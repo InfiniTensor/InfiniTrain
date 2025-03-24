@@ -13,8 +13,5 @@ public:
     explicit Sequential(std::vector<std::unique_ptr<Network>> &&layers);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
-
-private:
-    std::vector<Network *> layers_;
 };
 } // namespace infini_train::nn

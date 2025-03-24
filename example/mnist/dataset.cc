@@ -77,8 +77,8 @@ SN3PascalVincentFile ReadSN3PascalVincentFile(const std::string &path) {
 } // namespace
 
 MNISTDataset::MNISTDataset(const std::string &dataset, bool train)
-    : image_file_(ReadSN3PascalVincentFile(
-          std::format("{}/{}-images-idx3-ubyte", dataset, train ? kTrainPrefix : kTestPrefix))),
+    : image_file_(
+        ReadSN3PascalVincentFile(std::format("{}/{}-images-idx3-ubyte", dataset, train ? kTrainPrefix : kTestPrefix))),
       label_file_(ReadSN3PascalVincentFile(
           std::format("{}/{}-labels-idx1-ubyte", dataset, train ? kTrainPrefix : kTestPrefix))),
       image_dims_(image_file_.dims.begin() + 1, image_file_.dims.end()),

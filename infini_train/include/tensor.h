@@ -7,6 +7,8 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/device.h"
+
 namespace infini_train {
 namespace ops {
 class Op;
@@ -29,26 +31,33 @@ enum class DataType : int8_t {
 
 class TensorBuffer {
 public:
-    explicit TensorBuffer(size_t size);
+    TensorBuffer(Device device, size_t size);
+    ~TensorBuffer();
 
-    uint8_t *DataPtr();
-    const uint8_t *DataPtr() const;
+    void *DataPtr();
+    const void *DataPtr() const;
+
+    Device GetDevice() const;
     size_t Size() const;
 
 private:
-    std::unique_ptr<uint8_t[]> data_ = nullptr;
+    Device device_;
     size_t size_ = 0;
+    void *data_ = nullptr;
 };
 
 class Tensor {
 public:
     Tensor() = default;
 
+    Tensor(const std::vector<int64_t> &dims, DataType dtype, Device device);
     Tensor(const std::vector<int64_t> &dims, DataType dtype);
     Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &dims);
 
-    uint8_t *DataPtr();
-    const uint8_t *DataPtr() const;
+    Device GetDevice() const;
+
+    void *DataPtr();
+    const void *DataPtr() const;
 
     size_t SizeInBytes() const;
 
@@ -66,6 +75,8 @@ public:
     void Backward() const;
 
     template <typename T> void Fill(T value);
+
+    Tensor To(Device device);
 
     friend std::ostream &operator<<(std::ostream &os, const Tensor &tensor);
 
