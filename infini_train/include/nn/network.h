@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
@@ -20,7 +21,12 @@ public:
 
     virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) = 0;
 
+    void To(Device device);
+
 protected:
+    virtual void ToImpl(Device device) {}
+
+    Device device_; // CPU by default
     std::unordered_map<std::string, std::unique_ptr<Network>> named_layers_;
     std::unordered_map<std::string, std::unique_ptr<Tensor>> named_parameters_;
 };

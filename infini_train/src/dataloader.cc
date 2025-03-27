@@ -27,7 +27,8 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &tensor
 
     size_t offset = 0;
     for (const auto &tensor : tensors) {
-        memcpy(stacked_tensor->DataPtr() + offset, tensor->DataPtr(), tensor->SizeInBytes());
+        memcpy(reinterpret_cast<uint8_t *>(stacked_tensor->DataPtr()) + offset, tensor->DataPtr(),
+               tensor->SizeInBytes());
         offset += tensor->SizeInBytes();
     }
     return stacked_tensor;

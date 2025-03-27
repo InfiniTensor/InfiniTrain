@@ -55,6 +55,7 @@ std::vector<std::shared_ptr<Tensor>> Linear::ForwardImpl() {
                 = sum + reinterpret_cast<const float *>(b_->DataPtr())[j];
         }
     }
+
     return {output};
 }
 
@@ -69,7 +70,7 @@ void Linear::BackwardImpl() {
             for (int64_t j = 0; j < in_dim_; ++j) {
                 float sum = 0.0f;
                 for (int64_t k = 0; k < out_dim_; ++k) {
-                    sum += reinterpret_cast<float *>(w_->Gradient()->DataPtr())[j * out_dim_ + k]
+                    sum += reinterpret_cast<float *>(w_->DataPtr())[j * out_dim_ + k]
                          * reinterpret_cast<const float *>(output->Gradient()->DataPtr())[i * out_dim_ + k];
                 }
                 reinterpret_cast<float *>(input->Gradient()->DataPtr())[i * in_dim_ + j] += sum;
@@ -108,6 +109,7 @@ std::vector<std::shared_ptr<Tensor>> Sigmoid::ForwardImpl() {
             reinterpret_cast<float *>(output->DataPtr())[i * out_dim + j] = 1.0f / (1.0f + exp(-x));
         }
     }
+
     return {output};
 }
 
@@ -146,8 +148,6 @@ std::vector<std::shared_ptr<Tensor>> CrossEntropy::ForwardImpl() {
     auto output = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kFLOAT32);
 
     float loss = 0.0f;
-    std::vector<float> log_softmax_probs(bs * num_classes);
-
     // compute log_softmax
     for (int64_t i = 0; i < bs; ++i) {
         // extract logits and compute softmax denominator
@@ -163,15 +163,10 @@ std::vector<std::shared_ptr<Tensor>> CrossEntropy::ForwardImpl() {
             sum_exp += exp_val;
         }
 
-        // compute log_softmax and store
-        for (int64_t j = 0; j < num_classes; ++j) {
-            float exp_val = exp(reinterpret_cast<const float *>(input->DataPtr())[i * num_classes + j] - max_logit);
-            log_softmax_probs[i * num_classes + j] = log(exp_val / sum_exp);
-        }
-
         // compute cross-entropy loss
-        int64_t target_idx = target.DataPtr()[i];
-        loss -= log_softmax_probs[i * num_classes + target_idx];
+        const auto target_idx = reinterpret_cast<const uint8_t *>(target.DataPtr())[i];
+        loss -= log(exp(reinterpret_cast<const float *>(input->DataPtr())[i * num_classes + target_idx] - max_logit)
+                    / sum_exp);
     }
 
     // compute average loss
@@ -210,7 +205,7 @@ void CrossEntropy::BackwardImpl() {
 
         // compute dL/dx = softmax_probs - one_hot(target)
         for (int64_t i = 0; i < bs; ++i) {
-            int64_t target_idx = target->DataPtr()[i];
+            const auto target_idx = reinterpret_cast<uint8_t *>(target->DataPtr())[i];
             for (int j = 0; j < num_classes; ++j) {
                 float grad = softmax_probs[i * num_classes + j] - (j == target_idx ? 1.0f : 0.0f);
                 reinterpret_cast<float *>(input->Gradient()->DataPtr())[i * num_classes + j]

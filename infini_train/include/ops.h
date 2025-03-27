@@ -38,11 +38,19 @@ public:
     std::vector<std::shared_ptr<Tensor>> ForwardImpl() override;
     void BackwardImpl() override;
 
-private:
+protected:
     int64_t in_dim_ = 0;
     int64_t out_dim_ = 0;
     Tensor *w_ = nullptr; // not owned
     Tensor *b_ = nullptr; // not owned
+};
+
+class CUDALinear : public Linear {
+public:
+    CUDALinear(Tensor *weight, Tensor *bias);
+
+    std::vector<std::shared_ptr<Tensor>> ForwardImpl() override;
+    void BackwardImpl() override;
 };
 
 /*
@@ -58,6 +66,12 @@ public:
     void BackwardImpl() override;
 };
 
+class CUDASigmoid : public Sigmoid {
+public:
+    std::vector<std::shared_ptr<Tensor>> ForwardImpl() override;
+    void BackwardImpl() override;
+};
+
 /*
   -> input: [bs, out_dim]
   -> CrossEntropy ()
@@ -67,6 +81,12 @@ class CrossEntropy : public Op {
 public:
     CrossEntropy() = default;
 
+    std::vector<std::shared_ptr<Tensor>> ForwardImpl() override;
+    void BackwardImpl() override;
+};
+
+class CUDACrossEntropy : public CrossEntropy {
+public:
     std::vector<std::shared_ptr<Tensor>> ForwardImpl() override;
     void BackwardImpl() override;
 };
