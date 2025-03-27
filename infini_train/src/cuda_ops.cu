@@ -77,7 +77,7 @@ __global__ void set_ones(float *data, int size) {
 }
 
 void CUDALinear::BackwardImpl() {
-    
+
     auto &y = output_tensors_[0];
     auto &x = input_tensors_[0];
     const int bs = x->Dims()[0];
@@ -114,8 +114,9 @@ void CUDALinear::BackwardImpl() {
     set_ones<<<num_blocks, threads_per_block>>>(d_ptr, bs);
 
     CUBLAS_CHECK(cublasSgemv(handle, CUBLAS_OP_T, out_dim_, bs, &alpha,
-                             reinterpret_cast<const float *>(y->Gradient()->DataPtr()), out_dim_, reinterpret_cast<const float *>(ones->DataPtr()), 1,
-                             &beta, reinterpret_cast<float *>(b_->Gradient()->DataPtr()), 1));
+                             reinterpret_cast<const float *>(y->Gradient()->DataPtr()), out_dim_,
+                             reinterpret_cast<const float *>(ones->DataPtr()), 1, &beta,
+                             reinterpret_cast<float *>(b_->Gradient()->DataPtr()), 1));
 
     CUBLAS_CHECK(cublasDestroy(handle));
 }
@@ -175,9 +176,7 @@ __global__ void CrossEntropyKernel(const float *y_pred, const uint8_t *y_target,
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < batch_size) {
         float max_logit = kNegativeInfinity;
-        for (int j = 0; j < num_classes; j++) {
-            max_logit = max(max_logit, y_pred[i * num_classes + j]);
-        }
+        for (int j = 0; j < num_classes; j++) { max_logit = max(max_logit, y_pred[i * num_classes + j]); }
         float sum_exp = 0.0f;
         for (int j = 0; j < num_classes; j++) { sum_exp += expf(y_pred[i * num_classes + j] - max_logit); }
         loss[i] = -logf(expf(y_pred[i * num_classes + y_target[i]] - max_logit) / sum_exp);
@@ -189,13 +188,9 @@ __global__ void CrossEntropyBackwardKernel(float *input, float *input_grad, uint
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < bs) {
         float max_logit = kNegativeInfinity;
-        for (int j = 0; j < num_classes; j++) {
-            max_logit = max(max_logit, input[i * num_classes + j]);
-        }
+        for (int j = 0; j < num_classes; j++) { max_logit = max(max_logit, input[i * num_classes + j]); }
         float sum_exp = 0.0f;
-        for (int j = 0; j < num_classes; j++) {
-            sum_exp += expf(input[i * num_classes + j] - max_logit);
-        }
+        for (int j = 0; j < num_classes; j++) { sum_exp += expf(input[i * num_classes + j] - max_logit); }
         for (int j = 0; j < num_classes; j++) {
             int idx = i * num_classes + j;
             input_grad[idx] += (expf(input[idx] - max_logit) / sum_exp - (j == target[i] ? 1.0f : 0.0f)) / bs;
@@ -228,7 +223,7 @@ std::vector<std::shared_ptr<Tensor>> CUDACrossEntropy::ForwardImpl() {
         = std::accumulate(reinterpret_cast<const float *>(loss_cpu.DataPtr()),
                           reinterpret_cast<const float *>(loss_cpu.DataPtr()) + batch_size, 0.0f)
         / batch_size;
-    
+
     return {std::make_shared<Tensor>(loss->To(Device(DeviceType::kCUDA, 0)))};
 }
 
