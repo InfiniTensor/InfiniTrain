@@ -14,6 +14,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_subdirectory(third_party/gflags)
 include_directories(${gflags_SOURCE_DIR}/include)
 
+set(WITH_GFLAGS OFF CACHE BOOL "Disable glog finding system gflags" FORCE)
+set(WITH_GTEST OFF CACHE BOOL "Disable glog finding system gtest" FORCE)
+
 # Add glog
 add_subdirectory(third_party/glog)
 include_directories(${glog_SOURCE_DIR}/src)
