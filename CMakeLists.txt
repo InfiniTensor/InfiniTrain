@@ -41,6 +41,9 @@ if(USE_CUDA)
     # Examples
     add_executable(mnist example/mnist/main.cc example/mnist/dataset.cc example/mnist/net.cc)
     target_link_libraries(mnist glog gflags infini_train)
+
+    add_executable(gpt2 example/gpt2/main.cc example/gpt2/dataset.cc)
+    target_link_libraries(gpt2 glog gflags infini_train)
 else()
     include_directories(${PROJECT_SOURCE_DIR})
     file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
@@ -51,4 +54,7 @@ else()
     # Examples
     add_executable(mnist example/mnist/main.cc example/mnist/dataset.cc example/mnist/net.cc)
     target_link_libraries(mnist glog gflags infini_train)
+
+    add_executable(gpt2 example/gpt2/main.cc example/gpt2/dataset.cc)
+    target_link_libraries(gpt2 glog gflags infini_train)
 endif()
