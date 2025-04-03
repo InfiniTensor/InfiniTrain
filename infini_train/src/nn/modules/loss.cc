@@ -1,4 +1,4 @@
-#include "infini_train/include/nn/loss.h"
+#include "infini_train/include/nn/modules/loss.h"
 
 #include <memory>
 #include <vector>

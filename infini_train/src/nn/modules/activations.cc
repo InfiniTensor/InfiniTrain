@@ -1,4 +1,4 @@
-#include "infini_train/include/nn/activations.h"
+#include "infini_train/include/nn/modules/activations.h"
 
 #include <memory>
 #include <vector>

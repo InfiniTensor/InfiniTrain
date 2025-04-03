@@ -9,7 +9,7 @@
 
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/loss.h"
+#include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/optimizer.h"
 
 #include "example/mnist/dataset.h"

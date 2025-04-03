@@ -6,10 +6,10 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/nn/network.h"
+#include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
 
-class MNIST : public infini_train::nn::Network {
+class MNIST : public infini_train::nn::Module {
 public:
     MNIST();
 

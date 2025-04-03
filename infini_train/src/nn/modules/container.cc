@@ -1,4 +1,4 @@
-#include "infini_train/include/nn/container.h"
+#include "infini_train/include/nn/modules/container.h"
 
 #include <memory>
 #include <string>
@@ -7,7 +7,7 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-Sequential::Sequential(std::vector<std::unique_ptr<Network>> &&layers) {
+Sequential::Sequential(std::vector<std::unique_ptr<Module>> &&layers) {
     int idx = 0;
     for (auto &layer : layers) {
         AddNamedLayer(std::to_string(idx), std::move(layer));

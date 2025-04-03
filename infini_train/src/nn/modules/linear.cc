@@ -1,4 +1,4 @@
-#include "infini_train/include/nn/linear.h"
+#include "infini_train/include/nn/modules/linear.h"
 
 #include <memory>
 #include <vector>
