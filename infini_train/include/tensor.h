@@ -10,8 +10,8 @@
 #include "infini_train/include/device.h"
 
 namespace infini_train {
-namespace ops {
-class Op;
+namespace autograd {
+class Function;
 }
 
 enum class DataType : int8_t {
@@ -46,7 +46,7 @@ private:
     void *data_ = nullptr;
 };
 
-class Tensor {
+class Tensor : public std::enable_shared_from_this<Tensor> {
 public:
     Tensor() = default;
 
@@ -65,17 +65,6 @@ public:
     size_t NumElements() const;
     DataType Dtype() const;
 
-    void SetProducer(ops::Op *producer);
-
-    void RequiresGrad();
-
-    bool requires_grad() const { return requires_grad_; }
-    Tensor *Gradient();
-    const Tensor *Gradient() const;
-    void ZeroGrad();
-
-    void Backward() const;
-
     template <typename T> void Fill(T value);
 
     Tensor To(Device device);
@@ -89,8 +78,33 @@ private:
     size_t num_elements_ = 0;
     DataType dtype_;
 
-    ops::Op *producer_ = nullptr;
+    // autograd related
+public:
+    std::shared_ptr<Tensor> RequiresGrad();
+
+    std::shared_ptr<Tensor> grad() const { return grad_; };
+    bool requires_grad() const { return requires_grad_; }
+    void set_requires_grad(bool requires_grad) { requires_grad_ = requires_grad; }
+
+    bool is_leaf() const { return is_leaf_; }
+    void set_is_leaf(bool is_leaf) { is_leaf_ = is_leaf; }
+
+    std::shared_ptr<autograd::Function> grad_fn() const { return grad_fn_; }
+    void set_grad_fn(std::shared_ptr<autograd::Function> grad_fn) { grad_fn_ = grad_fn; }
+
+    int output_idx() const { return output_idx_; }
+    void set_output_idx(int output_idx) { output_idx_ = output_idx; }
+
+    void ZeroGrad();
+
+    void Backward(std::shared_ptr<Tensor> gradient = nullptr, bool retain_graph = false,
+                  bool create_graph = false) const;
+
+private:
+    std::shared_ptr<Tensor> grad_ = nullptr;
     bool requires_grad_ = false;
-    std::unique_ptr<Tensor> gradient_ = nullptr;
+    bool is_leaf_ = true;
+    std::shared_ptr<autograd::Function> grad_fn_ = nullptr;
+    int output_idx_ = -1;
 };
 } // namespace infini_train

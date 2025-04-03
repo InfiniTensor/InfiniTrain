@@ -3,34 +3,12 @@
 #include <memory>
 #include <vector>
 
-#include "infini_train/include/device.h"
-#include "infini_train/include/ops.h"
+#include "infini_train/include/autograd/loss.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-CrossEntropyLoss::CrossEntropyLoss() : cross_entropy_op_(std::make_unique<ops::CrossEntropy>()) {}
-
 std::vector<std::shared_ptr<Tensor>>
 CrossEntropyLoss::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    return cross_entropy_op_->Forward(input_tensors);
-}
-
-void CrossEntropyLoss::ToImpl(Device device) {
-    if (device_ == device) {
-        return;
-    }
-
-    switch (device.Type()) {
-    case DeviceType::kCPU:
-        cross_entropy_op_ = std::make_unique<ops::CrossEntropy>();
-        break;
-#ifdef USE_CUDA
-    case DeviceType::kCUDA:
-        cross_entropy_op_ = std::make_unique<ops::CUDACrossEntropy>();
-        break;
-#endif
-    default:
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device.Type());
-    }
+    return std::make_shared<autograd::CrossEntropy>()->Apply(input_tensors);
 }
 } // namespace infini_train::nn

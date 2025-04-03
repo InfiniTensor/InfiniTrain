@@ -12,15 +12,13 @@ class Module {
 public:
     virtual ~Module(){};
 
-    std::vector<Tensor *> Parameters() const;
+    std::vector<std::shared_ptr<Tensor>> Parameters() const;
 
     virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) = 0;
 
     void To(Device device);
 
 protected:
-    virtual void ToImpl(Device device) {}
-
     Device device_; // CPU by default
     std::unordered_map<std::string, std::unique_ptr<Module>> modules_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;
