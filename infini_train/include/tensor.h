@@ -51,7 +51,7 @@ public:
     Tensor() = default;
 
     Tensor(const std::vector<int64_t> &dims, DataType dtype, Device device);
-    Tensor(const std::vector<int64_t> &dims, DataType dtype);
+    Tensor(const std::vector<int64_t> &dims, DataType dtype) : Tensor(dims, dtype, Device(DeviceType::kCPU, 0)) {}
     Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &dims);
 
     Device GetDevice() const;
@@ -67,7 +67,9 @@ public:
 
     void SetProducer(ops::Op *producer);
 
-    void UseGradient();
+    void RequiresGrad();
+
+    bool requires_grad() const { return requires_grad_; }
     Tensor *Gradient();
     const Tensor *Gradient() const;
     void ZeroGrad();
@@ -88,6 +90,7 @@ private:
     DataType dtype_;
 
     ops::Op *producer_ = nullptr;
+    bool requires_grad_ = false;
     std::unique_ptr<Tensor> gradient_ = nullptr;
 };
 } // namespace infini_train

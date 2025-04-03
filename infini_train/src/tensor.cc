@@ -84,8 +84,6 @@ Tensor::Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &
     CHECK_LE(offset_ + kDataTypeToSize.at(dtype_) * num_elements_, buffer_->Size());
 }
 
-Tensor::Tensor(const std::vector<int64_t> &dims, DataType dtype) : Tensor(dims, dtype, Device(DeviceType::kCPU, 0)) {}
-
 Device Tensor::GetDevice() const { return buffer_->GetDevice(); }
 
 void *Tensor::DataPtr() { return reinterpret_cast<uint8_t *>(buffer_->DataPtr()) + offset_; }
@@ -102,7 +100,8 @@ DataType Tensor::Dtype() const { return dtype_; }
 
 void Tensor::SetProducer(ops::Op *producer) { producer_ = producer; }
 
-void Tensor::UseGradient() {
+void Tensor::RequiresGrad() {
+    requires_grad_ = true;
     if (!gradient_) {
         gradient_ = std::make_unique<Tensor>(dims_, dtype_, GetDevice());
         gradient_->Fill<float>(0.0f);

@@ -14,7 +14,7 @@ std::vector<std::shared_ptr<Tensor>> Op::Forward(const std::vector<std::shared_p
     input_tensors_ = input_tensors;
     auto output_tensors = ForwardImpl();
     for (auto &tensor : output_tensors) {
-        tensor->UseGradient();
+        tensor->RequiresGrad();
         tensor->SetProducer(this);
     }
     output_tensors_ = output_tensors;
