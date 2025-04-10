@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <random>
 #include <vector>
 
 #include "glog/logging.h"
@@ -67,7 +69,39 @@ public:
 
     template <typename T> void Fill(T value);
 
+    // TODO(dcj): return shared_ptr<Tensor> instead of Tensor later
     Tensor To(Device device);
+
+    // operator overloading
+    std::shared_ptr<Tensor> Equals(float scalar);
+    std::shared_ptr<Tensor> Add(const std::shared_ptr<Tensor> &other);
+    std::shared_ptr<Tensor> Add(float scalar);
+    std::shared_ptr<Tensor> Mul(const std::shared_ptr<Tensor> &other);
+    std::shared_ptr<Tensor> Mul(float scalar);
+    std::shared_ptr<Tensor> Tanh();
+    std::shared_ptr<Tensor> Pow(float exponent);
+
+    std::vector<std::shared_ptr<Tensor>> Split(int split_size, int dim = 0);
+    std::shared_ptr<Tensor> Transpose(int dim0, int dim1);
+    std::shared_ptr<Tensor> Slice(const std::vector<int64_t> &starts, const std::vector<int64_t> &ends,
+                                  const std::vector<int64_t> &steps);
+
+    std::shared_ptr<Tensor> View(const std::vector<int64_t> &dims);
+    std::shared_ptr<Tensor> Contiguous();
+
+    // distribution
+    std::shared_ptr<Tensor> Uniform(float from = 0.0f, float to = 1.0f,
+                                    std::optional<std::mt19937> generator = std::nullopt);
+
+    std::shared_ptr<Tensor> Matmul(const std::shared_ptr<Tensor> &other);
+    std::shared_ptr<Tensor> MaskedFill(const std::shared_ptr<Tensor> &mask, float value);
+
+    friend std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar);
+    friend std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
+    friend std::shared_ptr<Tensor> operator+(float scalar, const std::shared_ptr<Tensor> &t);
+    friend std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
+    friend std::shared_ptr<Tensor> operator*(float scalar, const std::shared_ptr<Tensor> &t);
+    friend std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor> &t, float scalar);
 
     friend std::ostream &operator<<(std::ostream &os, const Tensor &tensor);
 
@@ -107,4 +141,11 @@ private:
     std::shared_ptr<autograd::Function> grad_fn_ = nullptr;
     int output_idx_ = -1;
 };
+
+std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar);
+std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
+std::shared_ptr<Tensor> operator+(float scalar, const std::shared_ptr<Tensor> &t);
+std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
+std::shared_ptr<Tensor> operator*(float scalar, const std::shared_ptr<Tensor> &t);
+std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor> &t, float scalar);
 } // namespace infini_train

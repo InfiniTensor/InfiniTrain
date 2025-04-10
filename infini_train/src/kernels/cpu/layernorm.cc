@@ -17,6 +17,7 @@ std::shared_ptr<Tensor> LayerNormForward(const std::shared_ptr<Tensor> &input, c
         -> LayerNorm (w: [embed_dim], b: [embed_dim])
         -> o: [bs, seq_len, embed_dim]
     */
+    // TODO(dcj): LayerNorm shall support arbitrary dimensions, not just 3D tensors.
     CHECK_EQ(input->Dims().size(), 3);
     CHECK_LE(input->Dims()[2], weight->Dims()[0]);
     CHECK_LE(input->Dims()[2], bias->Dims()[0]);

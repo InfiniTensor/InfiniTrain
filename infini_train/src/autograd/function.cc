@@ -71,6 +71,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     grad_outputs_.resize(output_tensors.size(), nullptr);
     for (int output_idx = 0; output_idx < output_tensors.size(); ++output_idx) {
         auto &output_tensor = output_tensors[output_idx];
+        // TODO(dcj): Mark if an output tensor need differentiable or not.
         output_tensor->set_requires_grad(output_requires_grad);
         output_tensor->set_is_leaf(false);
         output_tensor->set_grad_fn(shared_from_this());

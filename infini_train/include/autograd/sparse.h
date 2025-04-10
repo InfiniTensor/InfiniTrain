@@ -7,7 +7,7 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
-class Linear : public Function {
+class Embedding : public Function {
 public:
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
     void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -15,6 +15,6 @@ public:
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
 private:
-    int64_t out_features_ = 0;
+    std::vector<int64_t> weight_dims_;
 };
 } // namespace infini_train::autograd

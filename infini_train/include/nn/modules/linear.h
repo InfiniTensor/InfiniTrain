@@ -10,7 +10,15 @@
 namespace infini_train::nn {
 class Linear : public Module {
 public:
-    Linear(int64_t in_dim, int64_t out_dim, Device device = Device());
+    static constexpr char kType[] = "Linear";
+
+    static constexpr char kParamWeightName[] = "weight";
+    static constexpr char kParamBiasName[] = "bias";
+
+    Linear(int64_t in_features, int64_t out_features, Device device = Device());
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+private:
+    void ResetParameters();
 };
 } // namespace infini_train::nn

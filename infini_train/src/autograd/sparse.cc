@@ -1,4 +1,4 @@
-#include "infini_train/include/autograd/embedding.h"
+#include "infini_train/include/autograd/sparse.h"
 
 #include <memory>
 #include <vector>
@@ -38,28 +38,27 @@ std::vector<std::shared_ptr<Tensor>> Embedding::Forward(const std::vector<std::s
 }
 
 void Embedding::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                             const std::vector<std::shared_ptr<Tensor>> &) {
+                             const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
     const auto &input = input_tensors[0];
     const auto &weight = input_tensors[1];
-    saved_tensors_ = {input, weight};
+    weight_dims_ = weight->Dims();
+    saved_tensors_ = {input};
 }
 
 std::vector<std::shared_ptr<Tensor>> Embedding::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(saved_tensors_.size(), 2);
-    const auto &input = saved_tensors_[0];
-    const auto &weight = saved_tensors_[1];
     CHECK_EQ(grad_outputs.size(), 1);
+    const auto &input = saved_tensors_[0];
     const auto &grad_output = grad_outputs[0];
 
     switch (input->GetDevice().Type()) {
     case DeviceType::kCPU: {
-        auto grad_weight = kernels::cpu::EmbeddingBackward(input, weight, grad_output);
-        return {grad_weight};
+        auto grad_weight = kernels::cpu::EmbeddingBackward(input, weight_dims_, grad_output);
+        return {nullptr, grad_weight};
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        auto grad_weight = kernels::cuda::EmbeddingBackward(input, weight, grad_output);
-        return {grad_weight};
+        auto grad_weight = kernels::cuda::EmbeddingBackward(input, weight_dims_, grad_output);
+        return {nullptr, grad_weight};
     }
 #endif
     default:
