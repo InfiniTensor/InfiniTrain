@@ -7,20 +7,20 @@
 namespace infini_train {
 class Optimizer {
 public:
-    explicit Optimizer(const std::vector<Tensor *> &params);
+    explicit Optimizer(const std::vector<std::shared_ptr<Tensor>> &params);
 
     void ZeroGrad();
 
     virtual void Step() = 0;
 
 protected:
-    std::vector<Tensor *> params_;
+    std::vector<std::shared_ptr<Tensor>> params_;
 };
 
 namespace optimizers {
 class SGD : public Optimizer {
 public:
-    SGD(const std::vector<Tensor *> &params, float learning_rate);
+    SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate);
 
     void Step() override;
 

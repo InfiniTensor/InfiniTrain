@@ -1,4 +1,4 @@
-#include "infini_train/include/nn/container.h"
+#include "infini_train/include/nn/modules/container.h"
 
 #include <memory>
 #include <string>
@@ -7,17 +7,17 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-Sequential::Sequential(std::vector<std::unique_ptr<Network>> &&layers) {
+Sequential::Sequential(std::vector<std::unique_ptr<Module>> &&layers) {
     int idx = 0;
     for (auto &layer : layers) {
-        AddNamedLayer(std::to_string(idx), std::move(layer));
+        modules_[std::to_string(idx)] = std::move(layer);
         ++idx;
     }
 }
 
 std::vector<std::shared_ptr<Tensor>> Sequential::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     auto &x = const_cast<std::vector<std::shared_ptr<Tensor>> &>(input_tensors);
-    for (int idx = 0; idx < named_layers_.size(); ++idx) { x = named_layers_[std::to_string(idx)]->Forward(x); }
+    for (int idx = 0; idx < modules_.size(); ++idx) { x = modules_[std::to_string(idx)]->Forward(x); }
     return x;
 }
 } // namespace infini_train::nn

@@ -12,8 +12,8 @@
 #endif
 #include "glog/logging.h"
 
+#include "infini_train/include/autograd/function.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/ops.h"
 
 namespace infini_train {
 namespace {
@@ -84,8 +84,6 @@ Tensor::Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &
     CHECK_LE(offset_ + kDataTypeToSize.at(dtype_) * num_elements_, buffer_->Size());
 }
 
-Tensor::Tensor(const std::vector<int64_t> &dims, DataType dtype) : Tensor(dims, dtype, Device(DeviceType::kCPU, 0)) {}
-
 Device Tensor::GetDevice() const { return buffer_->GetDevice(); }
 
 void *Tensor::DataPtr() { return reinterpret_cast<uint8_t *>(buffer_->DataPtr()) + offset_; }
@@ -99,31 +97,6 @@ const std::vector<int64_t> &Tensor::Dims() const { return dims_; }
 size_t Tensor::NumElements() const { return num_elements_; }
 
 DataType Tensor::Dtype() const { return dtype_; }
-
-void Tensor::SetProducer(ops::Op *producer) { producer_ = producer; }
-
-void Tensor::UseGradient() {
-    if (!gradient_) {
-        gradient_ = std::make_unique<Tensor>(dims_, dtype_, GetDevice());
-        gradient_->Fill<float>(0.0f);
-    }
-}
-
-Tensor *Tensor::Gradient() { return gradient_.get(); }
-
-const Tensor *Tensor::Gradient() const { return gradient_.get(); }
-
-void Tensor::ZeroGrad() {
-    if (gradient_) {
-        gradient_->Fill<float>(0.0f);
-    }
-}
-
-void Tensor::Backward() const {
-    if (producer_) {
-        producer_->Backward(this);
-    }
-}
 
 template <typename T> void Tensor::Fill(T value) {
     switch (GetDevice().Type()) {
@@ -150,8 +123,8 @@ template void Tensor::Fill<float>(float);
 Tensor Tensor::To(Device device) {
     if (device == buffer_->GetDevice()) {
         auto new_tensor = Tensor(*this, offset_, dims_);
-        if (gradient_) {
-            new_tensor.gradient_ = std::make_unique<Tensor>(*gradient_.get(), gradient_->offset_, gradient_->dims_);
+        if (grad_) {
+            new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), grad_->offset_, grad_->dims_);
         }
         return new_tensor;
     }
@@ -174,11 +147,46 @@ Tensor Tensor::To(Device device) {
         LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device.Type());
     }
 
-    if (gradient_) {
-        new_tensor.gradient_ = std::make_unique<Tensor>(gradient_->To(device));
+    if (grad_) {
+        new_tensor.grad_ = std::make_unique<Tensor>(grad_->To(device));
     }
 
+    new_tensor.requires_grad_ = requires_grad_;
+
     return new_tensor;
+}
+
+// autograd related
+std::shared_ptr<Tensor> Tensor::RequiresGrad() {
+    requires_grad_ = true;
+    if (!grad_) {
+        grad_ = std::make_unique<Tensor>(dims_, dtype_, GetDevice());
+        grad_->Fill<float>(0.0f);
+    }
+    return shared_from_this();
+}
+
+void Tensor::Backward(std::shared_ptr<Tensor> gradient, bool retain_graph, bool create_graph) const {
+    CHECK(!retain_graph && !create_graph) << "Not implemented yet!";
+    if (grad_fn_) {
+        if (!gradient) {
+            CHECK_EQ(dims_.size(), 0);
+            gradient = std::make_shared<Tensor>(std::vector<int64_t>{}, dtype_, GetDevice());
+            gradient->Fill<float>(1.0f);
+        } else {
+            CHECK_EQ(static_cast<int>(GetDevice().Type()), static_cast<int>(gradient->GetDevice().Type()));
+            CHECK_EQ(static_cast<int>(dtype_), static_cast<int>(gradient->Dtype()));
+            CHECK_EQ(dims_.size(), gradient->Dims().size());
+            for (int idx = 0; idx < dims_.size(); ++idx) { CHECK_EQ(dims_[idx], gradient->Dims()[idx]); }
+        }
+        grad_fn_->BackwardPartial(gradient, output_idx_);
+    }
+}
+
+void Tensor::ZeroGrad() {
+    if (grad_) {
+        grad_->Fill<float>(0.0f);
+    }
 }
 
 std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {

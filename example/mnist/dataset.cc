@@ -98,7 +98,7 @@ MNISTDataset::MNISTDataset(const std::string &dataset, bool train)
     infini_train::Tensor transposed_tensor(image_dims, DataType::kFLOAT32);
     for (int idx = 0; idx < bs; ++idx) {
         const auto *image_data = reinterpret_cast<uint8_t *>(image_file_.tensor.DataPtr()) + idx * 28 * 28;
-        auto *transposed_data = reinterpret_cast<float *>(transposed_tensor.DataPtr()) + idx * 28 * 28;
+        auto *transposed_data = static_cast<float *>(transposed_tensor.DataPtr()) + idx * 28 * 28;
         for (int i = 0; i < 28; ++i) {
             for (int j = 0; j < 28; ++j) { transposed_data[i * 28 + j] = image_data[i * 28 + j] / 255.0f; }
         }

@@ -9,7 +9,7 @@
 
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/loss.h"
+#include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/optimizer.h"
 
 #include "example/mnist/dataset.h"
@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
             if (train_idx % kNumItersOfOutputDuration == 0) {
                 LOG(ERROR) << "epoch: " << epoch << ", [" << train_idx * FLAGS_bs << "/" << train_dataset->Size()
                            << "] "
-                           << " loss: " << reinterpret_cast<float *>(loss_cpu.DataPtr())[0];
+                           << " loss: " << static_cast<float *>(loss_cpu.DataPtr())[0];
             }
 
             loss[0]->Backward();
@@ -98,14 +98,14 @@ int main(int argc, char *argv[]) {
         const int batch_size = output_cpu.Dims()[0];
         for (int batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
             auto label_index = reinterpret_cast<uint8_t *>(label_cpu.DataPtr())[batch_idx];
-            const auto *output_values = reinterpret_cast<float *>(output_cpu.DataPtr()) + batch_idx * kNumClasses;
+            const auto *output_values = static_cast<float *>(output_cpu.DataPtr()) + batch_idx * kNumClasses;
             const int output_index = std::max_element(output_values, output_values + kNumClasses) - output_values;
             if (output_index == label_index) {
                 ++correct;
             }
         }
         total += batch_size;
-        test_losses.push_back(reinterpret_cast<float *>(loss_cpu.DataPtr())[0]);
+        test_losses.push_back(static_cast<float *>(loss_cpu.DataPtr())[0]);
     }
     const auto avg_loss = std::accumulate(test_losses.begin(), test_losses.end(), 0.0) / test_losses.size();
     LOG(ERROR) << "Total: " << total << ", Correct: " << correct
