@@ -9,7 +9,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/dataloader.h"
-#include "infini_train/include/nn/loss.h"
+#include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/optimizer.h"
 
 #include "example/gpt2/dataset.h"
