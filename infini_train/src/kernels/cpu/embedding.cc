@@ -1,7 +1,6 @@
 #include "infini_train/include/kernels/cpu/embedding.h"
 
 #include <memory>
-#include <tuple>
 
 #include "glog/logging.h"
 
@@ -10,53 +9,46 @@
 namespace infini_train::kernels::cpu {
 std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight) {
     /*
-        x: [bs, seq_len]
+        x: [*]
         -> Embedding (weight: [num_embeddings, embedding_dim])
-        -> o: [bs, seq_len, embed_dim]
+        -> o: [*, embedding_dim]
     */
-    CHECK_EQ(input->Dims().size(), 2);
+    const auto &input_dims = input->Dims();
     CHECK_EQ(weight->Dims().size(), 2);
+    const int embedding_dim = weight->Dims()[1];
+    auto output_dims = input_dims;
+    output_dims.push_back(embedding_dim);
+    auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32);
 
-    const int batch_size = input->Dims()[0];
-    const int seq_len = input->Dims()[1];
-    const int embed_dim = weight->Dims()[1];
-
-    auto output = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, seq_len, embed_dim}, DataType::kFLOAT32);
-
-    for (int b = 0; b < batch_size; b++) {
-        for (int t = 0; t < seq_len; t++) {
-            int ix = static_cast<int>(reinterpret_cast<const uint16_t *>(input->DataPtr())[b * seq_len + t]);
-            for (int i = 0; i < embed_dim; i++) {
-                reinterpret_cast<float *>(output->DataPtr())[b * seq_len * embed_dim + t * embed_dim + i]
-                    = reinterpret_cast<float *>(weight->DataPtr())[ix * embed_dim + i];
-            }
+    for (int i = 0; i < input->NumElements(); i++) {
+        int idx = static_cast<int>(reinterpret_cast<const uint16_t *>(input->DataPtr())[i]);
+        for (int j = 0; j < embedding_dim; j++) {
+            reinterpret_cast<float *>(output->DataPtr())[i * embedding_dim + j]
+                = reinterpret_cast<float *>(weight->DataPtr())[idx * embedding_dim + j];
         }
     }
 
-    return {output};
+    return output;
 }
 
-std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::vector<int64_t> &weight_dims,
                                           const std::shared_ptr<Tensor> &grad_output) {
-    CHECK_EQ(input->Dims().size(), 2);
-    CHECK_EQ(weight->Dims().size(), 2);
+    CHECK_EQ(weight_dims.size(), 2);
+    const int embedding_dim = weight_dims[1];
+    CHECK_EQ(input->Dims().size() + 1, grad_output->Dims().size());
+    for (int idx = 0; idx < input->Dims().size(); ++idx) { CHECK_EQ(input->Dims()[idx], grad_output->Dims()[idx]); }
+    CHECK_EQ(*grad_output->Dims().rbegin(), embedding_dim);
 
-    const int batch_size = input->Dims()[0];
-    const int seq_len = input->Dims()[0];
-    const int embed_dim = weight->Dims()[1];
-
-    auto grad_weight = std::make_shared<Tensor>(weight->Dims(), DataType::kFLOAT32);
+    auto grad_weight = std::make_shared<Tensor>(weight_dims, DataType::kFLOAT32);
     grad_weight->Fill<float>(0.0f);
 
-    for (int b = 0; b < batch_size; b++) {
-        for (int t = 0; t < seq_len; t++) {
-            int ix = static_cast<int>(reinterpret_cast<const uint16_t *>(input->DataPtr())[b * seq_len + t]);
-            for (int i = 0; i < embed_dim; i++) {
-                reinterpret_cast<float *>(grad_weight->DataPtr())[ix * embed_dim + i]
-                    += reinterpret_cast<float *>(grad_output->DataPtr())[b * seq_len * embed_dim + t * embed_dim + i];
-            }
+    for (int i = 0; i < input->NumElements(); i++) {
+        int idx = static_cast<int>(reinterpret_cast<const uint16_t *>(input->DataPtr())[i]);
+        for (int j = 0; j < embedding_dim; j++) {
+            reinterpret_cast<float *>(grad_weight->DataPtr())[idx * embedding_dim + i]
+                += reinterpret_cast<float *>(grad_output->DataPtr())[i * embedding_dim + j];
         }
     }
-    return {grad_weight};
+    return grad_weight;
 }
 } // namespace infini_train::kernels::cpu

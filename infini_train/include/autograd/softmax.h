@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -7,16 +8,16 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
-class LayerNorm : public Function {
+class Softmax : public Function {
 public:
-    LayerNorm(float eps = 1e-5f);
+    explicit Softmax(int64_t dim = -1) : dim_(dim){};
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
     void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                       const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
-protected:
-    float eps_;
+private:
+    const int64_t dim_ = -1;
 };
 } // namespace infini_train::autograd

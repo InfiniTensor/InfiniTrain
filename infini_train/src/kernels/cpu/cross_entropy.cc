@@ -15,6 +15,7 @@ namespace {
 constexpr float kNegativeInfinity = -std::numeric_limits<float>::infinity();
 }
 
+// TODO(dcj): support target which is not index value
 std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input,
                                             const std::shared_ptr<Tensor> &target) {
     CHECK_EQ(input->Dims().size(), 2);

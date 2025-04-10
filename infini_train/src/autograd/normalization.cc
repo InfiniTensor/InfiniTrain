@@ -1,4 +1,4 @@
-#include "infini_train/include/autograd/layernorm.h"
+#include "infini_train/include/autograd/normalization.h"
 
 #include <memory>
 #include <vector>
