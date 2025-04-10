@@ -28,7 +28,7 @@ public:
         infini_train::Tensor tensor;
     };
 
-    TinyShakespeareDataset(const std::string &postfix, const size_t &sequence_length, bool train);
+    TinyShakespeareDataset(const std::string &filepath, size_t sequence_length);
 
     std::pair<std::shared_ptr<infini_train::Tensor>, std::shared_ptr<infini_train::Tensor>>
     operator[](size_t idx) const override;

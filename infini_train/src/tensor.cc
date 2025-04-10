@@ -12,8 +12,12 @@
 #endif
 #include "glog/logging.h"
 
-#include "infini_train/include/autograd/function.h"
+#include "infini_train/include/autograd/elementwise.h"
+#include "infini_train/include/autograd/matmul.h"
+#include "infini_train/include/autograd/misc.h"
+#include "infini_train/include/autograd/transform.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/nn/init.h"
 
 namespace infini_train {
 namespace {
@@ -156,6 +160,69 @@ Tensor Tensor::To(Device device) {
     return new_tensor;
 }
 
+// operator overloading
+std::shared_ptr<Tensor> Tensor::Equals(float scalar) {
+    return std::make_shared<autograd::EqualsScalar>(scalar)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Add(const std::shared_ptr<Tensor> &other) {
+    CHECK_EQ(static_cast<int>(GetDevice().Type()), static_cast<int>(other->GetDevice().Type()));
+    return std::make_shared<autograd::Add>()->Apply({shared_from_this(), other})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Add(float scalar) {
+    return std::make_shared<autograd::AddScalar>(scalar)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Mul(const std::shared_ptr<Tensor> &other) {
+    CHECK_EQ(static_cast<int>(GetDevice().Type()), static_cast<int>(other->GetDevice().Type()));
+    return std::make_shared<autograd::Mul>()->Apply({shared_from_this(), other})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Mul(float scalar) {
+    return std::make_shared<autograd::MulScalar>(scalar)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Tanh() { return std::make_shared<autograd::Tanh>()->Apply({shared_from_this()})[0]; }
+
+std::shared_ptr<Tensor> Tensor::Pow(float exponent) {
+    return std::make_shared<autograd::Pow>(exponent)->Apply({shared_from_this()})[0];
+}
+
+std::vector<std::shared_ptr<Tensor>> Tensor::Split(int split_size, int dim) {
+    return std::make_shared<autograd::Split>(split_size, dim)->Apply({shared_from_this()});
+}
+
+std::shared_ptr<Tensor> Tensor::View(const std::vector<int64_t> &dims) {
+    return std::make_shared<autograd::NoOp>(dims)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Contiguous() {
+    return std::make_shared<autograd::NoOp>(dims_)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Slice(const std::vector<int64_t> &starts, const std::vector<int64_t> &ends,
+                                      const std::vector<int64_t> &steps) {
+    return std::make_shared<autograd::Slice>(starts, ends, steps)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Transpose(int dim0, int dim1) {
+    return std::make_shared<autograd::Transpose>(dim0, dim1)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::MaskedFill(const std::shared_ptr<Tensor> &mask, float value) {
+    return std::make_shared<autograd::Mask>(mask, value)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Matmul(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::Matmul>()->Apply({shared_from_this(), other})[0];
+}
+
+// distribution
+std::shared_ptr<Tensor> Tensor::Uniform(float from, float to, std::optional<std::mt19937> generator) {
+    return nn::init::Uniform(shared_from_this(), from, to, generator);
+}
+
 // autograd related
 std::shared_ptr<Tensor> Tensor::RequiresGrad() {
     requires_grad_ = true;
@@ -195,4 +262,20 @@ std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
     os << "], dtype=" << kDataTypeToDesc.at(tensor.Dtype()) << ")";
     return os;
 }
+
+std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar) { return t->Equals(scalar); }
+
+std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2) {
+    return t1->Add(t2);
+}
+
+std::shared_ptr<Tensor> operator+(float scalar, const std::shared_ptr<Tensor> &t) { return t->Add(scalar); }
+
+std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2) {
+    return t1->Mul(t2);
+}
+
+std::shared_ptr<Tensor> operator*(float scalar, const std::shared_ptr<Tensor> &t) { return t->Mul(scalar); }
+
+std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor> &t, float scalar) { return t->Mul(scalar); }
 } // namespace infini_train
