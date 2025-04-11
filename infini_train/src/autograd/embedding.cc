@@ -53,13 +53,13 @@ std::vector<std::shared_ptr<Tensor>> Embedding::Backward(const std::vector<std::
 
     switch (input->GetDevice().Type()) {
     case DeviceType::kCPU: {
-        auto [grad_input, grad_weight] = kernels::cpu::EmbeddingBackward(input, weight, grad_output);
-        return {grad_input, grad_weight};
+        auto grad_weight = kernels::cpu::EmbeddingBackward(input, weight, grad_output);
+        return {grad_weight};
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        auto [grad_input, grad_weight] = kernels::cuda::EmbeddingBackward(input, weight, grad_output);
-        return {grad_input, grad_weight};
+        auto grad_weight = kernels::cuda::EmbeddingBackward(input, weight, grad_output);
+        return {grad_weight};
     }
 #endif
     default:

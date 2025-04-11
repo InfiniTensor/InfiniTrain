@@ -41,7 +41,7 @@ std::shared_ptr<Tensor> FusedEmbeddingForward(const std::shared_ptr<Tensor> &inp
     return {output};
 }
 
-std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
+std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
 FusedEmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &wte,
                        const std::shared_ptr<Tensor> &wpe, const std::shared_ptr<Tensor> &grad_output) {
     CHECK_EQ(input->Dims().size(), 2);
@@ -54,7 +54,6 @@ FusedEmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_p
     const int max_seqlen = wpe->Dims()[0];
     const int embed_dim = wpe->Dims()[1];
 
-    auto grad_input = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32);
     auto grad_wte = std::make_shared<Tensor>(wte->Dims(), DataType::kFLOAT32);
     auto grad_wpe = std::make_shared<Tensor>(wpe->Dims(), DataType::kFLOAT32);
     grad_wte->Fill<float>(0.0f);
@@ -71,6 +70,6 @@ FusedEmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_p
             }
         }
     }
-    return {grad_input, grad_wte, grad_wpe};
+    return {grad_wte, grad_wpe};
 }
 } // namespace infini_train::kernels::cpu
