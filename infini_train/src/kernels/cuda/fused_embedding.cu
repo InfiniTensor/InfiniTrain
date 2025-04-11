@@ -62,7 +62,7 @@ std::shared_ptr<Tensor> FusedEmbeddingForward(const std::shared_ptr<Tensor> &inp
 __global__ void WTEBackwardKernel(float *grad_wte, const float *grad_output, const uint16_t *input, int batch_size,
                                   int max_seqlen, int embed_dim) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= batch_size * max_seqlen) {
+    if (idx >= batch_size * max_seqlen * embed_dim) {
         return;
     }
 
@@ -93,7 +93,7 @@ __global__ void WPEBackwardKernel(float *grad_wpe, const float *grad_output, con
     atomicAdd(&grad_wpe[t * embed_dim + c], accum);
 }
 
-std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
+std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
 FusedEmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &wte,
                        const std::shared_ptr<Tensor> &wpe, const std::shared_ptr<Tensor> &grad_output) {
     CHECK_EQ(input->Dims().size(), 2);
@@ -106,7 +106,6 @@ FusedEmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_p
     const int max_seqlen = wpe->Dims()[0];
     const int embed_dim = wpe->Dims()[1];
 
-    auto grad_input = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
     auto grad_wte = std::make_shared<Tensor>(wte->Dims(), DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
     auto grad_wpe = std::make_shared<Tensor>(wpe->Dims(), DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
     grad_wte->Fill<float>(0.0f);
@@ -118,11 +117,11 @@ FusedEmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_p
         reinterpret_cast<float *>(grad_wpe->DataPtr()), reinterpret_cast<const float *>(grad_output->DataPtr()),
         reinterpret_cast<const uint16_t *>(input->DataPtr()), batch_size, max_seqlen, embed_dim);
 
-    num_blocks = ((batch_size * max_seqlen) + threads_per_block - 1) / threads_per_block;
+    num_blocks = ((batch_size * max_seqlen * embed_dim) + threads_per_block - 1) / threads_per_block;
     WTEBackwardKernel<<<num_blocks, threads_per_block>>>(
         reinterpret_cast<float *>(grad_wte->DataPtr()), reinterpret_cast<const float *>(grad_output->DataPtr()),
         reinterpret_cast<const uint16_t *>(input->DataPtr()), batch_size, max_seqlen, embed_dim);
 
-    return {grad_input, grad_wte, grad_wpe};
+    return {grad_wte, grad_wpe};
 }
 } // namespace infini_train::kernels::cuda

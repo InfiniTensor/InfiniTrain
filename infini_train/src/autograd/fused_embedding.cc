@@ -58,15 +58,13 @@ FusedEmbedding::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
 
     switch (input->GetDevice().Type()) {
     case DeviceType::kCPU: {
-        auto [grad_input, grad_tok_emb, grad_pos_emb]
-            = kernels::cpu::FusedEmbeddingBackward(input, tok_emb, pos_emb, grad_output);
-        return {grad_input, grad_tok_emb, grad_pos_emb};
+        auto [grad_tok_emb, grad_pos_emb] = kernels::cpu::FusedEmbeddingBackward(input, tok_emb, pos_emb, grad_output);
+        return {grad_tok_emb, grad_pos_emb};
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        auto [grad_input, grad_tok_emb, grad_pos_emb]
-            = kernels::cuda::FusedEmbeddingBackward(input, tok_emb, pos_emb, grad_output);
-        return {grad_input, grad_tok_emb, grad_pos_emb};
+        auto [grad_tok_emb, grad_pos_emb] = kernels::cuda::FusedEmbeddingBackward(input, tok_emb, pos_emb, grad_output);
+        return {grad_tok_emb, grad_pos_emb};
     }
 #endif
     default:
