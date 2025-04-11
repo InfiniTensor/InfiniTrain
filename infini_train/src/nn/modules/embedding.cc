@@ -24,9 +24,7 @@ Embedding::Embedding(int64_t num_embeddings, int64_t embedding_dim, Device devic
     weight->Fill<float>(0.5);
 }
 
-std::vector<std::shared_ptr<Tensor>>
-Embedding::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    return std::make_shared<autograd::Embedding>()->Apply(
-        {input_tensors[0], parameters_[kParamWeightName]});
+std::vector<std::shared_ptr<Tensor>> Embedding::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    return std::make_shared<autograd::Embedding>()->Apply({input_tensors[0], parameters_[kParamWeightName]});
 }
 } // namespace infini_train::nn

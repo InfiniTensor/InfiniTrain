@@ -55,8 +55,8 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     return {output};
 }
 
-__global__ void WeightBackwardKernel(float *grad_weight, const float *grad_output, const uint16_t *input, int batch_size,
-                                     int max_seqlen, int embed_dim) {
+__global__ void WeightBackwardKernel(float *grad_weight, const float *grad_output, const uint16_t *input,
+                                     int batch_size, int max_seqlen, int embed_dim) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= batch_size * max_seqlen) {
         return;

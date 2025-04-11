@@ -29,7 +29,8 @@ FusedEmbedding::FusedEmbedding(int64_t vocab_size, int64_t max_position, int64_t
     pos_emb->Fill<float>(0.5);
 }
 
-std::vector<std::shared_ptr<Tensor>> FusedEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>>
+FusedEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     return std::make_shared<autograd::FusedEmbedding>()->Apply(
         {input_tensors[0], parameters_[kParamTokenEmbeddingName], parameters_[kParamPosEmbeddingName]});
 }
