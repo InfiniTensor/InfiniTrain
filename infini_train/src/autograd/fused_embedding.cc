@@ -13,7 +13,8 @@
 #endif
 
 namespace infini_train::autograd {
-std::vector<std::shared_ptr<Tensor>> FusedEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>>
+FusedEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 3);
     const auto &input = input_tensors[0];
     const auto &tok_emb = input_tensors[1];
@@ -39,14 +40,15 @@ std::vector<std::shared_ptr<Tensor>> FusedEmbedding::Forward(const std::vector<s
 }
 
 void FusedEmbedding::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                             const std::vector<std::shared_ptr<Tensor>> &) {
+                                  const std::vector<std::shared_ptr<Tensor>> &) {
     const auto &input = input_tensors[0];
     const auto &tok_emb = input_tensors[1];
     const auto &pos_emb = input_tensors[2];
     saved_tensors_ = {input, tok_emb, pos_emb};
 }
 
-std::vector<std::shared_ptr<Tensor>> FusedEmbedding::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+std::vector<std::shared_ptr<Tensor>>
+FusedEmbedding::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(saved_tensors_.size(), 3);
     const auto &input = saved_tensors_[0];
     const auto &tok_emb = saved_tensors_[1];

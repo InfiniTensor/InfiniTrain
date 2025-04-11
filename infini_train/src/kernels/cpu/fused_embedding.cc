@@ -9,7 +9,7 @@
 
 namespace infini_train::kernels::cpu {
 std::shared_ptr<Tensor> FusedEmbeddingForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &wte,
-                                         const std::shared_ptr<Tensor> &wpe) {
+                                              const std::shared_ptr<Tensor> &wpe) {
     /*
         x: [bs, seq_len]
         -> FusedEmbedding (wte: [vocab_size, embed_dim], wpe: [max_position, embed_dim])
@@ -43,7 +43,7 @@ std::shared_ptr<Tensor> FusedEmbeddingForward(const std::shared_ptr<Tensor> &inp
 
 std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
 FusedEmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &wte,
-                  const std::shared_ptr<Tensor> &wpe, const std::shared_ptr<Tensor> &grad_output) {
+                       const std::shared_ptr<Tensor> &wpe, const std::shared_ptr<Tensor> &grad_output) {
     CHECK_EQ(input->Dims().size(), 2);
     CHECK_EQ(wte->Dims().size(), 2);
     CHECK_EQ(wpe->Dims().size(), 2);
