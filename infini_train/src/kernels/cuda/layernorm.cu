@@ -24,7 +24,8 @@ namespace infini_train::kernels::cuda {
 #endif
 
 __forceinline__ __device__ float warpReduceSum(float val) {
-    for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) { val += __shfl_down_sync(0xffffffff, val, offset); }
+    unsigned mask = __activemask(); 
+    for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) { val += __shfl_down_sync(mask, val, offset); }
     return val;
 }
 
@@ -81,11 +82,11 @@ std::shared_ptr<Tensor> LayerNormForward(const std::shared_ptr<Tensor> &input, c
     rstd = std::make_unique<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32,
                                     Device(DeviceType::kCUDA, 0));
     mean->Fill<float>(0.0f);
-    mean->Fill<float>(0.0f);
+    rstd->Fill<float>(0.0f);
 
     int threads_per_block = 256;
-    int block_y = threads_per_block / WARP_SIZE;
-    int num_blocks = (batch_size * max_seqlen + block_y - 1) / block_y;
+    int warps_per_block = threads_per_block / WARP_SIZE;
+    int num_blocks = (batch_size * max_seqlen + warps_per_block - 1) / warps_per_block;
 
     LayerNormForwardKernel<<<num_blocks, threads_per_block>>>(
         reinterpret_cast<const float *>(input->DataPtr()), reinterpret_cast<const float *>(weight->DataPtr()),

@@ -14,20 +14,19 @@
 
 namespace infini_train::autograd {
 std::vector<std::shared_ptr<Tensor>> Embedding::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    CHECK_EQ(input_tensors.size(), 3);
+    CHECK_EQ(input_tensors.size(), 2);
     const auto &input = input_tensors[0];
-    const auto &tok_emb = input_tensors[1];
-    const auto &pos_emb = input_tensors[2];
+    const auto &weight = input_tensors[1];
 
     std::shared_ptr<Tensor> output = nullptr;
     switch (input->GetDevice().Type()) {
     case DeviceType::kCPU: {
-        output = kernels::cpu::EmbeddingForward(input, tok_emb, pos_emb);
+        output = kernels::cpu::EmbeddingForward(input, weight);
         break;
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        output = kernels::cuda::EmbeddingForward(input, tok_emb, pos_emb);
+        output = kernels::cuda::EmbeddingForward(input, weight);
         break;
     }
 #endif
@@ -41,30 +40,26 @@ std::vector<std::shared_ptr<Tensor>> Embedding::Forward(const std::vector<std::s
 void Embedding::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                              const std::vector<std::shared_ptr<Tensor>> &) {
     const auto &input = input_tensors[0];
-    const auto &tok_emb = input_tensors[1];
-    const auto &pos_emb = input_tensors[2];
-    saved_tensors_ = {input, tok_emb, pos_emb};
+    const auto &weight = input_tensors[1];
+    saved_tensors_ = {input, weight};
 }
 
 std::vector<std::shared_ptr<Tensor>> Embedding::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(saved_tensors_.size(), 3);
+    CHECK_EQ(saved_tensors_.size(), 2);
     const auto &input = saved_tensors_[0];
-    const auto &tok_emb = saved_tensors_[1];
-    const auto &pos_emb = saved_tensors_[2];
+    const auto &weight = saved_tensors_[1];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
     switch (input->GetDevice().Type()) {
     case DeviceType::kCPU: {
-        auto [grad_input, grad_tok_emb, grad_pos_emb]
-            = kernels::cpu::EmbeddingBackward(input, tok_emb, pos_emb, grad_output);
-        return {grad_input, grad_tok_emb, grad_pos_emb};
+        auto [grad_input, grad_weight] = kernels::cpu::EmbeddingBackward(input, weight, grad_output);
+        return {grad_input, grad_weight};
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        auto [grad_input, grad_tok_emb, grad_pos_emb]
-            = kernels::cuda::EmbeddingBackward(input, tok_emb, pos_emb, grad_output);
-        return {grad_input, grad_tok_emb, grad_pos_emb};
+        auto [grad_input, grad_weight] = kernels::cuda::EmbeddingBackward(input, weight, grad_output);
+        return {grad_input, grad_weight};
     }
 #endif
     default:
