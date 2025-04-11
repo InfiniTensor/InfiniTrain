@@ -47,7 +47,7 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
                                            Device(DeviceType::kCUDA, 0));
 
     int threads_per_block = 256;
-    int num_blocks = (batch_size + threads_per_block - 1) / threads_per_block;
+    int num_blocks = (batch_size * max_seqlen * embed_dim + threads_per_block - 1) / threads_per_block;
     EmbeddingForwardKernel<<<num_blocks, threads_per_block>>>(
         reinterpret_cast<const uint16_t *>(input->DataPtr()), reinterpret_cast<float *>(output->DataPtr()),
         reinterpret_cast<const float *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim);
@@ -73,9 +73,8 @@ __global__ void WeightBackwardKernel(float *grad_weight, const float *grad_outpu
     atomicAdd(&grad_weight[token * embed_dim + c], grad);
 }
 
-std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
-EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
-                  const std::shared_ptr<Tensor> &grad_output) {
+std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                                          const std::shared_ptr<Tensor> &grad_output) {
     CHECK_EQ(input->Dims().size(), 2);
     CHECK_EQ(weight->Dims().size(), 2);
 
@@ -83,17 +82,16 @@ EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     const int max_seqlen = input->Dims()[1];
     const int embed_dim = weight->Dims()[1];
 
-    auto grad_input = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
     auto grad_weight = std::make_shared<Tensor>(weight->Dims(), DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
     grad_weight->Fill<float>(0.0f);
 
     int threads_per_block = 256;
-    int num_blocks = ((batch_size * max_seqlen) + threads_per_block - 1) / threads_per_block;
+    int num_blocks = ((batch_size * max_seqlen * embed_dim) + threads_per_block - 1) / threads_per_block;
 
     WeightBackwardKernel<<<num_blocks, threads_per_block>>>(
         reinterpret_cast<float *>(grad_weight->DataPtr()), reinterpret_cast<const float *>(grad_output->DataPtr()),
         reinterpret_cast<const uint16_t *>(input->DataPtr()), batch_size, max_seqlen, embed_dim);
 
-    return {grad_input, grad_weight};
+    return {grad_weight};
 }
 } // namespace infini_train::kernels::cuda

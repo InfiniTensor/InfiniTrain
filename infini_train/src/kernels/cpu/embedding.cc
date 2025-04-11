@@ -36,9 +36,8 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     return {output};
 }
 
-std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
-EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
-                  const std::shared_ptr<Tensor> &grad_output) {
+std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                                          const std::shared_ptr<Tensor> &grad_output) {
     CHECK_EQ(input->Dims().size(), 2);
     CHECK_EQ(weight->Dims().size(), 2);
 
@@ -46,7 +45,6 @@ EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     const int seq_len = input->Dims()[0];
     const int embed_dim = weight->Dims()[1];
 
-    auto grad_input = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32);
     auto grad_weight = std::make_shared<Tensor>(weight->Dims(), DataType::kFLOAT32);
     grad_weight->Fill<float>(0.0f);
 
@@ -59,6 +57,6 @@ EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
             }
         }
     }
-    return {grad_input, grad_weight};
+    return {grad_weight};
 }
 } // namespace infini_train::kernels::cpu
