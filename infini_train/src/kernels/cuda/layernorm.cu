@@ -24,7 +24,7 @@ namespace infini_train::kernels::cuda {
 #endif
 
 __forceinline__ __device__ float warpReduceSum(float val) {
-    unsigned mask = __activemask(); 
+    unsigned mask = __activemask();
     for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) { val += __shfl_down_sync(mask, val, offset); }
     return val;
 }
