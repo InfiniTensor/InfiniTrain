@@ -8,9 +8,9 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-class Embedding : public Module {
+class FusedEmbedding : public Module {
 public:
-    Embedding(int64_t num_embeddings, int64_t embedding_dim, Device device = Device());
+    FusedEmbedding(int64_t vocab_size, int64_t max_position, int64_t embed_dim, Device device = Device());
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 };
 } // namespace infini_train::nn
