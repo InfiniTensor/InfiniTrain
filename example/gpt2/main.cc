@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
             std::cout << train_idx << ": "
                       << ArrayToString<float>(reinterpret_cast<float *>(output.DataPtr()), 4 * 64 * 768) << std::endl;
             // std::cout << train_idx << ": "
-            //           << ArrayToString<uint16_t>(reinterpret_cast<uint16_t *>(output.DataPtr()), 4 * 64)
+            //           << ArrayToString<uint16_t>(reinterpret_cast<uint16_t *>(new_input->DataPtr()), 4 * 64)
             //           << std::endl;
             train_idx += 1;
             break;

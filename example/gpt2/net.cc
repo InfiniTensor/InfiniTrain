@@ -9,15 +9,23 @@
 
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/embedding.h"
+#include "infini_train/include/nn/modules/fused_embedding.h"
 #include "infini_train/include/nn/modules/layernorm.h"
+#include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
 
 namespace nn = infini_train::nn;
 
+namespace {
+constexpr int kVocabSize = 50257;
+constexpr int kSequenceLength = 64;
+constexpr int kEmbeddingDim = 768;
+}; // namespace
+
 GPT2::GPT2() {
-    modules_["embedding"] = std::make_unique<nn::Embedding>(50257, 64, 768);
-    modules_["layernorm"] = std::make_unique<nn::LayerNorm>(768);
+    modules_["embedding"] = std::make_unique<nn::FusedEmbedding>(kVocabSize, kSequenceLength, kEmbeddingDim);
+    modules_["layernorm"] = std::make_unique<nn::LayerNorm>(kEmbeddingDim);
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
