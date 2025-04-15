@@ -9,7 +9,9 @@
 namespace infini_train::autograd {
 class LayerNorm : public Function {
 public:
-    explicit LayerNorm(float eps);
+    static constexpr char kType[] = "LayerNormFunction";
+
+    explicit LayerNorm(float eps) : Function(kType), eps_(eps) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
     void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,

@@ -5,7 +5,7 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/kernels/cpu/linear_with_bias.h"
+#include "infini_train/include/kernels/cpu/linear.h"
 #include "infini_train/include/tensor.h"
 
 #ifdef USE_CUDA
@@ -22,7 +22,7 @@ std::vector<std::shared_ptr<Tensor>> Linear::Forward(const std::vector<std::shar
     std::shared_ptr<Tensor> output = nullptr;
     switch (input->GetDevice().Type()) {
     case DeviceType::kCPU: {
-        output = kernels::cpu::LinearWithBiasForward(input, weight, bias);
+        output = kernels::cpu::LinearForward(input, weight, true, bias);
         break;
     }
 #ifdef USE_CUDA
@@ -57,7 +57,7 @@ std::vector<std::shared_ptr<Tensor>> Linear::Backward(const std::vector<std::sha
     switch (input->GetDevice().Type()) {
     case DeviceType::kCPU: {
         auto [grad_input, grad_weight, grad_bias]
-            = kernels::cpu::LinearWithBiasBackward(input, weight, out_features_, grad_output);
+            = kernels::cpu::LinearBackward(input, weight, true, out_features_, grad_output);
         return {grad_input, grad_weight, grad_bias};
     }
 #ifdef USE_CUDA

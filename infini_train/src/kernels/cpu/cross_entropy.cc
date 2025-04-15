@@ -15,15 +15,13 @@ namespace {
 constexpr float kNegativeInfinity = -std::numeric_limits<float>::infinity();
 }
 
-// TODO(dcj): support target which is not index value
 std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input,
                                             const std::shared_ptr<Tensor> &target) {
-    CHECK_EQ(input->Dims().size(), 2);
-    const int bs = input->Dims()[0];
-    const int num_classes = input->Dims()[1];
-    CHECK_EQ(target->Dims().size(), 2);
-    CHECK_EQ(bs, target->Dims()[0]);
-    CHECK_EQ(1, target->Dims()[1]);
+    const auto &input_dims = input->Dims();
+    CHECK_GE(input_dims.size(), 2);
+    const int64_t bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
+    const int num_classes = *input_dims.rbegin();
+
     auto output = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kFLOAT32);
     static_cast<float *>(output->DataPtr())[0] = 0.0f;
     for (int64_t i = 0; i < bs; ++i) {
@@ -48,12 +46,11 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
 std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &input,
                                              const std::shared_ptr<Tensor> &target,
                                              const std::shared_ptr<Tensor> &grad_output) {
-    CHECK_EQ(input->Dims().size(), 2);
-    const int bs = input->Dims()[0];
-    const int num_classes = input->Dims()[1];
-    CHECK_EQ(target->Dims().size(), 2);
-    CHECK_EQ(bs, target->Dims()[0]);
-    CHECK_EQ(1, target->Dims()[1]);
+    const auto &input_dims = input->Dims();
+    CHECK_GE(input_dims.size(), 2);
+    const int64_t bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
+    const int num_classes = *input_dims.rbegin();
+
     CHECK_EQ(grad_output->Dims().size(), 0);
     auto grad_input = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32);
     std::vector<float> softmax(bs * num_classes, 0.0f);

@@ -52,6 +52,7 @@ std::shared_ptr<Tensor> SoftmaxForward(const std::shared_ptr<Tensor> &input, int
 
 std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_output,
                                         const std::shared_ptr<Tensor> &output, int64_t dim) {
+    dim = dim < 0 ? output->Dims().size() + dim : dim;
     auto grad_input = std::make_shared<Tensor>(output->Dims(), output->Dtype(), output->GetDevice());
     const float *grad_output_data = reinterpret_cast<const float *>(grad_output->DataPtr());
     const float *output_data = reinterpret_cast<const float *>(output->DataPtr());

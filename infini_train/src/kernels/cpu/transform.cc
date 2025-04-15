@@ -1,7 +1,6 @@
-#include "infini_train/include/kernels/cpu/elementwise.h"
+#include "infini_train/include/kernels/cpu/transform.h"
 
 #include <cmath>
-#include <functional>
 #include <memory>
 
 #include "glog/logging.h"
@@ -41,7 +40,8 @@ std::shared_ptr<Tensor> TrilBackward(const std::shared_ptr<Tensor> &grad_output,
 }
 
 std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, int64_t dim0, int64_t dim1) {
-    // TODO(dcj): support negative indexing
+    dim0 = dim0 < 0 ? dim0 + input->Dims().size() : dim0;
+    dim1 = dim1 < 0 ? dim1 + input->Dims().size() : dim1;
     CHECK(dim0 >= 0 && dim0 < input->Dims().size() && dim1 >= 0 && dim1 < input->Dims().size());
 
     auto in_dims = input->Dims();
@@ -89,7 +89,7 @@ std::shared_ptr<Tensor> TransposeBackward(const std::shared_ptr<Tensor> &grad_ou
 
 std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &mask,
                                     float value) {
-    CHECK_EQ(input->NumElements(), mask->NumElements());
+    CHECK_EQ(input->NumElements() % mask->NumElements(), 0);
     CHECK_EQ(static_cast<int>(input->Dtype()), static_cast<int>(mask->Dtype()));
     auto output = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());
 
@@ -97,7 +97,7 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
 
     for (int i = 0; i < input->NumElements(); ++i) {
         // TODO(dcj): use bool mask when dtype is enabled.
-        if (reinterpret_cast<const float *>(mask->DataPtr())[i] == 1.0) {
+        if (reinterpret_cast<const float *>(mask->DataPtr())[i % mask->NumElements()] == 1.0) {
             reinterpret_cast<float *>(output->DataPtr())[i] = value;
         } else {
             reinterpret_cast<float *>(output->DataPtr())[i] = in_ptr[i];
@@ -107,12 +107,12 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
 }
 
 std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &mask) {
-    CHECK_EQ(grad_output->NumElements(), mask->NumElements());
+    CHECK_EQ(grad_output->NumElements() % mask->NumElements(), 0);
     CHECK_EQ(static_cast<int>(grad_output->Dtype()), static_cast<int>(mask->Dtype()));
     auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), grad_output->Dtype(), grad_output->GetDevice());
 
     for (int i = 0; i < grad_output->NumElements(); ++i) {
-        if (reinterpret_cast<const float *>(mask->DataPtr())[i] == 1.0) {
+        if (reinterpret_cast<const float *>(mask->DataPtr())[i % mask->NumElements()] == 1.0) {
             reinterpret_cast<float *>(grad_input->DataPtr())[i] = 0.0;
         } else {
             reinterpret_cast<float *>(grad_input->DataPtr())[i]
