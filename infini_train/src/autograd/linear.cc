@@ -62,7 +62,8 @@ std::vector<std::shared_ptr<Tensor>> Linear::Backward(const std::vector<std::sha
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        auto [grad_input, grad_weight, grad_bias] = kernels::cuda::LinearBackward(input, weight, bias, grad_output);
+        auto [grad_input, grad_weight, grad_bias]
+            = kernels::cuda::LinearBackward(input, weight, out_features_, grad_output, true);
         return {grad_input, grad_weight, grad_bias};
     }
 #endif
