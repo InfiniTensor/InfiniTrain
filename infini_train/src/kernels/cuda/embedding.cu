@@ -52,7 +52,7 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
         reinterpret_cast<const uint16_t *>(input->DataPtr()), reinterpret_cast<float *>(output->DataPtr()),
         reinterpret_cast<const float *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim);
 
-    return {output};
+    return output;
 }
 
 __global__ void WeightBackwardKernel(float *grad_weight, const float *grad_output, const uint16_t *input,
@@ -73,16 +73,16 @@ __global__ void WeightBackwardKernel(float *grad_weight, const float *grad_outpu
     atomicAdd(&grad_weight[token * embed_dim + c], grad);
 }
 
-std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::vector<int64_t> &weight_dims,
                                           const std::shared_ptr<Tensor> &grad_output) {
     CHECK_EQ(input->Dims().size(), 2);
-    CHECK_EQ(weight->Dims().size(), 2);
+    CHECK_EQ(weight_dims.size(), 2);
 
     const int batch_size = input->Dims()[0];
     const int max_seqlen = input->Dims()[1];
-    const int embed_dim = weight->Dims()[1];
+    const int embed_dim = weight_dims[1];
 
-    auto grad_weight = std::make_shared<Tensor>(weight->Dims(), DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
+    auto grad_weight = std::make_shared<Tensor>(weight_dims, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
     grad_weight->Fill<float>(0.0f);
 
     int threads_per_block = 256;
@@ -92,6 +92,6 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
         reinterpret_cast<float *>(grad_weight->DataPtr()), reinterpret_cast<const float *>(grad_output->DataPtr()),
         reinterpret_cast<const uint16_t *>(input->DataPtr()), batch_size, max_seqlen, embed_dim);
 
-    return {grad_weight};
+    return grad_weight;
 }
 } // namespace infini_train::kernels::cuda

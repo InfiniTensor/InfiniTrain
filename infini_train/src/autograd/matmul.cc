@@ -1,5 +1,6 @@
 #include "infini_train/include/autograd/matmul.h"
 
+#include <cstddef>
 #include <memory>
 #include <vector>
 
@@ -26,7 +27,7 @@ std::vector<std::shared_ptr<Tensor>> Matmul::Forward(const std::vector<std::shar
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        output = kernels::cuda::LinearWithoutBiasForward(input1, input2);
+        output = kernels::cuda::LinearForward(input1, input2, nullptr);
         break;
     }
 #endif
@@ -61,8 +62,8 @@ std::vector<std::shared_ptr<Tensor>> Matmul::Backward(const std::vector<std::sha
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        auto [grad_input1, grad_input2]
-            = kernels::cuda::LinearWithoutBiasBackward(input1, input2, out_features_, grad_output);
+        auto [grad_input1, grad_input2, _]
+            = kernels::cuda::LinearBackward(input1, input2, out_features_, grad_output, false);
         return {grad_input1, grad_input2};
     }
 #endif

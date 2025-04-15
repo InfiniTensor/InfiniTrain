@@ -14,7 +14,7 @@ std::shared_ptr<Tensor> LinearWithBiasForward(const std::shared_ptr<Tensor> &inp
                                               const std::shared_ptr<Tensor> &bias) {
     const auto &input_dims = input->Dims();
     CHECK_GE(input_dims.size(), 2);
-    const int64_t bs = std::accumulate(input_dims.rbegin(), input_dims.rend(), 1, std::multiplies<int64_t>{});
+    const int64_t bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
     const int64_t in_features = *input_dims.rbegin();
 
     const auto &weight_dims = weight->Dims();
@@ -48,7 +48,7 @@ LinearWithBiasBackward(const std::shared_ptr<Tensor> &input, const std::shared_p
                        int64_t out_features, const std::shared_ptr<Tensor> &grad_output) {
     const auto &input_dims = input->Dims();
     CHECK_GE(input_dims.size(), 2);
-    const int64_t bs = std::accumulate(input_dims.rbegin(), input_dims.rend(), 1, std::multiplies<int64_t>{});
+    const int64_t bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
     const int64_t in_features = *input_dims.rbegin();
 
     const auto &weight_dims = weight->Dims();
