@@ -53,6 +53,7 @@ private:
 } // namespace
 
 std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    LOG(INFO) << "start forward of function: " << type_;
     auto output_tensors = Forward(input_tensors);
     SetupContext(input_tensors, output_tensors);
 
@@ -82,6 +83,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
 }
 
 void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int grad_output_idx) {
+    LOG(INFO) << "start backward_partial of function: " << type_;
     CHECK(!grad_outputs_[grad_output_idx]);
     grad_outputs_[grad_output_idx] = grad_output;
     ++grad_outputs_reached_;
@@ -95,6 +97,15 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
                 next_function->BackwardPartial(grad_input, output_idx);
             }
         }
+        // When a tensor is consumed by multiple operations, there may be multiple backward paths. As a result, the same
+        // function might be reused during backpropagation. Therefore, it's necessary to clear the state specific to
+        // this backward path.
+        ResetState();
     }
+}
+
+void Function::ResetState() {
+    grad_outputs_reached_ = 0;
+    for (auto &tensor : grad_outputs_) { tensor.reset(); }
 }
 } // namespace infini_train::autograd

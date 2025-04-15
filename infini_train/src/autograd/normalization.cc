@@ -14,8 +14,6 @@
 
 namespace infini_train::autograd {
 
-LayerNorm::LayerNorm(float eps) : eps_(eps) {}
-
 std::vector<std::shared_ptr<Tensor>> LayerNorm::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 3);
     const auto &input = input_tensors[0];

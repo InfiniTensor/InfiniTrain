@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <format>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -41,12 +42,13 @@ using namespace infini_train;
 namespace {
 // validation
 const std::unordered_set<std::string> kSupportedModels
-    = {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "d12", "d24", "d36", "d48"};
+    = {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "d12", "d24", "d36", "d48", "d1"};
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
 
 //
 const std::unordered_map<std::string, GPT2Config> kModelToConfigs = {
+    {"d1", {.block_size = 1024, .vocab_size = 50257, .n_layer = 1, .n_head = 12, .n_embd = 768}},
     {"d12", {.block_size = 1024, .vocab_size = 50257, .n_layer = 12, .n_head = 12, .n_embd = 768}},
     {"d24", {.block_size = 1024, .vocab_size = 50257, .n_layer = 24, .n_head = 16, .n_embd = 1024}},
     {"d36", {.block_size = 1024, .vocab_size = 50257, .n_layer = 36, .n_head = 20, .n_embd = 1280}},
@@ -115,6 +117,7 @@ int main(int argc, char *argv[]) {
     auto train_iter = train_loader.begin();
     auto loss_fn = nn::CrossEntropyLoss();
     loss_fn.To(device);
+    LOG(INFO) << "start training";
 
     for (int step = 0; step < FLAGS_num_iteration; ++step) {
         const bool last_step = step == FLAGS_num_iteration - 1;
@@ -143,17 +146,25 @@ int main(int argc, char *argv[]) {
         }
         float lossf = 0.0f;
         for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
+            // (bs, seq_len), (bs, seq_len)
             auto [x, y] = *train_iter;
             ++train_iter;
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
+            LOG(INFO) << "start forward";
+            // (bs, seq_len, vocab_size)
             auto logits = model->Forward({x, y})[0];
+            LOG(INFO) << "finish model forward, start loss forward";
             auto loss = loss_fn.Forward({logits, y})[0];
+            LOG(INFO) << "finish loss forward";
             auto loss_cpu = loss->To(Device());
             lossf += static_cast<const float *>(loss_cpu.DataPtr())[0] / grad_accum_steps;
+            LOG(INFO) << "start backward";
             loss->Backward();
+            LOG(INFO) << "finish backward";
         }
         optimizer.Step();
+        LOG(INFO) << std::format("step {}/{} | train loss {:.6f}", step, FLAGS_num_iteration, lossf);
     }
 
     gflags::ShutDownCommandLineFlags();

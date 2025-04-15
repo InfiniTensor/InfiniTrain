@@ -14,7 +14,7 @@ Linear::Linear(int64_t in_features, int64_t out_features, Device device) : Modul
     device_ = device;
 
     parameters_[kParamWeightName]
-        = std::make_shared<Tensor>(std::vector<int64_t>{in_features, out_features}, DataType::kFLOAT32, device)
+        = std::make_shared<Tensor>(std::vector<int64_t>{out_features, in_features}, DataType::kFLOAT32, device)
               ->RequiresGrad();
     parameters_[kParamBiasName]
         = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, DataType::kFLOAT32, device)->RequiresGrad();

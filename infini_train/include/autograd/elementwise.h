@@ -9,6 +9,10 @@
 namespace infini_train::autograd {
 class Tanh : public Function {
 public:
+    static constexpr char kType[] = "TanhFunction";
+
+    Tanh() : Function(kType) {}
+
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
     void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                       const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
@@ -17,7 +21,9 @@ public:
 
 class Pow : public Function {
 public:
-    explicit Pow(float exponent) : exponent_(exponent) {}
+    static constexpr char kType[] = "PowFunction";
+
+    explicit Pow(float exponent) : Function(kType), exponent_(exponent) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
     void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -30,7 +36,9 @@ private:
 
 class EqualsScalar : public Function {
 public:
-    explicit EqualsScalar(float scalar) : scalar_(scalar) {}
+    static constexpr char kType[] = "EqualsScalarFunction";
+
+    explicit EqualsScalar(float scalar) : Function(kType), scalar_(scalar) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
@@ -41,13 +49,25 @@ private:
 
 class Add : public Function {
 public:
+    static constexpr char kType[] = "AddFunction";
+
+    explicit Add() : Function(kType) {}
+
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+
+private:
+    std::vector<int64_t> a_dims_;
+    std::vector<int64_t> b_dims_;
 };
 
 class AddScalar : public Function {
 public:
-    explicit AddScalar(float scalar) : scalar_(scalar) {}
+    static constexpr char kType[] = "AddScalarFunction";
+
+    explicit AddScalar(float scalar) : Function(kType), scalar_(scalar) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
@@ -58,6 +78,10 @@ private:
 
 class Mul : public Function {
 public:
+    static constexpr char kType[] = "MulFunction";
+
+    explicit Mul() : Function(kType) {}
+
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
     void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                       const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
@@ -66,7 +90,9 @@ public:
 
 class MulScalar : public Function {
 public:
-    explicit MulScalar(float scalar) : scalar_(scalar) {}
+    static constexpr char kType[] = "MulScalarFunction";
+
+    explicit MulScalar(float scalar) : Function(kType), scalar_(scalar) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;

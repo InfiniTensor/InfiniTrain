@@ -10,7 +10,9 @@
 namespace infini_train::autograd {
 class Softmax : public Function {
 public:
-    explicit Softmax(int64_t dim = -1) : dim_(dim){};
+    static constexpr char kType[] = "SoftmaxFunction";
+
+    explicit Softmax(int64_t dim = -1) : Function(kType), dim_(dim){};
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
     void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
