@@ -171,13 +171,19 @@ std::vector<std::shared_ptr<Tensor>> Add::Forward(const std::vector<std::shared_
     return {output};
 }
 
+void Add::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                       const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+    a_dims_ = input_tensors[0]->Dims();
+    b_dims_ = input_tensors[1]->Dims();
+}
+
 std::vector<std::shared_ptr<Tensor>> Add::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
     switch (grad_output->GetDevice().Type()) {
     case DeviceType::kCPU: {
-        auto [grad_a, grad_b] = kernels::cpu::AddBackward(grad_output);
+        auto [grad_a, grad_b] = kernels::cpu::AddBackward(grad_output, a_dims_, b_dims_);
         return {grad_a, grad_b};
         break;
     }

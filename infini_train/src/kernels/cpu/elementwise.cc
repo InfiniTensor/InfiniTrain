@@ -3,6 +3,7 @@
 #include <cmath>
 #include <functional>
 #include <memory>
+#include <numeric>
 #include <utility>
 
 #include "glog/logging.h"
@@ -32,7 +33,8 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
 
 std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b,
                                       std::function<float(float, float)> binary_fn) {
-    // TODO(dcj): Use broadcast rule instead later.
+    // TODO(dcj): Broadcasting will be supported in the future.
+    // Currently, only one-way broadcasting from b to a is assumed by default.
     CHECK(a->NumElements() >= b->NumElements() && a->NumElements() % b->NumElements() == 0);
 
     auto output = std::make_shared<Tensor>(a->Dims(), DataType::kFLOAT32);
@@ -45,22 +47,30 @@ std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const st
     return output;
 }
 
-std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> BinaryBackward(const std::shared_ptr<Tensor> &grad_output,
-                                                                           const std::shared_ptr<Tensor> &a,
-                                                                           const std::shared_ptr<Tensor> &b,
-                                                                           std::function<float(float, float)> fn_a,
-                                                                           std::function<float(float, float)> fn_b) {
+std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
+BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &a,
+               const std::shared_ptr<Tensor> &b, const std::vector<int64_t> &a_dims, const std::vector<int64_t> &b_dims,
+               std::function<float(float, float)> fn_a, std::function<float(float, float)> fn_b) {
     // TODO(dcj): Use broadcast rule instead later.
-    CHECK(a->NumElements() >= b->NumElements() && a->NumElements() % b->NumElements() == 0);
+    const auto a_num_elements = std::accumulate(a_dims.begin(), a_dims.end(), 1, std::multiplies<int64_t>());
+    const auto b_num_elements = std::accumulate(b_dims.begin(), b_dims.end(), 1, std::multiplies<int64_t>());
 
-    auto grad_a = std::make_shared<Tensor>(a->Dims(), DataType::kFLOAT32);
-    auto grad_b = std::make_shared<Tensor>(b->Dims(), DataType::kFLOAT32);
-    for (int idx = 0; idx < a->NumElements(); ++idx) {
+    CHECK(a_num_elements >= b_num_elements && a_num_elements % b_num_elements == 0);
+    if (a) {
+        CHECK(a_num_elements == a->NumElements());
+    }
+    if (b) {
+        CHECK(b_num_elements == b->NumElements());
+    }
+
+    auto grad_a = std::make_shared<Tensor>(a_dims, DataType::kFLOAT32);
+    auto grad_b = std::make_shared<Tensor>(b_dims, DataType::kFLOAT32);
+    for (int idx = 0; idx < a_num_elements; ++idx) {
         const float x = a ? reinterpret_cast<float *>(a->DataPtr())[idx] : 0.0f;
-        const float y = b ? reinterpret_cast<float *>(b->DataPtr())[idx % b->NumElements()] : 0.0f;
+        const float y = b ? reinterpret_cast<float *>(b->DataPtr())[idx % b_num_elements] : 0.0f;
         const float grad = reinterpret_cast<float *>(grad_output->DataPtr())[idx];
         reinterpret_cast<float *>(grad_a->DataPtr())[idx] = grad * fn_a(x, y);
-        reinterpret_cast<float *>(grad_b->DataPtr())[idx] = grad * fn_a(x, y);
+        reinterpret_cast<float *>(grad_b->DataPtr())[idx % b_num_elements] = grad * fn_b(x, y);
     }
     return {grad_a, grad_b};
 }
@@ -92,9 +102,12 @@ std::shared_ptr<Tensor> AddForward(const std::shared_ptr<Tensor> &a, const std::
     return BinaryForward(a, b, [](float x, float y) { return x + y; });
 }
 
-std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> AddBackward(const std::shared_ptr<Tensor> &grad_output) {
+std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> AddBackward(const std::shared_ptr<Tensor> &grad_output,
+                                                                        const std::vector<int64_t> &a_dims,
+                                                                        const std::vector<int64_t> &b_dims) {
     return BinaryBackward(
-        grad_output, nullptr, nullptr, [](float, float) { return 1.0f; }, [](float, float) { return 1.0f; });
+        grad_output, nullptr, nullptr, a_dims, b_dims, [](float, float) { return 1.0f; },
+        [](float, float) { return 1.0f; });
 }
 
 std::shared_ptr<Tensor> AddScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
@@ -113,7 +126,7 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> MulBackward(const st
                                                                         const std::shared_ptr<Tensor> &b,
                                                                         const std::shared_ptr<Tensor> &grad_output) {
     return BinaryBackward(
-        grad_output, a, b, [](float, float y) { return y; }, [](float x, float) { return x; });
+        grad_output, a, b, a->Dims(), b->Dims(), [](float, float y) { return y; }, [](float x, float) { return x; });
 }
 
 std::shared_ptr<Tensor> MulScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {

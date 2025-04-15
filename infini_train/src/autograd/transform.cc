@@ -70,7 +70,7 @@ std::vector<std::shared_ptr<Tensor>> Transpose::Backward(const std::vector<std::
 }
 
 std::vector<std::shared_ptr<Tensor>> Mask::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    CHECK_EQ(input_tensors.size(), 2);
+    CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
     std::shared_ptr<Tensor> output = nullptr;
@@ -87,7 +87,6 @@ std::vector<std::shared_ptr<Tensor>> Mask::Forward(const std::vector<std::shared
 }
 
 std::vector<std::shared_ptr<Tensor>> Mask::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(saved_tensors_.size(), 1);
     const auto &grad_output = grad_outputs[0];
     std::shared_ptr<Tensor> grad_input = nullptr;
 

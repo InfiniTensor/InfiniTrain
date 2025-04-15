@@ -73,12 +73,12 @@ std::vector<std::shared_ptr<Tensor>> NoOp::Forward(const std::vector<std::shared
     std::shared_ptr<Tensor> output = nullptr;
     switch (input->GetDevice().Type()) {
     case DeviceType::kCPU: {
-        output = kernels::cpu::NoOpForward(input, dims_);
+        output = kernels::cpu::NoOpForward(input, output_dims_);
         break;
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        output = kernels::cuda::NoOpForward(input, dims_);
+        output = kernels::cuda::NoOpForward(input, output_dims_);
         break;
     }
 #endif
@@ -89,6 +89,12 @@ std::vector<std::shared_ptr<Tensor>> NoOp::Forward(const std::vector<std::shared
     return {output};
 }
 
+void NoOp::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                        const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+    const auto &input = input_tensors[0];
+    input_dims_ = input->Dims();
+}
+
 std::vector<std::shared_ptr<Tensor>> NoOp::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
@@ -96,12 +102,12 @@ std::vector<std::shared_ptr<Tensor>> NoOp::Backward(const std::vector<std::share
     const auto device = grad_outputs[0]->GetDevice();
     switch (device.Type()) {
     case DeviceType::kCPU: {
-        auto grad_input = kernels::cpu::NoOpBackward(dims_, grad_output);
+        auto grad_input = kernels::cpu::NoOpBackward(input_dims_, grad_output);
         return {grad_input};
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        auto grad_input = kernels::cuda::NoOpBackward(dims_, grad_output);
+        auto grad_input = kernels::cuda::NoOpBackward(input_dims_, grad_output);
         return {grad_input};
     }
 #endif
