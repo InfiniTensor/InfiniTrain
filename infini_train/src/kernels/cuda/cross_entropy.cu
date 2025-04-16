@@ -31,12 +31,11 @@ __global__ void CrossEntropyForwardKernel(const float *input_ptr, const uint8_t 
 
 std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input,
                                             const std::shared_ptr<Tensor> &target) {
-    CHECK_EQ(input->Dims().size(), 2);
-    const int bs = input->Dims()[0];
-    const int num_classes = input->Dims()[1];
-    CHECK_EQ(target->Dims().size(), 2);
-    CHECK_EQ(bs, target->Dims()[0]);
-    CHECK_EQ(1, target->Dims()[1]);
+    const auto &input_dims = input->Dims();
+    CHECK_GE(input_dims.size(), 2);
+    const int bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
+    const int num_classes = *input_dims.rbegin();
+
     auto batched_output
         = std::make_shared<Tensor>(std::vector<int64_t>{bs}, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
 
@@ -81,12 +80,11 @@ __global__ void CrossEntropyBackwardKernel(const float *input_ptr, float *input_
 std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &input,
                                              const std::shared_ptr<Tensor> &target,
                                              const std::shared_ptr<Tensor> &grad_output) {
-    CHECK_EQ(input->Dims().size(), 2);
-    const int bs = input->Dims()[0];
-    const int num_classes = input->Dims()[1];
-    CHECK_EQ(target->Dims().size(), 2);
-    CHECK_EQ(bs, target->Dims()[0]);
-    CHECK_EQ(1, target->Dims()[1]);
+    const auto &input_dims = input->Dims();
+    CHECK_GE(input_dims.size(), 2);
+    const int bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
+    const int num_classes = *input_dims.rbegin();
+
     CHECK_EQ(grad_output->Dims().size(), 0);
     auto grad_input = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
 
