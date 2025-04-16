@@ -18,7 +18,11 @@ Linear::Linear(int64_t in_features, int64_t out_features, Device device) : Modul
               ->RequiresGrad();
     parameters_[kParamBiasName]
         = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, DataType::kFLOAT32, device)->RequiresGrad();
-    ResetParameters();
+    // ResetParameters();
+    auto *w = parameters_[kParamWeightName].get();
+    w->Fill<float>(0.5);
+    auto *b = parameters_[kParamBiasName].get();
+    b->Fill<float>(0.5);
 }
 
 std::vector<std::shared_ptr<Tensor>> Linear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
