@@ -189,7 +189,7 @@ std::vector<std::shared_ptr<Tensor>> Add::Backward(const std::vector<std::shared
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        auto [grad_a, grad_b] = kernels::cuda::AddBackward(grad_output);
+        auto [grad_a, grad_b] = kernels::cuda::AddBackward(grad_output, a_dims_, b_dims_);
         return {grad_a, grad_b};
         break;
     }
