@@ -135,13 +135,13 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
         // cuBLAS is colmun-major
         // grad_other = input.T * grad_output --> grad_other.T =  grad_output.T * input
         // C = A * B.T ==> grad_other.T[*, n, k] = grad_output.T[*, n, m] * input[*, m, k]
-        // C = grad_other.T[*, k, m]
-        // A = grad_output.T[*, n, k]
-        // B = input.T[*, n, m]
-        const int lda = n, ldb = n, ldc = k;
-        const int64_t strideA = k * n;
-        const int64_t strideB = n * m;
-        const int64_t strideC = m * k;
+        // C = grad_other.T[*, n, k]
+        // A = grad_output.T[*, n, m]
+        // B = input.T[*, m, k]
+        const int lda = n, ldb = m, ldc = n;
+        const int64_t strideA = n * m;
+        const int64_t strideB = m * k;
+        const int64_t strideC = n * k;
         cublasGemmStridedBatchedEx(handle, CUBLAS_OP_N, CUBLAS_OP_T, n, k, m, &alpha, grad_output->DataPtr(),
                                    CUDA_R_32F, lda, strideA, input->DataPtr(), CUDA_R_32F, ldb, strideB, &beta,
                                    grad_other->DataPtr(), CUDA_R_32F, ldc, strideC, bs, CUDA_R_32F,
