@@ -28,6 +28,7 @@ if(USE_CUDA)
 
     # enable CUDA-related compilation options
     # set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} ${CMAKE_INCLUDE_PATH} -Xcompiler -fPIC --expt-relaxed-constexpr")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda")
 
     include_directories(${PROJECT_SOURCE_DIR})
     file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
