@@ -27,7 +27,7 @@ std::vector<std::shared_ptr<Tensor>> Matmul::Forward(const std::vector<std::shar
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        output = kernels::cuda::LinearForward(input1, input2, false, nullptr);
+        output = kernels::cuda::MatmulForward(input1, input2);
         break;
     }
 #endif
@@ -61,8 +61,7 @@ std::vector<std::shared_ptr<Tensor>> Matmul::Backward(const std::vector<std::sha
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        auto [grad_input1, grad_input2, _]
-            = kernels::cuda::LinearBackward(input1, input2, false, out_features_, grad_output, false);
+        auto [grad_input1, grad_input2] = kernels::cuda::MatmulBackward(input1, input2, grad_output);
         return {grad_input1, grad_input2};
     }
 #endif
