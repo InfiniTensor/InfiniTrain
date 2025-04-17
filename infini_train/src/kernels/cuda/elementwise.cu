@@ -35,6 +35,7 @@ __global__ void BinaryForwardKernel(T *output, Func fn, size_t num_elements_a, s
     }
 }
 
+// launch the given kernel function with the given output and inputs
 template <size_t BLOCK_SIZE, typename T, typename Kernel, typename... Inputs>
 void LaunchKernel(Kernel &&kernel, const std::shared_ptr<Tensor> &output, const Inputs &...inputs) {
     auto extract_ptrs = [](const auto &...ts) { return std::make_tuple(static_cast<T *>(ts->DataPtr())...); };
@@ -53,7 +54,10 @@ void LaunchKernel(Kernel &&kernel, const std::shared_ptr<Tensor> &output, const 
     }
 }
 
-// launch the kernel function given the output, inputs, and the operation function
+/**
+ * launch a forward elementwise operation given the calculation function, output, and the inputs
+ * Note: currently only support unary and binary operations
+ */
 template <size_t BLOCK_SIZE, typename T, typename Func, typename... Inputs>
 void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Inputs &...inputs) {
     T *output_ptr = static_cast<T *>(output->DataPtr());
