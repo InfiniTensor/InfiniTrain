@@ -70,7 +70,8 @@ void LaunchForward(const std::shared_ptr<Tensor> &output, const std::shared_ptr<
     for (int i = 0; i < dim; ++i) { outer_size *= input_dims[i]; };
     for (int i = dim + 1; i < input_dims.size(); ++i) { inner_size *= input_dims[i]; };
     if (axis_size == 0) {
-        LOG(ERROR) << "CUDA softmax forward: 'input_dims[dim] == 0' at " << __FILE__ << ":" << __LINE__;
+        LOG(INFO) << "CUDA softmax forward: 'input_dims[dim] == 0' at " << __FILE__ << ":" << __LINE__;
+        return;
     }
     if (outer_size == 0) {
         return;
@@ -83,7 +84,7 @@ void LaunchForward(const std::shared_ptr<Tensor> &output, const std::shared_ptr<
     cudaGetDeviceProperties(&prop, input->GetDevice().Index());
 
     if (BLOCK_SIZE > prop.maxThreadsPerBlock) {
-        LOG(ERROR) << "CUDA softmax forward: 'BLOCK_SIZE used is larger than the max number of thread per block' at "
+        LOG(FATAL) << "CUDA softmax forward: 'BLOCK_SIZE used is larger than the max number of thread per block' at "
                    << __FILE__ << ":" << __LINE__;
     }
     dim3 block_dims(BLOCK_SIZE);
@@ -105,7 +106,7 @@ std::shared_ptr<Tensor> SoftmaxForward(const std::shared_ptr<Tensor> &input, int
         LaunchForward<256, float>(output, input, dim);
         break;
     default:
-        return nullptr;
+        LOG(FATAL) << "CUDA softmax forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
 
     return output;
@@ -154,7 +155,8 @@ void LaunchBackward(const std::shared_ptr<Tensor> &grad_input, const std::shared
     for (int i = 0; i < dim; ++i) { outer_size *= output_dims[i]; };
     for (int i = dim + 1; i < output_dims.size(); ++i) { inner_size *= output_dims[i]; };
     if (axis_size == 0) {
-        LOG(ERROR) << "CUDA softmax backward: 'output_dims[dim] == 0' at " << __FILE__ << ":" << __LINE__;
+        LOG(INFO) << "CUDA softmax backward: 'output_dims[dim] == 0' at " << __FILE__ << ":" << __LINE__;
+        return;
     }
     if (outer_size == 0) {
         return;
@@ -168,7 +170,7 @@ void LaunchBackward(const std::shared_ptr<Tensor> &grad_input, const std::shared
     cudaGetDeviceProperties(&prop, output->GetDevice().Index());
 
     if (BLOCK_SIZE > prop.maxThreadsPerBlock) {
-        LOG(ERROR) << "CUDA softmax backward: 'BLOCK_SIZE used is larger than the max number of thread per block' at "
+        LOG(FATAL) << "CUDA softmax backward: 'BLOCK_SIZE used is larger than the max number of thread per block' at "
                    << __FILE__ << ":" << __LINE__;
     }
     dim3 block(BLOCK_SIZE);
@@ -192,7 +194,7 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
         LaunchBackward<256, float>(grad_input, grad_output, output, dim);
         break;
     default:
-        return nullptr;
+        LOG(FATAL) << "CUDA softmax backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
 
     return grad_input;
