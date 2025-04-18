@@ -94,7 +94,7 @@ __global__ void TransposeForwardKernel(const float *input, float *output, const 
         // the corresponding dim in input after swapping dim0 & dim1
         int64_t mapped_dim = coord;
         if (i == dim0) {
-            mapped_dim = remaining / out_strides[dim1]; // 注意 remaining 已变
+            mapped_dim = remaining / out_strides[dim1];
         } else if (i == dim1) {
             mapped_dim = remaining / out_strides[dim0];
         }
