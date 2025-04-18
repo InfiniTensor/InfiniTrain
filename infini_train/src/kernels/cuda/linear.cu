@@ -66,12 +66,12 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
     int lda = n;
     int ldb = k;
     int ldc = n;
-    int64_t strideA = n * k;
-    int64_t strideB = k * m;
-    int64_t strideC = m * n;
+    int64_t stride_a = n * k;
+    int64_t stride_b = k * m;
+    int64_t stride_c = m * n;
     cublasGemmStridedBatchedEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, &alpha, other->DataPtr(), CUDA_R_32F, lda,
-                               strideA, input->DataPtr(), CUDA_R_32F, ldb, strideB, &beta, output->DataPtr(),
-                               CUDA_R_32F, ldc, strideC, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT);
+                               stride_a, input->DataPtr(), CUDA_R_32F, ldb, stride_b, &beta, output->DataPtr(),
+                               CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT);
 
     cublasDestroy(handle);
     return output;
@@ -105,8 +105,8 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
         CHECK_EQ(input_dims[i], grad_output_dims[i]) << "Batch dims must match";
     }
 
-    auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32);
-    auto grad_other = std::make_shared<Tensor>(other_dims, DataType::kFLOAT32);
+    auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
+    auto grad_other = std::make_shared<Tensor>(other_dims, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
     grad_input->Fill<float>(0.0f);
     grad_other->Fill<float>(0.0f);
 
@@ -122,12 +122,12 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
         // A = other.T[*, n, k]
         // B = grad_output.T[*, n, m]
         const int lda = n, ldb = n, ldc = k;
-        const int64_t strideA = k * n;
-        const int64_t strideB = n * m;
-        const int64_t strideC = m * k;
+        const int64_t stride_a = k * n;
+        const int64_t stride_b = n * m;
+        const int64_t stride_c = m * k;
         cublasGemmStridedBatchedEx(handle, CUBLAS_OP_T, CUBLAS_OP_N, k, m, n, &alpha, other->DataPtr(), CUDA_R_32F, lda,
-                                   strideA, grad_output->DataPtr(), CUDA_R_32F, ldb, strideB, &beta,
-                                   grad_input->DataPtr(), CUDA_R_32F, ldc, strideC, bs, CUDA_R_32F,
+                                   stride_a, grad_output->DataPtr(), CUDA_R_32F, ldb, stride_b, &beta,
+                                   grad_input->DataPtr(), CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F,
                                    CUBLAS_GEMM_DEFAULT);
     }
 
@@ -139,12 +139,12 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
         // A = grad_output.T[*, n, m]
         // B = input.T[*, m, k]
         const int lda = n, ldb = m, ldc = n;
-        const int64_t strideA = n * m;
-        const int64_t strideB = m * k;
-        const int64_t strideC = n * k;
+        const int64_t stride_a = n * m;
+        const int64_t stride_b = m * k;
+        const int64_t stride_c = n * k;
         cublasGemmStridedBatchedEx(handle, CUBLAS_OP_N, CUBLAS_OP_T, n, k, m, &alpha, grad_output->DataPtr(),
-                                   CUDA_R_32F, lda, strideA, input->DataPtr(), CUDA_R_32F, ldb, strideB, &beta,
-                                   grad_other->DataPtr(), CUDA_R_32F, ldc, strideC, bs, CUDA_R_32F,
+                                   CUDA_R_32F, lda, stride_a, input->DataPtr(), CUDA_R_32F, ldb, stride_b, &beta,
+                                   grad_other->DataPtr(), CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F,
                                    CUBLAS_GEMM_DEFAULT);
     }
 
@@ -210,6 +210,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
 
     // C = alpha * op(B) * op(A) + beta * C
     // output = alpha * (input * weight) + beta * output
+    // TODO(zbl): use cublasSgemv if possible
     cublasSgemm(handle, op_weight, CUBLAS_OP_N, out_features, bs, in_features, &alpha,
                 static_cast<const float *>(weight->DataPtr()), (op_weight == CUBLAS_OP_N) ? out_features : in_features,
                 static_cast<const float *>(input->DataPtr()), in_features, &beta,
@@ -250,6 +251,7 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     cublasHandle_t handle;
     cublasCreate(&handle);
 
+    // TODO(zbl): use cublasSgemv if possible
     if (transpose) {
         // d_input = d_output * weight --> d_input.T = weight * d_output.T
         CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, in_features, bs, out_features, &alpha,
@@ -276,7 +278,8 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
                                  static_cast<float *>(grad_weight->DataPtr()), out_features));
     }
 
-    // FIXME(dcj): remove this sync
+    // NOTE(zbl): might need explicit sync
+    // TODO(zbl): check the CUDAStream used
     // CUDA_CHECK(cudaDeviceSynchronize());
 
     // d_bias = \sum_i(i=0, bs-1) d_output[i]
