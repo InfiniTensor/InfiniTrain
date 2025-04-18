@@ -11,8 +11,6 @@
 
 namespace infini_train::kernels::cuda {
 
-#define CEIL_DIV(x, y) (((x) + (y)-1) / (y))
-
 template <size_t BLOCK_SIZE, typename T>
 __global__ void SoftmaxForwardKernel(T *output, const T *input, int64_t outer_size, int64_t axis_size,
                                      int64_t inner_size) {
