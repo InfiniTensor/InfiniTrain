@@ -153,7 +153,7 @@ template <typename Func> std::shared_ptr<Tensor> UnaryForward(const std::shared_
         LaunchForward<256, float>(unary_fn, output, input);
         break;
     default:
-        return nullptr;
+        LOG(FATAL) << "CUDA unary forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
 
     return output;
@@ -170,7 +170,7 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
         LaunchBackward<256, float>(unary_fn, output, grad_output, a);
         break;
     default:
-        return nullptr;
+        LOG(FATAL) << "CUDA unary backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
 
     return output;
@@ -190,7 +190,7 @@ std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const st
         LaunchForward<256, float>(binary_fn, output, a, b);
         break;
     default:
-        return nullptr;
+        LOG(FATAL) << "CUDA binary forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
 
     return output;
@@ -225,7 +225,7 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
         LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_num_elements, b_num_elements, grad_output, a, b);
         break;
     default:
-        return {nullptr, nullptr};
+        LOG(FATAL) << "CUDA binary backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
 
     return {grad_a, grad_b};
