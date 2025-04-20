@@ -219,5 +219,205 @@ GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
 
 std::unique_ptr<GPT2> GPT2::FromPretrained(ModelType model_type) {
     // TODO(dcj): implement this later
+    LOG(FATAL) << "Not implemented yet";
     return nullptr;
+}
+
+namespace {
+std::vector<uint8_t> ReadSeveralBytesFromIfstream(size_t num_bytes, std::ifstream *ifs) {
+    std::vector<uint8_t> result(num_bytes);
+    ifs->read(reinterpret_cast<char *>(result.data()), num_bytes);
+    return result;
+}
+
+template <typename T> T BytesToType(const std::vector<uint8_t> &bytes, size_t offset) {
+    static_assert(std::is_trivially_copyable<T>::value, "T must be trivially copyable.");
+    T value;
+    std::memcpy(&value, &bytes[offset], sizeof(T));
+    return value;
+}
+
+constexpr int32_t kHeaderMagic = 20240326;
+constexpr int32_t kHeaderFP32Version = 3;
+} // namespace
+
+std::unique_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
+    std::ifstream ifs(filepath, std::ios::binary);
+    const auto header = ReadSeveralBytesFromIfstream(256, &ifs);
+
+    const auto magic = BytesToType<uint32_t>(header, 0);
+    CHECK_EQ(magic, kHeaderMagic);
+    const auto version = BytesToType<uint32_t>(header, 4);
+    CHECK_EQ(version, kHeaderFP32Version);
+
+    const auto block_size = BytesToType<uint32_t>(header, 8);
+    const auto vocab_size = BytesToType<uint32_t>(header, 12);
+    const auto n_layer = BytesToType<uint32_t>(header, 16);
+    const auto n_head = BytesToType<uint32_t>(header, 20);
+    const auto n_embd = BytesToType<uint32_t>(header, 24);
+    auto gpt2 = std::make_unique<GPT2>(GPT2Config{
+        .block_size = block_size, .vocab_size = vocab_size, .n_layer = n_layer, .n_head = n_head, .n_embd = n_embd});
+
+    const auto padded_vocab_size = BytesToType<uint32_t>(header, 28);
+    LOG(ERROR) << magic << " " << version << " " << block_size << " " << vocab_size << " " << n_layer << " " << n_head
+               << " " << n_embd << " " << padded_vocab_size;
+
+    // TODO(dcj): use named_parameters API later.
+
+    // transformer.wte.weight
+    // (vocab_size, n_embd) -> padded -> (padded_vocab_size, n_embd)
+    ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                          ->mutable_module(GPT2::kWTELayerName)
+                                          ->parameter(nn::Embedding::kParamWeightName)
+                                          ->DataPtr()),
+             vocab_size * n_embd * sizeof(float));
+    ifs.ignore((padded_vocab_size - vocab_size) * n_embd * sizeof(float));
+    // transformer.wpe.weight
+    ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                          ->mutable_module(GPT2::kWPELayerName)
+                                          ->parameter(nn::Embedding::kParamWeightName)
+                                          ->DataPtr()),
+             block_size * n_embd * sizeof(float));
+    // transformer.h.{i}.ln_1.weight
+    for (int idx = 0; idx < n_layer; idx++) {
+        ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                              ->mutable_module(GPT2::kHLayerName)
+                                              ->mutable_module(std::to_string(idx))
+                                              ->mutable_module(Block::kLn1LayerName)
+                                              ->parameter(nn::LayerNorm::kParamWeightName)
+                                              ->DataPtr()),
+                 n_embd * sizeof(float));
+    }
+    // transformer.h.{i}.ln_1.bias
+    for (int idx = 0; idx < n_layer; idx++) {
+        ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                              ->mutable_module(GPT2::kHLayerName)
+                                              ->mutable_module(std::to_string(idx))
+                                              ->mutable_module(Block::kLn1LayerName)
+                                              ->parameter(nn::LayerNorm::kParamBiasName)
+                                              ->DataPtr()),
+                 n_embd * sizeof(float));
+    }
+    // transformer.h.{i}.attn.c_attn.weight
+    for (int idx = 0; idx < n_layer; idx++) {
+        ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                              ->mutable_module(GPT2::kHLayerName)
+                                              ->mutable_module(std::to_string(idx))
+                                              ->mutable_module(Block::kAttnLayerName)
+                                              ->mutable_module(CausalSelfAttention::kCAttnLayerName)
+                                              ->parameter(GPT2Linear::kParamWeightName)
+                                              ->DataPtr()),
+                 3 * n_embd * n_embd * sizeof(float));
+    }
+    // transformer.h.{i}.attn.c_attn.bias
+    for (int idx = 0; idx < n_layer; idx++) {
+        ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                              ->mutable_module(GPT2::kHLayerName)
+                                              ->mutable_module(std::to_string(idx))
+                                              ->mutable_module(Block::kAttnLayerName)
+                                              ->mutable_module(CausalSelfAttention::kCAttnLayerName)
+                                              ->parameter(GPT2Linear::kParamBiasName)
+                                              ->DataPtr()),
+                 3 * n_embd * sizeof(float));
+    }
+    // transformer.h.{i}.attn.c_proj.weight
+    for (int idx = 0; idx < n_layer; idx++) {
+        ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                              ->mutable_module(GPT2::kHLayerName)
+                                              ->mutable_module(std::to_string(idx))
+                                              ->mutable_module(Block::kAttnLayerName)
+                                              ->mutable_module(CausalSelfAttention::kCProjLayerName)
+                                              ->parameter(GPT2Linear::kParamWeightName)
+                                              ->DataPtr()),
+                 n_embd * n_embd * sizeof(float));
+    }
+    // transformer.h.{i}.attn.c_proj.bias
+    for (int idx = 0; idx < n_layer; idx++) {
+        ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                              ->mutable_module(GPT2::kHLayerName)
+                                              ->mutable_module(std::to_string(idx))
+                                              ->mutable_module(Block::kAttnLayerName)
+                                              ->mutable_module(CausalSelfAttention::kCProjLayerName)
+                                              ->parameter(GPT2Linear::kParamBiasName)
+                                              ->DataPtr()),
+                 n_embd * sizeof(float));
+    }
+    // transformer.h.{i}.ln_2.weight
+    for (int idx = 0; idx < n_layer; idx++) {
+        ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                              ->mutable_module(GPT2::kHLayerName)
+                                              ->mutable_module(std::to_string(idx))
+                                              ->mutable_module(Block::kLn2LayerName)
+                                              ->parameter(nn::LayerNorm::kParamWeightName)
+                                              ->DataPtr()),
+                 n_embd * sizeof(float));
+    }
+    // transformer.h.{i}.ln_2.bias
+    for (int idx = 0; idx < n_layer; idx++) {
+        ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                              ->mutable_module(GPT2::kHLayerName)
+                                              ->mutable_module(std::to_string(idx))
+                                              ->mutable_module(Block::kLn2LayerName)
+                                              ->parameter(nn::LayerNorm::kParamBiasName)
+                                              ->DataPtr()),
+                 n_embd * sizeof(float));
+    }
+    // transformer.h.{i}.mlp.c_fc.weight
+    for (int idx = 0; idx < n_layer; idx++) {
+        ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                              ->mutable_module(GPT2::kHLayerName)
+                                              ->mutable_module(std::to_string(idx))
+                                              ->mutable_module(Block::kMlpLayerName)
+                                              ->mutable_module(MLP::kCFclayerName)
+                                              ->parameter(GPT2Linear::kParamWeightName)
+                                              ->DataPtr()),
+                 4 * n_embd * n_embd * sizeof(float));
+    }
+    // transformer.h.{i}.mlp.c_fc.bias
+    for (int idx = 0; idx < n_layer; idx++) {
+        ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                              ->mutable_module(GPT2::kHLayerName)
+                                              ->mutable_module(std::to_string(idx))
+                                              ->mutable_module(Block::kMlpLayerName)
+                                              ->mutable_module(MLP::kCFclayerName)
+                                              ->parameter(GPT2Linear::kParamBiasName)
+                                              ->DataPtr()),
+                 4 * n_embd * sizeof(float));
+    }
+    // transformer.h.{i}.mlp.c_proj.weight
+    for (int idx = 0; idx < n_layer; idx++) {
+        ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                              ->mutable_module(GPT2::kHLayerName)
+                                              ->mutable_module(std::to_string(idx))
+                                              ->mutable_module(Block::kMlpLayerName)
+                                              ->mutable_module(MLP::kCProjLayerName)
+                                              ->parameter(GPT2Linear::kParamWeightName)
+                                              ->DataPtr()),
+                 4 * n_embd * n_embd * sizeof(float));
+    }
+    // transformer.h.{i}.mlp.c_proj.bias
+    for (int idx = 0; idx < n_layer; idx++) {
+        ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                              ->mutable_module(GPT2::kHLayerName)
+                                              ->mutable_module(std::to_string(idx))
+                                              ->mutable_module(Block::kMlpLayerName)
+                                              ->mutable_module(MLP::kCProjLayerName)
+                                              ->parameter(GPT2Linear::kParamBiasName)
+                                              ->DataPtr()),
+                 n_embd * sizeof(float));
+    }
+    // transformer.ln_f.weight
+    ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                          ->mutable_module(GPT2::kLnFLayerName)
+                                          ->parameter(nn::LayerNorm::kParamWeightName)
+                                          ->DataPtr()),
+             n_embd * sizeof(float));
+    // transformer.ln_f.weight
+    ifs.read(reinterpret_cast<char *>(gpt2->mutable_module(GPT2::kTransformerLayerName)
+                                          ->mutable_module(GPT2::kLnFLayerName)
+                                          ->parameter(nn::LayerNorm::kParamBiasName)
+                                          ->DataPtr()),
+             n_embd * sizeof(float));
+
+    return gpt2;
 }

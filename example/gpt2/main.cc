@@ -20,6 +20,7 @@
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_string(input_val_bin, "", "input .bin to eval validation loss on");
+DEFINE_string(llmc_filepath, "", "llmc model file path to load from");
 DEFINE_string(model, "gpt2", "gpt2|gpt2-medium|gpt2-large|gpt2-xl|d12|d24|d36|d48");
 // token layout for each step of the optimization
 DEFINE_uint32(batch_size, 4, "batch size, in units of #batch dimensions");
@@ -91,7 +92,9 @@ int main(int argc, char *argv[]) {
     // init the model, either from scratch or from OpenAI pretrained checkpoint
     GPT2Config model_config;
     std::unique_ptr<GPT2> model = nullptr;
-    if (kModelToConfigs.count(FLAGS_model)) {
+    if (!FLAGS_llmc_filepath.empty()) {
+        model = GPT2::FromLLMC(FLAGS_llmc_filepath);
+    } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
         model = std::make_unique<GPT2>(model_config);
     } else {

@@ -9,11 +9,6 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-namespace {
-constexpr char kParamWeightName[] = "weight";
-constexpr char kParamBiasName[] = "bias";
-} // namespace
-
 LayerNorm::LayerNorm(const std::vector<int64_t> &normalized_shape, float eps, Device device) : eps_(eps) {
     device_ = device;
 

@@ -37,7 +37,7 @@ public:
 
 protected:
     Device device_; // CPU by default
-    const std::string type_;
+    const std::string type_ = kUndefinedType;
     std::unordered_map<std::string, std::unique_ptr<Module>> modules_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;
 };
