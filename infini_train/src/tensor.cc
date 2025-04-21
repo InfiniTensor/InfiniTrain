@@ -10,6 +10,8 @@
 #ifdef USE_CUDA
 #include "cuda_runtime_api.h"
 #endif
+
+#include "Eigen/Dense"
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/elementwise.h"
@@ -123,6 +125,18 @@ template <typename T> void Tensor::Fill(T value) {
 }
 
 template void Tensor::Fill<float>(float);
+
+Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> Tensor::EigenMatrix() {
+    const int64_t bs = std::accumulate(dims_.rbegin() + 1, dims_.rend(), 1, std::multiplies<int64_t>());
+    return Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(
+        reinterpret_cast<float *>(DataPtr()), bs, *dims_.rbegin());
+}
+
+Eigen::Map<Eigen::Matrix<float, 1, Eigen::Dynamic, Eigen::RowMajor>> Tensor::EigenVector() {
+    CHECK_EQ(dims_.size(), 1);
+    return Eigen::Map<Eigen::Matrix<float, 1, Eigen::Dynamic, Eigen::RowMajor>>(reinterpret_cast<float *>(DataPtr()), 1,
+                                                                                dims_[0]);
+}
 
 Tensor Tensor::To(Device device) {
     if (device == buffer_->GetDevice()) {
