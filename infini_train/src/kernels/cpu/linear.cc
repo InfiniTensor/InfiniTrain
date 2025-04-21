@@ -106,11 +106,11 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
 std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
                                       bool transpose, const std::shared_ptr<Tensor> &bias) {
     /*
-    !transpose: output = input * weight + bias
-    output[*, out_features] = input[*, in_features] * weight[in_features, out_features] + bias[out_features]
-
     transpose:  output = input * weight^T + bias
     output[*, out_features] = input[*, in_features] * weight[out_features, in_features]^T + bias[out_features]
+
+    !transpose: output = input * weight + bias
+    output[*, out_features] = input[*, in_features] * weight[in_features, out_features] + bias[out_features]
     */
 
     const auto &input_dims = input->Dims();
@@ -130,24 +130,32 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     auto output_dims = input_dims;
     *output_dims.rbegin() = out_features;
     auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32);
-    for (int64_t i = 0; i < bs; ++i) {
-        for (int64_t j = 0; j < out_features; ++j) {
-            auto *data_ptr = static_cast<float *>(output->DataPtr()) + i * out_features + j;
-            *data_ptr = 0.0f;
-            for (int64_t k = 0; k < in_features; ++k) {
-                *data_ptr += reinterpret_cast<const float *>(input->DataPtr())[i * in_features + k]
-                           * reinterpret_cast<const float *>(
-                                 weight->DataPtr())[transpose ? j * in_features + k : k * out_features + j];
-            }
-            *data_ptr += reinterpret_cast<const float *>(bias->DataPtr())[j];
-        }
+
+    if (transpose) {
+        output->EigenMatrix() = input->EigenMatrix() * weight->EigenMatrix().transpose();
+    } else {
+        output->EigenMatrix() = input->EigenMatrix() * weight->EigenMatrix();
     }
+    output->EigenMatrix().rowwise() += bias->EigenVector();
+
     return output;
 }
 
 std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
 LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight, bool transpose,
                int64_t out_features, const std::shared_ptr<Tensor> &grad_output) {
+    /*
+    transpose: grad_input = grad_output * weight
+    grad_input[*, in_features] = grad_output[*, out_features] * weight[out_features, in_features]
+    grad_weight[out_features, in_features] = grad_output[*, out_features]^T * input[*, in_features]
+    grad_bias[out_features] = grad_output[*, out_features].sum(axis=0)
+
+    !transpose: grad_input = grad_output * weight^T
+    grad_input[*, in_features] = grad_output[_, out_features] * weight[in_features, out_features]^T
+    grad_weight[in_features, out_features] = input[*, in_features]^T * grad_output[*, out_features]
+    grad_bias[out_features] = grad_output[*, out_features].sum(axis=0)
+    */
+
     const auto &input_dims = input->Dims();
     CHECK_GE(input_dims.size(), 2);
     const int64_t bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
@@ -160,28 +168,17 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
 
     auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32);
     auto grad_weight = std::make_shared<Tensor>(weight_dims, DataType::kFLOAT32);
-    grad_weight->Fill<float>(0.0f);
     auto grad_bias = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, DataType::kFLOAT32);
-    grad_bias->Fill<float>(0.0f);
 
-    for (int64_t i = 0; i < bs; ++i) {
-        for (int64_t j = 0; j < in_features; ++j) {
-            const auto input_idx = i * in_features + j;
-            auto *data_ptr = static_cast<float *>(grad_input->DataPtr()) + input_idx;
-            *data_ptr = 0.0f;
-            for (int64_t k = 0; k < out_features; ++k) {
-                const auto weight_idx = transpose ? k * in_features + j : j * out_features + k;
-                const auto grad = reinterpret_cast<const float *>(grad_output->DataPtr())[i * out_features + k];
-                *data_ptr += grad * reinterpret_cast<const float *>(weight->DataPtr())[weight_idx];
-                static_cast<float *>(grad_weight->DataPtr())[weight_idx]
-                    += grad * reinterpret_cast<const float *>(input->DataPtr())[input_idx];
-            }
-        }
-        for (int64_t k = 0; k < out_features; ++k) {
-            static_cast<float *>(grad_bias->DataPtr())[k]
-                += reinterpret_cast<const float *>(grad_output->DataPtr())[i * out_features + k];
-        }
+    if (transpose) {
+        grad_input->EigenMatrix() = grad_output->EigenMatrix() * weight->EigenMatrix();
+        grad_weight->EigenMatrix() = grad_output->EigenMatrix().transpose() * input->EigenMatrix();
+    } else {
+        grad_input->EigenMatrix() = grad_output->EigenMatrix() * weight->EigenMatrix().transpose();
+        grad_weight->EigenMatrix() = input->EigenMatrix().transpose() * grad_output->EigenMatrix();
     }
+    grad_bias->EigenVector() = grad_output->EigenMatrix().colwise().sum();
+
     return {grad_input, grad_weight, grad_bias};
 }
 } // namespace infini_train::kernels::cpu
