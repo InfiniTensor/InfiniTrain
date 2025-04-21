@@ -162,10 +162,10 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
     // don't init this one, we will tie weights
     modules_[kLMHeadLayerName] = std::make_unique<GPT2Linear>(config.n_embd, config.vocab_size, false, true);
     // https://paperswithcode.com/method/weight-tying
-    mutable_module(kTransformerLayerName)
+    *mutable_module(kTransformerLayerName)
         ->mutable_module(kWTELayerName)
         ->mutable_parameter(GPT2Linear::kParamWeightName)
-        ->reset(module(kLMHeadLayerName).parameter(GPT2Linear::kParamWeightName).get());
+        = module(kLMHeadLayerName).parameter(GPT2Linear::kParamWeightName);
 
     // init all weights
     Apply([&](Module *module) {

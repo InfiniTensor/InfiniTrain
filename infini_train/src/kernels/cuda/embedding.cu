@@ -36,11 +36,10 @@ __global__ void EmbeddingForwardKernel(const uint16_t *input, float *output, con
 }
 
 std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight) {
-    CHECK_EQ(input->Dims().size(), 2);
     CHECK_EQ(weight->Dims().size(), 2);
 
-    const int batch_size = input->Dims()[0];
-    const int max_seqlen = input->Dims()[1];
+    const int batch_size = input->Dims().size() == 2 ? input->Dims()[0] : 1;
+    const int max_seqlen = input->Dims().size() == 2 ? input->Dims()[1] : input->Dims()[0];
     const int embed_dim = weight->Dims()[1];
 
     auto output = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen, embed_dim}, DataType::kFLOAT32,
@@ -75,11 +74,10 @@ __global__ void WeightBackwardKernel(float *grad_weight, const float *grad_outpu
 
 std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::vector<int64_t> &weight_dims,
                                           const std::shared_ptr<Tensor> &grad_output) {
-    CHECK_EQ(input->Dims().size(), 2);
     CHECK_EQ(weight_dims.size(), 2);
 
-    const int batch_size = input->Dims()[0];
-    const int max_seqlen = input->Dims()[1];
+    const int batch_size = input->Dims().size() == 2 ? input->Dims()[0] : 1;
+    const int max_seqlen = input->Dims().size() == 2 ? input->Dims()[1] : input->Dims()[0];
     const int embed_dim = weight_dims[1];
 
     auto grad_weight = std::make_shared<Tensor>(weight_dims, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
