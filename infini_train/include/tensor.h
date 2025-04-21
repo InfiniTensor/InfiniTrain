@@ -7,6 +7,7 @@
 #include <random>
 #include <vector>
 
+#include "Eigen/Dense"
 #include "glog/logging.h"
 
 #include "infini_train/include/device.h"
@@ -68,6 +69,9 @@ public:
     DataType Dtype() const;
 
     template <typename T> void Fill(T value);
+
+    Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> EigenMatrix();
+    Eigen::Map<Eigen::Matrix<float, 1, Eigen::Dynamic, Eigen::RowMajor>> EigenVector();
 
     // TODO(dcj): return shared_ptr<Tensor> instead of Tensor later
     Tensor To(Device device);
