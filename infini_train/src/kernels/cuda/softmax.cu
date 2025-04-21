@@ -11,6 +11,14 @@
 
 namespace infini_train::kernels::cuda {
 
+#define CUDA_CHECK(call)                                                                                               \
+    do {                                                                                                               \
+        cudaError_t status = call;                                                                                     \
+        if (status != cudaSuccess) {                                                                                   \
+            LOG(FATAL) << "CUDA Error: " << cudaGetErrorString(status) << " at " << __FILE__ << ":" << __LINE__;       \
+        }                                                                                                              \
+    } while (0)
+
 template <size_t BLOCK_SIZE, typename T>
 __global__ void SoftmaxForwardKernel(T *output, const T *input, int64_t outer_size, int64_t axis_size,
                                      int64_t inner_size) {
@@ -108,7 +116,7 @@ std::shared_ptr<Tensor> SoftmaxForward(const std::shared_ptr<Tensor> &input, int
     default:
         LOG(FATAL) << "CUDA softmax forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
-
+    CUDA_CHECK(cudaDeviceSynchronize());
     return output;
 }
 
