@@ -1,6 +1,5 @@
 #include <cstdlib>
 #include <format>
-#include <iostream>
 #include <memory>
 #include <optional>
 #include <unordered_map>

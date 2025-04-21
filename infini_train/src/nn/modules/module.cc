@@ -46,6 +46,15 @@ const Module &Module::module(const std::string &name) const {
     return *modules_.at(name).get();
 }
 
+std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() const {
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> state;
+    for (auto &[name, param] : parameters_) { state.emplace(name, param); }
+    for (auto &[name, layer] : modules_) {
+        for (auto &[sub_name, param] : layer->StateDict()) { state.emplace(name + "." + sub_name, param); }
+    }
+    return state;
+}
+
 void Module::To(Device device) {
     if (device == device_) {
         return;

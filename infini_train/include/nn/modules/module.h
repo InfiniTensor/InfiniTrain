@@ -29,6 +29,8 @@ public:
     Module *mutable_module(const std::string &name);
     const Module &module(const std::string &name) const;
 
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
+
     virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) = 0;
 
     void To(Device device);
