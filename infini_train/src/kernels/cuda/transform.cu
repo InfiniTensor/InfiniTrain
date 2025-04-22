@@ -144,7 +144,7 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
 
     TransposeForwardKernel<<<num_blocks, threads_per_block>>>(
         reinterpret_cast<const float *>(input->DataPtr()), reinterpret_cast<float *>(output->DataPtr()), in_dims_dev,
-        in_strides_dev, out_strides_dev, ndim, dim0, dim1, threads_per_block);
+        in_strides_dev, out_strides_dev, ndim, dim0, dim1, num_elements);
 
     cudaFree(in_dims_dev);
     cudaFree(in_strides_dev);

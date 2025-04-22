@@ -153,6 +153,15 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     return {grad_input, grad_other};
 }
 
+__global__ void BiasCopyKernel(float *output, const float *bias, int bs, int out_features) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= bs * out_features) {
+        return;
+    }
+    int j = idx % out_features;
+    output[idx] = bias[j];
+}
+
 std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
                                       bool transpose, const std::shared_ptr<Tensor> &bias) {
 
@@ -189,10 +198,10 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     if (bias) {
         CHECK_EQ(bias->Dims().size(), 1);
         CHECK_EQ(bias->Dims()[0], out_features);
-        for (int i = 0; i < bs; ++i) {
-            cudaMemcpy(static_cast<float *>(output->DataPtr()) + i * out_features, bias->DataPtr(),
-                       out_features * sizeof(float), cudaMemcpyDeviceToDevice);
-        }
+        int threads_per_block = 256;
+        int num_blocks = (bs * out_features + threads_per_block - 1) / threads_per_block;
+        BiasCopyKernel<<<num_blocks, threads_per_block>>>(
+            static_cast<float *>(output->DataPtr()), static_cast<const float *>(bias->DataPtr()), bs, out_features);
     } else {
         output->Fill<float>(0.0f);
     }
@@ -202,17 +211,17 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     cublasHandle_t handle;
     CUBLAS_CHECK(cublasCreate(&handle));
 
-    // C = alpha * op(B) * op(A) + beta * C
-    // output = alpha * (input * weight) + beta * output
+    // cuBLAS is colmun-major
+    // output = input * weight --> output.T =  weight.T * input.T
+    // C = output.T[out_features, bs]
+    // A = weight.T[out_features, in_features]
+    // B = input.T[in_features, bs]
     // TODO(zbl): use cublasSgemv if possible
     CUBLAS_CHECK(cublasSgemm(handle, op_weight, CUBLAS_OP_N, out_features, bs, in_features, &alpha,
-                             static_cast<const float *>(weight->DataPtr()),
-                             (op_weight == CUBLAS_OP_N) ? out_features : in_features,
+                             static_cast<const float *>(weight->DataPtr()), transpose ? in_features : out_features,
                              static_cast<const float *>(input->DataPtr()), in_features, &beta,
                              static_cast<float *>(output->DataPtr()), out_features));
-
     CUBLAS_CHECK(cublasDestroy(handle));
-
     return {output};
 }
 
