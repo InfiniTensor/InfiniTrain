@@ -38,7 +38,8 @@ __global__ void BinaryForwardKernel(T *output, Func fn, size_t num_elements_a, s
 // launch the given kernel function with the given output and inputs
 template <size_t BLOCK_SIZE, typename T, typename Kernel, typename... Inputs>
 void LaunchKernel(Kernel &&kernel, const std::shared_ptr<Tensor> &output, const Inputs &...inputs) {
-    auto extract_ptrs = [](const auto &...ts) { return std::make_tuple(static_cast<T *>(ts->DataPtr())...); };
+    auto extract_ptrs
+        = [](const auto &...ts) { return std::make_tuple(static_cast<T *>(ts ? ts->DataPtr() : nullptr)...); };
     auto input_ptrs = extract_ptrs(inputs...);
 
     cudaDeviceProp prop;
@@ -135,7 +136,6 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     T *output_a_ptr = static_cast<T *>(output_a->DataPtr());
     T *output_b_ptr = static_cast<T *>(output_b->DataPtr());
     const T *grad_output_ptr = static_cast<const T *>(grad_output->DataPtr());
-
     LaunchKernel<BLOCK_SIZE, T>(
         [=](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
             BinaryBackwardKernel<<<grid, block>>>(output_a_ptr, output_b_ptr, fun_a, fun_b, a_num_elements,
@@ -201,7 +201,6 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
 BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &a,
                const std::shared_ptr<Tensor> &b, const std::vector<int64_t> &a_dims, const std::vector<int64_t> &b_dims,
                FuncA fn_a, FuncB fn_b) {
-
     const auto a_num_elements = std::accumulate(a_dims.begin(), a_dims.end(), 1, std::multiplies<int64_t>());
     const auto b_num_elements = std::accumulate(b_dims.begin(), b_dims.end(), 1, std::multiplies<int64_t>());
 
@@ -212,14 +211,15 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     if (b) {
         CHECK(b_num_elements == b->NumElements());
     }
-
     auto dtype = grad_output->Dtype();
-    auto device = a->GetDevice();
-    // Currently a and b should have the same data type
-    CHECK(dtype == b->Dtype());
-    auto grad_a = std::make_shared<Tensor>(a->Dims(), dtype, device);
-    auto grad_b = std::make_shared<Tensor>(b->Dims(), dtype, device);
+    auto device = grad_output->GetDevice();
 
+    // Currently a and b should have the same data type
+    if (a && b) {
+        CHECK(a->Dtype() == b->Dtype());
+    }
+    auto grad_a = std::make_shared<Tensor>(a_dims, dtype, device);
+    auto grad_b = std::make_shared<Tensor>(b_dims, dtype, device);
     switch (dtype) {
     case DataType::kFLOAT32:
         LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_num_elements, b_num_elements, grad_output, a, b);
