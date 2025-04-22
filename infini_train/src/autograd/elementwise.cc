@@ -54,7 +54,7 @@ std::vector<std::shared_ptr<Tensor>> Tanh::Backward(const std::vector<std::share
     }
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
-        grad_input = kernels::cpu::TanhBackward(grad_output, output);
+        grad_input = kernels::cuda::TanhBackward(grad_output, output);
         break;
     }
 #endif
