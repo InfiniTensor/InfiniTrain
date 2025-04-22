@@ -11,6 +11,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/container.h"
@@ -58,6 +59,11 @@ CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
     // (1, 1, block_size, block_size)
     bias_ = nn::function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
                 ->View({1, 1, config_.block_size, config_.block_size});
+}
+
+void CausalSelfAttention::To(infini_train::Device device) {
+    nn::Module::To(device);
+    bias_ = std::make_shared<infini_train::Tensor>(bias_->To(device));
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
@@ -163,8 +169,8 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
     modules_[kLMHeadLayerName] = std::make_unique<GPT2Linear>(config.n_embd, config.vocab_size, false, true);
     // https://paperswithcode.com/method/weight-tying
     *mutable_module(kTransformerLayerName)
-        ->mutable_module(kWTELayerName)
-        ->mutable_parameter(GPT2Linear::kParamWeightName)
+         ->mutable_module(kWTELayerName)
+         ->mutable_parameter(GPT2Linear::kParamWeightName)
         = module(kLMHeadLayerName).parameter(GPT2Linear::kParamWeightName);
 
     // init all weights

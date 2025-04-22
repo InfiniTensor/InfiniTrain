@@ -31,7 +31,7 @@ public:
 
     virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) = 0;
 
-    void To(Device device);
+    virtual void To(Device device);
 
     void Apply(std::function<void(Module *)> fn);
 

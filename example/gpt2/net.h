@@ -34,6 +34,8 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
+    void To(infini_train::Device device) override;
+
 private:
     GPT2Config config_;
     int64_t n_head_ = 0;

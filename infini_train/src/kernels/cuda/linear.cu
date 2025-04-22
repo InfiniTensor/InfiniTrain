@@ -77,7 +77,6 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
                                             CUDA_R_32F, lda, stride_a, input->DataPtr(), CUDA_R_32F, ldb, stride_b,
                                             &beta, output->DataPtr(), CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F,
                                             CUBLAS_GEMM_DEFAULT));
-    CUDA_CHECK(cudaDeviceSynchronize());
     CUBLAS_CHECK(cublasDestroy(handle));
     return output;
 }
@@ -259,7 +258,7 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     if (transpose) {
         // d_input = d_output * weight --> d_input.T = weight * d_output.T
         CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, in_features, bs, out_features, &alpha,
-                                 static_cast<const float *>(weight->DataPtr()), in_features,
+                                 static_cast<const float *>(weight->DataPtr()), out_features,
                                  static_cast<const float *>(grad_output->DataPtr()), out_features, &beta,
                                  static_cast<float *>(grad_input->DataPtr()), in_features));
 
