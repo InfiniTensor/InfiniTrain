@@ -69,10 +69,7 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
     int64_t stride_a = n * k;
     int64_t stride_b = k * m;
     int64_t stride_c = m * n;
-    // TODO(zbl): check GEMM algo
-    // CUBLAS_GEMM_DEFAULT might requires TensorCore
-    // Use CUBLAS_GEMM_ALGO0 to disable TensorCore algos
-
+    // NOTE(zbl): the last cublasGemmAlgo_t param has no effect on GPU arch >= sm_80(Ampere)
     CUBLAS_CHECK(cublasGemmStridedBatchedEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, &alpha, other->DataPtr(),
                                             CUDA_R_32F, lda, stride_a, input->DataPtr(), CUDA_R_32F, ldb, stride_b,
                                             &beta, output->DataPtr(), CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F,
