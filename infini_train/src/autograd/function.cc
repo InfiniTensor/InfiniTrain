@@ -57,7 +57,6 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     auto output_tensors = Forward(input_tensors);
     SetupContext(input_tensors, output_tensors);
 
-    next_functions_.clear();
     bool output_requires_grad = false;
     for (int idx = 0; idx < input_tensors.size(); ++idx) {
         const auto &input_tensor = input_tensors[idx];
