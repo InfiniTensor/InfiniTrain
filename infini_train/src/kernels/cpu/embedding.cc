@@ -13,6 +13,7 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
         -> Embedding (weight: [num_embeddings, embedding_dim])
         -> o: [*, embedding_dim]
     */
+    CHECK(input->Dtype() == DataType::kINT64);
     const auto &input_dims = input->Dims();
     CHECK_EQ(weight->Dims().size(), 2);
     const int embedding_dim = weight->Dims()[1];
@@ -21,7 +22,7 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32);
 
     for (int i = 0; i < input->NumElements(); i++) {
-        int idx = static_cast<int>(reinterpret_cast<const uint16_t *>(input->DataPtr())[i]);
+        int idx = static_cast<int>(reinterpret_cast<const int64_t *>(input->DataPtr())[i]);
         for (int j = 0; j < embedding_dim; j++) {
             reinterpret_cast<float *>(output->DataPtr())[i * embedding_dim + j]
                 = reinterpret_cast<float *>(weight->DataPtr())[idx * embedding_dim + j];
@@ -33,6 +34,7 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
 
 std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::vector<int64_t> &weight_dims,
                                           const std::shared_ptr<Tensor> &grad_output) {
+    CHECK(input->Dtype() == DataType::kINT64);
     CHECK_EQ(weight_dims.size(), 2);
     const int embedding_dim = weight_dims[1];
     CHECK_EQ(input->Dims().size() + 1, grad_output->Dims().size());
@@ -43,7 +45,7 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
     grad_weight->Fill<float>(0.0f);
 
     for (int i = 0; i < input->NumElements(); i++) {
-        int idx = static_cast<int>(reinterpret_cast<const uint16_t *>(input->DataPtr())[i]);
+        int idx = static_cast<int>(reinterpret_cast<const int64_t *>(input->DataPtr())[i]);
         for (int j = 0; j < embedding_dim; j++) {
             reinterpret_cast<float *>(grad_weight->DataPtr())[idx * embedding_dim + i]
                 += reinterpret_cast<float *>(grad_output->DataPtr())[i * embedding_dim + j];
