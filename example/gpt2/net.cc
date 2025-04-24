@@ -249,7 +249,7 @@ constexpr int32_t kHeaderFP32Version = 3;
 
 std::unique_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     std::ifstream ifs(filepath, std::ios::binary);
-    const auto header = ReadSeveralBytesFromIfstream(256, &ifs);
+    const auto header = ReadSeveralBytesFromIfstream(256 * sizeof(int32_t), &ifs);
 
     const auto magic = BytesToType<uint32_t>(header, 0);
     CHECK_EQ(magic, kHeaderMagic);
@@ -271,7 +271,7 @@ std::unique_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
 
     auto state_dict = gpt2->StateDict();
     // transformer.wte.weight
-    // (vocab_size, n_embd) -> padded -> (padded_vocab_size, n_embd)
+    // (padded_vocab_size, n_embd) -> un_pad -> (vocab_size, n_embd)
     auto &transformer_wte_weight = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kWTELayerName,
                                                           nn::Embedding::kParamWeightName)];
     ifs.read(reinterpret_cast<char *>(transformer_wte_weight->DataPtr()), transformer_wte_weight->SizeInBytes());
