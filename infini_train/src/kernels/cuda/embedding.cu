@@ -18,7 +18,7 @@ namespace infini_train::kernels::cuda {
         }                                                                                                              \
     } while (0)
 
-__global__ void EmbeddingForwardKernel(const uint16_t *input, float *output, const float *weight, int batch_size,
+__global__ void EmbeddingForwardKernel(const int64_t *input, float *output, const float *weight, int batch_size,
                                        int max_seqlen, int embed_dim) {
     int idx = (blockIdx.x * blockDim.x + threadIdx.x);
     if (idx >= batch_size * max_seqlen * embed_dim) {
@@ -36,6 +36,7 @@ __global__ void EmbeddingForwardKernel(const uint16_t *input, float *output, con
 }
 
 std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight) {
+    CHECK(input->Dtype() == DataType::kINT64);
     CHECK_EQ(weight->Dims().size(), 2);
 
     const int batch_size = input->Dims().size() == 2 ? input->Dims()[0] : 1;
@@ -48,14 +49,14 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     int threads_per_block = 256;
     int num_blocks = (batch_size * max_seqlen * embed_dim + threads_per_block - 1) / threads_per_block;
     EmbeddingForwardKernel<<<num_blocks, threads_per_block>>>(
-        reinterpret_cast<const uint16_t *>(input->DataPtr()), reinterpret_cast<float *>(output->DataPtr()),
+        reinterpret_cast<const int64_t *>(input->DataPtr()), reinterpret_cast<float *>(output->DataPtr()),
         reinterpret_cast<const float *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim);
 
     return output;
 }
 
-__global__ void WeightBackwardKernel(float *grad_weight, const float *grad_output, const uint16_t *input,
-                                     int batch_size, int max_seqlen, int embed_dim) {
+__global__ void WeightBackwardKernel(float *grad_weight, const float *grad_output, const int64_t *input, int batch_size,
+                                     int max_seqlen, int embed_dim) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= batch_size * max_seqlen) {
         return;
@@ -74,6 +75,7 @@ __global__ void WeightBackwardKernel(float *grad_weight, const float *grad_outpu
 
 std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::vector<int64_t> &weight_dims,
                                           const std::shared_ptr<Tensor> &grad_output) {
+    CHECK(input->Dtype() == DataType::kINT64);
     CHECK_EQ(weight_dims.size(), 2);
 
     const int batch_size = input->Dims().size() == 2 ? input->Dims()[0] : 1;
@@ -88,7 +90,7 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
 
     WeightBackwardKernel<<<num_blocks, threads_per_block>>>(
         reinterpret_cast<float *>(grad_weight->DataPtr()), reinterpret_cast<const float *>(grad_output->DataPtr()),
-        reinterpret_cast<const uint16_t *>(input->DataPtr()), batch_size, max_seqlen, embed_dim);
+        reinterpret_cast<const int64_t *>(input->DataPtr()), batch_size, max_seqlen, embed_dim);
 
     return grad_weight;
 }
