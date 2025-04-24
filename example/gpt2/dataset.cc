@@ -1,6 +1,7 @@
 #include "example/gpt2/dataset.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <fstream>
 #include <functional>
@@ -10,6 +11,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "glog/logging.h"
@@ -69,19 +71,32 @@ TinyShakespeareFile ReadTinyShakespeareFile(const std::string &path, size_t sequ
     const int data_size_in_bytes
         = kTypeToSize.at(text_file.type)
         * std::accumulate(text_file.dims.begin(), text_file.dims.end(), 1, std::multiplies<int>());
-    // shape: (num_seq, seq_len), dtype: uint16
-    text_file.tensor = infini_train::Tensor(text_file.dims, kTypeToDataType.at(text_file.type));
-    ifs.read(reinterpret_cast<char *>(text_file.tensor.DataPtr()), data_size_in_bytes);
+    // shape: (num_seq, seq_len), dtype: int64
+    text_file.tensor = infini_train::Tensor(text_file.dims, DataType::kINT64);
+    int64_t *dst = reinterpret_cast<int64_t *>(text_file.tensor.DataPtr());
+
+    std::variant<std::vector<uint16_t>, std::vector<int32_t>> buffer;
+    if (text_file.type == TinyShakespeareType::kUINT16) {
+        buffer = std::vector<uint16_t>(num_sequences * sequence_length);
+    } else if (text_file.type == TinyShakespeareType::kUINT32) {
+        buffer = std::vector<int32_t>(num_sequences * sequence_length);
+    }
+    std::visit(
+        [&](auto &vec) {
+            ifs.read(reinterpret_cast<char *>(vec.data()), data_size_in_bytes);
+            for (size_t i = 0; i < vec.size(); ++i) { dst[i] = static_cast<int64_t>(vec[i]); }
+        },
+        buffer);
     return text_file;
 }
 } // namespace
 
 TinyShakespeareDataset::TinyShakespeareDataset(const std::string &filepath, size_t sequence_length)
     : text_file_(ReadTinyShakespeareFile(filepath, sequence_length)), sequence_length_(sequence_length),
-      sequence_size_in_bytes_(sequence_length * kTypeToSize.at(text_file_.type)), num_samples_(text_file_.dims[0] - 1) {
+      sequence_size_in_bytes_(sequence_length * sizeof(int64_t)), num_samples_(text_file_.dims[0] - 1) {
     CHECK_LE(sequence_length, 1024); // GPT-2: max_seq_length = 1024
     CHECK_EQ(text_file_.dims[1], sequence_length_);
-    CHECK_EQ(static_cast<int>(text_file_.tensor.Dtype()), static_cast<int>(DataType::kUINT16));
+    CHECK_EQ(static_cast<int>(text_file_.tensor.Dtype()), static_cast<int>(DataType::kINT64));
 }
 
 std::pair<std::shared_ptr<infini_train::Tensor>, std::shared_ptr<infini_train::Tensor>>
@@ -90,8 +105,8 @@ TinyShakespeareDataset::operator[](size_t idx) const {
     std::vector<int64_t> dims = std::vector<int64_t>(text_file_.dims.begin() + 1, text_file_.dims.end());
     // x: (seq_len), y: (seq_len) -> stack -> (bs, seq_len) (bs, seq_len)
     return {std::make_shared<infini_train::Tensor>(text_file_.tensor, idx * sequence_size_in_bytes_, dims),
-            std::make_shared<infini_train::Tensor>(
-                text_file_.tensor, idx * sequence_size_in_bytes_ + kTypeToSize.at(text_file_.type), dims)};
+            std::make_shared<infini_train::Tensor>(text_file_.tensor, idx * sequence_size_in_bytes_ + sizeof(int64_t),
+                                                   dims)};
 }
 
 size_t TinyShakespeareDataset::Size() const { return num_samples_; }
