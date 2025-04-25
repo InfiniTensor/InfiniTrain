@@ -45,12 +45,10 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
 
     int threads_per_block = 256;
     int num_blocks = (bs + threads_per_block - 1) / threads_per_block;
-    LOG(INFO) << "num_blocks: " << num_blocks;
 
     // TODO(dcj): support multi datatypes later
     switch (target->Dtype()) {
     case DataType::kUINT8: {
-        LOG(INFO) << "HHHHHHHHHHHHHHHHHHHH";
         const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
         // FIXME(dcj): do reduce on GPU
         CrossEntropyForwardKernel<uint8_t>
