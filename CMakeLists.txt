@@ -35,7 +35,7 @@ if(USE_CUDA)
     include(FindCUDAToolkit)
 
     # enable CUDA-related compilation options
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
     include_directories(${PROJECT_SOURCE_DIR})
     file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)

@@ -153,6 +153,15 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     return {grad_input, grad_other};
 }
 
+__global__ void BiasCopyKernel(float *output, const float *bias, int bs, int out_features) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= bs * out_features) {
+        return;
+    }
+    int j = idx % out_features;
+    output[idx] = bias[j];
+}
+
 std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
                                       bool transpose, const std::shared_ptr<Tensor> &bias) {
 
@@ -180,7 +189,6 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     //   weight: (in_features, out_features) or (out_features, in_features) if transposed
     //   output: (bs, out_features)
     const int64_t out_features = weight_dims[transpose ? 0 : 1];
-    cublasOperation_t op_weight = transpose ? CUBLAS_OP_T : CUBLAS_OP_N;
 
     auto output_dims = input_dims;
     *output_dims.rbegin() = out_features;
@@ -189,10 +197,10 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     if (bias) {
         CHECK_EQ(bias->Dims().size(), 1);
         CHECK_EQ(bias->Dims()[0], out_features);
-        for (int i = 0; i < bs; ++i) {
-            cudaMemcpy(static_cast<float *>(output->DataPtr()) + i * out_features, bias->DataPtr(),
-                       out_features * sizeof(float), cudaMemcpyDeviceToDevice);
-        }
+        int threads_per_block = 256;
+        int num_blocks = (bs * out_features + threads_per_block - 1) / threads_per_block;
+        BiasCopyKernel<<<num_blocks, threads_per_block>>>(
+            static_cast<float *>(output->DataPtr()), static_cast<const float *>(bias->DataPtr()), bs, out_features);
     } else {
         output->Fill<float>(0.0f);
     }
@@ -201,19 +209,30 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     const float beta = 1.0f;
     cublasHandle_t handle;
     CUBLAS_CHECK(cublasCreate(&handle));
-
-    // C = alpha * op(B) * op(A) + beta * C
-    // output = alpha * (input * weight) + beta * output
     // TODO(zbl): use cublasSgemv if possible
-    CUBLAS_CHECK(cublasSgemm(handle, op_weight, CUBLAS_OP_N, out_features, bs, in_features, &alpha,
-                             static_cast<const float *>(weight->DataPtr()),
-                             (op_weight == CUBLAS_OP_N) ? out_features : in_features,
-                             static_cast<const float *>(input->DataPtr()), in_features, &beta,
-                             static_cast<float *>(output->DataPtr()), out_features));
+    if (transpose) {
+        // weight is [out_features, in_features] here
 
+        // output = input * weight.T --> output.T = weight * input.T
+        // C = output.T[out_features, bs]
+        // A = weight.T[in_features, out_features]
+        // B = input.T[in_features, bs]
+        CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, out_features, bs, in_features, &alpha,
+                                 static_cast<const float *>(weight->DataPtr()), in_features,
+                                 static_cast<const float *>(input->DataPtr()), in_features, &beta,
+                                 static_cast<float *>(output->DataPtr()), out_features));
+    } else {
+        // output = input * weight --> output.T =  weight.T * input.T
+        // C = output.T[out_features, bs]
+        // A = weight.T[out_features, in_features]
+        // B = input.T[in_features, bs]
+        CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, out_features, bs, in_features, &alpha,
+                                 static_cast<const float *>(weight->DataPtr()), out_features,
+                                 static_cast<const float *>(input->DataPtr()), in_features, &beta,
+                                 static_cast<float *>(output->DataPtr()), out_features));
+    }
     CUBLAS_CHECK(cublasDestroy(handle));
-
-    return {output};
+    return output;
 }
 
 __global__ void set_ones(float *data, int num_elements) {
@@ -253,25 +272,41 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
 
     // TODO(zbl): use cublasSgemv if possible
     if (transpose) {
-        // d_input = d_output * weight --> d_input.T = weight * d_output.T
-        CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, in_features, bs, out_features, &alpha,
-                                 static_cast<const float *>(weight->DataPtr()), out_features,
+        // weight is [out_features, in_features] here
+
+        // d_input = d_output * weight --> d_input.T = weight.T * d_output.T
+        // C = d_input.T[in_features, bs]
+        // A = weight.T[in_features, out_features]
+        // B = d_output.T[out_features, bs]
+        CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, in_features, bs, out_features, &alpha,
+                                 static_cast<const float *>(weight->DataPtr()), in_features,
                                  static_cast<const float *>(grad_output->DataPtr()), out_features, &beta,
                                  static_cast<float *>(grad_input->DataPtr()), in_features));
 
         // d_weight = d_output.T * input --> d_weight.T = input.T * d_output
-        CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, out_features, in_features, bs, &alpha,
-                                 static_cast<const float *>(grad_output->DataPtr()), out_features,
-                                 static_cast<const float *>(input->DataPtr()), in_features, &beta,
-                                 static_cast<float *>(grad_weight->DataPtr()), out_features));
+        // C = d_weight.T[in_features, out_features]
+        // A = input.T[in_features, bs]
+        // B = d_output.T[out_features, bs]
+        CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, in_features, out_features, bs, &alpha,
+                                 static_cast<const float *>(input->DataPtr()), in_features,
+                                 static_cast<const float *>(grad_output->DataPtr()), out_features, &beta,
+                                 static_cast<float *>(grad_weight->DataPtr()), in_features));
     } else {
+        // weight is [in_features, out_features] here
+
         // d_input = d_output * weight.T --> d_input.T = weight * d_output.T
+        // C = d_input.T[in_features, bs]
+        // A = weight.T[out_features, in_features]
+        // B = d_output.T[out_features, bs]
         CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, in_features, bs, out_features, &alpha,
                                  static_cast<const float *>(weight->DataPtr()), out_features,
                                  static_cast<const float *>(grad_output->DataPtr()), out_features, &beta,
                                  static_cast<float *>(grad_input->DataPtr()), in_features));
 
         // d_weight = input.T * d_output --> d_weight.T = d_output.T * input
+        // C = d_weight.T[out_features, in_features]
+        // A = d_output.T[out_features, bs]
+        // B = input.T[in_features, bs]
         CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, out_features, in_features, bs, &alpha,
                                  static_cast<const float *>(grad_output->DataPtr()), out_features,
                                  static_cast<const float *>(input->DataPtr()), in_features, &beta,
