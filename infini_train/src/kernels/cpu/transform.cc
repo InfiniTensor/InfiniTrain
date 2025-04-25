@@ -97,7 +97,7 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
 
     for (int i = 0; i < input->NumElements(); ++i) {
         // TODO(dcj): use bool mask when dtype is enabled.
-        if (reinterpret_cast<const float *>(mask->DataPtr())[i % mask->NumElements()] == 1.0) {
+        if ((std::abs(reinterpret_cast<const float *>(mask->DataPtr())[i % mask->NumElements()] - 1.0f) < 1e-5)) {
             reinterpret_cast<float *>(output->DataPtr())[i] = value;
         } else {
             reinterpret_cast<float *>(output->DataPtr())[i] = in_ptr[i];
