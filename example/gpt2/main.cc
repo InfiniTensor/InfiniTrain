@@ -121,8 +121,8 @@ int main(int argc, char *argv[]) {
     loss_fn.To(device);
     LOG(INFO) << "start training";
 
-    for (int step = 0; step < FLAGS_num_iteration; ++step) {
-        const bool last_step = step == FLAGS_num_iteration - 1;
+    for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
+        const bool last_step = step == FLAGS_num_iteration;
         // once in a while evaluate the validation dataset
         if (FLAGS_val_loss_every > 0 && (step % FLAGS_val_loss_every == 0 || last_step) && val_loader.has_value()) {
             // TODO(dcj): implement this after model.eval() is supported
@@ -150,6 +150,8 @@ int main(int argc, char *argv[]) {
         for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
             // (bs, seq_len), (bs, seq_len)
             auto [x, y] = *train_iter;
+            // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
+            // TODO(dcj): support dataloader.reset() later
             ++train_iter;
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
@@ -166,7 +168,9 @@ int main(int argc, char *argv[]) {
             LOG(INFO) << "finish backward";
         }
         optimizer.Step();
-        LOG(INFO) << std::format("step {}/{} | train loss {:.6f}", step, FLAGS_num_iteration, lossf);
+
+        LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e}", step + 1, FLAGS_num_iteration, lossf,
+                                  FLAGS_learning_rate);
     }
 
     gflags::ShutDownCommandLineFlags();
