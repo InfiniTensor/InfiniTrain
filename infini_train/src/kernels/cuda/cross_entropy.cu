@@ -17,7 +17,8 @@ namespace {
 constexpr float kNegativeInfinity = -std::numeric_limits<float>::infinity();
 }
 
-__global__ void CrossEntropyForwardKernel(const float *input_ptr, const uint8_t *target_ptr, float *loss_ptr, int bs,
+template <typename TargetType>
+__global__ void CrossEntropyForwardKernel(const float *input_ptr, const TargetType *target_ptr, float *loss_ptr, int bs,
                                           int num_classes) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < bs) {
@@ -40,15 +41,32 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
         = std::make_shared<Tensor>(std::vector<int64_t>{bs}, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
 
     const float *input_ptr = static_cast<const float *>(input->DataPtr());
-    const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
     float *batched_loss_ptr = static_cast<float *>(batched_output->DataPtr());
 
     int threads_per_block = 256;
     int num_blocks = (bs + threads_per_block - 1) / threads_per_block;
+    LOG(INFO) << "num_blocks: " << num_blocks;
 
-    // FIXME(dcj): do reduce on GPU
-    CrossEntropyForwardKernel<<<num_blocks, threads_per_block>>>(input_ptr, target_ptr, batched_loss_ptr, bs,
-                                                                 num_classes);
+    // TODO(dcj): support multi datatypes later
+    switch (target->Dtype()) {
+    case DataType::kUINT8: {
+        LOG(INFO) << "HHHHHHHHHHHHHHHHHHHH";
+        const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
+        // FIXME(dcj): do reduce on GPU
+        CrossEntropyForwardKernel<uint8_t>
+            <<<num_blocks, threads_per_block>>>(input_ptr, target_ptr, batched_loss_ptr, bs, num_classes);
+        break;
+    }
+    case DataType::kINT64: {
+        const int64_t *target_ptr = static_cast<const int64_t *>(target->DataPtr());
+        // FIXME(dcj): do reduce on GPU
+        CrossEntropyForwardKernel<int64_t>
+            <<<num_blocks, threads_per_block>>>(input_ptr, target_ptr, batched_loss_ptr, bs, num_classes);
+        break;
+    }
+    default:
+        LOG(FATAL) << "Unsupported target data type: " << static_cast<int>(target->Dtype());
+    }
     cudaDeviceSynchronize();
 
     auto loss_cpu = batched_output->To(Device());
@@ -61,7 +79,8 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
     return {std::make_shared<Tensor>(loss->To(Device(DeviceType::kCUDA, 0)))};
 }
 
-__global__ void CrossEntropyBackwardKernel(const float *input_ptr, float *input_grad_ptr, const uint8_t *target_ptr,
+template <typename TargetType>
+__global__ void CrossEntropyBackwardKernel(const float *input_ptr, float *input_grad_ptr, const TargetType *target_ptr,
                                            int bs, int num_classes) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < bs) {
@@ -90,13 +109,27 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
 
     const float *input_ptr = static_cast<const float *>(input->DataPtr());
     float *input_grad_ptr = static_cast<float *>(grad_input->DataPtr());
-    const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
 
     int threads_per_block = 256;
     int num_blocks = (bs + threads_per_block - 1) / threads_per_block;
 
-    CrossEntropyBackwardKernel<<<num_blocks, threads_per_block>>>(input_ptr, input_grad_ptr, target_ptr, bs,
-                                                                  num_classes);
+    // TODO(dcj): support multi datatypes later
+    switch (target->Dtype()) {
+    case DataType::kUINT8: {
+        const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
+        CrossEntropyBackwardKernel<uint8_t>
+            <<<num_blocks, threads_per_block>>>(input_ptr, input_grad_ptr, target_ptr, bs, num_classes);
+        break;
+    }
+    case DataType::kINT64: {
+        const int64_t *target_ptr = static_cast<const int64_t *>(target->DataPtr());
+        CrossEntropyBackwardKernel<int64_t>
+            <<<num_blocks, threads_per_block>>>(input_ptr, input_grad_ptr, target_ptr, bs, num_classes);
+        break;
+    }
+    default:
+        LOG(FATAL) << "Unsupported target data type: " << static_cast<int>(target->Dtype());
+    }
 
     return {grad_input};
 }
