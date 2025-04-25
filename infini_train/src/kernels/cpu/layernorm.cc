@@ -89,6 +89,7 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     auto grad_weight = std::make_shared<Tensor>(weight->Dims(), DataType::kFLOAT32);
     auto grad_bias = std::make_shared<Tensor>(bias->Dims(), DataType::kFLOAT32);
 
+    grad_input->Fill<float>(0.0f);
     grad_weight->Fill<float>(0.0f);
     grad_bias->Fill<float>(0.0f);
 
