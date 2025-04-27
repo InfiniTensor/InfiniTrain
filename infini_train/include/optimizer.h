@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include "infini_train/include/tensor.h"
@@ -26,6 +27,23 @@ public:
 
 private:
     const float learning_rate_ = 0.0;
+};
+
+class Adam : public Optimizer {
+public:
+    Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate = 1e-3, float beta1 = 0.9,
+         float beta2 = 0.999, float eps = 1e-8);
+
+    void Step() override;
+
+private:
+    int64_t t_;
+    const float learning_rate_;
+    const float beta1_;
+    const float beta2_;
+    const float eps_;
+    std::vector<std::shared_ptr<Tensor>> m_;
+    std::vector<std::shared_ptr<Tensor>> v_;
 };
 } // namespace optimizers
 } // namespace infini_train

@@ -41,5 +41,43 @@ void SGD::Step() {
         }
     }
 }
+
+Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate, float beta1, float beta2, float eps)
+    : Optimizer(params), t_(0), learning_rate_(learning_rate), beta1_(beta1), beta2_(beta2), eps_(eps) {
+
+    for (const auto &param : params_) {
+        m_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
+        v_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
+        m_.back()->Fill<float>(0.0f);
+        v_.back()->Fill<float>(0.0f);
+    }
+}
+
+void Adam::Step() {
+    ++t_;
+
+    for (size_t i = 0; i < params_.size(); ++i) {
+        auto &param = params_[i];
+        const auto &grad = param->grad();
+        auto &m = m_[i];
+        auto &v = v_[i];
+
+        switch (param->GetDevice().Type()) {
+        case DeviceType::kCPU: {
+            kernels::cpu::AdamAccumulateGrad(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
+            break;
+        }
+#ifdef USE_CUDA
+        case DeviceType::kCUDA: {
+            kernels::cuda::AdamAccumulateGrad(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
+            break;
+        }
+#endif
+        default:
+            LOG(FATAL) << "Unsupported device type: " << param->GetDevice();
+            break;
+        }
+    }
+}
 } // namespace optimizers
 } // namespace infini_train
