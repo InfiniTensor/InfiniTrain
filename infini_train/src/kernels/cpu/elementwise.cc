@@ -39,9 +39,8 @@ std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const st
 
     auto output = std::make_shared<Tensor>(a->Dims(), DataType::kFLOAT32);
     for (int idx = 0; idx < output->NumElements(); ++idx) {
-        static_cast<float *>(output->DataPtr())[idx]
-            = binary_fn(static_cast<float *>(a->DataPtr())[idx],
-                        static_cast<float *>(b->DataPtr())[idx % b->NumElements()]);
+        static_cast<float *>(output->DataPtr())[idx] = binary_fn(
+            static_cast<float *>(a->DataPtr())[idx], static_cast<float *>(b->DataPtr())[idx % b->NumElements()]);
     }
 
     return output;

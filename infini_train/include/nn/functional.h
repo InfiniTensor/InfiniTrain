@@ -75,4 +75,4 @@ std::shared_ptr<Tensor> Softmax(const std::shared_ptr<Tensor> &input, int64_t di
 std::shared_ptr<Tensor> Slice(const std::shared_ptr<Tensor> &input, const std::vector<int64_t> &starts,
                               const std::vector<int64_t> &ends, const std::vector<int64_t> &steps);
 
-}  // namespace infini_train::nn::function
+} // namespace infini_train::nn::function
