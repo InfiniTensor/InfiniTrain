@@ -53,7 +53,6 @@ private:
 } // namespace
 
 std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    LOG(INFO) << "start forward of function: " << type_;
     auto output_tensors = Forward(input_tensors);
     SetupContext(input_tensors, output_tensors);
 
@@ -86,7 +85,6 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
 }
 
 void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int grad_output_idx) {
-    LOG(INFO) << "start backward_partial of function: " << type_;
     if (!grad_outputs_[grad_output_idx]) {
         grad_outputs_[grad_output_idx] = grad_output;
         ++grad_outputs_reached_;
