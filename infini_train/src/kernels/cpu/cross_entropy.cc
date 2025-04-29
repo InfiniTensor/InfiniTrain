@@ -27,23 +27,23 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
     for (int64_t i = 0; i < bs; ++i) {
         float max_logit = kNegativeInfinity;
         for (int64_t j = 0; j < num_classes; ++j) {
-            max_logit = std::max(max_logit, reinterpret_cast<const float *>(input->DataPtr())[i * num_classes + j]);
+            max_logit = std::max(max_logit, static_cast<const float *>(input->DataPtr())[i * num_classes + j]);
         }
         float sum_exp = 0.0f;
         for (int64_t j = 0; j < num_classes; ++j) {
-            sum_exp += exp(reinterpret_cast<const float *>(input->DataPtr())[i * num_classes + j] - max_logit);
+            sum_exp += exp(static_cast<const float *>(input->DataPtr())[i * num_classes + j] - max_logit);
         }
         // TODO(dcj): support multi datatypes later
         if (target->Dtype() == DataType::kUINT8) {
             static_cast<float *>(output->DataPtr())[0] -= log(
-                exp(reinterpret_cast<const float *>(
-                        input->DataPtr())[i * num_classes + reinterpret_cast<const uint8_t *>(target->DataPtr())[i]]
+                exp(static_cast<const float *>(
+                        input->DataPtr())[i * num_classes + static_cast<const uint8_t *>(target->DataPtr())[i]]
                     - max_logit)
                 / sum_exp);
         } else if (target->Dtype() == DataType::kINT64) {
             static_cast<float *>(output->DataPtr())[0] -= log(
-                exp(reinterpret_cast<const float *>(
-                        input->DataPtr())[i * num_classes + reinterpret_cast<const int64_t *>(target->DataPtr())[i]]
+                exp(static_cast<const float *>(
+                        input->DataPtr())[i * num_classes + static_cast<const int64_t *>(target->DataPtr())[i]]
                     - max_logit)
                 / sum_exp);
         } else {
@@ -68,31 +68,31 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
     for (int64_t i = 0; i < bs; ++i) {
         float max_logit = kNegativeInfinity;
         for (int64_t j = 0; j < num_classes; ++j) {
-            max_logit = std::max(max_logit, reinterpret_cast<const float *>(input->DataPtr())[i * num_classes + j]);
+            max_logit = std::max(max_logit, static_cast<const float *>(input->DataPtr())[i * num_classes + j]);
         }
         float sum_exp = 0.0f;
         for (int64_t j = 0; j < num_classes; ++j) {
-            sum_exp += exp(reinterpret_cast<const float *>(input->DataPtr())[i * num_classes + j] - max_logit);
+            sum_exp += exp(static_cast<const float *>(input->DataPtr())[i * num_classes + j] - max_logit);
         }
         for (int64_t j = 0; j < num_classes; ++j) {
             const auto idx = i * num_classes + j;
-            softmax[idx] = exp(reinterpret_cast<const float *>(input->DataPtr())[idx] - max_logit) / sum_exp;
+            softmax[idx] = exp(static_cast<const float *>(input->DataPtr())[idx] - max_logit) / sum_exp;
         }
     }
     for (int64_t i = 0; i < bs; ++i) {
         auto target_idx = 0;
         // TODO(dcj): support multi datatypes later
         if (target->Dtype() == DataType::kUINT8) {
-            target_idx = reinterpret_cast<const uint8_t *>(target->DataPtr())[i];
+            target_idx = static_cast<const uint8_t *>(target->DataPtr())[i];
         } else if (target->Dtype() == DataType::kINT64) {
-            target_idx = reinterpret_cast<const int64_t *>(target->DataPtr())[i];
+            target_idx = static_cast<const int64_t *>(target->DataPtr())[i];
         } else {
             LOG(FATAL) << "Unsupported target data type: " << static_cast<int>(target->Dtype());
         }
         for (int64_t j = 0; j < num_classes; ++j) {
             const auto idx = i * num_classes + j;
             static_cast<float *>(grad_input->DataPtr())[idx]
-                = reinterpret_cast<const float *>(grad_output->DataPtr())[0]
+                = static_cast<const float *>(grad_output->DataPtr())[0]
                 * (softmax[idx] - (j == target_idx ? 1.0f : 0.0f)) / bs;
         }
     }

@@ -29,11 +29,11 @@ std::shared_ptr<Tensor> FusedEmbeddingForward(const std::shared_ptr<Tensor> &inp
 
     for (int b = 0; b < batch_size; b++) {
         for (int t = 0; t < max_seqlen; t++) {
-            int ix = static_cast<int>(reinterpret_cast<const uint16_t *>(input->DataPtr())[b * max_seqlen + t]);
+            int ix = static_cast<int>(static_cast<const uint16_t *>(input->DataPtr())[b * max_seqlen + t]);
             for (int i = 0; i < embed_dim; i++) {
-                reinterpret_cast<float *>(output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i]
-                    = reinterpret_cast<float *>(wte->DataPtr())[ix * embed_dim + i]
-                    + reinterpret_cast<float *>(wpe->DataPtr())[t * embed_dim + i];
+                static_cast<float *>(output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i]
+                    = static_cast<float *>(wte->DataPtr())[ix * embed_dim + i]
+                    + static_cast<float *>(wpe->DataPtr())[t * embed_dim + i];
             }
         }
     }
@@ -61,12 +61,12 @@ FusedEmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_p
 
     for (int b = 0; b < batch_size; b++) {
         for (int t = 0; t < max_seqlen; t++) {
-            int ix = static_cast<int>(reinterpret_cast<const uint16_t *>(input->DataPtr())[b * max_seqlen + t]);
+            int ix = static_cast<int>(static_cast<const uint16_t *>(input->DataPtr())[b * max_seqlen + t]);
             for (int i = 0; i < embed_dim; i++) {
                 float d
-                    = reinterpret_cast<float *>(grad_output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i];
-                reinterpret_cast<float *>(grad_wte->DataPtr())[ix * embed_dim + i] += d;
-                reinterpret_cast<float *>(grad_wpe->DataPtr())[t * embed_dim + i] += d;
+                    = static_cast<float *>(grad_output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i];
+                static_cast<float *>(grad_wte->DataPtr())[ix * embed_dim + i] += d;
+                static_cast<float *>(grad_wpe->DataPtr())[t * embed_dim + i] += d;
             }
         }
     }

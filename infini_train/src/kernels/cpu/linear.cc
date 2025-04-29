@@ -42,8 +42,8 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
             for (int64_t j = 0; j < n; ++j) {
                 float acc = 0.0f;
                 for (int64_t p = 0; p < k; ++p) {
-                    acc += reinterpret_cast<const float *>(input->DataPtr())[b * m * k + i * k + p]
-                         * reinterpret_cast<const float *>(other->DataPtr())[b * k * n + p * n + j];
+                    acc += static_cast<const float *>(input->DataPtr())[b * m * k + i * k + p]
+                         * static_cast<const float *>(other->DataPtr())[b * k * n + p * n + j];
                 }
                 static_cast<float *>(output->DataPtr())[b * m * n + i * n + j] = acc;
             }
@@ -93,9 +93,9 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
                     const auto input_idx = b * m * k + i * k + p;
                     const auto other_idx = b * k * n + p * n + j;
                     static_cast<float *>(grad_input->DataPtr())[input_idx]
-                        += grad * reinterpret_cast<const float *>(other->DataPtr())[other_idx];
+                        += grad * static_cast<const float *>(other->DataPtr())[other_idx];
                     static_cast<float *>(grad_other->DataPtr())[other_idx]
-                        += grad * reinterpret_cast<const float *>(input->DataPtr())[input_idx];
+                        += grad * static_cast<const float *>(input->DataPtr())[input_idx];
                 }
             }
         }

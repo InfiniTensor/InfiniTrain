@@ -15,7 +15,7 @@ namespace {
 std::shared_ptr<Tensor> UnaryForward(const std::shared_ptr<Tensor> &input, std::function<float(float)> unary_fn) {
     auto output = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32);
     for (int64_t idx = 0; idx < output->NumElements(); ++idx) {
-        reinterpret_cast<float *>(output->DataPtr())[idx] = unary_fn(reinterpret_cast<float *>(input->DataPtr())[idx]);
+        static_cast<float *>(output->DataPtr())[idx] = unary_fn(static_cast<float *>(input->DataPtr())[idx]);
     }
     return output;
 }
@@ -24,9 +24,9 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
                                       std::function<float(float)> unary_fn) {
     auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), DataType::kFLOAT32);
     for (int idx = 0; idx < grad_input->NumElements(); ++idx) {
-        const float x = a ? reinterpret_cast<float *>(a->DataPtr())[idx] : 0.0f;
-        const float grad = reinterpret_cast<float *>(grad_output->DataPtr())[idx];
-        reinterpret_cast<float *>(grad_input->DataPtr())[idx] = grad * unary_fn(x);
+        const float x = a ? static_cast<float *>(a->DataPtr())[idx] : 0.0f;
+        const float grad = static_cast<float *>(grad_output->DataPtr())[idx];
+        static_cast<float *>(grad_input->DataPtr())[idx] = grad * unary_fn(x);
     }
     return grad_input;
 }
@@ -39,9 +39,9 @@ std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const st
 
     auto output = std::make_shared<Tensor>(a->Dims(), DataType::kFLOAT32);
     for (int idx = 0; idx < output->NumElements(); ++idx) {
-        reinterpret_cast<float *>(output->DataPtr())[idx]
-            = binary_fn(reinterpret_cast<float *>(a->DataPtr())[idx],
-                        reinterpret_cast<float *>(b->DataPtr())[idx % b->NumElements()]);
+        static_cast<float *>(output->DataPtr())[idx]
+            = binary_fn(static_cast<float *>(a->DataPtr())[idx],
+                        static_cast<float *>(b->DataPtr())[idx % b->NumElements()]);
     }
 
     return output;
@@ -68,11 +68,11 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     grad_a->Fill<float>(0.0f);
     grad_b->Fill<float>(0.0f);
     for (int idx = 0; idx < a_num_elements; ++idx) {
-        const float x = a ? reinterpret_cast<float *>(a->DataPtr())[idx] : 0.0f;
-        const float y = b ? reinterpret_cast<float *>(b->DataPtr())[idx % b_num_elements] : 0.0f;
-        const float grad = reinterpret_cast<float *>(grad_output->DataPtr())[idx];
-        reinterpret_cast<float *>(grad_a->DataPtr())[idx] = grad * fn_a(x, y);
-        reinterpret_cast<float *>(grad_b->DataPtr())[idx % b_num_elements] += grad * fn_b(x, y);
+        const float x = a ? static_cast<float *>(a->DataPtr())[idx] : 0.0f;
+        const float y = b ? static_cast<float *>(b->DataPtr())[idx % b_num_elements] : 0.0f;
+        const float grad = static_cast<float *>(grad_output->DataPtr())[idx];
+        static_cast<float *>(grad_a->DataPtr())[idx] = grad * fn_a(x, y);
+        static_cast<float *>(grad_b->DataPtr())[idx % b_num_elements] += grad * fn_b(x, y);
     }
     return {grad_a, grad_b};
 }
