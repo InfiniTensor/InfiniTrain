@@ -115,8 +115,7 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
         if ((std::abs(static_cast<const float *>(mask->DataPtr())[i % mask->NumElements()] - 1.0f) < 1e-5)) {
             static_cast<float *>(grad_input->DataPtr())[i] = 0.0;
         } else {
-            static_cast<float *>(grad_input->DataPtr())[i]
-                = static_cast<const float *>(grad_output->DataPtr())[i];
+            static_cast<float *>(grad_input->DataPtr())[i] = static_cast<const float *>(grad_output->DataPtr())[i];
         }
     }
     return grad_input;

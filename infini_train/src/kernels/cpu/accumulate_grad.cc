@@ -8,8 +8,7 @@
 namespace infini_train::kernels::cpu {
 void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const std::shared_ptr<Tensor> &tensor) {
     for (int64_t idx = 0; idx < gradient->NumElements(); ++idx) {
-        static_cast<float *>(tensor->DataPtr())[idx]
-            += rate * static_cast<const float *>(gradient->DataPtr())[idx];
+        static_cast<float *>(tensor->DataPtr())[idx] += rate * static_cast<const float *>(gradient->DataPtr())[idx];
     }
 }
 
