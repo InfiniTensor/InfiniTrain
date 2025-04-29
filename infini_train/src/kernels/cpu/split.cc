@@ -31,8 +31,8 @@ std::vector<std::shared_ptr<Tensor>> SplitForward(const std::shared_ptr<Tensor> 
             const int64_t H_in = input_dims[dim];
             const int64_t H_out = output_dims[dim];
             const int64_t end = std::min(start + split_size, input_dims[dim]);
-            memcpy(reinterpret_cast<float *>(output->DataPtr()) + n * H_out * W,
-                   reinterpret_cast<const float *>(input->DataPtr()) + n * H_in * W + start * W,
+            memcpy(static_cast<float *>(output->DataPtr()) + n * H_out * W,
+                   static_cast<const float *>(input->DataPtr()) + n * H_in * W + start * W,
                    (end - start) * W * sizeof(float));
         }
         outputs.push_back(std::move(output));
@@ -65,8 +65,8 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
             const int64_t H_in = input_dims[dim];
             const int64_t H_out = output_dims[dim];
             const int64_t end = std::min(start + split_size, input_dims[dim]);
-            memcpy(reinterpret_cast<float *>(grad_input->DataPtr()) + n * H_in * W + start * W,
-                   reinterpret_cast<const float *>(grad_output->DataPtr()) + n * H_out * W,
+            memcpy(static_cast<float *>(grad_input->DataPtr()) + n * H_in * W + start * W,
+                   static_cast<const float *>(grad_output->DataPtr()) + n * H_out * W,
                    (end - start) * W * sizeof(float));
         }
     }
