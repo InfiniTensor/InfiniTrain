@@ -14,8 +14,8 @@ __global__ void AccumulateGradKernel(const float *grad_ptr, float rate, float *t
 void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const std::shared_ptr<Tensor> &tensor) {
     size_t num_elements = gradient->NumElements();
 
-    const float *grad_ptr = reinterpret_cast<const float *>(gradient->DataPtr());
-    float *tensor_ptr = reinterpret_cast<float *>(tensor->DataPtr());
+    const float *grad_ptr = static_cast<const float *>(gradient->DataPtr());
+    float *tensor_ptr = static_cast<float *>(tensor->DataPtr());
 
     int threads_per_block = 256;
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
@@ -43,10 +43,10 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
                         float beta1, float beta2, float eps, int64_t t) {
     size_t num_elements = grad->NumElements();
 
-    const float *grad_data = reinterpret_cast<const float *>(grad->DataPtr());
-    float *m_data = reinterpret_cast<float *>(m->DataPtr());
-    float *v_data = reinterpret_cast<float *>(v->DataPtr());
-    float *param_data = reinterpret_cast<float *>(param->DataPtr());
+    const float *grad_data = static_cast<const float *>(grad->DataPtr());
+    float *m_data = static_cast<float *>(m->DataPtr());
+    float *v_data = static_cast<float *>(v->DataPtr());
+    float *param_data = static_cast<float *>(param->DataPtr());
 
     const float bias_correction_m = 1.0f - std::pow(beta1, t);
     const float bias_correction_v = 1.0f - std::pow(beta2, t);

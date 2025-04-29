@@ -76,8 +76,8 @@ void LaunchForward(const std::shared_ptr<Tensor> &output, const std::shared_ptr<
         return;
     }
 
-    T *output_ptr = reinterpret_cast<T *>(output->DataPtr());
-    const T *input_ptr = reinterpret_cast<const T *>(input->DataPtr());
+    T *output_ptr = static_cast<T *>(output->DataPtr());
+    const T *input_ptr = static_cast<const T *>(input->DataPtr());
 
     cudaDeviceProp prop;
     cudaGetDeviceProperties(&prop, input->GetDevice().Index());
@@ -160,9 +160,9 @@ void LaunchBackward(const std::shared_ptr<Tensor> &grad_input, const std::shared
         return;
     }
 
-    T *grad_input_ptr = reinterpret_cast<T *>(grad_input->DataPtr());
-    const T *grad_output_ptr = reinterpret_cast<const T *>(grad_output->DataPtr());
-    const T *output_ptr = reinterpret_cast<const T *>(output->DataPtr());
+    T *grad_input_ptr = static_cast<T *>(grad_input->DataPtr());
+    const T *grad_output_ptr = static_cast<const T *>(grad_output->DataPtr());
+    const T *output_ptr = static_cast<const T *>(output->DataPtr());
 
     cudaDeviceProp prop;
     cudaGetDeviceProperties(&prop, output->GetDevice().Index());
@@ -186,6 +186,7 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
     CHECK(dim >= 0 && dim < output->Dims().size());
 
     auto grad_input = std::make_shared<Tensor>(output_dims, dtype, output->GetDevice());
+    grad_input->Fill<float>(0.0f);
 
     switch (dtype) {
     case DataType::kFLOAT32:
