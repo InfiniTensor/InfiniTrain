@@ -17,9 +17,9 @@ std::shared_ptr<Tensor> TrilForward(const std::shared_ptr<Tensor> &input, int64_
         int64_t row = i / input->Dims()[1];
         int64_t col = i % input->Dims()[1];
         if (row - col + diagonal >= 0) {
-            reinterpret_cast<float *>(output->DataPtr())[i] = reinterpret_cast<float *>(input->DataPtr())[i];
+            static_cast<float *>(output->DataPtr())[i] = static_cast<float *>(input->DataPtr())[i];
         } else {
-            reinterpret_cast<float *>(output->DataPtr())[i] = 0.0;
+            static_cast<float *>(output->DataPtr())[i] = 0.0;
         }
     }
     return output;
@@ -31,9 +31,9 @@ std::shared_ptr<Tensor> TrilBackward(const std::shared_ptr<Tensor> &grad_output,
         int64_t row = i / grad_output->Dims()[1];
         int64_t col = i % grad_output->Dims()[1];
         if (row - col + diagonal >= 0) {
-            reinterpret_cast<float *>(grad_input->DataPtr())[i] = reinterpret_cast<float *>(grad_output->DataPtr())[i];
+            static_cast<float *>(grad_input->DataPtr())[i] = static_cast<float *>(grad_output->DataPtr())[i];
         } else {
-            reinterpret_cast<float *>(grad_input->DataPtr())[i] = 0.0;
+            static_cast<float *>(grad_input->DataPtr())[i] = 0.0;
         }
     }
     return grad_input;
@@ -50,8 +50,8 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
 
     auto output = std::make_shared<Tensor>(out_dims, input->Dtype(), input->GetDevice());
 
-    const float *in_ptr = reinterpret_cast<const float *>(input->DataPtr());
-    float *out_ptr = reinterpret_cast<float *>(output->DataPtr());
+    const float *in_ptr = static_cast<const float *>(input->DataPtr());
+    float *out_ptr = static_cast<float *>(output->DataPtr());
 
     // compute strides of in_dims and out_dims
     std::vector<int64_t> in_strides(in_dims.size(), 1);
@@ -93,14 +93,14 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
     CHECK_EQ(static_cast<int>(input->Dtype()), static_cast<int>(mask->Dtype()));
     auto output = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());
 
-    const float *in_ptr = reinterpret_cast<const float *>(input->DataPtr());
+    const float *in_ptr = static_cast<const float *>(input->DataPtr());
 
     for (int i = 0; i < input->NumElements(); ++i) {
         // TODO(dcj): use bool mask when dtype is enabled.
-        if ((std::abs(reinterpret_cast<const float *>(mask->DataPtr())[i % mask->NumElements()] - 1.0f) < 1e-5)) {
-            reinterpret_cast<float *>(output->DataPtr())[i] = value;
+        if ((std::abs(static_cast<const float *>(mask->DataPtr())[i % mask->NumElements()] - 1.0f) < 1e-5)) {
+            static_cast<float *>(output->DataPtr())[i] = value;
         } else {
-            reinterpret_cast<float *>(output->DataPtr())[i] = in_ptr[i];
+            static_cast<float *>(output->DataPtr())[i] = in_ptr[i];
         }
     }
     return output;
@@ -112,11 +112,11 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
     auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), grad_output->Dtype(), grad_output->GetDevice());
 
     for (int i = 0; i < grad_output->NumElements(); ++i) {
-        if (reinterpret_cast<const float *>(mask->DataPtr())[i % mask->NumElements()] == 1.0) {
-            reinterpret_cast<float *>(grad_input->DataPtr())[i] = 0.0;
+        if (static_cast<const float *>(mask->DataPtr())[i % mask->NumElements()] == 1.0) {
+            static_cast<float *>(grad_input->DataPtr())[i] = 0.0;
         } else {
-            reinterpret_cast<float *>(grad_input->DataPtr())[i]
-                = reinterpret_cast<const float *>(grad_output->DataPtr())[i];
+            static_cast<float *>(grad_input->DataPtr())[i]
+                = static_cast<const float *>(grad_output->DataPtr())[i];
         }
     }
     return grad_input;
