@@ -51,7 +51,7 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
 
     std::vector<int64_t> output_dims = input_dims;
     output_dims[output_dims.size() - 1] = n;
-    auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
+    auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32, input->GetDevice());
 
     const float alpha = 1.0f, beta = 0.0f;
     cublasHandle_t handle;
@@ -106,12 +106,12 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
         CHECK_EQ(input_dims[i], grad_output_dims[i]) << "Batch dims must match";
     }
 
-    auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
-    auto grad_other = std::make_shared<Tensor>(other_dims, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
+    auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32, grad_output->GetDevice());
+    auto grad_other = std::make_shared<Tensor>(other_dims, DataType::kFLOAT32, grad_output->GetDevice());
     grad_input->Fill<float>(0.0f);
     grad_other->Fill<float>(0.0f);
 
-    float alpha = 1.0f, beta = 0.0f;
+    const float alpha = 1.0f, beta = 0.0f;
     cublasHandle_t handle;
     CUBLAS_CHECK(cublasCreate(&handle));
 
@@ -192,7 +192,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
 
     auto output_dims = input_dims;
     *output_dims.rbegin() = out_features;
-    auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
+    auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32, input->GetDevice());
 
     if (bias) {
         CHECK_EQ(bias->Dims().size(), 1);
@@ -255,13 +255,14 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     CHECK_EQ(in_features, weight_dims[transpose ? 1 : 0]);
     CHECK_EQ(out_features, weight_dims[transpose ? 0 : 1]);
 
-    auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
-    auto grad_weight = std::make_shared<Tensor>(weight_dims, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
+    auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32, grad_output->GetDevice());
+    auto grad_weight = std::make_shared<Tensor>(weight_dims, DataType::kFLOAT32, grad_output->GetDevice());
+    grad_input->Fill<float>(0.0f);
     grad_weight->Fill<float>(0.0f);
     std::shared_ptr<Tensor> grad_bias = nullptr;
     if (bias) {
         grad_bias = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, DataType::kFLOAT32,
-                                             Device(DeviceType::kCUDA, 0));
+                                             grad_output->GetDevice());
         grad_bias->Fill<float>(0.0f);
     }
 
@@ -313,15 +314,10 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
                                  static_cast<float *>(grad_weight->DataPtr()), out_features));
     }
 
-    // NOTE(zbl): might need explicit sync
-    // TODO(zbl): check the CUDAStream used
-    // CUDA_CHECK(cudaDeviceSynchronize());
-
     // d_bias = \sum_i(i=0, bs-1) d_output[i]
     // TODO(dcj): use thrust::fill or reduce kernel do this
     if (bias) {
-        auto ones
-            = std::make_shared<Tensor>(std::vector<int64_t>{bs}, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
+        auto ones = std::make_shared<Tensor>(std::vector<int64_t>{bs}, DataType::kFLOAT32, grad_output->GetDevice());
         float *ones_ptr = static_cast<float *>(ones->DataPtr());
 
         int threads_per_block = 256;

@@ -42,6 +42,8 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     }
 
     auto new_tensor = std::make_shared<Tensor>(new_dims, input->Dtype(), input->GetDevice());
+    // NOTE(zbl): must initialize with 0
+    new_tensor->Fill<float>(0.0f);
 
     std::vector<int64_t> src_strides(dims.size(), 0), dst_strides(new_dims.size(), 0);
     int64_t stride = 1;
@@ -77,7 +79,7 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     SliceForwardKernel<<<num_blocks, threads_per_block>>>(
         static_cast<const float *>(input->DataPtr()), static_cast<float *>(new_tensor->DataPtr()), new_dims_dev,
         starts_dev, steps_dev, input_strides_dev, output_strides_dev, num_dims, total_elements);
-
+    // NOTE(zbl): cudaFree() needs explicit sync when cudaMallocAsync() is called
     cudaFree(new_dims_dev);
     cudaFree(starts_dev);
     cudaFree(steps_dev);
@@ -119,7 +121,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
         new_dims.push_back((ends[i] - starts[i] + steps[i] - 1) / steps[i]);
     }
 
-    auto grad_input = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());
+    auto grad_input = std::make_shared<Tensor>(input->Dims(), input->Dtype(), grad_output->GetDevice());
     grad_input->Fill<float>(0.0);
 
     std::vector<int64_t> src_strides(dims.size());
@@ -159,6 +161,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
         static_cast<const float *>(grad_output->DataPtr()), static_cast<float *>(grad_input->DataPtr()), new_dims_dev,
         starts_dev, steps_dev, input_strides_dev, output_strides_dev, num_dims, total_elements);
 
+    // NOTE(zbl): cudaFree() needs explicit sync when cudaMallocAsync() is called
     cudaFree(new_dims_dev);
     cudaFree(starts_dev);
     cudaFree(steps_dev);

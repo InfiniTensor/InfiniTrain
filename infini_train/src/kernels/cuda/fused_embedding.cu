@@ -53,9 +53,9 @@ std::shared_ptr<Tensor> FusedEmbeddingForward(const std::shared_ptr<Tensor> &inp
     int threads_per_block = 256;
     int num_blocks = (batch_size * max_seqlen * embed_dim + threads_per_block - 1) / threads_per_block;
     FusedEmbeddingForwardKernel<<<num_blocks, threads_per_block>>>(
-        reinterpret_cast<const uint16_t *>(input->DataPtr()), reinterpret_cast<float *>(output->DataPtr()),
-        reinterpret_cast<const float *>(wte->DataPtr()), reinterpret_cast<const float *>(wpe->DataPtr()), batch_size,
-        max_seqlen, embed_dim);
+        static_cast<const uint16_t *>(input->DataPtr()), static_cast<float *>(output->DataPtr()),
+        static_cast<const float *>(wte->DataPtr()), static_cast<const float *>(wpe->DataPtr()), batch_size, max_seqlen,
+        embed_dim);
     return {output};
 }
 
@@ -114,13 +114,13 @@ FusedEmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_p
     int threads_per_block = 256;
     int num_blocks = ((max_seqlen * embed_dim) + threads_per_block - 1) / threads_per_block;
     WPEBackwardKernel<<<num_blocks, threads_per_block>>>(
-        reinterpret_cast<float *>(grad_wpe->DataPtr()), reinterpret_cast<const float *>(grad_output->DataPtr()),
-        reinterpret_cast<const uint16_t *>(input->DataPtr()), batch_size, max_seqlen, embed_dim);
+        static_cast<float *>(grad_wpe->DataPtr()), static_cast<const float *>(grad_output->DataPtr()),
+        static_cast<const uint16_t *>(input->DataPtr()), batch_size, max_seqlen, embed_dim);
 
     num_blocks = ((batch_size * max_seqlen * embed_dim) + threads_per_block - 1) / threads_per_block;
     WTEBackwardKernel<<<num_blocks, threads_per_block>>>(
-        reinterpret_cast<float *>(grad_wte->DataPtr()), reinterpret_cast<const float *>(grad_output->DataPtr()),
-        reinterpret_cast<const uint16_t *>(input->DataPtr()), batch_size, max_seqlen, embed_dim);
+        static_cast<float *>(grad_wte->DataPtr()), static_cast<const float *>(grad_output->DataPtr()),
+        static_cast<const uint16_t *>(input->DataPtr()), batch_size, max_seqlen, embed_dim);
 
     return {grad_wte, grad_wpe};
 }

@@ -62,7 +62,7 @@ std::vector<std::shared_ptr<Tensor>> SplitForward(const std::shared_ptr<Tensor> 
 }
 
 __global__ void SplitBackwardKernel(const float *const *grad_outputs, float *grad_input, int64_t N, int64_t H_in,
-                                    int64_t W, int64_t split_size, int64_t num_splits) {
+                                    int64_t W, int64_t split_size, int64_t num_splits, const int64_t *H_outs) {
     int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     int64_t total = N * H_in * W;
     if (idx >= total) {
@@ -78,8 +78,12 @@ __global__ void SplitBackwardKernel(const float *const *grad_outputs, float *gra
         return;
     }
 
-    int64_t H_out = min(split_size, H_in - split_idx * split_size);
+    int64_t H_out = H_outs[split_idx];
     int64_t local_h = h - split_idx * split_size;
+
+    if (local_h >= H_out) {
+        return;
+    }
 
     const float *grad_output = grad_outputs[split_idx];
     float value = grad_output[(n * H_out + local_h) * W + w];
@@ -93,6 +97,7 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
     CHECK_LT(dim, input_dims.size());
 
     auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32, grad_outputs[0]->GetDevice());
+    grad_input->Fill<float>(0.0f);
     int64_t N = std::accumulate(input_dims.begin(), input_dims.begin() + dim, 1, std::multiplies<int64_t>());
     int64_t W = std::accumulate(input_dims.begin() + dim + 1, input_dims.end(), 1, std::multiplies<int64_t>());
     int64_t H_in = input_dims[dim];
@@ -101,21 +106,32 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
     // init the array of grad_output ptrs
     std::vector<const float *> host_grad_output_ptrs;
     for (const auto &grad_output : grad_outputs) {
-        host_grad_output_ptrs.push_back(reinterpret_cast<const float *>(grad_output->DataPtr()));
+        host_grad_output_ptrs.push_back(static_cast<const float *>(grad_output->DataPtr()));
     }
 
     const float **device_grad_output_ptrs;
     cudaMalloc(&device_grad_output_ptrs, sizeof(float *) * num_splits);
-    cudaMemcpyAsync(device_grad_output_ptrs, host_grad_output_ptrs.data(), sizeof(float *) * num_splits,
-                    cudaMemcpyHostToDevice);
+    cudaMemcpy(device_grad_output_ptrs, host_grad_output_ptrs.data(), sizeof(float *) * num_splits,
+               cudaMemcpyHostToDevice);
+
+    // init H_out for each split
+    std::vector<int64_t> H_outs(num_splits);
+    for (int i = 0; i < num_splits; ++i) { H_outs[i] = std::min(split_size, H_in - i * split_size); }
+
+    int64_t *device_H_outs;
+    cudaMalloc(&device_H_outs, sizeof(int64_t) * num_splits);
+    cudaMemcpy(device_H_outs, H_outs.data(), sizeof(int64_t) * num_splits, cudaMemcpyHostToDevice);
 
     int64_t total_elements = N * H_in * W;
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
-    SplitBackwardKernel<<<num_blocks, threads_per_block>>>(
-        device_grad_output_ptrs, reinterpret_cast<float *>(grad_input->DataPtr()), N, H_in, W, split_size, num_splits);
+    SplitBackwardKernel<<<num_blocks, threads_per_block>>>(device_grad_output_ptrs,
+                                                           static_cast<float *>(grad_input->DataPtr()), N, H_in, W,
+                                                           split_size, num_splits, device_H_outs);
 
+    // NOTE(zbl): cudaFree() needs explicit sync when cudaMallocAsync() is called
+    cudaFree(device_H_outs);
     cudaFree(device_grad_output_ptrs);
     return grad_input;
 }
