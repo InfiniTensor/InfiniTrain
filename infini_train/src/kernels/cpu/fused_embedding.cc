@@ -63,8 +63,7 @@ FusedEmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::shared_p
         for (int t = 0; t < max_seqlen; t++) {
             int ix = static_cast<int>(static_cast<const uint16_t *>(input->DataPtr())[b * max_seqlen + t]);
             for (int i = 0; i < embed_dim; i++) {
-                float d
-                    = static_cast<float *>(grad_output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i];
+                float d = static_cast<float *>(grad_output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i];
                 static_cast<float *>(grad_wte->DataPtr())[ix * embed_dim + i] += d;
                 static_cast<float *>(grad_wpe->DataPtr())[t * embed_dim + i] += d;
             }

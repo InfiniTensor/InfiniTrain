@@ -53,14 +53,12 @@ std::shared_ptr<Tensor> LayerNormForward(const std::shared_ptr<Tensor> &input, c
             float s = 1.0f / sqrtf(v + eps);
 
             for (int i = 0; i < embed_dim; i++) {
-                float n
-                    = (s
-                       * (static_cast<float *>(input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i]
-                          - m)); // normalize
+                float n = (s
+                           * (static_cast<float *>(input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i]
+                              - m)); // normalize
                 float o = n * static_cast<float *>(weight->DataPtr())[i]
                         + static_cast<float *>(bias->DataPtr())[i]; // scale and shift
-                static_cast<float *>(output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i]
-                    = o; // write
+                static_cast<float *>(output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i] = o; // write
             }
             // cache the mean and rstd for the backward pass later
             static_cast<float *>(mean->DataPtr())[b * max_seqlen + t] = m;
@@ -103,8 +101,7 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
             float dnorm_norm_mean = 0.0f;
             for (int i = 0; i < embed_dim; i++) {
                 float norm_bti
-                    = (static_cast<float *>(input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i]
-                       - mean_bt)
+                    = (static_cast<float *>(input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i] - mean_bt)
                     * rstd_bt;
                 float dnorm_i
                     = static_cast<float *>(weight->DataPtr())[i]
@@ -118,28 +115,25 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
             // now iterate again and accumulate all the gradients
             for (int i = 0; i < embed_dim; i++) {
                 float norm_bti
-                    = (static_cast<float *>(input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i]
-                       - mean_bt)
+                    = (static_cast<float *>(input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i] - mean_bt)
                     * rstd_bt;
                 float dnorm_i
                     = static_cast<float *>(weight->DataPtr())[i]
                     * static_cast<float *>(grad_output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i];
                 // gradient contribution to bias
-                static_cast<float *>(grad_bias->DataPtr())[i] += static_cast<float *>(
-                    grad_output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i];
+                static_cast<float *>(grad_bias->DataPtr())[i]
+                    += static_cast<float *>(grad_output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i];
                 // gradient contribution to weight
                 static_cast<float *>(grad_weight->DataPtr())[i]
                     += norm_bti
-                     * static_cast<float *>(
-                           grad_output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i];
+                     * static_cast<float *>(grad_output->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i];
                 // gradient contribution to input
                 float dval = 0.0f;
                 dval += dnorm_i;                    // term 1
                 dval -= dnorm_mean;                 // term 2
                 dval -= norm_bti * dnorm_norm_mean; // term 3
                 dval *= rstd_bt;                    // final scale
-                static_cast<float *>(grad_input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i]
-                    += dval;
+                static_cast<float *>(grad_input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i] += dval;
             }
         }
     }
