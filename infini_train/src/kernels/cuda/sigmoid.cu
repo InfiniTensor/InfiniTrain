@@ -19,7 +19,7 @@ __global__ void SigmoidForwardKernel(const float *input_ptr, float *output_ptr, 
 std::shared_ptr<Tensor> SigmoidForward(const std::shared_ptr<Tensor> &input) {
     size_t num_elements = input->NumElements();
 
-    auto output = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
+    auto output = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32, input->GetDevice());
 
     const float *input_ptr = static_cast<const float *>(input->DataPtr());
     float *output_ptr = static_cast<float *>(output->DataPtr());
@@ -44,8 +44,8 @@ std::shared_ptr<Tensor> SigmoidBackward(const std::shared_ptr<Tensor> &output,
                                         const std::shared_ptr<Tensor> &grad_output) {
     size_t num_elements = output->NumElements();
 
-    auto grad_input = std::make_shared<Tensor>(output->Dims(), DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
-
+    auto grad_input = std::make_shared<Tensor>(output->Dims(), DataType::kFLOAT32, grad_output->GetDevice());
+    grad_input->Fill<float>(0.0f);
     const float *output_ptr = static_cast<const float *>(output->DataPtr());
     const float *grad_output_ptr = static_cast<float *>(grad_output->DataPtr());
     float *grad_input_ptr = static_cast<float *>(grad_input->DataPtr());

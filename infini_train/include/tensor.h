@@ -109,6 +109,9 @@ public:
 
     friend std::ostream &operator<<(std::ostream &os, const Tensor &tensor);
 
+    void SaveAsNpy(const std::string &path) const;
+    void Print(std::ostream &os = std::cout) const;
+
 private:
     std::shared_ptr<TensorBuffer> buffer_;
     size_t offset_ = 0;

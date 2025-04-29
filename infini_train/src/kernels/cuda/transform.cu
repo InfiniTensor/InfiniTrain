@@ -37,9 +37,8 @@ std::shared_ptr<Tensor> TrilForward(const std::shared_ptr<Tensor> &input, int64_
     int threads_per_block = 256;
     int num_blocks = (rows * cols + threads_per_block - 1) / threads_per_block;
 
-    TrilForwardKernel<<<num_blocks, threads_per_block>>>(reinterpret_cast<float *>(input->DataPtr()),
-                                                         reinterpret_cast<float *>(output->DataPtr()), rows, cols,
-                                                         diagonal);
+    TrilForwardKernel<<<num_blocks, threads_per_block>>>(static_cast<float *>(input->DataPtr()),
+                                                         static_cast<float *>(output->DataPtr()), rows, cols, diagonal);
     return output;
 }
 
@@ -64,12 +63,13 @@ std::shared_ptr<Tensor> TrilBackward(const std::shared_ptr<Tensor> &grad_output,
     int cols = grad_output->Dims()[1];
 
     auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), grad_output->Dtype(), grad_output->GetDevice());
+    grad_input->Fill<float>(0.0f);
 
     int threads_per_block = 256;
     int num_blocks = (rows * cols + threads_per_block - 1) / threads_per_block;
 
-    TrilBackwardKernel<<<num_blocks, threads_per_block>>>(reinterpret_cast<const float *>(grad_output->DataPtr()),
-                                                          reinterpret_cast<float *>(grad_input->DataPtr()), rows, cols,
+    TrilBackwardKernel<<<num_blocks, threads_per_block>>>(static_cast<const float *>(grad_output->DataPtr()),
+                                                          static_cast<float *>(grad_input->DataPtr()), rows, cols,
                                                           diagonal);
 
     return grad_input;
@@ -84,30 +84,30 @@ __global__ void TransposeForwardKernel(const float *input, float *output, const 
     }
 
     int64_t remaining = idx;
-    int64_t in_flat_idx = 0;
+    // TODO(zbl): assume ndim <= 8 here
+    int64_t coords[8];
 
+    // 1. decode coord from output index
     for (int i = 0; i < ndim; ++i) {
-        // the i-th coords of output tensor
-        int64_t coord = remaining / out_strides[i];
+        coords[i] = remaining / out_strides[i];
         remaining %= out_strides[i];
-
-        // the corresponding dim in input after swapping dim0 & dim1
-        int64_t mapped_dim = coord;
-        if (i == dim0) {
-            mapped_dim = remaining / out_strides[dim1];
-        } else if (i == dim1) {
-            mapped_dim = remaining / out_strides[dim0];
-        }
-
-        // calculate flat idx of input using mapped_dim
-        in_flat_idx += mapped_dim * in_strides[i];
     }
 
-    // copy to output
+    // 2. swap the coordinates
+    int64_t tmp = coords[dim0];
+    coords[dim0] = coords[dim1];
+    coords[dim1] = tmp;
+
+    // 3. compute input flat index
+    int64_t in_flat_idx = 0;
+    for (int i = 0; i < ndim; ++i) { in_flat_idx += coords[i] * in_strides[i]; }
+
     output[idx] = input[in_flat_idx];
 }
 
 std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, int64_t dim0, int64_t dim1) {
+    // TODO(zbl): assume ndim <= 8 here
+    CHECK_LE(input->Dims().size(), 8);
     dim0 = dim0 < 0 ? dim0 + input->Dims().size() : dim0;
     dim1 = dim1 < 0 ? dim1 + input->Dims().size() : dim1;
     CHECK(dim0 >= 0 && dim0 < input->Dims().size() && dim1 >= 0 && dim1 < input->Dims().size());
@@ -117,7 +117,7 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
     std::swap(out_dims[dim0], out_dims[dim1]);
 
     auto output = std::make_shared<Tensor>(out_dims, input->Dtype(), input->GetDevice());
-
+    output->Fill<float>(0.0f);
     int64_t ndim = in_dims.size();
     int64_t num_elements = output->NumElements();
 
@@ -143,9 +143,10 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
 
     TransposeForwardKernel<<<num_blocks, threads_per_block>>>(
-        reinterpret_cast<const float *>(input->DataPtr()), reinterpret_cast<float *>(output->DataPtr()), in_dims_dev,
-        in_strides_dev, out_strides_dev, ndim, dim0, dim1, threads_per_block);
+        static_cast<const float *>(input->DataPtr()), static_cast<float *>(output->DataPtr()), in_dims_dev,
+        in_strides_dev, out_strides_dev, ndim, dim0, dim1, num_elements);
 
+    // NOTE(zbl): cudaFree() needs explicit sync when cudaMallocAsync() is called
     cudaFree(in_dims_dev);
     cudaFree(in_strides_dev);
     cudaFree(out_strides_dev);
@@ -188,8 +189,8 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
     int num_blocks = (input->NumElements() + threads_per_block - 1) / threads_per_block;
 
     MaskForwardKernel<<<num_blocks, threads_per_block>>>(
-        reinterpret_cast<const float *>(input->DataPtr()), reinterpret_cast<const float *>(mask->DataPtr()),
-        reinterpret_cast<float *>(output->DataPtr()), value, batch_size, mask_size);
+        static_cast<const float *>(input->DataPtr()), static_cast<const float *>(mask->DataPtr()),
+        static_cast<float *>(output->DataPtr()), value, batch_size, mask_size);
     return output;
 }
 
@@ -218,13 +219,14 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
     int64_t batch_size = grad_output->NumElements() / mask_size;
 
     auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), grad_output->Dtype(), grad_output->GetDevice());
+    grad_input->Fill<float>(0.0f);
 
     int threads_per_block = 256;
     int num_blocks = (grad_output->NumElements() + threads_per_block - 1) / threads_per_block;
 
     MaskBackwardKernel<<<num_blocks, threads_per_block>>>(
-        reinterpret_cast<const float *>(grad_output->DataPtr()), reinterpret_cast<const float *>(mask->DataPtr()),
-        reinterpret_cast<float *>(grad_input->DataPtr()), batch_size, mask_size);
+        static_cast<const float *>(grad_output->DataPtr()), static_cast<const float *>(mask->DataPtr()),
+        static_cast<float *>(grad_input->DataPtr()), batch_size, mask_size);
     return grad_input;
 }
 } // namespace infini_train::kernels::cuda

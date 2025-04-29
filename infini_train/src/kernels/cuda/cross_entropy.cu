@@ -37,9 +37,7 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
     const int bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
     const int num_classes = *input_dims.rbegin();
 
-    auto batched_output
-        = std::make_shared<Tensor>(std::vector<int64_t>{bs}, DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
-
+    auto batched_output = std::make_shared<Tensor>(std::vector<int64_t>{bs}, DataType::kFLOAT32, input->GetDevice());
     const float *input_ptr = static_cast<const float *>(input->DataPtr());
     float *batched_loss_ptr = static_cast<float *>(batched_output->DataPtr());
 
@@ -74,7 +72,7 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
                           static_cast<const float *>(loss_cpu.DataPtr()) + bs, 0.0f)
         / bs;
 
-    return {std::make_shared<Tensor>(loss->To(Device(DeviceType::kCUDA, 0)))};
+    return {std::make_shared<Tensor>(loss->To(input->GetDevice()))};
 }
 
 template <typename TargetType>
@@ -103,8 +101,8 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
     const int num_classes = *input_dims.rbegin();
 
     CHECK_EQ(grad_output->Dims().size(), 0);
-    auto grad_input = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32, Device(DeviceType::kCUDA, 0));
-
+    auto grad_input = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32, grad_output->GetDevice());
+    grad_input->Fill<float>(0.0f);
     const float *input_ptr = static_cast<const float *>(input->DataPtr());
     float *input_grad_ptr = static_cast<float *>(grad_input->DataPtr());
 
