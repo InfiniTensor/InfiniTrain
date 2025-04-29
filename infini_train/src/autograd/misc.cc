@@ -159,6 +159,12 @@ std::vector<std::shared_ptr<Tensor>> Slice::Backward(const std::vector<std::shar
         grad_input = kernels::cpu::SliceBackward(grad_output, input, starts_, ends_, steps_);
         break;
     }
+#ifdef USE_CUDA
+    case DeviceType::kCUDA: {
+        grad_input = kernels::cuda::SliceBackward(grad_output, input, starts_, ends_, steps_);
+        break;
+    }
+#endif
     default:
         LOG(FATAL) << "Unsupported device type: " << static_cast<int>(input->GetDevice().Type());
         break;

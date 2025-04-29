@@ -1,6 +1,7 @@
 #include "infini_train/include/tensor.h"
 
 #include <cstdint>
+#include <fstream>
 #include <functional>
 #include <memory>
 #include <numeric>
@@ -292,4 +293,229 @@ std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor> &t1, const std::
 std::shared_ptr<Tensor> operator*(float scalar, const std::shared_ptr<Tensor> &t) { return t->Mul(scalar); }
 
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor> &t, float scalar) { return t->Mul(scalar); }
+
+void Tensor::SaveAsNpy(const std::string &path) const {
+    // TODO(zbl): support other dtypes
+    CHECK(dtype_ == DataType::kFLOAT32);
+
+    const size_t num_elements = NumElements();
+    const size_t num_bytes = num_elements * sizeof(float);
+
+    // Prepare host buffer
+    std::vector<float> host_buffer(num_elements);
+
+    if (GetDevice().Type() == DeviceType::kCPU) {
+        // If on CPU, direct copy
+        std::memcpy(host_buffer.data(), DataPtr(), num_bytes);
+    }
+#ifdef USE_CUDA
+    else if (GetDevice().Type() == DeviceType::kCUDA) {
+        // If on CUDA, copy back to host
+        cudaError_t err = cudaMemcpy(host_buffer.data(), DataPtr(), num_bytes, cudaMemcpyDeviceToHost);
+        CHECK_EQ(err, cudaSuccess) << "cudaMemcpy failed: " << cudaGetErrorString(err);
+    }
+#endif
+    else {
+        LOG(FATAL) << "Unsupported device type for SaveAsNpy.";
+    }
+
+    // Write .npy file
+    std::ofstream file(path, std::ios::binary);
+    CHECK(file.is_open()) << "Failed to open file for writing: " << path;
+
+    // Write magic string
+    file.write("\x93NUMPY", 6);
+
+    // Write version
+    uint8_t major = 1;
+    uint8_t minor = 0;
+    file.put(major);
+    file.put(minor);
+
+    // Construct header
+    std::ostringstream header_ss;
+    header_ss << "{'descr': '<f4', 'fortran_order': False, 'shape': (";
+    for (size_t i = 0; i < dims_.size(); ++i) {
+        header_ss << dims_[i];
+        if (i != dims_.size() - 1) {
+            header_ss << ", ";
+        }
+    }
+    if (dims_.size() == 1) {
+        header_ss << ",";
+    }
+    header_ss << ") }";
+
+    std::string header = header_ss.str();
+
+    // Pad header to 16-byte alignment
+    size_t header_len = header.size() + 1; // +1 for newline
+    size_t padding = 16 - ((10 + header_len) % 16);
+    header.append(padding, ' ');
+    header += '\n';
+
+    uint16_t header_size = static_cast<uint16_t>(header.size());
+    file.write(reinterpret_cast<const char *>(&header_size), sizeof(header_size));
+    file.write(header.c_str(), header.size());
+
+    // Write data
+    file.write(reinterpret_cast<const char *>(host_buffer.data()), num_bytes);
+
+    file.close();
+}
+
+void Tensor::Print(std::ostream &os) const {
+    /*
+        Print tensor in torch.tensor/np.array style.
+    */
+    // TODO(zbl): support other dtypes
+    CHECK(dtype_ == DataType::kFLOAT32);
+
+    const size_t num_elements = NumElements();
+    const size_t num_bytes = num_elements * sizeof(float);
+
+    std::vector<float> host_buffer(num_elements);
+
+    if (GetDevice().Type() == DeviceType::kCPU) {
+        std::memcpy(host_buffer.data(), DataPtr(), num_bytes);
+    }
+#ifdef USE_CUDA
+    else if (GetDevice().Type() == DeviceType::kCUDA) {
+        cudaDeviceSynchronize();
+        cudaError_t err = cudaMemcpy(host_buffer.data(), DataPtr(), num_bytes, cudaMemcpyDeviceToHost);
+        CHECK_EQ(err, cudaSuccess) << "cudaMemcpy failed: " << cudaGetErrorString(err);
+    }
+#endif
+    else {
+        LOG(FATAL) << "Unsupported device type for Print.";
+    }
+
+    constexpr int kPrintThreshold = 6;
+    constexpr int kPrecision = 4;
+    const float kSciThreshMin = 1e-4f;
+    const float kSciThreshMax = 1e+4f;
+
+    bool use_scientific = false;
+    for (float val : host_buffer) {
+        float abs_val = std::fabs(val);
+        if ((abs_val != 0.0f && abs_val < kSciThreshMin) || abs_val >= kSciThreshMax) {
+            use_scientific = true;
+            break;
+        }
+    }
+
+    auto format_float = [&](float val) -> std::string {
+        std::ostringstream ss;
+        if (use_scientific) {
+            ss << std::scientific << std::setprecision(kPrecision) << val;
+        } else {
+            ss << std::fixed << std::setprecision(kPrecision) << val;
+        }
+        return ss.str();
+    };
+
+    std::vector<std::string> formatted(num_elements);
+    size_t max_width = 0;
+    for (size_t i = 0; i < num_elements; ++i) {
+        formatted[i] = format_float(host_buffer[i]);
+        max_width = std::max(max_width, formatted[i].length());
+    }
+
+    os << "Tensor(";
+    int base_indent = 7;
+    if (dims_.empty()) {
+        os << formatted[0] << ")\n";
+        os << "dtype=float32, shape=()\n";
+        return;
+    }
+
+    // recursive with `insert_line_break` to add new line between batches
+    std::function<void(size_t, size_t, int, bool)> print_recursive;
+    print_recursive = [&](size_t dim, size_t offset, int indent, bool insert_line_break) {
+        if (dim == dims_.size() - 1) {
+            // innermost
+            os << "[";
+            size_t n = dims_[dim];
+            if (n <= kPrintThreshold) {
+                for (size_t i = 0; i < n; ++i) {
+                    if (i > 0) {
+                        os << ", ";
+                    }
+                    os << std::setw(max_width) << formatted[offset + i];
+                }
+            } else {
+                for (size_t i = 0; i < 3; ++i) {
+                    if (i > 0) {
+                        os << ", ";
+                    }
+                    os << std::setw(max_width) << formatted[offset + i];
+                }
+                os << ", ..., ";
+                for (size_t i = n - 3; i < n; ++i) {
+                    if (i > n - 3) {
+                        os << ", ";
+                    }
+                    os << std::setw(max_width) << formatted[offset + i];
+                }
+            }
+            os << "]";
+        } else {
+            os << "[";
+            size_t step = 1;
+            for (size_t d = dim + 1; d < dims_.size(); ++d) { step *= dims_[d]; }
+            size_t n = dims_[dim];
+            if (n <= kPrintThreshold) {
+                for (size_t i = 0; i < n; ++i) {
+                    if (i > 0) {
+                        if (insert_line_break) {
+                            os << ",\n\n" << std::string(base_indent + indent * 2, ' ');
+                        } else {
+                            os << ",\n" << std::string(base_indent + indent * 2, ' ');
+                        }
+                    }
+                    print_recursive(dim + 1, offset + i * step, indent + 1, false);
+                }
+            } else {
+                for (size_t i = 0; i < 3; ++i) {
+                    if (i > 0) {
+                        if (insert_line_break) {
+                            os << ",\n\n" << std::string(base_indent + indent * 2, ' ');
+                        } else {
+                            os << ",\n" << std::string(base_indent + indent * 2, ' ');
+                        }
+                    }
+                    print_recursive(dim + 1, offset + i * step, indent + 1, false);
+                }
+                os << ",\n"
+                   << std::string(base_indent + indent * 2, ' ') << "...,\n"
+                   << std::string(base_indent + indent * 2, ' ');
+                for (size_t i = n - 3; i < n; ++i) {
+                    if (i > n - 3) {
+                        if (insert_line_break) {
+                            os << ",\n\n" << std::string(base_indent + indent * 2, ' ');
+                        } else {
+                            os << ",\n" << std::string(base_indent + indent * 2, ' ');
+                        }
+                    }
+                    print_recursive(dim + 1, offset + i * step, indent + 1, false);
+                }
+            }
+            os << "]";
+        }
+    };
+
+    // outer batch dim, insert_line_break = true
+    print_recursive(0, 0, 0, true);
+
+    os << ",\n";
+
+    os << std::string(base_indent, ' ') + "dtype=float32, shape=(";
+    for (size_t i = 0; i < dims_.size(); ++i) {
+        if (i > 0) {
+            os << ", ";
+        }
+        os << dims_[i];
+    }
+    os << "))\n";
+}
 } // namespace infini_train
