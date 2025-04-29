@@ -112,7 +112,7 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
     auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), grad_output->Dtype(), grad_output->GetDevice());
 
     for (int i = 0; i < grad_output->NumElements(); ++i) {
-        if (static_cast<const float *>(mask->DataPtr())[i % mask->NumElements()] == 1.0) {
+        if ((std::abs(static_cast<const float *>(mask->DataPtr())[i % mask->NumElements()] - 1.0f) < 1e-5)) {
             static_cast<float *>(grad_input->DataPtr())[i] = 0.0;
         } else {
             static_cast<float *>(grad_input->DataPtr())[i]
