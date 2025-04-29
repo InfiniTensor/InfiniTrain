@@ -15,7 +15,7 @@ namespace {
 std::shared_ptr<Tensor> UnaryForward(const std::shared_ptr<Tensor> &input, std::function<float(float)> unary_fn) {
     auto output = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32);
     for (int64_t idx = 0; idx < output->NumElements(); ++idx) {
-        reinterpret_cast<float *>(output->DataPtr())[idx] = unary_fn(reinterpret_cast<float *>(input->DataPtr())[idx]);
+        static_cast<float *>(output->DataPtr())[idx] = unary_fn(static_cast<float *>(input->DataPtr())[idx]);
     }
     return output;
 }
@@ -24,9 +24,9 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
                                       std::function<float(float)> unary_fn) {
     auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), DataType::kFLOAT32);
     for (int idx = 0; idx < grad_input->NumElements(); ++idx) {
-        const float x = a ? reinterpret_cast<float *>(a->DataPtr())[idx] : 0.0f;
-        const float grad = reinterpret_cast<float *>(grad_output->DataPtr())[idx];
-        reinterpret_cast<float *>(grad_input->DataPtr())[idx] = grad * unary_fn(x);
+        const float x = a ? static_cast<float *>(a->DataPtr())[idx] : 0.0f;
+        const float grad = static_cast<float *>(grad_output->DataPtr())[idx];
+        static_cast<float *>(grad_input->DataPtr())[idx] = grad * unary_fn(x);
     }
     return grad_input;
 }
@@ -39,9 +39,8 @@ std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const st
 
     auto output = std::make_shared<Tensor>(a->Dims(), DataType::kFLOAT32);
     for (int idx = 0; idx < output->NumElements(); ++idx) {
-        reinterpret_cast<float *>(output->DataPtr())[idx]
-            = binary_fn(reinterpret_cast<float *>(a->DataPtr())[idx],
-                        reinterpret_cast<float *>(b->DataPtr())[idx % b->NumElements()]);
+        static_cast<float *>(output->DataPtr())[idx] = binary_fn(
+            static_cast<float *>(a->DataPtr())[idx], static_cast<float *>(b->DataPtr())[idx % b->NumElements()]);
     }
 
     return output;
@@ -68,11 +67,11 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     grad_a->Fill<float>(0.0f);
     grad_b->Fill<float>(0.0f);
     for (int idx = 0; idx < a_num_elements; ++idx) {
-        const float x = a ? reinterpret_cast<float *>(a->DataPtr())[idx] : 0.0f;
-        const float y = b ? reinterpret_cast<float *>(b->DataPtr())[idx % b_num_elements] : 0.0f;
-        const float grad = reinterpret_cast<float *>(grad_output->DataPtr())[idx];
-        reinterpret_cast<float *>(grad_a->DataPtr())[idx] = grad * fn_a(x, y);
-        reinterpret_cast<float *>(grad_b->DataPtr())[idx % b_num_elements] += grad * fn_b(x, y);
+        const float x = a ? static_cast<float *>(a->DataPtr())[idx] : 0.0f;
+        const float y = b ? static_cast<float *>(b->DataPtr())[idx % b_num_elements] : 0.0f;
+        const float grad = static_cast<float *>(grad_output->DataPtr())[idx];
+        static_cast<float *>(grad_a->DataPtr())[idx] = grad * fn_a(x, y);
+        static_cast<float *>(grad_b->DataPtr())[idx % b_num_elements] += grad * fn_b(x, y);
     }
     return {grad_a, grad_b};
 }
@@ -108,54 +107,9 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> AddBackward(const st
                                                                         const std::vector<int64_t> &a_dims,
                                                                         const std::vector<int64_t> &b_dims) {
 
-    auto grad_a = std::make_shared<Tensor>(a_dims, DataType::kFLOAT32);
-    std::memcpy(grad_a->DataPtr(), grad_output->DataPtr(), grad_output->NumElements() * sizeof(float));
-
-    auto grad_b = std::make_shared<Tensor>(b_dims, DataType::kFLOAT32);
-    grad_b->Fill<float>(0.0f);
-
-    const auto &out_dims = grad_output->Dims();
-    const int ndim = out_dims.size();
-    const int b_ndim = b_dims.size();
-    const float *grad_out_data = reinterpret_cast<const float *>(grad_output->DataPtr());
-    float *grad_b_data = reinterpret_cast<float *>(grad_b->DataPtr());
-
-    std::vector<int64_t> out_strides(ndim);
-    std::vector<int64_t> b_strides(b_ndim);
-
-    out_strides[ndim - 1] = 1;
-    for (int i = ndim - 2; i >= 0; --i) { out_strides[i] = out_strides[i + 1] * out_dims[i + 1]; }
-
-    if (b_ndim > 0) {
-        b_strides[b_ndim - 1] = 1;
-        for (int i = b_ndim - 2; i >= 0; --i) { b_strides[i] = b_strides[i + 1] * b_dims[i + 1]; }
-    }
-
-    for (int64_t idx = 0; idx < grad_output->NumElements(); ++idx) {
-        int64_t tmp = idx;
-        std::vector<int64_t> out_index(ndim);
-        for (int i = 0; i < ndim; ++i) {
-            out_index[i] = tmp / out_strides[i];
-            tmp %= out_strides[i];
-        }
-
-        std::vector<int64_t> b_index(b_ndim);
-        for (int i = 0; i < b_ndim; ++i) {
-            int offset = ndim - b_ndim + i;
-            if (offset < 0 || b_dims[i] == 1) {
-                b_index[i] = 0;
-            } else {
-                b_index[i] = out_index[offset];
-            }
-        }
-
-        int64_t b_offset = 0;
-        for (int i = 0; i < b_ndim; ++i) { b_offset += b_index[i] * b_strides[i]; }
-
-        grad_b_data[b_offset] += grad_out_data[idx];
-    }
-
-    return {grad_a, grad_b};
+    return BinaryBackward(
+        grad_output, nullptr, nullptr, a_dims, b_dims, [](float, float) { return 1.0f; },
+        [](float, float) { return 1.0f; });
 }
 
 std::shared_ptr<Tensor> AddScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {

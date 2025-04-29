@@ -17,8 +17,8 @@ std::shared_ptr<Tensor> SoftmaxForward(const std::shared_ptr<Tensor> &input, int
     dim = dim < 0 ? input->Dims().size() + dim : dim;
     auto output = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());
 
-    const float *input_data = reinterpret_cast<const float *>(input->DataPtr());
-    float *output_data = reinterpret_cast<float *>(output->DataPtr());
+    const float *input_data = static_cast<const float *>(input->DataPtr());
+    float *output_data = static_cast<float *>(output->DataPtr());
 
     const auto &dims = input->Dims();
     int outer = 1;
@@ -54,9 +54,9 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
                                         const std::shared_ptr<Tensor> &output, int64_t dim) {
     dim = dim < 0 ? output->Dims().size() + dim : dim;
     auto grad_input = std::make_shared<Tensor>(output->Dims(), output->Dtype(), output->GetDevice());
-    const float *grad_output_data = reinterpret_cast<const float *>(grad_output->DataPtr());
-    const float *output_data = reinterpret_cast<const float *>(output->DataPtr());
-    float *grad_input_data = reinterpret_cast<float *>(grad_input->DataPtr());
+    const float *grad_output_data = static_cast<const float *>(grad_output->DataPtr());
+    const float *output_data = static_cast<const float *>(output->DataPtr());
+    float *grad_input_data = static_cast<float *>(grad_input->DataPtr());
 
     const auto &dims = output->Dims();
     int outer = 1;
