@@ -22,10 +22,10 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32);
 
     for (int i = 0; i < input->NumElements(); i++) {
-        int idx = static_cast<int>(reinterpret_cast<const int64_t *>(input->DataPtr())[i]);
+        int idx = static_cast<int>(static_cast<const int64_t *>(input->DataPtr())[i]);
         for (int j = 0; j < embedding_dim; j++) {
-            reinterpret_cast<float *>(output->DataPtr())[i * embedding_dim + j]
-                = reinterpret_cast<float *>(weight->DataPtr())[idx * embedding_dim + j];
+            static_cast<float *>(output->DataPtr())[i * embedding_dim + j]
+                = static_cast<float *>(weight->DataPtr())[idx * embedding_dim + j];
         }
     }
 
@@ -45,10 +45,10 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
     grad_weight->Fill<float>(0.0f);
 
     for (int i = 0; i < input->NumElements(); i++) {
-        int idx = static_cast<int>(reinterpret_cast<const int64_t *>(input->DataPtr())[i]);
+        int idx = static_cast<int>(static_cast<const int64_t *>(input->DataPtr())[i]);
         for (int j = 0; j < embedding_dim; j++) {
-            reinterpret_cast<float *>(grad_weight->DataPtr())[idx * embedding_dim + j] // <-- 修复这里
-                += reinterpret_cast<const float *>(grad_output->DataPtr())[i * embedding_dim + j];
+            static_cast<float *>(grad_weight->DataPtr())[idx * embedding_dim + j] // <-- 修复这里
+                += static_cast<const float *>(grad_output->DataPtr())[i * embedding_dim + j];
         }
     }
     return grad_weight;

@@ -8,18 +8,18 @@
 namespace infini_train::kernels::cpu {
 void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const std::shared_ptr<Tensor> &tensor) {
     for (int64_t idx = 0; idx < gradient->NumElements(); ++idx) {
-        reinterpret_cast<float *>(tensor->DataPtr())[idx]
-            += rate * reinterpret_cast<const float *>(gradient->DataPtr())[idx];
+        static_cast<float *>(tensor->DataPtr())[idx]
+            += rate * static_cast<const float *>(gradient->DataPtr())[idx];
     }
 }
 
 void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_ptr<Tensor> &param,
                         const std::shared_ptr<Tensor> &m, const std::shared_ptr<Tensor> &v, float learning_rate,
                         float beta1, float beta2, float eps, int64_t t) {
-    const float *grad_data = reinterpret_cast<const float *>(grad->DataPtr());
-    float *m_data = reinterpret_cast<float *>(m->DataPtr());
-    float *v_data = reinterpret_cast<float *>(v->DataPtr());
-    float *param_data = reinterpret_cast<float *>(param->DataPtr());
+    const float *grad_data = static_cast<const float *>(grad->DataPtr());
+    float *m_data = static_cast<float *>(m->DataPtr());
+    float *v_data = static_cast<float *>(v->DataPtr());
+    float *param_data = static_cast<float *>(param->DataPtr());
 
     const float bias_correction_m = 1.0f - std::pow(beta1, t);
     const float bias_correction_v = 1.0f - std::pow(beta2, t);
