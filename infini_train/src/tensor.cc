@@ -438,11 +438,11 @@ void Tensor::Print(std::ostream &os) const {
     }
 
     const PrintOptions &opts = PrintOptions::Get();
-    const int precision = opts.precision;
-    const int threshold = opts.threshold;
-    const int edge_items = opts.edge_items;
-    const int linewidth = opts.linewidth;
-    const int base_indent = 8; // length of "tensor(["
+    const int64_t precision = opts.precision;
+    const int64_t threshold = opts.threshold;
+    const int64_t edge_items = opts.edge_items;
+    const int64_t linewidth = opts.linewidth;
+    const int64_t base_indent = 8; // length of "tensor(["
 
     bool use_sci = opts.sci_mode.value_or(false);
     if (!opts.sci_mode.has_value()) {
