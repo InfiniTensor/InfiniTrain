@@ -513,8 +513,8 @@ void Tensor::Print(std::ostream &os) const {
                     os << std::setw(max_width) << item;
                     line_len += max_width;
                 }
-                os << ", ..., ";
-                line_len += 5; // length of "..., "
+                os << ", ...";
+                line_len += 5; // length of ", ..."
                 if (linewidth > 0 && line_len + max_width > linewidth) {
                     os << "\n" << std::string(base_indent + indent + 1, ' ');
                     line_len = base_indent + indent + 1;

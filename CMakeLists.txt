@@ -29,6 +29,9 @@ add_subdirectory(third_party/eigen)
 include_directories(${PROJECT_SOURCE_DIR}/third_party/eigen)
 # add_definitions(-DEIGEN_USE_BLAS)
 
+include_directories(${PROJECT_SOURCE_DIR})
+file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
+
 if(USE_CUDA)
     add_compile_definitions(USE_CUDA=1)
     enable_language(CUDA)
@@ -37,42 +40,31 @@ if(USE_CUDA)
     # enable CUDA-related compilation options
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
-    include_directories(${PROJECT_SOURCE_DIR})
-    file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
     file(GLOB_RECURSE CUDA_SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
     list(APPEND SRC ${CUDA_SRC})
 
     add_library(infini_train STATIC ${SRC})
     set_target_properties(infini_train PROPERTIES CUDA_ARCHITECTURES "70;80")
     target_link_libraries(infini_train glog gflags CUDA::cudart CUDA::cublas Eigen3::Eigen)
-
-    # Examples
-    add_executable(mnist example/mnist/main.cc example/mnist/dataset.cc example/mnist/net.cc)
-    target_link_libraries(mnist glog gflags infini_train Eigen3::Eigen)
-
-    add_executable(gpt2 example/gpt2/main.cc example/gpt2/dataset.cc example/gpt2/net.cc)
-    target_link_libraries(gpt2 glog gflags infini_train Eigen3::Eigen)
 else()
-    include_directories(${PROJECT_SOURCE_DIR})
-    file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
-
     add_library(infini_train STATIC ${SRC})
     target_link_libraries(infini_train glog gflags Eigen3::Eigen)
-
-    # Examples
-    add_executable(mnist example/mnist/main.cc example/mnist/dataset.cc example/mnist/net.cc)
-    target_link_libraries(mnist glog gflags infini_train Eigen3::Eigen)
-
-    add_executable(gpt2 example/gpt2/main.cc example/gpt2/dataset.cc example/gpt2/net.cc)
-    target_link_libraries(gpt2 glog gflags infini_train Eigen3::Eigen)
-
-    # OpenBLAS
-    # target_link_libraries(infini_train ${OpenBLAS_LIBRARIES})
-    # target_link_libraries(mnist ${OpenBLAS_LIBRARIES})
-    # target_link_libraries(gpt2 ${OpenBLAS_LIBRARIES})
-
-    # OpenMP
-    target_link_libraries(infini_train OpenMP::OpenMP_CXX)
-    target_link_libraries(mnist OpenMP::OpenMP_CXX)
-    target_link_libraries(gpt2 OpenMP::OpenMP_CXX)
 endif()
+
+# Examples
+add_executable(mnist example/mnist/main.cc example/mnist/dataset.cc example/mnist/net.cc)
+target_link_libraries(mnist glog gflags infini_train Eigen3::Eigen)
+
+add_executable(gpt2 example/gpt2/main.cc example/gpt2/dataset.cc example/gpt2/net.cc)
+target_link_libraries(gpt2 glog gflags infini_train Eigen3::Eigen)
+
+# OpenBLAS
+# target_link_libraries(infini_train ${OpenBLAS_LIBRARIES})
+# target_link_libraries(mnist ${OpenBLAS_LIBRARIES})
+# target_link_libraries(gpt2 ${OpenBLAS_LIBRARIES})
+
+# OpenMP
+target_link_libraries(infini_train OpenMP::OpenMP_CXX)
+target_link_libraries(mnist OpenMP::OpenMP_CXX)
+target_link_libraries(gpt2 OpenMP::OpenMP_CXX)
+
