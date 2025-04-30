@@ -7,7 +7,6 @@
 
 #include "infini_train/include/kernels/cpu/sigmoid.h"
 #include "infini_train/include/tensor.h"
-
 #ifdef USE_CUDA
 #include "infini_train/include/kernels/cuda/sigmoid.h"
 #endif

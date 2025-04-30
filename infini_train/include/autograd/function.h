@@ -35,6 +35,6 @@ private:
     int dependencies_reached_ = 0;
     int grad_outputs_reached_ = 0;
     std::vector<std::shared_ptr<Tensor>> grad_outputs_;
-    const std::string type_;
+    const std::string type_ = kUndefinedType;
 };
 } // namespace infini_train::autograd

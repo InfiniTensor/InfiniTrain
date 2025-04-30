@@ -7,7 +7,6 @@
 
 #include "infini_train/include/kernels/cpu/softmax.h"
 #include "infini_train/include/tensor.h"
-
 #ifdef USE_CUDA
 #include "infini_train/include/kernels/cuda/softmax.h"
 #endif

@@ -5,7 +5,6 @@
 
 #include "infini_train/include/kernels/cpu/elementwise.h"
 #include "infini_train/include/tensor.h"
-
 #ifdef USE_CUDA
 #include "infini_train/include/kernels/cuda/elementwise.h"
 #endif

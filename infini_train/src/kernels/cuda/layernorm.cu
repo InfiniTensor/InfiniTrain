@@ -1,7 +1,5 @@
-#include "infini_train/include/device.h"
 #include "infini_train/include/kernels/cuda/layernorm.h"
 
-#include <cmath>
 #include <memory>
 #include <tuple>
 

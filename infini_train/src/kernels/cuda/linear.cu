@@ -1,7 +1,5 @@
-#include "infini_train/include/device.h"
 #include "infini_train/include/kernels/cuda/linear.h"
 
-#include <cstddef>
 #include <memory>
 #include <tuple>
 

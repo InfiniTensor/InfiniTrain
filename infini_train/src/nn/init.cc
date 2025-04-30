@@ -9,12 +9,11 @@
 #include <unordered_set>
 
 #include "glog/logging.h"
-
-#include "infini_train/include/tensor.h"
-
 #ifdef USE_CUDA
 #include "cuda_runtime_api.h"
 #endif
+
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::init {
 namespace {

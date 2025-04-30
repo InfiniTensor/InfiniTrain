@@ -9,10 +9,6 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
-namespace {
-constexpr float kNegativeInfinity = -std::numeric_limits<float>::infinity();
-}
-
 std::shared_ptr<Tensor> SoftmaxForward(const std::shared_ptr<Tensor> &input, int64_t dim) {
     dim = dim < 0 ? input->Dims().size() + dim : dim;
     auto output = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());

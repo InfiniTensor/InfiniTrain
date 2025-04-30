@@ -1,7 +1,5 @@
-#include "infini_train/include/kernels/cuda/elementwise.h"
+#include "infini_train/include/kernels/cuda/transform.h"
 
-#include <cmath>
-#include <functional>
 #include <memory>
 
 #include "cuda_runtime.h"

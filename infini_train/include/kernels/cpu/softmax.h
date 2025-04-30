@@ -1,8 +1,9 @@
 #pragma once
 
-#include "infini_train/include/tensor.h"
 #include <cstdint>
 #include <memory>
+
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
 std::shared_ptr<Tensor> SoftmaxForward(const std::shared_ptr<Tensor> &input, int64_t dim);

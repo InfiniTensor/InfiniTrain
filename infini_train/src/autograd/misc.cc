@@ -9,7 +9,6 @@
 #include "infini_train/include/kernels/cpu/slice.h"
 #include "infini_train/include/kernels/cpu/split.h"
 #include "infini_train/include/tensor.h"
-
 #ifdef USE_CUDA
 #include "infini_train/include/kernels/cuda/no_op.h"
 #include "infini_train/include/kernels/cuda/slice.h"

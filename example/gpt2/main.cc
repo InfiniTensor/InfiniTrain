@@ -19,6 +19,8 @@
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_string(input_val_bin, "", "input .bin to eval validation loss on");
+// model bin file is downloaded and processed using the script at
+// https://github.com/karpathy/llm.c/blob/master/train_gpt2.py
 DEFINE_string(llmc_filepath, "", "llmc model file path to load from");
 DEFINE_string(model, "gpt2", "gpt2|gpt2-medium|gpt2-large|gpt2-xl|d12|d24|d36|d48");
 // token layout for each step of the optimization
@@ -42,13 +44,12 @@ using namespace infini_train;
 namespace {
 // validation
 const std::unordered_set<std::string> kSupportedModels
-    = {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "d12", "d24", "d36", "d48", "d1"};
+    = {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "d12", "d24", "d36", "d48"};
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
 
 //
 const std::unordered_map<std::string, GPT2Config> kModelToConfigs = {
-    {"d1", {.block_size = 1024, .vocab_size = 50257, .n_layer = 1, .n_head = 12, .n_embd = 768}},
     {"d12", {.block_size = 1024, .vocab_size = 50257, .n_layer = 12, .n_head = 12, .n_embd = 768}},
     {"d24", {.block_size = 1024, .vocab_size = 50257, .n_layer = 24, .n_head = 16, .n_embd = 1024}},
     {"d36", {.block_size = 1024, .vocab_size = 50257, .n_layer = 36, .n_head = 20, .n_embd = 1280}},

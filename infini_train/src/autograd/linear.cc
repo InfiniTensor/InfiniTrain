@@ -7,7 +7,6 @@
 
 #include "infini_train/include/kernels/cpu/linear.h"
 #include "infini_train/include/tensor.h"
-
 #ifdef USE_CUDA
 #include "infini_train/include/kernels/cuda/linear.h"
 #endif

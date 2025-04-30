@@ -1,7 +1,7 @@
 option(USE_CUDA "Support NVIDIA CUDA" OFF)
 cmake_minimum_required(VERSION 3.28)
 
-project(infini_train VERSION 0.2.0 LANGUAGES CXX)
+project(infini_train VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

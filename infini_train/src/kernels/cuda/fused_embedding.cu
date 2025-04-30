@@ -1,4 +1,3 @@
-#include "infini_train/include/device.h"
 #include "infini_train/include/kernels/cuda/fused_embedding.h"
 
 #include <memory>
@@ -6,6 +5,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {

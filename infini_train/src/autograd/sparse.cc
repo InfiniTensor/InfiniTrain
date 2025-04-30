@@ -7,7 +7,6 @@
 
 #include "infini_train/include/kernels/cpu/embedding.h"
 #include "infini_train/include/tensor.h"
-
 #ifdef USE_CUDA
 #include "infini_train/include/kernels/cuda/embedding.h"
 #endif

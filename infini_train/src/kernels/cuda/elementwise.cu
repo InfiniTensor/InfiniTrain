@@ -55,10 +55,8 @@ void LaunchKernel(Kernel &&kernel, const std::shared_ptr<Tensor> &output, const 
     }
 }
 
-/**
- * launch a forward elementwise operation given the calculation function, output, and the inputs
- * Note: currently only support unary and binary operations
- */
+// launch a forward elementwise operation given the calculation function, output, and the inputs
+// Note: currently only support unary and binary operations
 template <size_t BLOCK_SIZE, typename T, typename Func, typename... Inputs>
 void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Inputs &...inputs) {
     T *output_ptr = static_cast<T *>(output->DataPtr());

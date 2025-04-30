@@ -1,6 +1,6 @@
 #include "infini_train/include/autograd/transform.h"
-#include "infini_train/include/kernels/cpu/transform.h"
 
+#include "infini_train/include/kernels/cpu/transform.h"
 #ifdef USE_CUDA
 #include "infini_train/include/kernels/cuda/transform.h"
 #endif
