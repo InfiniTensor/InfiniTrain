@@ -17,6 +17,22 @@ namespace autograd {
 class Function;
 }
 
+namespace {
+struct PrintOptions {
+    // ref: https://pytorch.org/docs/stable/generated/torch.set_printoptions.html#torch.set_printoptions
+    int64_t precision = 4;
+    int64_t threshold = 1000;
+    int64_t edge_items = 3;
+    int64_t linewidth = 80;
+    std::optional<bool> sci_mode;
+
+    static PrintOptions &Get() {
+        static PrintOptions instance;
+        return instance;
+    }
+};
+} // namespace
+
 enum class DataType : int8_t {
     kUINT8,
     kINT8,
@@ -111,6 +127,10 @@ public:
 
     void SaveAsNpy(const std::string &path) const;
     void Print(std::ostream &os = std::cout) const;
+    static void
+    SetPrintOptions(std::optional<int64_t> precision = std::nullopt, std::optional<int64_t> threshold = std::nullopt,
+                    std::optional<int64_t> edge_items = std::nullopt, std::optional<int64_t> linewidth = std::nullopt,
+                    std::optional<std::string> profile = std::nullopt, std::optional<bool> sci_mode = std::nullopt);
 
 private:
     std::shared_ptr<TensorBuffer> buffer_;

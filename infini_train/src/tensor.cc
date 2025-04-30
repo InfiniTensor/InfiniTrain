@@ -363,6 +363,54 @@ void Tensor::SaveAsNpy(const std::string &path) const {
     file.close();
 }
 
+void Tensor::SetPrintOptions(std::optional<int64_t> precision, std::optional<int64_t> threshold,
+                             std::optional<int64_t> edge_items, std::optional<int64_t> linewidth,
+                             std::optional<std::string> profile, std::optional<bool> sci_mode) {
+    PrintOptions &opts = PrintOptions::Get();
+    if (profile) {
+        // ref: https://github.com/pytorch/pytorch/blob/main/torch/_tensor_str.py
+        std::string &profile_name = *profile;
+        std::transform(profile_name.begin(), profile_name.end(), profile_name.begin(), ::tolower);
+        if (profile_name == "default") {
+            opts.precision = 4;
+            opts.threshold = 1000;
+            opts.edge_items = 3;
+            opts.linewidth = 80;
+            opts.sci_mode = std::nullopt;
+        } else if (profile_name == "short") {
+            opts.precision = 4;
+            opts.threshold = 100;
+            opts.edge_items = 2;
+            opts.linewidth = 80;
+            opts.sci_mode = std::nullopt;
+        } else if (profile_name == "full") {
+            opts.precision = 4;
+            opts.threshold = std::numeric_limits<int64_t>::max();
+            opts.edge_items = 3;
+            opts.linewidth = 80;
+            opts.sci_mode = std::nullopt;
+        } else {
+            LOG(WARNING) << "Undefined profile name: " << profile_name;
+        }
+    }
+
+    if (precision) {
+        opts.precision = *precision;
+    }
+    if (threshold) {
+        opts.threshold = *threshold;
+    }
+    if (edge_items) {
+        opts.edge_items = *edge_items;
+    }
+    if (linewidth) {
+        opts.linewidth = *linewidth;
+    }
+    if (sci_mode) {
+        opts.sci_mode = *sci_mode;
+    }
+}
+
 void Tensor::Print(std::ostream &os) const {
     /*
         Print tensor in torch.tensor/np.array style.
@@ -389,131 +437,163 @@ void Tensor::Print(std::ostream &os) const {
         LOG(FATAL) << "Unsupported device type for Print.";
     }
 
-    constexpr int kPrintThreshold = 6;
-    constexpr int kPrecision = 4;
-    const float kSciThreshMin = 1e-4f;
-    const float kSciThreshMax = 1e+4f;
+    const PrintOptions &opts = PrintOptions::Get();
+    const int precision = opts.precision;
+    const int threshold = opts.threshold;
+    const int edge_items = opts.edge_items;
+    const int linewidth = opts.linewidth;
+    const int base_indent = 8; // length of "tensor(["
 
-    bool use_scientific = false;
-    for (float val : host_buffer) {
-        float abs_val = std::fabs(val);
-        if ((abs_val != 0.0f && abs_val < kSciThreshMin) || abs_val >= kSciThreshMax) {
-            use_scientific = true;
-            break;
+    bool use_sci = opts.sci_mode.value_or(false);
+    if (!opts.sci_mode.has_value()) {
+        for (float v : host_buffer) {
+            float abs_v = std::fabs(v);
+            if ((abs_v > 0.0f && abs_v < 1e-4f) || abs_v >= 1e+4f) {
+                use_sci = true;
+                break;
+            }
         }
     }
 
     auto format_float = [&](float val) -> std::string {
         std::ostringstream ss;
-        if (use_scientific) {
-            ss << std::scientific << std::setprecision(kPrecision) << val;
+        if (use_sci) {
+            ss << std::scientific << std::setprecision(precision);
         } else {
-            ss << std::fixed << std::setprecision(kPrecision) << val;
+            ss << std::fixed << std::setprecision(precision);
         }
+        ss << val;
         return ss.str();
     };
 
-    std::vector<std::string> formatted(num_elements);
+    std::vector<std::string> str_vals(num_elements);
     size_t max_width = 0;
     for (size_t i = 0; i < num_elements; ++i) {
-        formatted[i] = format_float(host_buffer[i]);
-        max_width = std::max(max_width, formatted[i].length());
+        str_vals[i] = format_float(host_buffer[i]);
+        max_width = std::max(max_width, str_vals[i].length());
     }
 
-    os << "Tensor(";
-    int base_indent = 7;
-    if (dims_.empty()) {
-        os << formatted[0] << ")\n";
-        os << "dtype=float32, shape=()\n";
-        return;
-    }
+    const int ndim = dims_.size();
 
-    // recursive with `insert_line_break` to add new line between batches
-    std::function<void(size_t, size_t, int, bool)> print_recursive;
-    print_recursive = [&](size_t dim, size_t offset, int indent, bool insert_line_break) {
-        if (dim == dims_.size() - 1) {
-            // innermost
-            os << "[";
-            size_t n = dims_[dim];
-            if (n <= kPrintThreshold) {
-                for (size_t i = 0; i < n; ++i) {
+    std::function<void(int, size_t, int)> print_rec;
+    print_rec = [&](int dim, size_t offset, int indent) {
+        os << "[";
+        size_t step = 1;
+        for (int d = dim + 1; d < ndim; ++d) { step *= dims_[d]; }
+        int n = dims_[dim];
+
+        if (dim == ndim - 1) {
+            if (n <= 2 * edge_items || num_elements <= threshold) {
+                int line_len = base_indent + indent + 1;
+                for (int i = 0; i < n; ++i) {
                     if (i > 0) {
                         os << ", ";
+                        line_len += 2;
                     }
-                    os << std::setw(max_width) << formatted[offset + i];
+                    std::string item = str_vals[offset + i];
+                    if (linewidth > 0 && line_len + max_width > linewidth) {
+                        os << "\n" << std::string(base_indent + indent + 1, ' ');
+                        line_len = base_indent + indent + 1;
+                    }
+                    os << std::setw(max_width) << item;
+                    line_len += max_width;
                 }
             } else {
-                for (size_t i = 0; i < 3; ++i) {
+                int line_len = base_indent + indent + 1;
+                for (int i = 0; i < edge_items; ++i) {
                     if (i > 0) {
                         os << ", ";
+                        line_len += 2;
                     }
-                    os << std::setw(max_width) << formatted[offset + i];
+                    std::string item = str_vals[offset + i];
+                    if (linewidth > 0 && line_len + max_width > linewidth) {
+                        os << "\n" << std::string(base_indent + indent + 1, ' ');
+                        line_len = base_indent + indent + 1;
+                    }
+                    os << std::setw(max_width) << item;
+                    line_len += max_width;
                 }
                 os << ", ..., ";
-                for (size_t i = n - 3; i < n; ++i) {
-                    if (i > n - 3) {
+                line_len += 5; // length of "..., "
+                if (linewidth > 0 && line_len + max_width > linewidth) {
+                    os << "\n" << std::string(base_indent + indent + 1, ' ');
+                    line_len = base_indent + indent + 1;
+                } else {
+                    os << ", ";
+                    line_len += 2;
+                }
+                for (int i = n - edge_items; i < n; ++i) {
+                    if (i > n - edge_items) {
                         os << ", ";
+                        line_len += 2;
                     }
-                    os << std::setw(max_width) << formatted[offset + i];
+                    std::string item = str_vals[offset + i];
+                    if (linewidth > 0 && line_len + max_width > linewidth) {
+                        os << "\n" << std::string(base_indent + indent + 1, ' ');
+                        line_len = base_indent + indent + 1;
+                    }
+                    os << std::setw(max_width) << item;
+                    line_len += max_width;
                 }
             }
-            os << "]";
         } else {
-            os << "[";
-            size_t step = 1;
-            for (size_t d = dim + 1; d < dims_.size(); ++d) { step *= dims_[d]; }
-            size_t n = dims_[dim];
-            if (n <= kPrintThreshold) {
-                for (size_t i = 0; i < n; ++i) {
+            if (n <= 2 * edge_items || num_elements <= threshold) {
+                for (int i = 0; i < n; ++i) {
                     if (i > 0) {
-                        if (insert_line_break) {
-                            os << ",\n\n" << std::string(base_indent + indent * 2, ' ');
+                        if (dim < ndim - 2) {
+                            os << ",\n\n" << std::string(base_indent + indent, ' ');
                         } else {
-                            os << ",\n" << std::string(base_indent + indent * 2, ' ');
+                            os << ",\n" << std::string(base_indent + indent, ' ');
                         }
                     }
-                    print_recursive(dim + 1, offset + i * step, indent + 1, false);
+                    print_rec(dim + 1, offset + i * step, indent + 1);
                 }
             } else {
-                for (size_t i = 0; i < 3; ++i) {
+                for (int i = 0; i < edge_items; ++i) {
                     if (i > 0) {
-                        if (insert_line_break) {
-                            os << ",\n\n" << std::string(base_indent + indent * 2, ' ');
+                        if (dim < ndim - 2) {
+                            os << ",\n\n" << std::string(base_indent + indent, ' ');
                         } else {
-                            os << ",\n" << std::string(base_indent + indent * 2, ' ');
+                            os << ",\n" << std::string(base_indent + indent, ' ');
                         }
                     }
-                    print_recursive(dim + 1, offset + i * step, indent + 1, false);
+                    print_rec(dim + 1, offset + i * step, indent + 1);
                 }
                 os << ",\n"
-                   << std::string(base_indent + indent * 2, ' ') << "...,\n"
-                   << std::string(base_indent + indent * 2, ' ');
-                for (size_t i = n - 3; i < n; ++i) {
-                    if (i > n - 3) {
-                        if (insert_line_break) {
-                            os << ",\n\n" << std::string(base_indent + indent * 2, ' ');
+                   << std::string(base_indent + indent, ' ') << "...\n"
+                   << std::string(base_indent + indent, ' ');
+                for (int i = n - edge_items; i < n; ++i) {
+                    if (i > n - edge_items) {
+                        if (dim < ndim - 2) {
+                            os << ",\n\n" << std::string(base_indent + indent, ' ');
                         } else {
-                            os << ",\n" << std::string(base_indent + indent * 2, ' ');
+                            os << ",\n" << std::string(base_indent + indent, ' ');
                         }
                     }
-                    print_recursive(dim + 1, offset + i * step, indent + 1, false);
+                    print_rec(dim + 1, offset + i * step, indent + 1);
                 }
             }
-            os << "]";
         }
+        os << "]";
     };
 
-    // outer batch dim, insert_line_break = true
-    print_recursive(0, 0, 0, true);
+    os << "Tensor(";
+    if (num_elements == 0) {
+        os << "[], ";
+    } else {
+        print_rec(0, 0, 0);
+        os << ", \n";
+    }
 
-    os << ",\n";
-
-    os << std::string(base_indent, ' ') + "dtype=float32, shape=(";
+    os << std::string(base_indent - 1, ' ') << "dtype=float32, shape=(";
     for (size_t i = 0; i < dims_.size(); ++i) {
         if (i > 0) {
             os << ", ";
         }
         os << dims_[i];
+    }
+    if (dims_.size() == 1) {
+        os << ",";
     }
     os << "))\n";
 }
