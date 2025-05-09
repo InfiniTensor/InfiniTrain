@@ -1,17 +1,16 @@
-#include "infini_train/include/kernels/cpu/layernorm.h"
-
 #include <cmath>
 #include <memory>
 #include <tuple>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
-std::shared_ptr<Tensor> LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
-                                         const std::shared_ptr<Tensor> &bias, std::shared_ptr<Tensor> &mean,
-                                         std::shared_ptr<Tensor> &rstd, const float eps) {
+std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
+LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                 const std::shared_ptr<Tensor> &bias, const float eps) {
     /*
         x: [bs, seq_len, embed_dim]
         -> LayerNorm (w: [embed_dim], b: [embed_dim])
@@ -21,18 +20,16 @@ std::shared_ptr<Tensor> LayerNormForward(const std::shared_ptr<Tensor> &input, c
     CHECK_EQ(input->Dims().size(), 3);
     CHECK_LE(input->Dims()[2], weight->Dims()[0]);
     CHECK_LE(input->Dims()[2], bias->Dims()[0]);
-    CHECK_EQ(mean, nullptr);
-    CHECK_EQ(rstd, nullptr);
 
     const int batch_size = input->Dims()[0];
     const int max_seqlen = input->Dims()[1];
     const int embed_dim = input->Dims()[2];
 
     auto output = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen, embed_dim}, DataType::kFLOAT32);
-    mean = std::make_unique<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32);
-    rstd = std::make_unique<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32);
+    auto mean = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32);
+    auto rstd = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32);
     mean->Fill<float>(0.0f);
-    mean->Fill<float>(0.0f);
+    rstd->Fill<float>(0.0f);
 
     for (int b = 0; b < batch_size; b++) {
         for (int t = 0; t < max_seqlen; t++) {
@@ -66,7 +63,7 @@ std::shared_ptr<Tensor> LayerNormForward(const std::shared_ptr<Tensor> &input, c
         }
     }
 
-    return {output};
+    return {output, mean, rstd};
 }
 
 std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
@@ -140,3 +137,11 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     return {grad_input, grad_weight, grad_bias};
 }
 } // namespace infini_train::kernels::cpu
+
+#define REGISTER_CPU_LAYERNORM_KERNEL(kernel_name)                                                                     \
+    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+
+REGISTER_CPU_LAYERNORM_KERNEL(LayerNormForward)
+REGISTER_CPU_LAYERNORM_KERNEL(LayerNormBackward)
+
+#undef REGISTER_CPU_LAYERNORM_KERNEL

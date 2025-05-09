@@ -1,5 +1,3 @@
-#include "infini_train/include/kernels/cpu/linear.h"
-
 #include <cstdint>
 #include <fcntl.h>
 #include <memory>
@@ -8,6 +6,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
@@ -141,9 +140,10 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     return output;
 }
 
+// TODO(dcj): support linear without bias later
 std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
 LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight, bool transpose,
-               int64_t out_features, const std::shared_ptr<Tensor> &grad_output) {
+               int64_t out_features, const std::shared_ptr<Tensor> &grad_output, const bool bias) {
     /*
     transpose: grad_input = grad_output * weight
     grad_input[*, in_features] = grad_output[*, out_features] * weight[out_features, in_features]
@@ -182,3 +182,13 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     return {grad_input, grad_weight, grad_bias};
 }
 } // namespace infini_train::kernels::cpu
+
+#define REGISTER_CPU_LINEAR_KERNEL(kernel_name)                                                                        \
+    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+
+REGISTER_CPU_LINEAR_KERNEL(MatmulForward)
+REGISTER_CPU_LINEAR_KERNEL(MatmulBackward)
+REGISTER_CPU_LINEAR_KERNEL(LinearForward)
+REGISTER_CPU_LINEAR_KERNEL(LinearBackward)
+
+#undef REGISTER_CPU_LINEAR_KERNEL

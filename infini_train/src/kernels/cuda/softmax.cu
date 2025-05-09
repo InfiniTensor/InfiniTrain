@@ -1,5 +1,3 @@
-#include "infini_train/include/kernels/cuda/softmax.h"
-
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -7,6 +5,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
@@ -199,3 +198,11 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
     return grad_input;
 }
 } // namespace infini_train::kernels::cuda
+
+#define REGISTER_CUDA_SOFTMAX_KERNEL(kernel_name)                                                                      \
+    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+
+REGISTER_CUDA_SOFTMAX_KERNEL(SoftmaxForward)
+REGISTER_CUDA_SOFTMAX_KERNEL(SoftmaxBackward)
+
+#undef REGISTER_CUDA_SOFTMAX_KERNEL

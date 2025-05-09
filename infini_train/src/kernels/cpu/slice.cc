@@ -1,11 +1,10 @@
-#include "infini_train/include/kernels/cpu/slice.h"
-
 #include <cmath>
 #include <functional>
 #include <memory>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
@@ -129,3 +128,11 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     return new_tensor;
 }
 } // namespace infini_train::kernels::cpu
+
+#define REGISTER_CPU_SLICE_KERNEL(kernel_name)                                                                         \
+    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+
+REGISTER_CPU_SLICE_KERNEL(SliceForward)
+REGISTER_CPU_SLICE_KERNEL(SliceBackward)
+
+#undef REGISTER_CPU_SLICE_KERNEL

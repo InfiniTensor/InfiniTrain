@@ -1,14 +1,8 @@
 #include "infini_train/include/autograd/function.h"
 
-#include <memory>
-#include <vector>
-
 #include "glog/logging.h"
 
-#include "infini_train/include/kernels/cpu/accumulate_grad.h"
-#ifdef USE_CUDA
-#include "infini_train/include/kernels/cuda/accumulate_grad.h"
-#endif
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
@@ -29,21 +23,9 @@ public:
 
     void BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int) override {
         if (grad_output) {
-            switch (grad_->GetDevice().Type()) {
-            case DeviceType::kCPU: {
-                kernels::cpu::AccumulateGrad(grad_output, 1.0f, grad_);
-                break;
-            }
-#ifdef USE_CUDA
-            case DeviceType::kCUDA: {
-                kernels::cuda::AccumulateGrad(grad_output, 1.0f, grad_);
-                break;
-            }
-#endif
-            default:
-                LOG(FATAL) << "Unsupported device type: " << static_cast<int>(grad_->GetDevice().Type());
-                break;
-            }
+            auto device = grad_->GetDevice().Type();
+            auto kernel = Dispatcher::Instance().GetKernel({device, "AccumulateGrad"});
+            kernel.Call<void>(grad_output, 1.0f, grad_);
         }
     }
 

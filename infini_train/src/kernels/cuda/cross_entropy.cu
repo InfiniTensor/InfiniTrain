@@ -1,15 +1,11 @@
-#include "infini_train/include/kernels/cuda/cross_entropy.h"
-
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <memory>
 #include <numeric>
-#include <vector>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
@@ -130,3 +126,11 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
     return {grad_input};
 }
 } // namespace infini_train::kernels::cuda
+
+#define REGISTER_CUDA_CROSS_ENTROPY_KERNEL(kernel_name)                                                                \
+    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+
+REGISTER_CUDA_CROSS_ENTROPY_KERNEL(CrossEntropyForward)
+REGISTER_CUDA_CROSS_ENTROPY_KERNEL(CrossEntropyBackward)
+
+#undef REGISTER_CUDA_CROSS_ENTROPY_KERNEL

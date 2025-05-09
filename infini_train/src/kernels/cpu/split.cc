@@ -1,5 +1,3 @@
-#include "infini_train/include/kernels/cpu/split.h"
-
 #include <algorithm>
 #include <memory>
 #include <numeric>
@@ -8,6 +6,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
@@ -73,3 +72,11 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
     return grad_input;
 }
 } // namespace infini_train::kernels::cpu
+
+#define REGISTER_CPU_SPLIT_KERNEL(kernel_name)                                                                         \
+    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+
+REGISTER_CPU_SPLIT_KERNEL(SplitForward)
+REGISTER_CPU_SPLIT_KERNEL(SplitBackward)
+
+#undef REGISTER_CPU_SPLIT_KERNEL

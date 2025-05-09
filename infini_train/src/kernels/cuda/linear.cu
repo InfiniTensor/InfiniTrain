@@ -1,11 +1,7 @@
-#include "infini_train/include/kernels/cuda/linear.h"
-
-#include <memory>
-#include <tuple>
-
 #include "cublas_v2.h"
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
@@ -333,3 +329,13 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     return {grad_input, grad_weight, grad_bias};
 }
 } // namespace infini_train::kernels::cuda
+
+#define REGISTER_CUDA_LINEAR_KERNEL(kernel_name)                                                                       \
+    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+
+REGISTER_CUDA_LINEAR_KERNEL(MatmulForward)
+REGISTER_CUDA_LINEAR_KERNEL(MatmulBackward)
+REGISTER_CUDA_LINEAR_KERNEL(LinearForward)
+REGISTER_CUDA_LINEAR_KERNEL(LinearBackward)
+
+#undef REGISTER_CUDA_LINEAR_KERNEL

@@ -1,10 +1,9 @@
-#include "infini_train/include/kernels/cpu/sigmoid.h"
-
 #include <cmath>
 #include <memory>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
@@ -43,3 +42,11 @@ std::shared_ptr<Tensor> SigmoidBackward(const std::shared_ptr<Tensor> &output,
     return grad_input;
 }
 } // namespace infini_train::kernels::cpu
+
+#define REGISTER_CPU_SIGMOID_KERNEL(kernel_name)                                                                       \
+    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+
+REGISTER_CPU_SIGMOID_KERNEL(SigmoidForward)
+REGISTER_CPU_SIGMOID_KERNEL(SigmoidBackward)
+
+#undef REGISTER_CPU_SIGMOID_KERNEL

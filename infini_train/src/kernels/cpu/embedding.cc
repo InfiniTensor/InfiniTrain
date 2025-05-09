@@ -1,9 +1,8 @@
-#include "infini_train/include/kernels/cpu/embedding.h"
-
 #include <memory>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
@@ -55,3 +54,11 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
 }
 
 } // namespace infini_train::kernels::cpu
+
+#define REGISTER_CPU_EMBEDDING_KERNEL(kernel_name)                                                                     \
+    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+
+REGISTER_CPU_EMBEDDING_KERNEL(EmbeddingForward)
+REGISTER_CPU_EMBEDDING_KERNEL(EmbeddingBackward)
+
+#undef REGISTER_CPU_EMBEDDING_KERNEL

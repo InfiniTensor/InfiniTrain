@@ -1,5 +1,3 @@
-#include "infini_train/include/kernels/cpu/elementwise.h"
-
 #include <cmath>
 #include <functional>
 #include <memory>
@@ -8,6 +6,8 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/device.h"
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
@@ -124,9 +124,9 @@ std::shared_ptr<Tensor> MulForward(const std::shared_ptr<Tensor> &a, const std::
     return BinaryForward(a, b, [](float x, float y) { return x * y; });
 }
 
-std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> MulBackward(const std::shared_ptr<Tensor> &a,
-                                                                        const std::shared_ptr<Tensor> &b,
-                                                                        const std::shared_ptr<Tensor> &grad_output) {
+std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> MulBackward(const std::shared_ptr<Tensor> &grad_output,
+                                                                        const std::shared_ptr<Tensor> &a,
+                                                                        const std::shared_ptr<Tensor> &b) {
     return BinaryBackward(
         grad_output, a, b, a->Dims(), b->Dims(), [](float, float y) { return y; }, [](float x, float) { return x; });
 }
@@ -138,4 +138,24 @@ std::shared_ptr<Tensor> MulScalarForward(const std::shared_ptr<Tensor> &a, float
 std::shared_ptr<Tensor> MulScalarBackward(const std::shared_ptr<Tensor> &grad_output, float scalar) {
     return UnaryBackward(grad_output, nullptr, [scalar](float) { return scalar; });
 }
+
 } // namespace infini_train::kernels::cpu
+
+#define REGISTER_CPU_ELEMENTWISE_KERNEL(kernel_name)                                                                   \
+    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+
+REGISTER_CPU_ELEMENTWISE_KERNEL(TanhForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(TanhBackward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(PowForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(PowBackward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(EqualsScalarForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(AddForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(AddBackward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(AddScalarForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(AddScalarBackward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(MulForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(MulBackward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(MulScalarForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(MulScalarBackward)
+
+#undef REGISTER_CPU_ELEMENTWISE_KERNEL

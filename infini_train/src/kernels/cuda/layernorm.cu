@@ -1,10 +1,6 @@
-#include "infini_train/include/kernels/cuda/layernorm.h"
-
-#include <memory>
-#include <tuple>
-
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
@@ -72,24 +68,22 @@ __global__ void LayerNormForwardKernel(const float *input, const float *weight, 
     }
 }
 
-std::shared_ptr<Tensor> LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
-                                         const std::shared_ptr<Tensor> &bias, std::shared_ptr<Tensor> &mean,
-                                         std::shared_ptr<Tensor> &rstd, const float eps) {
+std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
+LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                 const std::shared_ptr<Tensor> &bias, const float eps) {
     CHECK_EQ(input->Dims().size(), 3);
     CHECK_LE(input->Dims()[2], weight->Dims()[0]);
     CHECK_LE(input->Dims()[2], bias->Dims()[0]);
-    CHECK_EQ(mean, nullptr);
-    CHECK_EQ(rstd, nullptr);
 
     const int batch_size = input->Dims()[0];
     const int max_seqlen = input->Dims()[1];
     const int embed_dim = input->Dims()[2];
 
     auto output = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32, input->GetDevice());
-    mean = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32,
-                                    input->GetDevice());
-    rstd = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32,
-                                    input->GetDevice());
+    auto mean = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32,
+                                         input->GetDevice());
+    auto rstd = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32,
+                                         input->GetDevice());
     mean->Fill<float>(0.0f);
     rstd->Fill<float>(0.0f);
 
@@ -102,7 +96,7 @@ std::shared_ptr<Tensor> LayerNormForward(const std::shared_ptr<Tensor> &input, c
         static_cast<const float *>(bias->DataPtr()), static_cast<float *>(mean->DataPtr()),
         static_cast<float *>(rstd->DataPtr()), static_cast<float *>(output->DataPtr()), eps, batch_size, max_seqlen,
         embed_dim);
-    return output;
+    return {output, mean, rstd};
 }
 
 // Helper function for warp/block-wide reduction
@@ -224,3 +218,11 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     return {grad_input, grad_weight, grad_bias};
 }
 } // namespace infini_train::kernels::cuda
+
+#define REGISTER_CUDA_LAYERNORM_KERNEL(kernel_name)                                                                    \
+    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+
+REGISTER_CUDA_LAYERNORM_KERNEL(LayerNormForward)
+REGISTER_CUDA_LAYERNORM_KERNEL(LayerNormBackward)
+
+#undef REGISTER_CUDA_LAYERNORM_KERNEL

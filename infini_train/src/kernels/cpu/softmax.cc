@@ -1,11 +1,10 @@
-#include "infini_train/include/kernels/cpu/softmax.h"
-
 #include <cmath>
 #include <cstdint>
 #include <memory>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
@@ -80,3 +79,11 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
     return grad_input;
 }
 } // namespace infini_train::kernels::cpu
+
+#define REGISTER_CPU_SOFTMAX_KERNEL(kernel_name)                                                                       \
+    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+
+REGISTER_CPU_SOFTMAX_KERNEL(SoftmaxForward)
+REGISTER_CPU_SOFTMAX_KERNEL(SoftmaxBackward)
+
+#undef REGISTER_CPU_SOFTMAX_KERNEL
