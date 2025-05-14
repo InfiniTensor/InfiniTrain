@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <random>
@@ -248,6 +249,10 @@ constexpr int32_t kHeaderFP32Version = 3;
 } // namespace
 
 std::unique_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
+    if (!std::filesystem::exists(filepath)) {
+        LOG(FATAL) << "File not found: " << filepath;
+    }
+
     std::ifstream ifs(filepath, std::ios::binary);
     const auto header = ReadSeveralBytesFromIfstream(256 * sizeof(int32_t), &ifs);
 

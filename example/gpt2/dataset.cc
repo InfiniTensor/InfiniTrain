@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -57,6 +58,11 @@ TinyShakespeareFile ReadTinyShakespeareFile(const std::string &path, size_t sequ
       magic    | version  | num_toks | reserved   |
       4 bytes  | 4 bytes  | 4 bytes  | 1012 bytes | # bytes       |
     */
+    
+    if (!std::filesystem::exists(path)) {
+        LOG(FATAL) << "File not found: " << path;
+    }
+
     TinyShakespeareFile text_file;
     std::ifstream ifs(path, std::ios::binary);
     const auto header = ReadSeveralBytesFromIfstream(1024, &ifs);
@@ -92,8 +98,16 @@ TinyShakespeareFile ReadTinyShakespeareFile(const std::string &path, size_t sequ
 } // namespace
 
 TinyShakespeareDataset::TinyShakespeareDataset(const std::string &filepath, size_t sequence_length)
-    : text_file_(ReadTinyShakespeareFile(filepath, sequence_length)), sequence_length_(sequence_length),
-      sequence_size_in_bytes_(sequence_length * sizeof(int64_t)), num_samples_(text_file_.dims[0] - 1) {
+    : sequence_length_(sequence_length),
+      sequence_size_in_bytes_(sequence_length * sizeof(int64_t)) {
+    
+    if (!std::filesystem::exists(filepath)) {
+        LOG(FATAL) << "Dataset not found: " << filepath;
+    }
+
+    text_file_ = ReadTinyShakespeareFile(filepath, sequence_length);
+    num_samples_ = text_file_.dims[0] - 1;
+
     CHECK_LE(sequence_length, 1024); // GPT-2: max_seq_length = 1024
     CHECK_EQ(text_file_.dims[1], sequence_length_);
     CHECK_EQ(static_cast<int>(text_file_.tensor.Dtype()), static_cast<int>(DataType::kINT64));

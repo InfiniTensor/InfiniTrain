@@ -39,5 +39,5 @@ private:
     TinyShakespeareFile text_file_;
     const size_t sequence_length_ = 0;
     const size_t sequence_size_in_bytes_ = 0;
-    const size_t num_samples_ = 0;
+    size_t num_samples_ = 0;
 };
