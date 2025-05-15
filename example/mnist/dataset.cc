@@ -88,7 +88,7 @@ MNISTDataset::MNISTDataset(const std::string &dataset, bool train) {
     if (!std::filesystem::exists(image_path)) {
         LOG(FATAL) << "Dataset not found: " << image_path;
     }
-    
+
     if (!std::filesystem::exists(label_path)) {
         LOG(FATAL) << "Dataset not found: " << label_path;
     }
@@ -98,7 +98,7 @@ MNISTDataset::MNISTDataset(const std::string &dataset, bool train) {
 
     image_dims_ = std::vector(image_file_.dims.begin() + 1, image_file_.dims.end());
     label_dims_ = std::vector(label_file_.dims.begin() + 1, label_file_.dims.end());
-    
+
     image_size_in_bytes_ = kSN3TypeToSize.at(image_file_.type)
                          * std::accumulate(image_dims_.begin(), image_dims_.end(), 1, std::multiplies<int>());
     label_size_in_bytes_ = kSN3TypeToSize.at(label_file_.type)
