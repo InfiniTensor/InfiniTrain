@@ -36,7 +36,7 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
         // TODO(dcj): maybe use async API later?
-        cudaMemcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice, 0);
         break;
     }
 #endif
@@ -125,7 +125,7 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
         // TODO(dcj): maybe use async API later?
-        cudaMemcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice, 0);
         break;
     }
 #endif
@@ -151,7 +151,7 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
         // TODO(dcj): maybe use async API later?
-        cudaMemcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice, 0);
         break;
     }
 #endif
@@ -177,7 +177,7 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
         // TODO(dcj): maybe use async API later?
-        cudaMemcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice, 0);
         break;
     }
 #endif
@@ -200,7 +200,7 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
     case DATA_TYPE: {                                                                                                  \
         std::vector<TYPE> buffer(num_elements);                                                                        \
         std::iota(buffer.begin(), buffer.end(), static_cast<TYPE>(start));                                             \
-        cudaMemcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE), cudaMemcpyHostToDevice);             \
+        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE), cudaMemcpyHostToDevice, 0);     \
         break;                                                                                                         \
     }
 

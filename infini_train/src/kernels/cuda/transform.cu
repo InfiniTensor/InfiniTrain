@@ -130,12 +130,13 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
     // Allocate device memory for dims and strides
     // TODO(zbl): avoid using cudaMalloc?
     int64_t *in_dims_dev, *in_strides_dev, *out_strides_dev;
-    cudaMalloc(&in_dims_dev, sizeof(int64_t) * ndim);
-    cudaMalloc(&in_strides_dev, sizeof(int64_t) * ndim);
-    cudaMalloc(&out_strides_dev, sizeof(int64_t) * ndim);
-    cudaMemcpy(in_dims_dev, in_dims.data(), sizeof(int64_t) * ndim, cudaMemcpyHostToDevice);
-    cudaMemcpy(in_strides_dev, in_strides.data(), sizeof(int64_t) * ndim, cudaMemcpyHostToDevice);
-    cudaMemcpy(out_strides_dev, out_strides.data(), sizeof(int64_t) * ndim, cudaMemcpyHostToDevice);
+    cudaMallocAsync(&in_dims_dev, 3 * sizeof(*in_dims_dev) * ndim, 0);
+    in_strides_dev = in_dims_dev + ndim;
+    out_strides_dev = in_strides_dev + ndim;
+
+    cudaMemcpyAsync(in_dims_dev, in_dims.data(), sizeof(int64_t) * ndim, cudaMemcpyHostToDevice, 0);
+    cudaMemcpyAsync(in_strides_dev, in_strides.data(), sizeof(int64_t) * ndim, cudaMemcpyHostToDevice, 0);
+    cudaMemcpyAsync(out_strides_dev, out_strides.data(), sizeof(int64_t) * ndim, cudaMemcpyHostToDevice, 0);
 
     int threads_per_block = 256;
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
@@ -145,9 +146,7 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
         in_strides_dev, out_strides_dev, ndim, dim0, dim1, num_elements);
 
     // NOTE(zbl): cudaFree() needs explicit sync when cudaMallocAsync() is called
-    cudaFree(in_dims_dev);
-    cudaFree(in_strides_dev);
-    cudaFree(out_strides_dev);
+    cudaFreeAsync(in_dims_dev, 0);
 
     return output;
 }

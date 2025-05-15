@@ -45,7 +45,7 @@ TensorBuffer::TensorBuffer(Device device, size_t size) : device_(device), size_(
 #ifdef USE_CUDA
     case DeviceType::kCUDA:
         // TODO(dcj): Maybe pin memory later.
-        cudaMalloc(&data_, size);
+        cudaMallocAsync(&data_, size, 0);
         break;
 #endif
     default:
@@ -61,7 +61,7 @@ TensorBuffer::~TensorBuffer() {
         break;
 #ifdef USE_CUDA
     case DeviceType::kCUDA:
-        cudaFree(data_);
+        cudaFreeAsync(data_, 0);
         break;
 #endif
     default:
@@ -113,7 +113,7 @@ template <typename T> void Tensor::Fill(T value) {
     case DeviceType::kCUDA: {
         // TODO(dcj): use thrust::fill later
         std::vector<T> host_buffer(num_elements_, value);
-        cudaMemcpy(DataPtr(), host_buffer.data(), num_elements_ * sizeof(T), cudaMemcpyHostToDevice);
+        cudaMemcpyAsync(DataPtr(), host_buffer.data(), num_elements_ * sizeof(T), cudaMemcpyHostToDevice, 0);
         break;
     }
 #endif
@@ -153,12 +153,12 @@ Tensor Tensor::To(Device device) {
     case DeviceType::kCPU:
         // CUDA -> CPU
         new_tensor = Tensor(dims_, dtype_, Device(DeviceType::kCPU, 0));
-        cudaMemcpy(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), cudaMemcpyDeviceToHost);
+        cudaMemcpyAsync(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), cudaMemcpyDeviceToHost, 0);
         break;
     case DeviceType::kCUDA:
         // CPU -> CUDA
         new_tensor = Tensor(dims_, dtype_, Device(DeviceType::kCUDA, 0));
-        cudaMemcpy(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), cudaMemcpyHostToDevice);
+        cudaMemcpyAsync(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), cudaMemcpyHostToDevice, 0);
         break;
 #endif
     default:
@@ -310,7 +310,7 @@ void Tensor::SaveAsNpy(const std::string &path) const {
 #ifdef USE_CUDA
     else if (GetDevice().Type() == DeviceType::kCUDA) {
         // If on CUDA, copy back to host
-        cudaError_t err = cudaMemcpy(host_buffer.data(), DataPtr(), num_bytes, cudaMemcpyDeviceToHost);
+        cudaError_t err = cudaMemcpyAsync(host_buffer.data(), DataPtr(), num_bytes, cudaMemcpyDeviceToHost, 0);
         CHECK_EQ(err, cudaSuccess) << "cudaMemcpy failed: " << cudaGetErrorString(err);
     }
 #endif
@@ -429,7 +429,7 @@ void Tensor::Print(std::ostream &os) const {
 #ifdef USE_CUDA
     else if (GetDevice().Type() == DeviceType::kCUDA) {
         cudaDeviceSynchronize();
-        cudaError_t err = cudaMemcpy(host_buffer.data(), DataPtr(), num_bytes, cudaMemcpyDeviceToHost);
+        cudaError_t err = cudaMemcpyAsync(host_buffer.data(), DataPtr(), num_bytes, cudaMemcpyDeviceToHost, 0);
         CHECK_EQ(err, cudaSuccess) << "cudaMemcpy failed: " << cudaGetErrorString(err);
     }
 #endif

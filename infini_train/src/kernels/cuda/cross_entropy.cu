@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cub/block/block_reduce.cuh>
+#include <cuda_runtime.h>
 #include <limits>
 #include <memory>
 #include <numeric>
@@ -17,16 +19,46 @@ namespace {
 constexpr float kNegativeInfinity = -std::numeric_limits<float>::infinity();
 }
 
-template <typename TargetType>
-__global__ void CrossEntropyForwardKernel(const float *input_ptr, const TargetType *target_ptr, float *loss_ptr, int bs,
-                                          int num_classes) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < bs) {
-        float max_logit = kNegativeInfinity;
-        for (int j = 0; j < num_classes; ++j) { max_logit = max(max_logit, input_ptr[idx * num_classes + j]); }
-        float sum_exp = 0.0f;
-        for (int j = 0; j < num_classes; ++j) { sum_exp += expf(input_ptr[idx * num_classes + j] - max_logit); }
-        loss_ptr[idx] = -logf(expf(input_ptr[idx * num_classes + target_ptr[idx]] - max_logit) / sum_exp);
+template <size_t BLOCK_SIZE, typename TargetType>
+__global__ void CrossEntropyForwardKernel(const float *__restrict__ input_ptr,
+                                          const TargetType *__restrict__ target_ptr, float *__restrict__ loss_ptr,
+                                          int bs, int num_classes) {
+    __shared__ struct {
+        float max_logit;
+        float sum_exp;
+        TargetType target_class;
+        typename cub::BlockReduce<float, BLOCK_SIZE>::TempStorage reduce;
+    } shared;
+
+    const int sample_idx = blockIdx.x;
+    if (sample_idx >= bs) {
+        return;
+    }
+
+    const int tid = threadIdx.x;
+    const size_t base = sample_idx * num_classes;
+
+    if (tid == 0) {
+        shared.target_class = target_ptr[sample_idx];
+    }
+    __syncthreads();
+
+    // calculate the max
+    float thread_max = kNegativeInfinity;
+    for (int i = tid; i < num_classes; i += BLOCK_SIZE) { thread_max = fmaxf(thread_max, input_ptr[base + i]); }
+    shared.max_logit = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Reduce(thread_max, cub::Max());
+    __syncthreads();
+
+    // calculate the sum of exponents
+    float thread_sum = 0.0f;
+    for (int i = tid; i < num_classes; i += BLOCK_SIZE) { thread_sum += expf(input_ptr[base + i] - shared.max_logit); }
+    shared.sum_exp = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Sum(thread_sum);
+    __syncthreads();
+
+    // calculate the loss
+    if (tid == 0) {
+        const float target_val = input_ptr[base + shared.target_class] - shared.max_logit;
+        loss_ptr[sample_idx] = logf(shared.sum_exp) - target_val;
     }
 }
 
@@ -41,22 +73,22 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
     const float *input_ptr = static_cast<const float *>(input->DataPtr());
     float *batched_loss_ptr = static_cast<float *>(batched_output->DataPtr());
 
-    int threads_per_block = 256;
-    int num_blocks = (bs + threads_per_block - 1) / threads_per_block;
+    constexpr int threads_per_block = 256;
+    int num_blocks = bs;
 
     // TODO(dcj): support multi datatypes later
     switch (target->Dtype()) {
     case DataType::kUINT8: {
         const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
         // FIXME(dcj): do reduce on GPU
-        CrossEntropyForwardKernel<uint8_t>
+        CrossEntropyForwardKernel<threads_per_block, uint8_t>
             <<<num_blocks, threads_per_block>>>(input_ptr, target_ptr, batched_loss_ptr, bs, num_classes);
         break;
     }
     case DataType::kINT64: {
         const int64_t *target_ptr = static_cast<const int64_t *>(target->DataPtr());
         // FIXME(dcj): do reduce on GPU
-        CrossEntropyForwardKernel<int64_t>
+        CrossEntropyForwardKernel<threads_per_block, int64_t>
             <<<num_blocks, threads_per_block>>>(input_ptr, target_ptr, batched_loss_ptr, bs, num_classes);
         break;
     }
@@ -75,20 +107,53 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
     return {std::make_shared<Tensor>(loss->To(input->GetDevice()))};
 }
 
-template <typename TargetType>
-__global__ void CrossEntropyBackwardKernel(const float *input_ptr, float *input_grad_ptr, const TargetType *target_ptr,
-                                           int bs, int num_classes) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < bs) {
-        float max_logit = kNegativeInfinity;
-        for (int j = 0; j < num_classes; ++j) { max_logit = max(max_logit, input_ptr[idx * num_classes + j]); }
-        float sum_exp = 0.0f;
-        for (int j = 0; j < num_classes; ++j) { sum_exp += expf(input_ptr[idx * num_classes + j] - max_logit); }
-        for (int j = 0; j < num_classes; ++j) {
-            int idx_grad = idx * num_classes + j;
-            input_grad_ptr[idx_grad]
-                = (expf(input_ptr[idx_grad] - max_logit) / sum_exp - (j == target_ptr[idx] ? 1.0f : 0.0f)) / bs;
-        }
+template <typename TargetType, size_t BLOCK_SIZE>
+__global__ void CrossEntropyBackwardKernel(const float *__restrict__ input_ptr, float *__restrict__ input_grad_ptr,
+                                           const TargetType *__restrict__ target_ptr, int bs, int num_classes) {
+    __shared__ struct {
+        float max_logit;
+        float sum_exp;
+        int target_class;
+        typename cub::BlockReduce<float, BLOCK_SIZE>::TempStorage reduce;
+    } shared;
+
+    const int tid = threadIdx.x;
+    const int idx = blockIdx.x;
+
+    if (idx >= bs) {
+        return;
+    }
+
+    const size_t idx_base = idx * num_classes;
+
+    if (tid == 0) {
+        shared.target_class = static_cast<int>(target_ptr[idx]);
+    }
+    __syncthreads();
+
+    // calculate the max
+    float thread_max = kNegativeInfinity;
+    for (int i = tid; i < num_classes; i += BLOCK_SIZE) { thread_max = fmaxf(thread_max, input_ptr[idx_base + i]); }
+    shared.max_logit = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Reduce(thread_max, cub::Max());
+    __syncthreads();
+
+    // calculate the sum
+    float thread_sum = 0.0f;
+    for (int i = tid; i < num_classes; i += BLOCK_SIZE) {
+        thread_sum += expf(input_ptr[idx_base + i] - shared.max_logit);
+    }
+    shared.sum_exp = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Sum(thread_sum);
+    __syncthreads();
+
+    // calculate the gradient
+    const float inv_bs = 1.0f / bs;
+    const float scale = 1.0f / shared.sum_exp;
+    const int target = shared.target_class;
+
+    for (int i = tid; i < num_classes; i += BLOCK_SIZE) {
+        const int global_idx = idx_base + i;
+        const float exp_val = expf(input_ptr[global_idx] - shared.max_logit);
+        input_grad_ptr[global_idx] = (exp_val * scale - (j == target)) * inv_bs;
     }
 }
 
@@ -106,20 +171,20 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
     const float *input_ptr = static_cast<const float *>(input->DataPtr());
     float *input_grad_ptr = static_cast<float *>(grad_input->DataPtr());
 
-    int threads_per_block = 256;
-    int num_blocks = (bs + threads_per_block - 1) / threads_per_block;
+    constexpr int threads_per_block = 256;
+    int num_blocks = bs;
 
     // TODO(dcj): support multi datatypes later
     switch (target->Dtype()) {
     case DataType::kUINT8: {
         const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
-        CrossEntropyBackwardKernel<uint8_t>
+        CrossEntropyBackwardKernel<uint8_t, threads_per_block>
             <<<num_blocks, threads_per_block>>>(input_ptr, input_grad_ptr, target_ptr, bs, num_classes);
         break;
     }
     case DataType::kINT64: {
         const int64_t *target_ptr = static_cast<const int64_t *>(target->DataPtr());
-        CrossEntropyBackwardKernel<int64_t>
+        CrossEntropyBackwardKernel<int64_t, threads_per_block>
             <<<num_blocks, threads_per_block>>>(input_ptr, input_grad_ptr, target_ptr, bs, num_classes);
         break;
     }

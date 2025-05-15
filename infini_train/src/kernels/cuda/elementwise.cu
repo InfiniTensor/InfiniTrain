@@ -42,12 +42,9 @@ void LaunchKernel(Kernel &&kernel, const std::shared_ptr<Tensor> &output, const 
         = [](const auto &...ts) { return std::make_tuple(static_cast<T *>(ts ? ts->DataPtr() : nullptr)...); };
     auto input_ptrs = extract_ptrs(inputs...);
 
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, output->GetDevice().Index());
-
     const size_t num_elements = output->NumElements();
-    dim3 block_dims(std::min(BLOCK_SIZE, static_cast<size_t>(prop.maxThreadsPerBlock)));
-    dim3 grid_dims(std::min(CEIL_DIV(num_elements, block_dims.x), static_cast<size_t>(prop.maxGridSize[0])));
+    dim3 block_dims(std::min(BLOCK_SIZE, static_cast<size_t>(1024)));
+    dim3 grid_dims(CEIL_DIV(num_elements, block_dims.x));
     const size_t step = grid_dims.x * block_dims.x;
 
     for (size_t offset = 0; offset < num_elements; offset += step) {
@@ -297,8 +294,8 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> AddBackward(const st
     CHECK_EQ(a_dims.size(), grad_output->Dims().size());
 
     auto grad_a = std::make_shared<Tensor>(a_dims, DataType::kFLOAT32, grad_output->GetDevice());
-    cudaMemcpy(grad_a->DataPtr(), grad_output->DataPtr(), grad_output->NumElements() * sizeof(float),
-               cudaMemcpyDeviceToDevice);
+    cudaMemcpyAsync(grad_a->DataPtr(), grad_output->DataPtr(), grad_output->NumElements() * sizeof(float),
+                    cudaMemcpyDeviceToDevice, 0);
 
     auto grad_b = std::make_shared<Tensor>(b_dims, DataType::kFLOAT32, grad_output->GetDevice());
     grad_b->Fill<float>(0.0f);
@@ -325,15 +322,15 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> AddBackward(const st
     int64_t *d_b_strides = nullptr;
     int64_t *d_b_dims = nullptr;
 
-    cudaMalloc(&d_out_strides, ndim * sizeof(int64_t));
-    cudaMalloc(&d_out_dims, ndim * sizeof(int64_t));
-    cudaMalloc(&d_b_strides, b_ndim * sizeof(int64_t));
-    cudaMalloc(&d_b_dims, b_ndim * sizeof(int64_t));
+    cudaMallocAsync(&d_out_strides, 2 * (ndim + b_ndim) * sizeof(*d_out_strides), 0);
+    d_out_dims = d_out_strides + ndim;
+    d_b_strides = d_out_dims + ndim;
+    d_b_dims = d_b_strides + b_ndim;
 
-    cudaMemcpy(d_out_strides, out_strides.data(), ndim * sizeof(int64_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_out_dims, out_dims.data(), ndim * sizeof(int64_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_b_strides, b_strides.data(), b_ndim * sizeof(int64_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_b_dims, b_dims.data(), b_ndim * sizeof(int64_t), cudaMemcpyHostToDevice);
+    cudaMemcpyAsync(d_out_strides, out_strides.data(), ndim * sizeof(int64_t), cudaMemcpyHostToDevice, 0);
+    cudaMemcpyAsync(d_out_dims, out_dims.data(), ndim * sizeof(int64_t), cudaMemcpyHostToDevice, 0);
+    cudaMemcpyAsync(d_b_strides, b_strides.data(), b_ndim * sizeof(int64_t), cudaMemcpyHostToDevice, 0);
+    cudaMemcpyAsync(d_b_dims, b_dims.data(), b_ndim * sizeof(int64_t), cudaMemcpyHostToDevice, 0);
 
     int threads = 256;
     int blocks = (num_elements + threads - 1) / threads;
@@ -342,10 +339,7 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> AddBackward(const st
                                                  static_cast<float *>(grad_b->DataPtr()), d_out_strides, d_out_dims,
                                                  ndim, d_b_strides, d_b_dims, b_ndim, num_elements);
     // NOTE(zbl): cudaFree() needs explicit sync when cudaMallocAsync() is called
-    cudaFree(d_out_strides);
-    cudaFree(d_out_dims);
-    cudaFree(d_b_strides);
-    cudaFree(d_b_dims);
+    cudaFreeAsync(d_out_strides, 0);
 
     return {grad_a, grad_b};
 }
