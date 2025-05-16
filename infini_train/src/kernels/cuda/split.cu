@@ -109,12 +109,12 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
         host_grad_output_ptrs.push_back(static_cast<const float *>(grad_output->DataPtr()));
     }
 
-    const void *device_ptr;
+    void *device_ptr;
     const float **device_grad_output_ptrs;
     int64_t *device_H_outs;
     cudaMallocAsync(&device_ptr, (sizeof(float *) + sizeof(int64_t)) * num_splits, 0);
-    device_grad_output_ptrs = static_cast<const float **>(device_ptr);
-    device_H_outs = static_cast<int64_t *>(device_grad_output_ptrs + num_splits);
+    device_grad_output_ptrs = (const float **)(device_ptr);
+    device_H_outs = reinterpret_cast<int64_t *>(device_grad_output_ptrs + num_splits);
 
     cudaMemcpyAsync(device_grad_output_ptrs, host_grad_output_ptrs.data(), sizeof(float *) * num_splits,
                     cudaMemcpyHostToDevice, 0);

@@ -153,7 +153,7 @@ __global__ void CrossEntropyBackwardKernel(const float *__restrict__ input_ptr, 
     for (int i = tid; i < num_classes; i += BLOCK_SIZE) {
         const int global_idx = idx_base + i;
         const float exp_val = expf(input_ptr[global_idx] - shared.max_logit);
-        input_grad_ptr[global_idx] = (exp_val * scale - (j == target)) * inv_bs;
+        input_grad_ptr[global_idx] = (exp_val * scale - (i == target)) * inv_bs;
     }
 }
 
