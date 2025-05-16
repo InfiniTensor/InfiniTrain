@@ -1,4 +1,6 @@
+#include <chrono>
 #include <cstdlib>
+#include <format>
 #include <iostream>
 #include <memory>
 #include <numeric>
@@ -60,6 +62,10 @@ int main(int argc, char *argv[]) {
 
     for (int epoch = 0; epoch < FLAGS_num_epoch; ++epoch) {
         int train_idx = 0;
+        float total_loss = 0.0;
+
+        const auto epoch_start = std::chrono::high_resolution_clock::now();
+
         for (const auto &[image, label] : train_dataloader) {
             auto new_image = std::make_shared<Tensor>(image->To(device));
             auto new_label = std::make_shared<Tensor>(label->To(device));
@@ -69,16 +75,25 @@ int main(int argc, char *argv[]) {
 
             auto loss = loss_fn.Forward({outputs[0], new_label});
             auto loss_cpu = loss[0]->To(Device());
+            float current_loss = static_cast<float *>(loss_cpu.DataPtr())[0];
+            total_loss += current_loss;
             if (train_idx % kNumItersOfOutputDuration == 0) {
                 LOG(ERROR) << "epoch: " << epoch << ", [" << train_idx * FLAGS_bs << "/" << train_dataset->Size()
                            << "] "
-                           << " loss: " << static_cast<float *>(loss_cpu.DataPtr())[0];
+                           << " loss: " << current_loss;
             }
 
             loss[0]->Backward();
             optimizer.Step();
             train_idx += 1;
         }
+
+        const auto epoch_end = std::chrono::high_resolution_clock::now();
+        const double duration_us = std::chrono::duration<double, std::micro>(epoch_end - epoch_start).count();
+
+        LOG(ERROR) << std::format("epoch {:2d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} samples/s)",
+                                  epoch, FLAGS_num_epoch - 1, total_loss / train_idx, FLAGS_lr, duration_us / 1e3f,
+                                  train_dataset->Size() / (duration_us / 1e6));
     }
 
     // TODO(dcj): Add no_grad() context manager later.
