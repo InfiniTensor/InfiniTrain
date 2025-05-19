@@ -40,6 +40,6 @@ private:
     SN3PascalVincentFile label_file_;
     std::vector<int64_t> image_dims_;
     std::vector<int64_t> label_dims_;
-    size_t image_size_in_bytes_ = 0;
-    size_t label_size_in_bytes_ = 0;
+    const size_t image_size_in_bytes_ = 0;
+    const size_t label_size_in_bytes_ = 0;
 };

@@ -54,6 +54,11 @@ SN3PascalVincentFile ReadSN3PascalVincentFile(const std::string &path) {
       reserved | reserved | type_int | num_dims |
       1 byte   | 1 byte   | 1 byte   | 1 byte   | 4*{num_dims} bytes | # bytes |
     */
+
+    if (!std::filesystem::exists(path)) {
+        LOG(FATAL) << "File not found: " << path;
+    }
+
     SN3PascalVincentFile sn3_file;
     std::ifstream ifs(path, std::ios::binary);
     const auto magic = ReadSeveralBytesFromIfstream(4, &ifs);
@@ -77,33 +82,17 @@ SN3PascalVincentFile ReadSN3PascalVincentFile(const std::string &path) {
 }
 } // namespace
 
-MNISTDataset::MNISTDataset(const std::string &dataset, bool train) {
-    const std::string image_path = std::format("{}/{}-images-idx3-ubyte", dataset, train ? kTrainPrefix : kTestPrefix);
-    const std::string label_path = std::format("{}/{}-labels-idx1-ubyte", dataset, train ? kTrainPrefix : kTestPrefix);
-
-    if (!std::filesystem::exists(dataset)) {
-        LOG(FATAL) << "Dataset not found: " << dataset;
-    }
-
-    if (!std::filesystem::exists(image_path)) {
-        LOG(FATAL) << "Dataset not found: " << image_path;
-    }
-
-    if (!std::filesystem::exists(label_path)) {
-        LOG(FATAL) << "Dataset not found: " << label_path;
-    }
-
-    image_file_ = ReadSN3PascalVincentFile(image_path);
-    label_file_ = ReadSN3PascalVincentFile(label_path);
-
-    image_dims_ = std::vector(image_file_.dims.begin() + 1, image_file_.dims.end());
-    label_dims_ = std::vector(label_file_.dims.begin() + 1, label_file_.dims.end());
-
-    image_size_in_bytes_ = kSN3TypeToSize.at(image_file_.type)
-                         * std::accumulate(image_dims_.begin(), image_dims_.end(), 1, std::multiplies<int>());
-    label_size_in_bytes_ = kSN3TypeToSize.at(label_file_.type)
-                         * std::accumulate(label_dims_.begin(), label_dims_.end(), 1, std::multiplies<int>());
-
+MNISTDataset::MNISTDataset(const std::string &dataset, bool train)
+    : image_file_(ReadSN3PascalVincentFile(
+          std::format("{}/{}-images-idx3-ubyte", dataset, train ? kTrainPrefix : kTestPrefix))),
+      label_file_(ReadSN3PascalVincentFile(
+          std::format("{}/{}-labels-idx1-ubyte", dataset, train ? kTrainPrefix : kTestPrefix))),
+      image_dims_(image_file_.dims.begin() + 1, image_file_.dims.end()),
+      label_dims_(label_file_.dims.begin() + 1, label_file_.dims.end()),
+      image_size_in_bytes_(kSN3TypeToSize.at(image_file_.type)
+                           * std::accumulate(image_dims_.begin(), image_dims_.end(), 1, std::multiplies<int>())),
+      label_size_in_bytes_(kSN3TypeToSize.at(label_file_.type)
+                           * std::accumulate(label_dims_.begin(), label_dims_.end(), 1, std::multiplies<int>())) {
     CHECK_EQ(image_file_.dims[0], label_file_.dims[0]);
     CHECK_EQ(static_cast<int>(image_file_.tensor.Dtype()), static_cast<int>(DataType::kUINT8));
     const auto &image_dims = image_file_.tensor.Dims();
