@@ -71,7 +71,8 @@ int main(int argc, char *argv[]) {
             auto loss_cpu = loss[0]->To(Device());
             if (train_idx % kNumItersOfOutputDuration == 0) {
                 LOG(ERROR) << "epoch: " << epoch << ", [" << train_idx * FLAGS_bs << "/" << train_dataset->Size()
-                           << "] " << " loss: " << static_cast<float *>(loss_cpu.DataPtr())[0];
+                           << "] "
+                           << " loss: " << static_cast<float *>(loss_cpu.DataPtr())[0];
             }
 
             loss[0]->Backward();
