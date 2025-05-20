@@ -11,6 +11,7 @@
 
 #ifdef USE_CUDA
 #include "cuda_runtime_api.h"
+#include <cuda_bf16.h>
 #endif
 #include "Eigen/Dense"
 #include "glog/logging.h"
@@ -26,12 +27,6 @@
 
 namespace infini_train {
 namespace {
-const std::unordered_map<DataType, size_t> kDataTypeToSize = {
-    {DataType::kUINT8, 1},    {DataType::kINT8, 1},    {DataType::kUINT16, 2},  {DataType::kINT16, 2},
-    {DataType::kUINT32, 4},   {DataType::kINT32, 4},   {DataType::kUINT64, 8},  {DataType::kINT64, 8},
-    {DataType::kBFLOAT16, 2}, {DataType::kFLOAT16, 2}, {DataType::kFLOAT32, 4}, {DataType::kFLOAT64, 8},
-};
-
 const std::unordered_map<DataType, std::string> kDataTypeToDesc = {
     {DataType::kUINT8, "uint8"},   {DataType::kINT8, "int8"},     {DataType::kUINT16, "uint16"},
     {DataType::kINT16, "int16"},   {DataType::kUINT32, "uint32"}, {DataType::kINT32, "int32"},
@@ -161,6 +156,9 @@ template <typename T> void Tensor::Fill(T value) {
 }
 
 template void Tensor::Fill<float>(float);
+#ifdef USE_CUDA
+template void Tensor::Fill<nv_bfloat16>(nv_bfloat16);
+#endif
 
 Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> Tensor::EigenMatrix() {
     const int64_t bs = std::accumulate(dims_.rbegin() + 1, dims_.rend(), 1, std::multiplies<int64_t>());
