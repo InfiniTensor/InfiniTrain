@@ -1,4 +1,7 @@
+#include <cstddef>
 #include <cstdint>
+#include <cuda_bf16.h>
+#include <cuda_fp16.h>
 
 #include "glog/logging.h"
 
@@ -9,7 +12,94 @@ namespace infini_train::kernels::cuda {
 
 #define CEIL_DIV(x, y) (((x) + (y)-1) / (y))
 
+/**
+ * Compile-time type mapping from DataType enum to concrete C++ types.
+ *
+ * - Primary template: Declared but undefined to enforce specialization
+ * - Specializations: Explicit mappings (DataType::kFLOAT32 → float, etc)
+ * - TypeMap_t alias: Direct access to mapped type (TypeMap_t<DataType::kINT32> → int32_t)
+ *
+ * Enables type-safe generic code where operations dispatch based on DataType tokens,
+ * with zero runtime overhead. Extend by adding new specializations.
+ */
+template <DataType DType> struct TypeMap;
+template <DataType DType> using TypeMap_t = typename TypeMap<DType>::type;
+
+template <> struct TypeMap<DataType::kFLOAT32> {
+    using type = float;
+};
+template <> struct TypeMap<DataType::kBFLOAT16> {
+#ifdef USE_CUDA
+    using type = nv_bfloat16;
+#endif
+};
+template <> struct TypeMap<DataType::kFLOAT64> {
+    using type = double;
+};
+template <> struct TypeMap<DataType::kINT32> {
+    using type = int32_t;
+};
+template <> struct TypeMap<DataType::kINT64> {
+    using type = int64_t;
+};
+
 namespace {
+
+template <typename T> __device__ __forceinline__ T tanh(const T &x) {
+    if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
+        return htanh(x);
+    } else if constexpr (std::is_same_v<T, float>) {
+        return tanhf(x);
+    } else {
+        return std::tanh(x);
+    }
+}
+
+template <typename T> __device__ __forceinline__ T pow(const T &x, const T &exponent) {
+    if constexpr (std::is_same_v<T, nv_bfloat16>) {
+        float x_ = __bfloat162float(x);
+        float exponent_ = __bfloat162float(exponent);
+        float ans_f = __powf(x_, exponent_);
+        return __float2bfloat16(isnan(ans_f) ? std::pow(x_, exponent_) : ans_f);
+    } else if constexpr (std::is_same_v<T, half>) {
+        float x_ = __half2float(x);
+        float exponent_ = __half2float(exponent);
+        float ans_f = __powf(x_, exponent_);
+        return __float2half(isnan(ans_f) ? std::pow(x_, exponent_) : ans_f);
+    } else if constexpr (std::is_same_v<T, float>) {
+        return powf(x, exponent);
+    } else {
+        return std::pow(x, exponent);
+    }
+}
+
+template <typename T> __device__ __forceinline__ T log(const T &x) {
+    if constexpr (std::is_same_v<Tdata, nv_bfloat16>) {
+        return __float2bfloat16(__logf(__bfloat162float(x)));
+    } else if constexpr (std::is_same_v<Tdata, half>) {
+        return __float2half(__logf(__half2float(x)));
+    } else if constexpr (std::is_same_v<Tdata, float>) {
+        return __logf(x);
+    } else {
+        return std::log(x);
+    }
+}
+
+template <typename T> __device__ __forceinline__ T add(const T &a, const T &b) {
+    if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
+        return __hadd(a, b);
+    } else {
+        return a + b;
+    }
+}
+
+template <typename T> __device__ __forceinline__ T mul(const T &a, const T &b) {
+    if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
+        return __hmul(a, b);
+    } else {
+        return a * b;
+    }
+}
 
 template <typename T, typename Func>
 __global__ void UnaryForwardKernel(T *output, Func fn, size_t num_elements, size_t offset, const T *input) {
@@ -148,7 +238,7 @@ __global__ void UnaryBackwardKernel(T *output, Func fn, size_t num_elements, siz
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x + offset;
 
     if (idx < num_elements) {
-        output[idx] = grad_output[idx] * fn(input ? input[idx] : T(0));
+        output[idx] = mul<T>(grad_output[idx], fn(input ? input[idx] : T(0)));
     }
 }
 
@@ -169,8 +259,8 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
     const T a_val = input_a ? input_a[a_offset] : T(0);
     const T b_val = input_b ? input_b[b_offset] : T(0);
 
-    output_a[a_offset] = grad_output[idx] * fn_a(a_val, b_val);
-    atomicAdd(&output_b[b_offset], grad_output[idx] * fn_b(a_val, b_val));
+    output_a[a_offset] = mul<T>(grad_output[idx], fn_a(a_val, b_val));
+    atomicAdd(&output_b[b_offset], mul<T>(grad_output[idx], fn_b(a_val, b_val)));
 }
 
 // launch unary operator's backward kernel
@@ -249,9 +339,8 @@ template <typename Func> std::shared_ptr<Tensor> UnaryForward(const std::shared_
     auto output = std::make_shared<Tensor>(input->Dims(), dtype, input->GetDevice());
 
     switch (dtype) {
-    case DataType::kFLOAT32:
-        LaunchForward<256, float>(unary_fn, output, input);
-        break;
+        DISPATCH_CASE(DataType::kFLOAT32, WRAP(LaunchForward<256, float>(unary_fn, output, input);))
+        DISPATCH_CASE(DataType::kBFLOAT16, WRAP(LaunchForward<256, nv_bfloat16>(unary_fn, output, input);))
     default:
         LOG(FATAL) << "CUDA unary forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -264,11 +353,15 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
                                       Func unary_fn) {
     auto dtype = grad_output->Dtype();
     auto output = std::make_shared<Tensor>(grad_output->Dims(), dtype, grad_output->GetDevice());
-    output->Fill<float>(0.0f);
     switch (dtype) {
-    case DataType::kFLOAT32:
-        LaunchBackward<256, float>(unary_fn, output, grad_output, a);
-        break;
+        DISPATCH_CASE(DataType::kFLOAT32, WRAP({
+                          output->Fill<float>(0.0f);
+                          LaunchBackward<256, float>(unary_fn, output, grad_output, a);
+                      }))
+        DISPATCH_CASE(DataType::kBFLOAT16, WRAP({
+                          output->Fill<nv_bfloat16>(0);
+                          LaunchBackward<256, nv_bfloat16>(unary_fn, output, grad_output, a);
+                      }))
     default:
         LOG(FATAL) << "CUDA unary backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -280,15 +373,15 @@ template <typename Func>
 std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b,
                                       Func binary_fn) {
     auto dtype = a->Dtype();
-    // Currently a and b should have the same data type and only one-way broadcasting from b to a is assumed by default
+    // Currently a and b should have the same data type and only one-way broadcasting from b to a is assumed by
+    // default
     CHECK(dtype == b->Dtype() && a->NumElements() >= b->NumElements() && a->NumElements() % b->NumElements() == 0);
 
     auto output = std::make_shared<Tensor>(a->Dims(), dtype, a->GetDevice());
 
     switch (dtype) {
-    case DataType::kFLOAT32:
-        LaunchForward<256, float>(binary_fn, output, a, b);
-        break;
+        DISPATCH_CASE(DataType::kFLOAT32, WRAP(LaunchForward<256, float>(binary_fn, output, a, b);))
+        DISPATCH_CASE(DataType::kBFLOAT16, WRAP(LaunchForward<256, nv_bfloat16>(binary_fn, output, a, b);))
     default:
         LOG(FATAL) << "CUDA binary forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -320,12 +413,19 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     }
     auto grad_a = std::make_shared<Tensor>(a_dims, dtype, device);
     auto grad_b = std::make_shared<Tensor>(b_dims, dtype, device);
-    grad_a->Fill<float>(0.0f);
-    grad_b->Fill<float>(0.0f);
+
     switch (dtype) {
-    case DataType::kFLOAT32:
-        LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a, b);
-        break;
+        DISPATCH_CASE(DataType::kFLOAT32, WRAP({
+                          grad_a->Fill<float>(0.0f);
+                          grad_b->Fill<float>(0.0f);
+                          LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a, b);
+                      }))
+        DISPATCH_CASE(DataType::kBFLOAT16, WRAP({
+                          grad_a->Fill<nv_bfloat16>(0);
+                          grad_b->Fill<nv_bfloat16>(0);
+                          LaunchBackward<256, nv_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
+                                                           b);
+                      }))
     default:
         LOG(FATAL) << "CUDA binary backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -368,64 +468,86 @@ std::shared_ptr<Tensor> CosBackward(const std::shared_ptr<Tensor> &grad_output, 
 }
 
 std::shared_ptr<Tensor> TanhForward(const std::shared_ptr<Tensor> &input) {
-    return UnaryForward(input, [] __device__(float x) { return tanhf(x); });
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return tanh(x); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> TanhBackward(const std::shared_ptr<Tensor> &grad_output,
                                      const std::shared_ptr<Tensor> &output) {
-    return UnaryBackward(grad_output, output, [] __device__(float x) { return 1.0 - x * x; });
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, output, [] __device__(auto x) { return decltype(x){1.0} - mul(x, x); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> PowForward(const std::shared_ptr<Tensor> &input, float scalar, bool scalar_is_base) {
-    if (scalar_is_base) {
-        return UnaryForward(input, [scalar] __device__(float x) { return powf(scalar, x); });
-    } else {
-        return UnaryForward(input, [scalar] __device__(float x) { return powf(x, scalar); });
-    }
+    DISPATCH(
+        input->Dtype(),
+        {
+            if (scalar_is_base) {
+                return UnaryForward(input, [scalar] __device__(auto x) { return pow(scalar, x); });
+            } else {
+                return UnaryForward(input, [scalar] __device__(auto x) { return pow(x, scalar); });
+            }
+        },
+        INFINI_ALL_FLOATING_TYPES)
+    return UnaryForward(input, [exponent] __device__(float x) { return powf(x, exponent); });
 }
 
 std::shared_ptr<Tensor> PowBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &input,
                                     float scalar, bool scalar_is_base) {
-    if (scalar_is_base) {
-        return UnaryBackward(grad_output, input,
-                             [scalar] __device__(float x) { return logf(scalar) * powf(scalar, x); });
-    } else {
-        return UnaryBackward(grad_output, input,
-                             [scalar] __device__(float x) { return scalar * powf(x, scalar - 1.0f); });
-    }
-}
-
-std::shared_ptr<Tensor> RsqrtForward(const std::shared_ptr<Tensor> &input) {
-    return UnaryForward(input, [] __device__(float x) { return 1.0f / sqrtf(x); });
-}
-
-std::shared_ptr<Tensor> RsqrtBackward(const std::shared_ptr<Tensor> &grad_output,
-                                      const std::shared_ptr<Tensor> &input) {
-    return UnaryBackward(grad_output, input, [] __device__(float x) { return -0.5f / (x * sqrtf(x)); });
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, input,
+                                  [scalar] __device__(auto x) {
+                                      if (scalar_is_base) {
+                                          return mul(log(decltype(x){scalar}), pow(decltype(x){scalar}, x));
+                                      } else {
+                                          return mul(decltype(x){scalar},
+                                                     pow(x, decltype(x){scalar} - decltype(x){1.0}));
+                                      }
+                                  });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> EqualsScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
-    return UnaryForward(a, [scalar] __device__(float x) { return x == scalar ? 1.0f : 0.0f; });
+    DISPATCH(a->Dtype(),
+             return UnaryForward(
+                 a, [scalar] __device__(auto x) { return x == decltype(x){scalar} ? decltype(x){1} : decltype(x){0}; });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> AddForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    return BinaryForward(a, b, [] __device__(float x, float y) { return x + y; });
+    DISPATCH(a->Dtype(), return BinaryForward(a, b, [] __device__(auto x, auto y) { return add(x, y); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> AddBackward(const std::shared_ptr<Tensor> &grad_output,
                                                                         const std::vector<int64_t> &a_dims,
                                                                         const std::vector<int64_t> &b_dims) {
-    return BinaryBackward(
-        grad_output, nullptr, nullptr, a_dims, b_dims, [] __device__(float, float) { return 1.f; },
-        [] __device__(float, float) { return 1.f; });
+    auto fn = [] __device__(auto x, auto y) { return decltype(x){1}; };
+    return BinaryBackward(grad_output, nullptr, nullptr, a_dims, b_dims, fn, fn);
 }
 
 std::shared_ptr<Tensor> AddScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
-    return UnaryForward(a, [scalar] __device__(float x) { return x + scalar; });
+    DISPATCH(a->Dtype(), return UnaryForward(a, [scalar] __device__(auto x) { return add(x, decltype(x){scalar}); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> AddScalarBackward(const std::shared_ptr<Tensor> &grad_output) {
-    return UnaryBackward(grad_output, nullptr, [] __device__(float) { return 1.0f; });
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, nullptr, [] __device__(auto x) { return decltype(x){1}; });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> SubForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return BinaryForward(a, b, [] __device__(float x, float y) { return x - y; });
+}
+
+std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> SubBackward(const std::shared_ptr<Tensor> &grad_output,
+                                                                        const std::vector<int64_t> &a_dims,
+                                                                        const std::vector<int64_t> &b_dims) {
+    return BinaryBackward(
+        grad_output, nullptr, nullptr, a_dims, b_dims, [] __device__(float, float) { return 1.f; },
+        [] __device__(float, float) { return -1.f; });
 }
 
 std::shared_ptr<Tensor> SubForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
@@ -441,23 +563,45 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> SubBackward(const st
 }
 
 std::shared_ptr<Tensor> MulForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    return BinaryForward(a, b, [] __device__(float x, float y) { return x * y; });
+    DISPATCH(a->Dtype(), return BinaryForward(a, b, [] __device__(auto x, auto y) { return mul(x, y); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> MulBackward(const std::shared_ptr<Tensor> &grad_output,
                                                                         const std::shared_ptr<Tensor> &a,
                                                                         const std::shared_ptr<Tensor> &b) {
-    return BinaryBackward(
-        grad_output, a, b, a->Dims(), b->Dims(), [] __device__(float, float y) { return y; },
-        [] __device__(float x, float) { return x; });
+    DISPATCH_WITH_DEFAULT(grad_output->Dtype(),
+                          return BinaryBackward(
+                              grad_output, a, b, a->Dims(), b->Dims(), [] __device__(auto, auto y) { return y; },
+                              [] __device__(auto x, auto) { return x; });
+                          , WRAP({
+                              LOG(FATAL) << "Unsupported data type at " << __FILE__ << ":" << __LINE__;
+                              return {nullptr, nullptr};
+                          }),
+                          INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> MulScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
-    return UnaryForward(a, [scalar] __device__(float x) { return x * scalar; });
+    DISPATCH(a->Dtype(), return UnaryForward(a, [scalar] __device__(auto x) { return mul(x, decltype(x){scalar}); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> MulScalarBackward(const std::shared_ptr<Tensor> &grad_output, float scalar) {
-    return UnaryBackward(grad_output, nullptr, [scalar] __device__(float) { return scalar; });
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, nullptr, [scalar] __device__(auto x) { return decltype(x){scalar}; });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> DivForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return BinaryForward(a, b, [] __device__(float x, float y) { return x / y; });
+}
+
+std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DivBackward(const std::shared_ptr<Tensor> &grad_output,
+                                                                        const std::shared_ptr<Tensor> &a,
+                                                                        const std::shared_ptr<Tensor> &b) {
+    return BinaryBackward(
+        grad_output, a, b, a->Dims(), b->Dims(), [] __device__(float, float y) { return 1 / y; },
+        [] __device__(float x, float y) { return -x / (y * y); });
 }
 
 std::shared_ptr<Tensor> DivForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {

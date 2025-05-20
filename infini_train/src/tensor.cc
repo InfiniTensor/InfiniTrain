@@ -10,6 +10,7 @@
 #include <vector>
 
 #ifdef USE_CUDA
+#include "cuda_runtime_api.h"
 #include "infini_train/include/common/cuda/common_cuda.cuh"
 #endif
 #include "Eigen/Dense"
@@ -169,6 +170,9 @@ template <typename T> void Tensor::Fill(T value) {
 
 template void Tensor::Fill<float>(float);
 template void Tensor::Fill<int64_t>(int64_t);
+#ifdef USE_CUDA
+template void Tensor::Fill<nv_bfloat16>(nv_bfloat16);
+#endif
 
 Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> Tensor::EigenMatrix() {
     const int64_t bs = std::accumulate(dims_.rbegin() + 1, dims_.rend(), 1, std::multiplies<int64_t>());

@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <random>
+#include <unordered_map>
 #include <vector>
 
 #include "Eigen/Dense"
@@ -46,6 +47,12 @@ enum class DataType : int8_t {
     kFLOAT16,
     kFLOAT32,
     kFLOAT64,
+};
+
+inline const std::unordered_map<DataType, size_t> kDataTypeToSize = {
+    {DataType::kUINT8, 1},    {DataType::kINT8, 1},    {DataType::kUINT16, 2},  {DataType::kINT16, 2},
+    {DataType::kUINT32, 4},   {DataType::kINT32, 4},   {DataType::kUINT64, 8},  {DataType::kINT64, 8},
+    {DataType::kBFLOAT16, 2}, {DataType::kFLOAT16, 2}, {DataType::kFLOAT32, 4}, {DataType::kFLOAT64, 8},
 };
 
 class TensorBuffer {
