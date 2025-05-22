@@ -78,6 +78,9 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
     if (grad_outputs_reached_ == grad_outputs_.size()
         && (dependencies_reached_ == dependencies_number_ || dependencies_number_ == 0)) {
         auto grad_inputs = Backward(grad_outputs_);
+        // Release tensors stored in the function to prevent circular references.
+        saved_tensors_.clear();
+        grad_outputs_.clear();
         CHECK_EQ(grad_inputs.size(), next_functions_.size());
         for (int idx = 0; idx < grad_inputs.size(); ++idx) {
             auto &grad_input = grad_inputs[idx];
