@@ -60,6 +60,6 @@ endif()
 add_executable(mnist example/mnist/main.cc example/mnist/dataset.cc example/mnist/net.cc)
 target_link_libraries(mnist infini_train)
 
-add_executable(gpt2 example/gpt2/main.cc example/gpt2/dataset.cc example/gpt2/net.cc)
+add_executable(gpt2 example/gpt2/main.cc example/gpt2/dataset.cc example/gpt2/net.cc example/gpt2/tokenizer.cc)
 target_link_libraries(gpt2 infini_train)
 

@@ -11,15 +11,18 @@
 
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/optimizer.h"
 
 #include "example/gpt2/dataset.h"
 #include "example/gpt2/net.h"
+#include "example/gpt2/tokenizer.h"
 
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_string(input_val_bin, "", "input .bin to eval validation loss on");
+DEFINE_string(tokenizer_bin, "", "input .bin to tokenizer");
 // model bin file is downloaded and processed using the script at
 // https://github.com/karpathy/llm.c/blob/master/train_gpt2.py
 DEFINE_string(llmc_filepath, "", "llmc model file path to load from");
@@ -30,6 +33,8 @@ DEFINE_uint32(sequence_length, 64, "sequence length");
 DEFINE_uint32(total_batch_size, 256, "total desired batch size, in units of #tokens");
 // workload (number of steps)
 DEFINE_uint32(num_iteration, 10, "number of iterations to run");
+DEFINE_uint32(freq_generate_txt, 10, "frequency of text generation");
+DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
 DEFINE_double(learning_rate, 1e-4, "learning rate warmup iterations");
 // evaluation
@@ -115,6 +120,11 @@ int main(int argc, char *argv[]) {
     // main training loop
     //
 
+    std::unique_ptr<Tokenizer> tokenizer = nullptr;
+    if (!FLAGS_tokenizer_bin.empty()) {
+        tokenizer = std::make_unique<Tokenizer>(FLAGS_tokenizer_bin);
+    }
+
     // TODO(dcj): support more complex optimizer later
     auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
 
@@ -180,6 +190,13 @@ int main(int argc, char *argv[]) {
 
         LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s)",
                                   step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f, tps);
+
+        if ((step + 1) % FLAGS_freq_generate_txt == 0) {
+            if (!tokenizer) {
+                continue;
+            }
+            tokenizer->GenerateText(*model, FLAGS_batch_size, FLAGS_sequence_length, FLAGS_text_length, device);
+        }
     }
 
     gflags::ShutDownCommandLineFlags();
