@@ -1,4 +1,5 @@
 option(USE_CUDA "Support NVIDIA CUDA" OFF)
+option(PROFILE_MODE "ENABLE PROFILE MODE" ON)
 cmake_minimum_required(VERSION 3.28)
 
 project(infini_train VERSION 0.3.0 LANGUAGES CXX)
@@ -32,6 +33,10 @@ include_directories(${PROJECT_SOURCE_DIR}/third_party/eigen)
 include_directories(${PROJECT_SOURCE_DIR})
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
 list(FILTER SRC EXCLUDE REGEX ".*kernels/cpu/.*")
+
+if(PROFILE_MODE)
+    add_compile_definitions(PROFILE_MODE=1)
+endif()
 
 file (GLOB_RECURSE CPU_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/kernels/cpu/*.cc)
 add_library(infini_train_cpu_kernels STATIC ${CPU_KERNELS})

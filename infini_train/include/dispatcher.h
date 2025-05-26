@@ -2,11 +2,15 @@
 
 #include <iostream>
 #include <map>
+#include <type_traits>
 #include <utility>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/device.h"
+#ifdef PROFILE_MODE
+#include "infini_train/include/profiler.h"
+#endif
 
 namespace infini_train {
 class KernelFunction {
@@ -15,7 +19,29 @@ public:
 
     // TODO(dcj): support auto-deduction of return type and parameter types
     template <typename RetT, class... ArgsT> RetT Call(ArgsT... args) const {
-        return (*reinterpret_cast<RetT (*)(ArgsT...)>(func_ptr_))(std::forward<ArgsT>(args)...);
+#ifdef PROFILE_MODE
+        const auto &ctx = GetProfileContext();
+        Profiler::Instance().StartRecord(ctx.name, ctx.device);
+#endif
+
+        using FuncT = RetT (*)(ArgsT...);
+        auto fn = reinterpret_cast<FuncT>(func_ptr_);
+
+        if constexpr (std::is_void_v<RetT>) {
+            fn(std::forward<ArgsT>(args)...);
+
+#ifdef PROFILE_MODE
+            Profiler::Instance().EndRecord(ctx.name, ctx.device);
+#endif
+            return;
+        } else {
+            RetT ret = fn(std::forward<ArgsT>(args)...);
+
+#ifdef PROFILE_MODE
+            Profiler::Instance().EndRecord(ctx.name, ctx.device);
+#endif
+            return ret;
+        }
     }
 
 private:
@@ -34,6 +60,9 @@ public:
     const KernelFunction &GetKernel(KeyT key) const {
         CHECK(key_to_kernel_map_.contains(key))
             << "Kernel not found: " << key.second << " on device: " << static_cast<int>(key.first);
+#ifdef PROFILE_MODE
+        SetProfileContext(key.second, key.first);
+#endif
         return key_to_kernel_map_.at(key);
     }
 
