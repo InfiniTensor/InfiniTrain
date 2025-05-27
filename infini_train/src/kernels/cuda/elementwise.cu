@@ -101,6 +101,16 @@ template <typename T> __device__ __forceinline__ T mul(const T &a, const T &b) {
     }
 }
 
+template <typename T> __device__ __forceinline__ T sigmoid(const T &x) {
+    if constexpr (std::is_same_v<T, float>) {
+        return 1.0f / (1.0f + expf(-x));
+    } else if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
+        return __hdiv(T(1), T(1) + hexp(-x));
+    } else {
+        return T(1) / (T(1) + std::exp(-x));
+    }
+}
+
 template <typename T, typename Func>
 __global__ void UnaryForwardKernel(T *output, Func fn, size_t num_elements, size_t offset, const T *input) {
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x + offset;
@@ -608,6 +618,18 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DivBackward(const st
         grad_output, a, b, a->Dims(), b->Dims(), [] __device__(float, float y) { return 1 / y; },
         [] __device__(float x, float y) { return -x / (y * y); });
 }
+
+std::shared_ptr<Tensor> SigmoidForward(const std::shared_ptr<Tensor> &input) {
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return sigmoid(x); });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> SigmoidBackward(const std::shared_ptr<Tensor> &output,
+                                        const std::shared_ptr<Tensor> &grad_output) {
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, output, [] __device__(auto x) { return mul(x, decltype(x){1} - x); });
+             , INFINI_ALL_FLOATING_TYPES)
+}
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_ELEMENTWISE_KERNEL(kernel_name)                                                                  \
@@ -640,5 +662,7 @@ REGISTER_CUDA_ELEMENTWISE_KERNEL(MulScalarForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(MulScalarBackward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(DivForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(DivBackward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(SigmoidForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(SigmoidBackward)
 
 #undef REGISTER_CUDA_ELEMENTWISE_KERNEL
