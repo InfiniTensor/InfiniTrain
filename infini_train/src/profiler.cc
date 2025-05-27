@@ -57,6 +57,7 @@ void Profiler::StartRecord(const std::string &name, DeviceType device) {
 void Profiler::EndRecord(const std::string &name, DeviceType device) {
     int64_t host_us = 0, device_us = 0;
     int64_t peak_mem_mb = 0;
+    std::string device_str = "cpu";
 
     switch (device) {
     case DeviceType::kCPU:
@@ -79,13 +80,14 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
 
             cudaMemPool_t pool;
             size_t peak_bytes = 0;
-            // TODO(zbl): set device id correctly
-            if (cudaDeviceGetDefaultMemPool(&pool, 0) == cudaSuccess
+            int device;
+            if (cudaGetDevice(&device) == cudaSuccess && cudaDeviceGetDefaultMemPool(&pool, device) == cudaSuccess
                 && cudaMemPoolGetAttribute(pool, cudaMemPoolAttrReservedMemHigh, &peak_bytes) == cudaSuccess) {
                 peak_mem_mb = static_cast<int64_t>(peak_bytes) / (1024 * 1024);
             } else {
                 LOG(FATAL) << "cudaMemPool not supported.";
             }
+            device_str = "cuda:" + std::to_string(device);
         }
         break;
     }
@@ -104,10 +106,10 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
         device_us = host_us;
     }
 
-    RecordKernel(name, host_us, device_us, peak_mem_mb);
+    RecordKernel(name, device_str, host_us, device_us, peak_mem_mb);
 }
 
-void Profiler::RecordKernel(const std::string &name, int64_t host_us, int64_t device_us,
+void Profiler::RecordKernel(const std::string &name, const std::string &device, int64_t host_us, int64_t device_us,
                             int64_t max_device_mem_usage_mb) {
     {
         std::lock_guard<std::mutex> lock(mtx_);
@@ -117,8 +119,8 @@ void Profiler::RecordKernel(const std::string &name, int64_t host_us, int64_t de
         entry.count += 1;
     }
 
-    call_records_.emplace_back(KernelCallRecord{current_tag_, GetCurrentTimestamp(), name, GetProfileContext().device,
-                                                host_us, device_us, max_device_mem_usage_mb});
+    call_records_.emplace_back(KernelCallRecord{current_tag_, GetCurrentTimestamp(), name, device, host_us, device_us,
+                                                max_device_mem_usage_mb});
 }
 
 void Profiler::Reset() {
@@ -231,8 +233,8 @@ void Profiler::PrintRecords(std::ostream &os) const {
     for (const auto &rec : call_records_) {
         int idx = tag_counters[rec.tag]++;
         os << std::left << std::setw(16) << rec.tag << std::setw(8) << idx << std::setw(24) << rec.timestamp
-           << std::setw(24) << rec.name << std::setw(10) << static_cast<int>(rec.device) << std::setw(12) << rec.host_us
-           << std::setw(12) << rec.device_us << std::setw(16) << rec.max_device_mem_usage_mb << "\n";
+           << std::setw(24) << rec.name << std::setw(10) << rec.device << std::setw(12) << rec.host_us << std::setw(12)
+           << rec.device_us << std::setw(16) << rec.max_device_mem_usage_mb << "\n";
     }
 }
 

@@ -36,7 +36,7 @@ struct KernelCallRecord {
     std::string tag;
     std::string timestamp;
     std::string name;
-    DeviceType device;
+    std::string device;
     int64_t host_us;
     int64_t device_us;
     int64_t max_device_mem_usage_mb;
@@ -69,7 +69,7 @@ public:
     void SetTag(const std::string &tag);
 
 private:
-    void RecordKernel(const std::string &name, int64_t host_us, int64_t device_us = 0,
+    void RecordKernel(const std::string &name, const std::string &device, int64_t host_us, int64_t device_us = 0,
                       int64_t max_device_mem_usage_mb = 0);
 
     std::mutex mtx_;
