@@ -39,6 +39,7 @@ struct KernelCallRecord {
     DeviceType device;
     int64_t host_us;
     int64_t device_us;
+    int64_t max_device_mem_usage_mb;
 };
 
 class Profiler {
@@ -68,7 +69,8 @@ public:
     void SetTag(const std::string &tag);
 
 private:
-    void RecordKernel(const std::string &name, int64_t host_us, int64_t device_us = 0);
+    void RecordKernel(const std::string &name, int64_t host_us, int64_t device_us = 0,
+                      int64_t max_device_mem_usage_mb = 0);
 
     std::mutex mtx_;
     std::map<std::string, KernelProfileInfo> stats_;

@@ -156,7 +156,7 @@ int main(int argc, char *argv[]) {
         }
         float lossf = 0.0f;
 #ifdef PROFILE_MODE
-        Profiler::Instance().SetTag("Step " + std::to_string(step));
+        Profiler::Instance().SetTag("Step_" + std::to_string(step));
 #endif
         for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
             // (bs, seq_len), (bs, seq_len)

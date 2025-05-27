@@ -4,9 +4,11 @@
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
+
 #ifdef USE_CUDA
 #include "cuda_runtime.h"
 #endif
+#include "glog/logging.h"
 
 namespace infini_train {
 namespace {
@@ -53,17 +55,11 @@ void Profiler::StartRecord(const std::string &name, DeviceType device) {
 }
 
 void Profiler::EndRecord(const std::string &name, DeviceType device) {
-    int64_t host_us = 0;
-    int64_t device_us = 0;
-
-    auto cpu_start = cpu_timing_map_[name];
-    auto cpu_end = std::chrono::high_resolution_clock::now();
-    host_us = std::chrono::duration_cast<std::chrono::microseconds>(cpu_end - cpu_start).count();
-    cpu_timing_map_.erase(name);
+    int64_t host_us = 0, device_us = 0;
+    int64_t peak_mem_mb = 0;
 
     switch (device) {
     case DeviceType::kCPU:
-        device_us = host_us;
         break;
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
@@ -80,6 +76,16 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
             cudaEventDestroy(start);
             cudaEventDestroy(stop);
             cuda_timing_map_.erase(it);
+
+            cudaMemPool_t pool;
+            size_t peak_bytes = 0;
+            // TODO(zbl): set device id correctly
+            if (cudaDeviceGetDefaultMemPool(&pool, 0) == cudaSuccess
+                && cudaMemPoolGetAttribute(pool, cudaMemPoolAttrReservedMemHigh, &peak_bytes) == cudaSuccess) {
+                peak_mem_mb = static_cast<int64_t>(peak_bytes) / (1024 * 1024);
+            } else {
+                LOG(FATAL) << "cudaMemPool not supported.";
+            }
         }
         break;
     }
@@ -89,10 +95,20 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
         break;
     }
 
-    RecordKernel(name, host_us, device_us);
+    auto cpu_start = cpu_timing_map_[name];
+    auto cpu_end = std::chrono::high_resolution_clock::now();
+    host_us = std::chrono::duration_cast<std::chrono::microseconds>(cpu_end - cpu_start).count();
+    cpu_timing_map_.erase(name);
+
+    if (device == DeviceType::kCPU) {
+        device_us = host_us;
+    }
+
+    RecordKernel(name, host_us, device_us, peak_mem_mb);
 }
 
-void Profiler::RecordKernel(const std::string &name, int64_t host_us, int64_t device_us) {
+void Profiler::RecordKernel(const std::string &name, int64_t host_us, int64_t device_us,
+                            int64_t max_device_mem_usage_mb) {
     {
         std::lock_guard<std::mutex> lock(mtx_);
         auto &entry = stats_[name];
@@ -101,8 +117,8 @@ void Profiler::RecordKernel(const std::string &name, int64_t host_us, int64_t de
         entry.count += 1;
     }
 
-    call_records_.emplace_back(
-        KernelCallRecord{current_tag_, GetCurrentTimestamp(), name, GetProfileContext().device, host_us, device_us});
+    call_records_.emplace_back(KernelCallRecord{current_tag_, GetCurrentTimestamp(), name, GetProfileContext().device,
+                                                host_us, device_us, max_device_mem_usage_mb});
 }
 
 void Profiler::Reset() {
@@ -128,6 +144,15 @@ void Profiler::Report(std::ostream &os, SortBy sort_by) const {
 
     for (const auto &[tag, kernel_map] : grouped_stats) {
         os << "\nTag: " << tag << "\n";
+
+        int64_t tag_peak_mb = 0;
+        for (const auto &rec : call_records_) {
+            if (rec.tag == tag) {
+                tag_peak_mb = std::max(tag_peak_mb, rec.max_device_mem_usage_mb);
+            }
+        }
+        os << "Peak Device Memory Usage: " << tag_peak_mb << " MB\n";
+
         os << std::left << std::setw(24) << "Name" << std::setw(10) << "Count" << std::setw(18) << "Host Total(us)"
            << std::setw(10) << "Host %" << std::setw(20) << "Device Total(us)" << std::setw(10) << "Device %"
            << std::setw(16) << "Avg Host(us)" << std::setw(18) << "Avg Device(us)"
@@ -198,6 +223,7 @@ void Profiler::PrintRecords(std::ostream &os) const {
     os << "\n--- Kernel Call Log ---\n";
     os << std::left << std::setw(16) << "Tag" << std::setw(8) << "Idx" << std::setw(24) << "Timestamp" << std::setw(24)
        << "Name" << std::setw(10) << "Device" << std::setw(12) << "Host(us)" << std::setw(12) << "Device(us)"
+       << std::setw(16) << "Peak Device Mem Usage(MB)"
        << "\n";
 
     std::map<std::string, int> tag_counters;
@@ -206,7 +232,7 @@ void Profiler::PrintRecords(std::ostream &os) const {
         int idx = tag_counters[rec.tag]++;
         os << std::left << std::setw(16) << rec.tag << std::setw(8) << idx << std::setw(24) << rec.timestamp
            << std::setw(24) << rec.name << std::setw(10) << static_cast<int>(rec.device) << std::setw(12) << rec.host_us
-           << std::setw(12) << rec.device_us << "\n";
+           << std::setw(12) << rec.device_us << std::setw(16) << rec.max_device_mem_usage_mb << "\n";
     }
 }
 
