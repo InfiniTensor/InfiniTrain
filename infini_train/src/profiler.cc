@@ -33,6 +33,9 @@ Profiler &Profiler::Instance() {
 }
 
 void Profiler::StartRecord(const std::string &name, DeviceType device) {
+    if (g_profiling_depth++ > 0) {
+        return;
+    }
     cpu_timing_map_[name] = std::chrono::high_resolution_clock::now();
 
     switch (device) {
@@ -55,6 +58,9 @@ void Profiler::StartRecord(const std::string &name, DeviceType device) {
 }
 
 void Profiler::EndRecord(const std::string &name, DeviceType device) {
+    if (--g_profiling_depth > 0) {
+        return;
+    }
     int64_t host_us = 0, device_us = 0;
     int64_t peak_mem_mb = 0;
     std::string device_str = "cpu";
@@ -88,6 +94,8 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
                 LOG(FATAL) << "cudaMemPool not supported.";
             }
             device_str = "cuda:" + std::to_string(device);
+        } else {
+            LOG(FATAL) << "Start time of " + name + " is not recorded.";
         }
         break;
     }

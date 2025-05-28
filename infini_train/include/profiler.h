@@ -12,6 +12,8 @@
 
 namespace infini_train {
 
+inline thread_local int g_profiling_depth = 0;
+
 struct ProfileContext {
     std::string name;
     DeviceType device;
@@ -20,8 +22,10 @@ struct ProfileContext {
 inline thread_local ProfileContext g_profile_context;
 
 inline void SetProfileContext(const std::string &name, DeviceType device) {
-    g_profile_context.name = name;
-    g_profile_context.device = device;
+    if (g_profiling_depth == 0) {
+        g_profile_context.name = name;
+        g_profile_context.device = device;
+    }
 }
 
 inline const ProfileContext &GetProfileContext() { return g_profile_context; }

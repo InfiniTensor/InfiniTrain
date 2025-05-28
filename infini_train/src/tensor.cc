@@ -19,6 +19,7 @@
 #include "infini_train/include/autograd/misc.h"
 #include "infini_train/include/autograd/transform.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/init.h"
 
 namespace infini_train {
@@ -105,23 +106,9 @@ size_t Tensor::NumElements() const { return num_elements_; }
 DataType Tensor::Dtype() const { return dtype_; }
 
 template <typename T> void Tensor::Fill(T value) {
-    switch (GetDevice().Type()) {
-    case DeviceType::kCPU: {
-        std::fill(reinterpret_cast<T *>(DataPtr()), reinterpret_cast<T *>(DataPtr()) + num_elements_, value);
-        break;
-#ifdef USE_CUDA
-    case DeviceType::kCUDA: {
-        // TODO(dcj): use thrust::fill later
-        std::vector<T> host_buffer(num_elements_, value);
-        cudaMemcpyAsync(DataPtr(), host_buffer.data(), num_elements_ * sizeof(T), cudaMemcpyHostToDevice, 0);
-        break;
-    }
-#endif
-    default:
-        LOG(ERROR) << "Unsupported device type for Tensor::Fill";
-        break;
-    }
-    }
+    // FIXME(zbl): support other data types
+    auto kernel = Dispatcher::Instance().GetKernel({GetDevice().Type(), "Fill"});
+    kernel.Call<void>(shared_from_this(), value);
 }
 
 template void Tensor::Fill<float>(float);
