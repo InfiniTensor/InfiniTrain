@@ -1,5 +1,5 @@
 option(USE_CUDA "Support NVIDIA CUDA" OFF)
-option(PROFILE_MODE "ENABLE PROFILE MODE" ON)
+option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 cmake_minimum_required(VERSION 3.28)
 
 project(infini_train VERSION 0.3.0 LANGUAGES CXX)
