@@ -74,20 +74,18 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
 
     // TODO(dcj): support multi datatypes later
     switch (target->Dtype()) {
-    case DataType::kUINT8: {
-        const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
-        // FIXME(dcj): do reduce on GPU
-        CrossEntropyForwardKernel<threads_per_block, uint8_t>
-            <<<num_blocks, threads_per_block>>>(input_ptr, target_ptr, batched_loss_ptr, bs, num_classes);
-        break;
-    }
-    case DataType::kINT64: {
-        const int64_t *target_ptr = static_cast<const int64_t *>(target->DataPtr());
-        // FIXME(dcj): do reduce on GPU
-        CrossEntropyForwardKernel<threads_per_block, int64_t>
-            <<<num_blocks, threads_per_block>>>(input_ptr, target_ptr, batched_loss_ptr, bs, num_classes);
-        break;
-    }
+        DISPATCH_CASE(DataType::kUINT8, WRAP({
+                          const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
+                          // FIXME(dcj): do reduce on GPU
+                          CrossEntropyForwardKernel<threads_per_block, uint8_t><<<num_blocks, threads_per_block>>>(
+                              input_ptr, target_ptr, batched_loss_ptr, bs, num_classes);
+                      }))
+        DISPATCH_CASE(DataType::kINT64, WRAP({
+                          const int64_t *target_ptr = static_cast<const int64_t *>(target->DataPtr());
+                          // FIXME(dcj): do reduce on GPU
+                          CrossEntropyForwardKernel<threads_per_block, int64_t><<<num_blocks, threads_per_block>>>(
+                              input_ptr, target_ptr, batched_loss_ptr, bs, num_classes);
+                      }))
     default:
         LOG(FATAL) << "Unsupported target data type: " << static_cast<int>(target->Dtype());
     }
@@ -172,18 +170,16 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
 
     // TODO(dcj): support multi datatypes later
     switch (target->Dtype()) {
-    case DataType::kUINT8: {
-        const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
-        CrossEntropyBackwardKernel<uint8_t, threads_per_block>
-            <<<num_blocks, threads_per_block>>>(input_ptr, input_grad_ptr, target_ptr, bs, num_classes);
-        break;
-    }
-    case DataType::kINT64: {
-        const int64_t *target_ptr = static_cast<const int64_t *>(target->DataPtr());
-        CrossEntropyBackwardKernel<int64_t, threads_per_block>
-            <<<num_blocks, threads_per_block>>>(input_ptr, input_grad_ptr, target_ptr, bs, num_classes);
-        break;
-    }
+        DISPATCH_CASE(DataType::kUINT8, WRAP({
+                          const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
+                          CrossEntropyBackwardKernel<uint8_t, threads_per_block><<<num_blocks, threads_per_block>>>(
+                              input_ptr, input_grad_ptr, target_ptr, bs, num_classes);
+                      }))
+        DISPATCH_CASE(DataType::kINT64, WRAP({
+                          const int64_t *target_ptr = static_cast<const int64_t *>(target->DataPtr());
+                          CrossEntropyBackwardKernel<int64_t, threads_per_block><<<num_blocks, threads_per_block>>>(
+                              input_ptr, input_grad_ptr, target_ptr, bs, num_classes);
+                      }))
     default:
         LOG(FATAL) << "Unsupported target data type: " << static_cast<int>(target->Dtype());
     }
