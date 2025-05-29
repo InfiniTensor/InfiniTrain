@@ -2,9 +2,15 @@
 
 #include "cuda.h"
 #include "cuda_runtime.h"
+#include <cuda_bf16.h>
+#include <cuda_fp16.h>
+
+#include "../common.h"
 #ifdef USE_NCCL
 #include "nccl.h"
 #endif
+
+namespace infini_train::common::cuda {
 
 // Common CUDA Macros
 #define CUDA_CHECK(call)                                                                                               \
@@ -44,3 +50,5 @@
         }                                                                                                              \
     } while (0)
 #endif
+
+} // namespace infini_train::common::cuda

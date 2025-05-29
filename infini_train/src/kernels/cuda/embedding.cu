@@ -1,18 +1,8 @@
 #include "glog/logging.h"
-#include <cuda_bf16.h>
 
-#include "infini_train/include/dispatcher.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
-
-#define CUDA_CHECK(call)                                                                                               \
-    do {                                                                                                               \
-        cudaError_t status = call;                                                                                     \
-        if (status != cudaSuccess) {                                                                                   \
-            LOG(FATAL) << "CUDA Error: " << cudaGetErrorString(status) << " at " << __FILE__ << ":" << __LINE__;       \
-        }                                                                                                              \
-    } while (0)
 
 template <typename T>
 __global__ void EmbeddingForwardKernel(const int64_t *input, T *output, const T *weight, int batch_size, int max_seqlen,
@@ -49,15 +39,15 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     int num_blocks = (batch_size * max_seqlen * embed_dim + threads_per_block - 1) / threads_per_block;
 
     switch (dtype) {
-        DISPATCH_CASE(DataType::kFLOAT32,
-                      WRAP(EmbeddingForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+        DISPATCH_CASE(WRAP(EmbeddingForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
                                static_cast<const int64_t *>(input->DataPtr()), static_cast<float *>(output->DataPtr()),
-                               static_cast<const float *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim);))
+                               static_cast<const float *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim);),
+                      DataType::kFLOAT32)
         DISPATCH_CASE(
-            DataType::kBFLOAT16,
             WRAP(EmbeddingForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
                      static_cast<const int64_t *>(input->DataPtr()), static_cast<nv_bfloat16 *>(output->DataPtr()),
-                     static_cast<const nv_bfloat16 *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim);))
+                     static_cast<const nv_bfloat16 *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim);),
+            DataType::kBFLOAT16)
     default:
         LOG(FATAL) << "CUDA Embedding forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -100,20 +90,22 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
     const int num_blocks = (num_tokens + threads_per_block - 1) / threads_per_block;
 
     switch (dtype) {
-        DISPATCH_CASE(DataType::kFLOAT32, WRAP({
+        DISPATCH_CASE(WRAP({
                           grad_weight->Fill<float>(0.0f);
                           EmbeddingBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
                               static_cast<const int64_t *>(input->DataPtr()),
                               static_cast<const float *>(grad_output->DataPtr()),
                               static_cast<float *>(grad_weight->DataPtr()), num_tokens, embedding_dim);
-                      }))
-        DISPATCH_CASE(DataType::kBFLOAT16, WRAP({
+                      }),
+                      DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP({
                           grad_weight->Fill<nv_bfloat16>(0);
                           EmbeddingBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
                               static_cast<const int64_t *>(input->DataPtr()),
                               static_cast<const nv_bfloat16 *>(grad_output->DataPtr()),
                               static_cast<nv_bfloat16 *>(grad_weight->DataPtr()), num_tokens, embedding_dim);
-                      }))
+                      }),
+                      DataType::kBFLOAT16)
     default:
         LOG(FATAL) << "CUDA Embedding backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }

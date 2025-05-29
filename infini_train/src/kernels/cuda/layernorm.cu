@@ -1,8 +1,7 @@
 #include "glog/logging.h"
 #include <cub/block/block_reduce.cuh>
 
-#include "infini_train/include/dispatcher.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
 
@@ -80,11 +79,11 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     switch (input->Dtype()) {
         DISPATCH_CASE(
-            DataType::kFLOAT32,
             WRAP(LayerNormForwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
                      static_cast<const float *>(input->DataPtr()), static_cast<const float *>(weight->DataPtr()),
                      static_cast<const float *>(bias->DataPtr()), static_cast<float *>(mean->DataPtr()),
-                     static_cast<float *>(rstd->DataPtr()), static_cast<float *>(output->DataPtr()), eps, embed_dim);))
+                     static_cast<float *>(rstd->DataPtr()), static_cast<float *>(output->DataPtr()), eps, embed_dim);),
+            DataType::kFLOAT32)
     default:
         LOG(FATAL) << "CUDA LayerNorm forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -167,13 +166,13 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     switch (input->Dtype()) {
         DISPATCH_CASE(
-            DataType::kFLOAT32,
             WRAP(LayerNormBackwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
                      static_cast<const float *>(input->DataPtr()), static_cast<const float *>(grad_output->DataPtr()),
                      static_cast<const float *>(mean->DataPtr()), static_cast<const float *>(rstd->DataPtr()),
                      static_cast<const float *>(weight->DataPtr()), static_cast<float *>(grad_input->DataPtr()),
                      static_cast<float *>(grad_weight->DataPtr()), static_cast<float *>(grad_bias->DataPtr()),
-                     embed_dim);))
+                     embed_dim);),
+            DataType::kFLOAT32)
     default:
         LOG(FATAL) << "CUDA LayerNorm backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
