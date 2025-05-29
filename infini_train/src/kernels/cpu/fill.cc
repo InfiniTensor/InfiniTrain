@@ -4,10 +4,10 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
-void Fill(std::shared_ptr<Tensor> tensor, float value) {
+void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
     // FIXME(zbl): support other data types
     auto data = reinterpret_cast<float *>(tensor->DataPtr());
-    std::fill(data, data + tensor->NumElements(), value);
+    std::fill(data, data + tensor->NumElements(), *(static_cast<float *>(value_ptr)));
 }
 } // namespace infini_train::kernels::cpu
 

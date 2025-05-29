@@ -8,10 +8,10 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
-void Fill(std::shared_ptr<Tensor> tensor, float value) {
+void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
     // FIXME(zbl): support other data types
     thrust::device_ptr<float> dev_ptr(reinterpret_cast<float *>(tensor->DataPtr()));
-    thrust::fill(thrust::cuda::par.on(0), dev_ptr, dev_ptr + tensor->NumElements(), value);
+    thrust::fill(thrust::cuda::par.on(0), dev_ptr, dev_ptr + tensor->NumElements(), *(static_cast<float *>(value_ptr)));
 }
 } // namespace infini_train::kernels::cuda
 

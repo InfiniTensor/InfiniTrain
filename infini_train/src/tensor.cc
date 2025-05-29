@@ -1,6 +1,7 @@
 #include "infini_train/include/tensor.h"
 
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <functional>
 #include <memory>
@@ -35,6 +36,21 @@ const std::unordered_map<DataType, std::string> kDataTypeToDesc = {
     {DataType::kINT16, "int16"},   {DataType::kUINT32, "uint32"}, {DataType::kINT32, "int32"},
     {DataType::kUINT64, "uint64"}, {DataType::kINT64, "int64"},   {DataType::kBFLOAT16, "bf16"},
     {DataType::kFLOAT16, "fp16"},  {DataType::kFLOAT32, "fp32"},  {DataType::kFLOAT64, "fp64"},
+};
+
+template <DataType DType> struct TypeMap;
+
+template <> struct TypeMap<DataType::kFLOAT32> {
+    using type = float;
+};
+template <> struct TypeMap<DataType::kFLOAT64> {
+    using type = double;
+};
+template <> struct TypeMap<DataType::kINT32> {
+    using type = int32_t;
+};
+template <> struct TypeMap<DataType::kINT64> {
+    using type = int64_t;
 };
 } // namespace
 
@@ -106,9 +122,41 @@ size_t Tensor::NumElements() const { return num_elements_; }
 DataType Tensor::Dtype() const { return dtype_; }
 
 template <typename T> void Tensor::Fill(T value) {
-    // FIXME(zbl): support other data types
+    DataType dtype = Dtype();
+
+    uint64_t storage = 0;
+
+    switch (dtype) {
+    case DataType::kFLOAT32: {
+        using TargetT = typename TypeMap<DataType::kFLOAT32>::type;
+        TargetT casted_value = static_cast<TargetT>(value);
+        std::memcpy(&storage, &casted_value, sizeof(TargetT));
+        break;
+    }
+    case DataType::kFLOAT64: {
+        using TargetT = typename TypeMap<DataType::kFLOAT64>::type;
+        TargetT casted_value = static_cast<TargetT>(value);
+        std::memcpy(&storage, &casted_value, sizeof(TargetT));
+        break;
+    }
+    case DataType::kINT32: {
+        using TargetT = typename TypeMap<DataType::kINT32>::type;
+        TargetT casted_value = static_cast<TargetT>(value);
+        std::memcpy(&storage, &casted_value, sizeof(TargetT));
+        break;
+    }
+    case DataType::kINT64: {
+        using TargetT = typename TypeMap<DataType::kINT64>::type;
+        TargetT casted_value = static_cast<TargetT>(value);
+        std::memcpy(&storage, &casted_value, sizeof(TargetT));
+        break;
+    }
+    default:
+        throw std::runtime_error("Unsupported data type in Tensor::Fill()");
+    }
+
     auto kernel = Dispatcher::Instance().GetKernel({GetDevice().Type(), "Fill"});
-    kernel.Call<void>(shared_from_this(), value);
+    kernel.Call<void>(shared_from_this(), static_cast<void *>(&storage));
 }
 
 template void Tensor::Fill<float>(float);
