@@ -1,12 +1,10 @@
 #include <cmath>
 #include <cstddef>
-#include <cstdint>
 #include <cub/block/block_reduce.cuh>
 
 #include "glog/logging.h"
 
-#include "infini_train/include/dispatcher.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
 template <size_t BLOCK_SIZE, typename T>
@@ -85,7 +83,7 @@ void LaunchForward(const std::shared_ptr<Tensor> &output, const std::shared_ptr<
     dim3 block_dims(BLOCK_SIZE);
     dim3 grid_dims(outer_size, inner_size);
 
-    DISPATCH_WITH_DEFAULT(dtype,
+    DISPATCH_WITH_DEFAULT(input->Dtype(),
                           WRAP(SoftmaxForwardKernel<BLOCK_SIZE, T>
                                <<<grid_dims, block_dims>>>(output_ptr, input_ptr, outer_size, axis_size, inner_size);),
                           WRAP(LOG(FATAL) << "Unsupported data type at " << __FILE__ << ":" << __LINE__),
@@ -100,7 +98,7 @@ std::shared_ptr<Tensor> SoftmaxForward(const std::shared_ptr<Tensor> &input, int
     auto output = std::make_shared<Tensor>(input_dims, dtype, input->GetDevice());
 
     switch (dtype) {
-        DISPATCH_CASE(DataType::kFLOAT32, WRAP(LaunchForward<256, float>(output, input, dim);))
+        DISPATCH_CASE(WRAP(LaunchForward<256, float>(output, input, dim);), DataType::kFLOAT32)
     default:
         LOG(FATAL) << "CUDA softmax forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -168,7 +166,7 @@ void LaunchBackward(const std::shared_ptr<Tensor> &grad_input, const std::shared
     dim3 block(BLOCK_SIZE);
     dim3 grid(outer_size, inner_size);
 
-    DISPATCH_WITH_DEFAULT(dtype,
+    DISPATCH_WITH_DEFAULT(grad_output->Dtype(),
                           WRAP(SoftmaxBackwardKernel<BLOCK_SIZE, T><<<grid, block>>>(
                                    grad_input_ptr, grad_output_ptr, output_ptr, outer_size, axis_size, inner_size);),
                           WRAP(LOG(FATAL) << "Unsupported data type at " << __FILE__ << ":" << __LINE__),
@@ -186,7 +184,7 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
     grad_input->Fill<float>(0.0f);
 
     switch (dtype) {
-        DISPATCH_CASE(DataType::kFLOAT32, WRAP(LaunchBackward<256, float>(grad_input, grad_output, output, dim);))
+        DISPATCH_CASE(WRAP(LaunchBackward<256, float>(grad_input, grad_output, output, dim);), DataType::kFLOAT32)
     default:
         LOG(FATAL) << "CUDA softmax backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }

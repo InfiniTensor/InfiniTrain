@@ -1,47 +1,10 @@
 #include <cstddef>
-#include <cstdint>
-#include <cuda_bf16.h>
-#include <cuda_fp16.h>
 
 #include "glog/logging.h"
 
-#include "infini_train/include/dispatcher.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
-
-#define CEIL_DIV(x, y) (((x) + (y)-1) / (y))
-
-/**
- * Compile-time type mapping from DataType enum to concrete C++ types.
- *
- * - Primary template: Declared but undefined to enforce specialization
- * - Specializations: Explicit mappings (DataType::kFLOAT32 → float, etc)
- * - TypeMap_t alias: Direct access to mapped type (TypeMap_t<DataType::kINT32> → int32_t)
- *
- * Enables type-safe generic code where operations dispatch based on DataType tokens,
- * with zero runtime overhead. Extend by adding new specializations.
- */
-template <DataType DType> struct TypeMap;
-template <DataType DType> using TypeMap_t = typename TypeMap<DType>::type;
-
-template <> struct TypeMap<DataType::kFLOAT32> {
-    using type = float;
-};
-template <> struct TypeMap<DataType::kBFLOAT16> {
-#ifdef USE_CUDA
-    using type = nv_bfloat16;
-#endif
-};
-template <> struct TypeMap<DataType::kFLOAT64> {
-    using type = double;
-};
-template <> struct TypeMap<DataType::kINT32> {
-    using type = int32_t;
-};
-template <> struct TypeMap<DataType::kINT64> {
-    using type = int64_t;
-};
 
 namespace {
 
@@ -342,8 +305,8 @@ template <typename Func> std::shared_ptr<Tensor> UnaryForward(const std::shared_
     auto output = std::make_shared<Tensor>(input->Dims(), dtype, input->GetDevice());
 
     switch (dtype) {
-        DISPATCH_CASE(DataType::kFLOAT32, WRAP(LaunchForward<256, float>(unary_fn, output, input);))
-        DISPATCH_CASE(DataType::kBFLOAT16, WRAP(LaunchForward<256, nv_bfloat16>(unary_fn, output, input);))
+        DISPATCH_CASE(WRAP(LaunchForward<256, float>(unary_fn, output, input);), DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(LaunchForward<256, nv_bfloat16>(unary_fn, output, input);), DataType::kBFLOAT16)
     default:
         LOG(FATAL) << "CUDA unary forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -357,14 +320,16 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
     auto dtype = grad_output->Dtype();
     auto output = std::make_shared<Tensor>(grad_output->Dims(), dtype, grad_output->GetDevice());
     switch (dtype) {
-        DISPATCH_CASE(DataType::kFLOAT32, WRAP({
+        DISPATCH_CASE(WRAP({
                           output->Fill<float>(0.0f);
                           LaunchBackward<256, float>(unary_fn, output, grad_output, a);
-                      }))
-        DISPATCH_CASE(DataType::kBFLOAT16, WRAP({
+                      }),
+                      DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP({
                           output->Fill<nv_bfloat16>(0);
                           LaunchBackward<256, nv_bfloat16>(unary_fn, output, grad_output, a);
-                      }))
+                      }),
+                      DataType::kBFLOAT16)
     default:
         LOG(FATAL) << "CUDA unary backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -383,8 +348,8 @@ std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const st
     auto output = std::make_shared<Tensor>(a->Dims(), dtype, a->GetDevice());
 
     switch (dtype) {
-        DISPATCH_CASE(DataType::kFLOAT32, WRAP(LaunchForward<256, float>(binary_fn, output, a, b);))
-        DISPATCH_CASE(DataType::kBFLOAT16, WRAP(LaunchForward<256, nv_bfloat16>(binary_fn, output, a, b);))
+        DISPATCH_CASE(WRAP(LaunchForward<256, float>(binary_fn, output, a, b);), DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(LaunchForward<256, nv_bfloat16>(binary_fn, output, a, b);), DataType::kBFLOAT16)
     default:
         LOG(FATAL) << "CUDA binary forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -418,17 +383,19 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     auto grad_b = std::make_shared<Tensor>(b_dims, dtype, device);
 
     switch (dtype) {
-        DISPATCH_CASE(DataType::kFLOAT32, WRAP({
+        DISPATCH_CASE(WRAP({
                           grad_a->Fill<float>(0.0f);
                           grad_b->Fill<float>(0.0f);
                           LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a, b);
-                      }))
-        DISPATCH_CASE(DataType::kBFLOAT16, WRAP({
+                      }),
+                      DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP({
                           grad_a->Fill<nv_bfloat16>(0);
                           grad_b->Fill<nv_bfloat16>(0);
                           LaunchBackward<256, nv_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
                                                            b);
-                      }))
+                      }),
+                      DataType::kBFLOAT16)
     default:
         LOG(FATAL) << "CUDA binary backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }

@@ -42,18 +42,18 @@
  */
 #define DISPATCH_WITH_DEFAULT(DTYPE_EXPR, BODY, DEFAULT_BODY, ...)                                                     \
     switch (DTYPE_EXPR) {                                                                                              \
-        CAT(DISPATCH_CASE_, PP_NARG(__VA_ARGS__))(__VA_ARGS__, BODY) default : { DEFAULT_BODY; }                       \
+        CAT(DISPATCH_CASE_, PP_NARG(__VA_ARGS__))(__VA_ARGS__, WRAP(BODY)) default : { WRAP(DEFAULT_BODY); }           \
     }
 
 // dispatch with switch and arbitrary number of cases
 #define DISPATCH(DTYPE_EXPR, BODY, ...)                                                                                \
     DISPATCH_WITH_DEFAULT(                                                                                             \
-        DTYPE_EXPR, BODY,                                                                                              \
+        DTYPE_EXPR, WRAP(BODY),                                                                                        \
         EXPAND(LOG(FATAL) << "Unsupported data type at " << __FILE__ << ":" << __LINE__; return nullptr;),             \
         __VA_ARGS__)
 
 // dispatch a single case
-#define DISPATCH_CASE(DTYPE_EXPR, BODY) DISPATCH_CASE_1(DTYPE_EXPR, WRAP(BODY))
+#define DISPATCH_CASE(BODY, ...) CAT(DISPATCH_CASE_, PP_NARG(__VA_ARGS__))(__VA_ARGS__, WRAP(BODY))
 
 // Helper macros to count the number of arguments
 #define PP_NARG(...) PP_NARG_(__VA_ARGS__, PP_RSEQ_N())

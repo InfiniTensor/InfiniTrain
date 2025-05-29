@@ -1,28 +1,10 @@
 #include "cublas_v2.h"
 #include "glog/logging.h"
-#include <cub/block/block_reduce.cuh>
 #include <cuda_bf16.h>
 
-#include "infini_train/include/dispatcher.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
-
-#define CUDA_CHECK(call)                                                                                               \
-    do {                                                                                                               \
-        cudaError_t status = call;                                                                                     \
-        if (status != cudaSuccess) {                                                                                   \
-            LOG(FATAL) << "CUDA Error: " << cudaGetErrorString(status) << " at " << __FILE__ << ":" << __LINE__;       \
-        }                                                                                                              \
-    } while (0)
-
-#define CUBLAS_CHECK(call)                                                                                             \
-    do {                                                                                                               \
-        cublasStatus_t status = call;                                                                                  \
-        if (status != CUBLAS_STATUS_SUCCESS) {                                                                         \
-            LOG(FATAL) << "CUBLAS Error: " << cublasGetStatusString(status) << " at " << __FILE__ << ":" << __LINE__;  \
-        }                                                                                                              \
-    } while (0)
 
 std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &other) {
     /*
@@ -69,16 +51,16 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
     // NOTE(zbl): the last cublasGemmAlgo_t param has no effect on GPU arch >= sm_80(Ampere)
 
     switch (input->Dtype()) {
-        DISPATCH_CASE(DataType::kFLOAT32,
-                      CUBLAS_CHECK(cublasGemmStridedBatchedEx(
+        DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
                           handle, CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, &alpha, other->DataPtr(), CUDA_R_32F, lda,
                           stride_a, input->DataPtr(), CUDA_R_32F, ldb, stride_b, &beta, output->DataPtr(), CUDA_R_32F,
-                          ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));)
-        DISPATCH_CASE(DataType::kBFLOAT16,
-                      CUBLAS_CHECK(cublasGemmStridedBatchedEx(
+                          ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
+                      DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
                           handle, CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, &alpha, other->DataPtr(), CUDA_R_16BF, lda,
                           stride_a, input->DataPtr(), CUDA_R_16BF, ldb, stride_b, &beta, output->DataPtr(), CUDA_R_16BF,
-                          ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));)
+                          ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
+                      DataType::kBFLOAT16)
     default:
         LOG(FATAL) << "CUDA Matmul forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -119,14 +101,16 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto grad_input = std::make_shared<Tensor>(input_dims, dtype, grad_output->GetDevice());
     auto grad_other = std::make_shared<Tensor>(other_dims, dtype, grad_output->GetDevice());
     switch (dtype) {
-        DISPATCH_CASE(DataType::kFLOAT32, WRAP({
+        DISPATCH_CASE(WRAP({
                           grad_input->Fill<float>(0.0f);
                           grad_other->Fill<float>(0.0f);
-                      }))
-        DISPATCH_CASE(DataType::kBFLOAT16, WRAP({
+                      }),
+                      DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP({
                           grad_input->Fill<nv_bfloat16>(0);
                           grad_other->Fill<nv_bfloat16>(0);
-                      }))
+                      }),
+                      DataType::kBFLOAT16)
     default:
         LOG(FATAL) << "CUDA Matmul backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -147,16 +131,17 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
         const int64_t stride_b = n * m;
         const int64_t stride_c = m * k;
         switch (dtype) {
-            DISPATCH_CASE(DataType::kFLOAT32,
-                          CUBLAS_CHECK(cublasGemmStridedBatchedEx(
+            DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
                               handle, CUBLAS_OP_T, CUBLAS_OP_N, k, m, n, &alpha, other->DataPtr(), CUDA_R_32F, lda,
                               stride_a, grad_output->DataPtr(), CUDA_R_32F, ldb, stride_b, &beta, grad_input->DataPtr(),
-                              CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));)
-            DISPATCH_CASE(DataType::kBFLOAT16,
-                          CUBLAS_CHECK(cublasGemmStridedBatchedEx(
-                              handle, CUBLAS_OP_T, CUBLAS_OP_N, k, m, n, &alpha, other->DataPtr(), CUDA_R_16BF, lda,
-                              stride_a, grad_output->DataPtr(), CUDA_R_16BF, ldb, stride_b, &beta,
-                              grad_input->DataPtr(), CUDA_R_16BF, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));)
+                              CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
+                          DataType::kFLOAT32)
+            DISPATCH_CASE(
+                WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
+                    handle, CUBLAS_OP_T, CUBLAS_OP_N, k, m, n, &alpha, other->DataPtr(), CUDA_R_16BF, lda, stride_a,
+                    grad_output->DataPtr(), CUDA_R_16BF, ldb, stride_b, &beta, grad_input->DataPtr(), CUDA_R_16BF, ldc,
+                    stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
+                DataType::kBFLOAT16)
         }
     }
 
@@ -172,16 +157,16 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
         const int64_t stride_b = k * m;
         const int64_t stride_c = n * k;
         switch (dtype) {
-            DISPATCH_CASE(DataType::kFLOAT32,
-                          CUBLAS_CHECK(cublasGemmStridedBatchedEx(
+            DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
                               handle, CUBLAS_OP_N, CUBLAS_OP_T, n, k, m, &alpha, grad_output->DataPtr(), CUDA_R_32F,
                               lda, stride_a, input->DataPtr(), CUDA_R_32F, ldb, stride_b, &beta, grad_other->DataPtr(),
-                              CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));)
-            DISPATCH_CASE(DataType::kBFLOAT16,
-                          CUBLAS_CHECK(cublasGemmStridedBatchedEx(
+                              CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
+                          DataType::kFLOAT32)
+            DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
                               handle, CUBLAS_OP_N, CUBLAS_OP_T, n, k, m, &alpha, grad_output->DataPtr(), CUDA_R_16BF,
                               lda, stride_a, input->DataPtr(), CUDA_R_16BF, ldb, stride_b, &beta, grad_other->DataPtr(),
-                              CUDA_R_16BF, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));)
+                              CUDA_R_16BF, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
+                          DataType::kBFLOAT16)
         }
     }
 
@@ -237,21 +222,22 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
         int num_blocks = (bs * out_features + threads_per_block - 1) / threads_per_block;
 
         switch (input->Dtype()) {
-            DISPATCH_CASE(DataType::kFLOAT32, WRAP(BiasCopyKernel<<<num_blocks, threads_per_block>>>(
-                                                       static_cast<float *>(output->DataPtr()),
-                                                       static_cast<const float *>(bias->DataPtr()), bs, out_features);))
-            DISPATCH_CASE(DataType::kBFLOAT16,
-                          WRAP(BiasCopyKernel<<<num_blocks, threads_per_block>>>(
+            DISPATCH_CASE(WRAP(BiasCopyKernel<<<num_blocks, threads_per_block>>>(
+                                   static_cast<float *>(output->DataPtr()), static_cast<const float *>(bias->DataPtr()),
+                                   bs, out_features);),
+                          DataType::kFLOAT32)
+            DISPATCH_CASE(WRAP(BiasCopyKernel<<<num_blocks, threads_per_block>>>(
                                    static_cast<nv_bfloat16 *>(output->DataPtr()),
-                                   static_cast<const nv_bfloat16 *>(bias->DataPtr()), bs, out_features);))
+                                   static_cast<const nv_bfloat16 *>(bias->DataPtr()), bs, out_features);),
+                          DataType::kBFLOAT16)
         default:
             LOG(FATAL) << "CUDA Linear forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
         }
 
     } else {
         switch (input->Dtype()) {
-            DISPATCH_CASE(DataType::kFLOAT32, output->Fill<float>(0.0f);)
-            DISPATCH_CASE(DataType::kBFLOAT16, output->Fill<nv_bfloat16>(0);)
+            DISPATCH_CASE(WRAP(output->Fill<float>(0.0f);), DataType::kFLOAT32)
+            DISPATCH_CASE(WRAP(output->Fill<nv_bfloat16>(0);), DataType::kBFLOAT16)
         default:
             LOG(FATAL) << "CUDA Linear forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
         }
@@ -280,18 +266,20 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     // A = weight.T[out_features, in_features]
     // B = input.T[in_features, bs]
     switch (input->Dtype()) {
-        DISPATCH_CASE(DataType::kFLOAT32, WRAP({
+        DISPATCH_CASE(WRAP({
                           CUBLAS_CHECK(cublasSgemm(handle, trans_a, trans_b, out_features, bs, in_features, &alpha,
                                                    static_cast<const float *>(weight->DataPtr()), lda,
                                                    static_cast<const float *>(input->DataPtr()), in_features, &beta,
                                                    static_cast<float *>(output->DataPtr()), out_features));
-                      }))
-        DISPATCH_CASE(DataType::kBFLOAT16, WRAP({
+                      }),
+                      DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP({
                           CUBLAS_CHECK(cublasGemmEx(handle, trans_a, trans_b, out_features, bs, in_features, &alpha,
                                                     weight->DataPtr(), CUDA_R_16BF, lda, input->DataPtr(), CUDA_R_16BF,
                                                     in_features, &beta, output->DataPtr(), CUDA_R_16BF, out_features,
                                                     CUDA_R_32F, CUBLAS_GEMM_DEFAULT));
-                      }))
+                      }),
+                      DataType::kBFLOAT16)
     }
     CUBLAS_CHECK(cublasDestroy(handle));
     return output;
@@ -342,8 +330,8 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     };
 
     switch (input->Dtype()) {
-        DISPATCH_CASE(DataType::kFLOAT32, WRAP(initialize_gradients(0.0f, DataType::kFLOAT32);))
-        DISPATCH_CASE(DataType::kBFLOAT16, WRAP(initialize_gradients(nv_bfloat16(0), DataType::kBFLOAT16);))
+        DISPATCH_CASE(WRAP(initialize_gradients(0.0f, DataType::kFLOAT32);), DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(initialize_gradients(nv_bfloat16(0), DataType::kBFLOAT16);), DataType::kBFLOAT16)
     default:
         LOG(FATAL) << "CUDA Linear backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
     }
@@ -368,7 +356,7 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
 
     switch (input->Dtype()) {
         // TODO(zbl): use cublasSgemv if possible
-        DISPATCH_CASE(DataType::kFLOAT32, WRAP({
+        DISPATCH_CASE(WRAP({
                           // - if transpose:
                           // weight is [out_features, in_features] here
                           // d_input = d_output * weight --> d_input.T = weight.T * d_output.T
@@ -410,8 +398,9 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
                                   static_cast<const float *>(grad_output->DataPtr()),
                                   static_cast<float *>(grad_bias->DataPtr()), out_features, bs);
                           }
-                      }))
-        DISPATCH_CASE(DataType::kBFLOAT16, WRAP({
+                      }),
+                      DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP({
                           CUBLAS_CHECK(cublasGemmEx(handle, trans_a1, trans_b1, in_features, bs, out_features, &alpha,
                                                     weight->DataPtr(), CUDA_R_16BF, lda1, grad_output->DataPtr(),
                                                     CUDA_R_16BF, out_features, &beta, grad_input->DataPtr(),
@@ -427,7 +416,8 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
                                   static_cast<const nv_bfloat16 *>(grad_output->DataPtr()),
                                   static_cast<nv_bfloat16 *>(grad_bias->DataPtr()), out_features, bs);
                           }
-                      }))
+                      }),
+                      DataType::kBFLOAT16)
     }
 
     CUBLAS_CHECK(cublasDestroy(handle));
