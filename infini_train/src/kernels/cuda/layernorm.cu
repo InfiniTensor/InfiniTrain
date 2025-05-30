@@ -5,9 +5,9 @@
 
 namespace infini_train::kernels::cuda {
 
-template <int BLOCK_SIZE>
-__global__ void LayerNormForwardKernel(const float *input, const float *weight, const float *bias, float *mean_out,
-                                       float *rstd_out, float *output, float eps, int embed_dim) {
+template <int BLOCK_SIZE, typename T>
+__global__ void LayerNormForwardKernel(const T *input, const T *weight, const float *bias, float *mean_out,
+                                       float *rstd_out, T *output, float eps, int embed_dim) {
     using BlockReduce = cub::BlockReduce<float, BLOCK_SIZE>;
     __shared__ typename BlockReduce::TempStorage temp_storage_mean;
     __shared__ typename BlockReduce::TempStorage temp_storage_rstd;
@@ -15,13 +15,14 @@ __global__ void LayerNormForwardKernel(const float *input, const float *weight, 
     __shared__ float shared_rstd;
 
     const int token_idx = blockIdx.x;
-    const float *x = input + token_idx * embed_dim;
-    float *y = output + token_idx * embed_dim;
+    const T *x = input + token_idx * embed_dim;
+    T *y = output + token_idx * embed_dim;
 
     float sum = 0.0f;
     float sqsum = 0.0f;
-    for (int i = threadIdx.x; i < embed_dim; i += BLOCK_SIZE) {
-        float val = x[i];
+
+    for (int i = threadIdx.x; i < embed_dim; i += blockDim.x) {
+        float val = common::cuda::Cast<float>(x[i]);
         sum += val;
         sqsum += val * val;
     }
@@ -64,36 +65,37 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
     const int max_seqlen = input->Dims()[1];
     const int embed_dim = input->Dims()[2];
 
-    auto output = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32, input->GetDevice());
+    auto dtype = input->Dtype();
+
+    auto output = std::make_shared<Tensor>(input->Dims(), dtype, input->GetDevice());
     auto mean = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32,
                                          input->GetDevice());
     auto rstd = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32,
                                          input->GetDevice());
-    mean->Fill<float>(0.0f);
-    rstd->Fill<float>(0.0f);
 
     constexpr int BLOCK_SIZE = 256;
     int threads_per_block = BLOCK_SIZE;
     int num_blocks = batch_size * max_seqlen;
 
-    switch (input->Dtype()) {
-        DISPATCH_CASE(
-            WRAP(LayerNormForwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, shared_mem_size>>>(
-                     static_cast<const float *>(input->DataPtr()), static_cast<const float *>(weight->DataPtr()),
-                     static_cast<const float *>(bias->DataPtr()), static_cast<float *>(mean->DataPtr()),
-                     static_cast<float *>(rstd->DataPtr()), static_cast<float *>(output->DataPtr()), eps, embed_dim);),
-            DataType::kFLOAT32)
-    default:
-        LOG(FATAL) << "CUDA LayerNorm forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
-    }
+    DispatchFunc<INFINI_FLOATING_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            mean->Fill<T>(0);
+            rstd->Fill<T>(0);
+            LayerNormForwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block>>>(
+                static_cast<const T *>(input->DataPtr()), static_cast<const T *>(weight->DataPtr()),
+                static_cast<const float *>(bias->DataPtr()), static_cast<float *>(mean->DataPtr()),
+                static_cast<float *>(rstd->DataPtr()), static_cast<T *>(output->DataPtr()), eps, embed_dim);
+        },
+        "CUDA LayerNormForward");
 
     return {output, mean, rstd};
 }
 
-template <int BLOCK_SIZE>
-__global__ void LayerNormBackwardKernel(const float *__restrict__ input, const float *__restrict__ grad_output,
+template <int BLOCK_SIZE, typename T>
+__global__ void LayerNormBackwardKernel(const T *__restrict__ input, const T *__restrict__ grad_output,
                                         const float *__restrict__ mean, const float *__restrict__ rstd,
-                                        const float *__restrict__ weight, float *__restrict__ grad_input,
+                                        const float *__restrict__ weight, T *__restrict__ grad_input,
                                         float *__restrict__ grad_weight, float *__restrict__ grad_bias, int embed_dim) {
     using BlockReduce = cub::BlockReduce<float, BLOCK_SIZE>;
     __shared__ typename BlockReduce::TempStorage temp_storage_mean;
@@ -104,9 +106,9 @@ __global__ void LayerNormBackwardKernel(const float *__restrict__ input, const f
     int tid = threadIdx.x;
     int token_idx = blockIdx.x;
 
-    const float *input_ptr = input + token_idx * embed_dim;
-    const float *grad_output_ptr = grad_output + token_idx * embed_dim;
-    float *grad_input_ptr = grad_input + token_idx * embed_dim;
+    const T *input_ptr = input + token_idx * embed_dim;
+    const T *grad_output_ptr = grad_output + token_idx * embed_dim;
+    T *grad_input_ptr = grad_input + token_idx * embed_dim;
 
     float mean_val = mean[token_idx];
     float rstd_val = rstd[token_idx];
@@ -115,9 +117,9 @@ __global__ void LayerNormBackwardKernel(const float *__restrict__ input, const f
     float dnorm_norm_mean = 0.f;
 
     for (int i = tid; i < embed_dim; i += BLOCK_SIZE) {
-        float dnorm = weight[i] * grad_output_ptr[i];
+        float dnorm = weight[i] * common::cuda::Cast<float>(grad_output_ptr[i]);
         dnorm_mean += dnorm;
-        dnorm_norm_mean += dnorm * (input_ptr[i] - mean_val);
+        dnorm_norm_mean += dnorm * (common::cuda::Cast<float>(input_ptr[i]) - mean_val);
     }
 
     dnorm_mean = BlockReduce(temp_storage_mean).Sum(dnorm_mean);
@@ -134,12 +136,13 @@ __global__ void LayerNormBackwardKernel(const float *__restrict__ input, const f
     __syncthreads();
 
     for (int i = tid; i < embed_dim; i += BLOCK_SIZE) {
-        float norm = (input_ptr[i] - mean_val) * rstd_val;
+        float norm = (common::cuda::Cast<float>(input_ptr[i]) - mean_val) * rstd_val;
 
-        grad_input_ptr[i] = (weight[i] * grad_output_ptr[i] - shared_mean - norm * shared_norm) * rstd_val;
+        grad_input_ptr[i]
+            = (weight[i] * common::cuda::Cast<float>(grad_output_ptr[i]) - shared_mean - norm * shared_norm) * rstd_val;
 
-        atomicAdd(&grad_weight[i], grad_output_ptr[i] * norm);
-        atomicAdd(&grad_bias[i], grad_output_ptr[i]);
+        atomicAdd(&grad_weight[i], common::cuda::Cast<float>(grad_output_ptr[i]) * norm);
+        atomicAdd(&grad_bias[i], common::cuda::Cast<float>(grad_output_ptr[i]));
     }
 }
 
@@ -151,29 +154,28 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     const int max_seqlen = input->Dims()[1];
     const int embed_dim = input->Dims()[2];
 
-    auto grad_input = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32, grad_output->GetDevice());
+    auto dtype = input->Dtype();
+    auto grad_input = std::make_shared<Tensor>(input->Dims(), dtype, grad_output->GetDevice());
     auto grad_weight = std::make_shared<Tensor>(weight->Dims(), DataType::kFLOAT32, grad_output->GetDevice());
     auto grad_bias = std::make_shared<Tensor>(bias->Dims(), DataType::kFLOAT32, grad_output->GetDevice());
-    grad_input->Fill<float>(0.0f);
-    grad_weight->Fill<float>(0.0f);
-    grad_bias->Fill<float>(0.0f);
 
     constexpr int BLOCK_SIZE = 256;
     int threads_per_block = BLOCK_SIZE;
     int num_blocks = batch_size * max_seqlen;
 
-    switch (input->Dtype()) {
-        DISPATCH_CASE(
-            WRAP(LayerNormBackwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block>>>(
-                     static_cast<const float *>(input->DataPtr()), static_cast<const float *>(grad_output->DataPtr()),
-                     static_cast<const float *>(mean->DataPtr()), static_cast<const float *>(rstd->DataPtr()),
-                     static_cast<const float *>(weight->DataPtr()), static_cast<float *>(grad_input->DataPtr()),
-                     static_cast<float *>(grad_weight->DataPtr()), static_cast<float *>(grad_bias->DataPtr()),
-                     embed_dim);),
-            DataType::kFLOAT32)
-    default:
-        LOG(FATAL) << "CUDA LayerNorm backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
-    }
+    DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
+        dtype,
+        [=]<typename T>() {
+            grad_input->Fill<T>(0);
+            grad_weight->Fill<float>(0);
+            grad_bias->Fill<float>(0);
+            LayerNormBackwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block>>>(
+                static_cast<const T *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
+                static_cast<const float *>(mean->DataPtr()), static_cast<const float *>(rstd->DataPtr()),
+                static_cast<const float *>(weight->DataPtr()), static_cast<T *>(grad_input->DataPtr()),
+                static_cast<float *>(grad_weight->DataPtr()), static_cast<float *>(grad_bias->DataPtr()), embed_dim);
+        },
+        "CUDA LayerNormForward");
 
     return {grad_input, grad_weight, grad_bias};
 }

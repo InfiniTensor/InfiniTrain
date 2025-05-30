@@ -1,5 +1,3 @@
-#include "glog/logging.h"
-
 #include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
@@ -37,19 +35,14 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     int threads_per_block = 256;
     int num_blocks = (batch_size * max_seqlen * embed_dim + threads_per_block - 1) / threads_per_block;
 
-    switch (dtype) {
-        DISPATCH_CASE(WRAP(EmbeddingForwardKernel<<<num_blocks, threads_per_block>>>(
-                               static_cast<const int64_t *>(input->DataPtr()), static_cast<float *>(output->DataPtr()),
-                               static_cast<const float *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim);),
-                      DataType::kFLOAT32)
-        DISPATCH_CASE(
-            WRAP(EmbeddingForwardKernel<<<num_blocks, threads_per_block>>>(
-                     static_cast<const int64_t *>(input->DataPtr()), static_cast<nv_bfloat16 *>(output->DataPtr()),
-                     static_cast<const nv_bfloat16 *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim);),
-            DataType::kBFLOAT16)
-    default:
-        LOG(FATAL) << "CUDA Embedding forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
-    }
+    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            EmbeddingForwardKernel<<<num_blocks, threads_per_block>>>(
+                static_cast<const int64_t *>(input->DataPtr()), static_cast<T *>(output->DataPtr()),
+                static_cast<const T *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim);
+        },
+        "CUDA EmbeddingForward");
 
     return output;
 }
@@ -87,26 +80,15 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
     const int threads_per_block = 256;
     const int num_blocks = (num_tokens + threads_per_block - 1) / threads_per_block;
 
-    switch (dtype) {
-        DISPATCH_CASE(WRAP({
-                          grad_weight->Fill<float>(0.0f);
-                          EmbeddingBackwardKernel<<<num_blocks, threads_per_block>>>(
-                              static_cast<const int64_t *>(input->DataPtr()),
-                              static_cast<const float *>(grad_output->DataPtr()),
-                              static_cast<float *>(grad_weight->DataPtr()), num_tokens, embedding_dim);
-                      }),
-                      DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP({
-                          grad_weight->Fill<nv_bfloat16>(0);
-                          EmbeddingBackwardKernel<<<num_blocks, threads_per_block>>>(
-                              static_cast<const int64_t *>(input->DataPtr()),
-                              static_cast<const nv_bfloat16 *>(grad_output->DataPtr()),
-                              static_cast<nv_bfloat16 *>(grad_weight->DataPtr()), num_tokens, embedding_dim);
-                      }),
-                      DataType::kBFLOAT16)
-    default:
-        LOG(FATAL) << "CUDA Embedding backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
-    }
+    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            grad_weight->Fill<T>(0);
+            EmbeddingBackwardKernel<<<num_blocks, threads_per_block>>>(
+                static_cast<const int64_t *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
+                static_cast<T *>(grad_weight->DataPtr()), num_tokens, embedding_dim);
+        },
+        "CUDA EmbeddingBackward");
 
     return grad_weight;
 }

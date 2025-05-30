@@ -1,12 +1,12 @@
 #include "cuda_runtime.h"
 #include "glog/logging.h"
 
-#include "infini_train/include/dispatcher.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
 
-__global__ void TrilForwardKernel(const float *input, float *output, int rows, int cols, int64_t diagonal) {
+template <typename T>
+__global__ void TrilForwardKernel(const T *input, T *output, int rows, int cols, int64_t diagonal) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= rows * cols) {
         return;
@@ -18,7 +18,7 @@ __global__ void TrilForwardKernel(const float *input, float *output, int rows, i
     if (row - col + diagonal >= 0) {
         output[idx] = input[idx];
     } else {
-        output[idx] = 0.0f;
+        output[idx] = T(0);
     }
 }
 
@@ -32,12 +32,19 @@ std::shared_ptr<Tensor> TrilForward(const std::shared_ptr<Tensor> &input, int64_
     int threads_per_block = 256;
     int num_blocks = (rows * cols + threads_per_block - 1) / threads_per_block;
 
-    TrilForwardKernel<<<num_blocks, threads_per_block>>>(static_cast<float *>(input->DataPtr()),
-                                                         static_cast<float *>(output->DataPtr()), rows, cols, diagonal);
+    DispatchFunc<INFINI_ALL_TYPES>(
+        input->Dtype(),
+        [=]<typename T>() {
+            TrilForwardKernel<<<num_blocks, threads_per_block>>>(
+                static_cast<T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), rows, cols, diagonal);
+        },
+        "TrilForward");
+
     return output;
 }
 
-__global__ void TrilBackwardKernel(const float *grad_output, float *grad_input, int rows, int cols, int64_t diagonal) {
+template <typename T>
+__global__ void TrilBackwardKernel(const T *grad_output, T *grad_input, int rows, int cols, int64_t diagonal) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= rows * cols) {
         return;
@@ -49,7 +56,7 @@ __global__ void TrilBackwardKernel(const float *grad_output, float *grad_input, 
     if (row - col + diagonal >= 0) {
         grad_input[idx] = grad_output[idx];
     } else {
-        grad_input[idx] = 0.0f;
+        grad_input[idx] = T(0);
     }
 }
 
@@ -57,15 +64,21 @@ std::shared_ptr<Tensor> TrilBackward(const std::shared_ptr<Tensor> &grad_output,
     int rows = grad_output->Dims()[0];
     int cols = grad_output->Dims()[1];
 
-    auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), grad_output->Dtype(), grad_output->GetDevice());
-    grad_input->Fill<float>(0.0f);
+    auto dtype = grad_output->Dtype();
+    auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), dtype, grad_output->GetDevice());
 
     int threads_per_block = 256;
     int num_blocks = (rows * cols + threads_per_block - 1) / threads_per_block;
 
-    TrilBackwardKernel<<<num_blocks, threads_per_block>>>(static_cast<const float *>(grad_output->DataPtr()),
-                                                          static_cast<float *>(grad_input->DataPtr()), rows, cols,
-                                                          diagonal);
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            grad_input->Fill<T>(0);
+            TrilBackwardKernel<<<num_blocks, threads_per_block>>>(static_cast<const T *>(grad_output->DataPtr()),
+                                                                  static_cast<T *>(grad_input->DataPtr()), rows, cols,
+                                                                  diagonal);
+        },
+        "TrilBackward");
 
     return grad_input;
 }
@@ -122,8 +135,8 @@ std::shared_ptr<Tensor> TriuBackward(const std::shared_ptr<Tensor> &grad_output,
     int rows = grad_output->Dims()[0];
     int cols = grad_output->Dims()[1];
 
-    auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), grad_output->Dtype(), grad_output->GetDevice());
-    grad_input->Fill<float>(0.0f);
+    auto dtype = grad_output->Dtype();
+    auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), dtype, grad_output->GetDevice());
 
     int threads_per_block = 256;
     int num_blocks = (rows * cols + threads_per_block - 1) / threads_per_block;
@@ -135,9 +148,10 @@ std::shared_ptr<Tensor> TriuBackward(const std::shared_ptr<Tensor> &grad_output,
     return grad_input;
 }
 
-__global__ void TransposeForwardKernel(const float *input, float *output, const int64_t *in_dims,
-                                       const int64_t *in_strides, const int64_t *out_strides, int64_t ndim,
-                                       int64_t dim0, int64_t dim1, int64_t num_elements) {
+template <typename T>
+__global__ void TransposeForwardKernel(const T *input, T *output, const int64_t *in_dims, const int64_t *in_strides,
+                                       const int64_t *out_strides, int64_t ndim, int64_t dim0, int64_t dim1,
+                                       int64_t num_elements) {
     int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= num_elements) {
         return;
@@ -176,8 +190,8 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
     std::vector<int64_t> out_dims = in_dims;
     std::swap(out_dims[dim0], out_dims[dim1]);
 
-    auto output = std::make_shared<Tensor>(out_dims, input->Dtype(), input->GetDevice());
-    output->Fill<float>(0.0f);
+    auto dtype = input->Dtype();
+    auto output = std::make_shared<Tensor>(out_dims, dtype, input->GetDevice());
     int64_t ndim = in_dims.size();
     int64_t num_elements = output->NumElements();
 
@@ -208,9 +222,15 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
     int threads_per_block = 256;
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
 
-    TransposeForwardKernel<<<num_blocks, threads_per_block>>>(
-        static_cast<const float *>(input->DataPtr()), static_cast<float *>(output->DataPtr()), in_dims_dev,
-        in_strides_dev, out_strides_dev, ndim, dim0, dim1, num_elements);
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            output->Fill<T>(0);
+            TransposeForwardKernel<<<num_blocks, threads_per_block>>>(
+                static_cast<const T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), in_dims_dev,
+                in_strides_dev, out_strides_dev, ndim, dim0, dim1, num_elements);
+        },
+        "TransposeForward");
 
     cudaFreeAsync(device_buffer, 0);
 
@@ -221,11 +241,11 @@ std::shared_ptr<Tensor> TransposeBackward(const std::shared_ptr<Tensor> &grad_ou
     return TransposeForward(grad_output, dim1, dim0);
 }
 
-__global__ void MaskForwardKernel(const float *input, const float *mask, float *output, float value, int batch_size,
-                                  int mask_size) {
+template <typename T>
+__global__ void MaskForwardKernel(const T *input, const T *mask, T *output, T value, int batch_size, int mask_size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < batch_size * mask_size) {
-        output[i] = (mask[i % mask_size] == 1.0f) ? value : input[i];
+        output[i] = (mask[i % mask_size] == T(1)) ? value : input[i];
     }
 }
 
@@ -233,7 +253,8 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
                                     float value) {
     auto input_shape = input->Dims();
     auto mask_shape = mask->Dims();
-    CHECK_EQ(static_cast<int>(input->Dtype()), static_cast<int>(mask->Dtype()));
+    auto dtype = input->Dtype();
+    CHECK_EQ(static_cast<int>(dtype), static_cast<int>(mask->Dtype()));
 
     int64_t input_dims = input_shape.size();
     int64_t mask_dims = mask_shape.size();
@@ -251,24 +272,31 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
     int threads_per_block = 256;
     int num_blocks = (input->NumElements() + threads_per_block - 1) / threads_per_block;
 
-    MaskForwardKernel<<<num_blocks, threads_per_block>>>(
-        static_cast<const float *>(input->DataPtr()), static_cast<const float *>(mask->DataPtr()),
-        static_cast<float *>(output->DataPtr()), value, batch_size, mask_size);
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            MaskForwardKernel<<<num_blocks, threads_per_block>>>(
+                static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask->DataPtr()),
+                static_cast<T *>(output->DataPtr()), common::cuda::Cast<T>(value), batch_size, mask_size);
+        },
+        "MaskForward");
+
     return output;
 }
 
-__global__ void MaskBackwardKernel(const float *grad_output, const float *mask, float *grad_input, int batch_size,
-                                   int mask_size) {
+template <typename T>
+__global__ void MaskBackwardKernel(const T *grad_output, const T *mask, T *grad_input, int batch_size, int mask_size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < batch_size * mask_size) {
-        grad_input[i] = (mask[i % mask_size] == 1.0f) ? 0.0f : grad_output[i];
+        grad_input[i] = (mask[i % mask_size] == T(1)) ? T(0) : grad_output[i];
     }
 }
 
 std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &mask) {
     auto output_shape = grad_output->Dims();
     auto mask_shape = mask->Dims();
-    CHECK_EQ(static_cast<int>(grad_output->Dtype()), static_cast<int>(mask->Dtype()));
+    auto dtype = grad_output->Dtype();
+    CHECK_EQ(static_cast<int>(dtype), static_cast<int>(mask->Dtype()));
 
     int64_t output_dims = output_shape.size();
     int64_t mask_dims = mask_shape.size();
@@ -282,14 +310,20 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
     int64_t batch_size = grad_output->NumElements() / mask_size;
 
     auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), grad_output->Dtype(), grad_output->GetDevice());
-    grad_input->Fill<float>(0.0f);
 
     int threads_per_block = 256;
     int num_blocks = (grad_output->NumElements() + threads_per_block - 1) / threads_per_block;
 
-    MaskBackwardKernel<<<num_blocks, threads_per_block>>>(
-        static_cast<const float *>(grad_output->DataPtr()), static_cast<const float *>(mask->DataPtr()),
-        static_cast<float *>(grad_input->DataPtr()), batch_size, mask_size);
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            grad_input->Fill<T>(0);
+            MaskBackwardKernel<<<num_blocks, threads_per_block>>>(
+                static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask->DataPtr()),
+                static_cast<T *>(grad_input->DataPtr()), batch_size, mask_size);
+        },
+        "MaskBackward");
+
     return grad_input;
 }
 

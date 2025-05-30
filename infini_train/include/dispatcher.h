@@ -7,6 +7,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/common/common.h"
 #include "infini_train/include/device.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
@@ -36,6 +37,10 @@
 #define INFINI_UNSIGNED_INTEGRAL_TYPES DataType::kUINT8, DataType::kUINT16, DataType::kUINT32, DataType::kUINT64
 #define INFINI_ALL_INTEGRAL_TYPES EXPAND(INFINI_SIGNED_INTEGRAL_TYPES), EXPAND(INFINI_UNSIGNED_INTEGRAL_TYPES)
 #define INFINI_ALL_TYPES EXPAND(INFINI_ALL_FLOATING_TYPES), EXPAND(INFINI_ALL_INTEGRAL_TYPES)
+#define INFINI_8_BIT_TYPES DataType::kINT8, DataType::kUINT8
+#define INFINI_16_BIT_TYPES DataType::kINT16, DataType::kUINT16, DataType::kFLOAT16, DataType::kBFLOAT16
+#define INFINI_32_BIT_TYPES DataType::kINT32, DataType::kUINT32, DataType::kFLOAT32
+#define INFINI_64_BIT_TYPES DataType::kINT64, DataType::kUINT64, DataType::kFLOAT64
 
 /**
  * Dispatch Macros
@@ -197,6 +202,64 @@
     }
 
 namespace infini_train {
+
+// function to check if a type is in a list of types
+template <typename T, typename... Ts> inline constexpr bool IsTypeInList = (std::is_same_v<T, Ts> || ...);
+
+/**
+ * @brief Dispatches a functor call based on runtime DataType, restricted to specified allowed types.
+ *
+ * This function:
+ * 1. Maps runtime DataType to compile-time C++ types using TypeMap_t
+ * 2. Only processes types specified in AllowedDTypes template parameter
+ * 3. Calls functor with resolved type and forwarded arguments
+ *
+ * @tparam AllowedDTypes List of DataType enums to support
+ * @param dtype Runtime data type to dispatch
+ * @param func Templated functor to call (must accept operator()<T>)
+ * @param context_identifier Optional string for context in error messages
+ * @param args Arguments to be forwarded to the functor
+ *
+ * Behavior:
+ * - For allowed types: Instantiates functor with mapped C++ type
+ * - For disallowed and unknown types: Logs error and returns
+ *
+ * @see TypeMap for DataType to C++ type mapping
+ */
+template <DataType... AllowedDTypes, typename Functor, typename... Args>
+auto DispatchFunc(DataType dtype, Functor &&func, std::string_view context_identifier = "", Args &&...args) {
+    switch (dtype) {
+
+#define CASE_FOR_TYPE(DType)                                                                                           \
+    case DType: {                                                                                                      \
+        if constexpr (IsTypeInList<TypeMap_t<DType>, TypeMap_t<AllowedDTypes>...>) {                                   \
+            return std::forward<Functor>(func).template operator()<TypeMap_t<DType>>(std::forward<Args>(args)...);     \
+        } else {                                                                                                       \
+            break;                                                                                                     \
+        }                                                                                                              \
+    }
+
+        CASE_FOR_TYPE(DataType::kUINT8)
+        CASE_FOR_TYPE(DataType::kINT8)
+        CASE_FOR_TYPE(DataType::kUINT16)
+        CASE_FOR_TYPE(DataType::kINT16)
+        CASE_FOR_TYPE(DataType::kUINT32)
+        CASE_FOR_TYPE(DataType::kINT32)
+        CASE_FOR_TYPE(DataType::kUINT64)
+        CASE_FOR_TYPE(DataType::kINT64)
+        CASE_FOR_TYPE(DataType::kFLOAT32)
+        CASE_FOR_TYPE(DataType::kFLOAT64)
+#ifdef USE_CUDA
+        CASE_FOR_TYPE(DataType::kBFLOAT16)
+        CASE_FOR_TYPE(DataType::kFLOAT16)
+#endif
+#undef CASE_FOR_TYPE
+    }
+    LOG_UNSUPPORTED_DTYPE(dtype, context_identifier);
+    // prevent the compiler warning about control reaching the end of non-void function
+    throw std::runtime_error("Unsupported data type");
+}
+
 class KernelFunction {
 public:
     template <typename FuncT> explicit KernelFunction(FuncT &&func) : func_ptr_(reinterpret_cast<void *>(func)) {}

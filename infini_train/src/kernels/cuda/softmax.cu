@@ -14,8 +14,8 @@ __global__ void SoftmaxForwardKernel(T *output, const T *input, int64_t outer_si
 
     __shared__ typename BlockReduce::TempStorage temp_storage_max;
     __shared__ typename BlockReduce::TempStorage temp_storage_sum;
-    __shared__ T row_max;
-    __shared__ T row_sum;
+    __shared__ float row_max;
+    __shared__ float row_sum;
 
     const int64_t group = blockIdx.x;     // row of the grid
     const int64_t inner_idx = blockIdx.y; // column of the grid
@@ -25,7 +25,7 @@ __global__ void SoftmaxForwardKernel(T *output, const T *input, int64_t outer_si
     T thread_max = -INFINITY;
     for (int64_t axis = tid; axis < axis_size; axis += BLOCK_SIZE) {
         int64_t idx = (group * axis_size + axis) * inner_size + inner_idx;
-        thread_max = max(thread_max, input[idx]);
+        thread_max = max(thread_max, common::cuda::Cast<float>(input[idx]));
     }
     T block_max = BlockReduce(temp_storage_max).Reduce(thread_max, cub::Max());
 
@@ -38,8 +38,8 @@ __global__ void SoftmaxForwardKernel(T *output, const T *input, int64_t outer_si
     T thread_sum = 0;
     for (int64_t axis = tid; axis < axis_size; axis += BLOCK_SIZE) {
         int64_t idx = (group * axis_size + axis) * inner_size + inner_idx;
-        T exp_val = exp(input[idx] - row_max);
-        output[idx] = exp_val;
+        T exp_val = exp(common::cuda::Cast<float>(input[idx]) - row_max);
+        output[idx] = common::cuda::Cast<T>(exp_val);
         thread_sum += exp_val;
     }
     T block_sum = BlockReduce(temp_storage_sum).Sum(thread_sum);
@@ -66,7 +66,7 @@ void LaunchForward(const std::shared_ptr<Tensor> &output, const std::shared_ptr<
     for (int i = 0; i < dim; ++i) { outer_size *= input_dims[i]; };
     for (int i = dim + 1; i < input_dims.size(); ++i) { inner_size *= input_dims[i]; };
     if (axis_size == 0) {
-        LOG(INFO) << "CUDA softmax forward: 'input_dims[dim] == 0' at " << __FILE__ << ":" << __LINE__;
+        LOG_LOC(INFO, "CUDA softmax forward: 'input_dims[dim] == 0'");
         return;
     }
     if (outer_size == 0) {
@@ -77,17 +77,13 @@ void LaunchForward(const std::shared_ptr<Tensor> &output, const std::shared_ptr<
     const T *input_ptr = static_cast<const T *>(input->DataPtr());
 
     if (BLOCK_SIZE > 1024) {
-        LOG(FATAL) << "CUDA softmax forward: 'BLOCK_SIZE used is larger than the max number of thread per block' at "
-                   << __FILE__ << ":" << __LINE__;
+        LOG_LOC(FATAL, "CUDA softmax forward: 'BLOCK_SIZE used is larger than the max number of thread per block'");
     }
     dim3 block_dims(BLOCK_SIZE);
     dim3 grid_dims(outer_size, inner_size);
 
-    DISPATCH_WITH_DEFAULT(input->Dtype(),
-                          WRAP(SoftmaxForwardKernel<BLOCK_SIZE, T>
-                               <<<grid_dims, block_dims>>>(output_ptr, input_ptr, outer_size, axis_size, inner_size);),
-                          WRAP(LOG(FATAL) << "Unsupported data type at " << __FILE__ << ":" << __LINE__),
-                          DataType::kFLOAT32, DataType::kBFLOAT16);
+    SoftmaxForwardKernel<BLOCK_SIZE, T>
+        <<<grid_dims, block_dims>>>(output_ptr, input_ptr, outer_size, axis_size, inner_size);
 }
 
 std::shared_ptr<Tensor> SoftmaxForward(const std::shared_ptr<Tensor> &input, int64_t dim) {
@@ -99,8 +95,9 @@ std::shared_ptr<Tensor> SoftmaxForward(const std::shared_ptr<Tensor> &input, int
 
     switch (dtype) {
         DISPATCH_CASE(WRAP(LaunchForward<256, float>(output, input, dim);), DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(LaunchForward<256, nv_bfloat16>(output, input, dim);), DataType::kBFLOAT16)
     default:
-        LOG(FATAL) << "CUDA softmax forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
+        LOG_LOC(FATAL, "CUDA softmax forward: 'Unsupported data type'");
     }
     return output;
 }
@@ -148,7 +145,7 @@ void LaunchBackward(const std::shared_ptr<Tensor> &grad_input, const std::shared
     for (int i = 0; i < dim; ++i) { outer_size *= output_dims[i]; };
     for (int i = dim + 1; i < output_dims.size(); ++i) { inner_size *= output_dims[i]; };
     if (axis_size == 0) {
-        LOG(INFO) << "CUDA softmax backward: 'output_dims[dim] == 0' at " << __FILE__ << ":" << __LINE__;
+        LOG_LOC(INFO, "CUDA softmax backward: 'output_dims[dim] == 0'");
         return;
     }
     if (outer_size == 0) {
@@ -160,17 +157,13 @@ void LaunchBackward(const std::shared_ptr<Tensor> &grad_input, const std::shared
     const T *output_ptr = static_cast<const T *>(output->DataPtr());
 
     if (BLOCK_SIZE > 1024) {
-        LOG(FATAL) << "CUDA softmax backward: 'BLOCK_SIZE used is larger than the max number of thread per block' at "
-                   << __FILE__ << ":" << __LINE__;
+        LOG_LOC(FATAL, "CUDA softmax backward: 'BLOCK_SIZE used is larger than the max number of thread per block'");
     }
     dim3 block(BLOCK_SIZE);
     dim3 grid(outer_size, inner_size);
 
-    DISPATCH_WITH_DEFAULT(grad_output->Dtype(),
-                          WRAP(SoftmaxBackwardKernel<BLOCK_SIZE, T><<<grid, block>>>(
-                                   grad_input_ptr, grad_output_ptr, output_ptr, outer_size, axis_size, inner_size);),
-                          WRAP(LOG(FATAL) << "Unsupported data type at " << __FILE__ << ":" << __LINE__),
-                          DataType::kFLOAT32, DataType::kBFLOAT16);
+    SoftmaxBackwardKernel<BLOCK_SIZE, T>
+        <<<grid, block>>>(grad_input_ptr, grad_output_ptr, output_ptr, outer_size, axis_size, inner_size);
 }
 
 std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_output,
@@ -185,8 +178,10 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
 
     switch (dtype) {
         DISPATCH_CASE(WRAP(LaunchBackward<256, float>(grad_input, grad_output, output, dim);), DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(LaunchBackward<256, nv_bfloat16>(grad_input, grad_output, output, dim);),
+                      DataType::kBFLOAT16)
     default:
-        LOG(FATAL) << "CUDA softmax backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
+        LOG_LOC(FATAL, "CUDA softmax backward: 'Unsupported data type'");
     }
 
     return grad_input;

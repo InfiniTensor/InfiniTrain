@@ -4,11 +4,11 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/dispatcher.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
-__global__ void SplitForwardKernel(const float *input, float *output, int64_t N, int64_t H_in, int64_t H_out, int64_t W,
+template <typename T>
+__global__ void SplitForwardKernel(const T *input, T *output, int64_t N, int64_t H_in, int64_t H_out, int64_t W,
                                    int64_t start_idx) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int total = N * H_out * W;
@@ -58,8 +58,9 @@ std::vector<std::shared_ptr<Tensor>> SplitForward(const std::shared_ptr<Tensor> 
     return outputs;
 }
 
-__global__ void SplitBackwardKernel(const float *const *grad_outputs, float *grad_input, int64_t N, int64_t H_in,
-                                    int64_t W, int64_t split_size, int64_t num_splits, const int64_t *H_outs) {
+template <typename T>
+__global__ void SplitBackwardKernel(const T *const *grad_outputs, T *grad_input, int64_t N, int64_t H_in, int64_t W,
+                                    int64_t split_size, int64_t num_splits, const int64_t *H_outs) {
     int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     int64_t total = N * H_in * W;
     if (idx >= total) {
@@ -82,38 +83,37 @@ __global__ void SplitBackwardKernel(const float *const *grad_outputs, float *gra
         return;
     }
 
-    const float *grad_output = grad_outputs[split_idx];
-    float value = grad_output[(n * H_out + local_h) * W + w];
+    const T *grad_output = grad_outputs[split_idx];
+    T value = grad_output[(n * H_out + local_h) * W + w];
     grad_input[(n * H_in + h) * W + w] = value;
 }
 
-std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, int64_t split_size, int dim,
-                                      const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_GT(split_size, 0);
-    CHECK_GE(dim, 0) << "Currently we do not support negative dimension";
-    CHECK_LT(dim, input_dims.size());
+template <typename T>
+std::shared_ptr<Tensor> LaunchSplitBackward(const std::vector<int64_t> &input_dims, int64_t split_size, int dim,
+                                            const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    auto dtype = grad_outputs[0]->Dtype();
+    auto grad_input = std::make_shared<Tensor>(input_dims, dtype, grad_outputs[0]->GetDevice());
+    grad_input->Fill<T>(0);
 
-    auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32, grad_outputs[0]->GetDevice());
-    grad_input->Fill<float>(0.0f);
     int64_t N = std::accumulate(input_dims.begin(), input_dims.begin() + dim, 1, std::multiplies<int64_t>());
     int64_t W = std::accumulate(input_dims.begin() + dim + 1, input_dims.end(), 1, std::multiplies<int64_t>());
     int64_t H_in = input_dims[dim];
     int64_t num_splits = grad_outputs.size();
 
     // init the array of grad_output ptrs
-    std::vector<const float *> host_grad_output_ptrs;
+    std::vector<const T *> host_grad_output_ptrs;
     for (const auto &grad_output : grad_outputs) {
-        host_grad_output_ptrs.push_back(static_cast<const float *>(grad_output->DataPtr()));
+        host_grad_output_ptrs.push_back(static_cast<const T *>(grad_output->DataPtr()));
     }
 
     void *device_ptr;
-    const float **device_grad_output_ptrs;
+    const T **device_grad_output_ptrs;
     int64_t *device_H_outs;
-    cudaMallocAsync(&device_ptr, (sizeof(float *) + sizeof(int64_t)) * num_splits, 0);
-    device_grad_output_ptrs = (const float **)(device_ptr);
+    cudaMallocAsync(&device_ptr, (sizeof(T *) + sizeof(int64_t)) * num_splits, 0);
+    device_grad_output_ptrs = (const T **)(device_ptr);
     device_H_outs = reinterpret_cast<int64_t *>(device_grad_output_ptrs + num_splits);
 
-    cudaMemcpyAsync(device_grad_output_ptrs, host_grad_output_ptrs.data(), sizeof(float *) * num_splits,
+    cudaMemcpyAsync(device_grad_output_ptrs, host_grad_output_ptrs.data(), sizeof(T *) * num_splits,
                     cudaMemcpyHostToDevice, 0);
 
     // init H_out for each split
@@ -127,11 +127,23 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
     SplitBackwardKernel<<<num_blocks, threads_per_block>>>(device_grad_output_ptrs,
-                                                           static_cast<float *>(grad_input->DataPtr()), N, H_in, W,
+                                                           static_cast<T *>(grad_input->DataPtr()), N, H_in, W,
                                                            split_size, num_splits, device_H_outs);
 
     cudaFreeAsync(device_ptr, 0);
     return grad_input;
+}
+
+std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, int64_t split_size, int dim,
+                                      const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    CHECK_GT(split_size, 0);
+    CHECK_GE(dim, 0) << "Currently we do not support negative dimension";
+    CHECK_LT(dim, input_dims.size());
+
+    return DispatchFunc<INFINI_ALL_TYPES>(
+        grad_outputs[0]->Dtype(),
+        [=]<typename T>() { return LaunchSplitBackward<T>(input_dims, split_size, dim, grad_outputs); },
+        "CUDA SplitBackward");
 }
 } // namespace infini_train::kernels::cuda
 

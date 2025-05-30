@@ -4,14 +4,18 @@
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 
-#include "infini_train/include/dispatcher.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
 void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
-    // FIXME(zbl): support other data types
-    thrust::device_ptr<float> dev_ptr(reinterpret_cast<float *>(tensor->DataPtr()));
-    thrust::fill(thrust::cuda::par.on(0), dev_ptr, dev_ptr + tensor->NumElements(), *(static_cast<float *>(value_ptr)));
+    DispatchFunc<INFINI_ALL_TYPES>(
+        tensor->Dtype(),
+        [=]<typename T>() {
+            thrust::device_ptr<T> dev_ptr(reinterpret_cast<T *>(tensor->DataPtr()));
+            thrust::fill(thrust::cuda::par.on(0), dev_ptr, dev_ptr + tensor->NumElements(),
+                         *(static_cast<T *>(value_ptr)));
+        },
+        "Fill");
 }
 } // namespace infini_train::kernels::cuda
 

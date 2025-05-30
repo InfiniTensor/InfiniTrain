@@ -1,10 +1,11 @@
 #include "glog/logging.h"
 
-#include "infini_train/include/dispatcher.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
-__global__ void SliceForwardKernel(const float *input, float *output, const int64_t *new_dims, const int64_t *starts,
+
+template <typename T>
+__global__ void SliceForwardKernel(const T *input, T *output, const int64_t *new_dims, const int64_t *starts,
                                    const int64_t *steps, const int64_t *in_strides, const int64_t *out_strides,
                                    int num_dims, int64_t total_elements) {
     int64_t out_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -36,9 +37,11 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
         new_dims.push_back((ends[i] - starts[i] + steps[i] - 1) / steps[i]);
     }
 
-    auto new_tensor = std::make_shared<Tensor>(new_dims, input->Dtype(), input->GetDevice());
+    auto dtype = input->Dtype();
+    auto new_tensor = std::make_shared<Tensor>(new_dims, dtype, input->GetDevice());
     // NOTE(zbl): must initialize with 0
-    new_tensor->Fill<float>(0.0f);
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype, [=]<typename T>() { new_tensor->Fill<T>(0); }, "CUDA SliceForward");
 
     std::vector<int64_t> src_strides(dims.size(), 0), dst_strides(new_dims.size(), 0);
     int64_t stride = 1;
@@ -74,18 +77,25 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
-    SliceForwardKernel<<<num_blocks, threads_per_block>>>(
-        static_cast<const float *>(input->DataPtr()), static_cast<float *>(new_tensor->DataPtr()), new_dims_dev,
-        starts_dev, steps_dev, input_strides_dev, output_strides_dev, num_dims, total_elements);
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            SliceForwardKernel<<<num_blocks, threads_per_block>>>(
+                static_cast<const T *>(input->DataPtr()), static_cast<T *>(new_tensor->DataPtr()), new_dims_dev,
+                starts_dev, steps_dev, input_strides_dev, output_strides_dev, num_dims, total_elements);
+        },
+        "CUDA SliceForward");
 
+    // NOTE(zbl): cudaFree() needs explicit sync when cudaMallocAsync() is called
     cudaFreeAsync(new_dims_dev, 0);
 
     return new_tensor;
 }
 
-__global__ void SliceBackwardKernel(const float *grad_output, float *grad_input, const int64_t *new_dims,
-                                    const int64_t *starts, const int64_t *steps, const int64_t *in_strides,
-                                    const int64_t *out_strides, int num_dims, int64_t total_elements) {
+template <typename T>
+__global__ void SliceBackwardKernel(const T *grad_output, T *grad_input, const int64_t *new_dims, const int64_t *starts,
+                                    const int64_t *steps, const int64_t *in_strides, const int64_t *out_strides,
+                                    int num_dims, int64_t total_elements) {
     int64_t out_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (out_idx >= total_elements) {
         return;
@@ -96,7 +106,7 @@ __global__ void SliceBackwardKernel(const float *grad_output, float *grad_input,
         int64_t idx = (out_idx / out_strides[i]) % new_dims[i];
         in_index += (starts[i] + idx * steps[i]) * in_strides[i];
     }
-    atomicAdd(&grad_input[in_index], grad_output[out_idx]);
+    grad_input[in_index] = grad_output[out_idx];
 }
 
 std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &input,
@@ -115,8 +125,10 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
         new_dims.push_back((ends[i] - starts[i] + steps[i] - 1) / steps[i]);
     }
 
-    auto grad_input = std::make_shared<Tensor>(input->Dims(), input->Dtype(), grad_output->GetDevice());
-    grad_input->Fill<float>(0.0);
+    auto dtype = input->Dtype();
+    auto grad_input = std::make_shared<Tensor>(input->Dims(), dtype, grad_output->GetDevice());
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype, [=]<typename T>() { grad_input->Fill<T>(0); }, "CUDA SliceBackward");
 
     std::vector<int64_t> src_strides(dims.size());
     int64_t stride = 1;
@@ -154,9 +166,14 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
-    SliceBackwardKernel<<<num_blocks, threads_per_block>>>(
-        static_cast<const float *>(grad_output->DataPtr()), static_cast<float *>(grad_input->DataPtr()), new_dims_dev,
-        starts_dev, steps_dev, input_strides_dev, output_strides_dev, num_dims, total_elements);
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            SliceBackwardKernel<<<num_blocks, threads_per_block>>>(
+                static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), new_dims_dev,
+                starts_dev, steps_dev, input_strides_dev, output_strides_dev, num_dims, total_elements);
+        },
+        "CUDA SliceBackward");
 
     cudaFreeAsync(new_dims_dev, 0);
 
