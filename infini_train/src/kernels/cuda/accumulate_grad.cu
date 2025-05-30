@@ -3,7 +3,8 @@
 
 namespace infini_train::kernels::cuda {
 
-__global__ void AccumulateGradKernel(const float *grad_ptr, float rate, float *tensor_ptr, size_t num_elements) {
+template <typename T>
+__global__ void AccumulateGradKernel(const T *grad_ptr, float rate, T *tensor_ptr, size_t num_elements) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < num_elements) {
         tensor_ptr[idx] += rate * grad_ptr[idx];

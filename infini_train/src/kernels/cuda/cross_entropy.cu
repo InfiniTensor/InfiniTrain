@@ -4,8 +4,6 @@
 #include <limits>
 #include <numeric>
 
-#include "glog/logging.h"
-
 #include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
@@ -62,6 +60,7 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
     CHECK_GE(input_dims.size(), 2);
     const int bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
     const int num_classes = *input_dims.rbegin();
+    auto dtype = target->Dtype();
 
     auto batched_output = std::make_shared<Tensor>(std::vector<int64_t>{bs}, DataType::kFLOAT32, input->GetDevice());
     const float *input_ptr = static_cast<const float *>(input->DataPtr());
@@ -71,28 +70,16 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
     int num_blocks = bs;
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(target->GetDevice());
-    // TODO(dcj): support multi datatypes later
-    switch (target->Dtype()) {
-        DISPATCH_CASE(WRAP({
-                          const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
-                          // FIXME(dcj): do reduce on GPU
-
-                          CrossEntropyForwardKernel<threads_per_block, uint8_t>
-                              <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                                  input_ptr, target_ptr, batched_loss_ptr, bs, num_classes);
-                      }),
-                      DataType::kUINT8)
-        DISPATCH_CASE(WRAP({
-                          const int64_t *target_ptr = static_cast<const int64_t *>(target->DataPtr());
-                          // FIXME(dcj): do reduce on GPU
-                          CrossEntropyForwardKernel<threads_per_block, int64_t>
-                              <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                                  input_ptr, target_ptr, batched_loss_ptr, bs, num_classes);
-                      }),
-                      DataType::kINT64)
-    default:
-        LOG(FATAL) << "Unsupported target data type: " << static_cast<int>(target->Dtype());
-    }
+    DispatchFunc<DataType::kUINT8, DataType::kINT64>(
+        dtype,
+        [=]<typename T>() {
+            const T *target_ptr = static_cast<const T *>(target->DataPtr());
+            // FIXME(dcj): do reduce on GPU
+            CrossEntropyForwardKernel<threads_per_block, T>
+                <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(input_ptr, target_ptr, batched_loss_ptr,
+                                                                              bs, num_classes);
+        },
+        "CUDA CrossEntropyForward");
     cudaDeviceSynchronize();
 
     auto loss_cpu = batched_output->To(DeviceManager::Instance()->GetDefaultDevice());
@@ -176,25 +163,15 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
     int num_blocks = bs;
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(target->GetDevice());
-    // TODO(dcj): support multi datatypes later
-    switch (target->Dtype()) {
-        DISPATCH_CASE(WRAP({
-                          const uint8_t *target_ptr = static_cast<const uint8_t *>(target->DataPtr());
-                          CrossEntropyBackwardKernel<uint8_t, threads_per_block>
-                              <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                                  input_ptr, input_grad_ptr, target_ptr, output_grad_ptr, bs, num_classes);
-                      }),
-                      DataType::kUINT8)
-        DISPATCH_CASE(WRAP({
-                          const int64_t *target_ptr = static_cast<const int64_t *>(target->DataPtr());
-                          CrossEntropyBackwardKernel<int64_t, threads_per_block>
-                              <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                                  input_ptr, input_grad_ptr, target_ptr, output_grad_ptr, bs, num_classes);
-                      }),
-                      DataType::kINT64)
-    default:
-        LOG(FATAL) << "Unsupported target data type: " << static_cast<int>(target->Dtype());
-    }
+    DispatchFunc<DataType::kUINT8, DataType::kINT64>(
+        target->Dtype(),
+        [=]<typename T>() {
+            const T *target_ptr = static_cast<const T *>(target->DataPtr());
+            CrossEntropyBackwardKernel<T, threads_per_block>
+                <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(input_ptr, input_grad_ptr, target_ptr, bs,
+                                                                              num_classes);
+        },
+        "CUDA CrossEntropyBackward");
 
     return {grad_input};
 }

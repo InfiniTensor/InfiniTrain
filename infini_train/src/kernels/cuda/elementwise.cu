@@ -1,7 +1,5 @@
 #include <cstddef>
 
-#include "glog/logging.h"
-
 #include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
@@ -37,11 +35,11 @@ template <typename T> __device__ __forceinline__ T pow(const T &x, const T &expo
 }
 
 template <typename T> __device__ __forceinline__ T log(const T &x) {
-    if constexpr (std::is_same_v<Tdata, nv_bfloat16>) {
+    if constexpr (std::is_same_v<T, nv_bfloat16>) {
         return __float2bfloat16(__logf(__bfloat162float(x)));
-    } else if constexpr (std::is_same_v<Tdata, half>) {
+    } else if constexpr (std::is_same_v<T, half>) {
         return __float2half(__logf(__half2float(x)));
-    } else if constexpr (std::is_same_v<Tdata, float>) {
+    } else if constexpr (std::is_same_v<T, float>) {
         return __logf(x);
     } else {
         return std::log(x);
@@ -315,7 +313,7 @@ template <typename Func> std::shared_ptr<Tensor> UnaryForward(const std::shared_
         DISPATCH_CASE(WRAP(LaunchForward<256, float>(unary_fn, output, input);), DataType::kFLOAT32)
         DISPATCH_CASE(WRAP(LaunchForward<256, nv_bfloat16>(unary_fn, output, input);), DataType::kBFLOAT16)
     default:
-        LOG(FATAL) << "CUDA unary forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
+        LOG_LOC(FATAL, "CUDA unary forward: 'Unsupported data type'");
     }
 
     return output;
@@ -338,7 +336,7 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
                       }),
                       DataType::kBFLOAT16)
     default:
-        LOG(FATAL) << "CUDA unary backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
+        LOG_LOC(FATAL, "CUDA unary backward: 'Unsupported data type'");
     }
 
     return output;
@@ -358,7 +356,7 @@ std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const st
         DISPATCH_CASE(WRAP(LaunchForward<256, float>(binary_fn, output, a, b);), DataType::kFLOAT32)
         DISPATCH_CASE(WRAP(LaunchForward<256, nv_bfloat16>(binary_fn, output, a, b);), DataType::kBFLOAT16)
     default:
-        LOG(FATAL) << "CUDA binary forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
+        LOG_LOC(FATAL, "CUDA binary forward: 'Unsupported data type'");
     }
 
     return output;
@@ -404,7 +402,7 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
                       }),
                       DataType::kBFLOAT16)
     default:
-        LOG(FATAL) << "CUDA binary backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
+        LOG_LOC(FATAL, "CUDA binary backward: 'Unsupported data type'");
     }
 
     return {grad_a, grad_b};
@@ -457,24 +455,21 @@ std::shared_ptr<Tensor> TanhBackward(const std::shared_ptr<Tensor> &grad_output,
 }
 
 std::shared_ptr<Tensor> PowForward(const std::shared_ptr<Tensor> &input, float scalar, bool scalar_is_base) {
-    DISPATCH(
-        input->Dtype(),
-        {
-            if (scalar_is_base) {
-                return UnaryForward(input, [scalar] __device__(auto x) { return pow(scalar, x); });
-            } else {
-                return UnaryForward(input, [scalar] __device__(auto x) { return pow(x, scalar); });
-            }
-        },
-        INFINI_ALL_FLOATING_TYPES)
-    return UnaryForward(input, [exponent] __device__(float x) { return powf(x, exponent); });
+    DISPATCH(input->Dtype(), WRAP({
+                 if (scalar_is_base) {
+                     return UnaryForward(input, [scalar] __device__(auto x) { return pow(scalar, x); });
+                 } else {
+                     return UnaryForward(input, [scalar] __device__(auto x) { return pow(x, scalar); });
+                 }
+             }),
+             INFINI_ALL_FLOATING_TYPES);
 }
 
 std::shared_ptr<Tensor> PowBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &input,
                                     float scalar, bool scalar_is_base) {
     DISPATCH(grad_output->Dtype(),
              return UnaryBackward(grad_output, input,
-                                  [scalar] __device__(auto x) {
+                                  [scalar, scalar_is_base] __device__(auto x) {
                                       if (scalar_is_base) {
                                           return mul(log(decltype(x){scalar}), pow(decltype(x){scalar}, x));
                                       } else {
@@ -483,6 +478,15 @@ std::shared_ptr<Tensor> PowBackward(const std::shared_ptr<Tensor> &grad_output, 
                                       }
                                   });
              , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> RsqrtForward(const std::shared_ptr<Tensor> &input) {
+    return UnaryForward(input, [] __device__(float x) { return 1.0f / std::sqrt(x); });
+}
+
+std::shared_ptr<Tensor> RsqrtBackward(const std::shared_ptr<Tensor> &grad_output,
+                                      const std::shared_ptr<Tensor> &input) {
+    return UnaryBackward(grad_output, input, [] __device__(float x) { return -0.5f / (x * std::sqrt(x)); });
 }
 
 std::shared_ptr<Tensor> EqualsScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
@@ -527,18 +531,6 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> SubBackward(const st
         [] __device__(float, float) { return -1.f; });
 }
 
-std::shared_ptr<Tensor> SubForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    return BinaryForward(a, b, [] __device__(float x, float y) { return x - y; });
-}
-
-std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> SubBackward(const std::shared_ptr<Tensor> &grad_output,
-                                                                        const std::vector<int64_t> &a_dims,
-                                                                        const std::vector<int64_t> &b_dims) {
-    return BinaryBackward(
-        grad_output, nullptr, nullptr, a_dims, b_dims, [] __device__(float, float) { return 1.f; },
-        [] __device__(float, float) { return -1.f; });
-}
-
 std::shared_ptr<Tensor> MulForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
     DISPATCH(a->Dtype(), return BinaryForward(a, b, [] __device__(auto x, auto y) { return mul(x, y); });
              , INFINI_ALL_FLOATING_TYPES)
@@ -552,7 +544,7 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> MulBackward(const st
                               grad_output, a, b, a->Dims(), b->Dims(), [] __device__(auto, auto y) { return y; },
                               [] __device__(auto x, auto) { return x; });
                           , WRAP({
-                              LOG(FATAL) << "Unsupported data type at " << __FILE__ << ":" << __LINE__;
+                              LOG_LOC(FATAL, "CUDA MulBackward: 'Unsupported data type'");
                               return {nullptr, nullptr};
                           }),
                           INFINI_ALL_FLOATING_TYPES)
@@ -567,18 +559,6 @@ std::shared_ptr<Tensor> MulScalarBackward(const std::shared_ptr<Tensor> &grad_ou
     DISPATCH(grad_output->Dtype(),
              return UnaryBackward(grad_output, nullptr, [scalar] __device__(auto x) { return decltype(x){scalar}; });
              , INFINI_ALL_FLOATING_TYPES)
-}
-
-std::shared_ptr<Tensor> DivForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    return BinaryForward(a, b, [] __device__(float x, float y) { return x / y; });
-}
-
-std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DivBackward(const std::shared_ptr<Tensor> &grad_output,
-                                                                        const std::shared_ptr<Tensor> &a,
-                                                                        const std::shared_ptr<Tensor> &b) {
-    return BinaryBackward(
-        grad_output, a, b, a->Dims(), b->Dims(), [] __device__(float, float y) { return 1 / y; },
-        [] __device__(float x, float y) { return -x / (y * y); });
 }
 
 std::shared_ptr<Tensor> DivForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {

@@ -101,20 +101,14 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto dtype = input->Dtype();
     auto grad_input = std::make_shared<Tensor>(input_dims, dtype, grad_output->GetDevice());
     auto grad_other = std::make_shared<Tensor>(other_dims, dtype, grad_output->GetDevice());
-    switch (dtype) {
-        DISPATCH_CASE(WRAP({
-                          grad_input->Fill<float>(0.0f);
-                          grad_other->Fill<float>(0.0f);
-                      }),
-                      DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP({
-                          grad_input->Fill<nv_bfloat16>(0);
-                          grad_other->Fill<nv_bfloat16>(0);
-                      }),
-                      DataType::kBFLOAT16)
-    default:
-        LOG(FATAL) << "CUDA Matmul backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
-    }
+
+    DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
+        dtype,
+        [=]<typename T>() {
+            grad_input->Fill<T>(0);
+            grad_other->Fill<T>(0);
+        },
+        "CUDA MatmulBackward");
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     const float alpha = 1.0f, beta = 0.0f;
@@ -226,26 +220,16 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
         int threads_per_block = 256;
         int num_blocks = (bs * out_features + threads_per_block - 1) / threads_per_block;
 
-        switch (input->Dtype()) {
-            DISPATCH_CASE(WRAP(BiasCopyKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                                   static_cast<float *>(output->DataPtr()), static_cast<const float *>(bias->DataPtr()),
-                                   bs, out_features);),
-                          DataType::kFLOAT32)
-            DISPATCH_CASE(WRAP(BiasCopyKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                                   static_cast<nv_bfloat16 *>(output->DataPtr()),
-                                   static_cast<const nv_bfloat16 *>(bias->DataPtr()), bs, out_features);),
-                          DataType::kBFLOAT16)
-        default:
-            LOG(FATAL) << "CUDA Linear forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
-        }
-
+        DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
+            input->Dtype(),
+            [=]<typename T>() {
+                BiasCopyKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                    static_cast<T *>(output->DataPtr()), static_cast<const T *>(bias->DataPtr()), bs, out_features);
+            },
+            "CUDA LinearForward");
     } else {
-        switch (input->Dtype()) {
-            DISPATCH_CASE(WRAP(output->Fill<float>(0.0f);), DataType::kFLOAT32)
-            DISPATCH_CASE(WRAP(output->Fill<nv_bfloat16>(0);), DataType::kBFLOAT16)
-        default:
-            LOG(FATAL) << "CUDA Linear forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
-        }
+        DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
+            input->Dtype(), [=]<typename T>() { output->Fill<T>(0); }, "CUDA LinearForward");
     }
 
     const float alpha = 1.0f;
@@ -298,7 +282,9 @@ __global__ void ReduceColumnsKernel(const T *__restrict__ input, T *__restrict__
     int row = blockIdx.x;
     float sum = 0.0f;
 
-    for (int col = threadIdx.x; col < num_cols; col += blockDim.x) { sum += input[row * num_cols + col]; }
+    for (int col = threadIdx.x; col < num_cols; col += blockDim.x) {
+        sum += common::cuda::Cast<float>(input[row * num_cols + col]);
+    }
 
     float reduced = BlockReduce(temp_storage).Sum(sum);
 
@@ -333,13 +319,8 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
             grad_bias->Fill<T>(zero_value);
         }
     };
-
-    switch (input->Dtype()) {
-        DISPATCH_CASE(WRAP(initialize_gradients(0.0f, DataType::kFLOAT32);), DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP(initialize_gradients(nv_bfloat16(0), DataType::kBFLOAT16);), DataType::kBFLOAT16)
-    default:
-        LOG(FATAL) << "CUDA Linear backward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
-    }
+    DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
+        input->Dtype(), [=]<typename T>() { initialize_gradients(T(0), input->Dtype()); }, "CUDA LinearBackward");
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     float alpha = 1.0f;
