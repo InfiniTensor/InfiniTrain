@@ -19,8 +19,8 @@
 #endif
 
 #include "example/common/tiny_shakespeare_dataset.h"
+#include "example/common/tokenizer.h"
 #include "example/gpt2/net.h"
-#include "example/gpt2/tokenizer.h"
 
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
@@ -206,7 +206,7 @@ int main(int argc, char *argv[]) {
     }
 #ifdef PROFILE_MODE
     Profiler::Instance().Report("gpt2.report", Profiler::SortBy::DeviceTimePercentage);
-    Profiler::Instance().PrintRecords("records.log");
+    Profiler::Instance().PrintRecords("gpt2.records.log");
 #endif
 
     gflags::ShutDownCommandLineFlags();
