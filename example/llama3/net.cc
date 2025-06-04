@@ -95,7 +95,8 @@ ApplyRotaryEmbedding(const std::shared_ptr<Tensor> &xq, const std::shared_ptr<Te
 }
 
 std::shared_ptr<Tensor> PrecomputeFreqsCis(int64_t dim, int64_t end, float theta = 10000.0f, bool use_scaled = false,
-                                           infini_train::Device device = infini_train::Device()) {
+                                           const infini_train::Device *device
+                                           = DeviceManager::Instance()->GetDefaultDevice()) {
     CHECK_GE(dim, 2) << "dim must be >= 2 for slicing";
     auto arange = nn::init::Arange(0, dim, DataType::kFLOAT32, device)->Slice(0, 0, dim, 2);
     auto freqs = 1.0f / nn::function::Pow(theta, arange / float(dim));
@@ -120,7 +121,7 @@ std::vector<std::shared_ptr<Tensor>> SwiGLU::Forward(const std::vector<std::shar
     return {x[0] * nn::function::Sigmoid(x[0])};
 }
 
-RMSNorm::RMSNorm(int64_t dim, float eps, infini_train::Device device) : eps_(eps) {
+RMSNorm::RMSNorm(int64_t dim, float eps, const infini_train::Device *device) : eps_(eps) {
     parameters_[kParamWeightName]
         = std::make_shared<Tensor>(std::vector<int64_t>{dim}, DataType::kFLOAT32, device)->RequiresGrad();
     nn::init::Ones(parameters_[kParamWeightName]);
@@ -140,8 +141,8 @@ CausalSelfAttention::CausalSelfAttention(const LLaMA3Config &config)
     CHECK_EQ(config.n_embd % config.n_head, 0);
 
     int64_t qkv_dim = (config.n_head + 2 * n_kv_head_) * head_dim_;
-    modules_[kCAttnLayerName] = std::make_unique<nn::Linear>(n_embd_, qkv_dim, false);
-    modules_[kCProjLayerName] = std::make_unique<nn::Linear>(n_embd_, n_embd_, false);
+    modules_[kCAttnLayerName] = std::make_shared<nn::Linear>(n_embd_, qkv_dim, false);
+    modules_[kCProjLayerName] = std::make_shared<nn::Linear>(n_embd_, n_embd_, false);
 }
 
 std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
@@ -223,10 +224,10 @@ MLP::MLP(const LLaMA3Config &config) {
     }
     hidden_dim_ = config.multiple_of * ((hidden_dim_ + config.multiple_of - 1) / config.multiple_of);
 
-    modules_[kCFcLayerName] = std::make_unique<nn::Linear>(config.n_embd, hidden_dim_, false);
-    modules_[kCFc2LayerName] = std::make_unique<nn::Linear>(config.n_embd, hidden_dim_, false);
-    modules_[kSiluLayerName] = std::make_unique<SwiGLU>();
-    modules_[kCProjLayerName] = std::make_unique<nn::Linear>(hidden_dim_, config.n_embd, false);
+    modules_[kCFcLayerName] = std::make_shared<nn::Linear>(config.n_embd, hidden_dim_, false);
+    modules_[kCFc2LayerName] = std::make_shared<nn::Linear>(config.n_embd, hidden_dim_, false);
+    modules_[kSiluLayerName] = std::make_shared<SwiGLU>();
+    modules_[kCProjLayerName] = std::make_shared<nn::Linear>(hidden_dim_, config.n_embd, false);
 }
 
 std::vector<std::shared_ptr<Tensor>> MLP::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
@@ -245,10 +246,10 @@ std::vector<std::shared_ptr<Tensor>> MLP::Forward(const std::vector<std::shared_
 }
 
 Block::Block(const LLaMA3Config &config) {
-    modules_[kLn1LayerName] = std::make_unique<RMSNorm>(config.n_embd, config.norm_eps);
-    modules_[kAttnLayerName] = std::make_unique<CausalSelfAttention>(config);
-    modules_[kLn2LayerName] = std::make_unique<RMSNorm>(config.n_embd, config.norm_eps);
-    modules_[kMlpLayerName] = std::make_unique<MLP>(config);
+    modules_[kLn1LayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
+    modules_[kAttnLayerName] = std::make_shared<CausalSelfAttention>(config);
+    modules_[kLn2LayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
+    modules_[kMlpLayerName] = std::make_shared<MLP>(config);
 }
 
 std::vector<std::shared_ptr<Tensor>> Block::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
@@ -271,24 +272,24 @@ std::vector<std::shared_ptr<Tensor>> Block::Forward(const std::vector<std::share
 
 LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
     {
-        std::unordered_map<std::string, std::unique_ptr<nn::Module>> transformer;
-        transformer[kWTELayerName] = std::make_unique<nn::Embedding>(config.vocab_size, config.n_embd);
+        std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
+        transformer[kWTELayerName] = std::make_shared<nn::Embedding>(config.vocab_size, config.n_embd);
         {
-            std::vector<std::unique_ptr<nn::Module>> h;
-            for (int64_t i = 0; i < config.n_layer; i++) { h.push_back(std::make_unique<Block>(config)); }
-            transformer[kHLayerName] = std::make_unique<nn::Sequential>(std::move(h));
+            std::vector<std::shared_ptr<nn::Module>> h;
+            for (int64_t i = 0; i < config.n_layer; i++) { h.push_back(std::make_shared<Block>(config)); }
+            transformer[kHLayerName] = std::make_shared<nn::Sequential>(std::move(h));
         }
-        transformer[kLnFLayerName] = std::make_unique<RMSNorm>(config.n_embd, config.norm_eps);
-        modules_[kTransformerLayerName] = std::make_unique<nn::ModuleDict>(std::move(transformer));
+        transformer[kLnFLayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
+        modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
     }
     // NOTE(zbl): weight-tying is possible but torch script did not do so
-    modules_[kLMHeadLayerName] = std::make_unique<nn::Linear>(config.n_embd, config.vocab_size, false);
+    modules_[kLMHeadLayerName] = std::make_shared<nn::Linear>(config.n_embd, config.vocab_size, false);
 }
 
 std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     // (bs, seq_len)
     auto &idx = x[0];
-    const auto device = idx->GetDevice();
+    const auto *device = idx->GetDevice();
     const auto t = idx->Dims()[1]; // seq_len
     CHECK_LE(t, config_.block_size) << "Cannot forward sequence of length " << t << ", block size is only "
                                     << config_.block_size;
@@ -326,7 +327,7 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
     return logits;
 }
 
-std::unique_ptr<LLaMA3> LLaMA3::FromPretrained(ModelType model_type) {
+std::shared_ptr<LLaMA3> LLaMA3::FromPretrained(ModelType model_type) {
     // TODO(zbl): implement this later
     LOG(FATAL) << "Not implemented yet";
     return nullptr;
@@ -350,7 +351,7 @@ constexpr int32_t kLLaMA3Magic = 20240803;
 constexpr int32_t kLLaMA3FP32Version = 3;
 } // namespace
 
-std::unique_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
+std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -394,7 +395,7 @@ std::unique_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     LOG(INFO) << "  version_major      = " << version_major;
     LOG(INFO) << "  version_minor      = " << version_minor;
 
-    auto llama3 = std::make_unique<LLaMA3>(LLaMA3Config{.block_size = block_size,
+    auto llama3 = std::make_shared<LLaMA3>(LLaMA3Config{.block_size = block_size,
                                                         .vocab_size = vocab_size,
                                                         .n_layer = n_layer,
                                                         .n_head = n_head,

@@ -57,17 +57,21 @@ std::shared_ptr<Tensor> StackForward(const std::vector<std::shared_ptr<Tensor>> 
     std::vector<const float *> host_input_ptrs;
     for (const auto &t : inputs) { host_input_ptrs.push_back(static_cast<const float *>(t->DataPtr())); }
 
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
+    const auto &stream = cuda_device->Stream();
+
     const float **device_input_ptrs;
-    cudaMallocAsync(&device_input_ptrs, sizeof(float *) * num_inputs, 0);
-    cudaMemcpyAsync(device_input_ptrs, host_input_ptrs.data(), sizeof(float *) * num_inputs, cudaMemcpyHostToDevice, 0);
+    cudaMallocAsync(&device_input_ptrs, sizeof(float *) * num_inputs, stream);
+    cudaMemcpyAsync(device_input_ptrs, host_input_ptrs.data(), sizeof(float *) * num_inputs, cudaMemcpyHostToDevice,
+                    stream);
 
     int64_t total = N * num_inputs * D;
     int threads_per_block = 256;
     int num_blocks = (total + threads_per_block - 1) / threads_per_block;
-    StackForwardKernel<<<num_blocks, threads_per_block>>>(device_input_ptrs, static_cast<float *>(output->DataPtr()), N,
-                                                          D, num_inputs);
+    StackForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
+        device_input_ptrs, static_cast<float *>(output->DataPtr()), N, D, num_inputs);
 
-    cudaFreeAsync(device_input_ptrs, 0);
+    cudaFreeAsync(device_input_ptrs, stream);
     return output;
 }
 
@@ -111,19 +115,21 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
     std::vector<float *> host_ptrs;
     for (auto &t : grads) { host_ptrs.push_back(static_cast<float *>(t->DataPtr())); }
 
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
+    const auto &stream = cuda_device->Stream();
+
     float **device_ptrs;
-    cudaMallocAsync(&device_ptrs, sizeof(float *) * num_inputs, 0);
-    cudaMemcpyAsync(device_ptrs, host_ptrs.data(), sizeof(float *) * num_inputs, cudaMemcpyHostToDevice, 0);
+    cudaMallocAsync(&device_ptrs, sizeof(float *) * num_inputs, stream);
+    cudaMemcpyAsync(device_ptrs, host_ptrs.data(), sizeof(float *) * num_inputs, cudaMemcpyHostToDevice, stream);
 
     int64_t total = N * num_inputs * D;
     int threads_per_block = 256;
     int num_blocks = (total + threads_per_block - 1) / threads_per_block;
 
-    StackBackwardKernel<<<num_blocks, threads_per_block>>>(static_cast<const float *>(grad_output->DataPtr()),
-                                                           device_ptrs, N, D, num_inputs);
+    StackBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
+        static_cast<const float *>(grad_output->DataPtr()), device_ptrs, N, D, num_inputs);
 
-    CUDA_CHECK(cudaGetLastError());
-    cudaFreeAsync(device_ptrs, 0);
+    cudaFreeAsync(device_ptrs, stream);
     return grads;
 }
 

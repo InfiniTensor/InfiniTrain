@@ -68,12 +68,9 @@ int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
 
     // select the device
-    Device device;
-    if (FLAGS_device == kDeviceCPU) {
-        device = Device(DeviceType::kCPU, 0);
-    } else {
-        device = Device(DeviceType::kCUDA, 0);
-    }
+    const Device *device
+        = DeviceManager::Instance()->GetDevice(FLAGS_device == kDeviceCPU ? DeviceType::kCPU : DeviceType::kCUDA, 0);
+    const Device *cpu_device = DeviceManager::Instance()->GetDefaultDevice();
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
     const auto tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length;
@@ -87,11 +84,11 @@ int main(int argc, char *argv[]) {
 
     // init the model, either from scratch or from OpenAI pretrained checkpoint
     LLaMA3Config model_config = LLaMA3Config();
-    std::unique_ptr<LLaMA3> model = nullptr;
+    std::shared_ptr<LLaMA3> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
         model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
     } else {
-        model = std::make_unique<LLaMA3>(model_config);
+        model = std::make_shared<LLaMA3>(model_config);
     }
     model->To(device);
     LOG(INFO) << "Model loaded to device.";
@@ -107,9 +104,9 @@ int main(int argc, char *argv[]) {
     //
     // main training loop
     //
-    std::unique_ptr<Tokenizer> tokenizer = nullptr;
+    std::shared_ptr<Tokenizer> tokenizer = nullptr;
     if (!FLAGS_tokenizer_bin.empty()) {
-        tokenizer = std::make_unique<Tokenizer>(FLAGS_tokenizer_bin);
+        tokenizer = std::make_shared<Tokenizer>(FLAGS_tokenizer_bin);
     }
 
     // TODO(dcj): support more complex optimizer later
@@ -166,7 +163,7 @@ int main(int argc, char *argv[]) {
             LOG(INFO) << "finish model forward, start loss forward";
             auto loss = loss_fn.Forward({logits, y})[0];
             LOG(INFO) << "finish loss forward";
-            auto loss_cpu = loss->To(Device());
+            auto loss_cpu = loss->To(cpu_device);
             lossf += static_cast<const float *>(loss_cpu.DataPtr())[0] / grad_accum_steps;
             LOG(INFO) << "start backward";
             loss->Backward();

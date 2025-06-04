@@ -19,7 +19,10 @@ void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const s
     int threads_per_block = 256;
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
 
-    AccumulateGradKernel<<<num_blocks, threads_per_block>>>(grad_ptr, rate, tensor_ptr, num_elements);
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+
+    AccumulateGradKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(grad_ptr, rate, tensor_ptr,
+                                                                                      num_elements);
 }
 
 __global__ void AdamAccumulateGradKernel(const float *grad_data, float *param_data, size_t num_elements, float *m_data,
@@ -53,9 +56,11 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
     int threads_per_block = 256;
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
 
-    AdamAccumulateGradKernel<<<num_blocks, threads_per_block>>>(grad_data, param_data, num_elements, m_data, v_data,
-                                                                learning_rate, beta1, beta2, eps, bias_correction_m,
-                                                                bias_correction_v);
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad->GetDevice());
+
+    AdamAccumulateGradKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+        grad_data, param_data, num_elements, m_data, v_data, learning_rate, beta1, beta2, eps, bias_correction_m,
+        bias_correction_v);
 }
 } // namespace infini_train::kernels::cuda
 

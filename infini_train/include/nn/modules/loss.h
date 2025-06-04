@@ -7,7 +7,7 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-class CrossEntropyLoss : public Module {
+class CrossEntropyLoss : public CloneableModule<CrossEntropyLoss> {
 public:
     CrossEntropyLoss() = default;
 

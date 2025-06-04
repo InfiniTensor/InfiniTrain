@@ -57,28 +57,32 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
 
     int64_t *new_dims_dev, *starts_dev, *steps_dev, *input_strides_dev, *output_strides_dev;
 
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    const auto &stream = cuda_device->Stream();
     cudaMallocAsync(&new_dims_dev,
-                    (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t), 0);
+                    (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
+                    stream);
     starts_dev = new_dims_dev + ends.size();
     steps_dev = starts_dev + starts.size();
     input_strides_dev = steps_dev + steps.size();
     output_strides_dev = input_strides_dev + dims.size();
 
-    cudaMemcpyAsync(new_dims_dev, new_dims.data(), ends.size() * sizeof(int64_t), cudaMemcpyHostToDevice, 0);
-    cudaMemcpyAsync(starts_dev, starts.data(), starts.size() * sizeof(int64_t), cudaMemcpyHostToDevice, 0);
-    cudaMemcpyAsync(steps_dev, steps.data(), steps.size() * sizeof(int64_t), cudaMemcpyHostToDevice, 0);
-    cudaMemcpyAsync(input_strides_dev, src_strides.data(), dims.size() * sizeof(int64_t), cudaMemcpyHostToDevice, 0);
+    cudaMemcpyAsync(new_dims_dev, new_dims.data(), ends.size() * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
+    cudaMemcpyAsync(starts_dev, starts.data(), starts.size() * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
+    cudaMemcpyAsync(steps_dev, steps.data(), steps.size() * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
+    cudaMemcpyAsync(input_strides_dev, src_strides.data(), dims.size() * sizeof(int64_t), cudaMemcpyHostToDevice,
+                    stream);
     cudaMemcpyAsync(output_strides_dev, dst_strides.data(), new_dims.size() * sizeof(int64_t), cudaMemcpyHostToDevice,
-                    0);
+                    stream);
 
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
-    SliceForwardKernel<<<num_blocks, threads_per_block>>>(
+    SliceForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
         static_cast<const float *>(input->DataPtr()), static_cast<float *>(new_tensor->DataPtr()), new_dims_dev,
         starts_dev, steps_dev, input_strides_dev, output_strides_dev, num_dims, total_elements);
 
-    cudaFreeAsync(new_dims_dev, 0);
+    cudaFreeAsync(new_dims_dev, stream);
 
     return new_tensor;
 }
@@ -137,28 +141,32 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     int dims_size = dims.size();
     int64_t *new_dims_dev, *starts_dev, *steps_dev, *input_strides_dev, *output_strides_dev;
 
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    const auto &stream = cuda_device->Stream();
     cudaMallocAsync(&new_dims_dev,
-                    (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t), 0);
+                    (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
+                    stream);
     starts_dev = new_dims_dev + ends.size();
     steps_dev = starts_dev + starts.size();
     input_strides_dev = steps_dev + steps.size();
     output_strides_dev = input_strides_dev + dims.size();
 
-    cudaMemcpyAsync(new_dims_dev, new_dims.data(), ends.size() * sizeof(int64_t), cudaMemcpyHostToDevice, 0);
-    cudaMemcpyAsync(starts_dev, starts.data(), starts.size() * sizeof(int64_t), cudaMemcpyHostToDevice, 0);
-    cudaMemcpyAsync(steps_dev, steps.data(), steps.size() * sizeof(int64_t), cudaMemcpyHostToDevice, 0);
-    cudaMemcpyAsync(input_strides_dev, src_strides.data(), dims.size() * sizeof(int64_t), cudaMemcpyHostToDevice, 0);
+    cudaMemcpyAsync(new_dims_dev, new_dims.data(), ends.size() * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
+    cudaMemcpyAsync(starts_dev, starts.data(), starts.size() * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
+    cudaMemcpyAsync(steps_dev, steps.data(), steps.size() * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
+    cudaMemcpyAsync(input_strides_dev, src_strides.data(), dims.size() * sizeof(int64_t), cudaMemcpyHostToDevice,
+                    stream);
     cudaMemcpyAsync(output_strides_dev, dst_strides.data(), new_dims.size() * sizeof(int64_t), cudaMemcpyHostToDevice,
-                    0);
+                    stream);
 
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
-    SliceBackwardKernel<<<num_blocks, threads_per_block>>>(
+    SliceBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
         static_cast<const float *>(grad_output->DataPtr()), static_cast<float *>(grad_input->DataPtr()), new_dims_dev,
         starts_dev, steps_dev, input_strides_dev, output_strides_dev, num_dims, total_elements);
 
-    cudaFreeAsync(new_dims_dev, 0);
+    cudaFreeAsync(new_dims_dev, stream);
 
     return grad_input;
 }

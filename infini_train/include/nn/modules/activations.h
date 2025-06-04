@@ -7,7 +7,7 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-class Sigmoid : public Module {
+class Sigmoid : public CloneableModule<Sigmoid> {
 public:
     Sigmoid() = default;
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;

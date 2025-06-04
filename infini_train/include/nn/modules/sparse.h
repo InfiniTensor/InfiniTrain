@@ -7,13 +7,13 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-class Embedding : public Module {
+class Embedding : public CloneableModule<Embedding> {
 public:
     static constexpr char kType[] = "Embedding";
 
     static constexpr char kParamWeightName[] = "weight";
 
-    Embedding(int num_embeddings, int embedding_dim, Device device = Device());
+    Embedding(int num_embeddings, int embedding_dim, const Device *device = nullptr);
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
 private:

@@ -34,6 +34,7 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     CHECK(input->Dtype() == DataType::kINT64);
     CHECK_EQ(weight->Dims().size(), 2);
 
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     const int batch_size = input->Dims().size() == 2 ? input->Dims()[0] : 1;
     const int max_seqlen = input->Dims().size() == 2 ? input->Dims()[1] : input->Dims()[0];
     const int embed_dim = weight->Dims()[1];
@@ -43,7 +44,7 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32, input->GetDevice());
     int threads_per_block = 256;
     int num_blocks = (batch_size * max_seqlen * embed_dim + threads_per_block - 1) / threads_per_block;
-    EmbeddingForwardKernel<<<num_blocks, threads_per_block>>>(
+    EmbeddingForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
         static_cast<const int64_t *>(input->DataPtr()), static_cast<float *>(output->DataPtr()),
         static_cast<const float *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim);
     return output;
@@ -70,6 +71,7 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
                                           const std::shared_ptr<Tensor> &grad_output) {
     CHECK(input->Dtype() == DataType::kINT64);
     CHECK_EQ(weight_dims.size(), 2);
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     const int embedding_dim = weight_dims[1];
     CHECK_EQ(input->Dims().size() + 1, grad_output->Dims().size());
     for (int idx = 0; idx < input->Dims().size(); ++idx) { CHECK_EQ(input->Dims()[idx], grad_output->Dims()[idx]); }
@@ -81,7 +83,7 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
     const int threads_per_block = 256;
     const int num_blocks = (num_tokens + threads_per_block - 1) / threads_per_block;
 
-    EmbeddingBackwardKernel<<<num_blocks, threads_per_block>>>(
+    EmbeddingBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
         static_cast<const int64_t *>(input->DataPtr()), static_cast<const float *>(grad_output->DataPtr()),
         static_cast<float *>(grad_weight->DataPtr()), num_tokens, embedding_dim);
     return grad_weight;

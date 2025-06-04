@@ -1,40 +1,19 @@
 #include "infini_train/include/autograd/function.h"
 
 #include "glog/logging.h"
+#include <cuda_runtime.h>
 
-#include "infini_train/include/dispatcher.h"
+#include "infini_train/include/autograd/accumulate.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
-namespace {
-class AccumulateGrad final : public Function {
-public:
-    explicit AccumulateGrad(std::shared_ptr<Tensor> grad) : grad_(grad) {}
-
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &) override {
-        LOG(FATAL) << "AccumulateGrad::Forward shall not be called directly!";
-        return {};
-    }
-
-    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &) override {
-        LOG(FATAL) << "AccumulateGrad::Backward shall not be called directly!";
-        return {};
-    }
-
-    void BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int) override {
-        if (grad_output) {
-            auto device = grad_->GetDevice().Type();
-            auto kernel = Dispatcher::Instance().GetKernel({device, "AccumulateGrad"});
-            kernel.Call<void>(grad_output, 1.0f, grad_);
-        }
-    }
-
-private:
-    std::shared_ptr<Tensor> grad_ = nullptr;
-};
-} // namespace
 
 std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_GE(input_tensors.size(), 1);
+    const auto *device = input_tensors[0]->GetDevice();
+    device->SetDevice();
+
     auto output_tensors = Forward(input_tensors);
     SetupContext(input_tensors, output_tensors);
 
@@ -67,6 +46,9 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
 }
 
 void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int grad_output_idx) {
+    const auto *device = grad_output->GetDevice();
+    device->SetDevice();
+
     if (!grad_outputs_[grad_output_idx]) {
         grad_outputs_[grad_output_idx] = grad_output;
         ++grad_outputs_reached_;

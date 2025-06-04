@@ -7,7 +7,7 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-Sequential::Sequential(std::vector<std::unique_ptr<Module>> &&layers) {
+Sequential::Sequential(std::vector<std::shared_ptr<Module>> &&layers) {
     int idx = 0;
     for (auto &layer : layers) {
         modules_[std::to_string(idx)] = std::move(layer);
@@ -21,7 +21,7 @@ std::vector<std::shared_ptr<Tensor>> Sequential::Forward(const std::vector<std::
     return x;
 }
 
-ModuleDict::ModuleDict(std::unordered_map<std::string, std::unique_ptr<Module>> &&modules) {
+ModuleDict::ModuleDict(std::unordered_map<std::string, std::shared_ptr<Module>> modules) {
     for (auto &[name, layer] : modules) { modules_[name] = std::move(layer); }
 }
 

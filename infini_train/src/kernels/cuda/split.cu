@@ -8,7 +8,8 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
-__global__ void SplitForwardKernel(const float *input, float *output, int64_t N, int64_t H_in, int64_t H_out, int64_t W,
+template <typename T>
+__global__ void SplitForwardKernel(const T *input, T *output, int64_t N, int64_t H_in, int64_t H_out, int64_t W,
                                    int64_t start_idx) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int total = N * H_out * W;
@@ -43,23 +44,37 @@ std::vector<std::shared_ptr<Tensor>> SplitForward(const std::shared_ptr<Tensor> 
         const int64_t H_out = std::min(split_size, H_in - start);
         output_dims[dim] = H_out;
 
-        auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32, input->GetDevice());
+        auto output = std::make_shared<Tensor>(output_dims, input->Dtype(), input->GetDevice());
 
         int64_t total = N * H_out * W;
         int threads_per_block = 256;
         int num_blocks = (total + threads_per_block - 1) / threads_per_block;
 
-        SplitForwardKernel<<<num_blocks, threads_per_block>>>(static_cast<const float *>(input->DataPtr()),
-                                                              static_cast<float *>(output->DataPtr()), N, H_in, H_out,
-                                                              W, start);
+        const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+        switch (input->Dtype()) {
+        case DataType::kFLOAT32:
+            SplitForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                static_cast<const float *>(input->DataPtr()), static_cast<float *>(output->DataPtr()), N, H_in, H_out,
+                W, start);
+            break;
+        case DataType::kINT64:
+            SplitForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                static_cast<const int64_t *>(input->DataPtr()), static_cast<int64_t *>(output->DataPtr()), N, H_in,
+                H_out, W, start);
+            break;
+        default:
+            LOG(FATAL) << "Unsupported data type";
+            break;
+        }
         outputs.push_back(std::move(output));
     }
 
     return outputs;
 }
 
-__global__ void SplitBackwardKernel(const float *const *grad_outputs, float *grad_input, int64_t N, int64_t H_in,
-                                    int64_t W, int64_t split_size, int64_t num_splits, const int64_t *H_outs) {
+template <typename T>
+__global__ void SplitBackwardKernel(const T *const *grad_outputs, T *grad_input, int64_t N, int64_t H_in, int64_t W,
+                                    int64_t split_size, int64_t num_splits, const int64_t *H_outs) {
     int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     int64_t total = N * H_in * W;
     if (idx >= total) {
@@ -82,8 +97,8 @@ __global__ void SplitBackwardKernel(const float *const *grad_outputs, float *gra
         return;
     }
 
-    const float *grad_output = grad_outputs[split_idx];
-    float value = grad_output[(n * H_out + local_h) * W + w];
+    const T *grad_output = grad_outputs[split_idx];
+    T value = grad_output[(n * H_out + local_h) * W + w];
     grad_input[(n * H_in + h) * W + w] = value;
 }
 
@@ -93,44 +108,97 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
     CHECK_GE(dim, 0) << "Currently we do not support negative dimension";
     CHECK_LT(dim, input_dims.size());
 
-    auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32, grad_outputs[0]->GetDevice());
-    grad_input->Fill<float>(0.0f);
+    const auto &grad = grad_outputs[0];
+    auto grad_input = std::make_shared<Tensor>(input_dims, grad->Dtype(), grad->GetDevice());
+    switch (grad->Dtype()) {
+    case DataType::kFLOAT32:
+        grad_input->Fill<float>(0.0f);
+        break;
+    case DataType::kINT64:
+        grad_input->Fill<int64_t>(0);
+        break;
+    default:
+        LOG(FATAL) << "Unsupported data type";
+        break;
+    }
     int64_t N = std::accumulate(input_dims.begin(), input_dims.begin() + dim, 1, std::multiplies<int64_t>());
     int64_t W = std::accumulate(input_dims.begin() + dim + 1, input_dims.end(), 1, std::multiplies<int64_t>());
     int64_t H_in = input_dims[dim];
     int64_t num_splits = grad_outputs.size();
 
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad->GetDevice());
+    const auto &stream = cuda_device->Stream();
     // init the array of grad_output ptrs
-    std::vector<const float *> host_grad_output_ptrs;
-    for (const auto &grad_output : grad_outputs) {
-        host_grad_output_ptrs.push_back(static_cast<const float *>(grad_output->DataPtr()));
+    switch (grad->Dtype()) {
+    case DataType::kFLOAT32: {
+        std::vector<const float *> host_grad_output_ptrs;
+        for (const auto &grad_output : grad_outputs) {
+            host_grad_output_ptrs.push_back(static_cast<const float *>(grad_output->DataPtr()));
+        }
+        void *device_ptr;
+        const float **device_grad_output_ptrs;
+        int64_t *device_H_outs;
+        cudaMallocAsync(&device_ptr, (sizeof(float *) + sizeof(int64_t)) * num_splits, stream);
+        device_grad_output_ptrs = (const float **)(device_ptr);
+        device_H_outs = reinterpret_cast<int64_t *>(device_grad_output_ptrs + num_splits);
+
+        cudaMemcpyAsync(device_grad_output_ptrs, host_grad_output_ptrs.data(), sizeof(float *) * num_splits,
+                        cudaMemcpyHostToDevice, stream);
+
+        // init H_out for each split
+        std::vector<int64_t> H_outs(num_splits);
+        for (int i = 0; i < num_splits; ++i) { H_outs[i] = std::min(split_size, H_in - i * split_size); }
+
+        cudaMemcpyAsync(device_H_outs, H_outs.data(), sizeof(int64_t) * num_splits, cudaMemcpyHostToDevice, stream);
+
+        int64_t total_elements = N * H_in * W;
+        int threads_per_block = 256;
+        int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
+
+        SplitBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
+            device_grad_output_ptrs, static_cast<float *>(grad_input->DataPtr()), N, H_in, W, split_size, num_splits,
+            device_H_outs);
+
+        cudaFreeAsync(device_ptr, stream);
+        break;
+    }
+    case DataType::kINT64: {
+        std::vector<const int64_t *> host_grad_output_ptrs;
+        for (const auto &grad_output : grad_outputs) {
+            host_grad_output_ptrs.push_back(static_cast<const int64_t *>(grad_output->DataPtr()));
+        }
+        void *device_ptr;
+        const int64_t **device_grad_output_ptrs;
+        int64_t *device_H_outs;
+        cudaMallocAsync(&device_ptr, (sizeof(int64_t *) + sizeof(int64_t)) * num_splits, stream);
+        device_grad_output_ptrs = (const int64_t **)(device_ptr);
+        device_H_outs = reinterpret_cast<int64_t *>(device_grad_output_ptrs + num_splits);
+
+        cudaMemcpyAsync(device_grad_output_ptrs, host_grad_output_ptrs.data(), sizeof(int64_t *) * num_splits,
+                        cudaMemcpyHostToDevice, stream);
+
+        // init H_out for each split
+        std::vector<int64_t> H_outs(num_splits);
+        for (int i = 0; i < num_splits; ++i) { H_outs[i] = std::min(split_size, H_in - i * split_size); }
+
+        cudaMemcpyAsync(device_H_outs, H_outs.data(), sizeof(int64_t) * num_splits, cudaMemcpyHostToDevice, stream);
+
+        int64_t total_elements = N * H_in * W;
+        int threads_per_block = 256;
+        int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
+
+        SplitBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
+            device_grad_output_ptrs, static_cast<int64_t *>(grad_input->DataPtr()), N, H_in, W, split_size, num_splits,
+            device_H_outs);
+
+        cudaFreeAsync(device_ptr, stream);
+        break;
+    }
+    default:
+        LOG(FATAL) << "Unsupported data type";
+        break;
     }
 
-    void *device_ptr;
-    const float **device_grad_output_ptrs;
-    int64_t *device_H_outs;
-    cudaMallocAsync(&device_ptr, (sizeof(float *) + sizeof(int64_t)) * num_splits, 0);
-    device_grad_output_ptrs = (const float **)(device_ptr);
-    device_H_outs = reinterpret_cast<int64_t *>(device_grad_output_ptrs + num_splits);
-
-    cudaMemcpyAsync(device_grad_output_ptrs, host_grad_output_ptrs.data(), sizeof(float *) * num_splits,
-                    cudaMemcpyHostToDevice, 0);
-
-    // init H_out for each split
-    std::vector<int64_t> H_outs(num_splits);
-    for (int i = 0; i < num_splits; ++i) { H_outs[i] = std::min(split_size, H_in - i * split_size); }
-
-    cudaMemcpyAsync(device_H_outs, H_outs.data(), sizeof(int64_t) * num_splits, cudaMemcpyHostToDevice, 0);
-
-    int64_t total_elements = N * H_in * W;
-    int threads_per_block = 256;
-    int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
-
-    SplitBackwardKernel<<<num_blocks, threads_per_block>>>(device_grad_output_ptrs,
-                                                           static_cast<float *>(grad_input->DataPtr()), N, H_in, W,
-                                                           split_size, num_splits, device_H_outs);
-
-    cudaFreeAsync(device_ptr, 0);
     return grad_input;
 }
 } // namespace infini_train::kernels::cuda

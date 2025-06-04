@@ -54,15 +54,16 @@ NewGELU::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
 CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
     : config_(config), n_head_(config.n_head), n_embd_(config.n_embd) {
     CHECK_EQ(config.n_embd % config.n_head, 0);
-    modules_[kCAttnLayerName] = std::make_unique<GPT2Linear>(config.n_embd, config.n_embd * 3);
-    modules_[kCProjLayerName] = std::make_unique<GPT2Linear>(config.n_embd, config.n_embd, true, false);
+    modules_[kCAttnLayerName] = std::make_shared<GPT2Linear>(config.n_embd, config.n_embd * 3);
+    modules_[kCProjLayerName] = std::make_shared<GPT2Linear>(config.n_embd, config.n_embd, true, false);
     // TODO(dcj): in torch, here need register buffer for bias
     // (1, 1, block_size, block_size)
     bias_ = nn::function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
                 ->View({1, 1, config_.block_size, config_.block_size});
 }
 
-void CausalSelfAttention::To(infini_train::Device device) {
+// FIXME(dcj): set bias_ as buffer in module
+void CausalSelfAttention::To(const infini_train::Device *device) {
     nn::Module::To(device);
     bias_ = std::make_shared<infini_train::Tensor>(bias_->To(device));
 }
@@ -117,9 +118,9 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
 }
 
 MLP::MLP(const GPT2Config &config) {
-    modules_[kCFclayerName] = std::make_unique<GPT2Linear>(config.n_embd, config.n_embd * 4);
-    modules_[kGeluLayerName] = std::make_unique<NewGELU>();
-    modules_[kCProjLayerName] = std::make_unique<GPT2Linear>(config.n_embd * 4, config.n_embd, true, false);
+    modules_[kCFclayerName] = std::make_shared<GPT2Linear>(config.n_embd, config.n_embd * 4);
+    modules_[kGeluLayerName] = std::make_shared<NewGELU>();
+    modules_[kCProjLayerName] = std::make_shared<GPT2Linear>(config.n_embd * 4, config.n_embd, true, false);
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
@@ -135,10 +136,10 @@ MLP::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
 }
 
 Block::Block(const GPT2Config &config) {
-    modules_[kLn1LayerName] = std::make_unique<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
-    modules_[kAttnLayerName] = std::make_unique<CausalSelfAttention>(config);
-    modules_[kLn2LayerName] = std::make_unique<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
-    modules_[kMlpLayerName] = std::make_unique<MLP>(config);
+    modules_[kLn1LayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
+    modules_[kAttnLayerName] = std::make_shared<CausalSelfAttention>(config);
+    modules_[kLn2LayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
+    modules_[kMlpLayerName] = std::make_shared<MLP>(config);
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
@@ -155,25 +156,24 @@ Block::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
 
 GPT2::GPT2(const GPT2Config &config) : config_(config) {
     {
-        std::unordered_map<std::string, std::unique_ptr<nn::Module>> transformer;
-        transformer[kWTELayerName] = std::make_unique<nn::Embedding>(config.vocab_size, config.n_embd);
-        transformer[kWPELayerName] = std::make_unique<nn::Embedding>(config.block_size, config.n_embd);
+        std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
+        transformer[kWTELayerName] = std::make_shared<nn::Embedding>(config.vocab_size, config.n_embd);
+        transformer[kWPELayerName] = std::make_shared<nn::Embedding>(config.block_size, config.n_embd);
         {
-            std::vector<std::unique_ptr<nn::Module>> h;
-            for (int64_t i = 0; i < config.n_layer; i++) { h.push_back(std::make_unique<Block>(config)); }
-            transformer[kHLayerName] = std::make_unique<nn::Sequential>(std::move(h));
+            std::vector<std::shared_ptr<nn::Module>> h;
+            for (int64_t i = 0; i < config.n_layer; i++) { h.push_back(std::make_shared<Block>(config)); }
+            transformer[kHLayerName] = std::make_shared<nn::Sequential>(std::move(h));
         }
-        transformer[kLnFLayerName] = std::make_unique<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
-        modules_[kTransformerLayerName] = std::make_unique<nn::ModuleDict>(std::move(transformer));
+        transformer[kLnFLayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
+        modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
     }
     // don't init this one, we will tie weights
-    modules_[kLMHeadLayerName] = std::make_unique<GPT2Linear>(config.n_embd, config.vocab_size, false, true);
+    modules_[kLMHeadLayerName] = std::make_shared<GPT2Linear>(config.n_embd, config.vocab_size, false, true);
     // https://paperswithcode.com/method/weight-tying
     *mutable_module(kTransformerLayerName)
          ->mutable_module(kWTELayerName)
          ->mutable_parameter(GPT2Linear::kParamWeightName)
         = module(kLMHeadLayerName).parameter(GPT2Linear::kParamWeightName);
-
     // init all weights
     Apply([&](Module *module) {
         if (module->type() == nn::Linear::kType) {
@@ -224,7 +224,7 @@ GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     return logits;
 }
 
-std::unique_ptr<GPT2> GPT2::FromPretrained(ModelType model_type) {
+std::shared_ptr<GPT2> GPT2::FromPretrained(ModelType model_type) {
     // TODO(dcj): implement this later
     LOG(FATAL) << "Not implemented yet";
     return nullptr;
@@ -248,7 +248,7 @@ constexpr int32_t kHeaderMagic = 20240326;
 constexpr int32_t kHeaderFP32Version = 3;
 } // namespace
 
-std::unique_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
+std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -266,7 +266,7 @@ std::unique_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     const auto n_layer = BytesToType<uint32_t>(header, 16);
     const auto n_head = BytesToType<uint32_t>(header, 20);
     const auto n_embd = BytesToType<uint32_t>(header, 24);
-    auto gpt2 = std::make_unique<GPT2>(GPT2Config{
+    auto gpt2 = std::make_shared<GPT2>(GPT2Config{
         .block_size = block_size, .vocab_size = vocab_size, .n_layer = n_layer, .n_head = n_head, .n_embd = n_embd});
 
     const auto padded_vocab_size = BytesToType<uint32_t>(header, 28);

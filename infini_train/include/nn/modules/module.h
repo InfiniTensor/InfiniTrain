@@ -3,18 +3,32 @@
 #include <functional>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
+
+#include "glog/logging.h"
 
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-class Module {
+class Module;
+
+// TODO(dcj): remove this forward declaration after using pimpl to hide Module implementation details
+namespace parallel {
+std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &network,
+                                               const std::vector<const Device *> &device_ids);
+}
+
+class Module : public std::enable_shared_from_this<Module> {
 public:
     static constexpr char kUndefinedType[] = "Undefined";
 
-    Module() : type_(kUndefinedType) {}
-    explicit Module(const std::string &type) : type_(type) {}
+    Module();
+
+    explicit Module(const std::string &type);
+
+    Module(const Module &) = default;
 
     virtual ~Module(){};
 
@@ -25,22 +39,44 @@ public:
     std::shared_ptr<Tensor> *mutable_parameter(const std::string &name);
     const std::shared_ptr<Tensor> &parameter(const std::string &name) const;
 
-    std::vector<Module *> modules() const;
-    Module *mutable_module(const std::string &name);
+    std::vector<std::shared_ptr<Module>> modules();
+    std::shared_ptr<Module> mutable_module(const std::string &name);
     const Module &module(const std::string &name) const;
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
 
-    virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) = 0;
+    virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+        LOG(FATAL) << "Forward function not implemented for this module";
+        return {};
+    }
 
-    virtual void To(Device device);
+    virtual void To(const Device *device);
 
     void Apply(std::function<void(Module *)> fn);
 
+    virtual std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const;
+
 protected:
-    Device device_; // CPU by default
+    const Device *device_ = nullptr;
     const std::string type_ = kUndefinedType;
-    std::unordered_map<std::string, std::unique_ptr<Module>> modules_;
+    std::unordered_map<std::string, std::shared_ptr<Module>> modules_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;
+
+private:
+    std::unordered_map<std::string, std::shared_ptr<Module>>
+    NamedModules(const std::string &prefix = "", bool remove_duplicate = true,
+                 std::unordered_set<Module *> *memory = nullptr);
+
+    friend std::vector<std::shared_ptr<Module>> parallel::Replicate(const std::shared_ptr<Module> &network,
+                                                                    const std::vector<const Device *> &device_ids);
+};
+
+template <typename Derived> class CloneableModule : public Module {
+public:
+    CloneableModule() = default;
+    explicit CloneableModule(const std::string &type) : Module(type) {}
+    std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const override {
+        return std::make_shared<Derived>(static_cast<const Derived &>(*this));
+    }
 };
 } // namespace infini_train::nn

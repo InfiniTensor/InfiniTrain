@@ -42,6 +42,7 @@ std::shared_ptr<Tensor> OuterForward(const std::shared_ptr<Tensor> &input, const
 
     auto output = std::make_shared<Tensor>(std::vector<int64_t>{M, N}, DataType::kFLOAT32, input->GetDevice());
 
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     // reinterpret input: [M] as column vector [M, 1]
     // reinterpret other: [N] as row vector [1, N]
     // output[M, N] = input[M, 1] * other.T[1, N]
@@ -50,6 +51,7 @@ std::shared_ptr<Tensor> OuterForward(const std::shared_ptr<Tensor> &input, const
     float beta = 0.0f;
     cublasHandle_t handle;
     CUBLAS_CHECK(cublasCreate(&handle));
+    CUBLAS_CHECK(cublasSetStream(handle, cuda_device->Stream()));
 
     CUBLAS_CHECK(cublasSgemm(
         handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, 1, &alpha, static_cast<const float *>(other->DataPtr()), N,
@@ -78,10 +80,12 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
     grad_input->Fill<float>(0.0f);
     grad_other->Fill<float>(0.0f);
 
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     float alpha = 1.0f;
     float beta = 0.0f;
     cublasHandle_t handle;
     CUBLAS_CHECK(cublasCreate(&handle));
+    CUBLAS_CHECK(cublasSetStream(handle, cuda_device->Stream()));
 
     // grad_input[M, 1] = grad_output[M, N] × other[N, 1]
     // y = grad_input[M]

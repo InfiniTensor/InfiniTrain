@@ -50,7 +50,8 @@ class RMSNorm : public infini_train::nn::Module {
 public:
     static constexpr char kParamWeightName[] = "weight";
 
-    explicit RMSNorm(int64_t dim, float eps = 1e-6f, infini_train::Device device = infini_train::Device());
+    explicit RMSNorm(int64_t dim, float eps = 1e-6f,
+                     const infini_train::Device *device = infini_train::DeviceManager::Instance()->GetDefaultDevice());
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
@@ -129,8 +130,8 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    static std::unique_ptr<LLaMA3> FromPretrained(ModelType model_type);
-    static std::unique_ptr<LLaMA3> FromLLMC(const std::string &filepath);
+    static std::shared_ptr<LLaMA3> FromPretrained(ModelType model_type);
+    static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath);
 
 private:
     LLaMA3Config config_;
