@@ -106,15 +106,6 @@ Tokenizer::Tokenizer(const std::string &filepath) {
     }
 }
 
-std::string ReplaceAll(std::string s, const std::string &from, const std::string &to) {
-    size_t pos = 0;
-    while ((pos = s.find(from, pos)) != std::string::npos) {
-        s.replace(pos, from.size(), to);
-        pos += to.size();
-    }
-    return s;
-}
-
 std::string Tokenizer::Decode(uint32_t token_id) const {
     if (token_id >= vocab_size_) {
         return "[INVALID_TOKEN]";
