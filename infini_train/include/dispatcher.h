@@ -203,6 +203,16 @@
 
 namespace infini_train {
 
+template <DataType... DTypes> struct DataTypeList {};
+
+template <DataType Dtype, typename List> struct IsDataTypeInList;
+
+template <DataType Dtype, DataType... DTypes>
+struct IsDataTypeInList<Dtype, DataTypeList<DTypes...>> : std::disjunction<std::bool_constant<Dtype == DTypes>...> {};
+
+template <DataType Dtype, typename List>
+inline constexpr bool IsDataTypeInList_v = IsDataTypeInList<Dtype, List>::value;
+
 // function to check if a type is in a list of types
 template <typename T, typename... Ts> inline constexpr bool IsTypeInList = (std::is_same_v<T, Ts> || ...);
 
@@ -258,6 +268,113 @@ auto DispatchFunc(DataType dtype, Functor &&func, std::string_view context_ident
     LOG_UNSUPPORTED_DTYPE(dtype, context_identifier);
     // prevent the compiler warning about control reaching the end of non-void function
     throw std::runtime_error("Unsupported data type");
+}
+
+// Recursive multi-type dispatcher
+namespace {
+
+/**
+ * @brief Responsible for resolving a list of data types and invoking a functor with the corresponding C++ types.
+ *
+ * @tparam index            Current index in the `dtypes` vector.
+ * @tparam AllowedListTuple Tuple of allowed `DataType` sets per dispatch level.
+ * @tparam ResolvedTypes    Accumulated resolved C++ types.
+ */
+template <size_t index, typename AllowedListTuple, typename... ResolvedTypes> struct DtypeDispatcher {
+
+    /**
+     * @brief Dispatches based on runtime data types and invokes the functor with resolved C++ types.
+     *
+     * Recursively matches each `DataType` in `dtypes` against the corresponding allowed list in
+     * `AllowedListTuple`. For each match, maps the `DataType` to a C++ type using `TypeMap_t`.
+     * Once all types are resolved, invokes the functor.
+     *
+     * @param dtypes              Vector of runtime data types to dispatch on.
+     * @param func                Functor to invoke with resolved template types.
+     * @param context_identifier  String used for logging or error context.
+     * @param args                Additional arguments forwarded to the functor.
+     * @return Result of invoking the functor with resolved types and forwarded arguments.
+     */
+    template <typename Functor, typename... Args>
+    static auto call(const std::vector<DataType> &dtypes, Functor &&func, std::string_view context_identifier,
+                     Args &&...args) {
+        constexpr size_t num_lists = std::tuple_size_v<AllowedListTuple>;
+
+        if constexpr (index == num_lists) {
+            // Base case: All types resolved, invoke the functor
+            return std::forward<Functor>(func).template operator()<ResolvedTypes...>(std::forward<Args>(args)...);
+        } else {
+            // Recursive case: Resolve the next type
+            using CurrentList = std::tuple_element_t<index, AllowedListTuple>;
+            DataType dtype = dtypes[index];
+
+            switch (dtype) {
+#define CASE_FOR_TYPE(DType)                                                                                           \
+    case DType:                                                                                                        \
+        if constexpr (IsDataTypeInList_v<DType, CurrentList>) {                                                        \
+            using T = TypeMap_t<DType>;                                                                                \
+            return DtypeDispatcher<index + 1, AllowedListTuple, ResolvedTypes..., T>::call(                            \
+                dtypes, std::forward<Functor>(func), context_identifier, std::forward<Args>(args)...);                 \
+        } else {                                                                                                       \
+            break;                                                                                                     \
+        }
+
+                CASE_FOR_TYPE(DataType::kUINT8)
+                CASE_FOR_TYPE(DataType::kINT8)
+                CASE_FOR_TYPE(DataType::kUINT16)
+                CASE_FOR_TYPE(DataType::kINT16)
+                CASE_FOR_TYPE(DataType::kUINT32)
+                CASE_FOR_TYPE(DataType::kINT32)
+                CASE_FOR_TYPE(DataType::kUINT64)
+                CASE_FOR_TYPE(DataType::kINT64)
+                CASE_FOR_TYPE(DataType::kFLOAT32)
+                CASE_FOR_TYPE(DataType::kFLOAT64)
+#ifdef USE_CUDA
+                CASE_FOR_TYPE(DataType::kBFLOAT16)
+                CASE_FOR_TYPE(DataType::kFLOAT16)
+#endif
+#undef CASE_FOR_TYPE
+            }
+            LOG_UNSUPPORTED_DTYPE(dtype, context_identifier);
+            // prevent the compiler warning about control reaching the end of non-void function
+            throw std::runtime_error("Unsupported data type");
+        }
+    }
+};
+} // namespace
+
+/**
+ * @brief Dispatches a functor based on a list of runtime data types.
+ *
+ * Given a vector of `DataType` values and corresponding allowed type lists, this function resolves
+ * each data type to its mapped C++ type using `TypeMap_t`, then invokes the provided functor with
+ * those types as template parameters.
+ *
+ * @tparam AllowedTypeLists   Variadic list of allowed data type sets per dispatch level.
+ * @tparam Functor            Callable object with a templated call operator.
+ * @tparam Args               Additional arguments to forward to the functor.
+ *
+ * @param dtypes              Vector of runtime data types to dispatch on.
+ * @param func                Functor to invoke after resolving types.
+ * @param context_identifier  Optional context string for error reporting/logging.
+ * @param args                Additional arguments to pass to the functor.
+ * @return Result of invoking the functor with resolved template types and arguments.
+ *
+ * Example lambda: [=]<typename T1, typename T2>() { ... }
+ */
+template <typename... AllowedTypeLists, typename Functor, typename... Args>
+auto DispatchFunc(const std::vector<DataType> &dtypes, Functor &&func, std::string_view context_identifier = "",
+                  Args &&...args) {
+    constexpr size_t num_lists = sizeof...(AllowedTypeLists);
+    if (dtypes.size() != num_lists) {
+        LOG(FATAL) << std::format("DispatchFunc expects {} dtypes, but only got {} in {}", num_lists, dtypes.size(),
+                                  context_identifier);
+        throw std::runtime_error("Incorrect number of runtime dtypes");
+    }
+
+    using AllowedListTuple = std::tuple<AllowedTypeLists...>;
+    return DtypeDispatcher<0, AllowedListTuple>::call(dtypes, std::forward<Functor>(func), context_identifier,
+                                                      std::forward<Args>(args)...);
 }
 
 class KernelFunction {
