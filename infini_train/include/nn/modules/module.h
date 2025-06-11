@@ -13,8 +13,8 @@ class Module {
 public:
     static constexpr char kUndefinedType[] = "Undefined";
 
-    Module() : type_(kUndefinedType) {}
-    explicit Module(const std::string &type) : type_(type) {}
+    Module(DataType dtype = DataType::kFLOAT32) : type_(kUndefinedType), dtype_(dtype) {}
+    explicit Module(const std::string &type, DataType dtype = DataType::kFLOAT32) : type_(type), dtype_(dtype) {}
 
     virtual ~Module(){};
 
@@ -35,10 +35,13 @@ public:
 
     virtual void To(Device device);
 
+    virtual void To(DataType dtype);
+
     void Apply(std::function<void(Module *)> fn);
 
 protected:
-    Device device_; // CPU by default
+    Device device_;  // CPU by default
+    DataType dtype_; // DataType::kFLOAT32 by default
     const std::string type_ = kUndefinedType;
     std::unordered_map<std::string, std::unique_ptr<Module>> modules_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;

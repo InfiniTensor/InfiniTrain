@@ -70,6 +70,21 @@ void Module::To(Device device) {
     for (auto &[_, layer] : modules_) { layer->To(device); }
 }
 
+void Module::To(DataType dtype) {
+    if (dtype == dtype_) {
+        return;
+    }
+
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> new_parameters;
+    for (auto &[name, param] : parameters_) {
+        new_parameters.emplace(name, std::make_shared<Tensor>(param->To(dtype)));
+    }
+    parameters_ = std::move(new_parameters);
+    dtype_ = dtype;
+
+    for (auto &[_, layer] : modules_) { layer->To(dtype); }
+}
+
 void Module::Apply(std::function<void(Module *)> fn) {
     for (auto *module : modules()) { module->Apply(fn); }
     fn(this);
