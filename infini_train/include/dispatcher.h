@@ -270,9 +270,7 @@ auto DispatchFunc(DataType dtype, Functor &&func, std::string_view context_ident
     throw std::runtime_error("Unsupported data type");
 }
 
-// Recursive multi-type dispatcher
 namespace {
-
 /**
  * @brief Responsible for resolving a list of data types and invoking a functor with the corresponding C++ types.
  *
@@ -360,7 +358,7 @@ template <size_t index, typename AllowedListTuple, typename... ResolvedTypes> st
  * @param args                Additional arguments to pass to the functor.
  * @return Result of invoking the functor with resolved template types and arguments.
  *
- * Example lambda: [=]<typename T1, typename T2>() { ... }
+ * Example functor using a templated lambda: [=]<typename T1, typename T2>() { ... }
  */
 template <typename... AllowedTypeLists, typename Functor, typename... Args>
 auto DispatchFunc(const std::vector<DataType> &dtypes, Functor &&func, std::string_view context_identifier = "",

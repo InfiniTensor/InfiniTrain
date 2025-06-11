@@ -1,13 +1,9 @@
 #include "infini_train/include/tensor.h"
 
-#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <functional>
-#include <memory>
 #include <numeric>
-#include <unordered_map>
-#include <vector>
 
 #ifdef USE_CUDA
 #include "cuda_runtime_api.h"
@@ -194,6 +190,19 @@ Tensor Tensor::To(const Device *device) {
     new_tensor.requires_grad_ = requires_grad_;
 
     return new_tensor;
+}
+
+Tensor Tensor::To(DataType dtype) {
+    if (dtype == dtype_) {
+        auto new_tensor = Tensor(*this, offset_, dims_);
+        if (grad_) {
+            new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), grad_->offset_, grad_->dims_);
+        }
+        return new_tensor;
+    }
+
+    auto kernel = Dispatcher::Instance().GetKernel({GetDevice().Type(), "Cast"});
+    return *kernel.Call<std::shared_ptr<Tensor>>(shared_from_this(), dtype);
 }
 
 // operator overloading

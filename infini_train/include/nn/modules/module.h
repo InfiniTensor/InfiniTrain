@@ -24,10 +24,8 @@ class Module : public std::enable_shared_from_this<Module> {
 public:
     static constexpr char kUndefinedType[] = "Undefined";
 
-    Module();
-
-    explicit Module(const std::string &type);
-
+    Module(DataType dtype = DataType::kFLOAT32) : type_(kUndefinedType), dtype_(dtype) {}
+    explicit Module(const std::string &type, DataType dtype = DataType::kFLOAT32) : type_(type), dtype_(dtype) {}
     Module(const Module &) = default;
 
     virtual ~Module(){};
@@ -54,12 +52,15 @@ public:
 
     virtual void To(const Device *device);
 
+    virtual void To(DataType dtype);
+
     void Apply(std::function<void(Module *)> fn);
 
     virtual std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const;
 
 protected:
     const Device *device_ = nullptr;
+    DataType dtype_; // DataType::kFLOAT32 by default
     const std::string type_ = kUndefinedType;
     std::unordered_map<std::string, std::shared_ptr<Module>> modules_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;

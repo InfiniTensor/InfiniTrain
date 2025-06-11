@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Eigen/Dense"
+#include "datatype.h"
 #include "glog/logging.h"
 
 #include "infini_train/include/datatype.h"
@@ -78,6 +79,7 @@ public:
 
     // TODO(dcj): return shared_ptr<Tensor> instead of Tensor later
     Tensor To(const Device *device);
+    Tensor To(DataType dtype);
 
     // operator overloading
     std::shared_ptr<Tensor> Equals(float scalar);

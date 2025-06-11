@@ -78,7 +78,7 @@ template <typename DST, typename SRC> __host__ __device__ DST Cast(SRC &&x) {
         } else if constexpr (std::is_same_v<DST_base, double>) {
             return static_cast<double>(__bfloat162float(x));
         } else if constexpr (std::is_same_v<DST_base, half>) {
-            return __bfloat162half(x);
+            return __half(x);
         }
     }
     // half conversions
@@ -88,7 +88,7 @@ template <typename DST, typename SRC> __host__ __device__ DST Cast(SRC &&x) {
         } else if constexpr (std::is_same_v<DST_base, double>) {
             return static_cast<double>(__half2float(x));
         } else if constexpr (std::is_same_v<DST_base, nv_bfloat16>) {
-            return __half2bfloat16(x);
+            return __nv_bfloat16(x);
         }
     }
     // float conversions to reduced precision
