@@ -12,4 +12,10 @@ public:
     Sigmoid() = default;
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 };
+
+class Relu : public Module {
+public:
+    Relu() = default;
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+};
 } // namespace infini_train::nn

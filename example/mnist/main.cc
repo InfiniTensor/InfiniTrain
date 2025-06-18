@@ -67,7 +67,8 @@ int main(int argc, char *argv[]) {
         const auto epoch_start = std::chrono::high_resolution_clock::now();
 
         for (const auto &[image, label] : train_dataloader) {
-            auto new_image = std::make_shared<Tensor>(image->To(device));
+            auto new_image
+                = std::make_shared<Tensor>(image->To(device), 0, std::vector<int64_t>{image->Dims()[0], 1, 28, 28});
             auto new_label = std::make_shared<Tensor>(label->To(device));
 
             auto outputs = network.Forward({new_image});
@@ -79,8 +80,7 @@ int main(int argc, char *argv[]) {
             total_loss += current_loss;
             if (train_idx % kNumItersOfOutputDuration == 0) {
                 LOG(ERROR) << "epoch: " << epoch << ", [" << train_idx * FLAGS_bs << "/" << train_dataset->Size()
-                           << "] "
-                           << " loss: " << current_loss;
+                           << "] " << " loss: " << current_loss;
             }
 
             loss[0]->Backward();
@@ -101,7 +101,8 @@ int main(int argc, char *argv[]) {
     int correct = 0;
     int total = 0;
     for (const auto &[image, label] : test_dataloader) {
-        auto new_image = std::make_shared<Tensor>(image->To(device));
+        auto new_image
+            = std::make_shared<Tensor>(image->To(device), 0, std::vector<int64_t>{image->Dims()[0], 1, 28, 28});
         auto new_label = std::make_shared<Tensor>(label->To(device));
 
         auto label_cpu = label->To(Device());

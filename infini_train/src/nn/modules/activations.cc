@@ -10,4 +10,8 @@ namespace infini_train::nn {
 std::vector<std::shared_ptr<Tensor>> Sigmoid::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     return std::make_shared<autograd::Sigmoid>()->Apply(input_tensors);
 }
+
+std::vector<std::shared_ptr<Tensor>> Relu::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    return std::make_shared<autograd::Relu>()->Apply(input_tensors);
+}
 } // namespace infini_train::nn

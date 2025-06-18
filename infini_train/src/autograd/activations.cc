@@ -31,4 +31,32 @@ std::vector<std::shared_ptr<Tensor>> Sigmoid::Backward(const std::vector<std::sh
     auto kernel = Dispatcher::Instance().GetKernel({device, "SigmoidBackward"});
     return {kernel.Call<std::shared_ptr<Tensor>>(output, grad_output)};
 }
+
+std::vector<std::shared_ptr<Tensor>> Relu::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1);
+    const auto &input = input_tensors[0];
+
+    auto device = input->GetDevice().Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "ReluForward"});
+    auto [output, mask] = kernel.Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(input);
+
+    return {output, mask};
+}
+
+void Relu::SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
+                        const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+    const auto &mask = output_tensors[1];
+    saved_tensors_ = {mask};
+}
+
+std::vector<std::shared_ptr<Tensor>> Relu::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    CHECK_EQ(grad_outputs.size(), 1);
+    const auto &mask = saved_tensors_[0];
+    CHECK_EQ(grad_outputs.size(), 1);
+    const auto &grad_output = grad_outputs[0];
+
+    auto device = grad_output->GetDevice().Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "ReluBackward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, mask)};
+}
 } // namespace infini_train::autograd

@@ -167,4 +167,5 @@ std::shared_ptr<Tensor> Slice(const std::shared_ptr<Tensor> &input, const std::v
 //   Concatenation of the input tensors.
 std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim = 0);
 
+std::shared_ptr<Tensor> LogSoftmax(const std::shared_ptr<Tensor> &input, int64_t dim = -1);
 } // namespace infini_train::nn::function
