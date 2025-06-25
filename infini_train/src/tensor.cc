@@ -174,7 +174,15 @@ Tensor Tensor::To(DataType dtype) {
     }
 
     auto kernel = Dispatcher::Instance().GetKernel({GetDevice().Type(), "Cast"});
-    return *kernel.Call<std::shared_ptr<Tensor>>(shared_from_this(), dtype);
+    auto new_tensor = *kernel.Call<std::shared_ptr<Tensor>>(shared_from_this(), dtype);
+
+    if (grad_) {
+        new_tensor.grad_ = std::make_unique<Tensor>(grad_->To(dtype));
+    }
+
+    new_tensor.requires_grad_ = requires_grad_;
+
+    return new_tensor;
 }
 
 // operator overloading

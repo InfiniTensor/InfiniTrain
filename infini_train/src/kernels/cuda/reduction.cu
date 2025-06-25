@@ -2,8 +2,7 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/dispatcher.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
 namespace {
@@ -12,42 +11,94 @@ constexpr float kInfinity = std::numeric_limits<float>::infinity();
 
 namespace {
 // Reduction operators
-template <typename ReduceFunc> struct CubOp;
+template <typename T, typename ReduceFunc> struct CubOp;
 
-template <> struct CubOp<cub::Sum> {
-    __device__ static float Init() { return 0.0f; }
-    __device__ static float Reduce(float a, float b) { return a + b; }
+template <typename T> struct CubOp<T, cub::Sum> {
+    __device__ static T Init() {
+        if constexpr (std::is_same_v<T, half>) {
+            return __float2half(0.f);
+        } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
+            return __float2bfloat16(0.f);
+        } else {
+            return T(0);
+        }
+    }
+    __device__ static T Reduce(T a, T b) {
+        if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
+            return __hadd(a, b);
+        } else {
+            return a + b;
+        }
+    }
     __device__ static cub::Sum Op() { return cub::Sum(); }
 };
 
-template <> struct CubOp<cub::Max> {
-    __device__ static float Init() { return -kInfinity; }
-    __device__ static float Reduce(float a, float b) { return fmaxf(a, b); }
+template <typename T> struct CubOp<T, cub::Max> {
+    __device__ static T Init() {
+        if constexpr (std::is_same_v<T, half>) {
+            return __float2half(-kInfinity);
+        } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
+            return __float2bfloat16(-kInfinity);
+        } else {
+            return T(-kInfinity);
+        }
+    }
+    __device__ static T Reduce(T a, T b) {
+        if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
+            return __hle(a, b) ? b : a;
+        } else if constexpr (std::is_same_v<T, float>) {
+            return fmaxf(a, b);
+        } else {
+            return std::max(a, b);
+        }
+    }
     __device__ static cub::Max Op() { return cub::Max(); }
 };
 
-template <> struct CubOp<cub::Min> {
-    __device__ static float Init() { return kInfinity; }
-    __device__ static float Reduce(float a, float b) { return fminf(a, b); }
+template <typename T> struct CubOp<T, cub::Min> {
+    __device__ static T Init() {
+        if constexpr (std::is_same_v<T, half>) {
+            return __float2half(kInfinity);
+        } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
+            return __float2bfloat16(kInfinity);
+        } else {
+            return T(-kInfinity);
+        }
+    }
+    __device__ static T Reduce(T a, T b) {
+        if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
+            return __hle(a, b) ? a : b;
+        } else if constexpr (std::is_same_v<T, float>) {
+            return fminf(a, b);
+        } else {
+            return std::min(a, b);
+        }
+    }
     __device__ static cub::Min Op() { return cub::Min(); }
 };
 
 // Finalization strategies
-struct MeanFinalize {
-    __device__ __forceinline__ float operator()(float sum, int64_t count) const {
-        return sum / static_cast<float>(count);
+template <typename T> struct MeanFinalize {
+    __device__ __forceinline__ T operator()(T sum, int64_t count) const {
+        if constexpr (std::is_same_v<T, half>) {
+            return __hdiv(sum, __float2half(float(count)));
+        } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
+            return __hdiv(sum, __float2bfloat16(float(count)));
+        } else {
+            return sum / T(count);
+        }
     }
 };
 
-struct IdentityFinalize {
-    __device__ __forceinline__ float operator()(float val, int64_t) const { return val; }
+template <typename T> struct IdentityFinalize {
+    __device__ __forceinline__ T operator()(T val, int64_t) const { return val; }
 };
 
 // Generic reduction kernel
-template <typename ReduceFunc, typename FinalizeOp, int BLOCK_SIZE>
-__global__ void GenericReduceKernel(const float *input, float *output, int64_t N, int64_t H, int64_t W,
+template <typename T, typename ReduceFunc, typename FinalizeOp, int BLOCK_SIZE>
+__global__ void GenericReduceKernel(const T *input, T *output, int64_t N, int64_t H, int64_t W,
                                     FinalizeOp finalize_op) {
-    using BlockReduce = cub::BlockReduce<float, BLOCK_SIZE>;
+    using BlockReduce = cub::BlockReduce<T, BLOCK_SIZE>;
     __shared__ typename BlockReduce::TempStorage temp_storage;
 
     int idx = blockIdx.x;
@@ -58,13 +109,13 @@ __global__ void GenericReduceKernel(const float *input, float *output, int64_t N
     int n = idx / W;
     int w = idx % W;
 
-    float acc = CubOp<ReduceFunc>::Init();
+    T acc = CubOp<T, ReduceFunc>::Init();
     for (int64_t h = threadIdx.x; h < H; h += blockDim.x) {
         int input_idx = (n * H + h) * W + w;
-        acc = CubOp<ReduceFunc>::Reduce(acc, input[input_idx]);
+        acc = CubOp<T, ReduceFunc>::Reduce(acc, input[input_idx]);
     }
 
-    float reduced = BlockReduce(temp_storage).Reduce(acc, CubOp<ReduceFunc>::Op());
+    T reduced = BlockReduce(temp_storage).Reduce(acc, CubOp<T, ReduceFunc>::Op());
 
     if (threadIdx.x == 0) {
         output[idx] = finalize_op(reduced, H);
@@ -72,9 +123,9 @@ __global__ void GenericReduceKernel(const float *input, float *output, int64_t N
 }
 
 // Unified backward kernel for Mean, Sum, Max, and Min
-__global__ void GenericReduceBackwardKernel(float *grad_input, const float *grad_output, const float *input,
-                                            const float *reduced, int64_t N, int64_t H, int64_t W, bool is_mean,
-                                            bool is_masked) {
+template <typename T>
+__global__ void GenericReduceBackwardKernel(T *grad_input, const T *grad_output, const T *input, const T *reduced,
+                                            int64_t N, int64_t H, int64_t W, bool is_mean, bool is_masked) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= N * H * W) {
         return;
@@ -87,22 +138,29 @@ __global__ void GenericReduceBackwardKernel(float *grad_input, const float *grad
     int reduced_idx = n * W + w;
 
     if (is_masked) {
-        float selected = reduced[reduced_idx];
-        float value = input[idx];
-        grad_input[idx] = (value == selected) ? grad_output[reduced_idx] : 0.0f;
+        T selected = reduced[reduced_idx];
+        T value = input[idx];
+        grad_input[idx] = (value == selected) ? grad_output[reduced_idx] : T(0);
     } else {
         grad_input[idx] = grad_output[reduced_idx];
         if (is_mean) {
-            grad_input[idx] /= static_cast<float>(H);
+            T H_casted;
+            if constexpr (std::is_same_v<T, half>) {
+                H_casted = __float2half(static_cast<float>(H));
+            } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
+                H_casted = __float2bfloat16(static_cast<float>(H));
+            } else {
+                H_casted = T(H);
+            }
+            grad_input[idx] /= H_casted;
         }
     }
 }
 } // namespace
 
 // Common forward implementation for reduce ops
-template <typename ReduceFunc, typename FinalizeOp>
-std::shared_ptr<Tensor> ReduceOpForward(const std::shared_ptr<Tensor> &input, const int64_t dim, const bool keep_dim,
-                                        FinalizeOp finalize_op) {
+template <typename ReduceFunc, template <typename> class FinalizeOp>
+std::shared_ptr<Tensor> ReduceOpForward(const std::shared_ptr<Tensor> &input, const int64_t dim, const bool keep_dim) {
     const auto &input_dims = input->Dims();
     int64_t actual_dim = dim < 0 ? dim + input_dims.size() : dim;
     CHECK_GE(actual_dim, 0);
@@ -115,22 +173,25 @@ std::shared_ptr<Tensor> ReduceOpForward(const std::shared_ptr<Tensor> &input, co
         output_dims.erase(output_dims.begin() + actual_dim);
     }
 
-    auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32, input->GetDevice());
+    auto dtype = input->Dtype();
+    auto output = std::make_shared<Tensor>(output_dims, dtype, input->GetDevice());
 
     int64_t N = std::accumulate(input_dims.begin(), input_dims.begin() + actual_dim, 1, std::multiplies<int64_t>());
     int64_t H = input_dims[actual_dim];
     int64_t W = std::accumulate(input_dims.begin() + actual_dim + 1, input_dims.end(), 1, std::multiplies<int64_t>());
 
-    const float *input_ptr = static_cast<const float *>(input->DataPtr());
-    float *output_ptr = static_cast<float *>(output->DataPtr());
-
     constexpr int BLOCK_SIZE = 256;
     int threads_per_block = BLOCK_SIZE;
     int num_blocks = N * W;
 
-    GenericReduceKernel<ReduceFunc, FinalizeOp, BLOCK_SIZE>
-        <<<num_blocks, threads_per_block>>>(input_ptr, output_ptr, N, H, W, finalize_op);
-
+    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            GenericReduceKernel<T, ReduceFunc, FinalizeOp<T>, BLOCK_SIZE>
+                <<<num_blocks, threads_per_block>>>(static_cast<const T *>(input->DataPtr()),
+                                                    static_cast<T *>(output->DataPtr()), N, H, W, FinalizeOp<T>{});
+        },
+        "CUDA ReductionForward");
     return output;
 }
 
@@ -143,41 +204,43 @@ std::shared_ptr<Tensor> ReduceOpBackward(const std::shared_ptr<Tensor> &grad_out
     CHECK_GE(actual_dim, 0);
     CHECK_LT(actual_dim, input_dims.size());
 
-    auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32, grad_output->GetDevice());
-    grad_input->Fill<float>(0.0f);
+    auto dtype = grad_output->Dtype();
+    auto grad_input = std::make_shared<Tensor>(input_dims, dtype, grad_output->GetDevice());
 
     int64_t N = std::accumulate(input_dims.begin(), input_dims.begin() + actual_dim, 1, std::multiplies<int64_t>());
     int64_t H = input_dims[actual_dim];
     int64_t W = std::accumulate(input_dims.begin() + actual_dim + 1, input_dims.end(), 1, std::multiplies<int64_t>());
 
-    float *grad_input_ptr = static_cast<float *>(grad_input->DataPtr());
-    const float *grad_output_ptr = static_cast<const float *>(grad_output->DataPtr());
-    const float *input_ptr = input ? static_cast<const float *>(input->DataPtr()) : nullptr;
-    const float *reduced_ptr = reduced ? static_cast<const float *>(reduced->DataPtr()) : nullptr;
-
     int threads_per_block = 256;
     int num_blocks = (N * H * W + threads_per_block - 1) / threads_per_block;
 
-    GenericReduceBackwardKernel<<<num_blocks, threads_per_block>>>(grad_input_ptr, grad_output_ptr, input_ptr,
-                                                                   reduced_ptr, N, H, W, is_mean, is_masked);
-
+    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            grad_input->Fill<T>(0);
+            GenericReduceBackwardKernel<<<num_blocks, threads_per_block>>>(
+                static_cast<T *>(grad_input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
+                input ? static_cast<const T *>(input->DataPtr()) : nullptr,
+                reduced ? static_cast<const T *>(reduced->DataPtr()) : nullptr, N, H, W, is_mean, is_masked);
+        },
+        "CUDA ReductionBackward");
     return grad_input;
 }
 
 std::shared_ptr<Tensor> MeanForward(const std::shared_ptr<Tensor> &input, const int64_t dim, const bool keep_dim) {
-    return ReduceOpForward<cub::Sum>(input, dim, keep_dim, MeanFinalize{});
+    return ReduceOpForward<cub::Sum, MeanFinalize>(input, dim, keep_dim);
 }
 
 std::shared_ptr<Tensor> SumForward(const std::shared_ptr<Tensor> &input, const int64_t dim, const bool keep_dim) {
-    return ReduceOpForward<cub::Sum>(input, dim, keep_dim, IdentityFinalize{});
+    return ReduceOpForward<cub::Sum, IdentityFinalize>(input, dim, keep_dim);
 }
 
 std::shared_ptr<Tensor> MaxForward(const std::shared_ptr<Tensor> &input, const int64_t dim, const bool keep_dim) {
-    return ReduceOpForward<cub::Max>(input, dim, keep_dim, IdentityFinalize{});
+    return ReduceOpForward<cub::Max, IdentityFinalize>(input, dim, keep_dim);
 }
 
 std::shared_ptr<Tensor> MinForward(const std::shared_ptr<Tensor> &input, const int64_t dim, const bool keep_dim) {
-    return ReduceOpForward<cub::Min>(input, dim, keep_dim, IdentityFinalize{});
+    return ReduceOpForward<cub::Min, IdentityFinalize>(input, dim, keep_dim);
 }
 
 std::shared_ptr<Tensor> MeanBackward(const std::shared_ptr<Tensor> &grad_output, const std::vector<int64_t> &input_dims,
