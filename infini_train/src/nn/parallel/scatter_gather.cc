@@ -117,7 +117,6 @@ std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std:
 
 std::vector<std::shared_ptr<Tensor>> Gather(const std::vector<std::vector<std::shared_ptr<Tensor>>> &outputs,
                                             const Device *target_device, int dim) {
-    // FIXME(dcj): implement this
     std::vector<std::shared_ptr<Tensor>> gather_tensors;
     for (const auto &output : outputs) { gather_tensors.push_back(output[0]); }
     return std::make_shared<functions::Gather>(target_device, dim)->Apply(gather_tensors);

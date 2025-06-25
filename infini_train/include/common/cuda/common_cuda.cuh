@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cuda.h"
 #include "cuda_runtime.h"
 #ifdef USE_NCCL
 #include "nccl.h"
@@ -19,6 +20,17 @@
         cublasStatus_t status = call;                                                                                  \
         if (status != CUBLAS_STATUS_SUCCESS) {                                                                         \
             LOG(FATAL) << "CUBLAS Error: " << cublasGetStatusString(status) << " at " << __FILE__ << ":" << __LINE__;  \
+        }                                                                                                              \
+    } while (0)
+
+#define CUDA_DRIVER_CHECK(call)                                                                                        \
+    do {                                                                                                               \
+        CUresult status = call;                                                                                        \
+        if (status != CUresult::CUDA_SUCCESS) {                                                                        \
+            const char *err_str = nullptr;                                                                             \
+            cuGetErrorString(status, &err_str);                                                                        \
+            LOG(FATAL) << "CUDA Driver API error: " << #call << " failed with error (" << status                       \
+                       << "): " << (err_str ? err_str : "Unknown error");                                              \
         }                                                                                                              \
     } while (0)
 

@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
-#include "infini_train/include/dispatcher.h"
 
 namespace infini_train::autograd {
 class AccumulateGrad final : public Function {

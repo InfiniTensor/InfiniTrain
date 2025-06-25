@@ -2,6 +2,8 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
+
 namespace infini_train::autograd {
 AccumulateGrad::AccumulateGrad(std::shared_ptr<Tensor> grad, float learning_rate)
     : grad_(grad), learning_rate_(learning_rate) {}

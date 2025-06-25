@@ -10,7 +10,7 @@
 #include <vector>
 
 #ifdef USE_CUDA
-#include "cuda_runtime_api.h"
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 #endif
 #include "Eigen/Dense"
 #include "glog/logging.h"
@@ -26,13 +26,6 @@
 
 namespace infini_train {
 namespace {
-#define CUDA_CHECK(call)                                                                                               \
-    do {                                                                                                               \
-        cudaError_t status = call;                                                                                     \
-        if (status != cudaSuccess) {                                                                                   \
-            LOG(FATAL) << "CUDA Error: " << cudaGetErrorString(status) << " at " << __FILE__ << ":" << __LINE__;       \
-        }                                                                                                              \
-    } while (0)
 
 const std::unordered_map<DataType, size_t> kDataTypeToSize = {
     {DataType::kUINT8, 1},    {DataType::kINT8, 1},    {DataType::kUINT16, 2},  {DataType::kINT16, 2},
@@ -134,7 +127,6 @@ size_t Tensor::NumElements() const { return num_elements_; }
 
 DataType Tensor::Dtype() const { return dtype_; }
 
-// FIXME(dcj): should use autograd function?
 template <typename T> void Tensor::Fill(T value) {
     auto device = GetDevice();
     device->SetDevice();
@@ -211,7 +203,6 @@ Tensor Tensor::To(const Device *device) {
         break;
     }
     case DeviceType::kCUDA: {
-        // TODO(dcj): use stream pool to manage streams
         new_tensor = Tensor(dims_, dtype_, device);
         if (GetDevice()->Type() == DeviceType::kCPU) {
             device->SetDevice();

@@ -12,7 +12,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_BUILD_TYPE Debug)
 
 # Add gflags
 add_subdirectory(third_party/gflags)

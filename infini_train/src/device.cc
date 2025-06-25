@@ -4,8 +4,6 @@
 #include <vector>
 
 #ifdef USE_CUDA
-#include "cuda.h"
-#include "cuda_runtime_api.h"
 #include "infini_train/include/common/cuda/common_cuda.cuh"
 #endif
 #ifdef USE_NCCL
@@ -86,12 +84,9 @@ std::vector<const Device *> DeviceManager::GetAllAvailableDevices(DeviceType dev
 DeviceManager::DeviceManager() {
     devices_map_[DeviceType::kCPU].push_back(std::unique_ptr<CpuDevice>(new CpuDevice()));
 #ifdef USE_CUDA
-    cuInit(0);
+    CUDA_DRIVER_CHECK(cuInit(0));
     int device_count = 0;
-    CUresult result = cuDeviceGetCount(&device_count);
-    if (result != CUresult::CUDA_SUCCESS) {
-        LOG(FATAL) << "Failed to get CUDA device count: " << result;
-    }
+    CUDA_DRIVER_CHECK(cuDeviceGetCount(&device_count));
     for (int idx = 0; idx < device_count; ++idx) {
         devices_map_[DeviceType::kCUDA].push_back(std::unique_ptr<CudaDevice>(new CudaDevice(idx)));
     }

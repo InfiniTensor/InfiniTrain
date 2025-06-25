@@ -1,5 +1,3 @@
-#include "infini_train/include/nn/modules/module.h"
-
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -9,6 +7,7 @@
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
+#include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
@@ -69,9 +68,9 @@ std::vector<std::shared_ptr<Tensor>> Broadcast::Forward(const std::vector<std::s
     // TODO(dcj): mark non differentiable
     auto kernel = Dispatcher::Instance().GetKernel({input_device_->Type(),
 #ifdef USE_NCCL
-                                                     "CommNcclBroadcast"
+                                                    "CommNcclBroadcast"
 #else
-                                                     "CommBroadcast"
+                                                    "CommBroadcast"
 #endif
     });
     return kernel.Call<std::vector<std::shared_ptr<Tensor>>>(input_tensors, target_gpus_);
@@ -83,7 +82,6 @@ void Broadcast::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_t
 }
 
 std::vector<std::shared_ptr<Tensor>> Broadcast::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    // FIXME(dcj): implement this
     return std::make_shared<ReduceAddCoalesced>(input_device_, num_inputs_)->Apply(grad_outputs);
 }
 
@@ -114,7 +112,6 @@ void ReduceAddCoalesced::SetupContext(const std::vector<std::shared_ptr<Tensor>>
 
 std::vector<std::shared_ptr<Tensor>>
 ReduceAddCoalesced::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    // FIXME(dcj): implement this
     return std::make_shared<Broadcast>(target_gpus_)->Apply(grad_outputs);
 }
 
@@ -133,12 +130,10 @@ BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors,
 }
 } // namespace
 
-// FIXME(dcj): should replicate buffer_
 std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &network,
                                                const std::vector<const Device *> &devices) {
     const int num_replicas = devices.size();
 
-    // FIXME(dcj): replicate buffer_!!!!!!!!!!!!!
     auto params = network->Parameters();
     std::unordered_map<Tensor *, int> param_indices;
     for (int idx = 0; idx < params.size(); ++idx) { param_indices[params[idx].get()] = idx; }

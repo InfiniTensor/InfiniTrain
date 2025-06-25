@@ -10,6 +10,7 @@
 #include "glog/logging.h"
 #include "nccl.h"
 
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
@@ -24,15 +25,6 @@ const std::unordered_map<DataType, ncclDataType_t> kNcclDtypeMap = {
     {DataType::kBFLOAT16, ncclBfloat16}, {DataType::kFLOAT16, ncclHalf},  {DataType::kFLOAT32, ncclFloat32},
     {DataType::kFLOAT64, ncclFloat64},
 };
-
-#define NCCL_CHECK(expr)                                                                                               \
-    do {                                                                                                               \
-        ncclResult_t _status = (expr);                                                                                 \
-        if (_status != ncclSuccess) {                                                                                  \
-            LOG(FATAL) << "NCCL error: " << ncclGetErrorString(_status) << " at " << __FILE__ << ":" << __LINE__       \
-                       << " (" << #expr << ")";                                                                        \
-        }                                                                                                              \
-    } while (0)
 } // namespace
 
 std::vector<std::shared_ptr<Tensor>> NcclBroadcast(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
