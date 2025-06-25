@@ -28,7 +28,7 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
 
     std::vector<int64_t> output_dims = input_dims;
     output_dims[output_dims.size() - 1] = n;
-    auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32, input->GetDevice());
+    auto output = std::make_shared<Tensor>(output_dims, input->Dtype(), input->GetDevice());
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     const float alpha = 1.0f, beta = 0.0f;
@@ -210,7 +210,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
 
     auto output_dims = input_dims;
     *output_dims.rbegin() = out_features;
-    auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32, input->GetDevice());
+    auto output = std::make_shared<Tensor>(output_dims, input->Dtype(), input->GetDevice());
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
 
@@ -306,8 +306,8 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     CHECK_EQ(in_features, weight_dims[transpose ? 1 : 0]);
     CHECK_EQ(out_features, weight_dims[transpose ? 0 : 1]);
 
-    auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32, grad_output->GetDevice());
-    auto grad_weight = std::make_shared<Tensor>(weight_dims, DataType::kFLOAT32, grad_output->GetDevice());
+    auto grad_input = std::make_shared<Tensor>(input_dims, input->Dtype(), grad_output->GetDevice());
+    auto grad_weight = std::make_shared<Tensor>(weight_dims, input->Dtype(), grad_output->GetDevice());
     std::shared_ptr<Tensor> grad_bias = nullptr;
 
     auto initialize_gradients = [&](auto zero_value, DataType dtype) {

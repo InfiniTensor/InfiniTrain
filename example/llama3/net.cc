@@ -298,6 +298,10 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
     if (freqs_cis_ == nullptr) {
         freqs_cis_ = PrecomputeFreqsCis(config_.n_embd / config_.n_head, config_.block_size * 2, config_.rope_theta,
                                         config_.use_scaled_rope, device);
+        // TODO(zbl): freqs_cis is built in FP32 by default
+        if (modules_[kLMHeadLayerName]->parameter(nn::Linear::kParamWeightName)->Dtype() == DataType::kBFLOAT16) {
+            freqs_cis_ = std::make_shared<Tensor>(freqs_cis_->To(DataType::kBFLOAT16));
+        }
     }
 
     // forward the LLaMA3 model itself
@@ -311,6 +315,10 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
 
     std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(idx->GetDevice()));
     std::shared_ptr<Tensor> mask = nn::function::Triu(ones, 1)->View({1, 1, t, t});
+    // TODO(zbl): nn::function::Ones builds tensor in FP32 by default
+    if (modules_[kLMHeadLayerName]->parameter(nn::Linear::kParamWeightName)->Dtype() == DataType::kBFLOAT16) {
+        mask = std::make_shared<Tensor>(mask->To(DataType::kBFLOAT16));
+    }
     std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 
     // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)

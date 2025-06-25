@@ -1,10 +1,52 @@
 #include <cstddef>
+#include <cub/warp/warp_reduce.cuh>
 
 #include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
 
 namespace {
+template <typename T> __device__ __forceinline__ T neg(const T &x) {
+    if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
+        return __hneg(x);
+    } else {
+        return -x;
+    }
+}
+
+template <typename T> __device__ __forceinline__ T reciprocal(const T &x) {
+    if constexpr (std::is_same_v<T, half>) {
+        return __hdiv(__float2half(1.0f), x);
+    } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
+        return __hdiv(__float2bfloat16(1.0f), x);
+    } else {
+        return T(1) / x;
+    }
+}
+
+template <typename T> __device__ __forceinline__ T sin(const T &x) {
+    if constexpr (std::is_same_v<T, half>) {
+        return __float2half(__sinf(__half2float(x)));
+    } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
+        return __float2bfloat16(__sinf(__bfloat162float(x)));
+    } else if constexpr (std::is_same_v<T, float>) {
+        return __sinf(x);
+    } else {
+        return std::sin(x);
+    }
+}
+
+template <typename T> __device__ __forceinline__ T cos(const T &x) {
+    if constexpr (std::is_same_v<T, half>) {
+        return __float2half(__cosf(__half2float(x)));
+    } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
+        return __float2bfloat16(__cosf(__bfloat162float(x)));
+    } else if constexpr (std::is_same_v<T, float>) {
+        return __cosf(x);
+    } else {
+        return std::cos(x);
+    }
+}
 
 template <typename T> __device__ __forceinline__ T tanh(const T &x) {
     if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
@@ -34,6 +76,18 @@ template <typename T> __device__ __forceinline__ T pow(const T &x, const T &expo
     }
 }
 
+template <typename T> __device__ __forceinline__ T rsqrt(const T &x) {
+    if constexpr (std::is_same_v<T, half>) {
+        return __float2half(rsqrtf(__half2float(x)));
+    } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
+        return __float2bfloat16(rsqrtf(__bfloat162float(x)));
+    } else if constexpr (std::is_same_v<T, float>) {
+        return rsqrtf(x);
+    } else {
+        return T(1) / std::sqrt(T(x));
+    }
+}
+
 template <typename T> __device__ __forceinline__ T log(const T &x) {
     if constexpr (std::is_same_v<T, nv_bfloat16>) {
         return __float2bfloat16(__logf(__bfloat162float(x)));
@@ -54,11 +108,27 @@ template <typename T> __device__ __forceinline__ T add(const T &a, const T &b) {
     }
 }
 
+template <typename T> __device__ __forceinline__ T sub(const T &a, const T &b) {
+    if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
+        return __hsub(a, b);
+    } else {
+        return a - b;
+    }
+}
+
 template <typename T> __device__ __forceinline__ T mul(const T &a, const T &b) {
     if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
         return __hmul(a, b);
     } else {
         return a * b;
+    }
+}
+
+template <typename T> __device__ __forceinline__ T div(const T &a, const T &b) {
+    if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
+        return __hdiv(a, b);
+    } else {
+        return a / b;
     }
 }
 
@@ -219,19 +289,59 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
                                      const int64_t *a_strides, const int64_t *a_shape, const int64_t *b_strides,
                                      const int64_t *b_shape, const int64_t *out_strides, const T *grad_output,
                                      const T *input_a, const T *input_b) {
-    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= num_elements) {
+    extern __shared__ char shared_memory[];
+    const int tid = threadIdx.x;
+    const int warp_id = tid / 32;
+    const int lane_id = tid % 32;
+
+    using WarpReduce = cub::WarpReduce<float>;
+    WarpReduce::TempStorage *temp_storage = reinterpret_cast<WarpReduce::TempStorage *>(shared_memory);
+
+    size_t idx = blockIdx.x * blockDim.x + tid;
+    bool in_bounds = (idx < num_elements);
+
+    int64_t a_offset = 0, b_offset = 0;
+    T a_val = T(0), b_val = T(0);
+    float grad_val = 0.0f;
+
+    if (in_bounds) {
+        a_offset = CalcOffset(idx, ndim, a_strides, a_shape, out_strides);
+        b_offset = CalcOffset(idx, ndim, b_strides, b_shape, out_strides);
+        a_val = input_a ? input_a[a_offset] : T(0);
+        b_val = input_b ? input_b[b_offset] : T(0);
+        output_a[a_offset] = mul<T>(grad_output[idx], fn_a(a_val, b_val));
+        grad_val = common::cuda::Cast<float>(mul<T>(grad_output[idx], fn_b(a_val, b_val)));
+    }
+
+    unsigned active_mask = __ballot_sync(0xFFFFFFFF, in_bounds);
+    if (!active_mask) {
         return;
     }
 
-    int64_t a_offset = CalcOffset(idx, ndim, a_strides, a_shape, out_strides);
-    int64_t b_offset = CalcOffset(idx, ndim, b_strides, b_shape, out_strides);
+    int leader = __ffs(active_mask) - 1;
+    int64_t common_offset = __shfl_sync(active_mask, b_offset, leader);
 
-    const T a_val = input_a ? input_a[a_offset] : T(0);
-    const T b_val = input_b ? input_b[b_offset] : T(0);
+    // Check if all active threads share common b_offset
+    bool warp_uniform = true;
+    for (int i = 0; i < 32; ++i) {
+        if (!(active_mask & (1 << i))) {
+            continue;
+        }
+        int64_t offset_i = __shfl_sync(active_mask, b_offset, i);
+        if (offset_i != common_offset) {
+            warp_uniform = false;
+            break;
+        }
+    }
 
-    output_a[a_offset] = mul<T>(grad_output[idx], fn_a(a_val, b_val));
-    atomicAdd(&output_b[b_offset], mul<T>(grad_output[idx], fn_b(a_val, b_val)));
+    if (warp_uniform) {
+        float reduced = WarpReduce(temp_storage[warp_id]).Sum(grad_val);
+        if (lane_id == leader) {
+            atomicAdd(&output_b[common_offset], common::cuda::Cast<T>(reduced));
+        }
+    } else if (in_bounds) {
+        atomicAdd(&output_b[b_offset], common::cuda::Cast<T>(grad_val));
+    }
 }
 
 // launch unary operator's backward kernel
@@ -296,7 +406,9 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     const size_t num_elements = grad_output->NumElements();
     LaunchKernel<BLOCK_SIZE, T>(
         [=](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
-            BinaryBackwardKernel<<<grid, block, 0, stream>>>(
+            const int NUM_WARPS = BLOCK_SIZE / 32;
+            size_t smem_size = NUM_WARPS * sizeof(cub::WarpReduce<float>::TempStorage);
+            BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(
                 output_a_ptr, output_b_ptr, fun_a, fun_b, ndim, num_elements, device_a_strides, device_a_shape,
                 device_b_strides, device_b_shape, device_out_strides, grad_output_ptr, ptrs...);
         },
@@ -410,36 +522,48 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
 } // namespace
 
 std::shared_ptr<Tensor> NegForward(const std::shared_ptr<Tensor> &input) {
-    return UnaryForward(input, [] __device__(float x) { return -x; });
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return neg(x); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> NegBackward(const std::shared_ptr<Tensor> &grad_output) {
-    return UnaryBackward(grad_output, nullptr, [] __device__(float) { return -1.0f; });
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, nullptr, [] __device__(auto x) { return decltype(x){-1.f}; });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> ReciprocalForward(const std::shared_ptr<Tensor> &input) {
-    return UnaryForward(input, [] __device__(float x) { return 1.0f / x; });
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return reciprocal(x); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> ReciprocalBackward(const std::shared_ptr<Tensor> &grad_output,
                                            const std::shared_ptr<Tensor> &input) {
-    return UnaryBackward(grad_output, input, [] __device__(float x) { return -1.0f / (x * x); });
+    DISPATCH(
+        grad_output->Dtype(),
+        return UnaryBackward(grad_output, input, [] __device__(auto x) { return div(decltype(x){-1.f}, mul(x, x)); });
+        , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> SinForward(const std::shared_ptr<Tensor> &input) {
-    return UnaryForward(input, [] __device__(float x) { return sinf(x); });
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return sin(x); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> SinBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &input) {
-    return UnaryBackward(grad_output, input, [] __device__(float x) { return cosf(x); });
+    DISPATCH(grad_output->Dtype(), return UnaryBackward(grad_output, input, [] __device__(auto x) { return cos(x); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> CosForward(const std::shared_ptr<Tensor> &input) {
-    return UnaryForward(input, [] __device__(float x) { return cosf(x); });
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return cos(x); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> CosBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &input) {
-    return UnaryBackward(grad_output, input, [] __device__(float x) { return -sinf(x); });
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, input, [] __device__(auto x) { return neg(sin(x)); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> TanhForward(const std::shared_ptr<Tensor> &input) {
@@ -481,12 +605,17 @@ std::shared_ptr<Tensor> PowBackward(const std::shared_ptr<Tensor> &grad_output, 
 }
 
 std::shared_ptr<Tensor> RsqrtForward(const std::shared_ptr<Tensor> &input) {
-    return UnaryForward(input, [] __device__(float x) { return 1.0f / std::sqrt(x); });
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return rsqrt(x); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> RsqrtBackward(const std::shared_ptr<Tensor> &grad_output,
                                       const std::shared_ptr<Tensor> &input) {
-    return UnaryBackward(grad_output, input, [] __device__(float x) { return -0.5f / (x * std::sqrt(x)); });
+    DISPATCH(grad_output->Dtype(), return UnaryBackward(grad_output, input,
+                                                        [] __device__(auto x) {
+                                                            return mul(decltype(x){-0.5}, mul(reciprocal(x), rsqrt(x)));
+                                                        });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> EqualsScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
@@ -520,15 +649,16 @@ std::shared_ptr<Tensor> AddScalarBackward(const std::shared_ptr<Tensor> &grad_ou
 }
 
 std::shared_ptr<Tensor> SubForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    return BinaryForward(a, b, [] __device__(float x, float y) { return x - y; });
+    DISPATCH(a->Dtype(), return BinaryForward(a, b, [] __device__(auto x, auto y) { return sub(x, y); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> SubBackward(const std::shared_ptr<Tensor> &grad_output,
                                                                         const std::vector<int64_t> &a_dims,
                                                                         const std::vector<int64_t> &b_dims) {
-    return BinaryBackward(
-        grad_output, nullptr, nullptr, a_dims, b_dims, [] __device__(float, float) { return 1.f; },
-        [] __device__(float, float) { return -1.f; });
+    auto fn_a = [] __device__(auto x, auto y) { return decltype(x){1}; };
+    auto fn_b = [] __device__(auto x, auto y) { return decltype(x){-1}; };
+    return BinaryBackward(grad_output, nullptr, nullptr, a_dims, b_dims, fn_a, fn_b);
 }
 
 std::shared_ptr<Tensor> MulForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
@@ -562,15 +692,22 @@ std::shared_ptr<Tensor> MulScalarBackward(const std::shared_ptr<Tensor> &grad_ou
 }
 
 std::shared_ptr<Tensor> DivForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    return BinaryForward(a, b, [] __device__(float x, float y) { return x / y; });
+    DISPATCH(a->Dtype(), return BinaryForward(a, b, [] __device__(auto x, auto y) { return div(x, y); });
+             , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DivBackward(const std::shared_ptr<Tensor> &grad_output,
                                                                         const std::shared_ptr<Tensor> &a,
                                                                         const std::shared_ptr<Tensor> &b) {
-    return BinaryBackward(
-        grad_output, a, b, a->Dims(), b->Dims(), [] __device__(float, float y) { return 1 / y; },
-        [] __device__(float x, float y) { return -x / (y * y); });
+    DISPATCH_WITH_DEFAULT(grad_output->Dtype(), return BinaryBackward(
+                                                    grad_output, a, b, a->Dims(), b->Dims(),
+                                                    [] __device__(auto, auto y) { return reciprocal(y); },
+                                                    [] __device__(auto x, auto y) { return div(neg(x), mul(y, y)); });
+                          , WRAP({
+                              LOG_LOC(FATAL, "CUDA DivBackward: 'Unsupported data type'");
+                              return {nullptr, nullptr};
+                          }),
+                          INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> SigmoidForward(const std::shared_ptr<Tensor> &input) {

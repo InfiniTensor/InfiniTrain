@@ -87,7 +87,8 @@ std::shared_ptr<Tensor> TrilBackward(const std::shared_ptr<Tensor> &grad_output,
     return grad_input;
 }
 
-__global__ void TriuForwardKernel(const float *input, float *output, int rows, int cols, int64_t diagonal) {
+template <typename T>
+__global__ void TriuForwardKernel(const T *input, T *output, int rows, int cols, int64_t diagonal) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= rows * cols) {
         return;
@@ -99,7 +100,7 @@ __global__ void TriuForwardKernel(const float *input, float *output, int rows, i
     if (row - col + diagonal <= 0) {
         output[idx] = input[idx];
     } else {
-        output[idx] = 0.0f;
+        output[idx] = T(0);
     }
 }
 
@@ -115,13 +116,19 @@ std::shared_ptr<Tensor> TriuForward(const std::shared_ptr<Tensor> &input, int64_
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
 
-    TriuForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-        static_cast<const float *>(input->DataPtr()), static_cast<float *>(output->DataPtr()), rows, cols, diagonal);
+    DispatchFunc<INFINI_ALL_TYPES>(
+        input->Dtype(),
+        [=]<typename T>() {
+            TriuForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                static_cast<const T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), rows, cols, diagonal);
+        },
+        "CUDA TriuForward");
 
     return output;
 }
 
-__global__ void TriuBackwardKernel(const float *grad_output, float *grad_input, int rows, int cols, int64_t diagonal) {
+template <typename T>
+__global__ void TriuBackwardKernel(const T *grad_output, T *grad_input, int rows, int cols, int64_t diagonal) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= rows * cols) {
         return;
@@ -133,7 +140,7 @@ __global__ void TriuBackwardKernel(const float *grad_output, float *grad_input, 
     if (row - col + diagonal <= 0) {
         grad_input[idx] = grad_output[idx];
     } else {
-        grad_input[idx] = 0.0f;
+        grad_input[idx] = T(0);
     }
 }
 
@@ -146,12 +153,17 @@ std::shared_ptr<Tensor> TriuBackward(const std::shared_ptr<Tensor> &grad_output,
 
     int threads_per_block = 256;
     int num_blocks = (rows * cols + threads_per_block - 1) / threads_per_block;
-
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
 
-    TriuBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-        static_cast<const float *>(grad_output->DataPtr()), static_cast<float *>(grad_input->DataPtr()), rows, cols,
-        diagonal);
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            grad_input->Fill<T>(0);
+            TriuBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), rows, cols,
+                diagonal);
+        },
+        "CUDA TriuBackward");
 
     return grad_input;
 }
@@ -342,8 +354,9 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
     return grad_input;
 }
 
-__global__ void RepeatInterleaveForwardKernel(const float *input, float *output, int64_t outer, int64_t dim_size,
-                                              int64_t inner, int64_t repeat) {
+template <typename T>
+__global__ void RepeatInterleaveForwardKernel(const T *input, T *output, int64_t outer, int64_t dim_size, int64_t inner,
+                                              int64_t repeat) {
     int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     int64_t total = outer * dim_size * repeat * inner;
     if (idx >= total) {
@@ -374,23 +387,26 @@ std::shared_ptr<Tensor> RepeatInterleaveForward(const std::shared_ptr<Tensor> &i
     output_dims[dim] = dim_size * repeat;
     auto output = std::make_shared<Tensor>(output_dims, input->Dtype(), input->GetDevice());
 
-    const float *input_ptr = static_cast<const float *>(input->DataPtr());
-    float *output_ptr = static_cast<float *>(output->DataPtr());
-
     int64_t total_elements = outer * dim_size * repeat * inner;
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
-
-    RepeatInterleaveForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-        input_ptr, output_ptr, outer, dim_size, inner, repeat);
+    DispatchFunc<INFINI_ALL_TYPES>(
+        input->Dtype(),
+        [=]<typename T>() {
+            RepeatInterleaveForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                static_cast<const T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), outer, dim_size, inner,
+                repeat);
+        },
+        "CUDA RepeatInterleaveForward");
 
     return output;
 }
 
-__global__ void RepeatInterleaveBackwardKernel(const float *grad_output, float *grad_input, int64_t outer,
-                                               int64_t dim_size, int64_t inner, int64_t repeat) {
+template <typename T>
+__global__ void RepeatInterleaveBackwardKernel(const T *grad_output, T *grad_input, int64_t outer, int64_t dim_size,
+                                               int64_t inner, int64_t repeat) {
     int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     int64_t total = outer * dim_size * inner;
     if (idx >= total) {
@@ -403,7 +419,7 @@ __global__ void RepeatInterleaveBackwardKernel(const float *grad_output, float *
     int64_t o = i / dim_size;
     int64_t di = i % dim_size;
 
-    float sum = 0.0f;
+    T sum = T(0);
     for (int64_t r = 0; r < repeat; ++r) {
         int64_t out_idx = ((o * dim_size * repeat + di * repeat + r) * inner) + j;
         sum += grad_output[out_idx];
@@ -425,19 +441,21 @@ std::shared_ptr<Tensor> RepeatInterleaveBackward(const std::shared_ptr<Tensor> &
     CHECK_EQ(grad_output->Dims()[dim], dim_size * repeat);
 
     auto grad_input = std::make_shared<Tensor>(input_dims, grad_output->Dtype(), grad_output->GetDevice());
-    grad_input->Fill<float>(0.0f);
-
-    const float *grad_out_ptr = static_cast<const float *>(grad_output->DataPtr());
-    float *grad_in_ptr = static_cast<float *>(grad_input->DataPtr());
 
     int64_t total_elements = outer * dim_size * inner;
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
-
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
 
-    RepeatInterleaveBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-        grad_out_ptr, grad_in_ptr, outer, dim_size, inner, repeat);
+    DispatchFunc<INFINI_ALL_TYPES>(
+        grad_output->Dtype(),
+        [=]<typename T>() {
+            grad_input->Fill<T>(0);
+            RepeatInterleaveBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), outer,
+                dim_size, inner, repeat);
+        },
+        "CUDA RepeatInterleaveBackward");
 
     return grad_input;
 }
