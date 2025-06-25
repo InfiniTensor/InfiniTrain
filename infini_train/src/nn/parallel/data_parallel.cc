@@ -6,8 +6,6 @@
 #include <thread>
 #include <vector>
 
-#include "cublas_v2.h"
-#include "cuda_runtime_api.h"
 #include "glog/logging.h"
 
 #include "infini_train/include/device.h"

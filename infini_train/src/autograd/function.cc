@@ -1,7 +1,6 @@
 #include "infini_train/include/autograd/function.h"
 
 #include "glog/logging.h"
-#include <cuda_runtime.h>
 
 #include "infini_train/include/autograd/accumulate.h"
 #include "infini_train/include/device.h"

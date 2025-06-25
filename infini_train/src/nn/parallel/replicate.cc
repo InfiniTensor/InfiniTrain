@@ -67,7 +67,13 @@ std::vector<std::shared_ptr<Tensor>> Broadcast::Forward(const std::vector<std::s
     }
 
     // TODO(dcj): mark non differentiable
-    auto kernel = Dispatcher::Instance().GetKernel({input_device_->Type(), "CommNcclBroadcast"});
+    auto kernel = Dispatcher::Instance().GetKernel({input_device_->Type(),
+#ifdef USE_NCCL
+                                                     "CommNcclBroadcast"
+#else
+                                                     "CommBroadcast"
+#endif
+    });
     return kernel.Call<std::vector<std::shared_ptr<Tensor>>>(input_tensors, target_gpus_);
 }
 
@@ -91,8 +97,13 @@ ReduceAddCoalesced::Forward(const std::vector<std::shared_ptr<Tensor>> &input_te
         }
     }
 
-    auto kernel
-        = Dispatcher::Instance().GetKernel({input_tensors[0]->GetDevice()->Type(), "CommNcclReduceAddCoalesced"});
+    auto kernel = Dispatcher::Instance().GetKernel({input_tensors[0]->GetDevice()->Type(),
+#ifdef USE_NCCL
+                                                    "CommNcclReduceAddCoalesced"
+#else
+                                                    "CommReduceAddCoalesced"
+#endif
+    });
     return kernel.Call<std::vector<std::shared_ptr<Tensor>>>(tensor_reshaped, destination_);
 }
 

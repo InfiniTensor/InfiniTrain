@@ -245,7 +245,7 @@ std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, const
             break;
         }
 #else
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device.Type());
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device->Type());
 #endif
     }
     return tensor;

@@ -6,6 +6,7 @@
 #ifdef USE_CUDA
 #include "cuda.h"
 #include "cuda_runtime_api.h"
+#include "infini_train/include/common/cuda/common_cuda.cuh"
 #endif
 #ifdef USE_NCCL
 #include "nccl.h"
@@ -13,7 +14,6 @@
 #endif
 #include "glog/logging.h"
 
-#include "infini_train/include/common/cuda/common_cuda.cuh"
 namespace infini_train {
 Device::Device(DeviceType type, int8_t index) : type_(type), index_(index) {
     if (type_ == DeviceType::kCPU && index_ != 0) {
@@ -40,6 +40,7 @@ std::ostream &operator<<(std::ostream &os, const Device &device) {
 
 CpuDevice::CpuDevice() : Device(DeviceType::kCPU, 0) {}
 
+#ifdef USE_CUDA
 CudaDevice::~CudaDevice() {
     if (stream_ != nullptr) {
         cudaStreamDestroy(stream_);
@@ -59,6 +60,7 @@ CudaDevice::CudaDevice(int8_t index) : Device(DeviceType::kCUDA, index) {
     SetDevice();
     cudaStreamCreate(&stream_);
 }
+#endif // USE_CUDA
 
 const DeviceManager *DeviceManager::Instance() {
     static auto instance = std::unique_ptr<DeviceManager>(new DeviceManager());
