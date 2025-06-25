@@ -6,7 +6,7 @@
 
 namespace infini_train::kernels::cuda {
 namespace {
-constexpr float kInfinity = std::numeric_limits<float>::infinity();
+__host__ __device__ constexpr float kInfinity = std::numeric_limits<float>::infinity();
 } // namespace
 
 namespace {
@@ -14,79 +14,27 @@ namespace {
 template <typename T, typename ReduceFunc> struct CubOp;
 
 template <typename T> struct CubOp<T, cub::Sum> {
-    __device__ static T Init() {
-        if constexpr (std::is_same_v<T, half>) {
-            return __float2half(0.f);
-        } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
-            return __float2bfloat16(0.f);
-        } else {
-            return T(0);
-        }
-    }
-    __device__ static T Reduce(T a, T b) {
-        if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
-            return __hadd(a, b);
-        } else {
-            return a + b;
-        }
-    }
+    __device__ static T Init() { return common::cuda::Cast<T>(0); }
+    __device__ static T Reduce(T a, T b) { return common::cuda::Add<T>(a, b); }
     __device__ static cub::Sum Op() { return cub::Sum(); }
 };
 
 template <typename T> struct CubOp<T, cub::Max> {
-    __device__ static T Init() {
-        if constexpr (std::is_same_v<T, half>) {
-            return __float2half(-kInfinity);
-        } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
-            return __float2bfloat16(-kInfinity);
-        } else {
-            return T(-kInfinity);
-        }
-    }
-    __device__ static T Reduce(T a, T b) {
-        if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
-            return __hle(a, b) ? b : a;
-        } else if constexpr (std::is_same_v<T, float>) {
-            return fmaxf(a, b);
-        } else {
-            return std::max(a, b);
-        }
-    }
+    __device__ static T Init() { return common::cuda::Cast<T>(-kInfinity); }
+    __device__ static T Reduce(T a, T b) { return common::cuda::Max<T>(a, b); }
     __device__ static cub::Max Op() { return cub::Max(); }
 };
 
 template <typename T> struct CubOp<T, cub::Min> {
-    __device__ static T Init() {
-        if constexpr (std::is_same_v<T, half>) {
-            return __float2half(kInfinity);
-        } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
-            return __float2bfloat16(kInfinity);
-        } else {
-            return T(-kInfinity);
-        }
-    }
-    __device__ static T Reduce(T a, T b) {
-        if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
-            return __hle(a, b) ? a : b;
-        } else if constexpr (std::is_same_v<T, float>) {
-            return fminf(a, b);
-        } else {
-            return std::min(a, b);
-        }
-    }
+    __device__ static T Init() { return common::cuda::Cast<T>(kInfinity); }
+    __device__ static T Reduce(T a, T b) { return common::cuda::Min<T>(a, b); }
     __device__ static cub::Min Op() { return cub::Min(); }
 };
 
 // Finalization strategies
 template <typename T> struct MeanFinalize {
     __device__ __forceinline__ T operator()(T sum, int64_t count) const {
-        if constexpr (std::is_same_v<T, half>) {
-            return __hdiv(sum, __float2half(float(count)));
-        } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
-            return __hdiv(sum, __float2bfloat16(float(count)));
-        } else {
-            return sum / T(count);
-        }
+        return common::cuda::Div(sum, common::cuda::Cast<T>(count));
     }
 };
 
