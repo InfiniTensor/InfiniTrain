@@ -68,6 +68,13 @@ void CausalSelfAttention::To(const infini_train::Device *device) {
     bias_ = std::make_shared<infini_train::Tensor>(bias_->To(device));
 }
 
+std::shared_ptr<nn::Module> CausalSelfAttention::ReplicateForDataParallel(int device_idx) const {
+    auto new_module = std::make_shared<CausalSelfAttention>(static_cast<const CausalSelfAttention &>(*this));
+    new_module->bias_ = std::make_shared<infini_train::Tensor>(
+        bias_->To(infini_train::DeviceManager::Instance()->GetDevice(infini_train::DeviceType::kCUDA, device_idx)));
+    return new_module;
+}
+
 std::vector<std::shared_ptr<infini_train::Tensor>>
 CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     const auto B = x[0]->Dims()[0]; // bs

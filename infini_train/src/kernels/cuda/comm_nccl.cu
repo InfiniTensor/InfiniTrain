@@ -41,6 +41,15 @@ std::vector<std::shared_ptr<Tensor>> NcclBroadcast(const std::vector<std::shared
         comms.push_back(dynamic_cast<const CudaDevice *>(devices[i])->NcclComm());
     }
 
+    int root = -1;
+    for (size_t i = 0; i < devices.size(); ++i) {
+        if (devices[i] == input_tensors[0]->GetDevice()) {
+            root = i;
+            break;
+        }
+    }
+    CHECK_NE(root, -1) << "Root not found in input devices";
+
     NCCL_CHECK(ncclGroupStart());
     for (size_t i = 0; i < devices.size(); ++i) {
         for (size_t j = 0; j < input_tensors.size(); ++j) {
@@ -72,6 +81,15 @@ NcclReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &
         streams.push_back(dynamic_cast<const CudaDevice *>(grads[i][0]->GetDevice())->Stream());
         comms.push_back(dynamic_cast<const CudaDevice *>(grads[i][0]->GetDevice())->NcclComm());
     }
+
+    int root = -1;
+    for (size_t i = 0; i < grads.size(); ++i) {
+        if (grads[i][0]->GetDevice() == destination) {
+            root = i;
+            break;
+        }
+    }
+    CHECK_NE(root, -1) << "Destination device not found in grads group";
 
     NCCL_CHECK(ncclGroupStart());
     for (size_t i = 0; i < grads.size(); ++i) {

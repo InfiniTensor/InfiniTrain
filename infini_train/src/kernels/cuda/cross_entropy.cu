@@ -98,9 +98,9 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
     }
     cudaDeviceSynchronize();
 
-    auto loss_cpu = batched_output->To(DeviceManager::Instance()->GetDevice(DeviceType::kCPU, 0));
+    auto loss_cpu = batched_output->To(DeviceManager::Instance()->GetDefaultDevice());
     auto loss = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kFLOAT32,
-                                         DeviceManager::Instance()->GetDevice(DeviceType::kCPU, 0));
+                                         DeviceManager::Instance()->GetDefaultDevice());
     static_cast<float *>(loss->DataPtr())[0]
         = std::accumulate(static_cast<const float *>(loss_cpu.DataPtr()),
                           static_cast<const float *>(loss_cpu.DataPtr()) + bs, 0.0f)

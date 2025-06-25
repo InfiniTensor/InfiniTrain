@@ -15,7 +15,7 @@ namespace infini_train::nn {
 Module::Module() : Module(kUndefinedType) {}
 
 Module::Module(const std::string &type)
-    : type_(type), device_(DeviceManager::Instance()->GetDevice(DeviceType::kCPU)) {}
+    : type_(type), device_(DeviceManager::Instance()->GetDefaultDevice()) {}
 
 const std::string &Module::type() const { return type_; }
 
@@ -118,6 +118,7 @@ void Module::Apply(std::function<void(Module *)> fn) {
 }
 
 std::shared_ptr<Module> Module::ReplicateForDataParallel(int device_idx) const {
+    // TODO(dcj): use device_idx later
     return std::make_shared<Module>(*this);
 }
 } // namespace infini_train::nn

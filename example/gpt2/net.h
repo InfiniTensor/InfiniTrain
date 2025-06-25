@@ -37,12 +37,7 @@ public:
 
     void To(const infini_train::Device *device) override;
 
-    std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const override {
-        auto new_module = std::make_shared<CausalSelfAttention>(static_cast<const CausalSelfAttention &>(*this));
-        new_module->bias_ = std::make_shared<infini_train::Tensor>(
-            bias_->To(infini_train::DeviceManager::Instance()->GetDevice(infini_train::DeviceType::kCUDA, device_idx)));
-        return new_module;
-    }
+    std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const override;
 
 private:
     GPT2Config config_;

@@ -16,6 +16,7 @@ template <typename T> __global__ void FillKernel(T *data, T value, size_t size) 
     }
 }
 
+// TODO(dcj): refactor Fill kernel with elementwise template
 void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
     const int num_tokens = tensor->NumElements();
     const int threads_per_block = 256;
