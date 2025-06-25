@@ -289,7 +289,7 @@ LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
 std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     // (bs, seq_len)
     auto &idx = x[0];
-    const auto *device = idx->GetDevice();
+    const auto device = idx->GetDevice();
     const auto t = idx->Dims()[1]; // seq_len
     CHECK_LE(t, config_.block_size) << "Cannot forward sequence of length " << t << ", block size is only "
                                     << config_.block_size;

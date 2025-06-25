@@ -55,6 +55,7 @@ ncclComm_t CudaDevice::NcclComm() const { return nccl_comm_; }
 #endif
 
 CudaDevice::CudaDevice(int8_t index) : Device(DeviceType::kCUDA, index) {
+    // TODO(dcj): make CudaDevice initialization lazy to avoid allocating memory on all GPUs in single-GPU mode
     SetDevice();
     cudaStreamCreate(&stream_);
 }

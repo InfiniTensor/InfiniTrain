@@ -14,6 +14,8 @@
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
+#include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/data_parallel.h"
 #include "infini_train/include/optimizer.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
@@ -47,7 +49,11 @@ DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 // debugging
 DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 // memory management
-DEFINE_string(device, "cuda", "device type (cpu/cuda)");
+DEFINE_string(device, "cuda", "device type (cpu/cuda), useless if data_parallel=true");
+// parallel
+DEFINE_bool(
+    data_parallel, false,
+    "use data parallelism or not, will always use device=cuda and use all cuda visible devices when set to true");
 
 using namespace infini_train;
 
@@ -68,9 +74,9 @@ int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
 
     // select the device
-    const Device *device
-        = DeviceManager::Instance()->GetDevice(FLAGS_device == kDeviceCPU ? DeviceType::kCPU : DeviceType::kCUDA, 0);
-    const Device *cpu_device = DeviceManager::Instance()->GetDefaultDevice();
+    const auto *device = DeviceManager::Instance()->GetDevice(
+        FLAGS_data_parallel || FLAGS_device == kDeviceCUDA ? DeviceType::kCUDA : DeviceType::kCPU);
+    // const Device *cpu_device = DeviceManager::Instance()->GetDefaultDevice();
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
     const auto tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length;
@@ -84,13 +90,18 @@ int main(int argc, char *argv[]) {
 
     // init the model, either from scratch or from OpenAI pretrained checkpoint
     LLaMA3Config model_config = LLaMA3Config();
-    std::shared_ptr<LLaMA3> model = nullptr;
+    std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
         model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
     } else {
         model = std::make_shared<LLaMA3>(model_config);
     }
-    model->To(device);
+
+    if (FLAGS_data_parallel) {
+        model = std::make_shared<nn::parallel::DataParallel>(model);
+    } else {
+        model->To(device);
+    }
     LOG(INFO) << "Model loaded to device.";
 
     DataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
@@ -104,9 +115,9 @@ int main(int argc, char *argv[]) {
     //
     // main training loop
     //
-    std::shared_ptr<Tokenizer> tokenizer = nullptr;
+    std::unique_ptr<Tokenizer> tokenizer = nullptr;
     if (!FLAGS_tokenizer_bin.empty()) {
-        tokenizer = std::make_shared<Tokenizer>(FLAGS_tokenizer_bin);
+        tokenizer = std::make_unique<Tokenizer>(FLAGS_tokenizer_bin);
     }
 
     // TODO(dcj): support more complex optimizer later
@@ -162,9 +173,10 @@ int main(int argc, char *argv[]) {
             auto logits = model->Forward({x, y})[0];
             LOG(INFO) << "finish model forward, start loss forward";
             auto loss = loss_fn.Forward({logits, y})[0];
+            loss = loss / grad_accum_steps;
             LOG(INFO) << "finish loss forward";
-            auto loss_cpu = loss->To(cpu_device);
-            lossf += static_cast<const float *>(loss_cpu.DataPtr())[0] / grad_accum_steps;
+            auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
+            lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
             LOG(INFO) << "start backward";
             loss->Backward();
             LOG(INFO) << "finish backward";

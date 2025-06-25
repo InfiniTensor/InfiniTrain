@@ -159,7 +159,7 @@ std::shared_ptr<Tensor> ReduceOpBackward(const std::shared_ptr<Tensor> &grad_out
     int threads_per_block = 256;
     int num_blocks = (N * H * W + threads_per_block - 1) / threads_per_block;
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
     GenericReduceBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
         grad_input_ptr, grad_output_ptr, input_ptr, reduced_ptr, N, H, W, is_mean, is_masked);
 
