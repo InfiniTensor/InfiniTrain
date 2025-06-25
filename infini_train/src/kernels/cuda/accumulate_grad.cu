@@ -4,21 +4,11 @@
 
 namespace infini_train::kernels::cuda {
 
-template <typename T> __device__ __forceinline__ T mul(const T &a, const float &b) {
-    if constexpr (std::is_same_v<T, half>) {
-        return __hmul(a, __float2half(b));
-    } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
-        return __hmul(a, __float2bfloat16(b));
-    } else {
-        return a - b;
-    }
-}
-
 template <typename T>
 __global__ void AccumulateGradKernel(const T *grad_ptr, float rate, T *tensor_ptr, size_t num_elements) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < num_elements) {
-        tensor_ptr[idx] += mul(grad_ptr[idx], rate);
+        tensor_ptr[idx] += common::cuda::Mul(grad_ptr[idx], common::cuda::Cast<T>(rate));
     }
 }
 
@@ -39,7 +29,8 @@ void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const s
         "CUDA AccumulateGrad");
 }
 
-template <typename T> __device__ __forceinline__ T fma_rn(const float &beta, const T &x, const T &y) {
+template <typename T> __device__ __forceinline__ T fma(const float &beta, const T &x, const T &y) {
+    // perform fma(beta, x, (1 - beta) * y)
     if constexpr (std::is_same_v<T, half>) {
         return __hfma(__float2half(beta), x, __float2half(1 - beta) * y);
     } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
@@ -51,28 +42,6 @@ template <typename T> __device__ __forceinline__ T fma_rn(const float &beta, con
     }
 }
 
-template <typename T> __device__ __forceinline__ T div_rn(const T &a, const float &b) {
-    if constexpr (std::is_same_v<T, half>) {
-        return __hdiv(a, __float2half(b));
-    } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
-        return __hdiv(a, __float2bfloat16(b));
-    } else if constexpr (std::is_same_v<T, float>) {
-        return __fdiv_rn(a, b);
-    } else {
-        return a / b;
-    }
-}
-
-template <typename T> __device__ __forceinline__ T sub(const T &a, const float &b) {
-    if constexpr (std::is_same_v<T, half>) {
-        return __hsub(a, __float2half(b));
-    } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
-        return __hsub(a, __float2bfloat16(b));
-    } else {
-        return a - b;
-    }
-}
-
 template <typename T>
 __global__ void AdamAccumulateGradKernel(const T *grad_data, T *param_data, size_t num_elements, T *m_data, T *v_data,
                                          float learning_rate, float beta1, float beta2, float eps,
@@ -80,14 +49,15 @@ __global__ void AdamAccumulateGradKernel(const T *grad_data, T *param_data, size
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < num_elements) {
         // m_data[idx] = __fmaf_rn(beta1, m_data[idx], (1 - beta1) * grad_data[idx]);
-        m_data[idx] = fma_rn(beta1, m_data[idx], grad_data[idx]);
+        m_data[idx] = fma(beta1, m_data[idx], grad_data[idx]);
         // v_data[idx] = __fmaf_rn(beta2, v_data[idx], (1 - beta2) * grad_data[idx] * grad_data[idx]);
-        v_data[idx] = fma_rn(beta2, v_data[idx], grad_data[idx] * grad_data[idx]);
+        v_data[idx] = fma(beta2, v_data[idx], grad_data[idx] * grad_data[idx]);
 
-        const float m_hat = div_rn(m_data[idx], bias_correction_m);
-        const float v_hat = div_rn(v_data[idx], bias_correction_v);
+        const float m_hat = common::cuda::Cast<float>(m_data[idx]) / bias_correction_m;
+        const float v_hat = common::cuda::Cast<float>(v_data[idx]) / bias_correction_v;
 
-        param_data[idx] = sub(param_data[idx], learning_rate * m_hat * __frcp_rn(__fsqrt_rn(v_hat) + eps));
+        param_data[idx] = common::cuda::Sub(
+            param_data[idx], common::cuda::Cast<T>(learning_rate * m_hat * __frcp_rn(__fsqrt_rn(v_hat) + eps)));
     }
 }
 
