@@ -582,9 +582,10 @@ std::shared_ptr<Tensor> SigmoidForward(const std::shared_ptr<Tensor> &input) {
 
 std::shared_ptr<Tensor> SigmoidBackward(const std::shared_ptr<Tensor> &output,
                                         const std::shared_ptr<Tensor> &grad_output) {
-    DISPATCH(grad_output->Dtype(),
-             return UnaryBackward(grad_output, output, [] __device__(auto x) { return Mul(x, Sub(decltype(x){1}, x)); });
-             , INFINI_ALL_FLOATING_TYPES)
+    DISPATCH(
+        grad_output->Dtype(),
+        return UnaryBackward(grad_output, output, [] __device__(auto x) { return Mul(x, Sub(decltype(x){1}, x)); });
+        , INFINI_ALL_FLOATING_TYPES)
 }
 } // namespace infini_train::kernels::cuda
 
