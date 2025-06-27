@@ -4,11 +4,10 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
-#include <unordered_map>
-#include <vector>
+#include <tuple>
 
 #include "glog/logging.h"
 
@@ -225,6 +224,11 @@ std::shared_ptr<GPT2> GPT2::FromPretrained(ModelType model_type) {
 }
 
 namespace {
+
+constexpr int32_t kHeaderMagic = 20240326;
+constexpr int32_t kHeaderFP32Version = 3;
+constexpr int32_t kHeaderBF16Version = 5;
+
 std::vector<uint8_t> ReadSeveralBytesFromIfstream(size_t num_bytes, std::ifstream *ifs) {
     std::vector<uint8_t> result(num_bytes);
     ifs->read(reinterpret_cast<char *>(result.data()), num_bytes);
@@ -238,8 +242,19 @@ template <typename T> T BytesToType(const std::vector<uint8_t> &bytes, size_t of
     return value;
 }
 
-constexpr int32_t kHeaderMagic = 20240326;
-constexpr int32_t kHeaderFP32Version = 3;
+std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::vector<uint8_t> &header,
+                                                                     size_t offset) {
+    const auto version = BytesToType<uint32_t>(header, offset);
+    switch (version) {
+    case kHeaderBF16Version:
+        return {version, infini_train::DataType::kBFLOAT16};
+    case kHeaderFP32Version:
+        return {version, infini_train::DataType::kFLOAT32};
+    default:
+        LOG(FATAL) << "Unsupported version: " << version << " at " << __FILE__ << ":" << __LINE__;
+        throw std::runtime_error("Unsupported version. (This line normally will not be reached)");
+    }
+}
 } // namespace
 
 std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
@@ -252,8 +267,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
 
     const auto magic = BytesToType<uint32_t>(header, 0);
     CHECK_EQ(magic, kHeaderMagic);
-    const auto version = BytesToType<uint32_t>(header, 4);
-    CHECK_EQ(version, kHeaderFP32Version);
+    auto [version, dtype] = DetermineAndCheckVersion(header, 4);
 
     const auto block_size = BytesToType<uint32_t>(header, 8);
     const auto vocab_size = BytesToType<uint32_t>(header, 12);

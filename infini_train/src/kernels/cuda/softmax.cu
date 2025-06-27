@@ -10,7 +10,7 @@ namespace infini_train::kernels::cuda {
 template <size_t BLOCK_SIZE, typename T>
 __global__ void SoftmaxForwardKernel(T *output, const T *input, int64_t outer_size, int64_t axis_size,
                                      int64_t inner_size) {
-    using BlockReduce = cub::BlockReduce<T, BLOCK_SIZE>;
+    using BlockReduce = cub::BlockReduce<float, BLOCK_SIZE>;
 
     __shared__ typename BlockReduce::TempStorage temp_storage_max;
     __shared__ typename BlockReduce::TempStorage temp_storage_sum;
@@ -22,12 +22,12 @@ __global__ void SoftmaxForwardKernel(T *output, const T *input, int64_t outer_si
     const int tid = threadIdx.x;
 
     // calculate the maximum for each group
-    T thread_max = -INFINITY;
+    float thread_max = -INFINITY;
     for (int64_t axis = tid; axis < axis_size; axis += BLOCK_SIZE) {
         int64_t idx = (group * axis_size + axis) * inner_size + inner_idx;
         thread_max = max(thread_max, common::cuda::Cast<float>(input[idx]));
     }
-    T block_max = BlockReduce(temp_storage_max).Reduce(thread_max, cub::Max());
+    float block_max = BlockReduce(temp_storage_max).Reduce(thread_max, cub::Max());
 
     if (tid == 0) {
         row_max = block_max;
@@ -35,14 +35,14 @@ __global__ void SoftmaxForwardKernel(T *output, const T *input, int64_t outer_si
     __syncthreads();
 
     // calculate the sum of exponents
-    T thread_sum = 0;
+    float thread_sum = 0;
     for (int64_t axis = tid; axis < axis_size; axis += BLOCK_SIZE) {
         int64_t idx = (group * axis_size + axis) * inner_size + inner_idx;
-        T exp_val = exp(common::cuda::Cast<float>(input[idx]) - row_max);
+        float exp_val = exp(common::cuda::Cast<float>(input[idx]) - row_max);
         output[idx] = common::cuda::Cast<T>(exp_val);
         thread_sum += exp_val;
     }
-    T block_sum = BlockReduce(temp_storage_sum).Sum(thread_sum);
+    float block_sum = BlockReduce(temp_storage_sum).Sum(thread_sum);
 
     if (tid == 0) {
         row_sum = block_sum;
@@ -52,7 +52,7 @@ __global__ void SoftmaxForwardKernel(T *output, const T *input, int64_t outer_si
     // normalize
     for (int64_t axis = tid; axis < axis_size; axis += BLOCK_SIZE) {
         int64_t idx = (group * axis_size + axis) * inner_size + inner_idx;
-        output[idx] /= row_sum;
+        output[idx] = common::cuda::Cast<T>(common::cuda::Cast<float>(output[idx]) / row_sum);
     }
 }
 
