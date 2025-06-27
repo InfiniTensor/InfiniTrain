@@ -279,7 +279,7 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
     int64_t mask_size = mask->NumElements();
     int64_t batch_size = input->NumElements() / mask_size;
 
-    auto output = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());
+    auto output = std::make_shared<Tensor>(input->Dims(), dtype, input->GetDevice());
 
     int threads_per_block = 256;
     int num_blocks = (input->NumElements() + threads_per_block - 1) / threads_per_block;

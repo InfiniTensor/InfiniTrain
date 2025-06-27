@@ -4,11 +4,10 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
-#include <unordered_map>
-#include <vector>
+#include <tuple>
 
 #include "glog/logging.h"
 
@@ -65,6 +64,11 @@ CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
 void CausalSelfAttention::To(infini_train::Device device) {
     nn::Module::To(device);
     bias_ = std::make_shared<infini_train::Tensor>(bias_->To(device));
+}
+
+void CausalSelfAttention::To(infini_train::DataType dtype) {
+    nn::Module::To(dtype);
+    bias_ = std::make_shared<infini_train::Tensor>(bias_->To(dtype));
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
@@ -231,6 +235,11 @@ std::unique_ptr<GPT2> GPT2::FromPretrained(ModelType model_type) {
 }
 
 namespace {
+
+constexpr int32_t kHeaderMagic = 20240326;
+constexpr int32_t kHeaderFP32Version = 3;
+constexpr int32_t kHeaderBF16Version = 5;
+
 std::vector<uint8_t> ReadSeveralBytesFromIfstream(size_t num_bytes, std::ifstream *ifs) {
     std::vector<uint8_t> result(num_bytes);
     ifs->read(reinterpret_cast<char *>(result.data()), num_bytes);
@@ -244,8 +253,19 @@ template <typename T> T BytesToType(const std::vector<uint8_t> &bytes, size_t of
     return value;
 }
 
-constexpr int32_t kHeaderMagic = 20240326;
-constexpr int32_t kHeaderFP32Version = 3;
+std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::vector<uint8_t> &header,
+                                                                     size_t offset) {
+    const auto version = BytesToType<uint32_t>(header, offset);
+    switch (version) {
+    case kHeaderBF16Version:
+        return {version, infini_train::DataType::kBFLOAT16};
+    case kHeaderFP32Version:
+        return {version, infini_train::DataType::kFLOAT32};
+    default:
+        LOG(FATAL) << "Unsupported version: " << version << " at " << __FILE__ << ":" << __LINE__;
+        throw std::runtime_error("Unsupported version. (This line normally will not be reached)");
+    }
+}
 } // namespace
 
 std::unique_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
@@ -258,8 +278,7 @@ std::unique_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
 
     const auto magic = BytesToType<uint32_t>(header, 0);
     CHECK_EQ(magic, kHeaderMagic);
-    const auto version = BytesToType<uint32_t>(header, 4);
-    CHECK_EQ(version, kHeaderFP32Version);
+    auto [version, dtype] = DetermineAndCheckVersion(header, 4);
 
     const auto block_size = BytesToType<uint32_t>(header, 8);
     const auto vocab_size = BytesToType<uint32_t>(header, 12);

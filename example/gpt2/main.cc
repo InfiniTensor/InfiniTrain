@@ -47,6 +47,8 @@ DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 // memory management
 DEFINE_string(device, "cuda", "device type (cpu/cuda)");
+// precision
+DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 
 using namespace infini_train;
 
@@ -56,6 +58,8 @@ const std::unordered_set<std::string> kSupportedModels
     = {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "d12", "d24", "d36", "d48"};
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
+constexpr char kDtypeFP32[] = "float32";
+constexpr char kDtypeBF16[] = "bfloat16";
 
 //
 const std::unordered_map<std::string, GPT2Config> kModelToConfigs = {
@@ -75,6 +79,14 @@ const std::unordered_map<std::string, GPT2::ModelType> kStrToModelType = {
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+
+float DecodeBF16(void *ptr) {
+    uint16_t *raw_data = reinterpret_cast<uint16_t *>(ptr);
+    uint32_t f32_bits = static_cast<uint32_t>(raw_data[0]) << 16;
+    float f;
+    std::memcpy(&f, &f32_bits, sizeof(f));
+    return f;
+}
 
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -110,6 +122,18 @@ int main(int argc, char *argv[]) {
         model = GPT2::FromPretrained(kStrToModelType.at(FLAGS_model));
     }
     model->To(device);
+
+    // select the data type
+    // TODO(lzm): change to solely rely on the weight file info for determining the dtype when autocast is supported
+    DataType dtype;
+    if (FLAGS_dtype == kDtypeFP32) {
+        dtype = DataType::kFLOAT32;
+    } else if (FLAGS_dtype == kDtypeBF16) {
+        dtype = DataType::kBFLOAT16;
+        model->To(dtype);
+    } else {
+        LOG(FATAL) << "Datatype " << FLAGS_dtype << " not supported.";
+    }
 
     DataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
                             FLAGS_batch_size);
@@ -183,7 +207,11 @@ int main(int argc, char *argv[]) {
             auto loss = loss_fn.Forward({logits, y})[0];
             LOG(INFO) << "finish loss forward";
             auto loss_cpu = loss->To(Device());
-            lossf += static_cast<const float *>(loss_cpu.DataPtr())[0] / grad_accum_steps;
+            if (FLAGS_dtype == kDtypeFP32) {
+                lossf += static_cast<const float *>(loss_cpu.DataPtr())[0] / grad_accum_steps;
+            } else if (FLAGS_dtype == kDtypeBF16) {
+                lossf += DecodeBF16(loss_cpu.DataPtr()) / grad_accum_steps;
+            }
             LOG(INFO) << "start backward";
             loss->Backward();
             LOG(INFO) << "finish backward";

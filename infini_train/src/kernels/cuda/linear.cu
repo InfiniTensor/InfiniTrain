@@ -27,9 +27,10 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
         CHECK_EQ(input_dims[i], other_dims[i]) << "Batch dims must match";
     }
 
+    auto dtype = input->Dtype();
     std::vector<int64_t> output_dims = input_dims;
     output_dims[output_dims.size() - 1] = n;
-    auto output = std::make_shared<Tensor>(output_dims, input->Dtype(), input->GetDevice());
+    auto output = std::make_shared<Tensor>(output_dims, dtype, input->GetDevice());
 
     const float alpha = 1.0f, beta = 0.0f;
     cublasHandle_t handle;
@@ -50,7 +51,7 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
     int64_t stride_c = m * n;
     // NOTE(zbl): the last cublasGemmAlgo_t param has no effect on GPU arch >= sm_80(Ampere)
 
-    switch (input->Dtype()) {
+    switch (dtype) {
         DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
                           handle, CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, &alpha, other->DataPtr(), CUDA_R_32F, lda,
                           stride_a, input->DataPtr(), CUDA_R_32F, ldb, stride_b, &beta, output->DataPtr(), CUDA_R_32F,
@@ -296,13 +297,14 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     const int64_t bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
     const int64_t in_features = *input_dims.rbegin();
 
+    auto dtype = input->Dtype();
     const auto &weight_dims = weight->Dims();
     CHECK_EQ(weight_dims.size(), 2);
     CHECK_EQ(in_features, weight_dims[transpose ? 1 : 0]);
     CHECK_EQ(out_features, weight_dims[transpose ? 0 : 1]);
 
-    auto grad_input = std::make_shared<Tensor>(input_dims, input->Dtype(), grad_output->GetDevice());
-    auto grad_weight = std::make_shared<Tensor>(weight_dims, input->Dtype(), grad_output->GetDevice());
+    auto grad_input = std::make_shared<Tensor>(input_dims, dtype, grad_output->GetDevice());
+    auto grad_weight = std::make_shared<Tensor>(weight_dims, dtype, grad_output->GetDevice());
     std::shared_ptr<Tensor> grad_bias = nullptr;
 
     auto initialize_gradients = [&](auto zero_value, DataType dtype) {
@@ -315,7 +317,7 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
         }
     };
     DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
-        input->Dtype(), [=]<typename T>() { initialize_gradients(T(0), input->Dtype()); }, "CUDA LinearBackward");
+        dtype, [=]<typename T>() { initialize_gradients(T(0), dtype); }, "CUDA LinearBackward");
 
     float alpha = 1.0f;
     float beta = 0.0f;

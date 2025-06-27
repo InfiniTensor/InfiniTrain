@@ -14,8 +14,7 @@ Embedding::Embedding(int num_embeddings, int embedding_dim, Device device) : Mod
     device_ = device;
 
     parameters_[kParamWeightName]
-        = std::make_shared<Tensor>(std::vector<int64_t>{num_embeddings, embedding_dim}, DataType::kFLOAT32, device)
-              ->RequiresGrad();
+        = std::make_shared<Tensor>(std::vector<int64_t>{num_embeddings, embedding_dim}, dtype_, device)->RequiresGrad();
     ResetParameters();
 }
 

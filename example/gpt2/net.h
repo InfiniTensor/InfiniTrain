@@ -35,6 +35,7 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
     void To(infini_train::Device device) override;
+    void To(infini_train::DataType dtype) override;
 
 private:
     GPT2Config config_;

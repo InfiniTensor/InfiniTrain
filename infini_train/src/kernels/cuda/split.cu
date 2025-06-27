@@ -33,6 +33,7 @@ std::vector<std::shared_ptr<Tensor>> SplitForward(const std::shared_ptr<Tensor> 
     CHECK_LT(dim, input_dims.size());
 
     std::vector<std::shared_ptr<Tensor>> outputs;
+    auto dtype = input->Dtype();
 
     const int64_t N = std::accumulate(input_dims.begin(), input_dims.begin() + dim, 1, std::multiplies<int64_t>());
     const int64_t W = std::accumulate(input_dims.begin() + dim + 1, input_dims.end(), 1, std::multiplies<int64_t>());
@@ -43,15 +44,21 @@ std::vector<std::shared_ptr<Tensor>> SplitForward(const std::shared_ptr<Tensor> 
         const int64_t H_out = std::min(split_size, H_in - start);
         output_dims[dim] = H_out;
 
-        auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32, input->GetDevice());
+        auto output = std::make_shared<Tensor>(output_dims, dtype, input->GetDevice());
 
         int64_t total = N * H_out * W;
         int threads_per_block = 256;
         int num_blocks = (total + threads_per_block - 1) / threads_per_block;
 
-        SplitForwardKernel<<<num_blocks, threads_per_block>>>(static_cast<const float *>(input->DataPtr()),
-                                                              static_cast<float *>(output->DataPtr()), N, H_in, H_out,
-                                                              W, start);
+        DispatchFunc<INFINI_ALL_TYPES>(
+            dtype,
+            [=]<typename T>() {
+                SplitForwardKernel<<<num_blocks, threads_per_block>>>(static_cast<const T *>(input->DataPtr()),
+                                                                      static_cast<T *>(output->DataPtr()), N, H_in,
+                                                                      H_out, W, start);
+            },
+            "CUDA SplitForward");
+
         outputs.push_back(std::move(output));
     }
 
