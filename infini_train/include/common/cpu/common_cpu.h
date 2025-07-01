@@ -14,6 +14,8 @@ namespace infini_train::common::cpu {
  * @return Value converted to DST type
  */
 template <typename DST, typename SRC> DST Cast(SRC &&x) {
+    static_assert(!std::is_reference_v<DST>, "Cast cannot return reference types");
+
     // TODO(lzm): add cpu-version fp16 and bf16
     return (DST)(std::forward<SRC>(x));
 }

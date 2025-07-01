@@ -42,6 +42,8 @@ namespace infini_train::common::cuda {
  *   int i = Cast<int>(2.718);         // double -> int (standard cast)
  */
 template <typename DST, typename SRC> __host__ __device__ DST Cast(SRC &&x) {
+    static_assert(!std::is_reference_v<DST>, "Cast cannot return reference types");
+
     using SRC_base = std::remove_cv_t<std::remove_reference_t<SRC>>;
     using DST_base = std::remove_cv_t<std::remove_reference_t<DST>>;
 
