@@ -10,6 +10,8 @@
 #endif
 #include "glog/logging.h"
 
+#include "infini_train/include/device.h"
+
 namespace infini_train {
 namespace {
 inline std::string GetCurrentTimestamp() {
@@ -32,6 +34,24 @@ Profiler &Profiler::Instance() {
     return profiler;
 }
 
+int GetRank() {
+    // Assume single-node setting, rank == device_id
+    int device = 0;
+#ifdef USE_CUDA
+    cudaGetDevice(&device);
+#endif
+    return device;
+}
+
+#ifdef USE_CUDA
+cudaStream_t GetCudaStream() {
+    int device_id = GetRank();
+    // TODO(zbl): support multi-stream on single device
+    return static_cast<const CudaDevice *>(DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, static_cast<int8_t>(device_id)))
+        ->Stream();
+}
+#endif
+
 void Profiler::StartRecord(const std::string &name, DeviceType device) {
     if (g_profiling_depth++ > 0) {
         return;
@@ -44,9 +64,10 @@ void Profiler::StartRecord(const std::string &name, DeviceType device) {
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
         cudaEvent_t start, stop;
+        cudaStream_t stream = GetCudaStream();
         cudaEventCreate(&start);
         cudaEventCreate(&stop);
-        cudaEventRecord(start, 0);
+        cudaEventRecord(start, stream);
         cuda_timing_map_[name] = {reinterpret_cast<void *>(start), reinterpret_cast<void *>(stop)};
         break;
     }
@@ -64,6 +85,7 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
     int64_t host_us = 0, device_us = 0;
     int64_t peak_mem_mb = 0;
     std::string device_str = "cpu";
+    int rank = GetRank();
 
     switch (device) {
     case DeviceType::kCPU:
@@ -75,7 +97,8 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
             auto event_pair = it->second;
             cudaEvent_t start = reinterpret_cast<cudaEvent_t>(event_pair.start);
             cudaEvent_t stop = reinterpret_cast<cudaEvent_t>(event_pair.stop);
-            cudaEventRecord(stop, 0);
+            cudaStream_t stream = GetCudaStream();
+            cudaEventRecord(stop, stream);
             cudaEventSynchronize(stop);
             float elapsed_ms;
             cudaEventElapsedTime(&elapsed_ms, start, stop);
@@ -110,145 +133,191 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
     host_us = std::chrono::duration_cast<std::chrono::microseconds>(cpu_end - cpu_start).count();
     cpu_timing_map_.erase(name);
 
-    RecordKernel(name, device_str, host_us, device_us, peak_mem_mb);
+    RecordKernel(name, rank, device_str, host_us, device_us, peak_mem_mb);
 }
 
-void Profiler::RecordKernel(const std::string &name, const std::string &device, int64_t host_us, int64_t device_us,
-                            int64_t max_device_mem_usage_mb) {
+void Profiler::RecordKernel(const std::string &name, const int &rank, const std::string &device, int64_t host_us,
+                            int64_t device_us, int64_t max_device_mem_usage_mb) {
     {
         std::lock_guard<std::mutex> lock(mtx_);
-        auto &entry = stats_[name];
-        entry.host_total_us += host_us;
-        entry.device_total_us += device_us;
-        entry.count += 1;
+        call_records_.emplace_back(KernelCallRecord{current_tag_, GetCurrentTimestamp(), rank, name, device, host_us,
+                                                    device_us, max_device_mem_usage_mb});
     }
-
-    call_records_.emplace_back(KernelCallRecord{current_tag_, GetCurrentTimestamp(), name, device, host_us, device_us,
-                                                max_device_mem_usage_mb});
 }
 
 void Profiler::Reset() {
     std::lock_guard<std::mutex> lock(mtx_);
-    stats_.clear();
     call_records_.clear();
     current_tag_ = "Untagged";
 }
 
 void Profiler::SetTag(const std::string &tag) { current_tag_ = tag; }
 
-void Profiler::Report(std::ostream &os, SortBy sort_by) const {
-    os << "\n--- Profiler Report ---\n";
-
-    std::map<std::string, std::map<std::string, KernelProfileInfo>> grouped_stats;
+void Profiler::ReportGroupedByRank(std::function<std::ostream &(int64_t)> get_os, SortBy sort_by) const {
+    std::map<int64_t, std::map<std::string, std::map<std::string, KernelProfileInfo>>> grouped_stats;
 
     for (const auto &rec : call_records_) {
-        auto &entry = grouped_stats[rec.tag][rec.name];
+        auto &entry = grouped_stats[rec.rank][rec.tag][rec.name];
         entry.host_total_us += rec.host_us;
         entry.device_total_us += rec.device_us;
         entry.count += 1;
     }
 
-    for (const auto &[tag, kernel_map] : grouped_stats) {
-        os << "\nTag: " << tag << "\n";
+    for (const auto &[rank, tag_map] : grouped_stats) {
+        std::ostream &os = get_os(rank);
+        if (!os) {
+            continue;
+        }
 
-        int64_t tag_peak_mb = 0;
-        for (const auto &rec : call_records_) {
-            if (rec.tag == tag) {
-                tag_peak_mb = std::max(tag_peak_mb, rec.max_device_mem_usage_mb);
+        os << "\n=== Profiler Report for Rank " << rank << " ===\n";
+
+        for (const auto &[tag, kernel_map] : tag_map) {
+            os << "\nTag: " << tag << "\n";
+
+            // Peak memory usage by tag
+            int64_t tag_peak_mb = 0;
+            for (const auto &rec : call_records_) {
+                if (rec.rank == rank && rec.tag == tag) {
+                    tag_peak_mb = std::max(tag_peak_mb, rec.max_device_mem_usage_mb);
+                }
             }
-        }
-        os << "Peak Device Memory Usage: " << tag_peak_mb << " MB\n";
+            os << "Peak Device Memory Usage: " << tag_peak_mb << " MB\n";
 
-        os << std::left << std::setw(24) << "Name" << std::setw(10) << "Count" << std::setw(18) << "Host Total(us)"
-           << std::setw(10) << "Host %" << std::setw(20) << "Device Total(us)" << std::setw(10) << "Device %"
-           << std::setw(16) << "Avg Host(us)" << std::setw(18) << "Avg Device(us)"
-           << "\n";
-
-        int64_t host_sum = 0;
-        int64_t dev_sum = 0;
-        for (const auto &[_, info] : kernel_map) {
-            host_sum += info.host_total_us;
-            dev_sum += info.device_total_us;
-        }
-
-        std::vector<std::pair<std::string, KernelProfileInfo>> records(kernel_map.begin(), kernel_map.end());
-
-        auto compare = [&](const auto &a, const auto &b) {
-            const auto &[_, A] = a;
-            const auto &[__, B] = b;
-            switch (sort_by) {
-            case SortBy::HostTimeTotal:
-                return A.host_total_us > B.host_total_us;
-            case SortBy::HostTimePercentage:
-                return A.host_total_us * dev_sum > B.host_total_us * dev_sum;
-            case SortBy::HostTimeAverage:
-                return A.host_total_us / A.count > B.host_total_us / B.count;
-            case SortBy::DeviceTimeTotal:
-                return A.device_total_us > B.device_total_us;
-            case SortBy::DeviceTimePercentage:
-                return A.device_total_us * host_sum > B.device_total_us * host_sum;
-            case SortBy::DeviceTimeAverage:
-                return A.device_total_us / A.count > B.device_total_us / B.count;
-            case SortBy::Count:
-                return A.count > B.count;
-            case SortBy::NotSorted:
-                return false;
-            }
-            return false;
-        };
-
-        if (sort_by != SortBy::NotSorted) {
-            std::sort(records.begin(), records.end(), compare);
-        }
-
-        for (const auto &[name, info] : records) {
-            double host_pct = host_sum > 0 ? 100.0 * info.host_total_us / host_sum : 0.0;
-            double dev_pct = dev_sum > 0 ? 100.0 * info.device_total_us / dev_sum : 0.0;
-            double avg_host = static_cast<double>(info.host_total_us) / info.count;
-            double avg_dev = static_cast<double>(info.device_total_us) / info.count;
-
-            os << std::left << std::setw(24) << name << std::setw(10) << info.count << std::setw(18)
-               << info.host_total_us << std::setw(10) << std::fixed << std::setprecision(2) << host_pct << std::setw(20)
-               << info.device_total_us << std::setw(10) << std::fixed << std::setprecision(2) << dev_pct
-               << std::setw(16) << static_cast<int64_t>(avg_host) << std::setw(18) << static_cast<int64_t>(avg_dev)
+            os << std::left << std::setw(24) << "Name" << std::setw(10) << "Count" << std::setw(18) << "Host Total(us)"
+               << std::setw(10) << "Host %" << std::setw(20) << "Device Total(us)" << std::setw(10) << "Device %"
+               << std::setw(16) << "Avg Host(us)" << std::setw(18) << "Avg Device(us)"
                << "\n";
+
+            int64_t host_sum = 0, dev_sum = 0;
+            for (const auto &[_, info] : kernel_map) {
+                host_sum += info.host_total_us;
+                dev_sum += info.device_total_us;
+            }
+
+            std::vector<std::pair<std::string, KernelProfileInfo>> records(kernel_map.begin(), kernel_map.end());
+
+            auto compare = [&](const auto &a, const auto &b) {
+                const auto &[_, A] = a;
+                const auto &[__, B] = b;
+                switch (sort_by) {
+                case SortBy::HostTimeTotal:
+                    return A.host_total_us > B.host_total_us;
+                case SortBy::HostTimePercentage:
+                    return A.host_total_us * dev_sum > B.host_total_us * dev_sum;
+                case SortBy::HostTimeAverage:
+                    return A.host_total_us / A.count > B.host_total_us / B.count;
+                case SortBy::DeviceTimeTotal:
+                    return A.device_total_us > B.device_total_us;
+                case SortBy::DeviceTimePercentage:
+                    return A.device_total_us * host_sum > B.device_total_us * host_sum;
+                case SortBy::DeviceTimeAverage:
+                    return A.device_total_us / A.count > B.device_total_us / B.count;
+                case SortBy::Count:
+                    return A.count > B.count;
+                case SortBy::NotSorted:
+                    return false;
+                }
+                return false;
+            };
+
+            if (sort_by != SortBy::NotSorted) {
+                std::sort(records.begin(), records.end(), compare);
+            }
+
+            for (const auto &[name, info] : records) {
+                double host_pct = host_sum > 0 ? 100.0 * info.host_total_us / host_sum : 0.0;
+                double dev_pct = dev_sum > 0 ? 100.0 * info.device_total_us / dev_sum : 0.0;
+                double avg_host = static_cast<double>(info.host_total_us) / info.count;
+                double avg_dev = static_cast<double>(info.device_total_us) / info.count;
+
+                os << std::left << std::setw(24) << name << std::setw(10) << info.count << std::setw(18)
+                   << info.host_total_us << std::setw(10) << std::fixed << std::setprecision(2) << host_pct
+                   << std::setw(20) << info.device_total_us << std::setw(10) << std::fixed << std::setprecision(2)
+                   << dev_pct << std::setw(16) << static_cast<int64_t>(avg_host) << std::setw(18)
+                   << static_cast<int64_t>(avg_dev) << "\n";
+            }
         }
     }
 }
 
-void Profiler::Report(const std::string &file_path, SortBy sort_by) const {
-    std::ofstream ofs(file_path);
-    if (!ofs) {
-        LOG(ERROR) << "Failed to open file: " << file_path;
-        return;
+void Profiler::Report(std::ostream &os, SortBy sort_by) const {
+    auto get_stream = [&](int64_t) -> std::ostream & { return os; };
+    ReportGroupedByRank(get_stream, sort_by);
+}
+
+void Profiler::Report(const std::string &file_prefix, SortBy sort_by) const {
+    std::map<int64_t, std::ofstream> file_map;
+
+    auto get_stream = [&](int64_t rank) -> std::ostream & {
+        auto &file = file_map[rank];
+        if (!file.is_open()) {
+            std::string filename = std::format("{}.rank{}", file_prefix, rank);
+            file.open(filename);
+            if (!file) {
+                LOG(ERROR) << "Failed to open file: " << filename;
+                static std::ofstream null_ofs;
+                return null_ofs;
+            }
+        }
+        return file;
+    };
+
+    ReportGroupedByRank(get_stream, sort_by);
+}
+
+void Profiler::PrintRecordsGroupedByRank(std::function<std::ostream &(int64_t)> get_os) const {
+    std::map<int64_t, std::map<std::string, std::vector<const KernelCallRecord *>>> grouped;
+
+    for (const auto &rec : call_records_) { grouped[rec.rank][rec.tag].push_back(&rec); }
+
+    for (const auto &[rank, tag_map] : grouped) {
+        std::ostream &os = get_os(rank);
+        if (!os) {
+            continue;
+        }
+
+        os << "\n=== Kernel Call Log for Rank " << rank << " ===\n";
+
+        for (const auto &[tag, records] : tag_map) {
+            os << "\nTag: " << tag << "\n";
+
+            os << std::left << std::setw(8) << "Idx" << std::setw(24) << "Timestamp" << std::setw(24) << "Name"
+               << std::setw(10) << "Device" << std::setw(12) << "Host(us)" << std::setw(12) << "Device(us)"
+               << std::setw(16) << "Peak Mem(MB)" << "\n";
+
+            for (size_t idx = 0; idx < records.size(); ++idx) {
+                const auto &rec = *records[idx];
+                os << std::left << std::setw(8) << idx << std::setw(24) << rec.timestamp << std::setw(24) << rec.name
+                   << std::setw(10) << rec.device << std::setw(12) << rec.host_us << std::setw(12) << rec.device_us
+                   << std::setw(16) << rec.max_device_mem_usage_mb << "\n";
+            }
+        }
     }
-    Report(ofs, sort_by);
 }
 
 void Profiler::PrintRecords(std::ostream &os) const {
-    os << "\n--- Kernel Call Log ---\n";
-    os << std::left << std::setw(16) << "Tag" << std::setw(8) << "Idx" << std::setw(24) << "Timestamp" << std::setw(24)
-       << "Name" << std::setw(10) << "Device" << std::setw(12) << "Host(us)" << std::setw(12) << "Device(us)"
-       << std::setw(16) << "Peak Device Mem Usage(MB)"
-       << "\n";
-
-    std::map<std::string, int> tag_counters;
-
-    for (const auto &rec : call_records_) {
-        int idx = tag_counters[rec.tag]++;
-        os << std::left << std::setw(16) << rec.tag << std::setw(8) << idx << std::setw(24) << rec.timestamp
-           << std::setw(24) << rec.name << std::setw(10) << rec.device << std::setw(12) << rec.host_us << std::setw(12)
-           << rec.device_us << std::setw(16) << rec.max_device_mem_usage_mb << "\n";
-    }
+    auto get_stream = [&](int64_t) -> std::ostream & { return os; };
+    PrintRecordsGroupedByRank(get_stream);
 }
 
-void Profiler::PrintRecords(const std::string &file_path) const {
-    std::ofstream ofs(file_path);
-    if (!ofs) {
-        LOG(ERROR) << "Failed to open file: " << file_path;
-        return;
-    }
-    PrintRecords(ofs);
+void Profiler::PrintRecords(const std::string &file_prefix) const {
+    std::map<int64_t, std::ofstream> file_map;
+
+    auto get_stream = [&](int64_t rank) -> std::ostream & {
+        auto &file = file_map[rank];
+        if (!file.is_open()) {
+            std::string filename = std::format("{}.rank{}", file_prefix, rank);
+            file.open(filename);
+            if (!file) {
+                LOG(ERROR) << "Failed to open file: " << filename;
+                static std::ofstream null_ofs;
+                return null_ofs;
+            }
+        }
+        return file;
+    };
+
+    PrintRecordsGroupedByRank(get_stream);
 }
 
 } // namespace infini_train
