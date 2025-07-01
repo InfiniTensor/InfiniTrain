@@ -35,7 +35,7 @@ Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_ra
         v_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
         DispatchFunc<INFINI_ALL_TYPES>(
             param->Dtype(),
-            [=]<typename T>() {
+            [this]<typename T>() {
                 m_.back()->Fill<T>(0);
                 v_.back()->Fill<T>(0);
             },

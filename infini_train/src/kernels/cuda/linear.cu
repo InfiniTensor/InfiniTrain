@@ -209,9 +209,10 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     //   output: (bs, out_features)
     const int64_t out_features = weight_dims[transpose ? 0 : 1];
 
+    auto dtype = input->Dtype();
     auto output_dims = input_dims;
     *output_dims.rbegin() = out_features;
-    auto output = std::make_shared<Tensor>(output_dims, input->Dtype(), input->GetDevice());
+    auto output = std::make_shared<Tensor>(output_dims, dtype, input->GetDevice());
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
 
@@ -222,7 +223,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
         int num_blocks = (bs * out_features + threads_per_block - 1) / threads_per_block;
 
         DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
-            input->Dtype(),
+            dtype,
             [=]<typename T>() {
                 BiasCopyKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
                     static_cast<T *>(output->DataPtr()), static_cast<const T *>(bias->DataPtr()), bs, out_features);
