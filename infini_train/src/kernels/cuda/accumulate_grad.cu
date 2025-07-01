@@ -29,29 +29,16 @@ void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const s
         "CUDA AccumulateGrad");
 }
 
-template <typename T> __device__ __forceinline__ T fma(const float &beta, const T &x, const T &y) {
-    // perform fma(beta, x, (1 - beta) * y)
-    if constexpr (std::is_same_v<T, half>) {
-        return __hfma(__float2half(beta), x, __float2half(1 - beta) * y);
-    } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
-        return __float2bfloat16(__fmaf_rn(beta, __bfloat162float(x), (1 - beta) * __bfloat162float(y)));
-    } else if constexpr (std::is_same_v<T, float>) {
-        return __fmaf_rn(beta, x, (1 - beta) * y);
-    } else {
-        return std::fma(beta, x, (1 - beta) * y);
-    }
-}
-
 template <typename T>
 __global__ void AdamAccumulateGradKernel(const T *grad_data, T *param_data, size_t num_elements, T *m_data, T *v_data,
                                          float learning_rate, float beta1, float beta2, float eps,
                                          const float bias_correction_m, const float bias_correction_v) {
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < num_elements) {
-        // m_data[idx] = __fmaf_rn(beta1, m_data[idx], (1 - beta1) * grad_data[idx]);
-        m_data[idx] = fma(beta1, m_data[idx], grad_data[idx]);
-        // v_data[idx] = __fmaf_rn(beta2, v_data[idx], (1 - beta2) * grad_data[idx] * grad_data[idx]);
-        v_data[idx] = fma(beta2, v_data[idx], grad_data[idx] * grad_data[idx]);
+        m_data[idx] = common::cuda::Fma(common::cuda::Cast<T>(beta1), m_data[idx],
+                                        common::cuda::Cast<T>(1 - beta1) * grad_data[idx]);
+        v_data[idx] = common::cuda::Fma(common::cuda::Cast<T>(beta2), v_data[idx],
+                                        common::cuda::Cast<T>(1 - beta2) * grad_data[idx] * grad_data[idx]);
 
         const float m_hat = common::cuda::Cast<float>(m_data[idx]) / bias_correction_m;
         const float v_hat = common::cuda::Cast<float>(v_data[idx]) / bias_correction_v;
