@@ -47,7 +47,8 @@ int GetRank() {
 cudaStream_t GetCudaStream() {
     int device_id = GetRank();
     // TODO(zbl): support multi-stream on single device
-    return static_cast<const CudaDevice *>(DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, static_cast<int8_t>(device_id)))
+    return static_cast<const CudaDevice *>(
+               DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, static_cast<int8_t>(device_id)))
         ->Stream();
 }
 #endif
@@ -283,7 +284,8 @@ void Profiler::PrintRecordsGroupedByRank(std::function<std::ostream &(int64_t)> 
 
             os << std::left << std::setw(8) << "Idx" << std::setw(24) << "Timestamp" << std::setw(24) << "Name"
                << std::setw(10) << "Device" << std::setw(12) << "Host(us)" << std::setw(12) << "Device(us)"
-               << std::setw(16) << "Peak Mem(MB)" << "\n";
+               << std::setw(16) << "Peak Mem(MB)"
+               << "\n";
 
             for (size_t idx = 0; idx < records.size(); ++idx) {
                 const auto &rec = *records[idx];
