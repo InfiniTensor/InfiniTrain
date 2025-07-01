@@ -241,4 +241,16 @@ template <typename T> __device__ __forceinline__ T Min(const T &a, const T &b) {
     }
 }
 
+template <typename T> __device__ __forceinline__ T Fma(const T &x, const T &y, const T &z) {
+    if constexpr (std::is_same_v<T, half>) {
+        return __hfma(x, y, z);
+    } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
+        return __float2bfloat16(__fmaf_rn(__bfloat162float(x), __bfloat162float(y), __bfloat162float(z)));
+    } else if constexpr (std::is_same_v<T, float>) {
+        return __fmaf_rn(x, y, z);
+    } else {
+        return std::fma(x, y, z);
+    }
+}
+
 } // namespace infini_train::common::cuda
