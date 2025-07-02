@@ -47,7 +47,7 @@ int GetRank() {
 cudaStream_t GetCudaStream() {
     int device_id = GetRank();
     // TODO(zbl): support multi-stream on single device
-    return static_cast<const CudaDevice *>(
+    return dynamic_cast<const CudaDevice *>(
                DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, static_cast<int8_t>(device_id)))
         ->Stream();
 }
@@ -110,14 +110,13 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
 
             cudaMemPool_t pool;
             size_t peak_bytes = 0;
-            int device;
-            if (cudaGetDevice(&device) == cudaSuccess && cudaDeviceGetDefaultMemPool(&pool, device) == cudaSuccess
+            if (cudaDeviceGetDefaultMemPool(&pool, rank) == cudaSuccess
                 && cudaMemPoolGetAttribute(pool, cudaMemPoolAttrReservedMemHigh, &peak_bytes) == cudaSuccess) {
                 peak_mem_mb = static_cast<int64_t>(peak_bytes) / (1024 * 1024);
             } else {
                 LOG(FATAL) << "cudaMemPool not supported.";
             }
-            device_str = "cuda:" + std::to_string(device);
+            device_str = "cuda:" + std::to_string(rank);
         } else {
             LOG(FATAL) << "Start time of " + name + " is not recorded.";
         }
