@@ -148,11 +148,6 @@ __global__ void UnaryBackwardKernel(T *output, Func fn, size_t num_elements, siz
     }
 }
 
-template <typename T> __device__ T warpReduceSum(T val) {
-    for (int offset = 16; offset > 0; offset >>= 1) { val += __shfl_down_sync(0xFFFFFFFF, val, offset); }
-    return val;
-}
-
 // Backward kernel for binary operators
 // TODO(lzm): determining and passing b_is_broadcasted from the caller; optimize further
 template <typename T, typename FuncA, typename FuncB>
@@ -467,10 +462,9 @@ std::shared_ptr<Tensor> PowBackward(const std::shared_ptr<Tensor> &grad_output, 
                                   [scalar, scalar_is_base] __device__(auto x) {
                                       auto casted_scalar = common::cuda::Cast<decltype(x)>(scalar);
                                       if (scalar_is_base) {
-                                          return Mul(Log(decltype(x){scalar}), Pow(decltype(x){scalar}, x));
+                                          return Mul(Log(casted_scalar), Pow(casted_scalar, x));
                                       } else {
-                                          return Mul(decltype(x){scalar},
-                                                     Pow(x, decltype(x){scalar} - decltype(x){1.0}));
+                                          return Mul(casted_scalar, Pow(x, casted_scalar - decltype(x){1.0}));
                                       }
                                   });
              , INFINI_ALL_FLOATING_TYPES)
