@@ -1,4 +1,3 @@
-#include "glog/logging.h"
 #include <cub/block/block_reduce.cuh>
 
 #include "infini_train/include/common/cuda/common_cuda.cuh"
@@ -114,7 +113,7 @@ __global__ void LayerNormBackwardKernel(const T *__restrict__ input, const T *__
     float dnorm_norm_mean = 0.f;
 
     for (int i = tid; i < embed_dim; i += BLOCK_SIZE) {
-        float dnorm = common::cuda::Cast<float>(weight[i]) * common::cuda::Cast<float>(grad_output_ptr[i]);
+        float dnorm = common::cuda::Cast<float>(common::cuda::Mul(weight[i], grad_output_ptr[i]));
         dnorm_mean += dnorm;
         dnorm_norm_mean += dnorm * (common::cuda::Cast<float>(input_ptr[i]) - mean_val);
     }
