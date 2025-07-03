@@ -4,9 +4,8 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/datatypape.h"
-#include "infini_train/include/devich"
-#include "infini_train/include/dispatcher.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 #define CEIL_DIV(x, y) (((x) + (y)-1) / (y))

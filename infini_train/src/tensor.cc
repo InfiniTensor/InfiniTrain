@@ -101,7 +101,7 @@ template <typename T> void Tensor::Fill(T value) {
 
     uint64_t storage = 0;
 
-    DispatchFunc<INFINI_ALL_TYPES>(Dtype(), [=]<typename TargetT>() {
+    DispatchFunc<INFINI_ALL_TYPES>(Dtype(), [&storage, value]<typename TargetT>() {
         TargetT casted_value = static_cast<TargetT>(value);
         std::memcpy((void *)(&storage), &casted_value, sizeof(TargetT));
     });
@@ -201,7 +201,7 @@ Tensor Tensor::To(DataType dtype) {
         return new_tensor;
     }
 
-    auto kernel = Dispatcher::Instance().GetKernel({GetDevice().Type(), "Cast"});
+    auto kernel = Dispatcher::Instance().GetKernel({GetDevice()->Type(), "Cast"});
     auto new_tensor = *kernel.Call<std::shared_ptr<Tensor>>(shared_from_this(), dtype);
 
     if (grad_) {

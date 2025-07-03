@@ -13,6 +13,7 @@ __global__ void CastKernel(Tdst *dst, const Tsrc *src, size_t num_elements, size
 
 std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
     auto dst_tensor = std::make_shared<Tensor>(input->Dims(), dtype, input->GetDevice());
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
 
     const size_t num_elements = input->NumElements();
     dim3 block_dims(256);
@@ -25,7 +26,7 @@ std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
             auto dst = static_cast<Tdst *>(dst_tensor->DataPtr());
             auto src = static_cast<const Tsrc *>(input->DataPtr());
             for (size_t offset = 0; offset < num_elements; offset += step) {
-                CastKernel<<<grid_dims, block_dims>>>(dst, src, num_elements, offset);
+                CastKernel<<<grid_dims, block_dims, 0, cuda_device->Stream()>>>(dst, src, num_elements, offset);
             }
         },
         "CUDA Cast");

@@ -88,7 +88,6 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
 
             auto loss_cpu = batched_output->To(DeviceManager::Instance()->GetDefaultDevice());
             auto loss = std::make_shared<Tensor>(std::vector<int64_t>{}, input->Dtype(),
-
                                                  DeviceManager::Instance()->GetDefaultDevice());
             auto loss_cpu_typed_ptr = static_cast<const Tinput *>(loss_cpu.DataPtr());
             static_cast<Tinput *>(loss->DataPtr())[0]
@@ -104,7 +103,8 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
 template <size_t BLOCK_SIZE, typename TargetType, typename InputType>
 __global__ void CrossEntropyBackwardKernel(const InputType *__restrict__ input_ptr,
                                            InputType *__restrict__ input_grad_ptr,
-                                           const TargetType *__restrict__ target_ptr, int bs, int num_classes) {
+                                           const TargetType *__restrict__ target_ptr,
+                                           const InputType *__restrict__ output_grad_ptr, int bs, int num_classes) {
     __shared__ struct {
         float max_logit;
         float sum_exp;
@@ -150,8 +150,8 @@ __global__ void CrossEntropyBackwardKernel(const InputType *__restrict__ input_p
     for (int i = tid; i < num_classes; i += BLOCK_SIZE) {
         const int global_idx = idx_base + i;
         const float exp_val = expf(common::cuda::Cast<float>(input_ptr[global_idx]) - shared.max_logit);
-        input_grad_ptr[global_idx]
-            = common::cuda::Cast<InputType>((exp_val * scale - (i == target)) * inv_bs * output_grad_ptr[0]);
+        input_grad_ptr[global_idx] = common::cuda::Cast<InputType>((exp_val * scale - (i == target)) * inv_bs
+                                                                   * common::cuda::Cast<float>(output_grad_ptr[0]));
     }
 }
 
@@ -174,12 +174,13 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
         {target->Dtype(), input->Dtype()},
         [=]<typename Ttarget, typename Tinput>() {
             grad_input->Fill<Tinput>(0);
+            const Tinput *output_grad_ptr = static_cast<const Tinput *>(grad_output->DataPtr());
             const Ttarget *target_ptr = static_cast<const Ttarget *>(target->DataPtr());
             const Tinput *input_ptr = static_cast<const Tinput *>(input->DataPtr());
             Tinput *input_grad_ptr = static_cast<Tinput *>(grad_input->DataPtr());
             CrossEntropyBackwardKernel<threads_per_block, Ttarget, Tinput>
-                <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(input_ptr, input_grad_ptr, target_ptr, bs,
-                                                                              num_classes);
+                <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(input_ptr, input_grad_ptr, target_ptr,
+                                                                              output_grad_ptr, bs, num_classes);
         },
         "CUDA CrossEntropyBackward");
 

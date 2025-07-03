@@ -1,6 +1,3 @@
-#include "cuda_runtime.h"
-#include "glog/logging.h"
-
 #include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
@@ -390,7 +387,7 @@ std::shared_ptr<Tensor> RepeatInterleaveForward(const std::shared_ptr<Tensor> &i
     int64_t total_elements = outer * dim_size * repeat * inner;
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
 
     DispatchFunc<INFINI_ALL_TYPES>(
         input->Dtype(),

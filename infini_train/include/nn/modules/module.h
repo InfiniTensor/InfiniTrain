@@ -24,8 +24,8 @@ class Module : public std::enable_shared_from_this<Module> {
 public:
     static constexpr char kUndefinedType[] = "Undefined";
 
-    Module(DataType dtype = DataType::kFLOAT32) : type_(kUndefinedType), dtype_(dtype) {}
-    explicit Module(const std::string &type, DataType dtype = DataType::kFLOAT32) : type_(type), dtype_(dtype) {}
+    explicit Module(DataType dtype = DataType::kFLOAT32);
+    explicit Module(const std::string &type, DataType dtype = DataType::kFLOAT32);
     Module(const Module &) = default;
 
     virtual ~Module(){};

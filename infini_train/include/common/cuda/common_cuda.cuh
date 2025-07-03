@@ -170,12 +170,12 @@ template <typename T> __device__ __forceinline__ T Pow(const T &x, const T &expo
         float x_ = __bfloat162float(x);
         float exponent_ = __bfloat162float(exponent);
         float ans_f = __powf(x_, exponent_);
-        return __float2bfloat16(isnan(ans_f) ? std::pow(x_, exponent_) : ans_f);
+        return __float2bfloat16(__isnan(ans_f) ? std::pow(x_, exponent_) : ans_f);
     } else if constexpr (std::is_same_v<T, half>) {
         float x_ = __half2float(x);
         float exponent_ = __half2float(exponent);
         float ans_f = __powf(x_, exponent_);
-        return __float2half(isnan(ans_f) ? std::pow(x_, exponent_) : ans_f);
+        return __float2half(__isnan(ans_f) ? std::pow(x_, exponent_) : ans_f);
     } else if constexpr (std::is_same_v<T, float>) {
         return powf(x, exponent);
     } else {

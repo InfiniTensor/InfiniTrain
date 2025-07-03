@@ -1,5 +1,3 @@
-#include "glog/logging.h"
-#include <cuda_runtime.h>
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
@@ -7,13 +5,6 @@
 #include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
-
-template <typename T> __global__ void FillKernel(T *data, T value, size_t size) {
-    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < size) {
-        data[idx] = value;
-    }
-}
 
 // TODO(dcj): refactor Fill kernel with elementwise template
 void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {

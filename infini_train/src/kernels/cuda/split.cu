@@ -2,8 +2,6 @@
 #include <numeric>
 #include <vector>
 
-#include "glog/logging.h"
-
 #include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
@@ -142,9 +140,9 @@ std::shared_ptr<Tensor> LaunchSplitBackward(const std::vector<int64_t> &input_di
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
-    SplitBackwardKernel<<<num_blocks, threads_per_block>>>(device_grad_output_ptrs,
-                                                           static_cast<T *>(grad_input->DataPtr()), N, H_in, W,
-                                                           split_size, num_splits, device_H_outs);
+    SplitBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(device_grad_output_ptrs,
+                                                                      static_cast<T *>(grad_input->DataPtr()), N, H_in,
+                                                                      W, split_size, num_splits, device_H_outs);
 
     cudaFreeAsync(device_ptr, stream);
 
