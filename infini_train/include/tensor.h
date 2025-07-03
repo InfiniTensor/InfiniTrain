@@ -50,17 +50,17 @@ enum class DataType : int8_t {
 
 class TensorBuffer {
 public:
-    TensorBuffer(Device device, size_t size);
+    TensorBuffer(const Device *device, size_t size);
     ~TensorBuffer();
 
     void *DataPtr();
     const void *DataPtr() const;
 
-    Device GetDevice() const;
+    const Device *GetDevice() const;
     size_t Size() const;
 
 private:
-    Device device_;
+    const Device *device_ = nullptr;
     size_t size_ = 0;
     void *data_ = nullptr;
 };
@@ -69,11 +69,12 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
 public:
     Tensor() = default;
 
-    Tensor(const std::vector<int64_t> &dims, DataType dtype, Device device);
-    Tensor(const std::vector<int64_t> &dims, DataType dtype) : Tensor(dims, dtype, Device(DeviceType::kCPU, 0)) {}
+    Tensor(const std::vector<int64_t> &dims, DataType dtype, const Device *device);
+    Tensor(const std::vector<int64_t> &dims, DataType dtype)
+        : Tensor(dims, dtype, DeviceManager::Instance()->GetDevice(DeviceType::kCPU, 0)) {}
     Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &dims);
 
-    Device GetDevice() const;
+    const Device *GetDevice() const;
 
     void *DataPtr();
     const void *DataPtr() const;
@@ -90,7 +91,7 @@ public:
     Eigen::Map<Eigen::Matrix<float, 1, Eigen::Dynamic, Eigen::RowMajor>> EigenVector();
 
     // TODO(dcj): return shared_ptr<Tensor> instead of Tensor later
-    Tensor To(Device device);
+    Tensor To(const Device *device);
 
     // operator overloading
     std::shared_ptr<Tensor> Equals(float scalar);
@@ -118,7 +119,7 @@ public:
 
     std::shared_ptr<Tensor> View(const std::vector<int64_t> &dims);
     std::shared_ptr<Tensor> Contiguous();
-    std::shared_ptr<Tensor> Flatten(int64_t start = 1, int64_t end = -1);
+    std::shared_ptr<Tensor> Flatten(int64_t start = 0, int64_t end = -1);
     std::shared_ptr<Tensor> Squeeze(int64_t dim);
 
     // distribution

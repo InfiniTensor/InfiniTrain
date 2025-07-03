@@ -1,19 +1,28 @@
 #include "infini_train/include/nn/modules/module.h"
 
 #include <memory>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
+
+#include "glog/logging.h"
 
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
+
+Module::Module() : Module(kUndefinedType) {}
+
+Module::Module(const std::string &type) : type_(type), device_(DeviceManager::Instance()->GetDefaultDevice()) {}
+
 const std::string &Module::type() const { return type_; }
 
 std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
     std::vector<std::shared_ptr<Tensor>> params;
     for (auto &[_, param] : parameters_) { params.push_back(param); }
-    for (auto &[_, layer] : modules_) {
-        for (auto &param : layer->Parameters()) { params.push_back(param); }
+    for (auto &[_, module] : modules_) {
+        for (auto &param : module->Parameters()) { params.push_back(param); }
     }
     return params;
 }
@@ -30,16 +39,47 @@ const std::shared_ptr<Tensor> &Module::parameter(const std::string &name) const 
     return parameters_.at(name);
 }
 
-std::vector<Module *> Module::modules() const {
-    std::vector<Module *> modules;
-    for (auto &[_, module] : modules_) { modules.push_back(module.get()); }
+std::vector<std::shared_ptr<Module>> Module::modules() {
+    std::vector<std::shared_ptr<Module>> modules;
+    auto named_modules = NamedModules();
+    for (auto &[_, module] : named_modules) {
+        if (_ != "") {
+            modules.push_back(module);
+        }
+    }
+    modules.insert(modules.begin(), named_modules[""]);
     return modules;
 }
 
-Module *Module::mutable_module(const std::string &name) {
-    CHECK(modules_.find(name) != modules_.end());
-    return modules_.at(name).get();
+// FIXME(dcj): can not call this function in constructor
+std::unordered_map<std::string, std::shared_ptr<Module>>
+Module::NamedModules(const std::string &prefix, bool remove_duplicate, std::unordered_set<Module *> *memory) {
+    std::unordered_set<Module *> local_memory;
+    if (memory == nullptr) {
+        memory = &local_memory;
+    }
+    std::unordered_map<std::string, std::shared_ptr<Module>> named_modules;
+    if (!memory->contains(this)) {
+        if (remove_duplicate) {
+            memory->insert(this);
+        }
+        CHECK(!named_modules.contains(prefix));
+        named_modules.emplace(prefix, shared_from_this());
+        for (auto &[name, module] : modules_) {
+            if (!module) {
+                continue;
+            }
+            auto submodule_prefix = (prefix.empty() ? "" : prefix + ".") + name;
+            for (auto &[sub_name, sub_module] : module->NamedModules(submodule_prefix, remove_duplicate, memory)) {
+                CHECK(!named_modules.contains(sub_name));
+                named_modules.emplace(sub_name, sub_module);
+            }
+        }
+    }
+    return named_modules;
 }
+
+std::shared_ptr<Module> Module::mutable_module(const std::string &name) { return modules_.at(name); }
 
 const Module &Module::module(const std::string &name) const {
     CHECK(modules_.find(name) != modules_.end());
@@ -49,13 +89,14 @@ const Module &Module::module(const std::string &name) const {
 std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() const {
     std::unordered_map<std::string, std::shared_ptr<Tensor>> state;
     for (auto &[name, param] : parameters_) { state.emplace(name, param); }
-    for (auto &[name, layer] : modules_) {
-        for (auto &[sub_name, param] : layer->StateDict()) { state.emplace(name + "." + sub_name, param); }
+    for (auto &[name, module] : modules_) {
+        for (auto &[sub_name, param] : module->StateDict()) { state.emplace(name + "." + sub_name, param); }
     }
     return state;
 }
 
-void Module::To(Device device) {
+void Module::To(const Device *device) {
+    CHECK_NOTNULL(device);
     if (device == device_) {
         return;
     }
@@ -67,11 +108,16 @@ void Module::To(Device device) {
     parameters_ = std::move(new_parameters);
     device_ = device;
 
-    for (auto &[_, layer] : modules_) { layer->To(device); }
+    for (auto &[_, module] : modules_) { module->To(device); }
 }
 
 void Module::Apply(std::function<void(Module *)> fn) {
-    for (auto *module : modules()) { module->Apply(fn); }
+    for (auto &[_, module] : modules_) { module->Apply(fn); }
     fn(this);
+}
+
+std::shared_ptr<Module> Module::ReplicateForDataParallel(int device_idx) const {
+    // TODO(dcj): use device_idx later
+    return std::make_shared<Module>(*this);
 }
 } // namespace infini_train::nn

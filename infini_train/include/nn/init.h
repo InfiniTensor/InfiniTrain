@@ -46,5 +46,5 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor);
 
 std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor);
 
-std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, Device device = Device());
+std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, const Device *device = nullptr);
 } // namespace infini_train::nn::init

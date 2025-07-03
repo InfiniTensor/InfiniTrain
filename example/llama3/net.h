@@ -39,18 +39,19 @@ struct LLaMA3Config {
     int64_t max_gen_batch_size = 4; // max batch size during inference
 };
 
-class SwiGLU : public infini_train::nn::Module {
+class SwiGLU : public infini_train::nn::CloneableModule<SwiGLU> {
 public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
 // TODO(zbl): implement fused kernel
-class RMSNorm : public infini_train::nn::Module {
+class RMSNorm : public infini_train::nn::CloneableModule<RMSNorm> {
 public:
     static constexpr char kParamWeightName[] = "weight";
 
-    explicit RMSNorm(int64_t dim, float eps = 1e-6f, infini_train::Device device = infini_train::Device());
+    explicit RMSNorm(int64_t dim, float eps = 1e-6f,
+                     const infini_train::Device *device = infini_train::DeviceManager::Instance()->GetDefaultDevice());
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
@@ -59,7 +60,7 @@ private:
     float eps_ = 1e-5f;
 };
 
-class CausalSelfAttention : public infini_train::nn::Module {
+class CausalSelfAttention : public infini_train::nn::CloneableModule<CausalSelfAttention> {
 public:
     static constexpr char kCAttnLayerName[] = "c_attn";
     static constexpr char kCProjLayerName[] = "c_proj";
@@ -78,7 +79,7 @@ private:
     int64_t head_dim_ = 0;
 };
 
-class MLP : public infini_train::nn::Module {
+class MLP : public infini_train::nn::CloneableModule<MLP> {
 public:
     static constexpr char kCFcLayerName[] = "c_fc";
     static constexpr char kCFc2LayerName[] = "c_fc2";
@@ -94,7 +95,7 @@ private:
     int64_t hidden_dim_ = 0;
 };
 
-class Block : public infini_train::nn::Module {
+class Block : public infini_train::nn::CloneableModule<Block> {
 public:
     static constexpr char kLn1LayerName[] = "ln_1";
     static constexpr char kAttnLayerName[] = "attn";
@@ -107,7 +108,7 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
-class LLaMA3 : public infini_train::nn::Module {
+class LLaMA3 : public infini_train::nn::CloneableModule<LLaMA3> {
 public:
     static constexpr char kWTELayerName[] = "wte";
     static constexpr char kHLayerName[] = "h";
@@ -129,8 +130,8 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    static std::unique_ptr<LLaMA3> FromPretrained(ModelType model_type);
-    static std::unique_ptr<LLaMA3> FromLLMC(const std::string &filepath);
+    static std::shared_ptr<LLaMA3> FromPretrained(ModelType model_type);
+    static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath);
 
 private:
     LLaMA3Config config_;

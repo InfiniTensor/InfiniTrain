@@ -25,7 +25,9 @@ std::shared_ptr<Tensor> SigmoidForward(const std::shared_ptr<Tensor> &input) {
     int threads_per_block = 256;
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
 
-    SigmoidForwardKernel<<<num_blocks, threads_per_block>>>(input_ptr, output_ptr, num_elements);
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    SigmoidForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(input_ptr, output_ptr,
+                                                                                      num_elements);
 
     return output;
 }
@@ -51,7 +53,9 @@ std::shared_ptr<Tensor> SigmoidBackward(const std::shared_ptr<Tensor> &output,
     int threads_per_block = 256;
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
 
-    SigmoidBackwardKernel<<<num_blocks, threads_per_block>>>(output_ptr, grad_output_ptr, grad_input_ptr, num_elements);
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
+    SigmoidBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(output_ptr, grad_output_ptr,
+                                                                                       grad_input_ptr, num_elements);
 
     return grad_input;
 }

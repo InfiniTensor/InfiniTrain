@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <mutex>
@@ -39,6 +40,7 @@ struct KernelProfileInfo {
 struct KernelCallRecord {
     std::string tag;
     std::string timestamp;
+    int64_t rank;
     std::string name;
     std::string device;
     int64_t host_us;
@@ -73,11 +75,12 @@ public:
     void SetTag(const std::string &tag);
 
 private:
-    void RecordKernel(const std::string &name, const std::string &device, int64_t host_us, int64_t device_us = 0,
-                      int64_t max_device_mem_usage_mb = 0);
+    void RecordKernel(const std::string &name, const int &rank, const std::string &device, int64_t host_us,
+                      int64_t device_us = 0, int64_t max_device_mem_usage_mb = 0);
+    void ReportGroupedByRank(std::function<std::ostream &(int64_t)> get_os, SortBy sort_by) const;
+    void PrintRecordsGroupedByRank(std::function<std::ostream &(int64_t)> get_os) const;
 
     std::mutex mtx_;
-    std::map<std::string, KernelProfileInfo> stats_;
     std::vector<KernelCallRecord> call_records_;
     std::string current_tag_ = "Untagged";
 

@@ -48,12 +48,9 @@ int main(int argc, char *argv[]) {
     DataLoader test_dataloader(test_dataset, FLAGS_bs);
 
     auto network = MNIST();
-    Device device;
-    if (FLAGS_device == kDeviceCPU) {
-        device = Device(DeviceType::kCPU, 0);
-    } else {
-        device = Device(DeviceType::kCUDA, 0);
-    }
+    const Device *device = FLAGS_device == kDeviceCPU ? DeviceManager::Instance()->GetDevice(DeviceType::kCPU, 0)
+                                                      : DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, 0);
+    const Device *cpu_device = DeviceManager::Instance()->GetDefaultDevice();
     network.To(device);
 
     auto loss_fn = nn::CrossEntropyLoss();
@@ -75,7 +72,7 @@ int main(int argc, char *argv[]) {
             optimizer.ZeroGrad();
 
             auto loss = loss_fn.Forward({outputs[0], new_label});
-            auto loss_cpu = loss[0]->To(Device());
+            auto loss_cpu = loss[0]->To(cpu_device);
             float current_loss = static_cast<float *>(loss_cpu.DataPtr())[0];
             total_loss += current_loss;
             if (train_idx % kNumItersOfOutputDuration == 0) {
@@ -105,11 +102,11 @@ int main(int argc, char *argv[]) {
             = std::make_shared<Tensor>(image->To(device), 0, std::vector<int64_t>{image->Dims()[0], 1, 28, 28});
         auto new_label = std::make_shared<Tensor>(label->To(device));
 
-        auto label_cpu = label->To(Device());
+        auto label_cpu = label->To(cpu_device);
         auto outputs = network.Forward({new_image});
-        auto output_cpu = outputs[0]->To(Device());
+        auto output_cpu = outputs[0]->To(cpu_device);
         auto loss = loss_fn.Forward({outputs[0], new_label});
-        auto loss_cpu = loss[0]->To(Device());
+        auto loss_cpu = loss[0]->To(cpu_device);
 
         const int batch_size = output_cpu.Dims()[0];
         for (int batch_idx = 0; batch_idx < batch_size; ++batch_idx) {

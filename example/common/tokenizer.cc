@@ -114,7 +114,7 @@ std::string Tokenizer::Decode(uint32_t token_id) const {
 }
 
 void Tokenizer::GenerateText(infini_train::nn::Module &model, uint32_t batch_size, uint32_t sequence_length,
-                             uint32_t text_length, Device device) const {
+                             uint32_t text_length, const Device *device) const {
     std::vector<int64_t> dims;
     dims.assign({batch_size, sequence_length});
     // x_tensor (FLAGS_batch_size, FLAGS_sequence_length) eq:(4, 64)
@@ -131,19 +131,21 @@ void Tokenizer::GenerateText(infini_train::nn::Module &model, uint32_t batch_siz
     auto x = std::make_shared<infini_train::Tensor>(x_tensor.To(device));
     uint64_t kRngState = kRngState;
     LOG(INFO) << "start generate text:";
+
+    const auto *cpu_device = DeviceManager::Instance()->GetDefaultDevice();
     for (int t = prompt_len; t < text_length; t++) {
         x = std::make_shared<infini_train::Tensor>(x->To(device)); // CPU->calc device
         // TODO(jym): use no_grad forward later
         auto logits = model.Forward({x})[0];
         auto logits_orignal = nn::function::Softmax(logits, -1);
-        auto logits_cpu = logits_orignal->To(Device());
+        auto logits_cpu = logits_orignal->To(cpu_device);
         auto data = logits_cpu.DataPtr();
         auto vocab_size = logits->Dims()[2];
         float *probs = static_cast<float *>(data) + (t - 1) * vocab_size;
         float coin = RandomF32(kRngState);
         int next_token = SampleMult(probs, vocab_size, coin);
 
-        x = std::make_shared<infini_train::Tensor>(x->To(Device())); // calc device->CPU
+        x = std::make_shared<infini_train::Tensor>(x->To(cpu_device)); // calc device->CPU
         auto data_temp = static_cast<int64_t *>(x->DataPtr());
         data_temp[t] = next_token;
         std::cout << Decode(next_token);

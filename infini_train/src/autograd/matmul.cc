@@ -11,7 +11,7 @@ std::vector<std::shared_ptr<Tensor>> Matmul::Forward(const std::vector<std::shar
     const auto &input1 = input_tensors[0];
     const auto &input2 = input_tensors[1];
 
-    auto device = input1->GetDevice().Type();
+    auto device = input1->GetDevice()->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device, "MatmulForward"});
     return {kernel.Call<std::shared_ptr<Tensor>>(input1, input2)};
 }
@@ -32,7 +32,7 @@ std::vector<std::shared_ptr<Tensor>> Matmul::Backward(const std::vector<std::sha
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = input1->GetDevice().Type();
+    auto device = input1->GetDevice()->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device, "MatmulBackward"});
     auto [grad_input1, grad_input2]
         = kernel.Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(input1, input2, grad_output);

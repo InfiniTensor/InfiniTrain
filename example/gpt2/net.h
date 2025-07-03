@@ -7,6 +7,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
 
@@ -18,13 +19,13 @@ struct GPT2Config {
     int64_t n_embd = 768;
 };
 
-class NewGELU : public infini_train::nn::Module {
+class NewGELU : public infini_train::nn::CloneableModule<NewGELU> {
 public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
-class CausalSelfAttention : public infini_train::nn::Module {
+class CausalSelfAttention : public infini_train::nn::CloneableModule<CausalSelfAttention> {
 public:
     static constexpr char kCAttnLayerName[] = "c_attn";
     static constexpr char kCProjLayerName[] = "c_proj";
@@ -34,7 +35,9 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    void To(infini_train::Device device) override;
+    void To(const infini_train::Device *device) override;
+
+    std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const override;
 
 private:
     GPT2Config config_;
@@ -43,7 +46,7 @@ private:
     std::shared_ptr<infini_train::Tensor> bias_ = nullptr;
 };
 
-class MLP : public infini_train::nn::Module {
+class MLP : public infini_train::nn::CloneableModule<MLP> {
 public:
     static constexpr char kCFclayerName[] = "c_fc";
     static constexpr char kGeluLayerName[] = "gelu";
@@ -55,7 +58,7 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
-class Block : public infini_train::nn::Module {
+class Block : public infini_train::nn::CloneableModule<Block> {
 public:
     static constexpr char kLn1LayerName[] = "ln_1";
     static constexpr char kAttnLayerName[] = "attn";
@@ -68,7 +71,7 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
-class GPT2 : public infini_train::nn::Module {
+class GPT2 : public infini_train::nn::CloneableModule<GPT2> {
 public:
     static constexpr char kWTELayerName[] = "wte";
     static constexpr char kWPELayerName[] = "wpe";
@@ -89,8 +92,8 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    static std::unique_ptr<GPT2> FromPretrained(ModelType model_type);
-    static std::unique_ptr<GPT2> FromLLMC(const std::string &filepath);
+    static std::shared_ptr<GPT2> FromPretrained(ModelType model_type);
+    static std::shared_ptr<GPT2> FromLLMC(const std::string &filepath);
 
 private:
     GPT2Config config_;

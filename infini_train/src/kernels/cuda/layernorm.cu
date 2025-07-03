@@ -77,7 +77,8 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
     int threads_per_block = BLOCK_SIZE;
     int num_blocks = batch_size * max_seqlen;
 
-    LayerNormForwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block>>>(
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    LayerNormForwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
         static_cast<const float *>(input->DataPtr()), static_cast<const float *>(weight->DataPtr()),
         static_cast<const float *>(bias->DataPtr()), static_cast<float *>(mean->DataPtr()),
         static_cast<float *>(rstd->DataPtr()), static_cast<float *>(output->DataPtr()), eps, embed_dim);
@@ -156,7 +157,8 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     int threads_per_block = BLOCK_SIZE;
     int num_blocks = batch_size * max_seqlen;
 
-    LayerNormBackwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block>>>(
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    LayerNormBackwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
         static_cast<const float *>(input->DataPtr()), static_cast<const float *>(grad_output->DataPtr()),
         static_cast<const float *>(mean->DataPtr()), static_cast<const float *>(rstd->DataPtr()),
         static_cast<const float *>(weight->DataPtr()), static_cast<float *>(grad_input->DataPtr()),

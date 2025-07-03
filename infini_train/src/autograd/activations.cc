@@ -10,7 +10,7 @@ std::vector<std::shared_ptr<Tensor>> Sigmoid::Forward(const std::vector<std::sha
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice().Type();
+    auto device = input->GetDevice()->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device, "SigmoidForward"});
     return {kernel.Call<std::shared_ptr<Tensor>>(input)};
 }
@@ -27,7 +27,7 @@ std::vector<std::shared_ptr<Tensor>> Sigmoid::Backward(const std::vector<std::sh
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = output->GetDevice().Type();
+    auto device = output->GetDevice()->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device, "SigmoidBackward"});
     return {kernel.Call<std::shared_ptr<Tensor>>(output, grad_output)};
 }

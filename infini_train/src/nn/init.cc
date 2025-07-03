@@ -28,7 +28,7 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
     std::normal_distribution<float> dis(mean, std);
     std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
 
-    switch (tensor->GetDevice().Type()) {
+    switch (tensor->GetDevice()->Type()) {
     case DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
@@ -41,7 +41,7 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
     }
 #endif
     default: {
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice().Type());
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice()->Type());
         break;
     }
     }
@@ -117,7 +117,7 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
     std::uniform_real_distribution<float> dis(a, b);
     std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
 
-    switch (tensor->GetDevice().Type()) {
+    switch (tensor->GetDevice()->Type()) {
     case DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
@@ -130,7 +130,7 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
     }
 #endif
     default: {
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice().Type());
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice()->Type());
         break;
     }
     }
@@ -143,7 +143,7 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {
     const int64_t num_elements = tensor->NumElements();
     std::vector<float> buffer(num_elements, 1.0f);
 
-    switch (tensor->GetDevice().Type()) {
+    switch (tensor->GetDevice()->Type()) {
     case DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
@@ -156,7 +156,7 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {
     }
 #endif
     default: {
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice().Type());
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice()->Type());
         break;
     }
     }
@@ -169,7 +169,7 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
     const int64_t num_elements = tensor->NumElements();
     std::vector<float> buffer(num_elements, 0.0f);
 
-    switch (tensor->GetDevice().Type()) {
+    switch (tensor->GetDevice()->Type()) {
     case DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
@@ -182,7 +182,7 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
     }
 #endif
     default: {
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice().Type());
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice()->Type());
         break;
     }
     }
@@ -204,10 +204,10 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
         break;                                                                                                         \
     }
 
-std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, Device device) {
+std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, const Device *device) {
     int64_t num_elements = end - start;
     auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{num_elements}, dtype, device);
-    if (device == Device()) {
+    if (device->IsCPU()) {
         switch (dtype) {
             CASE(DataType::kUINT8, uint8_t)
             CASE(DataType::kINT8, int8_t)
@@ -245,7 +245,7 @@ std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, Devic
             break;
         }
 #else
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device.Type());
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device->Type());
 #endif
     }
     return tensor;
