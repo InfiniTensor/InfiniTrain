@@ -118,6 +118,9 @@ ReduceAddCoalesced::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_ou
 std::vector<std::vector<std::shared_ptr<Tensor>>>
 BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors,
                           const std::vector<const Device *> &devices) {
+    if (tensors.empty()) {
+        return {};
+    }
     auto tensor_copies = std::make_shared<Broadcast>(devices)->Apply(tensors);
     std::vector<std::vector<std::shared_ptr<Tensor>>> tensor_copies_reshaped(devices.size());
     for (int replica_idx = 0; replica_idx < devices.size(); ++replica_idx) {
@@ -138,6 +141,11 @@ std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &ne
     std::unordered_map<Tensor *, int> param_indices;
     for (int idx = 0; idx < params.size(); ++idx) { param_indices[params[idx].get()] = idx; }
     auto param_copies = BroadcastCoalescedReshape(params, devices);
+
+    auto buffers = network->Buffers();
+    std::unordered_map<Tensor *, int> buffer_indices;
+    for (int idx = 0; idx < buffers.size(); ++idx) { buffer_indices[buffers[idx].get()] = idx; }
+    auto buffer_copies = BroadcastCoalescedReshape(buffers, devices);
 
     auto modules = network->modules();
     std::vector<std::vector<std::shared_ptr<Module>>> module_copies(num_replicas);
@@ -165,6 +173,13 @@ std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &ne
             for (int replica_idx = 0; replica_idx < num_replicas; ++replica_idx) {
                 auto &replica = module_copies[replica_idx][idx];
                 replica->parameters_[name] = param_copies[replica_idx][param_idx];
+            }
+        }
+        for (auto &[name, buffer] : module->buffers_) {
+            const auto buffer_idx = buffer_indices[buffer.get()];
+            for (int replica_idx = 0; replica_idx < num_replicas; ++replica_idx) {
+                auto &replica = module_copies[replica_idx][idx];
+                replica->buffers_[name] = buffer_copies[replica_idx][buffer_idx];
             }
         }
     }

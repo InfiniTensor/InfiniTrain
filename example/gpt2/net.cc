@@ -58,21 +58,8 @@ CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
     modules_[kCProjLayerName] = std::make_shared<GPT2Linear>(config.n_embd, config.n_embd, true, false);
     // TODO(dcj): in torch, here need register buffer for bias
     // (1, 1, block_size, block_size)
-    bias_ = nn::function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
+    buffers_[kParamBiasName] = nn::function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
                 ->View({1, 1, config_.block_size, config_.block_size});
-}
-
-// FIXME(dcj): set bias_ as buffer in module
-void CausalSelfAttention::To(const infini_train::Device *device) {
-    nn::Module::To(device);
-    bias_ = std::make_shared<infini_train::Tensor>(bias_->To(device));
-}
-
-std::shared_ptr<nn::Module> CausalSelfAttention::ReplicateForDataParallel(int device_idx) const {
-    auto new_module = std::make_shared<CausalSelfAttention>(static_cast<const CausalSelfAttention &>(*this));
-    new_module->bias_ = std::make_shared<infini_train::Tensor>(
-        bias_->To(infini_train::DeviceManager::Instance()->GetDevice(infini_train::DeviceType::kCUDA, device_idx)));
-    return new_module;
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
@@ -107,7 +94,7 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     // q matmul k: (bs, n_head, seq_len, seq_len) -> mul 1.0 / sqrt(n_embd / n_head) -> (bs, n_head, seq_len, seq_len)
     auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(*k->Dims().rbegin()));
     // (1, 1, seq_len, seq_len)
-    auto mask = bias_->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
+    auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
     // (1, 1, seq_len, seq_len) -> eq 0 -> (1, 1, seq_len, seq_len) -> masked_fill -> (bs, n_head, seq_len, seq_len)
     att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
     // (bs, n_head, seq_len, seq_len)

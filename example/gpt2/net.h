@@ -30,20 +30,17 @@ public:
     static constexpr char kCAttnLayerName[] = "c_attn";
     static constexpr char kCProjLayerName[] = "c_proj";
 
+    static constexpr char kParamBiasName[] = "bias";
+
     explicit CausalSelfAttention(const GPT2Config &config);
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    void To(const infini_train::Device *device) override;
-
-    std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const override;
-
 private:
     GPT2Config config_;
     int64_t n_head_ = 0;
     int64_t n_embd_ = 0;
-    std::shared_ptr<infini_train::Tensor> bias_ = nullptr;
 };
 
 class MLP : public infini_train::nn::CloneableModule<MLP> {

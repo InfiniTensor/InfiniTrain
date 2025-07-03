@@ -39,6 +39,8 @@ public:
     std::shared_ptr<Tensor> *mutable_parameter(const std::string &name);
     const std::shared_ptr<Tensor> &parameter(const std::string &name) const;
 
+    std::vector<std::shared_ptr<Tensor>> Buffers() const;
+
     std::vector<std::shared_ptr<Module>> modules();
     std::shared_ptr<Module> mutable_module(const std::string &name);
     const Module &module(const std::string &name) const;
@@ -61,6 +63,7 @@ protected:
     const std::string type_ = kUndefinedType;
     std::unordered_map<std::string, std::shared_ptr<Module>> modules_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> buffers_;
 
 private:
     std::unordered_map<std::string, std::shared_ptr<Module>>

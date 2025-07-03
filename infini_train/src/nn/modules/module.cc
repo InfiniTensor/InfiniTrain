@@ -39,6 +39,15 @@ const std::shared_ptr<Tensor> &Module::parameter(const std::string &name) const 
     return parameters_.at(name);
 }
 
+std::vector<std::shared_ptr<Tensor>> Module::Buffers() const {
+    std::vector<std::shared_ptr<Tensor>> buffers;
+    for (auto &[_, buffer] : buffers_) { buffers.push_back(buffer); }
+    for (auto &[_, module] : modules_) {
+        for (auto &buffer : module->Buffers()) { buffers.push_back(buffer); }
+    }
+    return buffers;
+}
+
 std::vector<std::shared_ptr<Module>> Module::modules() {
     std::vector<std::shared_ptr<Module>> modules;
     auto named_modules = NamedModules();
@@ -89,6 +98,7 @@ const Module &Module::module(const std::string &name) const {
 std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() const {
     std::unordered_map<std::string, std::shared_ptr<Tensor>> state;
     for (auto &[name, param] : parameters_) { state.emplace(name, param); }
+    for (auto &[name, buffer] : buffers_) { state.emplace(name, buffer); }
     for (auto &[name, module] : modules_) {
         for (auto &[sub_name, param] : module->StateDict()) { state.emplace(name + "." + sub_name, param); }
     }
@@ -102,10 +112,15 @@ void Module::To(const Device *device) {
     }
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> new_parameters;
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> new_buffers;
     for (auto &[name, param] : parameters_) {
         new_parameters.emplace(name, std::make_shared<Tensor>(param->To(device)));
     }
+    for (auto &[name, buffer] : buffers_) {
+        new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(device)));
+    }
     parameters_ = std::move(new_parameters);
+    buffers_ = std::move(new_buffers);
     device_ = device;
 
     for (auto &[_, module] : modules_) { module->To(device); }
