@@ -31,11 +31,9 @@ std::vector<std::shared_ptr<Tensor>> Linear::Forward(const std::vector<std::shar
 }
 
 void Linear::ResetParameters() {
-    init::KaimingUniform(parameters_[kParamWeightName], sqrt(5.0f));
+    parameters_[kParamWeightName]->Fill(0.01f);
     if (bias_) {
-        const auto [fan_in, _] = init::CalculateFanInAndFanOut(parameters_[kParamWeightName]);
-        const float bound = fan_in > 0 ? 1.0 / sqrt(fan_in) : 0.0;
-        init::Uniform(parameters_[kParamBiasName], -bound, bound);
+        parameters_[kParamBiasName]->Fill(0.01f);
     }
 }
 } // namespace infini_train::nn
