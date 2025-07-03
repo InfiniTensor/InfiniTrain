@@ -59,7 +59,7 @@ CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
     // TODO(dcj): in torch, here need register buffer for bias
     // (1, 1, block_size, block_size)
     buffers_[kParamBiasName] = nn::function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
-                ->View({1, 1, config_.block_size, config_.block_size});
+                                   ->View({1, 1, config_.block_size, config_.block_size});
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
