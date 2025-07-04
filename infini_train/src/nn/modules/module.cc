@@ -131,10 +131,13 @@ void Module::To(DataType dtype) {
     }
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> new_parameters;
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> new_buffers;
     for (auto &[name, param] : parameters_) {
         new_parameters.emplace(name, std::make_shared<Tensor>(param->To(dtype)));
     }
+    for (auto &[name, buffer] : buffers_) { new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(dtype))); }
     parameters_ = std::move(new_parameters);
+    buffers_ = std::move(new_buffers);
     dtype_ = dtype;
 
     for (auto &[_, layer] : modules_) { layer->To(dtype); }
