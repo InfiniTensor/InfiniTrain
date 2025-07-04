@@ -38,7 +38,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         // TODO(dcj): Mark if an output tensor need differentiable or not.
         output_tensor->set_requires_grad(output_requires_grad);
         output_tensor->set_is_leaf(false);
-        output_tensor->set_grad_fn(shared_from_this());
+        output_tensor->set_grad_fn(output_requires_grad ? shared_from_this() : nullptr);
         output_tensor->set_output_idx(output_idx);
     }
 
@@ -60,10 +60,8 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
     if (grad_outputs_reached_ == grad_outputs_.size()
         && (dependencies_reached_ == dependencies_number_ || dependencies_number_ == 0)) {
         auto grad_inputs = Backward(grad_outputs_);
-        // FIXME(dcj): If the Backward function of a certain Function is called and later re-enters the BackwardPartial
-        // function, clearing the saved tensors can be unsafe.
         saved_tensors_.clear();
-        std::fill(grad_outputs_.begin(), grad_outputs_.end(), nullptr);
+        grad_outputs_.clear();
         grad_outputs_reached_ = 0;
         dependencies_reached_ = 0;
 
