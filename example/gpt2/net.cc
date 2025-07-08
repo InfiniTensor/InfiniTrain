@@ -252,6 +252,7 @@ std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::
         return {version, infini_train::DataType::kFLOAT32};
     default:
         LOG(FATAL) << "Unsupported version: " << version << " at " << __FILE__ << ":" << __LINE__;
+        return {}; // Unreachable, but keeps compiler happy
     }
 }
 } // namespace

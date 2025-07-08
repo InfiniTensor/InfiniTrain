@@ -64,7 +64,7 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
                           ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
                       DataType::kBFLOAT16)
     default:
-        LOG_UNSUPPORTED_DTYPE(dtype, "CUDA MatmulForward: ");
+        LOG_UNSUPPORTED_DTYPE(dtype, "CUDA MatmulForward");
     }
 
     CUBLAS_CHECK(cublasDestroy(handle));
