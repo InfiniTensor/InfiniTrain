@@ -20,7 +20,7 @@ __global__ void LayerNormForwardKernel(const T *input, const T *weight, const T 
     float sum = 0.0f;
     float sqsum = 0.0f;
 
-    for (int i = threadIdx.x; i < embed_dim; i += blockDim.x) {
+    for (int i = threadIdx.x; i < embed_dim; i += BLOCK_SIZE) {
         float val = common::cuda::Cast<float>(x[i]);
         sum += val;
         sqsum += val * val;
@@ -134,11 +134,11 @@ __global__ void LayerNormBackwardKernel(const T *__restrict__ input, const T *__
         float norm = (common::cuda::Cast<float>(input_ptr[i]) - mean_val) * rstd_val;
         float grad_output_val = common::cuda::Cast<float>(grad_output_ptr[i]);
 
-        grad_input_ptr[i]
-            = (common::cuda::Cast<float>(weight[i]) * grad_output_val - shared_mean - norm * shared_norm) * rstd_val;
+        grad_input_ptr[i] = common::cuda::Cast<T>(
+            (common::cuda::Cast<float>(weight[i]) * grad_output_val - shared_mean - norm * shared_norm) * rstd_val);
 
-        atomicAdd(&grad_weight[i], common::cuda::Cast<float>(grad_output_ptr[i]) * norm);
-        atomicAdd(&grad_bias[i], common::cuda::Cast<float>(grad_output_ptr[i]));
+        atomicAdd(&grad_weight[i], common::cuda::Cast<T>(grad_output_val * norm));
+        atomicAdd(&grad_bias[i], grad_output_ptr[i]);
     }
 }
 

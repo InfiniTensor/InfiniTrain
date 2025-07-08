@@ -96,15 +96,16 @@ ApplyRotaryEmbedding(const std::shared_ptr<Tensor> &xq, const std::shared_ptr<Te
 
 std::shared_ptr<Tensor> PrecomputeFreqsCis(int64_t dim, int64_t end, float theta = 10000.0f, bool use_scaled = false,
                                            const infini_train::Device *device
-                                           = DeviceManager::Instance()->GetDefaultDevice()) {
+                                           = DeviceManager::Instance()->GetDefaultDevice(),
+                                           DataType dtype = DataType::kFLOAT32) {
     CHECK_GE(dim, 2) << "dim must be >= 2 for slicing";
-    auto arange = nn::init::Arange(0, dim, DataType::kFLOAT32, device)->Slice(0, 0, dim, 2);
+    auto arange = nn::init::Arange(0, dim, dtype, device)->Slice(0, 0, dim, 2);
     auto freqs = 1.0f / nn::function::Pow(theta, arange / float(dim));
     // TODO(zbl): use_scaled
     // if (use_scaled) {
     //     freqs = ApplyScaling(freqs, 8192.0f);
     // }
-    auto t = nn::init::Arange(0, end, DataType::kFLOAT32, device);
+    auto t = nn::init::Arange(0, end, dtype, device);
     // (end, dim / 2)
     auto freqs_outer = t->Outer(freqs);
     auto cos = nn::function::Cos(freqs_outer);
@@ -295,13 +296,11 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
                                     << config_.block_size;
 
     // Init freqs_cis on device only once
-    if (freqs_cis_ == nullptr) {
-        freqs_cis_ = PrecomputeFreqsCis(config_.n_embd / config_.n_head, config_.block_size * 2, config_.rope_theta,
-                                        config_.use_scaled_rope, device);
-        // TODO(zbl): freqs_cis is built in FP32 by default
-        if (modules_[kLMHeadLayerName]->parameter(nn::Linear::kParamWeightName)->Dtype() == DataType::kBFLOAT16) {
-            freqs_cis_ = std::make_shared<Tensor>(freqs_cis_->To(DataType::kBFLOAT16));
-        }
+    // TODO(zbl): consider moving this to model construction
+    if (buffers_[kFreqsCisName] == nullptr) {
+        buffers_[kFreqsCisName] = PrecomputeFreqsCis(
+            config_.n_embd / config_.n_head, config_.block_size * 2, config_.rope_theta, config_.use_scaled_rope,
+            device, modules_[kLMHeadLayerName]->parameter(nn::Linear::kParamWeightName)->Dtype());
     }
 
     // forward the LLaMA3 model itself
@@ -311,8 +310,9 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
 
     // TODO(zbl): dynamic start_pos
     int64_t start_pos = 0;
-    std::shared_ptr<Tensor> freqs_cis = freqs_cis_->Slice(0, start_pos, start_pos + t, 1);
+    buffers_[kFreqsCisName] = buffers_[kFreqsCisName]->Slice(0, start_pos, start_pos + t, 1);
 
+    // TODO(lzm): add dtype support for nn::function::Ones later
     std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(idx->GetDevice()));
     std::shared_ptr<Tensor> mask = nn::function::Triu(ones, 1)->View({1, 1, t, t});
     // TODO(zbl): nn::function::Ones builds tensor in FP32 by default
@@ -323,7 +323,7 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
 
     // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)
     auto x2 = transformer->mutable_module(kHLayerName)
-                  ->Forward(std::vector<std::shared_ptr<Tensor>>{x1, freqs_cis, start_pos_ptr, mask})[0];
+                  ->Forward(std::vector<std::shared_ptr<Tensor>>{x1, buffers_[kFreqsCisName], start_pos_ptr, mask})[0];
     // (bs, seq_len, n_embd) -> RMSNorm -> (bs, seq_len, n_embd)
     auto x3 = transformer->mutable_module(kLnFLayerName)->Forward({x2});
 

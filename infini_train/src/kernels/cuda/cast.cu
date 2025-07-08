@@ -35,9 +35,9 @@ std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
 }
 } // namespace infini_train::kernels::cuda
 
-#define REGISTER_CUDA_FILL_KERNEL(kernel_name)                                                                         \
+#define REGISTER_CUDA_CAST_KERNEL(kernel_name)                                                                         \
     REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
-REGISTER_CUDA_FILL_KERNEL(Cast)
+REGISTER_CUDA_CAST_KERNEL(Cast)
 
-#undef REGISTER_CUDA_FILL_KERNEL
+#undef REGISTER_CUDA_CAST_KERNEL

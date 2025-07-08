@@ -1,4 +1,5 @@
 #include <cstddef>
+
 #include <cub/warp/warp_reduce.cuh>
 
 #include "infini_train/include/common/cuda/common_cuda.cuh"
@@ -203,9 +204,11 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
     if (warp_uniform) {
         float reduced = WarpReduce(temp_storage[warp_id]).Sum(grad_val);
         if (lane_id == leader) {
+            // FIXME(lzm): atomicAdd is much slower for bf16 and half compared to float, needs further optimization
             atomicAdd(&output_b[common_offset], common::cuda::Cast<T>(reduced));
         }
     } else if (in_bounds) {
+        // FIXME(lzm): atomicAdd is much slower for bf16 and half compared to float, needs further optimization
         atomicAdd(&output_b[b_offset], common::cuda::Cast<T>(grad_val));
     }
 }

@@ -1,21 +1,28 @@
-#include <thrust/device_ptr.h>
-#include <thrust/execution_policy.h>
-#include <thrust/fill.h>
-
 #include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
 
+template <typename T> __global__ void FillKernel(T *data, T value, size_t size) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        data[idx] = value;
+    }
+}
+
 // TODO(dcj): refactor Fill kernel with elementwise template
 void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
+    const int num_tokens = tensor->NumElements();
+    const int threads_per_block = 256;
+    const int num_blocks = (num_tokens + threads_per_block - 1) / threads_per_block;
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+
     DispatchFunc<INFINI_ALL_TYPES>(
         tensor->Dtype(),
         [=]<typename T>() {
-            thrust::device_ptr<T> dev_ptr(reinterpret_cast<T *>(tensor->DataPtr()));
-            thrust::fill(thrust::cuda::par.on(0), dev_ptr, dev_ptr + tensor->NumElements(),
-                         *(static_cast<T *>(value_ptr)));
+            FillKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                static_cast<T *>(tensor->DataPtr()), *(static_cast<T *>(value_ptr)), tensor->NumElements());
         },
-        "Fill");
+        "CUDA Fill");
 }
 } // namespace infini_train::kernels::cuda
 

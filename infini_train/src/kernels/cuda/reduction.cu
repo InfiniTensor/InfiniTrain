@@ -1,7 +1,5 @@
 #include <cub/cub.cuh>
 
-#include "glog/logging.h"
-
 #include "infini_train/include/common/cuda/common_cuda.cuh"
 
 namespace infini_train::kernels::cuda {
@@ -93,12 +91,11 @@ __global__ void GenericReduceBackwardKernel(T *grad_input, const T *grad_output,
         grad_input[idx] = grad_output[reduced_idx];
         if (is_mean) {
             T H_casted;
-            if constexpr (std::is_same_v<T, half>) {
-                H_casted = __float2half(static_cast<float>(H));
-            } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
-                H_casted = __float2bfloat16(static_cast<float>(H));
+            // TODO(lzm): directly use Cast<T> when (half and nv_bfloat16) <-> (integral types) is supported
+            if constexpr (std::is_same_v<T, half> || std::is_same_v<T, nv_bfloat16>) {
+                H_casted = common::cuda::Cast<T>(static_cast<float>(H));
             } else {
-                H_casted = T(H);
+                H_casted = common::cuda::Cast<T>(H);
             }
             grad_input[idx] /= H_casted;
         }

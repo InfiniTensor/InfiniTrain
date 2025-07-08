@@ -24,8 +24,8 @@ class Module : public std::enable_shared_from_this<Module> {
 public:
     static constexpr char kUndefinedType[] = "Undefined";
 
-    explicit Module(DataType dtype = DataType::kFLOAT32);
-    explicit Module(const std::string &type, DataType dtype = DataType::kFLOAT32);
+    explicit Module();
+    explicit Module(const std::string &type);
     Module(const Module &) = default;
 
     virtual ~Module(){};
@@ -60,7 +60,6 @@ public:
 
 protected:
     const Device *device_ = nullptr;
-    DataType dtype_; // DataType::kFLOAT32 by default
     const std::string type_ = kUndefinedType;
     std::unordered_map<std::string, std::shared_ptr<Module>> modules_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;

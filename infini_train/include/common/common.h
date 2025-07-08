@@ -13,5 +13,3 @@
 #define LOG_UNSUPPORTED_DTYPE(DTYPE, CONTEXT_IDENTIFIER)                                                               \
     LOG_LOC(FATAL, WRAP(CONTEXT_IDENTIFIER << " Unsupported data type: "                                               \
                                                   + kDataTypeToDesc.at(static_cast<infini_train::DataType>(dtype))))
-
-namespace infini_train {} // namespace infini_train

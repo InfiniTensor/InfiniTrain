@@ -67,6 +67,7 @@ namespace infini_train::common::cuda {
  *   float f = Cast<float>(h);         // half -> float (CUDA intrinsic)
  *   int i = Cast<int>(2.718);         // double -> int (standard cast)
  */
+// TODO(lzm): add support for half and nv_bfloat16 conversions with integral types
 template <typename DST, typename SRC> __host__ __device__ DST Cast(SRC &&x) {
     static_assert(!std::is_reference_v<DST>, "Cast cannot return reference types");
 

@@ -37,7 +37,7 @@ std::shared_ptr<Tensor> TrilForward(const std::shared_ptr<Tensor> &input, int64_
             TrilForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
                 static_cast<T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), rows, cols, diagonal);
         },
-        "TrilForward");
+        "CUDA TrilForward");
 
     return output;
 }
@@ -79,7 +79,7 @@ std::shared_ptr<Tensor> TrilBackward(const std::shared_ptr<Tensor> &grad_output,
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), rows, cols,
                 diagonal);
         },
-        "TrilBackward");
+        "CUDA TrilBackward");
 
     return grad_input;
 }
@@ -250,7 +250,7 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
                 static_cast<const T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), in_dims_dev,
                 in_strides_dev, out_strides_dev, ndim, dim0, dim1, num_elements);
         },
-        "TransposeForward");
+        "CUDA TransposeForward");
 
     cudaFreeAsync(device_buffer, stream);
 
@@ -301,7 +301,7 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
                 static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask->DataPtr()),
                 static_cast<T *>(output->DataPtr()), common::cuda::Cast<T>(value), batch_size, mask_size);
         },
-        "MaskForward");
+        "CUDA MaskForward");
 
     return output;
 }
@@ -346,7 +346,7 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask->DataPtr()),
                 static_cast<T *>(grad_input->DataPtr()), batch_size, mask_size);
         },
-        "MaskBackward");
+        "CUDA MaskBackward");
 
     return grad_input;
 }

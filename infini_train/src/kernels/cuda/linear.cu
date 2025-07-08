@@ -64,7 +64,7 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
                           ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
                       DataType::kBFLOAT16)
     default:
-        LOG(FATAL) << "CUDA Matmul forward: 'Unsupported data type' at " << __FILE__ << ":" << __LINE__;
+        LOG_UNSUPPORTED_DTYPE(dtype, "CUDA MatmulForward: ");
     }
 
     CUBLAS_CHECK(cublasDestroy(handle));
@@ -242,7 +242,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     cublasHandle_t handle;
     CUBLAS_CHECK(cublasCreate(&handle));
     CUBLAS_CHECK(cublasSetStream(handle, cuda_device->Stream()));
-    // TODO(zbl): use cublasSgemv if possible
+    // TODO(zbl): use cublasSgemv if possible for convenience and simplicity
     //
     // - if a is transposed:
     // weight is [out_features, in_features] here

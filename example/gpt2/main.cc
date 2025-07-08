@@ -22,6 +22,7 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
+#include "example/common/utils.h"
 #include "example/gpt2/net.h"
 
 // I/O
@@ -85,14 +86,6 @@ const std::unordered_map<std::string, GPT2::ModelType> kStrToModelType = {
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
-
-float DecodeBF16(void *ptr) {
-    uint16_t *raw_data = reinterpret_cast<uint16_t *>(ptr);
-    uint32_t f32_bits = static_cast<uint32_t>(raw_data[0]) << 16;
-    float f;
-    std::memcpy(&f, &f32_bits, sizeof(f));
-    return f;
-}
 
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -217,7 +210,7 @@ int main(int argc, char *argv[]) {
             if (FLAGS_dtype == kDtypeFP32) {
                 lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
             } else if (FLAGS_dtype == kDtypeBF16) {
-                lossf += DecodeBF16(loss_cpu.DataPtr());
+                lossf += ConvertBF16ToFloat(loss_cpu.DataPtr());
             }
             LOG(INFO) << "start backward";
             loss->Backward();

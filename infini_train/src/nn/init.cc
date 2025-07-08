@@ -236,8 +236,8 @@ std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, const
             CUDA_CASE(DataType::kINT32, int32_t)
             CUDA_CASE(DataType::kUINT64, uint64_t)
             CUDA_CASE(DataType::kINT64, int64_t)
-            // CUDA_CASE(DataType::kBFLOAT16, bf16)
-            // CUDA_CASE(DataType::kFLOAT16, fp16)
+            CUDA_CASE(DataType::kBFLOAT16, nv_bfloat16)
+            CUDA_CASE(DataType::kFLOAT16, half)
             CUDA_CASE(DataType::kFLOAT32, float)
             CUDA_CASE(DataType::kFLOAT64, double)
         default:

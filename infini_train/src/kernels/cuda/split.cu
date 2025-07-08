@@ -123,7 +123,7 @@ std::shared_ptr<Tensor> LaunchSplitBackward(const std::vector<int64_t> &input_di
     void *device_ptr;
     const T **device_grad_output_ptrs;
     int64_t *device_H_outs;
-    cudaMallocAsync(&device_ptr, (sizeof(T *) + sizeof(int64_t)) * num_splits, 0);
+    cudaMallocAsync(&device_ptr, (sizeof(T *) + sizeof(int64_t)) * num_splits, stream);
     device_grad_output_ptrs = (const T **)(device_ptr);
     device_H_outs = reinterpret_cast<int64_t *>(device_grad_output_ptrs + num_splits);
 

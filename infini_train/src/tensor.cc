@@ -7,11 +7,13 @@
 
 #ifdef USE_CUDA
 #include "cuda_runtime_api.h"
-#include "infini_train/include/common/cuda/common_cuda.cuh"
 #endif
 #include "Eigen/Dense"
 #include "glog/logging.h"
 
+#ifdef USE_CUDA
+#include "infini_train/include/common/cuda/common_cuda.cuh"
+#endif
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/matmul.h"
 #include "infini_train/include/autograd/misc.h"

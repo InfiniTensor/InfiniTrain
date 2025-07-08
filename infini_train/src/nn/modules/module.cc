@@ -12,10 +12,9 @@
 
 namespace infini_train::nn {
 
-Module::Module(DataType dtype) : Module(kUndefinedType, dtype) {}
+Module::Module() : Module(kUndefinedType) {}
 
-Module::Module(const std::string &type, DataType dtype)
-    : type_(type), dtype_(dtype), device_(DeviceManager::Instance()->GetDefaultDevice()) {}
+Module::Module(const std::string &type) : type_(type), device_(DeviceManager::Instance()->GetDefaultDevice()) {}
 
 const std::string &Module::type() const { return type_; }
 
@@ -126,10 +125,6 @@ void Module::To(const Device *device) {
 }
 
 void Module::To(DataType dtype) {
-    if (dtype == dtype_) {
-        return;
-    }
-
     std::unordered_map<std::string, std::shared_ptr<Tensor>> new_parameters;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> new_buffers;
     for (auto &[name, param] : parameters_) {
@@ -138,7 +133,6 @@ void Module::To(DataType dtype) {
     for (auto &[name, buffer] : buffers_) { new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(dtype))); }
     parameters_ = std::move(new_parameters);
     buffers_ = std::move(new_buffers);
-    dtype_ = dtype;
 
     for (auto &[_, layer] : modules_) { layer->To(dtype); }
 }

@@ -267,7 +267,7 @@ auto DispatchFunc(DataType dtype, Functor &&func, std::string_view context_ident
     }
     LOG_UNSUPPORTED_DTYPE(dtype, context_identifier);
     // prevent the compiler warning about control reaching the end of non-void function
-    throw std::runtime_error("Unsupported data type");
+    std::abort();
 }
 
 namespace {
@@ -335,7 +335,7 @@ template <size_t index, typename AllowedListTuple, typename... ResolvedTypes> st
             }
             LOG_UNSUPPORTED_DTYPE(dtype, context_identifier);
             // prevent the compiler warning about control reaching the end of non-void function
-            throw std::runtime_error("Unsupported data type");
+            std::abort();
         }
     }
 };
@@ -367,7 +367,7 @@ auto DispatchFunc(const std::vector<DataType> &dtypes, Functor &&func, std::stri
     if (dtypes.size() != num_lists) {
         LOG(FATAL) << std::format("DispatchFunc expects {} dtypes, but only got {} in {}", num_lists, dtypes.size(),
                                   context_identifier);
-        throw std::runtime_error("Incorrect number of runtime dtypes");
+        std::abort();
     }
 
     using AllowedListTuple = std::tuple<AllowedTypeLists...>;

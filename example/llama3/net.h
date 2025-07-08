@@ -116,6 +116,8 @@ public:
     static constexpr char kTransformerLayerName[] = "transformer";
     static constexpr char kLMHeadLayerName[] = "lm_head";
 
+    static constexpr char kFreqsCisName[] = "freqs_cis";
+
     enum class ModelType : int8_t {
         // TODO(zbl): more model type from huggingface
         kLLaMA3_1_8B,
@@ -135,5 +137,4 @@ public:
 
 private:
     LLaMA3Config config_;
-    std::shared_ptr<infini_train::Tensor> freqs_cis_;
 };

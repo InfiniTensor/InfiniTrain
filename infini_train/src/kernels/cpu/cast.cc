@@ -19,9 +19,9 @@ std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
 }
 } // namespace infini_train::kernels::cpu
 
-#define REGISTER_CPU_FILL_KERNEL(kernel_name)                                                                          \
+#define REGISTER_CPU_CAST_KERNEL(kernel_name)                                                                          \
     REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
-REGISTER_CPU_FILL_KERNEL(Cast)
+REGISTER_CPU_CAST_KERNEL(Cast)
 
-#undef REGISTER_CPU_FILL_KERNEL
+#undef REGISTER_CPU_CAST_KERNEL

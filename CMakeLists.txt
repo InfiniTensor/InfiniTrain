@@ -55,8 +55,6 @@ if(USE_CUDA)
     find_package(CUDAToolkit REQUIRED)
     include_directories(${CUDAToolkit_INCLUDE_DIRS})
 
-    include_directories(SYSTEM ${CUDAToolkit_INCLUDE_DIRS})
-
     # enable CUDA-related compilation options
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
     file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
@@ -83,8 +81,8 @@ endif()
 add_executable(mnist example/mnist/main.cc example/mnist/dataset.cc example/mnist/net.cc)
 target_link_libraries(mnist infini_train)
 
-add_executable(gpt2 example/gpt2/main.cc example/common/tiny_shakespeare_dataset.cc example/gpt2/net.cc example/common/tokenizer.cc)
+add_executable(gpt2 example/gpt2/main.cc example/common/tiny_shakespeare_dataset.cc example/common/utils.cc example/gpt2/net.cc example/common/tokenizer.cc)
 target_link_libraries(gpt2 infini_train)
 
-add_executable(llama3 example/llama3/main.cc example/common/tiny_shakespeare_dataset.cc example/llama3/net.cc example/common/tokenizer.cc)
+add_executable(llama3 example/llama3/main.cc example/common/tiny_shakespeare_dataset.cc example/common/utils.cc example/llama3/net.cc example/common/tokenizer.cc)
 target_link_libraries(llama3 infini_train)
