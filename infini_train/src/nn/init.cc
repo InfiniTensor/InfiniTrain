@@ -12,6 +12,9 @@
 #ifdef USE_CUDA
 #include "cuda_runtime_api.h"
 #endif
+#ifdef USE_OMP
+#include "omp.h"
+#endif
 
 #include "infini_train/include/tensor.h"
 
@@ -25,8 +28,21 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
                                std::optional<std::mt19937> generator) {
     const int64_t num_elements = tensor->NumElements();
     std::vector<float> buffer(num_elements);
+
+#ifdef USE_OMP
+#pragma omp parallel
+    {
+        std::mt19937 local_gen(std::random_device{}() + omp_get_thread_num());
+        std::normal_distribution<float> local_dis(mean, std);
+#pragma omp for
+        for (int i = 0; i < buffer.size(); ++i) {
+            buffer[i] = generator ? local_dis(generator.value()) : local_dis(local_gen);
+        }
+    }
+#else
     std::normal_distribution<float> dis(mean, std);
     std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
+#endif
 
     switch (tensor->GetDevice()->Type()) {
     case DeviceType::kCPU: {
@@ -114,8 +130,21 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
                                 std::optional<std::mt19937> generator) {
     const int64_t num_elements = tensor->NumElements();
     std::vector<float> buffer(num_elements);
+
+#ifdef USE_OMP
+#pragma omp parallel
+    {
+        std::mt19937 local_gen(std::random_device{}() + omp_get_thread_num());
+        std::uniform_real_distribution<float> local_dis(a, b);
+#pragma omp for
+        for (int i = 0; i < buffer.size(); ++i) {
+            buffer[i] = generator ? local_dis(generator.value()) : local_dis(local_gen);
+        }
+    }
+#else
     std::uniform_real_distribution<float> dis(a, b);
     std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
+#endif
 
     switch (tensor->GetDevice()->Type()) {
     case DeviceType::kCPU: {

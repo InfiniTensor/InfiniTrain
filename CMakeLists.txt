@@ -46,6 +46,7 @@ file (GLOB_RECURSE CPU_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/kernels/cp
 add_library(infini_train_cpu_kernels STATIC ${CPU_KERNELS})
 target_link_libraries(infini_train_cpu_kernels glog Eigen3::Eigen)
 if(USE_OMP)
+    add_compile_definitions(USE_OMP=1)
     target_link_libraries(infini_train_cpu_kernels OpenMP::OpenMP_CXX)
 endif()
 
