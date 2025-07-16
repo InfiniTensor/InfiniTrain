@@ -31,9 +31,7 @@ std::shared_ptr<Tensor> OuterForward(const std::shared_ptr<Tensor> &input, const
     // output.T[N, M] = other[N, 1] * input.T[1, M]
     float alpha = 1.0f;
     float beta = 0.0f;
-    cublasHandle_t handle;
-    CUBLAS_CHECK(cublasCreate(&handle));
-    CUBLAS_CHECK(cublasSetStream(handle, cuda_device->Stream()));
+    cublasHandle_t handle = cuda_device->CublasHandle();
 
     switch (input->Dtype()) {
         DISPATCH_CASE(WRAP({
@@ -51,8 +49,6 @@ std::shared_ptr<Tensor> OuterForward(const std::shared_ptr<Tensor> &input, const
                       }),
                       DataType::kBFLOAT16)
     }
-
-    CUBLAS_CHECK(cublasDestroy(handle));
 
     return output;
 }
@@ -86,9 +82,7 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     float alpha = 1.0f;
     float beta = 0.0f;
-    cublasHandle_t handle;
-    CUBLAS_CHECK(cublasCreate(&handle));
-    CUBLAS_CHECK(cublasSetStream(handle, cuda_device->Stream()));
+    cublasHandle_t handle = cuda_device->CublasHandle();
 
     switch (dtype) {
         DISPATCH_CASE(WRAP({
@@ -133,7 +127,7 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
             }),
             DataType::kBFLOAT16)
     }
-    CUBLAS_CHECK(cublasDestroy(handle));
+
     return {grad_input, grad_other};
 }
 

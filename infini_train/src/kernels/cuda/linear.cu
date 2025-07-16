@@ -33,10 +33,7 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     const float alpha = 1.0f, beta = 0.0f;
-    cublasHandle_t handle;
-    // TODO(zbl): create handle only once
-    CUBLAS_CHECK(cublasCreate(&handle));
-    CUBLAS_CHECK(cublasSetStream(handle, cuda_device->Stream()));
+    cublasHandle_t handle = cuda_device->CublasHandle();
 
     // cuBLAS is colmun-major
     // output = input * other --> output.T = other.T * input.T
@@ -67,7 +64,6 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
         LOG_UNSUPPORTED_DTYPE(dtype, "CUDA MatmulForward");
     }
 
-    CUBLAS_CHECK(cublasDestroy(handle));
     return output;
 }
 
@@ -113,9 +109,7 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     const float alpha = 1.0f, beta = 0.0f;
-    cublasHandle_t handle;
-    CUBLAS_CHECK(cublasCreate(&handle));
-    CUBLAS_CHECK(cublasSetStream(handle, cuda_device->Stream()));
+    cublasHandle_t handle = cuda_device->CublasHandle();
 
     {
         // cuBLAS is colmun-major
@@ -168,7 +162,6 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
         }
     }
 
-    CUBLAS_CHECK(cublasDestroy(handle));
     return {grad_input, grad_other};
 }
 
@@ -239,9 +232,8 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     auto trans_a = transpose ? CUBLAS_OP_T : CUBLAS_OP_N;
     auto trans_b = CUBLAS_OP_N;
     auto lda = transpose ? in_features : out_features;
-    cublasHandle_t handle;
-    CUBLAS_CHECK(cublasCreate(&handle));
-    CUBLAS_CHECK(cublasSetStream(handle, cuda_device->Stream()));
+    cublasHandle_t handle = cuda_device->CublasHandle();
+
     // TODO(zbl): use cublasSgemv if possible for convenience and simplicity
     //
     // - if a is transposed:
@@ -272,7 +264,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
                       }),
                       DataType::kBFLOAT16)
     }
-    CUBLAS_CHECK(cublasDestroy(handle));
+
     return output;
 }
 
@@ -341,9 +333,7 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto ldb2 = transpose ? out_features : in_features;
     auto ldc2 = transpose ? in_features : out_features;
 
-    cublasHandle_t handle;
-    CUBLAS_CHECK(cublasCreate(&handle));
-    CUBLAS_CHECK(cublasSetStream(handle, cuda_device->Stream()));
+    cublasHandle_t handle = cuda_device->CublasHandle();
 
     switch (input->Dtype()) {
         // TODO(zbl): use cublasSgemv if possible
@@ -412,8 +402,6 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
                       }),
                       DataType::kBFLOAT16)
     }
-
-    CUBLAS_CHECK(cublasDestroy(handle));
 
     return {grad_input, grad_weight, grad_bias};
 }
