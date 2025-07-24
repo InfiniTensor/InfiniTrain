@@ -8,6 +8,7 @@
 #include "glog/logging.h"
 
 #ifdef USE_CUDA
+#include "cublas_v2.h"
 #include "cuda.h"
 #include "cuda_runtime_api.h"
 #endif
@@ -63,6 +64,7 @@ public:
 
     cudaStream_t Stream() const;
 
+    cublasHandle_t CublasHandle() const;
 #ifdef USE_NCCL
     ncclComm_t NcclComm() const;
 #endif
@@ -72,6 +74,7 @@ private:
 
     cudaStream_t stream_ = nullptr;
 
+    cublasHandle_t cublas_handle_ = nullptr;
 #ifdef USE_NCCL
     ncclComm_t nccl_comm_ = nullptr;
 #endif

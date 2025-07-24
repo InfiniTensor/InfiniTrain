@@ -43,12 +43,18 @@ CudaDevice::~CudaDevice() {
     if (stream_ != nullptr) {
         cudaStreamDestroy(stream_);
     }
+
+    if (cublas_handle_ != nullptr) {
+        cublasDestroy(cublas_handle_);
+    }
 }
 
 void CudaDevice::SetDevice() const { cudaSetDevice(index_); }
 void CudaDevice::Synchronize() const { cudaDeviceSynchronize(); }
 
 cudaStream_t CudaDevice::Stream() const { return stream_; }
+
+cublasHandle_t CudaDevice::CublasHandle() const { return cublas_handle_; }
 
 #ifdef USE_NCCL
 ncclComm_t CudaDevice::NcclComm() const { return nccl_comm_; }
@@ -58,6 +64,9 @@ CudaDevice::CudaDevice(int8_t index) : Device(DeviceType::kCUDA, index) {
     // TODO(dcj): make CudaDevice initialization lazy to avoid allocating memory on all GPUs in single-GPU mode
     SetDevice();
     cudaStreamCreate(&stream_);
+
+    cublasCreate(&cublas_handle_);
+    cublasSetStream(cublas_handle_, stream_);
 }
 #endif // USE_CUDA
 
