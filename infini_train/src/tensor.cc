@@ -32,10 +32,13 @@ TensorBuffer::TensorBuffer(const Device *device, size_t size) : device_(device),
         break;
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
+        int current_device = -1;
+        CUDA_CHECK(cudaGetDevice(&current_device));
         // TODO(dcj): Maybe pin memory later.
         device->SetDevice();
         const auto *cuda_device = dynamic_cast<const CudaDevice *>(device);
         CUDA_CHECK(cudaMallocAsync(&data_, size, cuda_device->Stream()));
+        CUDA_CHECK(cudaSetDevice(current_device));
         break;
     }
 #endif
@@ -160,13 +163,14 @@ Tensor Tensor::To(const Device *device) {
         break;
     }
     case DeviceType::kCUDA: {
+        int current_device = -1;
+        CUDA_CHECK(cudaGetDevice(&current_device));
         new_tensor = Tensor(dims_, dtype_, device);
         if (GetDevice()->Type() == DeviceType::kCPU) {
             device->SetDevice();
             // CPU -> CUDA
             CUDA_CHECK(cudaMemcpyAsync(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), cudaMemcpyHostToDevice,
                                        dynamic_cast<const CudaDevice *>(device)->Stream()));
-            break;
         } else {
             // CUDA -> CUDA
             //  1. CUDA -> CPU
@@ -177,8 +181,9 @@ Tensor Tensor::To(const Device *device) {
             device->SetDevice();
             CUDA_CHECK(cudaMemcpyAsync(new_tensor.DataPtr(), cpu_tensor.DataPtr(), SizeInBytes(),
                                        cudaMemcpyHostToDevice, dynamic_cast<const CudaDevice *>(device)->Stream()));
-            break;
         }
+        CUDA_CHECK(cudaSetDevice(current_device));
+        break;
     }
 #endif
     default:

@@ -97,9 +97,12 @@ DeviceManager::DeviceManager() {
     CUDA_DRIVER_CHECK(cuInit(0));
     int device_count = 0;
     CUDA_DRIVER_CHECK(cuDeviceGetCount(&device_count));
+    int current_device = -1;
+    CUDA_CHECK(cudaGetDevice(&current_device));
     for (int idx = 0; idx < device_count; ++idx) {
         devices_map_[DeviceType::kCUDA].push_back(std::unique_ptr<CudaDevice>(new CudaDevice(idx)));
     }
+    CUDA_CHECK(cudaSetDevice(current_device));
 #endif
 }
 

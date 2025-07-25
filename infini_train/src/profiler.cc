@@ -10,6 +10,9 @@
 #endif
 #include "glog/logging.h"
 
+#ifdef USE_CUDA
+#include "infini_train/include/common/cuda/common_cuda.cuh"
+#endif
 #include "infini_train/include/device.h"
 
 namespace infini_train {
@@ -34,18 +37,22 @@ Profiler &Profiler::Instance() {
     return profiler;
 }
 
-int GetRank() {
+int GetRank(DeviceType device) {
+    if (device == DeviceType::kCPU) {
+        return 0;
+    }
+
     // Assume single-node setting, rank == device_id
-    int device = 0;
+    int device_id = 0;
 #ifdef USE_CUDA
-    cudaGetDevice(&device);
+    CUDA_CHECK(cudaGetDevice(&device_id));
 #endif
-    return device;
+    return device_id;
 }
 
 #ifdef USE_CUDA
 cudaStream_t GetCudaStream() {
-    int device_id = GetRank();
+    int device_id = GetRank(DeviceType::kCUDA);
     // TODO(zbl): support multi-stream on single device
     return dynamic_cast<const CudaDevice *>(
                DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, static_cast<int8_t>(device_id)))
@@ -64,11 +71,19 @@ void Profiler::StartRecord(const std::string &name, DeviceType device) {
         break;
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
+        auto it = cuda_timing_map_.find(name);
+        if (it != cuda_timing_map_.end()) {
+            // Make sure there are no conflicts
+            CUDA_CHECK(cudaEventDestroy(reinterpret_cast<cudaEvent_t>(it->second.start)));
+            CUDA_CHECK(cudaEventDestroy(reinterpret_cast<cudaEvent_t>(it->second.stop)));
+            cuda_timing_map_.erase(it);
+        }
+
         cudaEvent_t start, stop;
         cudaStream_t stream = GetCudaStream();
-        cudaEventCreate(&start);
-        cudaEventCreate(&stop);
-        cudaEventRecord(start, stream);
+        CUDA_CHECK(cudaEventCreate(&start));
+        CUDA_CHECK(cudaEventCreate(&stop));
+        CUDA_CHECK(cudaEventRecord(start, stream));
         cuda_timing_map_[name] = {reinterpret_cast<void *>(start), reinterpret_cast<void *>(stop)};
         break;
     }
@@ -86,7 +101,7 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
     int64_t host_us = 0, device_us = 0;
     int64_t peak_mem_mb = 0;
     std::string device_str = "cpu";
-    int rank = GetRank();
+    int rank = GetRank(device);
 
     switch (device) {
     case DeviceType::kCPU:
@@ -99,13 +114,13 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
             cudaEvent_t start = reinterpret_cast<cudaEvent_t>(event_pair.start);
             cudaEvent_t stop = reinterpret_cast<cudaEvent_t>(event_pair.stop);
             cudaStream_t stream = GetCudaStream();
-            cudaEventRecord(stop, stream);
-            cudaEventSynchronize(stop);
-            float elapsed_ms;
-            cudaEventElapsedTime(&elapsed_ms, start, stop);
+            CUDA_CHECK(cudaEventRecord(stop, stream));
+            CUDA_CHECK(cudaEventSynchronize(stop));
+            float elapsed_ms = 0.f;
+            CUDA_CHECK(cudaEventElapsedTime(&elapsed_ms, start, stop));
             device_us = static_cast<int64_t>(elapsed_ms * 1000);
-            cudaEventDestroy(start);
-            cudaEventDestroy(stop);
+            CUDA_CHECK(cudaEventDestroy(start));
+            CUDA_CHECK(cudaEventDestroy(stop));
             cuda_timing_map_.erase(it);
 
             cudaMemPool_t pool;
