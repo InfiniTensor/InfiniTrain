@@ -191,6 +191,35 @@ std::shared_ptr<Tensor> NcclGather(const std::vector<std::shared_ptr<Tensor>> &t
     NCCL_CHECK(ncclGroupEnd());
     return output;
 }
+
+void NcclAllReduce(const std::vector<std::vector<std::shared_ptr<Tensor>>> &tensors) {
+    // tensors: [num_devices][num_tensors_per_device]
+
+    std::vector<cudaStream_t> streams;
+    std::vector<ncclComm_t> comms;
+
+    for (size_t i = 0; i < tensors.size(); ++i) {
+        auto device_ptr = dynamic_cast<const CudaDevice *>(tensors[i][0]->GetDevice());
+        streams.push_back(device_ptr->Stream());
+        comms.push_back(device_ptr->NcclComm());
+    }
+
+    NCCL_CHECK(ncclGroupStart());
+
+    for (size_t i = 0; i < tensors.size(); ++i) {
+        for (size_t j = 0; j < tensors[i].size(); ++j) {
+            const auto &tensor = tensors[i][j];
+            auto dtype = tensor->Dtype();
+            auto nccl_dtype = kNcclDtypeMap.at(dtype);
+            auto count = tensor->NumElements();
+            void *buffer = tensor->DataPtr();
+
+            NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, ncclSum, comms[i], streams[i]));
+        }
+    }
+
+    NCCL_CHECK(ncclGroupEnd());
+}
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_COMM_KERNEL(kernel_name)                                                                         \
@@ -200,6 +229,7 @@ REGISTER_CUDA_COMM_KERNEL(NcclBroadcast)
 REGISTER_CUDA_COMM_KERNEL(NcclScatter)
 REGISTER_CUDA_COMM_KERNEL(NcclGather)
 REGISTER_CUDA_COMM_KERNEL(NcclReduceAddCoalesced)
+REGISTER_CUDA_COMM_KERNEL(NcclAllReduce)
 
 #undef REGISTER_CUDA_COMM_KERNEL
 
