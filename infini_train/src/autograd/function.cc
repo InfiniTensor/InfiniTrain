@@ -49,11 +49,11 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
     const auto *device = grad_output->GetDevice();
     device->SetDevice();
 
-    if (!grad_outputs_[grad_output_idx]) {
+    if (!grad_outputs_.at(grad_output_idx)) {
         grad_outputs_[grad_output_idx] = grad_output;
         ++grad_outputs_reached_;
     } else {
-        auto accumulate_function = std::make_shared<AccumulateGrad>(grad_outputs_[grad_output_idx]);
+        auto accumulate_function = std::make_shared<AccumulateGrad>(grad_outputs_.at(grad_output_idx));
         accumulate_function->BackwardPartial(grad_output, 0);
     }
     ++dependencies_reached_;

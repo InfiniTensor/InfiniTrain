@@ -14,7 +14,7 @@
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/data_parallel.h"
+#include "infini_train/include/nn/parallel/distributed_data_parallel.h"
 #include "infini_train/include/optimizer.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
@@ -117,7 +117,7 @@ int main(int argc, char *argv[]) {
     const auto *device = DeviceManager::Instance()->GetDevice(
         FLAGS_data_parallel || FLAGS_device == kDeviceCUDA ? DeviceType::kCUDA : DeviceType::kCPU);
     if (FLAGS_data_parallel) {
-        model = std::make_shared<nn::parallel::DataParallel>(model);
+        model = std::make_shared<nn::parallel::ThreadDDP>(model);
     } else {
         model->To(device);
     }
@@ -182,7 +182,7 @@ int main(int argc, char *argv[]) {
         }
 
         // model->Train();
-        optimizer.ZeroGrad();
+        // optimizer.ZeroGrad();
         // if we are trying to overfit a single batch, we reset the loader here
         if (FLAGS_overfit_single_batch) {
             // train_loader.Reset();
@@ -199,24 +199,25 @@ int main(int argc, char *argv[]) {
             ++train_iter;
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
-            LOG(INFO) << "start forward";
-            // (bs, seq_len, vocab_size)
-            auto logits = model->Forward({x, y})[0];
-            LOG(INFO) << "finish model forward, start loss forward";
-            auto loss = loss_fn.Forward({logits, y})[0];
-            loss = loss / grad_accum_steps;
-            LOG(INFO) << "finish loss forward";
-            auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
-            if (FLAGS_dtype == kDtypeFP32) {
-                lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
-            } else if (FLAGS_dtype == kDtypeBF16) {
-                lossf += ConvertBF16ToFloat(loss_cpu.DataPtr());
-            }
-            LOG(INFO) << "start backward";
-            loss->Backward();
-            LOG(INFO) << "finish backward";
+            lossf = model->TrainStep({x}, {y}, std::make_shared<nn::CrossEntropyLoss>(loss_fn), optimizer);
+            // LOG(INFO) << "start forward";
+            // // (bs, seq_len, vocab_size)
+            // auto logits = model->Forward({x, y})[0];
+            // LOG(INFO) << "finish model forward, start loss forward";
+            // auto loss = loss_fn.Forward({logits, y})[0];
+            // loss = loss / grad_accum_steps;
+            // LOG(INFO) << "finish loss forward";
+            // auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
+            // if (FLAGS_dtype == kDtypeFP32) {
+            //     lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
+            // } else if (FLAGS_dtype == kDtypeBF16) {
+            //     lossf += ConvertBF16ToFloat(loss_cpu.DataPtr());
+            // }
+            // LOG(INFO) << "start backward";
+            // loss->Backward();
+            // LOG(INFO) << "finish backward";
         }
-        optimizer.Step();
+        // optimizer.Step();
 
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();

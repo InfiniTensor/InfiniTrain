@@ -13,8 +13,6 @@ class ThreadDDP : public Module {
 public:
     ThreadDDP(const std::shared_ptr<Module> &module, int dim = 0);
 
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
-
     std::vector<std::shared_ptr<Tensor>> Parameters() const override;
 
     float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,

@@ -9,6 +9,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/device.h"
+#include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
@@ -32,7 +33,7 @@ public:
 
     const std::string &type() const;
 
-    std::vector<std::shared_ptr<Tensor>> Parameters() const;
+    virtual std::vector<std::shared_ptr<Tensor>> Parameters() const;
     bool has_parameter(const std::string &name) const;
     std::shared_ptr<Tensor> *mutable_parameter(const std::string &name);
     const std::shared_ptr<Tensor> &parameter(const std::string &name) const;
@@ -49,6 +50,12 @@ public:
         LOG(FATAL) << "Forward function not implemented for this module";
         return {};
     }
+
+    virtual float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                            const std::vector<std::shared_ptr<Tensor>> &targets, const std::shared_ptr<Module> &loss_fn,
+                            Optimizer &optimizer) {
+        return 0.0f;
+    };
 
     virtual void To(const Device *device);
 
