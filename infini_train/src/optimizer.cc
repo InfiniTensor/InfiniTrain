@@ -52,6 +52,7 @@ void Adam::Step() {
         auto &m = m_[i];
         auto &v = v_[i];
 
+        // FIXME(dcj): use autograd function
         auto device = param->GetDevice()->Type();
         auto kernel = Dispatcher::Instance().GetKernel({device, "AdamAccumulateGrad"});
         kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);

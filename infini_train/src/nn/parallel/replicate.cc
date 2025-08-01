@@ -137,10 +137,18 @@ std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &ne
                                                const std::vector<const Device *> &devices) {
     const int num_replicas = devices.size();
 
+    // FIXME(dcj): Parameters function need deduplication
     auto params = network->Parameters();
     std::unordered_map<Tensor *, int> param_indices;
     for (int idx = 0; idx < params.size(); ++idx) { param_indices[params[idx].get()] = idx; }
     auto param_copies = BroadcastCoalescedReshape(params, devices);
+    for (int replica_idx = 0; replica_idx < num_replicas; ++replica_idx) {
+        for (auto param : param_copies[replica_idx]) {
+            param->RequiresGrad();
+            // FIXME(dcj): maybe wrong in dp(need autograd reduce)
+            param->set_is_leaf(true);
+        }
+    }
 
     auto buffers = network->Buffers();
     std::unordered_map<Tensor *, int> buffer_indices;

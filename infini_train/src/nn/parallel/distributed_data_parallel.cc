@@ -8,6 +8,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/modules/module.h"
@@ -19,10 +20,12 @@ namespace infini_train::nn::parallel {
 namespace {
 constexpr char kModuleName[] = "module";
 
-std::vector<std::shared_ptr<Tensor>> AllReduce(const std::vector<std::shared_ptr<Tensor>> &grads) {
-    auto device = grads[0]->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "NcclAllReduce"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grads)};
+void AllReduce(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads) {
+    CHECK_GT(grads.size(), 0);
+    auto device = grads[0][0]->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "CommNcclAllReduce"});
+    // FIXME(dcj): should auto deduce the grads's type
+    kernel.Call<void, std::vector<std::vector<std::shared_ptr<Tensor>>>>(grads);
 }
 
 void AllReduceGradients(const std::vector<std::shared_ptr<Module>> &replicas,
@@ -30,16 +33,16 @@ void AllReduceGradients(const std::vector<std::shared_ptr<Module>> &replicas,
     CHECK_GT(replicas.size(), 0);
 
     const auto &params = replicas[0]->Parameters();
-    for (int param_idx = 0; param_idx < params.size(); ++param_idx) {
-        std::vector<std::shared_ptr<Tensor>> grads;
-        for (int i = 0; i < replicas.size(); ++i) {
-            auto grad = replicas[i]->Parameters()[param_idx]->grad();
-            grads.push_back(grad);
-        }
+    std::vector<std::vector<std::shared_ptr<Tensor>>> grads(replicas.size());
 
-        auto reduced = AllReduce(grads);
-        for (int i = 0; i < replicas.size(); ++i) { replicas[i]->Parameters()[param_idx]->set_grad(reduced[i]); }
+    for (int replica_idx = 0; replica_idx < replicas.size(); ++replica_idx) {
+        grads[replica_idx].resize(params.size());
+        for (int param_idx = 0; param_idx < params.size(); ++param_idx) {
+            grads[replica_idx][param_idx] = replicas[replica_idx]->Parameters()[param_idx]->grad();
+        }
     }
+
+    AllReduce(grads);
 }
 
 std::vector<std::vector<std::shared_ptr<Tensor>>>
@@ -93,31 +96,9 @@ ThreadDDP::ThreadDDP(const std::shared_ptr<Module> &module, int dim)
     modules_[kModuleName] = std::move(module);
 
     // FIXME(dcj): no auto grad
-    replicas_ = Replicate(module, devices_);
+    replicas_ = Replicate(modules_[kModuleName], devices_);
 
     LOG(ERROR) << "ThreadDDP module created with " << devices_.size() << " devices";
-}
-
-std::vector<std::shared_ptr<Tensor>> ThreadDDP::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    auto &module = modules_.at(kModuleName);
-
-    for (auto tensor : module->Parameters()) {
-        if (tensor->GetDevice() != src_device_) {
-            LOG(FATAL) << std::format("module must have its Parameters on device {} (device_ids[0]) but found "
-                                      "one of them on device: {}",
-                                      src_device_->ToString(), tensor->GetDevice()->ToString());
-        }
-    }
-
-    auto scattered_inputs = Scatter(input_tensors, devices_, dim_);
-
-    if (devices_.size() == 1) {
-        return module->Forward(scattered_inputs[0]);
-    }
-
-    auto outputs = ParallelApply(replicas_, scattered_inputs, devices_);
-
-    return Gather(outputs, output_device_, dim_);
 }
 
 std::vector<std::shared_ptr<Tensor>> ThreadDDP::Parameters() const {
@@ -140,6 +121,8 @@ float ThreadDDP::TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_ten
     auto scattered_inputs = Scatter(input_tensors, devices_, dim_);
     auto scattered_targets = Scatter(targets, devices_, dim_);
 
+    optimizer.ZeroGrad();
+
     std::vector<std::vector<std::shared_ptr<Tensor>>> outputs;
     if (devices_.size() == 1) {
         outputs = {module->Forward(scattered_inputs[0])};
@@ -149,10 +132,10 @@ float ThreadDDP::TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_ten
 
     float loss_cpu = 0.0f;
     for (int i = 0; i < replicas_.size(); ++i) {
-        auto loss = loss_fn->Forward({outputs[i][0], scattered_targets[i][0]})[0];
+        auto loss = loss_fn->Forward({outputs[i][0], scattered_targets[i][0]})[0] / replicas_.size();
         loss->Backward();
         auto lossf = static_cast<const float *>(loss->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
-        loss_cpu += lossf / replicas_.size();
+        loss_cpu += lossf;
     }
 
     AllReduceGradients(replicas_, devices_);

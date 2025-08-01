@@ -204,10 +204,13 @@ void NcclAllReduce(const std::vector<std::vector<std::shared_ptr<Tensor>>> &tens
         comms.push_back(device_ptr->NcclComm());
     }
 
+    size_t num_devices = tensors.size();
+    size_t num_tensors_per_device = tensors[0].size();
+
     NCCL_CHECK(ncclGroupStart());
 
-    for (size_t i = 0; i < tensors.size(); ++i) {
-        for (size_t j = 0; j < tensors[i].size(); ++j) {
+    for (size_t j = 0; j < num_tensors_per_device; ++j) {
+        for (size_t i = 0; i < num_devices; ++i) {
             const auto &tensor = tensors[i][j];
             auto dtype = tensor->Dtype();
             auto nccl_dtype = kNcclDtypeMap.at(dtype);
@@ -217,7 +220,6 @@ void NcclAllReduce(const std::vector<std::vector<std::shared_ptr<Tensor>>> &tens
             NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, ncclSum, comms[i], streams[i]));
         }
     }
-
     NCCL_CHECK(ncclGroupEnd());
 }
 } // namespace infini_train::kernels::cuda
