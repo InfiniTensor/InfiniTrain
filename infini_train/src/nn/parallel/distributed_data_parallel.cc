@@ -105,9 +105,6 @@ std::vector<std::shared_ptr<Tensor>> ThreadDDP::Parameters() const {
     std::vector<std::shared_ptr<Tensor>> params;
     for (auto &replica : replicas_) {
         for (auto &param : replica->Parameters()) { params.push_back(param); }
-        for (auto &module : replica->modules()) {
-            for (auto &param : module->Parameters()) { params.push_back(param); }
-        }
     }
     return params;
 }
