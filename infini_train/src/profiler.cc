@@ -198,7 +198,7 @@ void Profiler::ReportGroupedByRank(std::function<std::ostream &(int64_t)> get_os
             }
             os << "Peak Device Memory Usage: " << tag_peak_mb << " MB\n";
 
-            os << std::left << std::setw(24) << "Name" << std::setw(10) << "Count" << std::setw(18) << "Host Total(us)"
+            os << std::left << std::setw(40) << "Name" << std::setw(10) << "Count" << std::setw(18) << "Host Total(us)"
                << std::setw(10) << "Host %" << std::setw(20) << "Device Total(us)" << std::setw(10) << "Device %"
                << std::setw(16) << "Avg Host(us)" << std::setw(18) << "Avg Device(us)"
                << "\n";
@@ -245,7 +245,7 @@ void Profiler::ReportGroupedByRank(std::function<std::ostream &(int64_t)> get_os
                 double avg_host = static_cast<double>(info.host_total_us) / info.count;
                 double avg_dev = static_cast<double>(info.device_total_us) / info.count;
 
-                os << std::left << std::setw(24) << name << std::setw(10) << info.count << std::setw(18)
+                os << std::left << std::setw(40) << name << std::setw(10) << info.count << std::setw(18)
                    << info.host_total_us << std::setw(10) << std::fixed << std::setprecision(2) << host_pct
                    << std::setw(20) << info.device_total_us << std::setw(10) << std::fixed << std::setprecision(2)
                    << dev_pct << std::setw(16) << static_cast<int64_t>(avg_host) << std::setw(18)
@@ -296,14 +296,14 @@ void Profiler::PrintRecordsGroupedByRank(std::function<std::ostream &(int64_t)> 
         for (const auto &[tag, records] : tag_map) {
             os << "\nTag: " << tag << "\n";
 
-            os << std::left << std::setw(8) << "Idx" << std::setw(24) << "Timestamp" << std::setw(24) << "Name"
+            os << std::left << std::setw(8) << "Idx" << std::setw(24) << "Timestamp" << std::setw(40) << "Name"
                << std::setw(10) << "Device" << std::setw(12) << "Host(us)" << std::setw(12) << "Device(us)"
                << std::setw(16) << "Peak Mem(MB)"
                << "\n";
 
             for (size_t idx = 0; idx < records.size(); ++idx) {
                 const auto &rec = *records[idx];
-                os << std::left << std::setw(8) << idx << std::setw(24) << rec.timestamp << std::setw(24) << rec.name
+                os << std::left << std::setw(8) << idx << std::setw(24) << rec.timestamp << std::setw(40) << rec.name
                    << std::setw(10) << rec.device << std::setw(12) << rec.host_us << std::setw(12) << rec.device_us
                    << std::setw(16) << rec.max_device_mem_usage_mb << "\n";
             }
