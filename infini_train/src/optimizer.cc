@@ -21,7 +21,6 @@ SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate
 
 void SGD::Step() {
     for (auto param : params_) {
-        auto device = param->GetDevice()->Type();
         auto accumulate_function = std::make_shared<infini_train::autograd::AccumulateGrad>(param, -learning_rate_);
         accumulate_function->BackwardPartial(param->grad(), 0);
     }
@@ -52,9 +51,9 @@ void Adam::Step() {
         auto &m = m_[i];
         auto &v = v_[i];
 
-        // FIXME(dcj): use autograd function
-        auto device = param->GetDevice()->Type();
-        auto kernel = Dispatcher::Instance().GetKernel({device, "AdamAccumulateGrad"});
+        auto device = param->GetDevice();
+        device->SetDevice();
+        auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AdamAccumulateGrad"});
         kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
     }
 }
