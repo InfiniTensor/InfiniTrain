@@ -16,8 +16,8 @@ public:
     std::vector<std::shared_ptr<Tensor>> Parameters() const override;
 
     float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                    const std::vector<std::shared_ptr<Tensor>> &targets, const std::shared_ptr<Module> &loss_fn,
-                    Optimizer &optimizer) override;
+                    const std::vector<std::shared_ptr<Tensor>> &targets,
+                    const std::shared_ptr<Module> &loss_fn) override;
 
 private:
     int dim_ = 0;

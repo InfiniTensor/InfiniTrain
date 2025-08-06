@@ -45,43 +45,51 @@ void AllReduceGradients(const std::vector<std::shared_ptr<Module>> &replicas,
     AllReduce(grads);
 }
 
-std::vector<std::vector<std::shared_ptr<Tensor>>>
-ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
-              const std::vector<std::vector<std::shared_ptr<Tensor>>> &inputs,
-              const std::vector<const Device *> &devices) {
+float ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
+                    const std::vector<std::vector<std::shared_ptr<Tensor>>> &inputs,
+                    const std::vector<std::vector<std::shared_ptr<Tensor>>> &targets,
+                    const std::vector<const Device *> &devices, const std::shared_ptr<Module> &loss_fn) {
     CHECK_EQ(modules.size(), inputs.size()) << std::format(
         "The number of modules {} is not equal to the number of inputs {}", modules.size(), inputs.size());
     CHECK_EQ(modules.size(), devices.size());
 
     // pre-allocate results so we do not need lock in the worker threads
     std::vector<std::optional<std::vector<std::shared_ptr<Tensor>>>> results(modules.size(), std::nullopt);
+    std::vector<float> loss_vec(modules.size(), 0.0f);
 
     auto worker = [&](const std::shared_ptr<Module> &module, const std::vector<std::shared_ptr<Tensor>> &inputs,
-                      const Device *device, int idx) {
+                      const std::vector<std::shared_ptr<Tensor>> &targets, const Device *device, int idx, int dp_size) {
         device->SetDevice();
         auto output = module->Forward(inputs);
         results[idx] = output;
+        // may conflict with gradient accumulation
+        auto loss = loss_fn->Forward({output[0], targets[0]})[0] / dp_size;
+        loss->Backward();
+        loss_vec[idx]
+            = static_cast<const float *>(loss->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
     };
 
     if (modules.size() > 1) {
         std::vector<std::thread> threads;
+        int dp_size = devices.size();
         for (int idx = 0; idx < modules.size(); ++idx) {
-            threads.emplace_back(worker, modules[idx], inputs[idx], devices[idx], idx);
+            threads.emplace_back(worker, modules[idx], inputs[idx], targets[idx], devices[idx], idx, dp_size);
         }
         for (int idx = 0; idx < threads.size(); ++idx) { threads[idx].join(); }
     } else {
-        worker(modules[0], inputs[0], devices[0], 0);
+        worker(modules[0], inputs[0], targets[0], devices[0], 0, devices.size());
     }
 
-    std::vector<std::vector<std::shared_ptr<Tensor>>> outputs;
+    float lossf = 0.0f;
     for (int idx = 0; idx < inputs.size(); ++idx) {
         auto output = results[idx];
         if (!output) {
             LOG(FATAL) << "ParallelApply worker thread " << idx << " did not return a result";
         }
-        outputs.push_back(output.value());
+        lossf += loss_vec[idx];
     }
-    return outputs;
+
+    return lossf;
 }
 } // namespace
 
@@ -110,34 +118,17 @@ std::vector<std::shared_ptr<Tensor>> ThreadDDP::Parameters() const {
 }
 
 float ThreadDDP::TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                           const std::vector<std::shared_ptr<Tensor>> &targets, const std::shared_ptr<Module> &loss_fn,
-                           Optimizer &optimizer) {
+                           const std::vector<std::shared_ptr<Tensor>> &targets,
+                           const std::shared_ptr<Module> &loss_fn) {
     auto &module = modules_.at(kModuleName);
     for (auto tensor : module->Parameters()) { CHECK_EQ(tensor->GetDevice(), src_device_); }
 
     auto scattered_inputs = Scatter(input_tensors, devices_, dim_);
     auto scattered_targets = Scatter(targets, devices_, dim_);
 
-    optimizer.ZeroGrad();
-
-    std::vector<std::vector<std::shared_ptr<Tensor>>> outputs;
-    if (devices_.size() == 1) {
-        outputs = {module->Forward(scattered_inputs[0])};
-    } else {
-        outputs = ParallelApply(replicas_, scattered_inputs, devices_);
-    }
-
-    float loss_cpu = 0.0f;
-    for (int i = 0; i < replicas_.size(); ++i) {
-        auto loss = loss_fn->Forward({outputs[i][0], scattered_targets[i][0]})[0] / replicas_.size();
-        loss->Backward();
-        auto lossf = static_cast<const float *>(loss->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
-        loss_cpu += lossf;
-    }
+    float loss_cpu = ParallelApply(replicas_, scattered_inputs, scattered_targets, devices_, loss_fn);
 
     AllReduceGradients(replicas_, devices_);
-
-    optimizer.Step();
 
     return loss_cpu;
 }

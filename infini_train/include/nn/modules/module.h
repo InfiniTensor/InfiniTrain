@@ -52,8 +52,8 @@ public:
     }
 
     virtual float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                            const std::vector<std::shared_ptr<Tensor>> &targets, const std::shared_ptr<Module> &loss_fn,
-                            Optimizer &optimizer) {
+                            const std::vector<std::shared_ptr<Tensor>> &targets,
+                            const std::shared_ptr<Module> &loss_fn) {
         return 0.0f;
     };
 

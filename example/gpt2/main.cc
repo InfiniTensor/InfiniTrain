@@ -182,7 +182,7 @@ int main(int argc, char *argv[]) {
         }
 
         // model->Train();
-        // optimizer.ZeroGrad();
+        optimizer.ZeroGrad();
         // if we are trying to overfit a single batch, we reset the loader here
         if (FLAGS_overfit_single_batch) {
             // train_loader.Reset();
@@ -199,7 +199,7 @@ int main(int argc, char *argv[]) {
             ++train_iter;
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
-            lossf = model->TrainStep({x}, {y}, std::make_shared<nn::CrossEntropyLoss>(loss_fn), optimizer);
+            lossf = model->TrainStep({x}, {y}, std::make_shared<nn::CrossEntropyLoss>(loss_fn));
             // LOG(INFO) << "start forward";
             // // (bs, seq_len, vocab_size)
             // auto logits = model->Forward({x, y})[0];
@@ -217,7 +217,7 @@ int main(int argc, char *argv[]) {
             // loss->Backward();
             // LOG(INFO) << "finish backward";
         }
-        // optimizer.Step();
+        optimizer.Step();
 
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
