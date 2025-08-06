@@ -208,7 +208,10 @@ Tensor Tensor::To(DataType dtype) {
         return new_tensor;
     }
 
-    auto kernel = Dispatcher::Instance().GetKernel({GetDevice()->Type(), "Cast"});
+    auto device = GetDevice();
+    device->SetDevice();
+
+    auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "Cast"});
     auto new_tensor = *kernel.Call<std::shared_ptr<Tensor>>(shared_from_this(), dtype);
 
     if (grad_) {

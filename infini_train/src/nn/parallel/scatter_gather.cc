@@ -55,7 +55,13 @@ std::vector<std::shared_ptr<Tensor>> Scatter::Forward(const std::vector<std::sha
     const auto &input = input_tensors[0];
     std::vector<std::shared_ptr<Tensor>> output_tensors;
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "CommScatter"});
+    auto kernel = Dispatcher::Instance().GetKernel({device,
+#ifdef USE_NCCL
+                                                    "CommNcclScatter"
+#else
+                                                    "CommScatter"
+#endif
+    });
     output_tensors = kernel.Call<std::vector<std::shared_ptr<Tensor>>>(input, target_gpus_, dim_);
     return output_tensors;
 }

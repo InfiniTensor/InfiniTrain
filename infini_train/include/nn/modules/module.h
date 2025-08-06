@@ -38,7 +38,7 @@ public:
     std::shared_ptr<Tensor> *mutable_parameter(const std::string &name);
     const std::shared_ptr<Tensor> &parameter(const std::string &name) const;
 
-    std::vector<std::shared_ptr<Tensor>> Buffers() const;
+    virtual std::vector<std::shared_ptr<Tensor>> Buffers() const;
 
     std::vector<std::shared_ptr<Module>> modules();
     std::shared_ptr<Module> mutable_module(const std::string &name);

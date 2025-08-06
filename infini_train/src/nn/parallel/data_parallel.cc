@@ -64,11 +64,12 @@ DataParallel::DataParallel(const std::shared_ptr<Module> &module, int dim)
     output_device_ = devices_.at(0);
     src_device_ = devices_.at(0);
 
+    module->To(src_device_);
+
     modules_[kModuleName] = std::move(module);
 
     // TODO(dcj): implement check_balance for cuda devices later.
 
-    module->To(src_device_);
     LOG(ERROR) << "DataParallel module created with " << devices_.size() << " devices";
 }
 

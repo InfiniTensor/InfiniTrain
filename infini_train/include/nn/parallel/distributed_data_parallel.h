@@ -15,6 +15,12 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Parameters() const override;
 
+    std::vector<std::shared_ptr<Tensor>> Buffers() const override;
+
+    void To(const Device *device) override;
+
+    void To(DataType dtype) override;
+
     float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                     const std::vector<std::shared_ptr<Tensor>> &targets,
                     const std::shared_ptr<Module> &loss_fn) override;

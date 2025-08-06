@@ -45,6 +45,14 @@ void AllReduceGradients(const std::vector<std::shared_ptr<Module>> &replicas,
     AllReduce(grads);
 }
 
+float ConvertBF16ToFloat(void *ptr) {
+    uint16_t *raw_data = reinterpret_cast<uint16_t *>(ptr);
+    uint32_t f32_bits = static_cast<uint32_t>(raw_data[0]) << 16;
+    float f;
+    std::memcpy(&f, &f32_bits, sizeof(f));
+    return f;
+}
+
 float ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
                     const std::vector<std::vector<std::shared_ptr<Tensor>>> &inputs,
                     const std::vector<std::vector<std::shared_ptr<Tensor>>> &targets,
@@ -65,8 +73,14 @@ float ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
         // may conflict with gradient accumulation
         auto loss = loss_fn->Forward({output[0], targets[0]})[0] / dp_size;
         loss->Backward();
-        loss_vec[idx]
-            = static_cast<const float *>(loss->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
+        auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
+        if (loss->Dtype() == DataType::kFLOAT32) {
+            loss_vec[idx] = static_cast<const float *>(loss_cpu.DataPtr())[0];
+        } else if (loss->Dtype() == DataType::kBFLOAT16) {
+            loss_vec[idx] = ConvertBF16ToFloat(loss_cpu.DataPtr());
+        } else {
+            LOG(FATAL) << "Unsupported loss data type " << static_cast<int>(loss->Dtype());
+        }
     };
 
     if (modules.size() > 1) {
@@ -117,6 +131,22 @@ std::vector<std::shared_ptr<Tensor>> ThreadDDP::Parameters() const {
     return params;
 }
 
+std::vector<std::shared_ptr<Tensor>> ThreadDDP::Buffers() const {
+    std::vector<std::shared_ptr<Tensor>> buffers;
+    for (auto &replica : replicas_) {
+        for (auto &buffer : replica->Buffers()) { buffers.push_back(buffer); }
+    }
+    return buffers;
+}
+
+void ThreadDDP::To(const Device *device) {
+    LOG(FATAL) << "Calling the to device function of ThreadDDP is not allowed!";
+}
+
+void ThreadDDP::To(DataType dtype) {
+    for (auto &replica : replicas_) { replica->To(dtype); }
+}
+
 float ThreadDDP::TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                            const std::vector<std::shared_ptr<Tensor>> &targets,
                            const std::shared_ptr<Module> &loss_fn) {
@@ -126,10 +156,10 @@ float ThreadDDP::TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_ten
     auto scattered_inputs = Scatter(input_tensors, devices_, dim_);
     auto scattered_targets = Scatter(targets, devices_, dim_);
 
-    float loss_cpu = ParallelApply(replicas_, scattered_inputs, scattered_targets, devices_, loss_fn);
+    float lossf = ParallelApply(replicas_, scattered_inputs, scattered_targets, devices_, loss_fn);
 
     AllReduceGradients(replicas_, devices_);
 
-    return loss_cpu;
+    return lossf;
 }
 } // namespace infini_train::nn::parallel
