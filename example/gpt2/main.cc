@@ -199,23 +199,27 @@ int main(int argc, char *argv[]) {
             ++train_iter;
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
-            lossf = model->TrainStep({x}, {y}, std::make_shared<nn::CrossEntropyLoss>(loss_fn));
-            // LOG(INFO) << "start forward";
-            // // (bs, seq_len, vocab_size)
-            // auto logits = model->Forward({x, y})[0];
-            // LOG(INFO) << "finish model forward, start loss forward";
-            // auto loss = loss_fn.Forward({logits, y})[0];
-            // loss = loss / grad_accum_steps;
-            // LOG(INFO) << "finish loss forward";
-            // auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
-            // if (FLAGS_dtype == kDtypeFP32) {
-            //     lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
-            // } else if (FLAGS_dtype == kDtypeBF16) {
-            //     lossf += ConvertBF16ToFloat(loss_cpu.DataPtr());
-            // }
-            // LOG(INFO) << "start backward";
-            // loss->Backward();
-            // LOG(INFO) << "finish backward";
+            if (FLAGS_data_parallel) {
+                // TODO(dcj): support gradient accumulation for data parallelism later
+                lossf = model->TrainStep({x}, {y}, std::make_shared<nn::CrossEntropyLoss>(loss_fn));
+                continue;
+            }
+            LOG(INFO) << "start forward";
+            // (bs, seq_len, vocab_size)
+            auto logits = model->Forward({x, y})[0];
+            LOG(INFO) << "finish model forward, start loss forward";
+            auto loss = loss_fn.Forward({logits, y})[0];
+            loss = loss / grad_accum_steps;
+            LOG(INFO) << "finish loss forward";
+            auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
+            if (FLAGS_dtype == kDtypeFP32) {
+                lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
+            } else if (FLAGS_dtype == kDtypeBF16) {
+                lossf += ConvertBF16ToFloat(loss_cpu.DataPtr());
+            }
+            LOG(INFO) << "start backward";
+            loss->Backward();
+            LOG(INFO) << "finish backward";
         }
         optimizer.Step();
 
