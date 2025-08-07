@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (FLAGS_data_parallel) {
-        model = std::make_shared<nn::parallel::ThreadDDP>(model);
+        model = std::make_shared<nn::parallel::ThreadDistributedDataParallel>(model);
     } else {
         model->To(device);
     }

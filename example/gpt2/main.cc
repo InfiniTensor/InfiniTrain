@@ -117,7 +117,7 @@ int main(int argc, char *argv[]) {
     const auto *device = DeviceManager::Instance()->GetDevice(
         FLAGS_data_parallel || FLAGS_device == kDeviceCUDA ? DeviceType::kCUDA : DeviceType::kCPU);
     if (FLAGS_data_parallel) {
-        model = std::make_shared<nn::parallel::ThreadDDP>(model);
+        model = std::make_shared<nn::parallel::ThreadDistributedDataParallel>(model);
     } else {
         model->To(device);
     }

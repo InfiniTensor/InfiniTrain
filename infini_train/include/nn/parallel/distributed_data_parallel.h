@@ -9,9 +9,9 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
-class ThreadDDP : public Module {
+class ThreadDistributedDataParallel : public Module {
 public:
-    ThreadDDP(const std::shared_ptr<Module> &module, int dim = 0);
+    ThreadDistributedDataParallel(const std::shared_ptr<Module> &module, int dim = 0);
 
     std::vector<std::shared_ptr<Tensor>> Parameters() const override;
 

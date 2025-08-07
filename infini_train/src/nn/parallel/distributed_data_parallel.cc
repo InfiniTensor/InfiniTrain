@@ -107,7 +107,7 @@ float ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
 }
 } // namespace
 
-ThreadDDP::ThreadDDP(const std::shared_ptr<Module> &module, int dim)
+ThreadDistributedDataParallel::ThreadDistributedDataParallel(const std::shared_ptr<Module> &module, int dim)
     : dim_(dim), devices_(DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA)) {
     CHECK_GT(devices_.size(), 0) << "No available devices found";
     output_device_ = devices_.at(0);
@@ -120,10 +120,10 @@ ThreadDDP::ThreadDDP(const std::shared_ptr<Module> &module, int dim)
     // FIXME(dcj): no auto grad
     replicas_ = Replicate(modules_[kModuleName], devices_);
 
-    LOG(ERROR) << "ThreadDDP module created with " << devices_.size() << " devices";
+    LOG(ERROR) << "ThreadDistributedDataParallel module created with " << devices_.size() << " devices";
 }
 
-std::vector<std::shared_ptr<Tensor>> ThreadDDP::Parameters() const {
+std::vector<std::shared_ptr<Tensor>> ThreadDistributedDataParallel::Parameters() const {
     std::vector<std::shared_ptr<Tensor>> params;
     for (auto &replica : replicas_) {
         for (auto &param : replica->Parameters()) { params.push_back(param); }
@@ -131,7 +131,7 @@ std::vector<std::shared_ptr<Tensor>> ThreadDDP::Parameters() const {
     return params;
 }
 
-std::vector<std::shared_ptr<Tensor>> ThreadDDP::Buffers() const {
+std::vector<std::shared_ptr<Tensor>> ThreadDistributedDataParallel::Buffers() const {
     std::vector<std::shared_ptr<Tensor>> buffers;
     for (auto &replica : replicas_) {
         for (auto &buffer : replica->Buffers()) { buffers.push_back(buffer); }
@@ -139,17 +139,17 @@ std::vector<std::shared_ptr<Tensor>> ThreadDDP::Buffers() const {
     return buffers;
 }
 
-void ThreadDDP::To(const Device *device) {
-    LOG(FATAL) << "Calling the to device function of ThreadDDP is not allowed!";
+void ThreadDistributedDataParallel::To(const Device *device) {
+    LOG(FATAL) << "Calling the to device function of ThreadDistributedDataParallel is not allowed!";
 }
 
-void ThreadDDP::To(DataType dtype) {
+void ThreadDistributedDataParallel::To(DataType dtype) {
     for (auto &replica : replicas_) { replica->To(dtype); }
 }
 
-float ThreadDDP::TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                           const std::vector<std::shared_ptr<Tensor>> &targets,
-                           const std::shared_ptr<Module> &loss_fn) {
+float ThreadDistributedDataParallel::TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                                               const std::vector<std::shared_ptr<Tensor>> &targets,
+                                               const std::shared_ptr<Module> &loss_fn) {
     auto &module = modules_.at(kModuleName);
     for (auto tensor : module->Parameters()) { CHECK_EQ(tensor->GetDevice(), src_device_); }
 
