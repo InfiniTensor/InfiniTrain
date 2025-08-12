@@ -103,11 +103,18 @@ int main(int argc, char *argv[]) {
         model = std::make_shared<LLaMA3>(model_config);
     }
 
+    int world_size = 1;
+    std::vector<const Device *> devices;
     if (FLAGS_data_parallel) {
-        model = std::make_shared<nn::parallel::ThreadDistributedDataParallel>(model);
+        devices = DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA);
+        world_size = devices.size();
     } else {
-        model->To(device);
+        devices.push_back(device);
     }
+    model->To(device);
+
+    std::vector<std::shared_ptr<nn::Module>> models = nn::parallel::Replicate(model, devices);
+
     LOG(INFO) << "Model loaded to device.";
 
     DataType dtype;
@@ -138,7 +145,10 @@ int main(int argc, char *argv[]) {
     }
 
     // TODO(dcj): support more complex optimizer later
-    auto optimizer = optimizers::Adam(model->Parameters(), FLAGS_learning_rate);
+    std::vector<optimizers::Adam> thread_optimizers;
+    for (int rank = 0; rank < world_size; ++rank) {
+        thread_optimizers.push_back(optimizers::Adam(models[rank]->Parameters(), FLAGS_learning_rate));
+    }
 
     auto train_iter = train_loader.begin();
     auto loss_fn = nn::CrossEntropyLoss();
@@ -168,7 +178,6 @@ int main(int argc, char *argv[]) {
         }
 
         // model->Train();
-        optimizer.ZeroGrad();
         // if we are trying to overfit a single batch, we reset the loader here
         if (FLAGS_overfit_single_batch) {
             // train_loader.Reset();
@@ -177,37 +186,76 @@ int main(int argc, char *argv[]) {
 #ifdef PROFILE_MODE
         Profiler::Instance().SetTag("Step_" + std::to_string(step));
 #endif
-        for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
-            // (bs, seq_len), (bs, seq_len)
-            auto [x, y] = *train_iter;
-            // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
-            // TODO(dcj): support dataloader.reset() later
-            ++train_iter;
-            x = std::make_shared<Tensor>(x->To(device));
-            y = std::make_shared<Tensor>(y->To(device));
-            if (FLAGS_data_parallel) {
-                // TODO(dcj): support gradient accumulation for data parallelism later
-                lossf = model->TrainStep({x}, {y}, std::make_shared<nn::CrossEntropyLoss>(loss_fn));
-                continue;
-            }
-            LOG(INFO) << "start forward";
-            // (bs, seq_len, vocab_size)
-            auto logits = model->Forward({x, y})[0];
-            LOG(INFO) << "finish model forward, start loss forward";
-            auto loss = loss_fn.Forward({logits, y})[0];
-            loss = loss / grad_accum_steps;
-            LOG(INFO) << "finish loss forward";
-            auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
-            if (FLAGS_dtype == kDtypeFP32) {
-                lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
-            } else if (FLAGS_dtype == kDtypeBF16) {
-                lossf += ConvertBF16ToFloat(loss_cpu.DataPtr());
-            }
-            LOG(INFO) << "start backward";
-            loss->Backward();
-            LOG(INFO) << "finish backward";
+
+        std::vector<std::thread> threads;
+        std::vector<float> thread_losses(world_size, 0.0f);
+        for (int rank = 0; rank < world_size; ++rank) {
+            threads.emplace_back([&, rank]() {
+                thread_optimizers[rank].ZeroGrad();
+                for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
+                    auto &local_model = models[rank];
+                    auto local_device = devices[rank];
+
+                    auto [x, y] = *train_iter;
+                    ++train_iter;
+                    x = std::make_shared<Tensor>(x->To(local_device));
+                    y = std::make_shared<Tensor>(y->To(local_device));
+
+                    auto logits = local_model->Forward({x, y})[0];
+                    auto loss = loss_fn.Forward({logits, y})[0] / grad_accum_steps;
+                    auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
+
+                    if (FLAGS_dtype == kDtypeFP32) {
+                        thread_losses[rank] += static_cast<const float *>(loss_cpu.DataPtr())[0];
+                    } else if (FLAGS_dtype == kDtypeBF16) {
+                        thread_losses[rank] += ConvertBF16ToFloat(loss_cpu.DataPtr());
+                    }
+
+                    loss->Backward();
+                }
+                thread_optimizers[rank].Step();
+            });
         }
-        optimizer.Step();
+
+        for (auto &t : threads) { t.join(); }
+
+        if (FLAGS_data_parallel) {
+            nn::parallel::AllReduceGradients(models);
+        }
+
+        for (auto thread_loss : thread_losses) { lossf += thread_loss; }
+
+        // for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
+        //     // (bs, seq_len), (bs, seq_len)
+        //     auto [x, y] = *train_iter;
+        //     // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
+        //     // TODO(dcj): support dataloader.reset() later
+        //     ++train_iter;
+        //     x = std::make_shared<Tensor>(x->To(device));
+        //     y = std::make_shared<Tensor>(y->To(device));
+        //     if (FLAGS_data_parallel) {
+        //         // TODO(dcj): support gradient accumulation for data parallelism later
+        //         lossf = model->TrainStep({x}, {y}, std::make_shared<nn::CrossEntropyLoss>(loss_fn));
+        //         continue;
+        //     }
+        //     LOG(INFO) << "start forward";
+        //     // (bs, seq_len, vocab_size)
+        //     auto logits = model->Forward({x, y})[0];
+        //     LOG(INFO) << "finish model forward, start loss forward";
+        //     auto loss = loss_fn.Forward({logits, y})[0];
+        //     loss = loss / grad_accum_steps;
+        //     LOG(INFO) << "finish loss forward";
+        //     auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
+        //     if (FLAGS_dtype == kDtypeFP32) {
+        //         lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
+        //     } else if (FLAGS_dtype == kDtypeBF16) {
+        //         lossf += ConvertBF16ToFloat(loss_cpu.DataPtr());
+        //     }
+        //     LOG(INFO) << "start backward";
+        //     loss->Backward();
+        //     LOG(INFO) << "finish backward";
+        // }
+        // optimizer.Step();
 
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();

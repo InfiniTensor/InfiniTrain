@@ -32,4 +32,10 @@ private:
     const Device *src_device_ = nullptr;
     std::vector<std::shared_ptr<Module>> replicas_;
 };
+
+std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &network,
+                                               const std::vector<const Device *> &devices);
+
+void AllReduceGradients(const std::vector<std::shared_ptr<Module>> &replicas);
+
 } // namespace infini_train::nn::parallel

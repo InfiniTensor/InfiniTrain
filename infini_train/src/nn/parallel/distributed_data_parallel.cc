@@ -28,23 +28,6 @@ void AllReduce(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads) {
     kernel.Call<void, std::vector<std::vector<std::shared_ptr<Tensor>>>>(grads);
 }
 
-void AllReduceGradients(const std::vector<std::shared_ptr<Module>> &replicas,
-                        const std::vector<const Device *> &devices) {
-    CHECK_GT(replicas.size(), 0);
-
-    const auto &params = replicas[0]->Parameters();
-    std::vector<std::vector<std::shared_ptr<Tensor>>> grads(replicas.size());
-
-    for (int replica_idx = 0; replica_idx < replicas.size(); ++replica_idx) {
-        grads[replica_idx].resize(params.size());
-        for (int param_idx = 0; param_idx < params.size(); ++param_idx) {
-            grads[replica_idx][param_idx] = replicas[replica_idx]->Parameters()[param_idx]->grad();
-        }
-    }
-
-    AllReduce(grads);
-}
-
 float ConvertBF16ToFloat(void *ptr) {
     uint16_t *raw_data = reinterpret_cast<uint16_t *>(ptr);
     uint32_t f32_bits = static_cast<uint32_t>(raw_data[0]) << 16;
@@ -107,6 +90,22 @@ float ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
 }
 } // namespace
 
+void AllReduceGradients(const std::vector<std::shared_ptr<Module>> &replicas) {
+    CHECK_GT(replicas.size(), 0);
+
+    const auto &params = replicas[0]->Parameters();
+    std::vector<std::vector<std::shared_ptr<Tensor>>> grads(replicas.size());
+
+    for (int replica_idx = 0; replica_idx < replicas.size(); ++replica_idx) {
+        grads[replica_idx].resize(params.size());
+        for (int param_idx = 0; param_idx < params.size(); ++param_idx) {
+            grads[replica_idx][param_idx] = replicas[replica_idx]->Parameters()[param_idx]->grad();
+        }
+    }
+
+    AllReduce(grads);
+}
+
 ThreadDistributedDataParallel::ThreadDistributedDataParallel(const std::shared_ptr<Module> &module, int dim)
     : dim_(dim), devices_(DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA)) {
     CHECK_GT(devices_.size(), 0) << "No available devices found";
@@ -158,7 +157,7 @@ float ThreadDistributedDataParallel::TrainStep(const std::vector<std::shared_ptr
 
     float lossf = ParallelApply(replicas_, scattered_inputs, scattered_targets, devices_, loss_fn);
 
-    AllReduceGradients(replicas_, devices_);
+    AllReduceGradients(replicas_);
 
     return lossf;
 }
