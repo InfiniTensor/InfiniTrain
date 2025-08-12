@@ -27,6 +27,18 @@ const std::unordered_map<DataType, ncclDataType_t> kNcclDtypeMap = {
 };
 } // namespace
 
+void NcclAllReduceSingleTensor(const std::shared_ptr<Tensor> &tensor) {
+    auto stream = dynamic_cast<const CudaDevice *>(tensor->GetDevice())->Stream();
+    auto comm = dynamic_cast<const CudaDevice *>(tensor->GetDevice())->NcclComm();
+    auto dtype = tensor->Dtype();
+    auto nccl_dtype = kNcclDtypeMap.at(dtype);
+    auto count = tensor->NumElements();
+    void *buffer = tensor->DataPtr();
+
+    // FIXME(dcj): should do all reduce based on th type of passed-in reduceOpType
+    NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, ncclAvg, comm, stream));
+}
+
 std::vector<std::shared_ptr<Tensor>> NcclBroadcast(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                                                    const std::vector<const Device *> &devices) {
     std::vector<std::shared_ptr<Tensor>> outputs;
@@ -212,12 +224,7 @@ void NcclAllReduce(const std::vector<std::vector<std::shared_ptr<Tensor>>> &tens
     for (size_t j = 0; j < num_tensors_per_device; ++j) {
         for (size_t i = 0; i < num_devices; ++i) {
             const auto &tensor = tensors[i][j];
-            auto dtype = tensor->Dtype();
-            auto nccl_dtype = kNcclDtypeMap.at(dtype);
-            auto count = tensor->NumElements();
-            void *buffer = tensor->DataPtr();
-
-            NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, ncclSum, comms[i], streams[i]));
+            NcclAllReduceSingleTensor(tensor);
         }
     }
     NCCL_CHECK(ncclGroupEnd());
@@ -226,6 +233,8 @@ void NcclAllReduce(const std::vector<std::vector<std::shared_ptr<Tensor>>> &tens
 
 #define REGISTER_CUDA_COMM_KERNEL(kernel_name)                                                                         \
     REGISTER_KERNEL(infini_train::DeviceType::kCUDA, Comm##kernel_name, infini_train::kernels::cuda::kernel_name)
+
+REGISTER_CUDA_COMM_KERNEL(NcclAllReduceSingleTensor)
 
 REGISTER_CUDA_COMM_KERNEL(NcclBroadcast)
 REGISTER_CUDA_COMM_KERNEL(NcclScatter)
