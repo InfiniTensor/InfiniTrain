@@ -222,6 +222,62 @@ void NcclAllReduce(const std::vector<std::vector<std::shared_ptr<Tensor>>> &tens
     }
     NCCL_CHECK(ncclGroupEnd());
 }
+
+void NcclSend(const std::vector<std::shared_ptr<Tensor>> &tensors, int dest_rank)) {
+    std::vector<cudaStream_t> streams;
+    std::vector<ncclComm_t> comms;
+
+    for (size_t i = 0; i < tensors.size(); ++i) {
+        auto device_ptr = dynamic_cast<const CudaDevice *>(tensors[i]->GetDevice());
+        streams.push_back(device_ptr->Stream());
+        comms.push_back(device_ptr->NcclComm());
+    }
+
+    CHECK_NE(dest_rank, -1) << "Destination device not found in input tensors's devices";
+
+    NCCL_CHECK(ncclGroupStart());
+
+    size_t num_devices = tensors.size();
+    for (size_t i = 0; i < num_devices; ++i) {
+        const auto &tensor = tensors[i];
+        auto dtype = tensor->Dtype();
+        auto nccl_dtype = kNcclDtypeMap.at(dtype);
+        auto count = tensor->NumElements();
+        void *buffer = tensor->DataPtr();
+
+        NCCL_CHECK(ncclSend(buffer, count, nccl_dtype, dest_rank, comms[i], streams[i]));
+    }
+
+    NCCL_CHECK(ncclGroupEnd());
+}
+
+void NcclRecv(const std::vector<std::shared_ptr<Tensor>> &tensors, int src_rank) {
+    std::vector<cudaStream_t> streams;
+    std::vector<ncclComm_t> comms;
+
+    for (size_t i = 0; i < tensors.size(); ++i) {
+        auto device_ptr = dynamic_cast<const CudaDevice *>(tensors[i]->GetDevice());
+        streams.push_back(device_ptr->Stream());
+        comms.push_back(device_ptr->NcclComm());
+    }
+
+    CHECK_NE(src_rank, -1) << "Source device not found in input devices";
+
+    NCCL_CHECK(ncclGroupStart());
+
+    size_t num_devices = tensors.size();
+    for (size_t i = 0; i < num_devices; ++i) {
+        const auto &tensor = tensors[i];
+        auto dtype = tensor->Dtype();
+        auto nccl_dtype = kNcclDtypeMap.at(dtype);
+        auto count = tensor->NumElements();
+        void *buffer = tensor->DataPtr();
+
+        NCCL_CHECK(ncclRecv(buffer, count, nccl_dtype, src_rank, comms[i], streams[i]));
+    }
+
+    NCCL_CHECK(ncclGroupEnd());
+}
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_COMM_KERNEL(kernel_name)                                                                         \
@@ -232,7 +288,8 @@ REGISTER_CUDA_COMM_KERNEL(NcclScatter)
 REGISTER_CUDA_COMM_KERNEL(NcclGather)
 REGISTER_CUDA_COMM_KERNEL(NcclReduceAddCoalesced)
 REGISTER_CUDA_COMM_KERNEL(NcclAllReduce)
-
+REGISTER_CUDA_COMM_KERNEL(NcclSend)
+REGISTER_CUDA_COMM_KERNEL(NcclRecv)
 #undef REGISTER_CUDA_COMM_KERNEL
 
 #endif // USE_NCCL
