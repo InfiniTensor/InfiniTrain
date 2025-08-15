@@ -98,4 +98,27 @@ std::vector<std::shared_ptr<Tensor>> Stack::Backward(const std::vector<std::shar
     auto kernel = Dispatcher::Instance().GetKernel({device, "StackBackward"});
     return kernel.Call<std::vector<std::shared_ptr<Tensor>>>(input_dims_, dim_, grad_output);
 }
+
+std::vector<std::shared_ptr<Tensor>> Concat::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_GE(input_tensors.size(), 2);
+    const auto device = input_tensors[0]->GetDevice()->Type();
+
+    auto kernel = Dispatcher::Instance().GetKernel({device, "ConcatForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(input_tensors, dim_)};
+}
+
+void Concat::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                         const std::vector<std::shared_ptr<Tensor>> &) {
+    for (auto input : input_tensors) {
+        input_dims_list_.push_back(input->Dims());
+    }
+}
+
+std::vector<std::shared_ptr<Tensor>> Concat::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    const auto &grad_output = grad_outputs[0];
+
+    auto device = grad_output->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "ConcatBackward"});
+    return kernel.Call<std::vector<std::shared_ptr<Tensor>>>(grad_output, input_dims_list_, dim_);
+}
 } // namespace infini_train::autograd

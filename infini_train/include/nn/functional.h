@@ -169,4 +169,15 @@ std::shared_ptr<Tensor> Slice(const std::shared_ptr<Tensor> &input, const std::v
 //   Concatenation of the input tensors.
 std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim = 0);
 
+// Concatenates the given sequence of tensors in tensors in the given dimension.
+//
+// Args:
+//   inputs: The sequence of tensors to concatenate. All tensors must either have the same shape (except in the
+//   concatenating dimension) or be a 1-D empty tensor with size (0,). dim: dimension to insert (defualt 0).
+//   dim: dimension to insert (defualt 0).
+// 
+// Returns:
+//   Concatenation of the input tensors.
+std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim = 0);
+
 } // namespace infini_train::nn::function

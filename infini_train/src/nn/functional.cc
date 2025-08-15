@@ -56,6 +56,10 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &inputs
     return std::make_shared<autograd::Stack>(dim)->Apply(inputs)[0];
 }
 
+std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim) {
+    return std::make_shared<autograd::Concat>(dim)->Apply(inputs)[0];
+}
+
 std::shared_ptr<Tensor> Softmax(const std::shared_ptr<Tensor> &input, int64_t dim) {
     return std::make_shared<autograd::Softmax>(dim)->Apply({input})[0];
 }

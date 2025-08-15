@@ -225,6 +225,40 @@ std::shared_ptr<Tensor> NcclGather(const std::vector<std::shared_ptr<Tensor>> &t
     NCCL_CHECK(ncclGroupEnd());
     return output;
 }
+
+void NcclAllReduceLocal(const std::shared_ptr<Tensor> &tensor) {
+    // Assume this kernel only executed on local ranks
+    auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+    CHECK(device) << "NcclAllReduceLocal requires a CUDA tensor/device";
+
+    // CUDA_CHECK(cudaSetDevice(device->DeviceId()));
+    cudaStream_t stream = device->Stream();
+    ncclComm_t comm = device->NcclComm();
+
+    auto dtype = tensor->Dtype();
+    auto nccl_dtype = kNcclDtypeMap.at(dtype);
+    auto count = tensor->NumElements();
+    void *buffer = tensor->DataPtr();
+
+    NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, op, comm, stream));
+}
+
+void NcclAllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input) {
+    // Assume this kernel only executed on local ranks
+    auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+    CHECK(device) << "NcclAllGatherAlongLastDimLocal requires a CUDA tensor/device";
+
+    // CUDA_CHECK(cudaSetDevice(device->DeviceId()));
+    cudaStream_t stream = device->Stream();
+    ncclComm_t comm = device->NcclComm();
+
+    auto dtype = tensor->Dtype();
+    auto nccl_dtype = kNcclDtypeMap.at(dtype);
+    auto count = tensor->NumElements();
+
+    NCCL_CHECK(ncclAllGather(tensor->DataPtr(), output->DataPtr(), count, nccl_dtype, comm, stream));
+}
+
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_COMM_KERNEL(kernel_name)                                                                         \
@@ -235,6 +269,9 @@ REGISTER_CUDA_COMM_KERNEL(NcclScatter)
 REGISTER_CUDA_COMM_KERNEL(NcclGather)
 REGISTER_CUDA_COMM_KERNEL(NcclReduceAddCoalesced)
 REGISTER_CUDA_COMM_KERNEL(NcclAllReduce)
+REGISTER_CUDA_COMM_KERNEL(NcclAllReduceLocal)
+REGISTER_CUDA_COMM_KERNEL(NcclAllGatherAlongLastDimLocal)
+REGISTER_CUDA_COMM_KERNEL(NcclReduceScatterAlongLastDimLocal)
 
 #undef REGISTER_CUDA_COMM_KERNEL
 
