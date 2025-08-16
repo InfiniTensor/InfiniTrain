@@ -231,32 +231,36 @@ void NcclAllReduceLocal(const std::shared_ptr<Tensor> &tensor) {
     auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
     CHECK(device) << "NcclAllReduceLocal requires a CUDA tensor/device";
 
-    // CUDA_CHECK(cudaSetDevice(device->DeviceId()));
+    device->SetDevice();
     cudaStream_t stream = device->Stream();
     ncclComm_t comm = device->NcclComm();
+
+    NCCL_CHECK(ncclGroupStart());
 
     auto dtype = tensor->Dtype();
     auto nccl_dtype = kNcclDtypeMap.at(dtype);
     auto count = tensor->NumElements();
     void *buffer = tensor->DataPtr();
 
-    NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, op, comm, stream));
+    NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, ncclSum, comm, stream));
+
+    NCCL_CHECK(ncclGroupEnd());
 }
 
 void NcclAllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input) {
     // Assume this kernel only executed on local ranks
-    auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
-    CHECK(device) << "NcclAllGatherAlongLastDimLocal requires a CUDA tensor/device";
+    auto *device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    CHECK(device) << "NcclAllGather requires a CUDA tensor/device";
 
-    // CUDA_CHECK(cudaSetDevice(device->DeviceId()));
+    // device->SetDevice();
     cudaStream_t stream = device->Stream();
     ncclComm_t comm = device->NcclComm();
 
-    auto dtype = tensor->Dtype();
+    auto dtype = input->Dtype();
     auto nccl_dtype = kNcclDtypeMap.at(dtype);
-    auto count = tensor->NumElements();
+    auto count = input->NumElements();
 
-    NCCL_CHECK(ncclAllGather(tensor->DataPtr(), output->DataPtr(), count, nccl_dtype, comm, stream));
+    NCCL_CHECK(ncclAllGather(input->DataPtr(), output->DataPtr(), count, nccl_dtype, comm, stream));
 }
 
 } // namespace infini_train::kernels::cuda
@@ -270,8 +274,7 @@ REGISTER_CUDA_COMM_KERNEL(NcclGather)
 REGISTER_CUDA_COMM_KERNEL(NcclReduceAddCoalesced)
 REGISTER_CUDA_COMM_KERNEL(NcclAllReduce)
 REGISTER_CUDA_COMM_KERNEL(NcclAllReduceLocal)
-REGISTER_CUDA_COMM_KERNEL(NcclAllGatherAlongLastDimLocal)
-REGISTER_CUDA_COMM_KERNEL(NcclReduceScatterAlongLastDimLocal)
+REGISTER_CUDA_COMM_KERNEL(NcclAllGather)
 
 #undef REGISTER_CUDA_COMM_KERNEL
 

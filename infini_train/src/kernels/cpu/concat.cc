@@ -27,8 +27,7 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
     auto device = inputs[0]->GetDevice();
 
     for (const auto &t : inputs) {
-        CHECK_EQ(t->Dtype(), dtype);
-        CHECK_EQ(t->GetDevice(), device);
+        CHECK(t->Dtype() == dtype);
         CHECK_EQ(t->Dims().size(), base_dims.size());
         for (size_t ax = 0; ax < base_dims.size(); ++ax) {
             if (static_cast<int64_t>(ax) == dim) {
@@ -103,7 +102,7 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
     const size_t elem_size = sizeof(float);
 
     auto dtype = grad_output->Dtype();
-    CHECK_EQ(dtype, DataType::kFLOAT32) << "CPU ConcatBackward assumes float32";
+    CHECK(dtype == DataType::kFLOAT32) << "CPU ConcatBackward assumes float32";
     std::vector<std::shared_ptr<Tensor>> grads;
     grads.reserve(input_dims_list.size());
     for (const auto &d : input_dims_list) { grads.emplace_back(std::make_shared<Tensor>(d, DataType::kFLOAT32)); }

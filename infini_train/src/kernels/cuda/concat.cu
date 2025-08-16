@@ -64,8 +64,7 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
     std::vector<int64_t> Ks;
     Ks.reserve(inputs.size());
     for (const auto &t : inputs) {
-        CHECK_EQ(t->Dtype(), dtype);
-        CHECK_EQ(t->GetDevice(), device);
+        CHECK(t->Dtype() == dtype);
         CHECK_EQ(t->Dims().size(), base_dims.size());
         for (size_t ax = 0; ax < base_dims.size(); ++ax) {
             if (static_cast<int64_t>(ax) == dim) {
