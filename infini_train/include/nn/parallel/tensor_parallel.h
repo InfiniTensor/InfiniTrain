@@ -68,4 +68,28 @@ private:
 
     int64_t input_size_per_partition_ = 0;
 };
+
+class VocabParallelEmbedding : public Module {
+public:
+    static constexpr char kType[] = "VocabParallelEmbedding";
+    static constexpr char kParamWeightName[] = "weight";
+
+    VocabParallelEmbedding(int64_t num_embeddings,
+                           int64_t embedding_dim,
+                           TensorParallelGroup tp_group);
+
+    std::vector<std::shared_ptr<Tensor>>
+    Forward(const std::vector<std::shared_ptr<Tensor>>& input_tensors) override;
+
+private:
+    TensorParallelGroup tp_group_;
+
+    int64_t vocab_size_global_ = 0;
+    int64_t embedding_dim_ = 0;
+
+    bool rank_determined_ = false;
+    int64_t vocab_size_per_partition_ = 0;
+    int64_t vocab_start_index_ = 0;
+    int64_t vocab_end_index_ = 0;
+};
 } // namespace infini_train::nn::parallel

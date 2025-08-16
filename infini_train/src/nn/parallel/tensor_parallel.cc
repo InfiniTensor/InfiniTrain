@@ -260,4 +260,63 @@ RowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_ten
     return skip_bias_add_ ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_.at(kParamBiasName) : nullptr} : std::vector<std::shared_ptr<Tensor>>{output};
 }
 
+VocabParallelEmbedding::VocabParallelEmbedding(int64_t num_embeddings,
+                                               int64_t embedding_dim,
+                                               TensorParallelGroup tp_group)
+    : Module(kType), tp_group_(tp_group), vocab_size_global_(num_embeddings),
+      embedding_dim_(embedding_dim) {
+    CHECK_GT(tp_group_.WorldSize(), 0) << "No available devices found for VocabParallelEmbedding";
+    CHECK_GT(num_embeddings, 0);
+    CHECK_GT(embedding_dim, 0);
+    // TODO(zbl): support uneven partition
+    CHECK_EQ(num_embeddings % tp_group_.WorldSize(), 0)
+        << "num_embeddings must be divisible by TP world size for VocabParallelEmbedding";
+
+    vocab_size_per_partition_ = num_embeddings / tp_group_.WorldSize();
+
+    parameters_[kParamWeightName]
+        = std::make_shared<Tensor>(
+              std::vector<int64_t>{vocab_size_per_partition_, embedding_dim_},
+              DataType::kFLOAT32, device_)
+              ->RequiresGrad();
+}
+
+std::vector<std::shared_ptr<Tensor>>
+VocabParallelEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>>& input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1) << "VocabParallelEmbedding takes exactly one input (token ids)";
+    auto tokens = input_tensors[0];
+    
+    CHECK(tokens->Dtype() == DataType::kINT64 || tokens->Dtype() == DataType::kINT32)
+        << "VocabParallelEmbedding expects integer token ids";
+    
+    // TODO(zbl): determine rank on construction
+    if (!rank_determined_) {
+        auto rank = tp_group_.RankOf(device_);
+        vocab_start_index_ = static_cast<int64_t>(rank) * vocab_size_per_partition_;
+        vocab_end_index_   = vocab_start_index_ + vocab_size_per_partition_;
+    }
+    
+    auto world_size = tp_group_.WorldSize();
+    shared_ptr<Tensor> masked_input = tokens;
+    if (world_size > 1) {
+        // TODO(zbl): add logic ops, support int?
+        input_mask = (input_ < vocab_start_index_) | (input_ >= vocab_end_index_)
+        masked_input = tokens - vocab_start_index_;
+        // TODO(zbl): mask support int64 tensor
+        masked_input->MaskedFill(input_mask, 0);
+    } 
+
+    auto local_output = std::make_shared<autograd::Embedding>()->Apply({masked_input, parameters_[kParamWeightName]});
+
+    if (world_size > 1) {
+        // FIXME(zbl): MaskedFill does not support row-wise mask, need implementation
+        // output_parallel[input_mask, :] = 0.0
+        local_output->MaskedFill(input_mask, 0);
+    }
+    
+    auto output = ReduceFromTPRegionFunc(local_output, tp_group_)[0];
+
+    return {output};
+}
+
 } // namespace infini_train::nn::parallel
