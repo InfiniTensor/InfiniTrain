@@ -21,11 +21,14 @@ struct TensorParallelGroup {
             return -1;
         }
     }
-}
+};
 
 class ColumnParallelLinear : public Module {
 public:
     static constexpr char kType[] = "ColumnParallelLinear";
+
+    static constexpr char kParamWeightName[] = "weight";
+    static constexpr char kParamBiasName[] = "bias";
 
     ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias, TensorParallelGroup tp_group,
                          bool gather_output, bool input_is_parallel, bool skip_bias_add);
@@ -46,6 +49,9 @@ private:
 class RowParallelLinear : public Module {
 public:
     static constexpr char kType[] = "RowParallelLinear";
+
+    static constexpr char kParamWeightName[] = "weight";
+    static constexpr char kParamBiasName[] = "bias";
 
     RowParallelLinear(int64_t in_features, int64_t out_features, bool bias, TensorParallelGroup tp_group,
                       bool reduce_output, bool input_is_parallel, bool skip_bias_add);
