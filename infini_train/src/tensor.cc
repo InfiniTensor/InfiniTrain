@@ -229,6 +229,46 @@ std::shared_ptr<Tensor> Tensor::Equals(float scalar) {
     return std::make_shared<autograd::EqualsScalar>(scalar)->Apply({shared_from_this()})[0];
 }
 
+std::shared_ptr<Tensor> Tensor::Lt(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::Lt>()->Apply({shared_from_this(), other})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Lt(float scalar) {
+    return std::make_shared<autograd::LtScalar>(scalar)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Gt(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::Gt>()->Apply({shared_from_this(), other})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Gt(float scalar) {
+    return std::make_shared<autograd::GtScalar>(scalar)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Le(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::Le>()->Apply({shared_from_this(), other})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Le(float scalar) {
+    return std::make_shared<autograd::LeScalar>(scalar)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Ge(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::Ge>()->Apply({shared_from_this(), other})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Ge(float scalar) {
+    return std::make_shared<autograd::GeScalar>(scalar)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::And(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::And>()->Apply({shared_from_this(), other})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Or(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::Or>()->Apply({shared_from_this(), other})[0];
+}
+
 std::shared_ptr<Tensor> Tensor::Add(const std::shared_ptr<Tensor> &other) {
     CHECK_EQ(static_cast<int>(GetDevice()->Type()), static_cast<int>(other->GetDevice()->Type()));
     return std::make_shared<autograd::Add>()->Apply({shared_from_this(), other})[0];
@@ -457,6 +497,62 @@ std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
 }
 
 std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar) { return t->Equals(scalar); }
+
+std::shared_ptr<Tensor> operator<(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
+    return a->Lt(b);
+}
+
+std::shared_ptr<Tensor> operator<(const std::shared_ptr<Tensor>& a, float scalar) {
+    return a->Lt(scalar);
+}
+
+std::shared_ptr<Tensor> operator<(float scalar, const std::shared_ptr<Tensor>& a) {
+    return a->Gt(scalar);
+}
+
+std::shared_ptr<Tensor> operator>(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
+    return a->Gt(b);
+}
+
+std::shared_ptr<Tensor> operator>(const std::shared_ptr<Tensor>& a, float scalar) {
+    return a->Gt(scalar);
+}
+
+std::shared_ptr<Tensor> operator>(float scalar, const std::shared_ptr<Tensor>& a) {
+    return a->Lt(scalar);
+}
+
+std::shared_ptr<Tensor> operator<=(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
+    return a->Le(b);
+}
+
+std::shared_ptr<Tensor> operator<=(const std::shared_ptr<Tensor>& a, float scalar) {
+    return a->Le(scalar);
+}
+
+std::shared_ptr<Tensor> operator<=(float scalar, const std::shared_ptr<Tensor>& a) {
+    return a->Ge(scalar);
+}
+
+std::shared_ptr<Tensor> operator>=(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
+    return a->Ge(b);
+}
+
+std::shared_ptr<Tensor> operator>=(const std::shared_ptr<Tensor>& a, float scalar) {
+    return a->Ge(scalar);
+}
+
+std::shared_ptr<Tensor> operator>=(float scalar, const std::shared_ptr<Tensor>& a) {
+    return a->Le(scalar);
+}
+
+std::shared_ptr<Tensor> operator&(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
+    return a->And(b);
+}
+
+std::shared_ptr<Tensor> operator|(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
+    return a->Or(b);
+}
 
 std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2) {
     return t1->Add(t2);

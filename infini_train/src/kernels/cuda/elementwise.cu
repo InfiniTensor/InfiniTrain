@@ -572,6 +572,109 @@ std::shared_ptr<Tensor> EqualsScalarForward(const std::shared_ptr<Tensor> &a, fl
              , INFINI_ALL_FLOATING_TYPES)
 }
 
+std::shared_ptr<Tensor> LtForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(),
+             return BinaryForward(a, b,
+                                  [] __device__(auto x, auto y) {
+                                      return x < y ? decltype(x){1} : decltype(x){0};
+                                  });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> LtScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    DISPATCH(a->Dtype(),
+             return UnaryForward(a,
+                                 [scalar] __device__(auto x) {
+                                     return (x < decltype(x){scalar})
+                                                ? decltype(x){1}
+                                                : decltype(x){0};
+                                 });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> LeForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(),
+             return BinaryForward(a, b,
+                                  [] __device__(auto x, auto y) {
+                                      return (x <= y) ? decltype(x){1} : decltype(x){0};
+                                  });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> LeScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    DISPATCH(a->Dtype(),
+             return UnaryForward(a,
+                                 [scalar] __device__(auto x) {
+                                     return (x <= decltype(x){scalar})
+                                                ? decltype(x){1}
+                                                : decltype(x){0};
+                                 });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> GtForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(),
+             return BinaryForward(a, b,
+                                  [] __device__(auto x, auto y) {
+                                      return x > y ? decltype(x){1} : decltype(x){0};
+                                  });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+
+std::shared_ptr<Tensor> GtScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    DISPATCH(a->Dtype(),
+             return UnaryForward(a,
+                                 [scalar] __device__(auto x) {
+                                     return (x > decltype(x){scalar})
+                                                ? decltype(x){1}
+                                                : decltype(x){0};
+                                 });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> GeForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(),
+             return BinaryForward(a, b,
+                                  [] __device__(auto x, auto y) {
+                                      return (x >= y) ? decltype(x){1} : decltype(x){0};
+                                  });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> GeScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    DISPATCH(a->Dtype(),
+             return UnaryForward(a,
+                                 [scalar] __device__(auto x) {
+                                     return (x >= decltype(x){scalar})
+                                                ? decltype(x){1}
+                                                : decltype(x){0};
+                                 });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> OrForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(),
+             return BinaryForward(a, b,
+                                  [] __device__(auto x, auto y) {
+                                      return (x != decltype(x){0} || y != decltype(y){0})
+                                                 ? decltype(x){1}
+                                                 : decltype(x){0};
+                                  });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> AndForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(),
+             return BinaryForward(a, b,
+                                  [] __device__(auto x, auto y) {
+                                      return (x != decltype(x){0} && y != decltype(y){0})
+                                                 ? decltype(x){1}
+                                                 : decltype(x){0};
+                                  });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
 std::shared_ptr<Tensor> AddForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
     DISPATCH(a->Dtype(), return BinaryForward(a, b, [] __device__(auto x, auto y) { return Add(x, y); });
              , INFINI_ALL_FLOATING_TYPES)
@@ -690,6 +793,16 @@ REGISTER_CUDA_ELEMENTWISE_KERNEL(PowBackward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(RsqrtForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(RsqrtBackward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(EqualsScalarForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(LtForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(LtScalarForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(LeForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(LeScalarForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(GtForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(GtScalarForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(GeForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(GeScalarForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(OrForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(AndForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(AddForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(AddBackward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(AddScalarForward)

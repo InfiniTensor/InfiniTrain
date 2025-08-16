@@ -194,6 +194,172 @@ std::vector<std::shared_ptr<Tensor>> EqualsScalar::Backward(const std::vector<st
     return {};
 }
 
+std::vector<std::shared_ptr<Tensor>>
+Lt::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 2);
+    const auto &a = input_tensors[0];
+    const auto &b = input_tensors[1];
+
+    auto device = a->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "LtForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+Lt::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    LOG(FATAL) << "Lt::Backward shall not be called anytime";
+    return {};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+LtScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1);
+    const auto &input = input_tensors[0];
+
+    auto device = input->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "LtScalarForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+LtScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    LOG(FATAL) << "LtScalar::Backward shall not be called anytime";
+    return {};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+Le::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 2);
+    const auto &a = input_tensors[0];
+    const auto &b = input_tensors[1];
+
+    auto device = a->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "LeForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+Le::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    LOG(FATAL) << "Le::Backward shall not be called anytime";
+    return {};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+LeScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1);
+    const auto &input = input_tensors[0];
+
+    auto device = input->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "LeScalarForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+LeScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    LOG(FATAL) << "LeScalar::Backward shall not be called anytime";
+    return {};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+Gt::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 2);
+    const auto &a = input_tensors[0];
+    const auto &b = input_tensors[1];
+
+    auto device = a->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "GtForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+Gt::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    LOG(FATAL) << "Gt::Backward shall not be called anytime";
+    return {};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+GtScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1);
+    const auto &input = input_tensors[0];
+
+    auto device = input->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "GtScalarForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+GtScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    LOG(FATAL) << "GtScalar::Backward shall not be called anytime";
+    return {};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+Ge::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 2);
+    const auto &a = input_tensors[0];
+    const auto &b = input_tensors[1];
+
+    auto device = a->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "GeForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+Ge::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    LOG(FATAL) << "Ge::Backward shall not be called anytime";
+    return {};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+GeScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1);
+    const auto &input = input_tensors[0];
+
+    auto device = input->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "GeScalarForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+GeScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    LOG(FATAL) << "GeScalar::Backward shall not be called anytime";
+    return {};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+Or::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 2);
+    const auto &a = input_tensors[0];
+    const auto &b = input_tensors[1];
+
+    auto device = a->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "OrForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+Or::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    LOG(FATAL) << "Or::Backward shall not be called anytime";
+    return {};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+And::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 2);
+    const auto &a = input_tensors[0];
+    const auto &b = input_tensors[1];
+
+    auto device = a->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "AndForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+And::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    LOG(FATAL) << "And::Backward shall not be called anytime";
+    return {};
+}
+
 std::vector<std::shared_ptr<Tensor>> Add::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 2);
     const auto &a = input_tensors[0];

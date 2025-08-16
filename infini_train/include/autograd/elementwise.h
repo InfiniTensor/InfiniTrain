@@ -110,6 +110,118 @@ private:
     const float scalar_ = 0.0f;
 };
 
+class Lt : public Function {
+public:
+    static constexpr char kType[] = "LtFunction";
+
+    explicit Lt() : Function(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+};
+
+class LtScalar : public Function {
+public:
+    static constexpr char kType[] = "LtScalarFunction";
+
+    explicit LtScalar(float scalar) : Function(kType), scalar_(scalar) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+
+private:
+    const float scalar_ = 0.0f;
+};
+
+class Le : public Function {
+public:
+    static constexpr char kType[] = "LeFunction";
+
+    explicit Le() : Function(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+};
+
+class LeScalar : public Function {
+public:
+    static constexpr char kType[] = "LeScalarFunction";
+
+    explicit LeScalar(float scalar) : Function(kType), scalar_(scalar) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+
+private:
+    const float scalar_ = 0.0f;
+};
+
+class Gt : public Function {
+public:
+    static constexpr char kType[] = "GtFunction";
+
+    explicit Gt() : Function(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+};
+
+class GtScalar : public Function {
+public:
+    static constexpr char kType[] = "GtScalarFunction";
+
+    explicit GtScalar(float scalar) : Function(kType), scalar_(scalar) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+
+private:
+    const float scalar_ = 0.0f;
+};
+
+class Ge : public Function {
+public:
+    static constexpr char kType[] = "GeFunction";
+
+    explicit Ge() : Function(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+};
+
+class GeScalar : public Function {
+public:
+    static constexpr char kType[] = "GeScalarFunction";
+
+    explicit GeScalar(float scalar) : Function(kType), scalar_(scalar) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+
+private:
+    const float scalar_ = 0.0f;
+};
+
+class And : public Function {
+public:
+    static constexpr char kType[] = "AndFunction";
+
+    explicit And() : Function(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+};
+
+class Or : public Function {
+public:
+    static constexpr char kType[] = "OrFunction";
+
+    explicit Or() : Function(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+};
+
 class Add : public Function {
 public:
     static constexpr char kType[] = "AddFunction";
