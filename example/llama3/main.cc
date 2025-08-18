@@ -2,7 +2,6 @@
 #include <format>
 #include <memory>
 #include <optional>
-#include <unordered_map>
 #include <unordered_set>
 
 #ifdef USE_CUDA
@@ -16,8 +15,6 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/data_parallel.h"
-#include "infini_train/include/nn/parallel/distributed_data_parallel.h"
 #include "infini_train/include/optimizer.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
@@ -157,9 +154,8 @@ void Train(const DistributedDataParallel::Rank &rank) {
         LOG(FATAL) << "Rank " << rank.thread_rank() << ": Datatype " << FLAGS_dtype << " not supported.";
     }
 
-    // TODO(dcj): implement distributed data loader
-    DataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
-                            FLAGS_batch_size);
+    DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
+                                       FLAGS_batch_size, rank.thread_rank(), rank.WorldSize());
     std::optional<DataLoader> val_loader = std::nullopt;
     if (!FLAGS_input_val_bin.empty()) {
         val_loader = DataLoader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_val_bin, FLAGS_sequence_length),
@@ -216,15 +212,10 @@ void Train(const DistributedDataParallel::Rank &rank) {
 #endif
         for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
             // (bs, seq_len), (bs, seq_len)
-            if (step == 0 && micro_step == 0) {
-                for (int i = 0; i < rank.thread_rank(); ++i) { ++train_iter; }
-            } else {
-                for (int i = 0; i < rank.WorldSize(); ++i) { ++train_iter; }
-            }
             auto [x, y] = *train_iter;
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
             // TODO(dcj): support dataloader.reset() later
-            // ++train_iter;
+            ++train_iter;
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
             LOG(INFO) << "Rank " << rank.thread_rank() << ": start forward";

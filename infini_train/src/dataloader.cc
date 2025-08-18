@@ -36,8 +36,9 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &tensor
 } // namespace
 
 DataLoaderIterator::DataLoaderIterator(const Dataset &dataset, size_t batch_size, size_t batch_idx,
-                                       size_t max_batch_idx)
-    : dataset_(&dataset), batch_size_(batch_size), batch_idx_(batch_idx), max_batch_idx_(max_batch_idx){};
+                                       size_t max_batch_idx, size_t ddp_rank, size_t ddp_world_size)
+    : dataset_(&dataset), batch_size_(batch_size), batch_idx_(batch_idx), max_batch_idx_(max_batch_idx),
+      ddp_rank_(ddp_rank), ddp_world_size_(ddp_world_size){};
 
 std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DataLoaderIterator::operator*() const {
     /*
@@ -57,7 +58,7 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DataLoaderIterator::
 }
 
 DataLoaderIterator &DataLoaderIterator::operator++() {
-    batch_idx_ = std::min(batch_idx_ + 1, max_batch_idx_);
+    batch_idx_ = std::min(batch_idx_ + ddp_world_size_, max_batch_idx_);
     return *this;
 }
 
@@ -84,5 +85,17 @@ DataLoaderIterator DataLoader::begin() const { return DataLoaderIterator(*datase
 
 DataLoaderIterator DataLoader::end() const {
     return DataLoaderIterator(*dataset_, batch_size_, max_batch_idx_, max_batch_idx_);
+}
+
+DistributedDataLoader::DistributedDataLoader(const std::shared_ptr<Dataset> &dataset, size_t batch_size,
+                                             size_t ddp_rank, size_t ddp_world_size)
+    : DataLoader(dataset, batch_size), ddp_rank_(ddp_rank), ddp_world_size_(ddp_world_size) {}
+
+DataLoaderIterator DistributedDataLoader::begin() const {
+    return DataLoaderIterator(*dataset_, batch_size_, ddp_rank_, max_batch_idx_, ddp_rank_, ddp_world_size_);
+}
+
+DataLoaderIterator DistributedDataLoader::end() const {
+    return DataLoaderIterator(*dataset_, batch_size_, max_batch_idx_, max_batch_idx_, ddp_rank_, ddp_world_size_);
 }
 } // namespace infini_train
