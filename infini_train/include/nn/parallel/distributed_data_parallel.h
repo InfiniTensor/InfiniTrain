@@ -1,41 +1,35 @@
 #pragma once
 
 #include <memory>
-#include <vector>
 
-#include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/optimizer.h"
-#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
-class ThreadDistributedDataParallel : public Module {
+class DistributedDataParallel : public nn::Module {
 public:
-    ThreadDistributedDataParallel(const std::shared_ptr<Module> &module, int dim = 0);
+    class Rank {
+    public:
+        Rank(int process_rank, int thread_rank, int process_size, int thread_size);
 
-    std::vector<std::shared_ptr<Tensor>> Parameters() const override;
+        int process_rank() const;
+        int thread_rank() const;
+        int process_size() const;
+        int thread_size() const;
 
-    std::vector<std::shared_ptr<Tensor>> Buffers() const override;
+        int WorldSize() const;
 
-    void To(const Device *device) override;
+        bool IsDDP() const;
 
-    void To(DataType dtype) override;
+        bool IsMainRank() const;
 
-    float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                    const std::vector<std::shared_ptr<Tensor>> &targets,
-                    const std::shared_ptr<Module> &loss_fn) override;
+    private:
+        const int process_rank_ = 0;
+        const int thread_rank_ = 0;
+        const int process_size_ = 1;
+        const int thread_size_ = 1;
+    };
 
-private:
-    int dim_ = 0;
-    std::vector<const Device *> devices_;
-    const Device *output_device_ = nullptr;
-    const Device *src_device_ = nullptr;
-    std::vector<std::shared_ptr<Module>> replicas_;
+    DistributedDataParallel(std::shared_ptr<nn::Module> module, int device_id) {}
 };
-
-std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &network,
-                                               const std::vector<const Device *> &devices);
-
-void AllReduceGradients(const std::vector<std::shared_ptr<Module>> &replicas);
 
 } // namespace infini_train::nn::parallel

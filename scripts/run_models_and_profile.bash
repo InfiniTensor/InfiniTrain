@@ -117,13 +117,13 @@ run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FI
 
 run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype float32" "gpt2_2" "no"
 
-run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda --data_parallel=true --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype float32" "gpt2_3" "no"
+run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda --data_parallel=8 --batch_size 10 --total_batch_size 5120 --num_iteration 10 --dtype float32" "gpt2_3" "no"
 
 run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --dtype float32" "llama3_1" "no"
 
 run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype float32" "llama3_2" "no"
 
-run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --data_parallel=true --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype float32" "llama3_3" "no"
+run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --data_parallel=8 --batch_size 10 --total_batch_size 5120 --num_iteration 10 --dtype float32" "llama3_3" "no"
 
 # BFloat16
 clean_build_dir
@@ -134,13 +134,13 @@ run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FI
 
 run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype bfloat16" "gpt2_2_bfloat16" "no"
 
-run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda --data_parallel=true --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype bfloat16" "gpt2_3_bfloat16" "no"
+run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda --data_parallel=8 --batch_size 10 --total_batch_size 5120 --num_iteration 10 --dtype bfloat16" "gpt2_3_bfloat16" "no"
 
 run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --dtype bfloat16" "llama3_1_bfloat16" "no"
 
 run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype bfloat16" "llama3_2_bfloat16" "no"
 
-run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --data_parallel=true --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype bfloat16" "llama3_3_bfloat16" "no"
+run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --data_parallel=8 --batch_size 10 --total_batch_size 5120 --num_iteration 10 --dtype bfloat16" "llama3_3_bfloat16" "no"
 
 # ========== Block 2 (default config and dp with NCCL, Profiling Enabled) ==========
 # Float32
@@ -152,13 +152,13 @@ run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FI
 
 run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype float32" "gpt2_2_profile" "yes"
 
-run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda --data_parallel=true --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype float32" "gpt2_3_profile" "yes"
+run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda --data_parallel=8 --batch_size 10 --total_batch_size 5120 --num_iteration 10 --dtype float32" "gpt2_3_profile" "yes"
 
 run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --dtype float32" "llama3_1_profile" "yes"
 
 run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype float32" "llama3_2_profile" "yes"
 
-run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --data_parallel=true --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype float32" "llama3_3_profile" "yes"
+run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --data_parallel=8 --batch_size 10 --total_batch_size 5120 --num_iteration 10 --dtype float32" "llama3_3_profile" "yes"
 
 # BFloat16
 clean_build_dir
@@ -169,10 +169,10 @@ run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FI
 
 run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype bfloat16" "gpt2_2_bfloat16_profile" "yes"
 
-run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda --data_parallel=true --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype bfloat16" "gpt2_3_bfloat16_profile" "yes"
+run_and_log "./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda --data_parallel=8 --batch_size 10 --total_batch_size 5120 --num_iteration 10 --dtype bfloat16" "gpt2_3_bfloat16_profile" "yes"
 
 run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --dtype bfloat16" "llama3_1_bfloat16_profile" "yes"
 
 run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype bfloat16" "llama3_2_bfloat16_profile" "yes"
 
-run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --data_parallel=true --batch_size 80 --total_batch_size 5120 --num_iteration 10 --dtype bfloat16" "llama3_3_bfloat16_profile" "yes"
+run_and_log "./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda --data_parallel=8 --batch_size 10 --total_batch_size 5120 --num_iteration 10 --dtype bfloat16" "llama3_3_bfloat16_profile" "yes"

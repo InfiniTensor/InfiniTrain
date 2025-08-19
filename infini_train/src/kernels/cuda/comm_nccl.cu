@@ -14,6 +14,7 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
+#include "infini_train/include/nn/parallel_functional.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
@@ -25,9 +26,18 @@ const std::unordered_map<DataType, ncclDataType_t> kNcclDtypeMap = {
     {DataType::kBFLOAT16, ncclBfloat16}, {DataType::kFLOAT16, ncclHalf},  {DataType::kFLOAT32, ncclFloat32},
     {DataType::kFLOAT64, ncclFloat64},
 };
+
+using nn::parallel::function::ReduceOpType;
+
+const std::unordered_map<ReduceOpType, ncclRedOp_t> kNcclReduceOpMap = {
+    {ReduceOpType::kSum, ncclSum},
+    {ReduceOpType::kProd, ncclProd},
+    {ReduceOpType::kMax, ncclMax},
+    {ReduceOpType::kAvg, ncclAvg},
+};
 } // namespace
 
-void NcclAllReduceSingleTensor(const std::shared_ptr<Tensor> &tensor) {
+void NcclAllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op) {
     auto stream = dynamic_cast<const CudaDevice *>(tensor->GetDevice())->Stream();
     auto comm = dynamic_cast<const CudaDevice *>(tensor->GetDevice())->NcclComm();
     auto dtype = tensor->Dtype();
@@ -35,8 +45,7 @@ void NcclAllReduceSingleTensor(const std::shared_ptr<Tensor> &tensor) {
     auto count = tensor->NumElements();
     void *buffer = tensor->DataPtr();
 
-    // FIXME(dcj): should do all reduce based on th type of passed-in reduceOpType
-    NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, ncclAvg, comm, stream));
+    NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, kNcclReduceOpMap.at(reduce_op), comm, stream));
 }
 
 std::vector<std::shared_ptr<Tensor>> NcclBroadcast(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -203,38 +212,10 @@ std::shared_ptr<Tensor> NcclGather(const std::vector<std::shared_ptr<Tensor>> &t
     NCCL_CHECK(ncclGroupEnd());
     return output;
 }
-
-void NcclAllReduce(const std::vector<std::vector<std::shared_ptr<Tensor>>> &tensors) {
-    // tensors: [num_devices][num_tensors_per_device]
-
-    std::vector<cudaStream_t> streams;
-    std::vector<ncclComm_t> comms;
-
-    for (size_t i = 0; i < tensors.size(); ++i) {
-        auto device_ptr = dynamic_cast<const CudaDevice *>(tensors[i][0]->GetDevice());
-        streams.push_back(device_ptr->Stream());
-        comms.push_back(device_ptr->NcclComm());
-    }
-
-    size_t num_devices = tensors.size();
-    size_t num_tensors_per_device = tensors[0].size();
-
-    NCCL_CHECK(ncclGroupStart());
-
-    for (size_t j = 0; j < num_tensors_per_device; ++j) {
-        for (size_t i = 0; i < num_devices; ++i) {
-            const auto &tensor = tensors[i][j];
-            NcclAllReduceSingleTensor(tensor);
-        }
-    }
-    NCCL_CHECK(ncclGroupEnd());
-}
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_COMM_KERNEL(kernel_name)                                                                         \
     REGISTER_KERNEL(infini_train::DeviceType::kCUDA, Comm##kernel_name, infini_train::kernels::cuda::kernel_name)
-
-REGISTER_CUDA_COMM_KERNEL(NcclAllReduceSingleTensor)
 
 REGISTER_CUDA_COMM_KERNEL(NcclBroadcast)
 REGISTER_CUDA_COMM_KERNEL(NcclScatter)

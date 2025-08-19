@@ -12,9 +12,10 @@
 
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/distributed_data_parallel.h"
+#include "infini_train/include/nn/parallel_functional.h"
 #include "infini_train/include/optimizer.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
@@ -74,42 +75,7 @@ DEFINE_validator(model, [](const char *, const std::string &value) { return kSup
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
 
-class DistributedDataParallel : public nn::Module {
-public:
-    class Rank {
-    public:
-        Rank(int process_rank, int thread_rank, int process_size, int thread_size)
-            : process_rank_(process_rank), thread_rank_(thread_rank), process_size_(process_size),
-              thread_size_(thread_size) {}
-
-        int process_rank() const { return process_rank_; }
-        int thread_rank() const { return thread_rank_; }
-        int process_size() const { return process_size_; }
-        int thread_size() const { return thread_size_; }
-
-        int WorldSize() const { return process_size_ * thread_size_; }
-
-        bool IsDDP() const { return process_size_ * thread_size_ > 1; }
-
-        bool IsMainRank() const { return thread_rank_ == 0; }
-
-    private:
-        const int process_rank_ = 0;
-        const int thread_rank_ = 0;
-        const int process_size_ = 1;
-        const int thread_size_ = 1;
-    };
-
-    DistributedDataParallel(std::shared_ptr<nn::Module> module, int device_id) {}
-};
-
-void AllReduce(std::shared_ptr<Tensor> tensor) {
-    auto device = tensor->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "CommNcclAllReduceSingleTensor"});
-    kernel.Call<void>(tensor);
-}
-
-void Train(const DistributedDataParallel::Rank &rank) {
+void Train(const nn::parallel::DistributedDataParallel::Rank &rank) {
     // select the device
     const Device *device;
     if (rank.IsDDP()) {
@@ -156,10 +122,11 @@ void Train(const DistributedDataParallel::Rank &rank) {
 
     DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
                                        FLAGS_batch_size, rank.thread_rank(), rank.WorldSize());
-    std::optional<DataLoader> val_loader = std::nullopt;
+    std::optional<DistributedDataLoader> val_loader = std::nullopt;
     if (!FLAGS_input_val_bin.empty()) {
-        val_loader = DataLoader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_val_bin, FLAGS_sequence_length),
-                                FLAGS_batch_size);
+        val_loader = DistributedDataLoader(
+            std::make_shared<TinyShakespeareDataset>(FLAGS_input_val_bin, FLAGS_sequence_length), FLAGS_batch_size,
+            rank.thread_rank(), rank.WorldSize());
     }
 
     //
@@ -226,8 +193,7 @@ void Train(const DistributedDataParallel::Rank &rank) {
             loss = loss / grad_accum_steps;
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
             if (rank.IsDDP()) {
-                // TODO(dcj): should do allreduce on lossf to support accumulate gradients
-                AllReduce(loss);
+                nn::parallel::function::AllReduce(loss, nn::parallel::function::ReduceOpType::kAvg);
             }
             auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
             if (FLAGS_dtype == kDtypeFP32) {
@@ -238,7 +204,9 @@ void Train(const DistributedDataParallel::Rank &rank) {
             LOG(INFO) << "Rank " << rank.thread_rank() << ": start backward";
             loss->Backward();
             if (rank.IsDDP()) {
-                for (auto param : model->Parameters()) { AllReduce(param->grad()); }
+                for (auto param : model->Parameters()) {
+                    nn::parallel::function::AllReduce(param->grad(), nn::parallel::function::ReduceOpType::kAvg);
+                }
             }
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish backward";
         }
@@ -276,7 +244,7 @@ int main(int argc, char *argv[]) {
     if (FLAGS_data_parallel > 1) {
         std::vector<std::thread> threads;
         for (int idx = 0; idx < FLAGS_data_parallel; ++idx) {
-            DistributedDataParallel::Rank rank(0, idx, 1, FLAGS_data_parallel);
+            nn::parallel::DistributedDataParallel::Rank rank(0, idx, 1, FLAGS_data_parallel);
             threads.emplace_back(Train, rank);
         }
 

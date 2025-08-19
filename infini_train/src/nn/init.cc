@@ -44,7 +44,9 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
     std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
 #endif
 
-    switch (tensor->GetDevice()->Type()) {
+    auto device = tensor->GetDevice();
+
+    switch (device->Type()) {
     case DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
@@ -52,7 +54,8 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
         // TODO(dcj): maybe use async API later?
-        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice, 0);
+        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice,
+                        dynamic_cast<const CudaDevice *>(device)->Stream());
         break;
     }
 #endif
@@ -146,7 +149,9 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
     std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
 #endif
 
-    switch (tensor->GetDevice()->Type()) {
+    auto device = tensor->GetDevice();
+
+    switch (device->Type()) {
     case DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
@@ -154,7 +159,8 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
         // TODO(dcj): maybe use async API later?
-        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice, 0);
+        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice,
+                        dynamic_cast<const CudaDevice *>(device)->Stream());
         break;
     }
 #endif
@@ -172,7 +178,9 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {
     const int64_t num_elements = tensor->NumElements();
     std::vector<float> buffer(num_elements, 1.0f);
 
-    switch (tensor->GetDevice()->Type()) {
+    auto device = tensor->GetDevice();
+
+    switch (device->Type()) {
     case DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
@@ -180,7 +188,8 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
         // TODO(dcj): maybe use async API later?
-        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice, 0);
+        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice,
+                        dynamic_cast<const CudaDevice *>(device)->Stream());
         break;
     }
 #endif
@@ -198,7 +207,9 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
     const int64_t num_elements = tensor->NumElements();
     std::vector<float> buffer(num_elements, 0.0f);
 
-    switch (tensor->GetDevice()->Type()) {
+    auto device = tensor->GetDevice();
+
+    switch (device->Type()) {
     case DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
@@ -206,7 +217,8 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
 #ifdef USE_CUDA
     case DeviceType::kCUDA: {
         // TODO(dcj): maybe use async API later?
-        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice, 0);
+        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice,
+                        dynamic_cast<const CudaDevice *>(device)->Stream());
         break;
     }
 #endif
@@ -225,11 +237,12 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE));                                         \
         break;                                                                                                         \
     }
-#define CUDA_CASE(DATA_TYPE, TYPE)                                                                                     \
+#define CUDA_CASE(DATA_TYPE, TYPE, STREAM)                                                                             \
     case DATA_TYPE: {                                                                                                  \
         std::vector<TYPE> buffer(num_elements);                                                                        \
         std::iota(buffer.begin(), buffer.end(), static_cast<TYPE>(start));                                             \
-        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE), cudaMemcpyHostToDevice, 0);     \
+        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE), cudaMemcpyHostToDevice,         \
+                        STREAM);                                                                                       \
         break;                                                                                                         \
     }
 
@@ -257,18 +270,18 @@ std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, const
     } else {
 #ifdef USE_CUDA
         switch (dtype) {
-            CUDA_CASE(DataType::kUINT8, uint8_t)
-            CUDA_CASE(DataType::kINT8, int8_t)
-            CUDA_CASE(DataType::kUINT16, uint16_t)
-            CUDA_CASE(DataType::kINT16, int16_t)
-            CUDA_CASE(DataType::kUINT32, uint32_t)
-            CUDA_CASE(DataType::kINT32, int32_t)
-            CUDA_CASE(DataType::kUINT64, uint64_t)
-            CUDA_CASE(DataType::kINT64, int64_t)
-            CUDA_CASE(DataType::kBFLOAT16, nv_bfloat16)
-            CUDA_CASE(DataType::kFLOAT16, half)
-            CUDA_CASE(DataType::kFLOAT32, float)
-            CUDA_CASE(DataType::kFLOAT64, double)
+            CUDA_CASE(DataType::kUINT8, uint8_t, dynamic_cast<const CudaDevice *>(device)->Stream())
+            CUDA_CASE(DataType::kINT8, int8_t, dynamic_cast<const CudaDevice *>(device)->Stream())
+            CUDA_CASE(DataType::kUINT16, uint16_t, dynamic_cast<const CudaDevice *>(device)->Stream())
+            CUDA_CASE(DataType::kINT16, int16_t, dynamic_cast<const CudaDevice *>(device)->Stream())
+            CUDA_CASE(DataType::kUINT32, uint32_t, dynamic_cast<const CudaDevice *>(device)->Stream())
+            CUDA_CASE(DataType::kINT32, int32_t, dynamic_cast<const CudaDevice *>(device)->Stream())
+            CUDA_CASE(DataType::kUINT64, uint64_t, dynamic_cast<const CudaDevice *>(device)->Stream())
+            CUDA_CASE(DataType::kINT64, int64_t, dynamic_cast<const CudaDevice *>(device)->Stream())
+            CUDA_CASE(DataType::kBFLOAT16, nv_bfloat16, dynamic_cast<const CudaDevice *>(device)->Stream())
+            CUDA_CASE(DataType::kFLOAT16, half, dynamic_cast<const CudaDevice *>(device)->Stream())
+            CUDA_CASE(DataType::kFLOAT32, float, dynamic_cast<const CudaDevice *>(device)->Stream())
+            CUDA_CASE(DataType::kFLOAT64, double, dynamic_cast<const CudaDevice *>(device)->Stream())
         default:
             LOG(FATAL) << "Unsupported data type: " << static_cast<int>(dtype);
             break;

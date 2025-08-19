@@ -15,8 +15,8 @@ public:
 
     std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> operator*() const;
 
-    virtual DataLoaderIterator &operator++();
-    virtual DataLoaderIterator operator++(int);
+    DataLoaderIterator &operator++();
+    DataLoaderIterator operator++(int);
 
     friend bool operator<(const DataLoaderIterator &lhs, const DataLoaderIterator &rhs);
     friend bool operator!=(const DataLoaderIterator &lhs, const DataLoaderIterator &rhs);

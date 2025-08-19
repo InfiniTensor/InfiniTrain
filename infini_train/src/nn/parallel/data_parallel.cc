@@ -12,7 +12,7 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
 
-#include "infini_train/src/nn/parallel/scatter_gather.h"
+#include "infini_train/include/nn/parallel_functional.h"
 
 namespace infini_train::nn::parallel {
 namespace {
@@ -84,16 +84,16 @@ std::vector<std::shared_ptr<Tensor>> DataParallel::Forward(const std::vector<std
         }
     }
 
-    auto scattered_inputs = Scatter(input_tensors, devices_, dim_);
+    auto scattered_inputs = function::Scatter(input_tensors, devices_, dim_);
 
     if (devices_.size() == 1) {
         return module->Forward(scattered_inputs[0]);
     }
 
-    auto replicas = Replicate(module, devices_);
+    auto replicas = function::Replicate(module, devices_);
 
     auto outputs = ParallelApply(replicas, scattered_inputs, devices_);
 
-    return Gather(outputs, output_device_, dim_);
+    return function::Gather(outputs, output_device_, dim_);
 }
 } // namespace infini_train::nn::parallel
