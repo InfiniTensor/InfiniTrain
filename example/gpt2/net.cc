@@ -279,9 +279,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
         .block_size = block_size, .vocab_size = vocab_size, .n_layer = n_layer, .n_head = n_head, .n_embd = n_embd});
 
     const auto padded_vocab_size = BytesToType<uint32_t>(header, 28);
-    LOG(ERROR) << "magic: " << magic << " version: " << version << " block_size: " << block_size
-               << " vocab_size: " << vocab_size << " n_layer: " << n_layer << " n_head: " << n_head
-               << " n_embd: " << n_embd << " padded_vocab_size: " << padded_vocab_size;
+    LOG(INFO) << "magic: " << magic << " version: " << version << " block_size: " << block_size
+              << " vocab_size: " << vocab_size << " n_layer: " << n_layer << " n_head: " << n_head
+              << " n_embd: " << n_embd << " padded_vocab_size: " << padded_vocab_size;
 
     auto state_dict = gpt2->StateDict();
     // transformer.wte.weight
