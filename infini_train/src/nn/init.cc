@@ -237,12 +237,12 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE));                                         \
         break;                                                                                                         \
     }
-#define CUDA_CASE(DATA_TYPE, TYPE, STREAM)                                                                             \
+#define CUDA_CASE(DATA_TYPE, TYPE)                                                                                     \
     case DATA_TYPE: {                                                                                                  \
         std::vector<TYPE> buffer(num_elements);                                                                        \
         std::iota(buffer.begin(), buffer.end(), static_cast<TYPE>(start));                                             \
         cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE), cudaMemcpyHostToDevice,         \
-                        STREAM);                                                                                       \
+                        dynamic_cast<const CudaDevice *>(device)->Stream());                                           \
         break;                                                                                                         \
     }
 
@@ -270,18 +270,18 @@ std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, const
     } else {
 #ifdef USE_CUDA
         switch (dtype) {
-            CUDA_CASE(DataType::kUINT8, uint8_t, dynamic_cast<const CudaDevice *>(device)->Stream())
-            CUDA_CASE(DataType::kINT8, int8_t, dynamic_cast<const CudaDevice *>(device)->Stream())
-            CUDA_CASE(DataType::kUINT16, uint16_t, dynamic_cast<const CudaDevice *>(device)->Stream())
-            CUDA_CASE(DataType::kINT16, int16_t, dynamic_cast<const CudaDevice *>(device)->Stream())
-            CUDA_CASE(DataType::kUINT32, uint32_t, dynamic_cast<const CudaDevice *>(device)->Stream())
-            CUDA_CASE(DataType::kINT32, int32_t, dynamic_cast<const CudaDevice *>(device)->Stream())
-            CUDA_CASE(DataType::kUINT64, uint64_t, dynamic_cast<const CudaDevice *>(device)->Stream())
-            CUDA_CASE(DataType::kINT64, int64_t, dynamic_cast<const CudaDevice *>(device)->Stream())
-            CUDA_CASE(DataType::kBFLOAT16, nv_bfloat16, dynamic_cast<const CudaDevice *>(device)->Stream())
-            CUDA_CASE(DataType::kFLOAT16, half, dynamic_cast<const CudaDevice *>(device)->Stream())
-            CUDA_CASE(DataType::kFLOAT32, float, dynamic_cast<const CudaDevice *>(device)->Stream())
-            CUDA_CASE(DataType::kFLOAT64, double, dynamic_cast<const CudaDevice *>(device)->Stream())
+            CUDA_CASE(DataType::kUINT8, uint8_t)
+            CUDA_CASE(DataType::kINT8, int8_t)
+            CUDA_CASE(DataType::kUINT16, uint16_t)
+            CUDA_CASE(DataType::kINT16, int16_t)
+            CUDA_CASE(DataType::kUINT32, uint32_t)
+            CUDA_CASE(DataType::kINT32, int32_t)
+            CUDA_CASE(DataType::kUINT64, uint64_t)
+            CUDA_CASE(DataType::kINT64, int64_t)
+            CUDA_CASE(DataType::kBFLOAT16, nv_bfloat16)
+            CUDA_CASE(DataType::kFLOAT16, half)
+            CUDA_CASE(DataType::kFLOAT32, float)
+            CUDA_CASE(DataType::kFLOAT64, double)
         default:
             LOG(FATAL) << "Unsupported data type: " << static_cast<int>(dtype);
             break;
