@@ -158,8 +158,7 @@ Tensor Tensor::To(const Device *device) {
         // CUDA -> CPU
         GetDevice()->SetDevice();
         new_tensor = Tensor(dims_, dtype_, DeviceManager::Instance()->GetDefaultDevice());
-        CUDA_CHECK(cudaMemcpyAsync(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), cudaMemcpyDeviceToHost,
-                                   dynamic_cast<const CudaDevice *>(GetDevice())->Stream()));
+        CUDA_CHECK(cudaMemcpy(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), cudaMemcpyDeviceToHost));
         break;
     }
     case DeviceType::kCUDA: {
@@ -176,8 +175,6 @@ Tensor Tensor::To(const Device *device) {
             //  1. CUDA -> CPU
             //  2. CPU -> CUDA
             Tensor cpu_tensor = To(DeviceManager::Instance()->GetDefaultDevice());
-            // FIXME(dcj): remove this sync?
-            cudaDeviceSynchronize();
             device->SetDevice();
             CUDA_CHECK(cudaMemcpyAsync(new_tensor.DataPtr(), cpu_tensor.DataPtr(), SizeInBytes(),
                                        cudaMemcpyHostToDevice, dynamic_cast<const CudaDevice *>(device)->Stream()));
