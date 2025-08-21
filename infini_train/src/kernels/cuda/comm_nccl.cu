@@ -45,6 +45,8 @@ void NcclAllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op
     auto count = tensor->NumElements();
     void *buffer = tensor->DataPtr();
 
+    tensor->GetDevice()->SetDevice();
+
     NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, kNcclReduceOpMap.at(reduce_op), comm, stream));
 }
 
@@ -73,6 +75,7 @@ std::vector<std::shared_ptr<Tensor>> NcclBroadcast(const std::vector<std::shared
 
     NCCL_CHECK(ncclGroupStart());
     for (size_t i = 0; i < devices.size(); ++i) {
+        devices[i]->SetDevice();
         for (size_t j = 0; j < input_tensors.size(); ++j) {
             const auto &input_tensor = input_tensors[j];
             const auto dtype = input_tensor->Dtype();
@@ -90,17 +93,20 @@ std::vector<std::shared_ptr<Tensor>> NcclBroadcast(const std::vector<std::shared
 
 std::vector<std::shared_ptr<Tensor>>
 NcclReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads, const Device *destination) {
+    // grads: [devices, tensors]
     std::vector<std::shared_ptr<Tensor>> outputs;
     std::vector<cudaStream_t> streams;
     std::vector<ncclComm_t> comms;
+    std::vector<const Device *> devices;
 
     for (size_t i = 0; i < grads[0].size(); ++i) {
         outputs.push_back(std::make_shared<Tensor>(grads[0][i]->Dims(), grads[0][i]->Dtype(), destination));
         outputs[i]->Fill<float>(0.0f);
     }
     for (size_t i = 0; i < grads.size(); ++i) {
-        streams.push_back(dynamic_cast<const CudaDevice *>(grads[i][0]->GetDevice())->Stream());
-        comms.push_back(dynamic_cast<const CudaDevice *>(grads[i][0]->GetDevice())->NcclComm());
+        devices.push_back(grads[i][0]->GetDevice());
+        streams.push_back(dynamic_cast<const CudaDevice *>(devices[i])->Stream());
+        comms.push_back(dynamic_cast<const CudaDevice *>(devices[i])->NcclComm());
     }
 
     int root = -1;
@@ -114,6 +120,7 @@ NcclReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &
 
     NCCL_CHECK(ncclGroupStart());
     for (size_t i = 0; i < grads.size(); ++i) {
+        devices[i]->SetDevice();
         for (size_t j = 0; j < grads[i].size(); ++j) {
             const auto &grad = grads[i][j];
             const auto dtype = grad->Dtype();
@@ -152,6 +159,7 @@ std::vector<std::shared_ptr<Tensor>> NcclScatter(const std::shared_ptr<Tensor> &
     auto nccl_dtype = kNcclDtypeMap.at(dtype);
 
     for (size_t i = 0; i < devices.size(); ++i) {
+        devices[i]->SetDevice();
         const auto dtype = tensor->Dtype();
         auto nccl_dtype = kNcclDtypeMap.at(dtype);
         NCCL_CHECK(ncclSend(split_tensors[i]->DataPtr(), split_tensors[i]->NumElements(), nccl_dtype, i,
@@ -174,6 +182,7 @@ std::shared_ptr<Tensor> NcclGather(const std::vector<std::shared_ptr<Tensor>> &t
 
     std::vector<cudaStream_t> streams;
     std::vector<ncclComm_t> comms;
+    std::vector<const Device *> devices;
 
     int dest_rank = -1;
     for (size_t i = 0; i < tensors.size(); ++i) {
@@ -183,6 +192,7 @@ std::shared_ptr<Tensor> NcclGather(const std::vector<std::shared_ptr<Tensor>> &t
         }
         streams.push_back(dynamic_cast<const CudaDevice *>(device)->Stream());
         comms.push_back(dynamic_cast<const CudaDevice *>(device)->NcclComm());
+        devices.push_back(device);
 
         total_dim += tensors[i]->Dims()[dim];
     }
@@ -197,6 +207,7 @@ std::shared_ptr<Tensor> NcclGather(const std::vector<std::shared_ptr<Tensor>> &t
     int64_t offset = 0;
 
     for (size_t i = 0; i < num_devices; ++i) {
+        devices[i]->SetDevice();
         auto &tensor = tensors[i];
         size_t num_elements = tensor->NumElements();
         void *send_ptr = tensor->DataPtr();
