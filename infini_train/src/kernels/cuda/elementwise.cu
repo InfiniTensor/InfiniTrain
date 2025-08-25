@@ -6,6 +6,64 @@
 
 namespace infini_train::kernels::cuda {
 namespace {
+template <typename scalar_t, typename index_t,
+          typename std::enable_if_t<std::is_same<scalar_t, __half>::value> * = nullptr>
+__device__ __forceinline__ void fastSpecializedAtomicAdd(scalar_t *tensor, index_t index, const index_t numel,
+                                                         scalar_t value) {
+    __half *target_addr = tensor + index;
+    bool low_byte = ((reinterpret_cast<std::uintptr_t>(target_addr) & (sizeof(__half2) - 1)) == 0);
+
+    if (low_byte && index < (numel - 1)) {
+        __half2 value2 = __halves2half2(value, __float2half(0.0f));
+        atomicAdd(reinterpret_cast<__half2 *>(target_addr), value2);
+
+    } else if (!low_byte && index > 0) {
+        __half2 value2 = __halves2half2(__float2half(0.0f), value);
+        atomicAdd(reinterpret_cast<__half2 *>(target_addr - 1), value2);
+
+    } else {
+        atomicAdd(target_addr, value);
+    }
+}
+
+template <typename scalar_t, typename index_t,
+          typename std::enable_if_t<std::is_same<scalar_t, __nv_bfloat16>::value> * = nullptr>
+__device__ __forceinline__ void fastSpecializedAtomicAdd(scalar_t *tensor, index_t index, const index_t numel,
+                                                         scalar_t value) {
+    __nv_bfloat16 *target_addr = tensor + index;
+    bool low_byte = ((reinterpret_cast<std::uintptr_t>(target_addr) & (sizeof(__nv_bfloat162) - 1)) == 0);
+
+    if (low_byte && index < (numel - 1)) {
+        __nv_bfloat162 value2 = __halves2bfloat162(value, __nv_bfloat16(0.0f));
+        atomicAdd(reinterpret_cast<__nv_bfloat162 *>(target_addr), value2);
+
+    } else if (!low_byte && index > 0) {
+        __nv_bfloat162 value2 = __halves2bfloat162(__nv_bfloat16(0.0f), value);
+        atomicAdd(reinterpret_cast<__nv_bfloat162 *>(target_addr - 1), value2);
+
+    } else {
+        atomicAdd(target_addr, value);
+    }
+}
+
+template <typename scalar_t, typename index_t,
+          typename std::enable_if_t<!std::is_same<scalar_t, __half>::value
+                                    && !std::is_same<scalar_t, __nv_bfloat16>::value> * = nullptr>
+__device__ __forceinline__ void fastSpecializedAtomicAdd(scalar_t *tensor, index_t index, const index_t /*numel*/,
+                                                         scalar_t value) {
+    atomicAdd(tensor + index, value);
+}
+
+template <class scalar_t, class index_t>
+__device__ __forceinline__ void fastAtomicAdd(scalar_t *tensor, index_t index, const index_t numel, scalar_t value,
+                                              bool fast_atomics) {
+    if (fast_atomics) {
+        fastSpecializedAtomicAdd(tensor, index, numel, value);
+    } else {
+        atomicAdd(tensor + index, value);
+    }
+}
+
 using namespace infini_train::common::cuda;
 
 template <typename T, typename Func>
@@ -213,6 +271,68 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
     }
 }
 
+struct SharedElem {
+    int64_t offset;
+    float grad;
+};
+// NOTE(dcj): Specialized BinaryBackwardKernel for low-precision types (__half / bfloat16)
+template <typename T, typename FuncA, typename FuncB>
+__global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB fn_b, int ndim, size_t num_elements,
+                                     const int64_t *a_strides, const int64_t *a_shape, const int64_t *b_strides,
+                                     const int64_t *b_shape, const int64_t *out_strides, const T *grad_output,
+                                     const T *input_a, const T *input_b, bool fast_atomics) {
+    extern __shared__ char shared_memory[];
+    // Shared memory stores b_offset and grad_val
+    SharedElem *smem = reinterpret_cast<SharedElem *>(shared_memory);
+
+    const int tid = threadIdx.x;
+    const int block_threads = blockDim.x;
+    const int global_idx = blockIdx.x * blockDim.x + tid;
+    bool in_bounds = (global_idx < num_elements);
+
+    // Each thread calculates its own a_offset and b_offset
+    int64_t a_offset = 0, b_offset = 0;
+    float grad_val = 0.0f;
+    T a_val = T(0), b_val = T(0);
+
+    if (in_bounds) {
+        a_offset = CalcOffset(global_idx, ndim, a_strides, a_shape, out_strides);
+        b_offset = CalcOffset(global_idx, ndim, b_strides, b_shape, out_strides);
+
+        a_val = input_a ? input_a[a_offset] : T(0);
+        b_val = input_b ? input_b[b_offset] : T(0);
+
+        // Compute gradient contribution for output_a
+        output_a[a_offset] = Mul<T>(grad_output[global_idx], fn_a(a_val, b_val));
+        // Store gradient contribution for output_b in float for accumulation
+        grad_val = common::cuda::Cast<float>(Mul<T>(grad_output[global_idx], fn_b(a_val, b_val)));
+    }
+
+    // Write each thread's b_offset and grad_val into shared memory
+    smem[tid].offset = in_bounds ? b_offset : -1;
+    smem[tid].grad = grad_val;
+
+    __syncthreads();
+
+    // Block-level reduction: threads check if they can accumulate
+    for (int stride = 1; stride < block_threads; stride *= 2) {
+        __syncthreads();
+        if (tid % (2 * stride) == 0 && (tid + stride) < block_threads) {
+            if (smem[tid].offset == smem[tid + stride].offset && smem[tid].offset != -1) {
+                smem[tid].grad += smem[tid + stride].grad;
+                smem[tid + stride].offset = -1;
+            }
+        }
+    }
+    __syncthreads();
+
+    // Write final result back to global memory
+    if (in_bounds && smem[tid].offset != -1) {
+        fastAtomicAdd<T, size_t>(output_b, smem[tid].offset, num_elements, common::cuda::Cast<T>(smem[tid].grad),
+                                 fast_atomics);
+    }
+}
+
 // launch unary operator's backward kernel
 template <size_t BLOCK_SIZE, typename T, typename Func, typename... Inputs>
 void LaunchBackward(Func func, const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &grad_output,
@@ -273,16 +393,28 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     cudaMemcpyAsync(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
 
     const size_t num_elements = grad_output->NumElements();
-    LaunchKernel<BLOCK_SIZE, T>(
-        [=](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
-            const int NUM_WARPS = BLOCK_SIZE / 32;
-            size_t smem_size = NUM_WARPS * sizeof(cub::WarpReduce<float>::TempStorage);
-            BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(
-                output_a_ptr, output_b_ptr, fun_a, fun_b, ndim, num_elements, device_a_strides, device_a_shape,
-                device_b_strides, device_b_shape, device_out_strides, grad_output_ptr, ptrs...);
-        },
-        output_a, inputs...);
 
+    if constexpr (std::is_same_v<T, float>) {
+        LaunchKernel<BLOCK_SIZE, T>(
+            [=](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
+                const int NUM_WARPS = BLOCK_SIZE / 32;
+                size_t smem_size = NUM_WARPS * sizeof(cub::WarpReduce<float>::TempStorage);
+                BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(
+                    output_a_ptr, output_b_ptr, fun_a, fun_b, ndim, num_elements, device_a_strides, device_a_shape,
+                    device_b_strides, device_b_shape, device_out_strides, grad_output_ptr, ptrs...);
+            },
+            output_a, inputs...);
+    } else if constexpr (std::is_same_v<T, __half> || std::is_same_v<T, __nv_bfloat16>) {
+        LaunchKernel<BLOCK_SIZE, T>(
+            [=](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
+                size_t smem_size = BLOCK_SIZE * sizeof(SharedElem);
+                BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(
+                    output_a_ptr, output_b_ptr, fun_a, fun_b, ndim, num_elements, device_a_strides, device_a_shape,
+                    device_b_strides, device_b_shape, device_out_strides, grad_output_ptr, ptrs...,
+                    /*fast_atomics=*/true);
+            },
+            output_a, inputs...);
+    }
     cudaFreeAsync(device_buffer, stream);
 }
 
