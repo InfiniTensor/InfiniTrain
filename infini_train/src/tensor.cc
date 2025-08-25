@@ -316,10 +316,16 @@ std::shared_ptr<Tensor> Tensor::Pow(float exponent) {
 std::shared_ptr<Tensor> Tensor::Rsqrt() { return std::make_shared<autograd::Rsqrt>()->Apply({shared_from_this()})[0]; }
 
 std::vector<std::shared_ptr<Tensor>> Tensor::Split(int split_size, int dim) {
+    if (dim < 0) {
+        dim += dims_.size();
+    }
     return std::make_shared<autograd::Split>(split_size, dim)->Apply({shared_from_this()});
 }
 
 std::shared_ptr<Tensor> Tensor::RepeatInterleave(int64_t repeat, int64_t dim) {
+    if (dim < 0) {
+        dim += dims_.size();
+    }
     return std::make_shared<autograd::RepeatInterleave>(repeat, dim)->Apply({shared_from_this()})[0];
 }
 
@@ -498,59 +504,43 @@ std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
 
 std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar) { return t->Equals(scalar); }
 
-std::shared_ptr<Tensor> operator<(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
+std::shared_ptr<Tensor> operator<(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
     return a->Lt(b);
 }
 
-std::shared_ptr<Tensor> operator<(const std::shared_ptr<Tensor>& a, float scalar) {
-    return a->Lt(scalar);
-}
+std::shared_ptr<Tensor> operator<(const std::shared_ptr<Tensor> &a, float scalar) { return a->Lt(scalar); }
 
-std::shared_ptr<Tensor> operator<(float scalar, const std::shared_ptr<Tensor>& a) {
-    return a->Gt(scalar);
-}
+std::shared_ptr<Tensor> operator<(float scalar, const std::shared_ptr<Tensor> &a) { return a->Gt(scalar); }
 
-std::shared_ptr<Tensor> operator>(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
+std::shared_ptr<Tensor> operator>(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
     return a->Gt(b);
 }
 
-std::shared_ptr<Tensor> operator>(const std::shared_ptr<Tensor>& a, float scalar) {
-    return a->Gt(scalar);
-}
+std::shared_ptr<Tensor> operator>(const std::shared_ptr<Tensor> &a, float scalar) { return a->Gt(scalar); }
 
-std::shared_ptr<Tensor> operator>(float scalar, const std::shared_ptr<Tensor>& a) {
-    return a->Lt(scalar);
-}
+std::shared_ptr<Tensor> operator>(float scalar, const std::shared_ptr<Tensor> &a) { return a->Lt(scalar); }
 
-std::shared_ptr<Tensor> operator<=(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
+std::shared_ptr<Tensor> operator<=(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
     return a->Le(b);
 }
 
-std::shared_ptr<Tensor> operator<=(const std::shared_ptr<Tensor>& a, float scalar) {
-    return a->Le(scalar);
-}
+std::shared_ptr<Tensor> operator<=(const std::shared_ptr<Tensor> &a, float scalar) { return a->Le(scalar); }
 
-std::shared_ptr<Tensor> operator<=(float scalar, const std::shared_ptr<Tensor>& a) {
-    return a->Ge(scalar);
-}
+std::shared_ptr<Tensor> operator<=(float scalar, const std::shared_ptr<Tensor> &a) { return a->Ge(scalar); }
 
-std::shared_ptr<Tensor> operator>=(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
+std::shared_ptr<Tensor> operator>=(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
     return a->Ge(b);
 }
 
-std::shared_ptr<Tensor> operator>=(const std::shared_ptr<Tensor>& a, float scalar) {
-    return a->Ge(scalar);
-}
+std::shared_ptr<Tensor> operator>=(const std::shared_ptr<Tensor> &a, float scalar) { return a->Ge(scalar); }
 
-std::shared_ptr<Tensor> operator>=(float scalar, const std::shared_ptr<Tensor>& a) {
-    return a->Le(scalar);
-}
+std::shared_ptr<Tensor> operator>=(float scalar, const std::shared_ptr<Tensor> &a) { return a->Le(scalar); }
 
-std::shared_ptr<Tensor> operator&(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
+std::shared_ptr<Tensor> operator&(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
     return a->And(b);
 }
 
-std::shared_ptr<Tensor> operator|(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
+std::shared_ptr<Tensor> operator|(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
     return a->Or(b);
 }
 

@@ -229,13 +229,11 @@ std::shared_ptr<Tensor> NcclGather(const std::vector<std::shared_ptr<Tensor>> &t
 void NcclAllReduceLocal(const std::shared_ptr<Tensor> &tensor) {
     // Assume this kernel only executed on local ranks
     auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
-    CHECK(device) << "NcclAllReduceLocal requires a CUDA tensor/device";
+    CHECK(device->IsCUDA()) << "NcclAllReduceLocal requires a CUDA tensor/device";
 
     device->SetDevice();
     cudaStream_t stream = device->Stream();
     ncclComm_t comm = device->NcclComm();
-
-    NCCL_CHECK(ncclGroupStart());
 
     auto dtype = tensor->Dtype();
     auto nccl_dtype = kNcclDtypeMap.at(dtype);
@@ -243,16 +241,16 @@ void NcclAllReduceLocal(const std::shared_ptr<Tensor> &tensor) {
     void *buffer = tensor->DataPtr();
 
     NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, ncclSum, comm, stream));
-
-    NCCL_CHECK(ncclGroupEnd());
 }
 
 void NcclAllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input) {
     // Assume this kernel only executed on local ranks
     auto *device = dynamic_cast<const CudaDevice *>(input->GetDevice());
-    CHECK(device) << "NcclAllGather requires a CUDA tensor/device";
+    auto *output_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
+    CHECK(device->IsCUDA()) << "NcclAllGather requires a CUDA tensor/device";
+    CHECK(device == output_device) << "NcclAllGather input/output must be on the same CUDA device";
 
-    // device->SetDevice();
+    device->SetDevice();
     cudaStream_t stream = device->Stream();
     ncclComm_t comm = device->NcclComm();
 

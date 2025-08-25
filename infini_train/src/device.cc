@@ -54,7 +54,10 @@ CudaDevice::~CudaDevice() {
 void CudaDevice::SetDevice() const { cudaSetDevice(index_); }
 void CudaDevice::Synchronize() const { cudaDeviceSynchronize(); }
 
-cudaStream_t CudaDevice::Stream() const { return stream_; }
+cudaStream_t CudaDevice::Stream() const {
+    SetDevice();
+    return stream_;
+}
 
 cublasHandle_t CudaDevice::CublasHandle() const { return cublas_handle_; }
 

@@ -194,8 +194,7 @@ std::vector<std::shared_ptr<Tensor>> EqualsScalar::Backward(const std::vector<st
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-Lt::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>> Lt::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 2);
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
@@ -205,14 +204,12 @@ Lt::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-Lt::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+std::vector<std::shared_ptr<Tensor>> Lt::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     LOG(FATAL) << "Lt::Backward shall not be called anytime";
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-LtScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>> LtScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
@@ -221,14 +218,12 @@ LtScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-LtScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+std::vector<std::shared_ptr<Tensor>> LtScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     LOG(FATAL) << "LtScalar::Backward shall not be called anytime";
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-Le::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>> Le::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 2);
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
@@ -238,14 +233,12 @@ Le::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-Le::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+std::vector<std::shared_ptr<Tensor>> Le::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     LOG(FATAL) << "Le::Backward shall not be called anytime";
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-LeScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>> LeScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
@@ -254,14 +247,12 @@ LeScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-LeScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+std::vector<std::shared_ptr<Tensor>> LeScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     LOG(FATAL) << "LeScalar::Backward shall not be called anytime";
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-Gt::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>> Gt::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 2);
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
@@ -271,14 +262,12 @@ Gt::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-Gt::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+std::vector<std::shared_ptr<Tensor>> Gt::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     LOG(FATAL) << "Gt::Backward shall not be called anytime";
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-GtScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>> GtScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
@@ -287,14 +276,12 @@ GtScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-GtScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+std::vector<std::shared_ptr<Tensor>> GtScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     LOG(FATAL) << "GtScalar::Backward shall not be called anytime";
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-Ge::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>> Ge::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 2);
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
@@ -304,14 +291,12 @@ Ge::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-Ge::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+std::vector<std::shared_ptr<Tensor>> Ge::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     LOG(FATAL) << "Ge::Backward shall not be called anytime";
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-GeScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>> GeScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
@@ -320,14 +305,12 @@ GeScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-GeScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+std::vector<std::shared_ptr<Tensor>> GeScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     LOG(FATAL) << "GeScalar::Backward shall not be called anytime";
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-Or::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>> Or::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 2);
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
@@ -337,14 +320,12 @@ Or::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-Or::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+std::vector<std::shared_ptr<Tensor>> Or::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     LOG(FATAL) << "Or::Backward shall not be called anytime";
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-And::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>> And::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 2);
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
@@ -354,8 +335,7 @@ And::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
 }
 
-std::vector<std::shared_ptr<Tensor>>
-And::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+std::vector<std::shared_ptr<Tensor>> And::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     LOG(FATAL) << "And::Backward shall not be called anytime";
     return {};
 }

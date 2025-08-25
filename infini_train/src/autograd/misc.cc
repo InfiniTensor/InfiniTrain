@@ -108,10 +108,8 @@ std::vector<std::shared_ptr<Tensor>> Concat::Forward(const std::vector<std::shar
 }
 
 void Concat::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                         const std::vector<std::shared_ptr<Tensor>> &) {
-    for (auto input : input_tensors) {
-        input_dims_list_.push_back(input->Dims());
-    }
+                          const std::vector<std::shared_ptr<Tensor>> &) {
+    for (auto input : input_tensors) { input_dims_list_.push_back(input->Dims()); }
 }
 
 std::vector<std::shared_ptr<Tensor>> Concat::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {

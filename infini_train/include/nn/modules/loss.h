@@ -12,4 +12,11 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 };
+
+class MSELoss : public CloneableModule<MSELoss> {
+public:
+    MSELoss() = default;
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+};
 } // namespace infini_train::nn

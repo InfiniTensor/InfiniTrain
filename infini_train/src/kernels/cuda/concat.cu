@@ -22,7 +22,7 @@ __device__ __forceinline__ int64_t UpperBoundI64(const int64_t *offsets, int64_t
             r = m;
         }
     }
-    return l - 1; 
+    return l - 1;
 }
 
 template <typename T>
@@ -178,7 +178,7 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
     for (const auto &dvec : input_dims_list) {
         auto t = std::make_shared<Tensor>(dvec, dtype, grad_output->GetDevice());
         DispatchFunc<INFINI_ALL_TYPES>(
-            dtype, [=]<typename T>() { t->template Fill<T>(0); }, "CUDA ConcatBackward");
+            dtype, [=]<typename T>() { t->Fill<T>(0); }, "CUDA ConcatBackward");
         grads.push_back(t);
     }
 

@@ -88,5 +88,5 @@ target_link_libraries(gpt2 infini_train)
 add_executable(llama3 example/llama3/main.cc example/common/tiny_shakespeare_dataset.cc example/common/utils.cc example/llama3/net.cc example/common/tokenizer.cc)
 target_link_libraries(llama3 infini_train)
 
-add_executable(mlp_tp example/mlp_tp/main.cc example/mlp_tp/net.cc)
-target_link_libraries(mlp_tp infini_train)
+add_executable(gpt2_tp example/gpt2_tp/main.cc example/common/tiny_shakespeare_dataset.cc example/common/utils.cc example/gpt2_tp/net.cc example/common/tokenizer.cc)
+target_link_libraries(gpt2_tp infini_train)

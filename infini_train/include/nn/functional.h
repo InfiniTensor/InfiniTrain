@@ -175,7 +175,7 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &inputs
 //   inputs: The sequence of tensors to concatenate. All tensors must either have the same shape (except in the
 //   concatenating dimension) or be a 1-D empty tensor with size (0,). dim: dimension to insert (defualt 0).
 //   dim: dimension to insert (defualt 0).
-// 
+//
 // Returns:
 //   Concatenation of the input tensors.
 std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim = 0);

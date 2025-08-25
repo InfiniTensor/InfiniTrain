@@ -195,6 +195,46 @@ std::shared_ptr<Tensor> EqualsScalarForward(const std::shared_ptr<Tensor> &a, fl
     return UnaryForward(a, [scalar](float x) { return x == scalar ? 1.0f : 0.0f; });
 }
 
+std::shared_ptr<Tensor> LtForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return BinaryForward(a, b, [](auto x, auto y) { return x < y ? 1 : 0; });
+}
+
+std::shared_ptr<Tensor> LtScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    return UnaryForward(a, [scalar](auto x) { return (x < scalar) ? 1 : 0; });
+}
+
+std::shared_ptr<Tensor> LeForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return BinaryForward(a, b, [](auto x, auto y) { return (x <= y) ? 1 : 0; });
+}
+
+std::shared_ptr<Tensor> LeScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    return UnaryForward(a, [scalar](auto x) { return (x <= scalar) ? 1 : 0; });
+}
+
+std::shared_ptr<Tensor> GtForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return BinaryForward(a, b, [](auto x, auto y) { return x > y ? 1 : 0; });
+}
+
+std::shared_ptr<Tensor> GtScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    return UnaryForward(a, [scalar](auto x) { return (x > scalar) ? 1 : 0; });
+}
+
+std::shared_ptr<Tensor> GeForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return BinaryForward(a, b, [](auto x, auto y) { return (x >= y) ? 1 : 0; });
+}
+
+std::shared_ptr<Tensor> GeScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    return UnaryForward(a, [scalar](auto x) { return (x >= scalar) ? 1 : 0; });
+}
+
+std::shared_ptr<Tensor> OrForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return BinaryForward(a, b, [](auto x, auto y) { return (x != 0 || y != 0) ? 1 : 0; });
+}
+
+std::shared_ptr<Tensor> AndForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return BinaryForward(a, b, [](auto x, auto y) { return (x != 0 && y != 0) ? 1 : 0; });
+}
+
 std::shared_ptr<Tensor> AddForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
     return BinaryForward(a, b, [](float x, float y) { return x + y; });
 }
@@ -279,6 +319,16 @@ REGISTER_CPU_ELEMENTWISE_KERNEL(PowBackward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(RsqrtForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(RsqrtBackward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(EqualsScalarForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(LtForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(LtScalarForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(LeForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(LeScalarForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(GtForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(GtScalarForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(GeForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(GeScalarForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(OrForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(AndForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(AddForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(AddBackward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(AddScalarForward)
