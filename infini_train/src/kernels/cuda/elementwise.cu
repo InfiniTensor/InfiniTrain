@@ -223,9 +223,9 @@ struct SharedElem {
 // NOTE(dcj): Specialized BinaryBackwardKernel for low-precision types (__half / bfloat16)
 template <typename T, typename FuncA, typename FuncB>
 __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB fn_b, int ndim, size_t num_elements,
-                                     const int64_t *a_strides, const int64_t *a_shape, const int64_t *b_strides,
-                                     const int64_t *b_shape, const int64_t *out_strides, const T *grad_output,
-                                     const T *input_a, const T *input_b, bool fast_atomics) {
+                                     size_t b_num_elements, const int64_t *a_strides, const int64_t *a_shape,
+                                     const int64_t *b_strides, const int64_t *b_shape, const int64_t *out_strides,
+                                     const T *grad_output, const T *input_a, const T *input_b, bool fast_atomics) {
     extern __shared__ char shared_memory[];
     // Shared memory stores b_offset and grad_val
     SharedElem *smem = reinterpret_cast<SharedElem *>(shared_memory);
@@ -273,7 +273,7 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
 
     // Write final result back to global memory
     if (in_bounds && smem[tid].offset != -1) {
-        fastAtomicAdd<T, size_t>(output_b, smem[tid].offset, num_elements, common::cuda::Cast<T>(smem[tid].grad),
+        fastAtomicAdd<T, size_t>(output_b, smem[tid].offset, b_num_elements, common::cuda::Cast<T>(smem[tid].grad),
                                  fast_atomics);
     }
 }
@@ -354,8 +354,9 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
             [=](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
                 size_t smem_size = BLOCK_SIZE * sizeof(SharedElem);
                 BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(
-                    output_a_ptr, output_b_ptr, fun_a, fun_b, ndim, num_elements, device_a_strides, device_a_shape,
-                    device_b_strides, device_b_shape, device_out_strides, grad_output_ptr, ptrs...,
+                    output_a_ptr, output_b_ptr, fun_a, fun_b, ndim, num_elements, output_b->NumElements(),
+                    device_a_strides, device_a_shape, device_b_strides, device_b_shape, device_out_strides,
+                    grad_output_ptr, ptrs...,
                     /*fast_atomics=*/true);
             },
             output_a, inputs...);

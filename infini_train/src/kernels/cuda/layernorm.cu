@@ -100,7 +100,8 @@ template <int BLOCK_SIZE, typename T>
 __global__ void LayerNormBackwardKernel(const T *__restrict__ input, const T *__restrict__ grad_output,
                                         const float *__restrict__ mean, const float *__restrict__ rstd,
                                         const T *__restrict__ weight, T *__restrict__ grad_input,
-                                        T *__restrict__ grad_weight, T *__restrict__ grad_bias, int embed_dim) {
+                                        T *__restrict__ grad_weight, T *__restrict__ grad_bias, int embed_dim,
+                                        size_t weight_num_elements, size_t bias_num_elements) {
     using BlockReduce = cub::BlockReduce<float, BLOCK_SIZE>;
     __shared__ typename BlockReduce::TempStorage temp_storage_mean;
     __shared__ typename BlockReduce::TempStorage temp_storage_norm;
@@ -144,8 +145,9 @@ __global__ void LayerNormBackwardKernel(const T *__restrict__ input, const T *__
         grad_input_ptr[i] = common::cuda::Cast<T>(
             (common::cuda::Cast<float>(weight[i]) * grad_output_val - shared_mean - norm * shared_norm) * rstd_val);
 
-        atomicAdd(&grad_weight[i], common::cuda::Cast<T>(grad_output_val * norm));
-        atomicAdd(&grad_bias[i], grad_output_ptr[i]);
+        common::cuda::fastAtomicAdd<T, size_t>(grad_weight, i, weight_num_elements,
+                                               common::cuda::Cast<T>(grad_output_val * norm), true);
+        common::cuda::fastAtomicAdd<T, size_t>(grad_bias, i, bias_num_elements, grad_output_ptr[i], true);
     }
 }
 
@@ -177,7 +179,8 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
                 static_cast<const T *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
                 static_cast<const float *>(mean->DataPtr()), static_cast<const float *>(rstd->DataPtr()),
                 static_cast<const T *>(weight->DataPtr()), static_cast<T *>(grad_input->DataPtr()),
-                static_cast<T *>(grad_weight->DataPtr()), static_cast<T *>(grad_bias->DataPtr()), embed_dim);
+                static_cast<T *>(grad_weight->DataPtr()), static_cast<T *>(grad_bias->DataPtr()), embed_dim,
+                grad_weight->NumElements(), grad_bias->NumElements());
         },
         "CUDA LayerNormBackward");
 
