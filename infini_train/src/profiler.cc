@@ -11,7 +11,7 @@
 #include "glog/logging.h"
 
 #ifdef USE_CUDA
-#include "infini_train/include/common/cuda/common_cuda.cuh"
+#include "infini_train/include/common/cuda/common_cuda.h"
 #endif
 #include "infini_train/include/device.h"
 

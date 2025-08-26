@@ -1,4 +1,13 @@
-#include "infini_train/include/common/cuda/common_cuda.cuh"
+#include <memory>
+#include <algorithm>
+#include <vector>
+#include <numeric>
+#include <functional>
+
+#include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/tensor.h"
+#include "infini_train/include/dispatcher.h"
+#include "infini_train/include/common/cuda/kernel_helper.cuh"
 
 namespace infini_train::kernels::cuda {
 

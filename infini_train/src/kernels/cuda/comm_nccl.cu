@@ -10,7 +10,7 @@
 #include "glog/logging.h"
 #include "nccl.h"
 
-#include "infini_train/include/common/cuda/common_cuda.cuh"
+#include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
