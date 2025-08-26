@@ -4,7 +4,7 @@
 #include <vector>
 
 #ifdef USE_CUDA
-#include "infini_train/include/common/cuda/common_cuda.cuh"
+#include "infini_train/include/common/cuda/common_cuda.h"
 #endif
 #ifdef USE_NCCL
 #include "nccl.h"

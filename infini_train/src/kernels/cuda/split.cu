@@ -2,7 +2,9 @@
 #include <numeric>
 #include <vector>
 
-#include "infini_train/include/common/cuda/common_cuda.cuh"
+#include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/dispatcher.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
 template <typename T>

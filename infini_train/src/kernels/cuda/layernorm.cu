@@ -1,6 +1,13 @@
-#include <cub/block/block_reduce.cuh>
+#include <memory>
+#include <tuple>
 
-#include "infini_train/include/common/cuda/common_cuda.cuh"
+#include "cub/block/block_reduce.cuh"
+
+#include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/common/cuda/kernel_helper.cuh"
+#include "infini_train/include/device.h"
+#include "infini_train/include/dispatcher.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
 

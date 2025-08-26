@@ -1,4 +1,9 @@
-#include "infini_train/include/common/cuda/common_cuda.cuh"
+#include <cstddef>
+#include <memory>
+
+#include "infini_train/include/device.h"
+#include "infini_train/include/dispatcher.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
 

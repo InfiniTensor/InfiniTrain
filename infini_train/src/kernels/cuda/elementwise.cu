@@ -1,69 +1,14 @@
 #include <cstddef>
 
-#include <cub/warp/warp_reduce.cuh>
+#include "cub/warp/warp_reduce.cuh"
 
-#include "infini_train/include/common/cuda/common_cuda.cuh"
+#include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/common/cuda/kernel_helper.cuh"
+#include "infini_train/include/dispatcher.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
 namespace {
-template <typename scalar_t, typename index_t,
-          typename std::enable_if_t<std::is_same<scalar_t, __half>::value> * = nullptr>
-__device__ __forceinline__ void fastSpecializedAtomicAdd(scalar_t *tensor, index_t index, const index_t numel,
-                                                         scalar_t value) {
-    __half *target_addr = tensor + index;
-    bool low_byte = ((reinterpret_cast<std::uintptr_t>(target_addr) & (sizeof(__half2) - 1)) == 0);
-
-    if (low_byte && index < (numel - 1)) {
-        __half2 value2 = __halves2half2(value, __float2half(0.0f));
-        atomicAdd(reinterpret_cast<__half2 *>(target_addr), value2);
-
-    } else if (!low_byte && index > 0) {
-        __half2 value2 = __halves2half2(__float2half(0.0f), value);
-        atomicAdd(reinterpret_cast<__half2 *>(target_addr - 1), value2);
-
-    } else {
-        atomicAdd(target_addr, value);
-    }
-}
-
-template <typename scalar_t, typename index_t,
-          typename std::enable_if_t<std::is_same<scalar_t, __nv_bfloat16>::value> * = nullptr>
-__device__ __forceinline__ void fastSpecializedAtomicAdd(scalar_t *tensor, index_t index, const index_t numel,
-                                                         scalar_t value) {
-    __nv_bfloat16 *target_addr = tensor + index;
-    bool low_byte = ((reinterpret_cast<std::uintptr_t>(target_addr) & (sizeof(__nv_bfloat162) - 1)) == 0);
-
-    if (low_byte && index < (numel - 1)) {
-        __nv_bfloat162 value2 = __halves2bfloat162(value, __nv_bfloat16(0.0f));
-        atomicAdd(reinterpret_cast<__nv_bfloat162 *>(target_addr), value2);
-
-    } else if (!low_byte && index > 0) {
-        __nv_bfloat162 value2 = __halves2bfloat162(__nv_bfloat16(0.0f), value);
-        atomicAdd(reinterpret_cast<__nv_bfloat162 *>(target_addr - 1), value2);
-
-    } else {
-        atomicAdd(target_addr, value);
-    }
-}
-
-template <typename scalar_t, typename index_t,
-          typename std::enable_if_t<!std::is_same<scalar_t, __half>::value
-                                    && !std::is_same<scalar_t, __nv_bfloat16>::value> * = nullptr>
-__device__ __forceinline__ void fastSpecializedAtomicAdd(scalar_t *tensor, index_t index, const index_t /*numel*/,
-                                                         scalar_t value) {
-    atomicAdd(tensor + index, value);
-}
-
-template <class scalar_t, class index_t>
-__device__ __forceinline__ void fastAtomicAdd(scalar_t *tensor, index_t index, const index_t numel, scalar_t value,
-                                              bool fast_atomics) {
-    if (fast_atomics) {
-        fastSpecializedAtomicAdd(tensor, index, numel, value);
-    } else {
-        atomicAdd(tensor + index, value);
-    }
-}
-
 using namespace infini_train::common::cuda;
 
 template <typename T, typename Func>

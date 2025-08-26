@@ -1,57 +1,10 @@
 #pragma once
 
 #include "cuda.h"
-#include "cuda_runtime.h"
-#include <cuda_bf16.h>
-#include <cuda_fp16.h>
-
-#include "../common.h"
-#include "infini_train/include/dispatcher.h"
-#ifdef USE_NCCL
-#include "nccl.h"
-#endif
+#include "cuda_bf16.h"
+#include "cuda_fp16.h"
 
 namespace infini_train::common::cuda {
-
-// Common CUDA Macros
-#define CUDA_CHECK(call)                                                                                               \
-    do {                                                                                                               \
-        cudaError_t status = call;                                                                                     \
-        if (status != cudaSuccess) {                                                                                   \
-            LOG(FATAL) << "CUDA Error: " << cudaGetErrorString(status) << " at " << __FILE__ << ":" << __LINE__;       \
-        }                                                                                                              \
-    } while (0)
-
-#define CUBLAS_CHECK(call)                                                                                             \
-    do {                                                                                                               \
-        cublasStatus_t status = call;                                                                                  \
-        if (status != CUBLAS_STATUS_SUCCESS) {                                                                         \
-            LOG(FATAL) << "CUBLAS Error: " << cublasGetStatusString(status) << " at " << __FILE__ << ":" << __LINE__;  \
-        }                                                                                                              \
-    } while (0)
-
-#define CUDA_DRIVER_CHECK(call)                                                                                        \
-    do {                                                                                                               \
-        CUresult status = call;                                                                                        \
-        if (status != CUresult::CUDA_SUCCESS) {                                                                        \
-            const char *err_str = nullptr;                                                                             \
-            cuGetErrorString(status, &err_str);                                                                        \
-            LOG(FATAL) << "CUDA Driver API error: " << #call << " failed with error (" << status                       \
-                       << "): " << (err_str ? err_str : "Unknown error");                                              \
-        }                                                                                                              \
-    } while (0)
-
-#ifdef USE_NCCL
-#define NCCL_CHECK(expr)                                                                                               \
-    do {                                                                                                               \
-        ncclResult_t _status = (expr);                                                                                 \
-        if (_status != ncclSuccess) {                                                                                  \
-            LOG(FATAL) << "NCCL error: " << ncclGetErrorString(_status) << " at " << __FILE__ << ":" << __LINE__       \
-                       << " (" << #expr << ")";                                                                        \
-        }                                                                                                              \
-    } while (0)
-#endif
-
 /**
  * Converts a value between arbitrary types with specialized handling for
  * CUDA floating-point precisions. For primitive types, this offers perfect
@@ -282,4 +235,61 @@ template <typename T> __device__ __forceinline__ T Fma(const T &x, const T &y, c
     }
 }
 
+template <typename scalar_t, typename index_t,
+          typename std::enable_if_t<std::is_same<scalar_t, __half>::value> * = nullptr>
+__device__ __forceinline__ void fastSpecializedAtomicAdd(scalar_t *tensor, index_t index, const index_t numel,
+                                                         scalar_t value) {
+    __half *target_addr = tensor + index;
+    bool low_byte = ((reinterpret_cast<std::uintptr_t>(target_addr) & (sizeof(__half2) - 1)) == 0);
+
+    if (low_byte && index < (numel - 1)) {
+        __half2 value2 = __halves2half2(value, __float2half(0.0f));
+        atomicAdd(reinterpret_cast<__half2 *>(target_addr), value2);
+
+    } else if (!low_byte && index > 0) {
+        __half2 value2 = __halves2half2(__float2half(0.0f), value);
+        atomicAdd(reinterpret_cast<__half2 *>(target_addr - 1), value2);
+
+    } else {
+        atomicAdd(target_addr, value);
+    }
+}
+
+template <typename scalar_t, typename index_t,
+          typename std::enable_if_t<std::is_same<scalar_t, __nv_bfloat16>::value> * = nullptr>
+__device__ __forceinline__ void fastSpecializedAtomicAdd(scalar_t *tensor, index_t index, const index_t numel,
+                                                         scalar_t value) {
+    __nv_bfloat16 *target_addr = tensor + index;
+    bool low_byte = ((reinterpret_cast<std::uintptr_t>(target_addr) & (sizeof(__nv_bfloat162) - 1)) == 0);
+
+    if (low_byte && index < (numel - 1)) {
+        __nv_bfloat162 value2 = __halves2bfloat162(value, __nv_bfloat16(0.0f));
+        atomicAdd(reinterpret_cast<__nv_bfloat162 *>(target_addr), value2);
+
+    } else if (!low_byte && index > 0) {
+        __nv_bfloat162 value2 = __halves2bfloat162(__nv_bfloat16(0.0f), value);
+        atomicAdd(reinterpret_cast<__nv_bfloat162 *>(target_addr - 1), value2);
+
+    } else {
+        atomicAdd(target_addr, value);
+    }
+}
+
+template <typename scalar_t, typename index_t,
+          typename std::enable_if_t<!std::is_same<scalar_t, __half>::value
+                                    && !std::is_same<scalar_t, __nv_bfloat16>::value> * = nullptr>
+__device__ __forceinline__ void fastSpecializedAtomicAdd(scalar_t *tensor, index_t index, const index_t /*numel*/,
+                                                         scalar_t value) {
+    atomicAdd(tensor + index, value);
+}
+
+template <class scalar_t, class index_t>
+__device__ __forceinline__ void fastAtomicAdd(scalar_t *tensor, index_t index, const index_t numel, scalar_t value,
+                                              bool fast_atomics) {
+    if (fast_atomics) {
+        fastSpecializedAtomicAdd(tensor, index, numel, value);
+    } else {
+        atomicAdd(tensor + index, value);
+    }
+}
 } // namespace infini_train::common::cuda
