@@ -13,8 +13,9 @@ std::vector<std::shared_ptr<Tensor>> Linear::Forward(const std::vector<std::shar
     const auto &bias = input_tensors.size() == 3 ? input_tensors[2] : nullptr;
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "LinearForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, weight, true, bias)};
+    // auto kernel = Dispatcher::Instance().GetKernel({device, "LinearForward"});
+    // return {kernel.Call<std::shared_ptr<Tensor>>(input, weight, true, bias)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "LinearForward"}, input, weight, true, bias)};
 }
 
 void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,

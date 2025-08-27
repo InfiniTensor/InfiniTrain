@@ -9,6 +9,7 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
+#include "infini_train/include/autocast.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
@@ -244,6 +245,10 @@ void Train(const nn::parallel::Rank &rank) {
         Profiler::Instance().SetTag("Step_" + std::to_string(step));
 #endif
         for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
+            infini_train::AutocastGuard autocast_guard(device->Type(),
+                                                       DataType::kBFLOAT16); // enable autocast for the current step
+            // printf("%d, %d, %d\n", tls_autocast_context.enabled, tls_autocast_context.device_type,
+            //        tls_autocast_context.autocast_dtype);
             // (bs, seq_len), (bs, seq_len)
             auto [x, y] = *train_iter;
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
@@ -257,6 +262,10 @@ void Train(const nn::parallel::Rank &rank) {
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish model forward, start loss forward";
             auto loss = loss_fn->Forward({logits, y})[0];
             loss = loss / grad_accum_steps;
+
+            autocast_guard.Disable();
+            // printf("%d, %d, %d\n", tls_autocast_context.enabled, tls_autocast_context.device_type,
+            //        tls_autocast_context.autocast_dtype);
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
             if (ddp_world_size > 1) {
                 function::AllReduce(loss, function::ReduceOpType::kAvg);

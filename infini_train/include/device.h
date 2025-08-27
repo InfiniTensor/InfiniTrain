@@ -18,6 +18,7 @@ namespace infini_train {
 enum class DeviceType : int8_t {
     kCPU = 0,
     kCUDA = 1,
+    kCount = 2,
 };
 
 class DeviceManager;
