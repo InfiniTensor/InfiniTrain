@@ -200,8 +200,9 @@ std::vector<std::shared_ptr<Tensor>> Add::Forward(const std::vector<std::shared_
     const auto &b = input_tensors[1];
 
     auto device = a->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "AddForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
+    // auto kernel = Dispatcher::Instance().GetKernel({device, "AddForward"});
+    // return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "AddForward"}, a, b)};
 }
 
 void Add::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -226,8 +227,9 @@ std::vector<std::shared_ptr<Tensor>> AddScalar::Forward(const std::vector<std::s
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "AddScalarForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
+    // auto kernel = Dispatcher::Instance().GetKernel({device, "AddScalarForward"});
+    // return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "AddScalarForward"}, input, scalar_)};
 }
 
 std::vector<std::shared_ptr<Tensor>> AddScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
@@ -272,8 +274,9 @@ std::vector<std::shared_ptr<Tensor>> Mul::Forward(const std::vector<std::shared_
     const auto &b = input_tensors[1];
 
     auto device = a->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MulForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
+    // auto kernel = Dispatcher::Instance().GetKernel({device, "MulForward"});
+    // return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MulForward"}, a, b)};
 }
 
 void Mul::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -301,8 +304,9 @@ std::vector<std::shared_ptr<Tensor>> MulScalar::Forward(const std::vector<std::s
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MulScalarForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
+    // auto kernel = Dispatcher::Instance().GetKernel({device, "MulScalarForward"});
+    // return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MulScalarForward"}, input, scalar_)};
 }
 
 std::vector<std::shared_ptr<Tensor>> MulScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {

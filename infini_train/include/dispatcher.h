@@ -5,8 +5,10 @@
 #include <type_traits>
 #include <utility>
 
+#include "autocast.h"
 #include "glog/logging.h"
 
+#include "infini_train/include/autocast.h"
 #include "infini_train/include/common/common.h"
 #include "infini_train/include/device.h"
 #ifdef PROFILE_MODE
@@ -432,6 +434,12 @@ public:
         CHECK(!key_to_kernel_map_.contains(key))
             << "Kernel already registered: " << key.second << " on device: " << static_cast<int>(key.first);
         key_to_kernel_map_.emplace(key, kernel);
+    }
+
+    template <typename RetT, class... ArgsT> RetT Call(KeyT key, ArgsT... args) const {
+        auto kernel = this->GetKernel(key);
+        tls_autocast_context.Autocast(key, args...);
+        return kernel.Call<RetT>(std::forward<ArgsT>(args)...);
     }
 
 private:

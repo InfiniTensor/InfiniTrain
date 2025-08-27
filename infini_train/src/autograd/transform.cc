@@ -60,8 +60,9 @@ std::vector<std::shared_ptr<Tensor>> Mask::Forward(const std::vector<std::shared
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MaskForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, mask_, value_)};
+    // auto kernel = Dispatcher::Instance().GetKernel({device, "MaskForward"});
+    // return {kernel.Call<std::shared_ptr<Tensor>>(input, mask_, value_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MaskForward"}, input, mask_, value_)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Mask::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {

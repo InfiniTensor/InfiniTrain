@@ -327,7 +327,8 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
     auto output_shape = grad_output->Dims();
     auto mask_shape = mask->Dims();
     auto dtype = grad_output->Dtype();
-    CHECK_EQ(static_cast<int>(dtype), static_cast<int>(mask->Dtype()));
+    auto grad_output_ = std::make_shared(grad_output->To(DataType::kFLOAT32));
+    CHECK_EQ(static_cast<int>(grad_output_->Dtype()), static_cast<int>(mask->Dtype()));
 
     int64_t output_dims = output_shape.size();
     int64_t mask_dims = mask_shape.size();
@@ -340,19 +341,19 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
     int64_t mask_size = mask->NumElements();
     int64_t batch_size = grad_output->NumElements() / mask_size;
 
-    auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), grad_output->Dtype(), grad_output->GetDevice());
+    auto grad_input = std::make_shared<Tensor>(grad_output_->Dims(), grad_output_->Dtype(), grad_output_->GetDevice());
 
     int threads_per_block = 256;
     int num_blocks = (grad_output->NumElements() + threads_per_block - 1) / threads_per_block;
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output_->GetDevice());
 
     DispatchFunc<INFINI_ALL_TYPES>(
         dtype,
         [=]<typename T>() {
             grad_input->Fill<T>(0);
             MaskBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask->DataPtr()),
+                static_cast<const T *>(grad_output_->DataPtr()), static_cast<const T *>(mask->DataPtr()),
                 static_cast<T *>(grad_input->DataPtr()), batch_size, mask_size);
         },
         "CUDA MaskBackward");
