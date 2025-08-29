@@ -191,48 +191,68 @@ std::shared_ptr<Tensor> RsqrtBackward(const std::shared_ptr<Tensor> &grad_output
     return UnaryBackward(grad_output, input, [](float x) { return -0.5f / (x * std::sqrt(x)); });
 }
 
+std::shared_ptr<Tensor> ExpForward(const std::shared_ptr<Tensor> &input) {
+    return UnaryForward(input, [](float x) { return std::exp(x); });
+}
+
+std::shared_ptr<Tensor> ExpBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &output) {
+    return UnaryBackward(grad_output, output, [](float y) { return y; });
+}
+
+std::shared_ptr<Tensor> LogForward(const std::shared_ptr<Tensor> &input) {
+    return UnaryForward(input, [](float x) { return std::log(x); });
+}
+
+std::shared_ptr<Tensor> LogBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &input) {
+    return UnaryBackward(grad_output, input, [](float x) { return 1 / x; });
+}
+
+std::shared_ptr<Tensor> EqualsForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return BinaryForward(a, b, [](float x, float y) { return (x == y) ? 1.0f : 0.0f; });
+}
+
 std::shared_ptr<Tensor> EqualsScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
     return UnaryForward(a, [scalar](float x) { return x == scalar ? 1.0f : 0.0f; });
 }
 
 std::shared_ptr<Tensor> LtForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    return BinaryForward(a, b, [](auto x, auto y) { return x < y ? 1 : 0; });
+    return BinaryForward(a, b, [](float x, float y) { return x < y ? 1 : 0; });
 }
 
 std::shared_ptr<Tensor> LtScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
-    return UnaryForward(a, [scalar](auto x) { return (x < scalar) ? 1 : 0; });
+    return UnaryForward(a, [scalar](float x) { return (x < scalar) ? 1 : 0; });
 }
 
 std::shared_ptr<Tensor> LeForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    return BinaryForward(a, b, [](auto x, auto y) { return (x <= y) ? 1 : 0; });
+    return BinaryForward(a, b, [](float x, float y) { return (x <= y) ? 1 : 0; });
 }
 
 std::shared_ptr<Tensor> LeScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
-    return UnaryForward(a, [scalar](auto x) { return (x <= scalar) ? 1 : 0; });
+    return UnaryForward(a, [scalar](float x) { return (x <= scalar) ? 1 : 0; });
 }
 
 std::shared_ptr<Tensor> GtForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    return BinaryForward(a, b, [](auto x, auto y) { return x > y ? 1 : 0; });
+    return BinaryForward(a, b, [](float x, float y) { return x > y ? 1 : 0; });
 }
 
 std::shared_ptr<Tensor> GtScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
-    return UnaryForward(a, [scalar](auto x) { return (x > scalar) ? 1 : 0; });
+    return UnaryForward(a, [scalar](float x) { return (x > scalar) ? 1 : 0; });
 }
 
 std::shared_ptr<Tensor> GeForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    return BinaryForward(a, b, [](auto x, auto y) { return (x >= y) ? 1 : 0; });
+    return BinaryForward(a, b, [](float x, float y) { return (x >= y) ? 1 : 0; });
 }
 
 std::shared_ptr<Tensor> GeScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
-    return UnaryForward(a, [scalar](auto x) { return (x >= scalar) ? 1 : 0; });
+    return UnaryForward(a, [scalar](float x) { return (x >= scalar) ? 1 : 0; });
 }
 
 std::shared_ptr<Tensor> OrForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    return BinaryForward(a, b, [](auto x, auto y) { return (x != 0 || y != 0) ? 1 : 0; });
+    return BinaryForward(a, b, [](float x, float y) { return (x != 0 || y != 0) ? 1 : 0; });
 }
 
 std::shared_ptr<Tensor> AndForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    return BinaryForward(a, b, [](auto x, auto y) { return (x != 0 && y != 0) ? 1 : 0; });
+    return BinaryForward(a, b, [](float x, float y) { return (x != 0 && y != 0) ? 1 : 0; });
 }
 
 std::shared_ptr<Tensor> AddForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
@@ -318,6 +338,11 @@ REGISTER_CPU_ELEMENTWISE_KERNEL(PowForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(PowBackward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(RsqrtForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(RsqrtBackward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(ExpForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(ExpBackward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(LogForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(LogBackward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(EqualsForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(EqualsScalarForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(LtForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(LtScalarForward)

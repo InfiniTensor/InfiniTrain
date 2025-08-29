@@ -180,6 +180,65 @@ std::vector<std::shared_ptr<Tensor>> Rsqrt::Backward(const std::vector<std::shar
     return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, input)};
 }
 
+std::vector<std::shared_ptr<Tensor>> Exp::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1);
+    const auto &input = input_tensors[0];
+
+    auto device = input->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "ExpForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(input)};
+}
+
+std::vector<std::shared_ptr<Tensor>> Exp::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    CHECK_EQ(grad_outputs.size(), 1);
+    const auto &grad_output = grad_outputs[0];
+
+    auto device = grad_output->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "ExpBackward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output)};
+}
+
+std::vector<std::shared_ptr<Tensor>> Log::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1);
+    const auto &input = input_tensors[0];
+
+    auto device = input->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "LogForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(input)};
+}
+
+void Log::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                       const std::vector<std::shared_ptr<Tensor>> &) {
+    const auto &input = input_tensors[0];
+    saved_tensors_ = {input};
+}
+
+std::vector<std::shared_ptr<Tensor>> Log::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    CHECK_EQ(saved_tensors_.size(), 1);
+    const auto &input = saved_tensors_[0];
+    CHECK_EQ(grad_outputs.size(), 1);
+    const auto &grad_output = grad_outputs[0];
+
+    auto device = input->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "LogBackward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, input)};
+}
+
+std::vector<std::shared_ptr<Tensor>> Equals::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 2);
+    const auto &input = input_tensors[0];
+    const auto &other = input_tensors[1];
+
+    auto device = input->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "EqualsForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(input, other)};
+}
+
+std::vector<std::shared_ptr<Tensor>> Equals::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    LOG(FATAL) << "Equals::Backward shall not be called anytime";
+    return {};
+}
+
 std::vector<std::shared_ptr<Tensor>> EqualsScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];

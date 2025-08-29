@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 
+#include "infini_train/include/autograd/function.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
@@ -26,10 +27,7 @@ struct TensorParallelGroup {
     }
 };
 
-std::vector<std::shared_ptr<Tensor>> GatherFromTPRegionFunc(const std::shared_ptr<Tensor> &input,
-                                                            TensorParallelGroup tp_group);
-
-class ColumnParallelLinear : public Module {
+class ColumnParallelLinear : public nn::Module {
 public:
     static constexpr char kType[] = "ColumnParallelLinear";
 
@@ -52,7 +50,7 @@ private:
     int64_t output_size_per_partition_ = 0;
 };
 
-class RowParallelLinear : public Module {
+class RowParallelLinear : public nn::Module {
 public:
     static constexpr char kType[] = "RowParallelLinear";
 
@@ -75,7 +73,7 @@ private:
     int64_t input_size_per_partition_ = 0;
 };
 
-class VocabParallelEmbedding : public Module {
+class VocabParallelEmbedding : public nn::Module {
 public:
     static constexpr char kType[] = "VocabParallelEmbedding";
     static constexpr char kParamWeightName[] = "weight";
@@ -93,5 +91,41 @@ private:
     int64_t vocab_size_per_partition_ = 0;
     int64_t vocab_start_index_ = 0;
     int64_t vocab_end_index_ = 0;
+};
+
+class VocabParallelCrossEntropy : public autograd::Function {
+public:
+    static constexpr char kType[] = "VocabParallelCrossEntropyFunction";
+
+    VocabParallelCrossEntropy(TensorParallelGroup tp_group, int64_t vocab_size_original = 0,
+                              float label_smoothing = 0.f)
+        : autograd::Function(kType), tp_group_(tp_group), vocab_size_original_(vocab_size_original),
+          label_smoothing_(label_smoothing) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+
+private:
+    TensorParallelGroup tp_group_;
+    float label_smoothing_ = 0.0f;
+
+    int64_t rows_ = 0;
+    int64_t vocab_size_local_ = 0;
+    int64_t vocab_size_global_ = 0;
+    int64_t vocab_size_original_ = 0; // For padded situations
+};
+
+class VocabParallelCrossEntropyLoss : public nn::Module {
+public:
+    VocabParallelCrossEntropyLoss(TensorParallelGroup tp_group, int64_t vocab_size_original = 0,
+                                  float label_smoothing = 0.f)
+        : tp_group_(tp_group), vocab_size_original_(vocab_size_original), label_smoothing_(label_smoothing){};
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+private:
+    TensorParallelGroup tp_group_;
+    float label_smoothing_ = 0.0f;
+    int64_t vocab_size_original_ = 0; // For padded situations
 };
 } // namespace infini_train::nn::parallel

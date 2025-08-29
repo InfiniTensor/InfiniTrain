@@ -128,7 +128,7 @@ int main(int argc, char **argv) {
     // Each rank has its own local model/optimizer/loss_fn
     std::vector<std::shared_ptr<TensorParallelGPT2>> models(world_size);
     std::vector<std::unique_ptr<Optimizer>> opts(world_size);
-    std::vector<std::shared_ptr<nn::CrossEntropyLoss>> loss_modules(world_size);
+    std::vector<std::shared_ptr<nn::parallel::VocabParallelCrossEntropyLoss>> loss_modules(world_size);
     std::vector<tp::TensorParallelGroup> tp_groups(world_size);
 
     DataType dtype = (FLAGS_dtype == std::string("bfloat16")) ? DataType::kBFLOAT16 : DataType::kFLOAT32;
@@ -146,7 +146,8 @@ int main(int argc, char **argv) {
 
         opts[r] = std::make_unique<optimizers::SGD>(models[r]->Parameters(), FLAGS_learning_rate);
 
-        loss_modules[r] = std::make_shared<nn::CrossEntropyLoss>();
+        // TODO(zbl): get original vocab_size dynamically
+        loss_modules[r] = std::make_shared<nn::parallel::VocabParallelCrossEntropyLoss>(tp_groups[r], 50257);
         loss_modules[r]->To(tp_groups[r].devices[r]);
     }
 

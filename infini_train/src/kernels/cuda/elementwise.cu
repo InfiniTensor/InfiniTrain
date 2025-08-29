@@ -580,6 +580,34 @@ std::shared_ptr<Tensor> RsqrtBackward(const std::shared_ptr<Tensor> &grad_output
              , INFINI_ALL_FLOATING_TYPES)
 }
 
+std::shared_ptr<Tensor> ExpForward(const std::shared_ptr<Tensor> &input) {
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return Exp(x); });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> ExpBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &output) {
+    DISPATCH(grad_output->Dtype(), return UnaryBackward(grad_output, output, [] __device__(auto y) { return y; });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> LogForward(const std::shared_ptr<Tensor> &input) {
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return Log(x); });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> LogBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &input) {
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, input, [] __device__(auto x) { return Reciprocal(x); });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> EqualsForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(),
+             return BinaryForward(a, b,
+                                  [] __device__(auto x, auto y) { return (x == y) ? decltype(x){1} : decltype(x){0}; });
+             , INFINI_ALL_TYPES)
+}
+
 std::shared_ptr<Tensor> EqualsScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
     DISPATCH(a->Dtype(),
              return UnaryForward(
@@ -785,6 +813,11 @@ REGISTER_CUDA_ELEMENTWISE_KERNEL(PowForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(PowBackward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(RsqrtForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(RsqrtBackward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(ExpForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(ExpBackward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(LogForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(LogBackward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(EqualsForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(EqualsScalarForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(LtForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(LtScalarForward)

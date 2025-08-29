@@ -27,6 +27,22 @@ private:
     std::vector<int64_t> input_dims_;
 };
 
+class IndexGather : public Function {
+public:
+    static constexpr char kType[] = "IndexGatherFunction";
+
+    IndexGather(int64_t dim = 0) : Function(kType), dim_(dim) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+
+private:
+    const int64_t dim_ = 0;
+    std::vector<int64_t> input_dims_;
+};
+
 class NoOp : public Function {
 public:
     static constexpr char kType[] = "NoOpFunction";

@@ -189,8 +189,8 @@ TensorParallelGPT2::TensorParallelGPT2(const TPGPT2Config &config) : config_(con
     modules_[kLMHeadLayerName] = std::make_shared<tp::ColumnParallelLinear>(
         /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
         /*bias=*/false, config_.tp_group,
-        // NOTE(zbl): each rank would get full [B, T, V] as logits
-        /*gather_output=*/true,
+        // NOTE(zbl): each rank would get sharded [B, T, V_local] as logits
+        /*gather_output=*/false,
         /*input_is_parallel=*/false,
         /*skip_bias_add=*/false);
 
@@ -230,12 +230,6 @@ TensorParallelGPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tens
     // TODO(dcj): add inference-time mini-optimization
     // (B, T, C) -> Linear(C, V) -> (B, T, V)
     auto logits = modules_[kLMHeadLayerName]->Forward(x3)[0];
-
-    // NOTE(zbl): Due to weight tying, we need to manually slice logits back to (B, T, V_original) at the end of forward
-    auto B = logits->Dims()[0];
-    auto T = logits->Dims()[1];
-    auto V_original = config_.original_vocab_size;
-    logits = logits->Slice({0, 0, 0}, {B, T, V_original}, {1, 1, 1});
 
     // (B, T, V_original)
     return {logits};

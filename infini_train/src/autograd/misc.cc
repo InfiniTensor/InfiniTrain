@@ -27,6 +27,34 @@ std::vector<std::shared_ptr<Tensor>> Split::Backward(const std::vector<std::shar
     return {kernel.Call<std::shared_ptr<Tensor>>(input_dims_, split_size_, dim_, grad_outputs)};
 }
 
+std::vector<std::shared_ptr<Tensor>> IndexGather::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 2);
+    const auto &input = input_tensors[0];
+    const auto &index = input_tensors[1];
+
+    auto device = input->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "IndexGatherForward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(input, index, dim_)};
+}
+
+void IndexGather::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                               const std::vector<std::shared_ptr<Tensor>> &) {
+    const auto &input = input_tensors[0];
+    const auto &index = input_tensors[1];
+    input_dims_ = input->Dims();
+    saved_tensors_ = {index};
+}
+
+std::vector<std::shared_ptr<Tensor>> IndexGather::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    CHECK_EQ(grad_outputs.size(), 1);
+    const auto &grad_output = grad_outputs[0];
+    const auto &index = saved_tensors_[0];
+
+    auto device = grad_outputs[0]->GetDevice();
+    auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "IndexGatherBackward"});
+    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, index, dim_, input_dims_)};
+}
+
 std::vector<std::shared_ptr<Tensor>> NoOp::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];

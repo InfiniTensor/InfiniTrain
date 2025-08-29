@@ -16,13 +16,12 @@
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel_functional.h"
 #include "infini_train/include/tensor.h"
-
-#include "infini_train/src/nn/parallel/scatter_gather.h"
 
 namespace infini_train::nn::parallel {
 
-// namespace {
+namespace {
 // Comm Kernel Call Functions
 std::shared_ptr<Tensor> GatherAlongLastDim(const std::shared_ptr<Tensor> &tensor, const TensorParallelGroup &tp_group) {
     int world_size = tp_group.WorldSize();
@@ -40,8 +39,7 @@ std::shared_ptr<Tensor> GatherAlongLastDim(const std::shared_ptr<Tensor> &tensor
     auto gathered_output = std::make_shared<Tensor>(output_shape, tensor->Dtype(), tensor->GetDevice());
 
 #ifdef USE_NCCL
-    auto kernel = Dispatcher::Instance().GetKernel({tensor->GetDevice()->Type(), "CommNcclAllGather"});
-    kernel.Call<void>(gathered_output, tensor);
+    function::AllGather(gathered_output, tensor);
 #else
     LOG(FATAL) << "AllGather requires NCCL enabled";
     return nullptr;
@@ -81,8 +79,7 @@ std::shared_ptr<Tensor> Reduce(const std::shared_ptr<Tensor> &tensor, const Tens
     CHECK(it != tp_group.devices.end()) << "Tensor device not in TensorParallelGroup";
 
 #ifdef USE_NCCL
-    auto kernel = Dispatcher::Instance().GetKernel({tensor->GetDevice()->Type(), "CommNcclAllReduceLocal"});
-    kernel.Call<void>(tensor);
+    function::AllReduce(tensor, function::ReduceOpType::kSum);
     return tensor;
 #else
     LOG(FATAL) << "AllReduce requires NCCL enabled";
@@ -200,7 +197,7 @@ void LinearResetParameters(std::shared_ptr<Tensor> weight, std::shared_ptr<Tenso
     }
 }
 
-// } // namespace
+} // namespace
 
 ColumnParallelLinear::ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias,
                                            TensorParallelGroup tp_group, bool gather_output, bool input_is_parallel,
@@ -362,4 +359,163 @@ VocabParallelEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>> &inpu
     return {output};
 }
 
+std::vector<std::shared_ptr<Tensor>>
+VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 2) << kType << " expects {logits, target}";
+    auto logits = input_tensors[0];
+    auto target = input_tensors[1];
+
+    auto dtype = logits->Dtype();
+    auto device = logits->GetDevice();
+
+    CHECK(target->Dtype() == DataType::kINT64) << "target must be int64";
+    CHECK_GE(label_smoothing_, 0.0f);
+    CHECK_LT(label_smoothing_, 1.0f);
+
+    vocab_size_local_ = logits->Dims().back();
+    int world = tp_group_.WorldSize();
+    int rank = tp_group_.Rank();
+    vocab_size_global_ = static_cast<int64_t>(vocab_size_local_) * world;
+    vocab_size_original_ = vocab_size_original_ == 0 ? vocab_size_global_ : vocab_size_original_;
+    CHECK_LE(vocab_size_original_, vocab_size_global_) << "Original vocab size should be <= padded vocab size";
+
+    // rows = product of all dims except last
+    rows_ = logits->NumElements() / vocab_size_local_;
+
+    // 0. Mask out the padded part to -inf
+    int64_t vocab_start = static_cast<int64_t>(rank) * vocab_size_local_;
+    int64_t vocab_end = vocab_start + vocab_size_local_;
+
+    auto col_ids = nn::init::Arange(0, vocab_size_local_, DataType::kINT64, device);
+    auto global_ids = (world > 1) ? col_ids->Add(static_cast<float>(vocab_start)) : col_ids;
+    auto valid_mask_local
+        = std::make_shared<Tensor>((global_ids < static_cast<float>(vocab_size_original_))->To(logits->Dtype()))
+              ->View({1, vocab_size_local_});
+
+    auto logits_masked = logits->MaskedFill(1 - valid_mask_local, -std::numeric_limits<float>::infinity());
+
+    // 1. Calculate global max value
+    auto local_max = logits_masked->Max(-1);
+    auto global_max = std::make_shared<Tensor>(local_max->Clone());
+    if (world > 1) {
+#ifdef USE_NCCL
+        function::AllReduce(global_max, function::ReduceOpType::kMax);
+#else
+        LOG(FATAL) << "AllReduce requires NCCL enabled";
+        return {nullptr};
+#endif
+    }
+    auto shifted = logits_masked->Sub(global_max->Unsqueeze(-1));
+
+    // 2. Prepare vocab range and mask
+    std::shared_ptr<Tensor> target_mask;
+    std::shared_ptr<Tensor> masked_target;
+    if (world > 1) {
+        target_mask = (target < static_cast<float>(vocab_start)) | (target >= static_cast<float>(vocab_end));
+        masked_target = target - static_cast<float>(vocab_start);
+        masked_target = masked_target->MaskedFill(target_mask, 0);
+    } else {
+        target_mask = std::make_shared<Tensor>(target->Dims(), DataType::kINT64, target->GetDevice());
+        target_mask->Fill(0);
+        masked_target = target;
+    }
+
+    // 3, Calculate exp(shifted) and global sum_exp
+    auto exp_local = shifted->Exp();
+    auto sum_exp_local = exp_local->Sum(-1);
+    auto sum_exp = (world > 1) ? ReduceFromTPRegionFunc(sum_exp_local, tp_group_)[0] : sum_exp_local;
+
+    // 4. Perform Softmax（local shards but normalize globally）
+    auto softmax_local = exp_local->Div(sum_exp->Unsqueeze(-1));
+
+    // 5. Perform allreduce to get global predicted_logit
+    auto pred_local = shifted->Gather(-1, masked_target->Unsqueeze(-1))->Squeeze(-1);
+    if (world > 1) {
+        pred_local = pred_local->MaskedFill(std::make_shared<Tensor>(target_mask->To(pred_local->Dtype())), 0.0f);
+    }
+    auto predicted = (world > 1) ? ReduceFromTPRegionFunc(pred_local, tp_group_)[0] : pred_local;
+
+    // 6. loss = log(sum_exp) - predicted_logit
+    auto log_sum_exp = sum_exp->Log();
+    auto loss = log_sum_exp->Sub(predicted);
+
+    // 7. Label smoothing（According to Megatron-LM）
+    // TODO(zbl): adjust smoothing coef according to vocab_size_original
+    if (label_smoothing_ > 0.0f) {
+        // mean_logp over *valid tokens only*:
+        // mean_logp = (sum_i_in_valid shifted_i) / vocab_size_original_ - log_sum_exp
+        auto shifted2d = shifted->View({rows_, vocab_size_local_});
+        auto sum_shifted_valid_local = (shifted2d->Mul(valid_mask_local))->Sum(-1);
+
+        auto sum_shifted_valid
+            = (world > 1) ? ReduceFromTPRegionFunc(sum_shifted_valid_local, tp_group_)[0] : sum_shifted_valid_local;
+
+        auto mean_logp = sum_shifted_valid->Mul(1.f / static_cast<float>(vocab_size_original_))->Sub(log_sum_exp);
+
+        float smoothing = label_smoothing_;
+        loss = loss->Mul(1.0f - smoothing)->Sub(mean_logp->Mul(smoothing));
+    }
+
+    // 8. Save for backward
+    saved_tensors_ = {softmax_local, target_mask, masked_target, valid_mask_local};
+
+    return {loss};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+VocabParallelCrossEntropy::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    CHECK_EQ(grad_outputs.size(), 1);
+
+    auto softmax_local = saved_tensors_[0];
+    auto target_mask = std::make_shared<Tensor>(saved_tensors_[1]->To(softmax_local->Dtype()));
+    auto masked_target = saved_tensors_[2];
+    auto valid_mask_local = saved_tensors_[3];
+
+    // View in 2D
+    auto softmax_2d = softmax_local->View({rows_, vocab_size_local_});
+    auto grad_output_2d = grad_outputs[0]->View({rows_, 1});
+    auto grad2d = softmax_2d->Mul(grad_output_2d);
+
+    // Build one-hot(row, masked_target) and update softmax
+    // softmax_update = 1 - target_mask
+    auto softmax_update = 1 - target_mask->View({rows_});
+
+    // row_scale = (1 - mask) * dloss * (1 - smoothing), according to Megatron-LM
+    auto row_scale = softmax_update->Mul(grad_outputs[0]->View({rows_}))->Mul(1.0f - label_smoothing_);
+
+    // onehot: zeros([rows, Vp]); onehot[r, idx[r]] += row_scale[r]; grad2d -= onehot
+    // FIXME(zbl): support flexible broadcasting in binary(a, b), or other way of building one-hot
+    // col: (1, V_local)
+    auto col = nn::init::Arange(0, vocab_size_local_, DataType::kINT64, softmax_local->GetDevice())
+                   ->View({1, vocab_size_local_});
+    // one_hot: (rows, V_local)
+    auto one_hot = col->RepeatInterleave(rows_, 0)->View({rows_, vocab_size_local_});
+    // target2d: (rows, 1)
+    auto target2d = masked_target->View({rows_, 1});
+    // mask2d: (rows, V_local)
+    auto mask2d = std::make_shared<Tensor>((one_hot == target2d)->To(softmax_local->Dtype()));
+    grad2d = grad2d->Sub(mask2d->Mul(row_scale->View({rows_, 1})));
+
+    // TODO(zbl): adjust smoothing coef according to vocab_size_original
+    if (label_smoothing_ > 0.0f) {
+        float smoothing = label_smoothing_ / static_cast<float>(vocab_size_original_);
+        grad2d = grad2d - grad_output_2d->Mul(valid_mask_local)->Mul(smoothing);
+    }
+    grad2d = grad2d->Mul(valid_mask_local);
+
+    auto grad_logits = grad2d->View(softmax_local->Dims());
+
+    return {grad_logits, nullptr};
+}
+
+std::vector<std::shared_ptr<Tensor>>
+VocabParallelCrossEntropyLoss::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 2);
+    auto loss_tensor = std::make_shared<VocabParallelCrossEntropy>(tp_group_, vocab_size_original_, label_smoothing_)
+                           ->Apply(input_tensors)[0];
+    // NOTE(zbl): loss should be a scalar
+    std::shared_ptr<Tensor> scalar = loss_tensor;
+    while (scalar->Dims().size() > 0) { scalar = scalar->Mean(-1); }
+    return {scalar};
+}
 } // namespace infini_train::nn::parallel
