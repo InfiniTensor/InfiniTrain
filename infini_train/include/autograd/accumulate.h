@@ -14,8 +14,6 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &) override;
 
-    void BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int) override;
-
 private:
     std::shared_ptr<Tensor> grad_ = nullptr;
     float learning_rate_ = 1.0f;

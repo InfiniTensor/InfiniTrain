@@ -13,17 +13,16 @@ std::vector<std::shared_ptr<Tensor>> AccumulateGrad::Forward(const std::vector<s
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>> AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &) {
-    LOG(FATAL) << "AccumulateGrad::Backward shall not be called directly!";
-    return {};
-}
-
-void AccumulateGrad::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int) {
+std::vector<std::shared_ptr<Tensor>>
+AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    CHECK_EQ(grad_outputs.size(), 1);
+    auto grad_output = grad_outputs[0];
     if (grad_output) {
         auto device = grad_->GetDevice();
         device->SetDevice();
         auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
         kernel.Call<void>(grad_output, learning_rate_, grad_);
     }
+    return {};
 }
 } // namespace infini_train::autograd

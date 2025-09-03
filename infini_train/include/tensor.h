@@ -176,7 +176,7 @@ private:
     bool requires_grad_ = false;
     bool is_leaf_ = true;
     std::shared_ptr<autograd::Function> grad_fn_ = nullptr;
-    int output_idx_ = -1;
+    int output_idx_ = 0;
 };
 
 std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar);
