@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
-#include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
 class Sigmoid : public Function {

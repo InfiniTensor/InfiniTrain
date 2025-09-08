@@ -4,6 +4,7 @@
 
 #include "infini_train/include/autograd/accumulate.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
@@ -20,11 +21,12 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     bool output_requires_grad = false;
     for (int idx = 0; idx < input_tensors.size(); ++idx) {
         const auto &input_tensor = input_tensors[idx];
-        // FIXME(dcj): should set grad_fn every time?
         if (input_tensor->requires_grad() && input_tensor->is_leaf()) {
-            input_tensor->set_grad_fn(std::make_shared<AccumulateGrad>(input_tensor->grad()));
+            next_functions_.emplace_back(input_tensor->grad_accumulator(), input_tensor->output_idx());
+            input_tensor->grad_accumulator()->IncreaseDependenciesNumber();
+        } else {
+            next_functions_.emplace_back(input_tensor->grad_fn(), input_tensor->output_idx());
         }
-        next_functions_.emplace_back(input_tensor->grad_fn(), input_tensor->output_idx());
         if (input_tensor->grad_fn()) {
             input_tensor->grad_fn()->IncreaseDependenciesNumber();
         }
@@ -49,7 +51,8 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
     const auto *device = grad_output->GetDevice();
     device->SetDevice();
 
-    // FIXME(dcj): accumulate function
+    // NOTE(dcj): The accumulate autograd function has no grad_outputs.
+    // Temporarily resize the vector to hold one nullptr as a buffer.
     if (grad_outputs_.empty()) {
         grad_outputs_.resize(1, nullptr);
     }
@@ -57,8 +60,8 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
         grad_outputs_[grad_output_idx] = grad_output;
         ++grad_outputs_reached_;
     } else {
-        auto accumulate_function = std::make_shared<AccumulateGrad>(grad_outputs_.at(grad_output_idx));
-        accumulate_function->BackwardPartial(grad_output, 0);
+        auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
+        kernel.Call<void>(grad_output, 1.0f, grad_outputs_.at(grad_output_idx));
     }
     ++dependencies_reached_;
     if (grad_outputs_reached_ == grad_outputs_.size()
@@ -79,5 +82,6 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
         }
     }
 }
+
 void Function::IncreaseDependenciesNumber() { ++dependencies_number_; }
 } // namespace infini_train::autograd

@@ -1,21 +1,19 @@
 #include "infini_train/include/nn/parallel/distributed_data_parallel.h"
 
-#include <format>
 #include <memory>
-#include <optional>
-#include <thread>
 #include <vector>
 
 #include "glog/logging.h"
 
-#include "infini_train/include/datatype.h"
-#include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
 
 #include "infini_train/include/nn/parallel_functional.h"
 
 namespace infini_train::nn::parallel {
+namespace {
+constexpr char kModuleName[] = "module";
+} // namespace
 
 DistributedDataParallel::Rank::Rank(int process_rank, int thread_rank, int process_size, int thread_size)
     : process_rank_(process_rank), thread_rank_(thread_rank), process_size_(process_size), thread_size_(thread_size) {}
@@ -30,4 +28,18 @@ int DistributedDataParallel::Rank::WorldSize() const { return process_size_ * th
 bool DistributedDataParallel::Rank::IsDDP() const { return process_size_ * thread_size_ > 1; }
 
 bool DistributedDataParallel::Rank::IsMainRank() const { return thread_rank_ == 0; }
+
+DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, int device_id) {
+    for (auto &param : module->Parameters()) {
+        auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(function::ReduceOpType::kAvg);
+        param->RegisterPostAccumulateGradHook(std::move(hook));
+    }
+    modules_[kModuleName] = std::move(module);
+}
+
+std::vector<std::shared_ptr<Tensor>>
+DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    return modules_[kModuleName]->Forward(input_tensors);
+}
+
 } // namespace infini_train::nn::parallel

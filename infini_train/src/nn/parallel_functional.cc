@@ -8,6 +8,7 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/reduce_op_type.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel::function {

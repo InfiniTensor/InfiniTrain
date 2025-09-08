@@ -15,6 +15,7 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel_functional.h"
+#include "infini_train/include/nn/reduce_op_type.h"
 #include "infini_train/include/optimizer.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
@@ -122,6 +123,11 @@ void Train(const nn::parallel::DistributedDataParallel::Rank &rank) {
 
     model->To(device);
 
+    if (rank.IsDDP()) {
+        model = std::make_shared<nn::parallel::DistributedDataParallel>(
+            nn::parallel::DistributedDataParallel(model, rank.thread_rank()));
+    }
+
     // select the data type
     // TODO(lzm): change to solely rely on the weight file info for determining the dtype when autocast is supported
     DataType dtype;
@@ -218,11 +224,6 @@ void Train(const nn::parallel::DistributedDataParallel::Rank &rank) {
             }
             LOG(INFO) << "Rank " << rank.thread_rank() << ": start backward";
             loss->Backward();
-            if (rank.IsDDP()) {
-                for (auto param : model->Parameters()) {
-                    nn::parallel::function::AllReduce(param->grad(), nn::parallel::function::ReduceOpType::kAvg);
-                }
-            }
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish backward";
         }
         optimizer.Step();

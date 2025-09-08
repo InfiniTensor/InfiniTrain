@@ -11,6 +11,11 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
+namespace infini_train {
+class Tensor;
+class Device;
+} // namespace infini_train
+
 namespace infini_train::nn {
 class Module;
 
@@ -77,6 +82,7 @@ template <typename Derived> class CloneableModule : public Module {
 public:
     CloneableModule() = default;
     explicit CloneableModule(const std::string &type) : Module(type) {}
+
     std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const override {
         return std::make_shared<Derived>(static_cast<const Derived &>(*this));
     }

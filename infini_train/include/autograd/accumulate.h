@@ -8,14 +8,14 @@
 namespace infini_train::autograd {
 class AccumulateGrad final : public Function {
 public:
-    explicit AccumulateGrad(std::shared_ptr<Tensor> grad, float learning_rate = 1.0f);
+    AccumulateGrad(std::shared_ptr<Tensor> tensor, float learning_rate = 1.0f);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &) override;
 
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &) override;
 
 private:
-    std::shared_ptr<Tensor> grad_ = nullptr;
+    std::shared_ptr<Tensor> tensor_ = nullptr;
     float learning_rate_ = 1.0f;
 };
 } // namespace infini_train::autograd
