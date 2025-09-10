@@ -124,6 +124,7 @@ TPMLP::TPMLP(const TPGPT2Config &config) {
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
         /*skip_bias_add=*/false);
+
     modules_[kGeluLayerName] = std::make_shared<NewGELU>();
 
     // c_proj: RowParallel (input parallel, output full)

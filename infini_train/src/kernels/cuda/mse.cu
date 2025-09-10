@@ -1,8 +1,10 @@
 #include <cub/block/block_reduce.cuh>
 #include <cuda_runtime.h>
-#include <numeric>
 
-#include "infini_train/include/common/cuda/common_cuda.cuh"
+#include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/common/cuda/kernel_helper.cuh"
+#include "infini_train/include/dispatcher.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
 template <size_t BLOCK_SIZE, typename T>

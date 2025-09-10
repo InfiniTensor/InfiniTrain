@@ -6,7 +6,9 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/common/cuda/common_cuda.cuh"
+#include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/dispatcher.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
 __device__ __forceinline__ int64_t UpperBoundI64(const int64_t *offsets, int64_t n_plus_1, int64_t x) {

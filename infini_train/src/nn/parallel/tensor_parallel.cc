@@ -97,7 +97,7 @@ public:
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
         // Each rank should get the same `input`
         // No need to perform Broadcast-like copy
-        return {input_tensors[0]};
+        return {std::make_shared<Tensor>(input_tensors[0]->Clone())};
     };
 
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
@@ -160,7 +160,7 @@ public:
     };
 
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
-        return {grad_outputs[0]};
+        return {std::make_shared<Tensor>(grad_outputs[0]->Clone())};
     };
 
 private:
@@ -330,28 +330,9 @@ VocabParallelEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>> &inpu
         = std::make_shared<autograd::Embedding>()->Apply({masked_input, parameters_[kParamWeightName]})[0];
 
     if (world_size > 1) {
-        // TODO(zbl): MaskedFill itself does not support row-wise mask, needs implementation
-        //            For now, use RepeatInterleave + MaskedFill to work around
-        auto MaskRowsLike = [](const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &row_mask,
-                               float value) -> std::shared_ptr<Tensor> {
-            const auto &input_shape = input->Dims();
-            const int64_t H = input_shape.back();
-            const int64_t rows = input->NumElements() / H;
-            std::shared_ptr<Tensor> mask1d;
-            if (row_mask->NumElements() == rows) {
-                mask1d = (row_mask->Dims().size() == 1) ? row_mask : row_mask->View({rows});
-            } else {
-                LOG(FATAL) << "row_mask must have product of all dims except last (expected " << rows << ", got "
-                           << row_mask->NumElements() << ")";
-            }
-
-            auto fullMask
-                = std::make_shared<Tensor>(mask1d->RepeatInterleave(H, 0)->View(input_shape)->To(input->Dtype()));
-
-            return input->MaskedFill(fullMask, value);
-        };
-        // Same as `local_output[input_mask, :] = 0.0`
-        local_output = MaskRowsLike(local_output, input_mask, 0.0f);
+        // NOTE(zbl): Already extend MaskedFill to support row-wise mask
+        //            Same as `local_output[input_mask, :] = 0.0`
+        local_output = local_output->MaskedFill(std::make_shared<Tensor>(input_mask->To(local_output->Dtype())), 0.0f);
     }
 
     auto output = ReduceFromTPRegionFunc(local_output, tp_group_)[0];
@@ -466,46 +447,18 @@ std::vector<std::shared_ptr<Tensor>>
 VocabParallelCrossEntropy::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
 
+    auto grad_output = grad_outputs[0];
     auto softmax_local = saved_tensors_[0];
     auto target_mask = std::make_shared<Tensor>(saved_tensors_[1]->To(softmax_local->Dtype()));
     auto masked_target = saved_tensors_[2];
     auto valid_mask_local = saved_tensors_[3];
 
-    // View in 2D
-    auto softmax_2d = softmax_local->View({rows_, vocab_size_local_});
-    auto grad_output_2d = grad_outputs[0]->View({rows_, 1});
-    auto grad2d = softmax_2d->Mul(grad_output_2d);
-
-    // Build one-hot(row, masked_target) and update softmax
-    // softmax_update = 1 - target_mask
-    auto softmax_update = 1 - target_mask->View({rows_});
-
-    // row_scale = (1 - mask) * dloss * (1 - smoothing), according to Megatron-LM
-    auto row_scale = softmax_update->Mul(grad_outputs[0]->View({rows_}))->Mul(1.0f - label_smoothing_);
-
-    // onehot: zeros([rows, Vp]); onehot[r, idx[r]] += row_scale[r]; grad2d -= onehot
-    // FIXME(zbl): support flexible broadcasting in binary(a, b), or other way of building one-hot
-    // col: (1, V_local)
-    auto col = nn::init::Arange(0, vocab_size_local_, DataType::kINT64, softmax_local->GetDevice())
-                   ->View({1, vocab_size_local_});
-    // one_hot: (rows, V_local)
-    auto one_hot = col->RepeatInterleave(rows_, 0)->View({rows_, vocab_size_local_});
-    // target2d: (rows, 1)
-    auto target2d = masked_target->View({rows_, 1});
-    // mask2d: (rows, V_local)
-    auto mask2d = std::make_shared<Tensor>((one_hot == target2d)->To(softmax_local->Dtype()));
-    grad2d = grad2d->Sub(mask2d->Mul(row_scale->View({rows_, 1})));
-
-    // TODO(zbl): adjust smoothing coef according to vocab_size_original
-    if (label_smoothing_ > 0.0f) {
-        float smoothing = label_smoothing_ / static_cast<float>(vocab_size_original_);
-        grad2d = grad2d - grad_output_2d->Mul(valid_mask_local)->Mul(smoothing);
-    }
-    grad2d = grad2d->Mul(valid_mask_local);
-
-    auto grad_logits = grad2d->View(softmax_local->Dims());
-
-    return {grad_logits, nullptr};
+    auto device = grad_output->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "VocabParallelCrossEntropyBackward"});
+    auto grad_input
+        = kernel.Call<std::shared_ptr<Tensor>>(grad_output, softmax_local, target_mask, masked_target, valid_mask_local,
+                                               vocab_size_local_, vocab_size_original_, label_smoothing_);
+    return {grad_input, nullptr};
 }
 
 std::vector<std::shared_ptr<Tensor>>

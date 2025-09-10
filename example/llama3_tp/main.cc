@@ -1,22 +1,21 @@
-#include <chrono>
 #include <cstdlib>
 #include <format>
 #include <memory>
 #include <optional>
-#include <thread>
-#include <unordered_map>
 #include <unordered_set>
-#include <vector>
 
+#ifdef USE_CUDA
+#include "cuda_runtime.h"
+#endif
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
+#include "infini_train/include/nn/parallel_functional.h"
 #include "infini_train/include/optimizer.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
@@ -25,16 +24,16 @@
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
 #include "example/common/utils.h"
-#include "example/gpt2_tp/net.h"
+#include "example/llama3_tp/net.h"
 
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_string(input_val_bin, "", "input .bin to eval validation loss on");
 DEFINE_string(tokenizer_bin, "", "input .bin to tokenizer");
 // model bin file is downloaded and processed using the script at
-// https://github.com/karpathy/llm.c/blob/master/train_gpt2.py
+// https://github.com/karpathy/llm.c/blob/master/train_llama3.py
 DEFINE_string(llmc_filepath, "", "llmc model file path to load from");
-DEFINE_string(model, "gpt2", "gpt2|gpt2-medium|gpt2-large|gpt2-xl|d12|d24|d36|d48");
+DEFINE_string(model, "llama3", "meta-llama/Meta-Llama-3.1-8B");
 // token layout for each step of the optimization
 DEFINE_uint32(batch_size, 4, "batch size, in units of #batch dimensions");
 DEFINE_uint32(sequence_length, 64, "sequence length");
@@ -44,7 +43,7 @@ DEFINE_uint32(num_iteration, 10, "number of iterations to run");
 DEFINE_uint32(freq_generate_txt, 10, "frequency of text generation");
 DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
-DEFINE_double(learning_rate, 1e-4, "learning rate warmup iterations");
+DEFINE_double(learning_rate, 1e-5, "learning rate warmup iterations");
 // evaluation
 DEFINE_uint32(val_loss_every, 0, "every how many steps to evaluate val loss?");
 DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
@@ -63,41 +62,26 @@ namespace tp = infini_train::nn::parallel;
 
 namespace {
 // validation
-const std::unordered_set<std::string> kSupportedModels
-    = {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "d12", "d24", "d36", "d48"};
+const std::unordered_set<std::string> kSupportedModels = {"llama3"};
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 
-//
-const std::unordered_map<std::string, TPGPT2Config> kModelToConfigs = {
-    {"d12", {.block_size = 1024, .vocab_size = 50257, .n_layer = 12, .n_head = 12, .n_embd = 768}},
-    {"d24", {.block_size = 1024, .vocab_size = 50257, .n_layer = 24, .n_head = 16, .n_embd = 1024}},
-    {"d36", {.block_size = 1024, .vocab_size = 50257, .n_layer = 36, .n_head = 20, .n_embd = 1280}},
-    {"d48", {.block_size = 1024, .vocab_size = 50257, .n_layer = 48, .n_head = 25, .n_embd = 1600}},
-};
-const std::unordered_map<std::string, TensorParallelGPT2::ModelType> kStrToModelType = {
-    {"gpt2", TensorParallelGPT2::ModelType::kGPT2},
-    {"gpt2-medium", TensorParallelGPT2::ModelType::kGPT2Medium},
-    {"gpt2-large", TensorParallelGPT2::ModelType::kGPT2Large},
-    {"gpt2-xl", TensorParallelGPT2::ModelType::kGPT2XL},
-};
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
 
-int main(int argc, char **argv) {
+int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
-    const uint32_t tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length;
-    CHECK_EQ(FLAGS_total_batch_size % tokens_per_fwdbwd, 0u)
-        << "total_batch_size must be divisible by batch_size*sequence_length";
-    const uint32_t grad_accum_steps = FLAGS_total_batch_size / tokens_per_fwdbwd;
+    const auto tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length;
+    CHECK_EQ(FLAGS_total_batch_size % tokens_per_fwdbwd, 0);
+    const auto grad_accum_steps = FLAGS_total_batch_size / tokens_per_fwdbwd;
     LOG(INFO) << "total desired batch size: " << FLAGS_total_batch_size
               << " => calculated gradient accumulation steps: " << grad_accum_steps;
 
@@ -112,21 +96,20 @@ int main(int argc, char **argv) {
     CHECK_LE(world_size, cuda_devs.size()) << "tp_world_size should be less than device count";
     LOG(INFO) << "TP world size = " << world_size;
 
-    auto build_model = [&](tp::TensorParallelGroup tp_group) -> std::shared_ptr<TensorParallelGPT2> {
-        std::shared_ptr<TensorParallelGPT2> model = nullptr;
+    auto build_model = [&](tp::TensorParallelGroup tp_group) -> std::shared_ptr<TensorParallelLLaMA3> {
+        std::shared_ptr<TensorParallelLLaMA3> model = nullptr;
         if (!FLAGS_llmc_filepath.empty()) {
-            model = TensorParallelGPT2::FromLLMC(FLAGS_llmc_filepath, tp_group);
-        } else if (kModelToConfigs.count(FLAGS_model)) {
-            auto model_config = kModelToConfigs.at(FLAGS_model);
-            model = std::make_shared<TensorParallelGPT2>(model_config);
+            model = TensorParallelLLaMA3::FromLLMC(FLAGS_llmc_filepath, tp_group);
         } else {
-            model = TensorParallelGPT2::FromPretrained(kStrToModelType.at(FLAGS_model));
+            TPLLaMA3Config model_config = TPLLaMA3Config();
+            model_config.tp_group = tp_group;
+            model = std::make_shared<TensorParallelLLaMA3>(model_config);
         }
         return model;
     };
 
     // Each rank has its own local model/optimizer/loss_fn
-    std::vector<std::shared_ptr<TensorParallelGPT2>> models(world_size);
+    std::vector<std::shared_ptr<TensorParallelLLaMA3>> models(world_size);
     std::vector<std::unique_ptr<Optimizer>> opts(world_size);
     std::vector<std::shared_ptr<nn::parallel::VocabParallelCrossEntropyLoss>> loss_modules(world_size);
     std::vector<tp::TensorParallelGroup> tp_groups(world_size);
@@ -144,10 +127,10 @@ int main(int argc, char **argv) {
             models[r]->To(dtype);
         }
 
-        opts[r] = std::make_unique<optimizers::SGD>(models[r]->Parameters(), FLAGS_learning_rate);
+        opts[r] = std::make_unique<optimizers::Adam>(models[r]->Parameters(), FLAGS_learning_rate);
 
         // TODO(zbl): get original vocab_size dynamically
-        loss_modules[r] = std::make_shared<nn::parallel::VocabParallelCrossEntropyLoss>(tp_groups[r], 50257);
+        loss_modules[r] = std::make_shared<nn::parallel::VocabParallelCrossEntropyLoss>(tp_groups[r]);
         loss_modules[r]->To(tp_groups[r].devices[r]);
     }
 
@@ -155,8 +138,8 @@ int main(int argc, char **argv) {
                             FLAGS_batch_size);
     std::optional<DataLoader> val_loader = std::nullopt;
     if (!FLAGS_input_val_bin.empty()) {
-        val_loader.emplace(std::make_shared<TinyShakespeareDataset>(FLAGS_input_val_bin, FLAGS_sequence_length),
-                           FLAGS_batch_size);
+        val_loader = DataLoader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_val_bin, FLAGS_sequence_length),
+                                FLAGS_batch_size);
     }
     auto train_iter = train_loader.begin();
 
@@ -166,20 +149,21 @@ int main(int argc, char **argv) {
         tokenizer = std::make_unique<Tokenizer>(FLAGS_tokenizer_bin);
     }
 
-    LOG(INFO) << "Start training GPT2 with Tensor Parallel";
+    LOG(INFO) << "Start training LLaMA3 with Tensor Parallel";
     auto *cpu = DeviceManager::Instance()->GetDefaultDevice();
 
-    for (uint32_t step = 0; step < FLAGS_num_iteration; ++step) {
+    for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
         const bool last_step = step == FLAGS_num_iteration;
 
         const auto iter_start = std::chrono::high_resolution_clock::now();
 
-        // TODO(zbl): implement this
-        if (FLAGS_val_loss_every > 0 && (step % FLAGS_val_loss_every == 0) && val_loader.has_value()) {
-            LOG(FATAL) << "[TP] val loop not implemented in this example.";
+        // once in a while evaluate the validation dataset
+        if (FLAGS_val_loss_every > 0 && (step % FLAGS_val_loss_every == 0 || last_step) && val_loader.has_value()) {
+            // TODO(dcj): implement this after model.eval() is supported
         }
-        if (FLAGS_sample_every > 0 && (step % FLAGS_sample_every == 0)) {
-            LOG(FATAL) << "[TP] sampling is not implemented in this example.";
+        // once in a while perform model inference on the master process
+        if (FLAGS_sample_every > 0 && (step % FLAGS_sample_every == 0 || last_step)) {
+            // TODO(dcj): implement this after model.eval() is supported
         }
 
         // bit confusing: we want to make sure to eval and sample on 0th iteration
@@ -202,8 +186,8 @@ int main(int argc, char **argv) {
 #ifdef PROFILE_MODE
         Profiler::Instance().SetTag("Step_" + std::to_string(step));
 #endif
-        for (uint32_t micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
-            // x: [B,T], y: [B,T]
+        for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
+            // (bs, seq_len), (bs, seq_len)
             auto [x, y] = *train_iter;
             ++train_iter;
 
@@ -214,7 +198,6 @@ int main(int argc, char **argv) {
                 y_rank[r] = std::make_shared<Tensor>(y->To(tp_groups[r].devices[r]));
             }
 
-            LOG(INFO) << "start forward";
             // Perform forward on each rank
             std::vector<std::shared_ptr<Tensor>> local_logits(world_size);
             std::vector<float> local_losses(world_size, 0.0f);
@@ -259,22 +242,22 @@ int main(int argc, char **argv) {
 
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
-        const double toks_per_sec = FLAGS_total_batch_size / (duration_us / 1e6);
+        const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
-        LOG(ERROR) << std::format(
-            "step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, tp_world={})", step + 1,
-            FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3, toks_per_sec, world_size);
+        LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s)",
+                                  step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f, tps);
 
         if ((step + 1) % FLAGS_freq_generate_txt == 0 && tokenizer) {
             LOG(FATAL) << "[TP] text generation skipped in this example.";
         }
     }
 #ifdef PROFILE_MODE
-    Profiler::Instance().Report("gpt2_tp.report", Profiler::SortBy::DeviceTimePercentage);
-    Profiler::Instance().PrintRecords("gpt2_tp.records.log");
+    Profiler::Instance().Report("llama3_tp.report", Profiler::SortBy::DeviceTimePercentage);
+    Profiler::Instance().PrintRecords("llama3_tp.records.log");
 #endif
 
     gflags::ShutDownCommandLineFlags();
     google::ShutdownGoogleLogging();
+
     return 0;
 }
