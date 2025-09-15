@@ -1,7 +1,7 @@
 #include <memory>
 #include <tuple>
 
-#include "cub/block/block_reduce.cuh"
+#include <cub/block/block_reduce.cuh>
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"

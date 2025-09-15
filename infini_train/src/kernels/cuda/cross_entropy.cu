@@ -2,8 +2,8 @@
 #include <limits>
 #include <numeric>
 
-#include "cub/block/block_reduce.cuh"
-#include "cuda_runtime.h"
+#include <cub/block/block_reduce.cuh>
+#include <cuda_runtime.h>
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"

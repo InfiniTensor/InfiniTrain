@@ -4,15 +4,14 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
-
-#include "glog/logging.h"
-
 #ifdef USE_CUDA
-#include "cublas_v2.h"
+#include <cublas_v2.h>
 #endif
 #ifdef USE_NCCL
-#include "nccl.h"
+#include <nccl.h>
 #endif
+
+#include "glog/logging.h"
 
 namespace infini_train {
 

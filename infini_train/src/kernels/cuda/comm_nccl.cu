@@ -6,9 +6,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "cuda_runtime.h"
+#include <cuda_runtime.h>
+#include <nccl.h>
+
 #include "glog/logging.h"
-#include "nccl.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/device.h"

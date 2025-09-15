@@ -6,8 +6,9 @@
 #include <numeric>
 
 #ifdef USE_CUDA
-#include "cuda_runtime_api.h"
+#include <cuda_runtime_api.h>
 #endif
+
 #include "Eigen/Dense"
 #include "glog/logging.h"
 

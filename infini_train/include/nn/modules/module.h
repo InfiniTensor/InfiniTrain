@@ -6,8 +6,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "glog/logging.h"
-
 #include "infini_train/include/datatype.h"
 
 namespace infini_train {
@@ -48,10 +46,7 @@ public:
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
 
-    virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-        LOG(FATAL) << "Forward function not implemented for this module";
-        return {};
-    }
+    virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
 
     virtual void To(const Device *device);
 

@@ -3,8 +3,8 @@
 #include <numeric>
 #include <vector>
 
-#include "cub/block/block_reduce.cuh"
-#include "cublas_v2.h"
+#include <cub/block/block_reduce.cuh>
+#include <cublas_v2.h>
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"

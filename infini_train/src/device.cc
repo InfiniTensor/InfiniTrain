@@ -3,14 +3,16 @@
 #include <cstdint>
 #include <vector>
 
+#ifdef USE_NCCL
+#include <mutex>
+#include <nccl.h>
+#endif
+
+#include "glog/logging.h"
+
 #ifdef USE_CUDA
 #include "infini_train/include/common/cuda/common_cuda.h"
 #endif
-#ifdef USE_NCCL
-#include "nccl.h"
-#include <mutex>
-#endif
-#include "glog/logging.h"
 
 namespace infini_train {
 Device::Device(DeviceType type, int8_t index) : type_(type), index_(index) {
