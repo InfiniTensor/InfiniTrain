@@ -5,10 +5,10 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/tensor.h"
-
-#include "infini_train/include/nn/parallel_functional.h"
 
 namespace infini_train::nn::parallel {
 namespace {

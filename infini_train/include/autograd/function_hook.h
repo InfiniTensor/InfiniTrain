@@ -2,9 +2,11 @@
 
 #include <memory>
 
-#include "infini_train/include/nn/parallel_functional.h"
-#include "infini_train/include/nn/reduce_op_type.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
+
+namespace infini_train {
+class Tensor;
+}
 
 namespace infini_train::autograd {
 class PostAccumulateGradHook {

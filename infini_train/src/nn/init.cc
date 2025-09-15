@@ -1,6 +1,5 @@
 #include "infini_train/include/nn/init.h"
 
-#include <algorithm>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -16,6 +15,7 @@
 #include "omp.h"
 #endif
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::init {

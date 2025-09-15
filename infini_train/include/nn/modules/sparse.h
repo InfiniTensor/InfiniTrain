@@ -4,7 +4,11 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/tensor.h"
+
+namespace infini_train {
+class Tensor;
+class Device;
+} // namespace infini_train
 
 namespace infini_train::nn {
 class Embedding : public CloneableModule<Embedding> {

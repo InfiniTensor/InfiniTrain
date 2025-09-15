@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "infini_train/include/nn/parallel_functional.h"
+#include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {

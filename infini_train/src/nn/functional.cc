@@ -11,6 +11,7 @@
 #include "infini_train/include/autograd/softmax.h"
 #include "infini_train/include/autograd/transform.h"
 #include "infini_train/include/nn/init.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::function {
 std::shared_ptr<Tensor> Tril(const std::shared_ptr<Tensor> &input, int64_t diagonal) {

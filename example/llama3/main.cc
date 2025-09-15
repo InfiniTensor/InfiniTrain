@@ -15,8 +15,8 @@
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/distributed_data_parallel.h"
-#include "infini_train/include/nn/parallel_functional.h"
-#include "infini_train/include/nn/reduce_op_type.h"
+#include "infini_train/include/nn/parallel/parallel_functional.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/optimizer.h"
 
 #ifdef PROFILE_MODE

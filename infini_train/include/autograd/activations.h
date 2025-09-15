@@ -5,6 +5,10 @@
 
 #include "infini_train/include/autograd/function.h"
 
+namespace infini_train {
+class Tensor;
+}
+
 namespace infini_train::autograd {
 class Sigmoid : public Function {
 public:

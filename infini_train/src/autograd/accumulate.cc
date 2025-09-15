@@ -4,6 +4,7 @@
 
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/dispatcher.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
 AccumulateGrad::AccumulateGrad(std::shared_ptr<Tensor> tensor, float learning_rate)

@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "Eigen/Dense"
-#include "datatype.h"
 #include "glog/logging.h"
 
 #include "infini_train/include/datatype.h"

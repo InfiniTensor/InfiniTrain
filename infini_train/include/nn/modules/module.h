@@ -8,8 +8,7 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/device.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/datatype.h"
 
 namespace infini_train {
 class Tensor;

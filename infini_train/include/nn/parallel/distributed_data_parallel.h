@@ -2,9 +2,12 @@
 
 #include <memory>
 
-#include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/reduce_op_type.h"
+
+namespace infini_train {
+class Tensor;
+class Device;
+} // namespace infini_train
 
 namespace infini_train::nn::parallel {
 

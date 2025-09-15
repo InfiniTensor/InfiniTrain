@@ -4,7 +4,9 @@
 #include <utility>
 #include <vector>
 
-#include "infini_train/include/tensor.h"
+namespace infini_train {
+class Tensor;
+}
 
 namespace infini_train::autograd {
 class Function : public std::enable_shared_from_this<Function> {

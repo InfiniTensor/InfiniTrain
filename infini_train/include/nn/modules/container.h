@@ -5,7 +5,10 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/tensor.h"
+
+namespace infini_train {
+class Tensor;
+}
 
 namespace infini_train::nn {
 class Sequential : public CloneableModule<Sequential> {

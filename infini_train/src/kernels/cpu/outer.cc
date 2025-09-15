@@ -1,7 +1,6 @@
 #include <cstdint>
 #include <fcntl.h>
 #include <memory>
-#include <numeric>
 #include <tuple>
 
 #include "glog/logging.h"

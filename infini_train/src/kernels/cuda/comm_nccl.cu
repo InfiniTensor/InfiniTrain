@@ -14,8 +14,8 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
-#include "infini_train/include/nn/parallel_functional.h"
-#include "infini_train/include/nn/reduce_op_type.h"
+#include "infini_train/include/nn/parallel/parallel_functional.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {

@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
 class CrossEntropyLoss : public CloneableModule<CrossEntropyLoss> {

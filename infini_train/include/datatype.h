@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <type_traits>
+#include <string>
 #include <unordered_map>
 
 #ifdef USE_CUDA

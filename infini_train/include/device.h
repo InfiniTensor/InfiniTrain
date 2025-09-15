@@ -9,8 +9,6 @@
 
 #ifdef USE_CUDA
 #include "cublas_v2.h"
-#include "cuda.h"
-#include "cuda_runtime_api.h"
 #endif
 #ifdef USE_NCCL
 #include "nccl.h"

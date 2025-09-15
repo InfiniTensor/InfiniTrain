@@ -5,7 +5,10 @@
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
-#include "infini_train/include/tensor.h"
+
+namespace infini_train {
+class Tensor;
+}
 
 namespace infini_train::autograd {
 class Softmax : public Function {
