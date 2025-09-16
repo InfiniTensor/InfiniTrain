@@ -31,8 +31,12 @@ bool DistributedDataParallel::Rank::IsMainRank() const { return thread_rank_ == 
 
 DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, int device_id) {
     for (auto &param : module->Parameters()) {
+        CHECK_EQ(param->GetDevice()->Index(), device_id) << "All parameters must be on the same device as the module";
         auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(function::ReduceOpType::kAvg);
         param->RegisterPostAccumulateGradHook(std::move(hook));
+    }
+    for (auto &buffer : module->Buffers()) {
+        CHECK_EQ(buffer->GetDevice()->Index(), device_id) << "All buffers must be on the same device as the module";
     }
     modules_[kModuleName] = std::move(module);
 }
