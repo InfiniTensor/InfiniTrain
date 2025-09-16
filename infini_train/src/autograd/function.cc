@@ -26,9 +26,9 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
             input_tensor->grad_accumulator()->IncreaseDependenciesNumber();
         } else {
             next_functions_.emplace_back(input_tensor->grad_fn(), input_tensor->output_idx());
-        }
-        if (input_tensor->grad_fn()) {
-            input_tensor->grad_fn()->IncreaseDependenciesNumber();
+            if (input_tensor->grad_fn()) {
+                input_tensor->grad_fn()->IncreaseDependenciesNumber();
+            }
         }
         output_requires_grad |= input_tensor->requires_grad();
     }
