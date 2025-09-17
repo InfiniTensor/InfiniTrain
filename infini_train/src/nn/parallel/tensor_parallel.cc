@@ -23,6 +23,31 @@ namespace infini_train::nn::parallel {
 
 namespace {
 // Comm Kernel Call Functions
+std::shared_ptr<Tensor> GatherAlongFirstDim(const std::shared_ptr<Tensor> &tensor,
+                                            const TensorParallelGroup &tp_group) {
+    int world_size = tp_group.WorldSize();
+    CHECK_GT(world_size, 0) << "Tensor Parallel group not initialized";
+    if (world_size == 1) {
+        // Bypass the function if we are using only 1 GPU.
+        return tensor;
+    }
+
+    auto it = std::find(tp_group.devices.begin(), tp_group.devices.end(), tensor->GetDevice());
+    CHECK(it != tp_group.devices.end()) << "Tensor device not in TensorParallelGroup";
+
+    std::vector<int64_t> output_shape = tensor->Dims();
+    output_shape[0] *= world_size;
+    auto gathered_output = std::make_shared<Tensor>(output_shape, tensor->Dtype(), tensor->GetDevice());
+
+#ifdef USE_NCCL
+    function::AllGather(gathered_output, tensor);
+    return gathered_output;
+#else
+    LOG(FATAL) << "AllGather requires NCCL enabled";
+    return nullptr;
+#endif
+}
+
 std::shared_ptr<Tensor> GatherAlongLastDim(const std::shared_ptr<Tensor> &tensor, const TensorParallelGroup &tp_group) {
     int world_size = tp_group.WorldSize();
     CHECK_GT(world_size, 0) << "Tensor Parallel group not initialized";
@@ -78,11 +103,40 @@ std::shared_ptr<Tensor> Reduce(const std::shared_ptr<Tensor> &tensor, const Tens
     auto it = std::find(tp_group.devices.begin(), tp_group.devices.end(), tensor->GetDevice());
     CHECK(it != tp_group.devices.end()) << "Tensor device not in TensorParallelGroup";
 
+    auto output = std::make_shared<Tensor>(tensor->Clone());
+
 #ifdef USE_NCCL
-    function::AllReduce(tensor, function::ReduceOpType::kSum);
-    return tensor;
+    function::AllReduce(output, function::ReduceOpType::kSum);
+    return output;
 #else
     LOG(FATAL) << "AllReduce requires NCCL enabled";
+    return nullptr;
+#endif
+}
+
+std::shared_ptr<Tensor> ReduceScatterAlongFirstDim(const std::shared_ptr<Tensor> &tensor,
+                                                   const TensorParallelGroup &tp_group) {
+    int world_size = tp_group.WorldSize();
+    CHECK_GT(world_size, 0) << "Tensor Parallel group not initialized";
+    if (world_size == 1) {
+        // Bypass the function if we are using only 1 GPU.
+        return tensor;
+    }
+
+    auto it = std::find(tp_group.devices.begin(), tp_group.devices.end(), tensor->GetDevice());
+    CHECK(it != tp_group.devices.end()) << "Tensor device not in TensorParallelGroup";
+
+    auto output_shape = tensor->Dims();
+    CHECK_EQ(output_shape[0] % world_size, 0) << "First dimension of the tensor should be divisible by TP world size";
+    output_shape[0] /= world_size;
+
+    auto output = std::make_shared<Tensor>(output_shape, tensor->Dtype(), tensor->GetDevice());
+
+#ifdef USE_NCCL
+    function::ReduceScatter(output, tensor, function::ReduceOpType::kSum);
+    return output;
+#else
+    LOG(FATAL) << "ReduceScatter requires NCCL enabled";
     return nullptr;
 #endif
 }
@@ -167,6 +221,57 @@ private:
     TensorParallelGroup tp_group_;
 };
 
+class ReduceScatterToSPRegion : public autograd::Function {
+public:
+    static constexpr char kType[] = "ReduceScatterToSPRegionFunction";
+
+    explicit ReduceScatterToSPRegion(TensorParallelGroup tp_group) : autograd::Function(kType), tp_group_(tp_group) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
+        // FIXME(zbl): Megatron-LM keeps tensor as [S, B, H] by default
+        return {ReduceScatterAlongFirstDim(input_tensors[0]->Transpose(0, 1), tp_group_)->Transpose(0, 1)};
+    };
+
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
+        // FIXME(zbl): Megatron-LM keeps tensor as [S, B, H] by default
+        return {GatherAlongFirstDim(grad_outputs[0]->Transpose(0, 1), tp_group_)->Transpose(0, 1)};
+    };
+
+private:
+    TensorParallelGroup tp_group_;
+};
+
+class GatherFromSPRegion : public autograd::Function {
+public:
+    static constexpr char kType[] = "GatherFromSPRegionFunction";
+
+    explicit GatherFromSPRegion(TensorParallelGroup tp_group) : autograd::Function(kType), tp_group_(tp_group) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
+        // FIXME(zbl): Megatron-LM keeps tensor as [S, B, H] by default
+        return {GatherAlongFirstDim(input_tensors[0]->Transpose(0, 1), tp_group_)->Transpose(0, 1)};
+    };
+
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
+        // FIXME(zbl): Megatron-LM keeps tensor as [S, B, H] by default
+        return {ReduceScatterAlongFirstDim(grad_outputs[0]->Transpose(0, 1), tp_group_)->Transpose(0, 1)};
+    };
+
+private:
+    TensorParallelGroup tp_group_;
+};
+
+void LinearResetParameters(std::shared_ptr<Tensor> weight, std::shared_ptr<Tensor> bias = nullptr) {
+    init::KaimingUniform(weight, sqrt(5.0f));
+    if (bias) {
+        const auto [fan_in, _] = init::CalculateFanInAndFanOut(weight);
+        const float bound = fan_in > 0 ? 1.0 / sqrt(fan_in) : 0.0;
+        init::Uniform(bias, -bound, bound);
+    }
+}
+
+} // namespace
+
 // Comm Helper Functions
 std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(const std::shared_ptr<Tensor> &input,
                                                         TensorParallelGroup tp_group) {
@@ -188,22 +293,21 @@ std::vector<std::shared_ptr<Tensor>> ReduceFromTPRegionFunc(const std::shared_pt
     return std::make_shared<ReduceFromTPRegion>(tp_group)->Apply({input});
 }
 
-void LinearResetParameters(std::shared_ptr<Tensor> weight, std::shared_ptr<Tensor> bias = nullptr) {
-    init::KaimingUniform(weight, sqrt(5.0f));
-    if (bias) {
-        const auto [fan_in, _] = init::CalculateFanInAndFanOut(weight);
-        const float bound = fan_in > 0 ? 1.0 / sqrt(fan_in) : 0.0;
-        init::Uniform(bias, -bound, bound);
-    }
+std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(const std::shared_ptr<Tensor> &input,
+                                                                 TensorParallelGroup tp_group) {
+    return std::make_shared<ReduceScatterToSPRegion>(tp_group)->Apply({input});
 }
 
-} // namespace
+std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_ptr<Tensor> &input,
+                                                            TensorParallelGroup tp_group) {
+    return std::make_shared<GatherFromSPRegion>(tp_group)->Apply({input});
+}
 
 ColumnParallelLinear::ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias,
                                            TensorParallelGroup tp_group, bool gather_output, bool input_is_parallel,
-                                           bool skip_bias_add)
+                                           bool skip_bias_add, bool sequence_parallel)
     : Module(kType), tp_group_(tp_group), bias_(bias), gather_output_(gather_output),
-      input_is_parallel_(input_is_parallel), skip_bias_add_(skip_bias_add) {
+      input_is_parallel_(input_is_parallel), skip_bias_add_(skip_bias_add), sequence_parallel_(sequence_parallel) {
     CHECK_GT(tp_group.WorldSize(), 0) << "No available devices found";
     CHECK_EQ(out_features % tp_group_.WorldSize(), 0)
         << "out_features must be divisible by TP world size for ColumnParallel";
@@ -227,7 +331,12 @@ ColumnParallelLinear::ColumnParallelLinear(int64_t in_features, int64_t out_feat
 std::vector<std::shared_ptr<Tensor>>
 ColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1) << "ColumnParallelLinear takes exactly one input";
-    auto input = input_is_parallel_ ? input_tensors[0] : CopyToTPRegionFunc(input_tensors[0], tp_group_)[0];
+    auto input = (input_is_parallel_ || sequence_parallel_) ? input_tensors[0]
+                                                            : CopyToTPRegionFunc(input_tensors[0], tp_group_)[0];
+
+    if (sequence_parallel_) {
+        input = GatherFromSPRegionFunc(input, tp_group_)[0];
+    }
 
     auto sharded_output = std::make_shared<autograd::Linear>()->Apply(
         (bias_ && !skip_bias_add_)
@@ -243,13 +352,18 @@ ColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_
 }
 
 RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features, bool bias, TensorParallelGroup tp_group,
-                                     bool reduce_output, bool input_is_parallel, bool skip_bias_add)
+                                     bool reduce_output, bool input_is_parallel, bool skip_bias_add,
+                                     bool sequence_parallel)
     : Module(kType), tp_group_(tp_group), bias_(bias), reduce_output_(reduce_output),
-      input_is_parallel_(input_is_parallel), skip_bias_add_(skip_bias_add) {
+      input_is_parallel_(input_is_parallel), skip_bias_add_(skip_bias_add), sequence_parallel_(sequence_parallel) {
     CHECK_GT(tp_group.WorldSize(), 0) << "No available devices found";
     CHECK_EQ(in_features % tp_group_.WorldSize(), 0)
         << "in_features must be divisible by TP world size for RowParallel";
     input_size_per_partition_ = in_features / tp_group_.WorldSize();
+
+    if (!input_is_parallel_ && sequence_parallel_) {
+        LOG(FATAL) << "To enable `sequence_parallel`, `input_is_parallel` must be `True`";
+    }
 
     // init params shards on local rank
     parameters_[kParamWeightName]
@@ -272,7 +386,9 @@ RowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_ten
     auto sharded_output = std::make_shared<autograd::Linear>()->Apply(
         std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
 
-    auto output = reduce_output_ ? ReduceFromTPRegionFunc(sharded_output, tp_group_)[0] : sharded_output;
+    auto output = reduce_output_ ? (sequence_parallel_ ? ReduceScatterToSPRegionFunc(sharded_output, tp_group_)[0]
+                                                       : ReduceFromTPRegionFunc(sharded_output, tp_group_)[0])
+                                 : sharded_output;
 
     if (bias_ && !skip_bias_add_) {
         output = output->Add(parameters_[kParamBiasName]);
@@ -335,7 +451,8 @@ VocabParallelEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>> &inpu
         local_output = local_output->MaskedFill(std::make_shared<Tensor>(input_mask->To(local_output->Dtype())), 0.0f);
     }
 
-    auto output = ReduceFromTPRegionFunc(local_output, tp_group_)[0];
+    auto output = tp_group_.sequence_parallel_enabled ? ReduceScatterToSPRegionFunc(local_output, tp_group_)[0]
+                                                      : ReduceFromTPRegionFunc(local_output, tp_group_)[0];
 
     return {output};
 }
@@ -464,11 +581,13 @@ VocabParallelCrossEntropy::Backward(const std::vector<std::shared_ptr<Tensor>> &
 std::vector<std::shared_ptr<Tensor>>
 VocabParallelCrossEntropyLoss::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 2);
+    auto logits = input_tensors[0];
+    auto target = input_tensors[1];
+
     auto loss_tensor = std::make_shared<VocabParallelCrossEntropy>(tp_group_, vocab_size_original_, label_smoothing_)
-                           ->Apply(input_tensors)[0];
+                           ->Apply(std::vector<std::shared_ptr<Tensor>>{logits, target})[0];
     // NOTE(zbl): loss should be a scalar
-    std::shared_ptr<Tensor> scalar = loss_tensor;
-    while (scalar->Dims().size() > 0) { scalar = scalar->Mean(-1); }
+    std::shared_ptr<Tensor> scalar = loss_tensor->View({loss_tensor->NumElements()})->Mean(0);
     return {scalar};
 }
 } // namespace infini_train::nn::parallel

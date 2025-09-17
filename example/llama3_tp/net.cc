@@ -20,6 +20,7 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
+#include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
 using namespace infini_train;
@@ -137,7 +138,9 @@ std::vector<std::shared_ptr<Tensor>> RMSNorm::Forward(const std::vector<std::sha
 
 TPCausalSelfAttention::TPCausalSelfAttention(const TPLLaMA3Config &config)
     : config_(config), n_head_(config.n_head), n_embd_(config.n_embd), n_kv_head_(config.n_kv_head),
-      n_rep_(config.n_head / config.n_kv_head), head_dim_(config.n_embd / config.n_head) {
+      n_rep_(config.n_head / config.n_kv_head), head_dim_(config.n_embd / config.n_head),
+      sequence_parallel_(config_.tp_group.sequence_parallel_enabled) {
+    // TODO(zbl): add gather_qkv_all switch
     CHECK_LE(config.n_kv_head, config.n_head);
     CHECK_EQ(config.n_head % config.n_kv_head, 0);
     CHECK_EQ(config.n_embd % config.n_head, 0);
@@ -150,7 +153,8 @@ TPCausalSelfAttention::TPCausalSelfAttention(const TPLLaMA3Config &config)
         /*bias=*/false, config_.tp_group,
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false);
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/sequence_parallel_);
 
     // proj: RowParallel (input is parallel and output is full)
     modules_[kCProjLayerName] = std::make_shared<tp::RowParallelLinear>(
@@ -159,15 +163,21 @@ TPCausalSelfAttention::TPCausalSelfAttention(const TPLLaMA3Config &config)
         /*bias=*/false, config_.tp_group,
         /*reduce_output=*/true,
         /*input_is_parallel=*/true,
-        /*skip_bias_add=*/false);
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/sequence_parallel_ && gather_qkv_all_);
 }
 
 std::vector<std::shared_ptr<Tensor>> TPCausalSelfAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    const auto B = x[0]->Dims()[0]; // bs
-    const auto T = x[0]->Dims()[1]; // seq_len
-    const auto C = x[0]->Dims()[2]; // n_embd
+    const auto B = x[0]->Dims()[0];       // bs
+    const auto T_local = x[0]->Dims()[1]; // seq_len_local
+    const auto C = x[0]->Dims()[2];       // n_embd
 
     const auto tp_world = config_.tp_group.WorldSize();
+    const auto rank = config_.tp_group.Rank();
+    const bool sp_enabled = sequence_parallel_;
+    const bool gather_qkv_all = gather_qkv_all_;
+
+    const auto T = sp_enabled ? (T_local * tp_world) : T_local;
     const auto C_local = C / tp_world;
     const auto H_local = n_head_ / tp_world;
     const auto KV_local = n_kv_head_ / tp_world;
@@ -176,6 +186,7 @@ std::vector<std::shared_ptr<Tensor>> TPCausalSelfAttention::Forward(const std::v
     const auto freqs_cis = x.size() > 1 ? x[1] : nullptr;
     const auto start_pos = x.size() > 2 ? x[2] : nullptr;
     const auto mask = x.size() > 3 ? x[3] : nullptr;
+    CHECK(freqs_cis != nullptr) << "freqs_cis is null.";
 
     // (B, T, C) -> (B, T, (H + 2 * n_kv_head) * D)
     auto qkv = modules_[kCAttnLayerName]->Forward({x[0]})[0];
@@ -251,7 +262,8 @@ TPMLP::TPMLP(const TPLLaMA3Config &config) {
         /*bias=*/false, config.tp_group,
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false);
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/config.tp_group.sequence_parallel_enabled);
 
     // c_fc2: ColumnParallel (input full, output parallel)
     modules_[kCFc2LayerName] = std::make_shared<tp::ColumnParallelLinear>(
@@ -259,7 +271,8 @@ TPMLP::TPMLP(const TPLLaMA3Config &config) {
         /*bias=*/false, config.tp_group,
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false);
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/config.tp_group.sequence_parallel_enabled);
 
     modules_[kSiluLayerName] = std::make_shared<SwiGLU>();
 
@@ -269,7 +282,8 @@ TPMLP::TPMLP(const TPLLaMA3Config &config) {
         /*bias=*/false, config.tp_group,
         /*reduce_output=*/true,
         /*input_is_parallel=*/true,
-        /*skip_bias_add=*/false);
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/config.tp_group.sequence_parallel_enabled);
 }
 
 std::vector<std::shared_ptr<Tensor>> TPMLP::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
@@ -332,7 +346,8 @@ TensorParallelLLaMA3::TensorParallelLLaMA3(const TPLLaMA3Config &config) : confi
         // NOTE(zbl): each rank would get sharded [B, T, V_local] as logits
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false);
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/config.tp_group.sequence_parallel_enabled);
 }
 
 std::vector<std::shared_ptr<Tensor>> TensorParallelLLaMA3::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {

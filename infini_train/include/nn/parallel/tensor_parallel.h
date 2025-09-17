@@ -13,7 +13,8 @@ namespace infini_train::nn::parallel {
 struct TensorParallelGroup {
     // TODO(zbl): check torch.distributed.ProcessGroup
     std::vector<const Device *> devices;
-    int rank;
+    int rank = 0;
+    bool sequence_parallel_enabled = false;
 
     int WorldSize() const { return static_cast<int>(devices.size()); }
     int Rank() const { return rank; }
@@ -27,6 +28,25 @@ struct TensorParallelGroup {
     }
 };
 
+// Comm Helper Functions
+std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(const std::shared_ptr<Tensor> &input,
+                                                        TensorParallelGroup tp_group);
+
+std::vector<std::shared_ptr<Tensor>> GatherFromTPRegionFunc(const std::shared_ptr<Tensor> &input,
+                                                            TensorParallelGroup tp_group);
+
+std::vector<std::shared_ptr<Tensor>> ScatterToTPRegionFunc(const std::shared_ptr<Tensor> &input,
+                                                           TensorParallelGroup tp_group);
+
+std::vector<std::shared_ptr<Tensor>> ReduceFromTPRegionFunc(const std::shared_ptr<Tensor> &input,
+                                                            TensorParallelGroup tp_group);
+
+std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(const std::shared_ptr<Tensor> &input,
+                                                                 TensorParallelGroup tp_group);
+
+std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_ptr<Tensor> &input,
+                                                            TensorParallelGroup tp_group);
+
 class ColumnParallelLinear : public nn::Module {
 public:
     static constexpr char kType[] = "ColumnParallelLinear";
@@ -35,7 +55,8 @@ public:
     static constexpr char kParamBiasName[] = "bias";
 
     ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias, TensorParallelGroup tp_group,
-                         bool gather_output, bool input_is_parallel, bool skip_bias_add);
+                         bool gather_output, bool input_is_parallel, bool skip_bias_add,
+                         bool sequence_parallel = false);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
@@ -46,6 +67,7 @@ private:
     bool gather_output_ = false;     // whether to return full local output tensor after forward (need gather)
     bool input_is_parallel_ = false; // will perform an autograd-aware copy when false
     bool skip_bias_add_ = false;     // will return {out, bias} if true (for fusion purpose)
+    bool sequence_parallel_ = false; // whether to enable sequence parallel
 
     int64_t output_size_per_partition_ = 0;
 };
@@ -58,7 +80,7 @@ public:
     static constexpr char kParamBiasName[] = "bias";
 
     RowParallelLinear(int64_t in_features, int64_t out_features, bool bias, TensorParallelGroup tp_group,
-                      bool reduce_output, bool input_is_parallel, bool skip_bias_add);
+                      bool reduce_output, bool input_is_parallel, bool skip_bias_add, bool sequence_parallel = false);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
@@ -69,6 +91,7 @@ private:
     bool reduce_output_ = false;     // whether to return full local output tensor after forward (need reduce)
     bool input_is_parallel_ = false; // will perform an autograd-aware copy when false
     bool skip_bias_add_ = false;     // will return {out, bias} if true (for fusion purpose)
+    bool sequence_parallel_ = false; // whether to enable sequence parallel
 
     int64_t input_size_per_partition_ = 0;
 };
