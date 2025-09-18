@@ -80,9 +80,6 @@ private:
     int64_t n_kv_head_ = 0;
     int64_t n_rep_ = 0;
     int64_t head_dim_ = 0;
-
-    bool sequence_parallel_ = false; // whether to enable sequence parallel
-    bool gather_qkv_all_ = true;     // whether to gather Q/K/V or gather K/V only
 };
 
 class TPMLP : public infini_train::nn::CloneableModule<TPMLP> {

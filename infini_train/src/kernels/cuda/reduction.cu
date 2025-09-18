@@ -14,22 +14,22 @@ namespace {
 // Reduction operators
 template <typename T, typename ReduceFunc> struct CubOp;
 
-template <typename T> struct CubOp<T, cub::Sum> {
+template <typename T> struct CubOp<T, ::cuda::std::plus<>> {
     __device__ static T Init() { return common::cuda::Cast<T>(0); }
     __device__ static T Reduce(T a, T b) { return common::cuda::Add<T>(a, b); }
-    __device__ static cub::Sum Op() { return cub::Sum(); }
+    __device__ static ::cuda::std::plus<> Op() { return ::cuda::std::plus<>(); }
 };
 
-template <typename T> struct CubOp<T, cub::Max> {
+template <typename T> struct CubOp<T, ::cuda::maximum<>> {
     __device__ static T Init() { return common::cuda::Cast<T>(-kInfinity); }
     __device__ static T Reduce(T a, T b) { return common::cuda::Max<T>(a, b); }
-    __device__ static cub::Max Op() { return cub::Max(); }
+    __device__ static ::cuda::maximum<> Op() { return ::cuda::maximum<>(); }
 };
 
-template <typename T> struct CubOp<T, cub::Min> {
+template <typename T> struct CubOp<T, ::cuda::minimum<>> {
     __device__ static T Init() { return common::cuda::Cast<T>(kInfinity); }
     __device__ static T Reduce(T a, T b) { return common::cuda::Min<T>(a, b); }
-    __device__ static cub::Min Op() { return cub::Min(); }
+    __device__ static ::cuda::minimum<> Op() { return ::cuda::minimum<>(); }
 };
 
 // Finalization strategies
@@ -179,19 +179,19 @@ std::shared_ptr<Tensor> ReduceOpBackward(const std::shared_ptr<Tensor> &grad_out
 }
 
 std::shared_ptr<Tensor> MeanForward(const std::shared_ptr<Tensor> &input, const int64_t dim, const bool keep_dim) {
-    return ReduceOpForward<cub::Sum, MeanFinalize>(input, dim, keep_dim);
+    return ReduceOpForward<::cuda::std::plus<>, MeanFinalize>(input, dim, keep_dim);
 }
 
 std::shared_ptr<Tensor> SumForward(const std::shared_ptr<Tensor> &input, const int64_t dim, const bool keep_dim) {
-    return ReduceOpForward<cub::Sum, IdentityFinalize>(input, dim, keep_dim);
+    return ReduceOpForward<::cuda::std::plus<>, IdentityFinalize>(input, dim, keep_dim);
 }
 
 std::shared_ptr<Tensor> MaxForward(const std::shared_ptr<Tensor> &input, const int64_t dim, const bool keep_dim) {
-    return ReduceOpForward<cub::Max, IdentityFinalize>(input, dim, keep_dim);
+    return ReduceOpForward<::cuda::maximum<>, IdentityFinalize>(input, dim, keep_dim);
 }
 
 std::shared_ptr<Tensor> MinForward(const std::shared_ptr<Tensor> &input, const int64_t dim, const bool keep_dim) {
-    return ReduceOpForward<cub::Min, IdentityFinalize>(input, dim, keep_dim);
+    return ReduceOpForward<::cuda::minimum<>, IdentityFinalize>(input, dim, keep_dim);
 }
 
 std::shared_ptr<Tensor> MeanBackward(const std::shared_ptr<Tensor> &grad_output, const std::vector<int64_t> &input_dims,

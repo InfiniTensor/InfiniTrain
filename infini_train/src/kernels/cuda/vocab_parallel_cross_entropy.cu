@@ -42,7 +42,7 @@ VocabParallelCrossEntropyBackwardKernel(const Tinput *__restrict__ softmax_local
 
         float grad = dm * s;
 
-        if (t >= 0 && j == static_cast<int>(t)) {
+        if (static_cast<int64_t>(t) >= 0 && j == static_cast<int>(t)) {
             grad -= row_scale;
         }
 

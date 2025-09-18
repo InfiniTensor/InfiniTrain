@@ -138,9 +138,7 @@ std::vector<std::shared_ptr<Tensor>> RMSNorm::Forward(const std::vector<std::sha
 
 TPCausalSelfAttention::TPCausalSelfAttention(const TPLLaMA3Config &config)
     : config_(config), n_head_(config.n_head), n_embd_(config.n_embd), n_kv_head_(config.n_kv_head),
-      n_rep_(config.n_head / config.n_kv_head), head_dim_(config.n_embd / config.n_head),
-      sequence_parallel_(config_.tp_group.sequence_parallel_enabled) {
-    // TODO(zbl): add gather_qkv_all switch
+      n_rep_(config.n_head / config.n_kv_head), head_dim_(config.n_embd / config.n_head) {
     CHECK_LE(config.n_kv_head, config.n_head);
     CHECK_EQ(config.n_head % config.n_kv_head, 0);
     CHECK_EQ(config.n_embd % config.n_head, 0);
@@ -154,7 +152,7 @@ TPCausalSelfAttention::TPCausalSelfAttention(const TPLLaMA3Config &config)
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
         /*skip_bias_add=*/false,
-        /*sequence_parallel=*/sequence_parallel_);
+        /*sequence_parallel=*/config_.tp_group.sequence_parallel_enabled);
 
     // proj: RowParallel (input is parallel and output is full)
     modules_[kCProjLayerName] = std::make_shared<tp::RowParallelLinear>(
@@ -164,20 +162,17 @@ TPCausalSelfAttention::TPCausalSelfAttention(const TPLLaMA3Config &config)
         /*reduce_output=*/true,
         /*input_is_parallel=*/true,
         /*skip_bias_add=*/false,
-        /*sequence_parallel=*/sequence_parallel_ && gather_qkv_all_);
+        /*sequence_parallel=*/config_.tp_group.sequence_parallel_enabled);
 }
 
 std::vector<std::shared_ptr<Tensor>> TPCausalSelfAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    const auto B = x[0]->Dims()[0];       // bs
-    const auto T_local = x[0]->Dims()[1]; // seq_len_local
-    const auto C = x[0]->Dims()[2];       // n_embd
+    const auto B = x[0]->Dims()[0]; // bs
+    // const auto T_local = x[0]->Dims()[1]; // seq_len_local
+    const auto C = x[0]->Dims()[2]; // n_embd
 
     const auto tp_world = config_.tp_group.WorldSize();
     const auto rank = config_.tp_group.Rank();
-    const bool sp_enabled = sequence_parallel_;
-    const bool gather_qkv_all = gather_qkv_all_;
 
-    const auto T = sp_enabled ? (T_local * tp_world) : T_local;
     const auto C_local = C / tp_world;
     const auto H_local = n_head_ / tp_world;
     const auto KV_local = n_kv_head_ / tp_world;
@@ -190,6 +185,8 @@ std::vector<std::shared_ptr<Tensor>> TPCausalSelfAttention::Forward(const std::v
 
     // (B, T, C) -> (B, T, (H + 2 * n_kv_head) * D)
     auto qkv = modules_[kCAttnLayerName]->Forward({x[0]})[0];
+    // NOTE(zbl): Acquire full T after AllGather is performed in ColumnParallelLinear
+    const auto T = qkv->Dims()[1];
     // NOTE(zbl): torch script uses torch.split({...}, dim) to split tensors into sub-tensors in different sizes
     //            use Slice() to work around here
     const int64_t q_size_local = H_local * D;

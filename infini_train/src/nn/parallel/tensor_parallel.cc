@@ -587,7 +587,7 @@ VocabParallelCrossEntropyLoss::Forward(const std::vector<std::shared_ptr<Tensor>
     auto loss_tensor = std::make_shared<VocabParallelCrossEntropy>(tp_group_, vocab_size_original_, label_smoothing_)
                            ->Apply(std::vector<std::shared_ptr<Tensor>>{logits, target})[0];
     // NOTE(zbl): loss should be a scalar
-    std::shared_ptr<Tensor> scalar = loss_tensor->View({loss_tensor->NumElements()})->Mean(0);
+    std::shared_ptr<Tensor> scalar = loss_tensor->View({static_cast<int64_t>(loss_tensor->NumElements())})->Mean(0);
     return {scalar};
 }
 } // namespace infini_train::nn::parallel

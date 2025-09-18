@@ -490,7 +490,7 @@ std::shared_ptr<Tensor> NegForward(const std::shared_ptr<Tensor> &input) {
 
 std::shared_ptr<Tensor> NegBackward(const std::shared_ptr<Tensor> &grad_output) {
     DISPATCH(grad_output->Dtype(),
-             return UnaryBackward(grad_output, nullptr, [] __device__(auto x) { return decltype(x){-1.f}; });
+             return UnaryBackward(grad_output, nullptr, [] __device__(auto x) { return decltype(x){-1}; });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
@@ -503,7 +503,7 @@ std::shared_ptr<Tensor> ReciprocalBackward(const std::shared_ptr<Tensor> &grad_o
                                            const std::shared_ptr<Tensor> &input) {
     DISPATCH(
         grad_output->Dtype(),
-        return UnaryBackward(grad_output, input, [] __device__(auto x) { return Div(decltype(x){-1.f}, Mul(x, x)); });
+        return UnaryBackward(grad_output, input, [] __device__(auto x) { return Div(decltype(x){-1}, Mul(x, x)); });
         , INFINI_ALL_FLOATING_TYPES)
 }
 
@@ -536,16 +536,18 @@ std::shared_ptr<Tensor> TanhForward(const std::shared_ptr<Tensor> &input) {
 std::shared_ptr<Tensor> TanhBackward(const std::shared_ptr<Tensor> &grad_output,
                                      const std::shared_ptr<Tensor> &output) {
     DISPATCH(grad_output->Dtype(),
-             return UnaryBackward(grad_output, output, [] __device__(auto x) { return decltype(x){1.0} - Mul(x, x); });
+             return UnaryBackward(grad_output, output, [] __device__(auto x) { return decltype(x){1} - Mul(x, x); });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> PowForward(const std::shared_ptr<Tensor> &input, float scalar, bool scalar_is_base) {
     DISPATCH(input->Dtype(), WRAP({
                  if (scalar_is_base) {
-                     return UnaryForward(input, [scalar] __device__(auto x) { return Pow(decltype(x){scalar}, x); });
+                     return UnaryForward(
+                         input, [scalar] __device__(auto x) { return Pow(static_cast<decltype(x)>(scalar), x); });
                  } else {
-                     return UnaryForward(input, [scalar] __device__(auto x) { return Pow(x, decltype(x){scalar}); });
+                     return UnaryForward(
+                         input, [scalar] __device__(auto x) { return Pow(x, static_cast<decltype(x)>(scalar)); });
                  }
              }),
              INFINI_ALL_FLOATING_TYPES);
@@ -560,7 +562,7 @@ std::shared_ptr<Tensor> PowBackward(const std::shared_ptr<Tensor> &grad_output, 
                                       if (scalar_is_base) {
                                           return Mul(Log(casted_scalar), Pow(casted_scalar, x));
                                       } else {
-                                          return Mul(casted_scalar, Pow(x, casted_scalar - decltype(x){1.0}));
+                                          return Mul(casted_scalar, Pow(x, casted_scalar - decltype(x){1}));
                                       }
                                   });
              , INFINI_ALL_FLOATING_TYPES)
@@ -573,10 +575,10 @@ std::shared_ptr<Tensor> RsqrtForward(const std::shared_ptr<Tensor> &input) {
 
 std::shared_ptr<Tensor> RsqrtBackward(const std::shared_ptr<Tensor> &grad_output,
                                       const std::shared_ptr<Tensor> &input) {
-    DISPATCH(grad_output->Dtype(), return UnaryBackward(grad_output, input,
-                                                        [] __device__(auto x) {
-                                                            return Mul(decltype(x){-0.5}, Mul(Reciprocal(x), Rsqrt(x)));
-                                                        });
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(
+                 grad_output, input,
+                 [] __device__(auto x) { return Mul(static_cast<decltype(x)>(-0.5), Mul(Reciprocal(x), Rsqrt(x))); });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
@@ -609,9 +611,11 @@ std::shared_ptr<Tensor> EqualsForward(const std::shared_ptr<Tensor> &a, const st
 }
 
 std::shared_ptr<Tensor> EqualsScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
-    DISPATCH(a->Dtype(),
-             return UnaryForward(
-                 a, [scalar] __device__(auto x) { return x == decltype(x){scalar} ? decltype(x){1} : decltype(x){0}; });
+    DISPATCH(a->Dtype(), return UnaryForward(a,
+                                             [scalar] __device__(auto x) {
+                                                 return x == static_cast<decltype(x)>(scalar) ? decltype(x){1}
+                                                                                              : decltype(x){0};
+                                             });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
@@ -753,13 +757,15 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> MulBackward(const st
 }
 
 std::shared_ptr<Tensor> MulScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
-    DISPATCH(a->Dtype(), return UnaryForward(a, [scalar] __device__(auto x) { return Mul(x, decltype(x){scalar}); });
+    DISPATCH(a->Dtype(),
+             return UnaryForward(a, [scalar] __device__(auto x) { return Mul(x, static_cast<decltype(x)>(scalar)); });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> MulScalarBackward(const std::shared_ptr<Tensor> &grad_output, float scalar) {
     DISPATCH(grad_output->Dtype(),
-             return UnaryBackward(grad_output, nullptr, [scalar] __device__(auto x) { return decltype(x){scalar}; });
+             return UnaryBackward(grad_output, nullptr,
+                                  [scalar] __device__(auto x) { return static_cast<decltype(x)>(scalar); });
              , INFINI_ALL_FLOATING_TYPES)
 }
 

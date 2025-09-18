@@ -1,6 +1,7 @@
 #include "infini_train/include/device.h"
 
 #include <cstdint>
+#include <cstdlib>
 #include <vector>
 
 #ifdef USE_NCCL
@@ -113,6 +114,9 @@ DeviceManager::DeviceManager() {
 
 #ifdef USE_NCCL
 void DeviceManager::InitNcclCommunicators() {
+    // NOTE(zbl): Use GROUP launch mode to ensure grouped, ordered collective launches
+    setenv("NCCL_LAUNCH_MODE", "GROUP", 1);
+
     const auto &cuda_devices = devices_map_.at(DeviceType::kCUDA);
     int num_devices = cuda_devices.size();
 
