@@ -14,8 +14,8 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
-#include "infini_train/include/nn/parallel_functional.h"
 #include "infini_train/include/optimizer.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"

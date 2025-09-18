@@ -1,8 +1,6 @@
 #include <cmath>
 
-#include "cub/block/block_reduce.cuh"
-#include "cuda_runtime.h"
-#include "math_constants.h"
+#include <cub/block/block_reduce.cuh>
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"

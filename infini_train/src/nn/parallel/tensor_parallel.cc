@@ -1,9 +1,6 @@
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 
-#include <format>
 #include <memory>
-#include <optional>
-#include <thread>
 #include <vector>
 
 #include "glog/logging.h"
@@ -11,12 +8,11 @@
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/linear.h"
 #include "infini_train/include/autograd/sparse.h"
-#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel_functional.h"
+#include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
