@@ -22,6 +22,7 @@
 #include "infini_train/include/autograd/matmul.h"
 #include "infini_train/include/autograd/misc.h"
 #include "infini_train/include/autograd/outer.h"
+#include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/transform.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
@@ -224,9 +225,79 @@ Tensor Tensor::To(DataType dtype) {
     return new_tensor;
 }
 
+Tensor Tensor::Clone() const {
+    auto device = GetDevice();
+    Tensor cloned(dims_, dtype_, device);
+
+    device->SetDevice();
+
+    if (device->Type() == DeviceType::kCPU) {
+        std::memcpy(cloned.DataPtr(), DataPtr(), SizeInBytes());
+    }
+#ifdef USE_CUDA
+    else if (device->Type() == DeviceType::kCUDA) {
+        CUDA_CHECK(cudaMemcpyAsync(cloned.DataPtr(), DataPtr(), SizeInBytes(), cudaMemcpyDeviceToDevice,
+                                   dynamic_cast<const CudaDevice *>(device)->Stream()));
+    }
+#endif
+    else {
+        LOG(FATAL) << "Unsupported device type for Clone.";
+    }
+
+    if (grad_) {
+        cloned.grad_ = std::make_unique<Tensor>(grad_->Clone());
+    }
+    cloned.requires_grad_ = requires_grad_;
+    return cloned;
+}
+
 // operator overloading
+std::shared_ptr<Tensor> Tensor::Equals(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::Equals>()->Apply({shared_from_this(), other})[0];
+}
+
 std::shared_ptr<Tensor> Tensor::Equals(float scalar) {
     return std::make_shared<autograd::EqualsScalar>(scalar)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Lt(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::Lt>()->Apply({shared_from_this(), other})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Lt(float scalar) {
+    return std::make_shared<autograd::LtScalar>(scalar)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Gt(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::Gt>()->Apply({shared_from_this(), other})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Gt(float scalar) {
+    return std::make_shared<autograd::GtScalar>(scalar)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Le(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::Le>()->Apply({shared_from_this(), other})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Le(float scalar) {
+    return std::make_shared<autograd::LeScalar>(scalar)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Ge(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::Ge>()->Apply({shared_from_this(), other})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Ge(float scalar) {
+    return std::make_shared<autograd::GeScalar>(scalar)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::And(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::And>()->Apply({shared_from_this(), other})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Or(const std::shared_ptr<Tensor> &other) {
+    return std::make_shared<autograd::Or>()->Apply({shared_from_this(), other})[0];
 }
 
 std::shared_ptr<Tensor> Tensor::Add(const std::shared_ptr<Tensor> &other) {
@@ -275,11 +346,42 @@ std::shared_ptr<Tensor> Tensor::Pow(float exponent) {
 
 std::shared_ptr<Tensor> Tensor::Rsqrt() { return std::make_shared<autograd::Rsqrt>()->Apply({shared_from_this()})[0]; }
 
+std::shared_ptr<Tensor> Tensor::Exp() { return std::make_shared<autograd::Exp>()->Apply({shared_from_this()})[0]; }
+
+std::shared_ptr<Tensor> Tensor::Log() { return std::make_shared<autograd::Log>()->Apply({shared_from_this()})[0]; }
+
+std::shared_ptr<Tensor> Tensor::Mean(int64_t dim, bool keep_dim) {
+    return std::make_shared<autograd::Mean>(dim, keep_dim)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Sum(int64_t dim, bool keep_dim) {
+    return std::make_shared<autograd::Sum>(dim, keep_dim)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Min(int64_t dim, bool keep_dim) {
+    return std::make_shared<autograd::Min>(dim, keep_dim)->Apply({shared_from_this()})[0];
+}
+
+std::shared_ptr<Tensor> Tensor::Max(int64_t dim, bool keep_dim) {
+    return std::make_shared<autograd::Max>(dim, keep_dim)->Apply({shared_from_this()})[0];
+}
+
 std::vector<std::shared_ptr<Tensor>> Tensor::Split(int split_size, int dim) {
+    if (dim < 0) {
+        dim += dims_.size();
+    }
     return std::make_shared<autograd::Split>(split_size, dim)->Apply({shared_from_this()});
 }
 
+std::shared_ptr<Tensor> Tensor::Gather(int dim, std::shared_ptr<Tensor> index) {
+    CHECK(GetDevice() == index->GetDevice()) << "index must be on the same device as input.";
+    return std::make_shared<autograd::IndexGather>(dim)->Apply({shared_from_this(), index})[0];
+}
+
 std::shared_ptr<Tensor> Tensor::RepeatInterleave(int64_t repeat, int64_t dim) {
+    if (dim < 0) {
+        dim += dims_.size();
+    }
     return std::make_shared<autograd::RepeatInterleave>(repeat, dim)->Apply({shared_from_this()})[0];
 }
 
@@ -323,6 +425,19 @@ std::shared_ptr<Tensor> Tensor::Squeeze(int64_t dim) {
     CHECK_EQ(new_shape[dim], 1) << "Cannot squeeze dim " << dim << " because size (" << new_shape[dim] << ") != 1.";
 
     new_shape.erase(new_shape.begin() + dim);
+
+    return Contiguous()->View(new_shape);
+}
+
+std::shared_ptr<Tensor> Tensor::Unsqueeze(int64_t dim) {
+    if (dim < 0) {
+        dim += dims_.size() + 1;
+    }
+    CHECK_GE(dim, 0);
+    CHECK_LE(dim, dims_.size());
+
+    std::vector<int64_t> new_shape = dims_;
+    new_shape.insert(new_shape.begin() + dim, 1);
 
     return Contiguous()->View(new_shape);
 }
@@ -452,11 +567,55 @@ autograd::PostAccumulateGradHook *Tensor::post_accumulate_grad_hook() const { re
 std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
     os << "Tensor(data_ptr=" << static_cast<const void *>(tensor.DataPtr()) << ", dims=[";
     for (const auto &dim : tensor.Dims()) { os << dim << ", "; }
-    os << "], dtype=" << kDataTypeToDesc.at(tensor.Dtype()) << ")";
+    os << "], dtype=" << kDataTypeToDesc.at(tensor.Dtype()) << ", requires_grad=" << tensor.requires_grad() << ")";
     return os;
 }
 
+std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return a->Equals(b);
+}
+
 std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar) { return t->Equals(scalar); }
+
+std::shared_ptr<Tensor> operator<(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return a->Lt(b);
+}
+
+std::shared_ptr<Tensor> operator<(const std::shared_ptr<Tensor> &a, float scalar) { return a->Lt(scalar); }
+
+std::shared_ptr<Tensor> operator<(float scalar, const std::shared_ptr<Tensor> &a) { return a->Gt(scalar); }
+
+std::shared_ptr<Tensor> operator>(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return a->Gt(b);
+}
+
+std::shared_ptr<Tensor> operator>(const std::shared_ptr<Tensor> &a, float scalar) { return a->Gt(scalar); }
+
+std::shared_ptr<Tensor> operator>(float scalar, const std::shared_ptr<Tensor> &a) { return a->Lt(scalar); }
+
+std::shared_ptr<Tensor> operator<=(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return a->Le(b);
+}
+
+std::shared_ptr<Tensor> operator<=(const std::shared_ptr<Tensor> &a, float scalar) { return a->Le(scalar); }
+
+std::shared_ptr<Tensor> operator<=(float scalar, const std::shared_ptr<Tensor> &a) { return a->Ge(scalar); }
+
+std::shared_ptr<Tensor> operator>=(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return a->Ge(b);
+}
+
+std::shared_ptr<Tensor> operator>=(const std::shared_ptr<Tensor> &a, float scalar) { return a->Ge(scalar); }
+
+std::shared_ptr<Tensor> operator>=(float scalar, const std::shared_ptr<Tensor> &a) { return a->Le(scalar); }
+
+std::shared_ptr<Tensor> operator&(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return a->And(b);
+}
+
+std::shared_ptr<Tensor> operator|(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    return a->Or(b);
+}
 
 std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2) {
     return t1->Add(t2);

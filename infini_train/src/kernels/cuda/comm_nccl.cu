@@ -225,6 +225,44 @@ std::shared_ptr<Tensor> NcclGather(const std::vector<std::shared_ptr<Tensor>> &t
     NCCL_CHECK(ncclGroupEnd());
     return output;
 }
+
+void NcclAllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input) {
+    // Assume this kernel only executed on local ranks
+    auto *device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto *output_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
+    CHECK(device->IsCUDA()) << "NcclAllGather requires a CUDA tensor/device";
+    CHECK(device == output_device) << "NcclAllGather input/output must be on the same CUDA device";
+
+    device->SetDevice();
+    cudaStream_t stream = device->Stream();
+    ncclComm_t comm = device->NcclComm();
+
+    auto dtype = input->Dtype();
+    auto nccl_dtype = kNcclDtypeMap.at(dtype);
+    auto count = input->NumElements();
+
+    NCCL_CHECK(ncclAllGather(input->DataPtr(), output->DataPtr(), count, nccl_dtype, comm, stream));
+}
+
+void NcclReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                       ReduceOpType reduce_op) {
+    auto *device_in = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto *device_out = dynamic_cast<const CudaDevice *>(output->GetDevice());
+    CHECK(device_in && device_out && device_in->IsCUDA()) << "NcclReduceScatter requires CUDA tensors/devices";
+    CHECK(device_in == device_out) << "NcclReduceScatter input/output must be on the same CUDA device";
+
+    device_in->SetDevice();
+    cudaStream_t stream = device_in->Stream();
+    ncclComm_t comm = device_in->NcclComm();
+
+    auto dtype = input->Dtype();
+    auto nccl_dtype = kNcclDtypeMap.at(dtype);
+    int64_t count = static_cast<int64_t>(output->NumElements());
+
+    NCCL_CHECK(ncclReduceScatter(input->DataPtr(), output->DataPtr(), count, nccl_dtype, kNcclReduceOpMap.at(reduce_op),
+                                 comm, stream));
+}
+
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_COMM_KERNEL(kernel_name)                                                                         \
@@ -235,6 +273,8 @@ REGISTER_CUDA_COMM_KERNEL(NcclScatter)
 REGISTER_CUDA_COMM_KERNEL(NcclGather)
 REGISTER_CUDA_COMM_KERNEL(NcclReduceAddCoalesced)
 REGISTER_CUDA_COMM_KERNEL(NcclAllReduce)
+REGISTER_CUDA_COMM_KERNEL(NcclAllGather)
+REGISTER_CUDA_COMM_KERNEL(NcclReduceScatter)
 
 #undef REGISTER_CUDA_COMM_KERNEL
 
