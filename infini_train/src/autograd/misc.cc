@@ -57,7 +57,8 @@ std::vector<std::shared_ptr<Tensor>> Slice::Forward(const std::vector<std::share
 
     auto device = input->GetDevice()->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device, "SliceForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, starts_, ends_, steps_)};
+    auto res = kernel.Call<std::shared_ptr<Tensor>>(input, starts_, ends_, steps_);
+    return {res};
 }
 
 void Slice::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,

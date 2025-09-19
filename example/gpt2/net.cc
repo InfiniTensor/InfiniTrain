@@ -137,6 +137,7 @@ Block::Block(const GPT2Config &config) {
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
 Block::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
+    printf("Block::Forward \n");
     // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd) -> attention -> (bs, seq_len, n_embd)
     // -> Add -> (bs, seq_len, n_embd)
     auto x1 = x[0] + modules_[kAttnLayerName]->Forward(modules_[kLn1LayerName]->Forward(x))[0];
@@ -183,6 +184,31 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
         }
     });
 }
+
+std::vector<std::shared_ptr<nn::Module>> GPT2::GetPipelineLayers() {
+    auto &transformer = modules_[kTransformerLayerName];
+
+    std::vector<std::shared_ptr<nn::Module>> layers;
+
+    layers.push_back(transformer->mutable_module(kWTELayerName));
+    layers.push_back(transformer->mutable_module(kWPELayerName));
+
+    auto seq = std::dynamic_pointer_cast<nn::Sequential>(transformer->mutable_module(kHLayerName));
+    if (seq) {
+        for (int idx = 0; idx < seq->size(); ++idx) { 
+            auto sub_module = (*seq)[idx];
+            layers.push_back(sub_module);
+        }
+    }
+
+    layers.push_back(transformer->mutable_module(kLnFLayerName));
+
+    layers.push_back(modules_[kLMHeadLayerName]);
+
+    return layers;
+}
+
+int GPT2::GetHiddenSize() const { return config_.n_embd; }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
 GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {

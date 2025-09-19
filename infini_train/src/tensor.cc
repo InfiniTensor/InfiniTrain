@@ -329,7 +329,8 @@ std::shared_ptr<Tensor> Tensor::Squeeze(int64_t dim) {
 
 std::shared_ptr<Tensor> Tensor::Slice(const std::vector<int64_t> &starts, const std::vector<int64_t> &ends,
                                       const std::vector<int64_t> &steps) {
-    return std::make_shared<autograd::Slice>(starts, ends, steps)->Apply({shared_from_this()})[0];
+    auto res = std::make_shared<autograd::Slice>(starts, ends, steps)->Apply({shared_from_this()})[0];
+    return res;
 }
 
 std::shared_ptr<Tensor> Tensor::Slice(int64_t dim, int64_t start, int64_t end, int64_t step) {

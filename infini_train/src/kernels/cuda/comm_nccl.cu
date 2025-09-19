@@ -225,6 +225,64 @@ std::shared_ptr<Tensor> NcclGather(const std::vector<std::shared_ptr<Tensor>> &t
     NCCL_CHECK(ncclGroupEnd());
     return output;
 }
+
+std::shared_ptr<Tensor> NcclSend(std::shared_ptr<Tensor> tensor, int dest_rank) {
+    printf("NcclSend Start!!\n");
+    auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+    cudaStream_t stream = device_ptr->Stream();
+    ncclComm_t comm = device_ptr->NcclComm();
+
+    CHECK_NE(dest_rank, -1) << "Destination device not found in input tensors's devices";
+
+    // NCCL_CHECK(ncclGroupStart());
+
+    auto dtype = tensor->Dtype();
+    auto nccl_dtype = kNcclDtypeMap.at(dtype);
+    auto count = tensor->NumElements();
+    void *buffer = tensor->DataPtr();
+
+    NCCL_CHECK(ncclSend(buffer, count, nccl_dtype, dest_rank, comm, stream));
+    printf("NcclSend: count=%zu, dtype=%d \n", count, (int)dtype);
+    printf(" NcclSend: comm=%p, stream=%p, dest_rank=%d\n", (void *)comm, (void *)stream, dest_rank);
+    printf("NcclSend finish!!! %d\n", dest_rank);
+
+    // NCCL_CHECK(ncclGroupEnd());
+
+    printf("NcclSend(std::shared_ptr<Tensor> tensor, int dest_rank)  OK!!!\n");
+    return tensor;
+}
+
+std::shared_ptr<Tensor> NcclRecv(std::shared_ptr<Tensor> tensor, int src_rank) {
+    printf("NcclRecv entry!!!\n");
+    auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+    CHECK(device_ptr) << "Tensor not on CUDA device";
+    CHECK(tensor->DataPtr() != nullptr) << "Tensor data is null";
+
+    cudaStream_t stream = device_ptr->Stream();
+    ncclComm_t comm = device_ptr->NcclComm();
+
+    CHECK(comm != nullptr) << "NCCL communicator is null on device ";
+    CHECK(stream != nullptr) << "CUDA stream is null";
+
+    CHECK_NE(src_rank, -1) << "Source device not found in input devices";
+
+    // NCCL_CHECK(ncclGroupStart());
+
+    auto dtype = tensor->Dtype();
+    auto nccl_dtype = kNcclDtypeMap.at(dtype);
+    auto count = tensor->NumElements();
+    void *buffer = tensor->DataPtr();
+
+    NCCL_CHECK(ncclRecv(buffer, count, nccl_dtype, src_rank, comm, stream));
+    printf("NcclRecv: count=%zu, dtype=%d \n", count, (int)dtype);
+    printf(" NcclRecv: comm=%p, stream=%p, src_rank=%d\n", (void *)comm, (void *)stream, src_rank);
+    printf("NcclRecv finish!!! %d\n", src_rank);
+
+    // NCCL_CHECK(ncclGroupEnd());
+
+    printf("NcclRecv OK!!! FLAG 3\n");
+    return tensor;
+}
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_COMM_KERNEL(kernel_name)                                                                         \
@@ -235,7 +293,8 @@ REGISTER_CUDA_COMM_KERNEL(NcclScatter)
 REGISTER_CUDA_COMM_KERNEL(NcclGather)
 REGISTER_CUDA_COMM_KERNEL(NcclReduceAddCoalesced)
 REGISTER_CUDA_COMM_KERNEL(NcclAllReduce)
-
+REGISTER_CUDA_COMM_KERNEL(NcclSend)
+REGISTER_CUDA_COMM_KERNEL(NcclRecv)
 #undef REGISTER_CUDA_COMM_KERNEL
 
 #endif // USE_NCCL

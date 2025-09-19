@@ -129,6 +129,10 @@ public:
 
     explicit LLaMA3(const LLaMA3Config &config);
 
+    std::vector<std::shared_ptr<infini_train::nn::Module>> GetPipelineLayers() override;
+
+    int GetHiddenSize() const;
+
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 

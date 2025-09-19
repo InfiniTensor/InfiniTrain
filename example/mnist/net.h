@@ -13,6 +13,11 @@ class MNIST : public infini_train::nn::Module {
 public:
     MNIST();
 
+    std::vector<std::shared_ptr<infini_train::nn::Module>> GetPipelineLayers() override {
+        LOG(FATAL) << "not implemented";
+        return {};
+    }
+
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
