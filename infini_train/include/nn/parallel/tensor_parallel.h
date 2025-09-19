@@ -104,12 +104,14 @@ public:
     static constexpr char kType[] = "VocabParallelEmbedding";
     static constexpr char kParamWeightName[] = "weight";
 
-    VocabParallelEmbedding(int64_t num_embeddings, int64_t embedding_dim, TensorParallelGroup tp_group);
+    VocabParallelEmbedding(int64_t num_embeddings, int64_t embedding_dim, bool reduce_scatter_embeddings,
+                           TensorParallelGroup tp_group);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
 private:
     TensorParallelGroup tp_group_;
+    bool reduce_scatter_embeddings_ = false; // whether to perform ReduceScatter after embedding lookup
 
     int64_t vocab_size_global_ = 0;
     int64_t embedding_dim_ = 0;

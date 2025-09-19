@@ -54,6 +54,7 @@ DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 DEFINE_string(device, "cuda", "device type (cpu/cuda), useless if data_parallel=true");
 // parallel
 DEFINE_uint32(tensor_parallel, 0, "Tensor Parallel world size (0=use all visible CUDA devices)");
+DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 
@@ -112,6 +113,11 @@ int main(int argc, char **argv) {
     CHECK_LE(world_size, cuda_devs.size()) << "tp_world_size should be less than device count";
     LOG(INFO) << "TP world size = " << world_size;
 
+    if (FLAGS_sequence_parallel) {
+        CHECK_EQ(FLAGS_sequence_length % world_size, 0)
+            << "sequence_length must be divisible by tp_world_size when SP is enabled (pad later if needed).";
+    }
+
     auto build_model = [&](tp::TensorParallelGroup tp_group) -> std::shared_ptr<TensorParallelGPT2> {
         std::shared_ptr<TensorParallelGPT2> model = nullptr;
         if (!FLAGS_llmc_filepath.empty()) {
@@ -137,6 +143,7 @@ int main(int argc, char **argv) {
         tp_groups[r] = tp::TensorParallelGroup();
         tp_groups[r].devices.assign(cuda_devs.begin(), cuda_devs.begin() + world_size);
         tp_groups[r].rank = r;
+        tp_groups[r].sequence_parallel_enabled = FLAGS_sequence_parallel;
 
         models[r] = build_model(tp_groups[r]);
         models[r]->To(tp_groups[r].devices[r]);
@@ -214,7 +221,6 @@ int main(int argc, char **argv) {
                 y_rank[r] = std::make_shared<Tensor>(y->To(tp_groups[r].devices[r]));
             }
 
-            LOG(INFO) << "start forward";
             // Perform forward on each rank
             std::vector<std::shared_ptr<Tensor>> local_logits(world_size);
             std::vector<float> local_losses(world_size, 0.0f);
@@ -242,7 +248,7 @@ int main(int argc, char **argv) {
                 for (auto &th : threads) { th.join(); }
             }
 
-            // NOTE(zbl): losses on each rank should be the same,
+            // NOTE(zbl): In pure TP context, losses on each rank should be the same,
             //            since AllReduce has been called in VocabParallelCrossEntropyLoss
             lossf += local_losses[0];
         }
@@ -262,8 +268,9 @@ int main(int argc, char **argv) {
         const double toks_per_sec = FLAGS_total_batch_size / (duration_us / 1e6);
 
         LOG(ERROR) << std::format(
-            "step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, tp_world={})", step + 1,
-            FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3, toks_per_sec, world_size);
+            "step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, TP={}, SP={})", step + 1,
+            FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3, toks_per_sec, world_size,
+            FLAGS_sequence_parallel ? world_size : 0);
 
         if ((step + 1) % FLAGS_freq_generate_txt == 0 && tokenizer) {
             LOG(FATAL) << "[TP] text generation skipped in this example.";

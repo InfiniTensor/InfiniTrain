@@ -14,7 +14,6 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/optimizer.h"
 #ifdef PROFILE_MODE
@@ -249,10 +248,12 @@ int main(int argc, char *argv[]) {
 
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
-        const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
+        const double toks_per_sec = FLAGS_total_batch_size / (duration_us / 1e6);
 
-        LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s)",
-                                  step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f, tps);
+        LOG(ERROR) << std::format(
+            "step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, TP={}, SP={})", step + 1,
+            FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3, toks_per_sec, world_size,
+            FLAGS_sequence_parallel ? world_size : 0);
 
         if ((step + 1) % FLAGS_freq_generate_txt == 0 && tokenizer) {
             LOG(FATAL) << "[TP] text generation skipped in this example.";

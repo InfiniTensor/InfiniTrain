@@ -19,7 +19,6 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
-#include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
 namespace nn = infini_train::nn;
@@ -57,7 +56,8 @@ TPCausalSelfAttention::TPCausalSelfAttention(const TPGPT2Config &config)
         /*bias=*/true, config_.tp_group,
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false);
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/config_.tp_group.sequence_parallel_enabled);
 
     // proj: RowParallel (input is parallel and output is full)
     modules_[kCProjLayerName] = std::make_shared<tp::RowParallelLinear>(
@@ -66,7 +66,8 @@ TPCausalSelfAttention::TPCausalSelfAttention(const TPGPT2Config &config)
         /*bias=*/true, config_.tp_group,
         /*reduce_output=*/true,
         /*input_is_parallel=*/true,
-        /*skip_bias_add=*/false);
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/config_.tp_group.sequence_parallel_enabled);
 
     // causal mask: (1, 1, block_size, block_size)
     buffers_[kParamBiasName] = nn::function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
@@ -76,7 +77,6 @@ TPCausalSelfAttention::TPCausalSelfAttention(const TPGPT2Config &config)
 std::vector<std::shared_ptr<infini_train::Tensor>>
 TPCausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     const auto B = x[0]->Dims()[0];                                 // bs
-    const auto T = x[0]->Dims()[1];                                 // seq_len
     const auto C = x[0]->Dims()[2];                                 // n_embd
     const int64_t head_dim = n_embd_ / n_head_;                     // per-head dim (global)
     const int64_t local_C = n_embd_ / config_.tp_group.WorldSize(); // per-rank hidden
@@ -89,6 +89,9 @@ TPCausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::T
     auto q = qkv[0];
     auto k = qkv[1];
     auto v = qkv[2];
+
+    // NOTE(zbl): Acquire full T after AllGather is performed in ColumnParallelLinear
+    const auto T = q->Dims()[1];
 
     // View to multi-head: local_n_head * head_dim == local_C
     // (B, T, local_C) -> (B, T, h_l, Dh) -> (B, h_l, T, Dh)
@@ -123,7 +126,8 @@ TPMLP::TPMLP(const TPGPT2Config &config) {
         /*bias=*/true, config.tp_group,
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false);
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/config.tp_group.sequence_parallel_enabled);
 
     modules_[kGeluLayerName] = std::make_shared<NewGELU>();
 
@@ -133,7 +137,8 @@ TPMLP::TPMLP(const TPGPT2Config &config) {
         /*bias=*/true, config.tp_group,
         /*reduce_output=*/true,
         /*input_is_parallel=*/true,
-        /*skip_bias_add=*/false);
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/config.tp_group.sequence_parallel_enabled);
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
@@ -171,12 +176,11 @@ TensorParallelGPT2::TensorParallelGPT2(const TPGPT2Config &config) : config_(con
     // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
     //            Megatron-LM has an optional argument `--make-vocab-size-divisible-by`, would do padding to vocab
     //            Here we introduce padding by default, might need modify Tokenizer correspondingly later
-    //            Due to weight tying, we need to manually slice logits at the end of forward
     CHECK_EQ(config.vocab_size % config.tp_group.WorldSize(), 0) << "Vocab size should be divisible by TP world size";
     {
         std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
-        transformer[kWTELayerName]
-            = std::make_shared<tp::VocabParallelEmbedding>(config_.vocab_size, config_.n_embd, config_.tp_group);
+        transformer[kWTELayerName] = std::make_shared<tp::VocabParallelEmbedding>(
+            config_.vocab_size, config_.n_embd, config_.tp_group.sequence_parallel_enabled, config_.tp_group);
         transformer[kWPELayerName] = std::make_shared<nn::Embedding>(config_.block_size, config_.n_embd);
         {
             std::vector<std::shared_ptr<nn::Module>> h;
@@ -193,7 +197,8 @@ TensorParallelGPT2::TensorParallelGPT2(const TPGPT2Config &config) : config_(con
         // NOTE(zbl): each rank would get sharded [B, T, V_local] as logits
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false);
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/config.tp_group.sequence_parallel_enabled);
 
     // https://paperswithcode.com/method/weight-tying
     *mutable_module(kTransformerLayerName)
@@ -212,8 +217,11 @@ TensorParallelGPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tens
     const auto t = idx->Dims()[1]; // T
     CHECK_LE(t, config_.block_size) << "Cannot forward sequence of length " << t << ", block size is only "
                                     << config_.block_size;
-    // (T)
-    auto pos = nn::init::Arange(0, t, infini_train::DataType::kINT64, device);
+    // (T_local)
+    // NOTE(zbl): Slice pos sequence when SP is enabled
+    int64_t t_local = config_.tp_group.sequence_parallel_enabled ? (t / config_.tp_group.WorldSize()) : t;
+    int64_t start = config_.tp_group.sequence_parallel_enabled ? config_.tp_group.Rank() * t_local : 0;
+    auto pos = nn::init::Arange(start, start + t_local, infini_train::DataType::kINT64, device);
     // forward the GPT2 model itself
     auto &transformer = modules_[kTransformerLayerName];
     // (B, T) -> Embedding(V_local, C) -> (B, T, C)

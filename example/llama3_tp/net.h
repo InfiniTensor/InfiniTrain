@@ -96,7 +96,6 @@ public:
 
 private:
     int64_t hidden_dim_ = 0;
-    TPLLaMA3Config config_;
 };
 
 class TPBlock : public infini_train::nn::CloneableModule<TPBlock> {

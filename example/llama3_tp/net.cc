@@ -20,7 +20,6 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
-#include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
 using namespace infini_train;
@@ -167,7 +166,6 @@ TPCausalSelfAttention::TPCausalSelfAttention(const TPLLaMA3Config &config)
 
 std::vector<std::shared_ptr<Tensor>> TPCausalSelfAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     const auto B = x[0]->Dims()[0]; // bs
-    // const auto T_local = x[0]->Dims()[1]; // seq_len_local
     const auto C = x[0]->Dims()[2]; // n_embd
 
     const auto tp_world = config_.tp_group.WorldSize();
@@ -326,8 +324,8 @@ std::vector<std::shared_ptr<Tensor>> TPBlock::Forward(const std::vector<std::sha
 TensorParallelLLaMA3::TensorParallelLLaMA3(const TPLLaMA3Config &config) : config_(config) {
     {
         std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
-        transformer[kWTELayerName]
-            = std::make_shared<tp::VocabParallelEmbedding>(config.vocab_size, config.n_embd, config_.tp_group);
+        transformer[kWTELayerName] = std::make_shared<tp::VocabParallelEmbedding>(
+            config.vocab_size, config.n_embd, config_.tp_group.sequence_parallel_enabled, config_.tp_group);
         {
             std::vector<std::shared_ptr<nn::Module>> h;
             for (int64_t i = 0; i < config.n_layer; i++) { h.push_back(std::make_shared<TPBlock>(config)); }

@@ -396,8 +396,9 @@ RowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_ten
 }
 
 VocabParallelEmbedding::VocabParallelEmbedding(int64_t num_embeddings, int64_t embedding_dim,
-                                               TensorParallelGroup tp_group)
-    : Module(kType), tp_group_(tp_group), vocab_size_global_(num_embeddings), embedding_dim_(embedding_dim) {
+                                               bool reduce_scatter_embeddings, TensorParallelGroup tp_group)
+    : Module(kType), tp_group_(tp_group), vocab_size_global_(num_embeddings), embedding_dim_(embedding_dim),
+      reduce_scatter_embeddings_(reduce_scatter_embeddings) {
     CHECK_GT(tp_group_.WorldSize(), 0) << "No available devices found for VocabParallelEmbedding";
     CHECK_GT(num_embeddings, 0);
     CHECK_GT(embedding_dim, 0);
@@ -447,8 +448,8 @@ VocabParallelEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>> &inpu
         local_output = local_output->MaskedFill(std::make_shared<Tensor>(input_mask->To(local_output->Dtype())), 0.0f);
     }
 
-    auto output = tp_group_.sequence_parallel_enabled ? ReduceScatterToSPRegionFunc(local_output, tp_group_)[0]
-                                                      : ReduceFromTPRegionFunc(local_output, tp_group_)[0];
+    auto output = reduce_scatter_embeddings_ ? ReduceScatterToSPRegionFunc(local_output, tp_group_)[0]
+                                             : ReduceFromTPRegionFunc(local_output, tp_group_)[0];
 
     return {output};
 }
