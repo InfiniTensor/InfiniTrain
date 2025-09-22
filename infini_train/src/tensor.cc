@@ -677,6 +677,17 @@ void Tensor::Print(std::ostream &os) const {
 
     const int ndim = dims_.size();
 
+    if (ndim == 0) {
+        os << "Tensor(";
+        if (num_elements == 0) {
+            os << "[], ";
+        } else {
+            os << str_vals[0] << ", ";
+        }
+        os << "dtype=float32, shape=())\n";
+        return;
+    }
+
     std::function<void(int, size_t, int)> print_rec;
     print_rec = [&](int dim, size_t offset, int indent) {
         os << "[";
