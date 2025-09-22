@@ -371,6 +371,7 @@ template <typename Func> std::shared_ptr<Tensor> UnaryForward(const std::shared_
     switch (dtype) {
         DISPATCH_CASE(WRAP(LaunchForward<256, float>(unary_fn, output, input);), DataType::kFLOAT32)
         DISPATCH_CASE(WRAP(LaunchForward<256, nv_bfloat16>(unary_fn, output, input);), DataType::kBFLOAT16)
+        DISPATCH_CASE(WRAP(LaunchForward<256, int64_t>(unary_fn, output, input);), DataType::kINT64)
     default:
         LOG_LOC(FATAL, "CUDA unary forward: 'Unsupported data type'");
     }
@@ -394,6 +395,11 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
                           LaunchBackward<256, nv_bfloat16>(unary_fn, output, grad_output, a);
                       }),
                       DataType::kBFLOAT16)
+        DISPATCH_CASE(WRAP({
+                          output->Fill<int64_t>(0);
+                          LaunchBackward<256, int64_t>(unary_fn, output, grad_output, a);
+                      }),
+                      DataType::kINT64)
     default:
         LOG_LOC(FATAL, "CUDA unary backward: 'Unsupported data type'");
     }
@@ -414,6 +420,7 @@ std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const st
     switch (dtype) {
         DISPATCH_CASE(WRAP(LaunchForward<256, float>(binary_fn, output, a, b);), DataType::kFLOAT32)
         DISPATCH_CASE(WRAP(LaunchForward<256, nv_bfloat16>(binary_fn, output, a, b);), DataType::kBFLOAT16)
+        DISPATCH_CASE(WRAP(LaunchForward<256, int64_t>(binary_fn, output, a, b);), DataType::kINT64)
     default:
         LOG_LOC(FATAL, "CUDA binary forward: 'Unsupported data type'");
     }
@@ -460,6 +467,14 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
                                                            b);
                       }),
                       DataType::kBFLOAT16)
+        // FIXME(zbl): AtomicAdd does not support int64_t
+        // DISPATCH_CASE(WRAP({
+        //                   grad_a->Fill<int64_t>(0);
+        //                   grad_b->Fill<int64_t>(0);
+        //                   LaunchBackward<256, int64_t>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
+        //                   b);
+        //               }),
+        //               DataType::kINT64)
     default:
         LOG_LOC(FATAL, "CUDA binary backward: 'Unsupported data type'");
     }
@@ -475,7 +490,7 @@ std::shared_ptr<Tensor> NegForward(const std::shared_ptr<Tensor> &input) {
 
 std::shared_ptr<Tensor> NegBackward(const std::shared_ptr<Tensor> &grad_output) {
     DISPATCH(grad_output->Dtype(),
-             return UnaryBackward(grad_output, nullptr, [] __device__(auto x) { return decltype(x){-1.f}; });
+             return UnaryBackward(grad_output, nullptr, [] __device__(auto x) { return decltype(x){-1}; });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
@@ -488,7 +503,7 @@ std::shared_ptr<Tensor> ReciprocalBackward(const std::shared_ptr<Tensor> &grad_o
                                            const std::shared_ptr<Tensor> &input) {
     DISPATCH(
         grad_output->Dtype(),
-        return UnaryBackward(grad_output, input, [] __device__(auto x) { return Div(decltype(x){-1.f}, Mul(x, x)); });
+        return UnaryBackward(grad_output, input, [] __device__(auto x) { return Div(decltype(x){-1}, Mul(x, x)); });
         , INFINI_ALL_FLOATING_TYPES)
 }
 
@@ -521,16 +536,18 @@ std::shared_ptr<Tensor> TanhForward(const std::shared_ptr<Tensor> &input) {
 std::shared_ptr<Tensor> TanhBackward(const std::shared_ptr<Tensor> &grad_output,
                                      const std::shared_ptr<Tensor> &output) {
     DISPATCH(grad_output->Dtype(),
-             return UnaryBackward(grad_output, output, [] __device__(auto x) { return decltype(x){1.0} - Mul(x, x); });
+             return UnaryBackward(grad_output, output, [] __device__(auto x) { return decltype(x){1} - Mul(x, x); });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> PowForward(const std::shared_ptr<Tensor> &input, float scalar, bool scalar_is_base) {
     DISPATCH(input->Dtype(), WRAP({
                  if (scalar_is_base) {
-                     return UnaryForward(input, [scalar] __device__(auto x) { return Pow(decltype(x){scalar}, x); });
+                     return UnaryForward(
+                         input, [scalar] __device__(auto x) { return Pow(static_cast<decltype(x)>(scalar), x); });
                  } else {
-                     return UnaryForward(input, [scalar] __device__(auto x) { return Pow(x, decltype(x){scalar}); });
+                     return UnaryForward(
+                         input, [scalar] __device__(auto x) { return Pow(x, static_cast<decltype(x)>(scalar)); });
                  }
              }),
              INFINI_ALL_FLOATING_TYPES);
@@ -545,7 +562,7 @@ std::shared_ptr<Tensor> PowBackward(const std::shared_ptr<Tensor> &grad_output, 
                                       if (scalar_is_base) {
                                           return Mul(Log(casted_scalar), Pow(casted_scalar, x));
                                       } else {
-                                          return Mul(casted_scalar, Pow(x, casted_scalar - decltype(x){1.0}));
+                                          return Mul(casted_scalar, Pow(x, casted_scalar - decltype(x){1}));
                                       }
                                   });
              , INFINI_ALL_FLOATING_TYPES)
@@ -558,18 +575,128 @@ std::shared_ptr<Tensor> RsqrtForward(const std::shared_ptr<Tensor> &input) {
 
 std::shared_ptr<Tensor> RsqrtBackward(const std::shared_ptr<Tensor> &grad_output,
                                       const std::shared_ptr<Tensor> &input) {
-    DISPATCH(grad_output->Dtype(), return UnaryBackward(grad_output, input,
-                                                        [] __device__(auto x) {
-                                                            return Mul(decltype(x){-0.5}, Mul(Reciprocal(x), Rsqrt(x)));
-                                                        });
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(
+                 grad_output, input,
+                 [] __device__(auto x) { return Mul(static_cast<decltype(x)>(-0.5), Mul(Reciprocal(x), Rsqrt(x))); });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
-std::shared_ptr<Tensor> EqualsScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
-    DISPATCH(a->Dtype(),
-             return UnaryForward(
-                 a, [scalar] __device__(auto x) { return x == decltype(x){scalar} ? decltype(x){1} : decltype(x){0}; });
+std::shared_ptr<Tensor> ExpForward(const std::shared_ptr<Tensor> &input) {
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return Exp(x); });
              , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> ExpBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &output) {
+    DISPATCH(grad_output->Dtype(), return UnaryBackward(grad_output, output, [] __device__(auto y) { return y; });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> LogForward(const std::shared_ptr<Tensor> &input) {
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return Log(x); });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> LogBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &input) {
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, input, [] __device__(auto x) { return Reciprocal(x); });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> EqualsForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(),
+             return BinaryForward(a, b,
+                                  [] __device__(auto x, auto y) { return (x == y) ? decltype(x){1} : decltype(x){0}; });
+             , INFINI_ALL_TYPES)
+}
+
+std::shared_ptr<Tensor> EqualsScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    DISPATCH(a->Dtype(), return UnaryForward(a,
+                                             [scalar] __device__(auto x) {
+                                                 return x == static_cast<decltype(x)>(scalar) ? decltype(x){1}
+                                                                                              : decltype(x){0};
+                                             });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> LtForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(), return BinaryForward(
+                             a, b, [] __device__(auto x, auto y) { return x < y ? decltype(x){1} : decltype(x){0}; });
+             , INFINI_ALL_TYPES)
+}
+
+std::shared_ptr<Tensor> LtScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    DISPATCH(a->Dtype(), return UnaryForward(a,
+                                             [scalar] __device__(auto x) {
+                                                 return (x < static_cast<decltype(x)>(scalar)) ? decltype(x){1}
+                                                                                               : decltype(x){0};
+                                             });
+             , INFINI_ALL_TYPES)
+}
+
+std::shared_ptr<Tensor> LeForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(),
+             return BinaryForward(a, b,
+                                  [] __device__(auto x, auto y) { return (x <= y) ? decltype(x){1} : decltype(x){0}; });
+             , INFINI_ALL_TYPES)
+}
+
+std::shared_ptr<Tensor> LeScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    DISPATCH(a->Dtype(), return UnaryForward(a,
+                                             [scalar] __device__(auto x) {
+                                                 return (x <= static_cast<decltype(x)>(scalar)) ? decltype(x){1}
+                                                                                                : decltype(x){0};
+                                             });
+             , INFINI_ALL_TYPES)
+}
+
+std::shared_ptr<Tensor> GtForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(), return BinaryForward(
+                             a, b, [] __device__(auto x, auto y) { return x > y ? decltype(x){1} : decltype(x){0}; });
+             , INFINI_ALL_TYPES)
+}
+
+std::shared_ptr<Tensor> GtScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    DISPATCH(a->Dtype(), return UnaryForward(a,
+                                             [scalar] __device__(auto x) {
+                                                 return (x > static_cast<decltype(x)>(scalar)) ? decltype(x){1}
+                                                                                               : decltype(x){0};
+                                             });
+             , INFINI_ALL_TYPES)
+}
+
+std::shared_ptr<Tensor> GeForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(),
+             return BinaryForward(a, b,
+                                  [] __device__(auto x, auto y) { return (x >= y) ? decltype(x){1} : decltype(x){0}; });
+             , INFINI_ALL_TYPES)
+}
+
+std::shared_ptr<Tensor> GeScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
+    DISPATCH(a->Dtype(), return UnaryForward(a,
+                                             [scalar] __device__(auto x) {
+                                                 return (x >= static_cast<decltype(x)>(scalar)) ? decltype(x){1}
+                                                                                                : decltype(x){0};
+                                             });
+             , INFINI_ALL_TYPES)
+}
+
+std::shared_ptr<Tensor> OrForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(), return BinaryForward(a, b,
+                                              [] __device__(auto x, auto y) {
+                                                  return (x != decltype(x){0} || y != decltype(y){0}) ? decltype(x){1}
+                                                                                                      : decltype(x){0};
+                                              });
+             , INFINI_ALL_TYPES)
+}
+
+std::shared_ptr<Tensor> AndForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    DISPATCH(a->Dtype(), return BinaryForward(a, b,
+                                              [] __device__(auto x, auto y) {
+                                                  return (x != decltype(x){0} && y != decltype(y){0}) ? decltype(x){1}
+                                                                                                      : decltype(x){0};
+                                              });
+             , INFINI_ALL_TYPES)
 }
 
 std::shared_ptr<Tensor> AddForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
@@ -585,20 +712,21 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> AddBackward(const st
 }
 
 std::shared_ptr<Tensor> AddScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
-    DISPATCH(a->Dtype(), return UnaryForward(a, [scalar] __device__(auto x) { return Add(x, decltype(x){scalar}); });
-             , INFINI_ALL_FLOATING_TYPES)
+    DISPATCH(a->Dtype(),
+             return UnaryForward(a, [scalar] __device__(auto x) { return Add(x, static_cast<decltype(x)>(scalar)); });
+             , INFINI_ALL_TYPES)
 }
 
 std::shared_ptr<Tensor> AddScalarBackward(const std::shared_ptr<Tensor> &grad_output) {
     DISPATCH(grad_output->Dtype(),
              return UnaryBackward(grad_output, nullptr,
                                   [] __device__(auto x) { return common::cuda::Cast<decltype(x)>(1); });
-             , INFINI_ALL_FLOATING_TYPES)
+             , INFINI_ALL_TYPES)
 }
 
 std::shared_ptr<Tensor> SubForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
     DISPATCH(a->Dtype(), return BinaryForward(a, b, [] __device__(auto x, auto y) { return Sub(x, y); });
-             , INFINI_ALL_FLOATING_TYPES)
+             , INFINI_ALL_TYPES)
 }
 
 std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> SubBackward(const std::shared_ptr<Tensor> &grad_output,
@@ -629,13 +757,15 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> MulBackward(const st
 }
 
 std::shared_ptr<Tensor> MulScalarForward(const std::shared_ptr<Tensor> &a, float scalar) {
-    DISPATCH(a->Dtype(), return UnaryForward(a, [scalar] __device__(auto x) { return Mul(x, decltype(x){scalar}); });
+    DISPATCH(a->Dtype(),
+             return UnaryForward(a, [scalar] __device__(auto x) { return Mul(x, static_cast<decltype(x)>(scalar)); });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> MulScalarBackward(const std::shared_ptr<Tensor> &grad_output, float scalar) {
     DISPATCH(grad_output->Dtype(),
-             return UnaryBackward(grad_output, nullptr, [scalar] __device__(auto x) { return decltype(x){scalar}; });
+             return UnaryBackward(grad_output, nullptr,
+                                  [scalar] __device__(auto x) { return static_cast<decltype(x)>(scalar); });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
@@ -689,7 +819,22 @@ REGISTER_CUDA_ELEMENTWISE_KERNEL(PowForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(PowBackward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(RsqrtForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(RsqrtBackward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(ExpForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(ExpBackward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(LogForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(LogBackward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(EqualsForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(EqualsScalarForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(LtForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(LtScalarForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(LeForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(LeScalarForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(GtForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(GtScalarForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(GeForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(GeScalarForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(OrForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(AndForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(AddForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(AddBackward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(AddScalarForward)

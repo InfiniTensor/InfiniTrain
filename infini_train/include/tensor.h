@@ -82,8 +82,22 @@ public:
     Tensor To(const Device *device);
     Tensor To(DataType dtype);
 
+    Tensor Clone() const;
+
     // operator overloading
+    std::shared_ptr<Tensor> Equals(const std::shared_ptr<Tensor> &other);
     std::shared_ptr<Tensor> Equals(float scalar);
+    std::shared_ptr<Tensor> Lt(const std::shared_ptr<Tensor> &other);
+    std::shared_ptr<Tensor> Lt(float scalar);
+    std::shared_ptr<Tensor> Le(const std::shared_ptr<Tensor> &other);
+    std::shared_ptr<Tensor> Le(float scalar);
+    std::shared_ptr<Tensor> Gt(const std::shared_ptr<Tensor> &other);
+    std::shared_ptr<Tensor> Gt(float scalar);
+    std::shared_ptr<Tensor> Ge(const std::shared_ptr<Tensor> &other);
+    std::shared_ptr<Tensor> Ge(float scalar);
+    std::shared_ptr<Tensor> And(const std::shared_ptr<Tensor> &other);
+    std::shared_ptr<Tensor> Or(const std::shared_ptr<Tensor> &other);
+
     std::shared_ptr<Tensor> Add(const std::shared_ptr<Tensor> &other);
     std::shared_ptr<Tensor> Add(float scalar);
     std::shared_ptr<Tensor> Sub(const std::shared_ptr<Tensor> &other);
@@ -97,8 +111,17 @@ public:
     std::shared_ptr<Tensor> Tanh();
     std::shared_ptr<Tensor> Pow(float exponent);
     std::shared_ptr<Tensor> Rsqrt();
+    std::shared_ptr<Tensor> Exp();
+    std::shared_ptr<Tensor> Log();
+
+    std::shared_ptr<Tensor> Mean(int64_t dim, bool keep_dim = false);
+    std::shared_ptr<Tensor> Sum(int64_t dim, bool keep_dim = false);
+    std::shared_ptr<Tensor> Min(int64_t dim, bool keep_dim = false);
+    std::shared_ptr<Tensor> Max(int64_t dim, bool keep_dim = false);
 
     std::vector<std::shared_ptr<Tensor>> Split(int split_size, int dim = 0);
+    std::shared_ptr<Tensor> Gather(int dim, std::shared_ptr<Tensor> index);
+
     std::shared_ptr<Tensor> Transpose(int dim0, int dim1);
     std::shared_ptr<Tensor> Slice(const std::vector<int64_t> &starts, const std::vector<int64_t> &ends,
                                   const std::vector<int64_t> &steps);
@@ -110,6 +133,7 @@ public:
     std::shared_ptr<Tensor> Contiguous();
     std::shared_ptr<Tensor> Flatten(int64_t start = 0, int64_t end = -1);
     std::shared_ptr<Tensor> Squeeze(int64_t dim);
+    std::shared_ptr<Tensor> Unsqueeze(int64_t dim);
 
     // distribution
     std::shared_ptr<Tensor> Uniform(float from = 0.0f, float to = 1.0f,
@@ -119,7 +143,23 @@ public:
     std::shared_ptr<Tensor> Outer(const std::shared_ptr<Tensor> &other);
     std::shared_ptr<Tensor> MaskedFill(const std::shared_ptr<Tensor> &mask, float value);
 
+    friend std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
     friend std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar);
+    friend std::shared_ptr<Tensor> operator<(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
+    friend std::shared_ptr<Tensor> operator<(const std::shared_ptr<Tensor> &t, float scalar);
+    friend std::shared_ptr<Tensor> operator<(float scalar, const std::shared_ptr<Tensor> &t);
+    friend std::shared_ptr<Tensor> operator>(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
+    friend std::shared_ptr<Tensor> operator>(const std::shared_ptr<Tensor> &t, float scalar);
+    friend std::shared_ptr<Tensor> operator>(float scalar, const std::shared_ptr<Tensor> &t);
+    friend std::shared_ptr<Tensor> operator<=(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
+    friend std::shared_ptr<Tensor> operator<=(const std::shared_ptr<Tensor> &t, float scalar);
+    friend std::shared_ptr<Tensor> operator<=(float scalar, const std::shared_ptr<Tensor> &t);
+    friend std::shared_ptr<Tensor> operator>=(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
+    friend std::shared_ptr<Tensor> operator>=(const std::shared_ptr<Tensor> &t, float scalar);
+    friend std::shared_ptr<Tensor> operator>=(float scalar, const std::shared_ptr<Tensor> &t);
+    friend std::shared_ptr<Tensor> operator&(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
+    friend std::shared_ptr<Tensor> operator|(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
+
     friend std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
     friend std::shared_ptr<Tensor> operator+(float scalar, const std::shared_ptr<Tensor> &t);
     friend std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor> &t, float scalar);
