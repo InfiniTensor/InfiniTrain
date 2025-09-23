@@ -22,6 +22,11 @@ std::vector<std::shared_ptr<Tensor>> Gather(const std::vector<std::vector<std::s
 
 void AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op);
 
+void AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input);
+
+void ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                   ReduceOpType reduce_op = ReduceOpType::kSum);
+
 std::vector<std::vector<std::shared_ptr<Tensor>>>
 BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors,
                           const std::vector<const Device *> &devices);
