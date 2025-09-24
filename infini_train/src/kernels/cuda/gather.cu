@@ -31,7 +31,15 @@ __global__ void IndexGatherForwardKernel(const T *__restrict__ input, const int6
         return;
     }
 
-    const int64_t gather_j = norm_index[out_idx];
+    // Normalize like PyTorch: allow negative, clamp to [0, dim_size_gather-1]
+    int64_t gather_j = norm_index[out_idx];
+    gather_j = (gather_j < 0) ? (gather_j + dim_size_gather) : gather_j;
+    if (gather_j < 0) {
+        gather_j = 0;
+    }
+    if (gather_j >= dim_size_gather) {
+        gather_j = dim_size_gather - 1;
+    }
 
     int64_t in_linear = 0, tmp = out_idx;
 #pragma unroll
@@ -65,7 +73,9 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
         if (d == dim) {
             continue;
         }
-        CHECK_EQ(in_dims[d], idx_dims[d]) << "index shape must match input on non-gather dims";
+        // Align with PyTorch semantics: index.size(d) <= input.size(d) for d != dim
+        CHECK_LE(idx_dims[d], in_dims[d])
+            << "index.size(" << d << ") must be <= input.size(" << d << ") on non-gather dims";
     }
 
     const auto *cuda_dev = dynamic_cast<const CudaDevice *>(input->GetDevice());

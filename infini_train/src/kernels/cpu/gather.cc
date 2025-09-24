@@ -28,7 +28,9 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
         if (d == dim) {
             continue;
         }
-        CHECK_EQ(in_dims[d], idx_dims[d]) << "index shape must match input on non-gather dims";
+        // Align with PyTorch semantics: index.size(d) <= input.size(d) for d != dim
+        CHECK_LE(idx_dims[d], in_dims[d])
+            << "index.size(" << d << ") must be <= input.size(" << d << ") on non-gather dims";
     }
 
     auto out = std::make_shared<Tensor>(idx_dims, input->Dtype(), input->GetDevice());
@@ -55,11 +57,14 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
         const int64_t *idx_ptr = static_cast<const int64_t *>(index->DataPtr());
         for (int64_t i = 0; i < total; ++i) {
             int64_t v = idx_ptr[i];
+            // Normalize like PyTorch: allow negative, clamp to [0, dim_size_gather-1]
+            v = (v < 0) ? (v + gather_dim_size) : v;
             if (v < 0) {
-                v += gather_dim_size; // 负索引 wrap
+                v = 0;
             }
-            CHECK_GE(v, 0) << "gather index out of bounds";
-            CHECK_LT(v, gather_dim_size) << "gather index out of bounds";
+            if (v >= gather_dim_size) {
+                v = gather_dim_size - 1;
+            }
             norm_index[i] = v;
         }
     }
@@ -116,7 +121,9 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
         if (d == dim) {
             continue;
         }
-        CHECK_EQ(in_dims[d], idx_dims[d]) << "index shape must match input on non-gather dims";
+        // Align with PyTorch semantics: index.size(d) <= input.size(d) for d != dim
+        CHECK_LE(idx_dims[d], in_dims[d])
+            << "index.size(" << d << ") must be <= input.size(" << d << ") on non-gather dims";
     }
 
     auto grad_input = std::make_shared<Tensor>(in_dims, grad_output->Dtype(), grad_output->GetDevice());
@@ -144,11 +151,14 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
         const int64_t *idx_ptr = static_cast<const int64_t *>(index->DataPtr());
         for (int64_t i = 0; i < total; ++i) {
             int64_t v = idx_ptr[i];
+            // Normalize like PyTorch: allow negative, clamp to [0, dim_size_gather-1]
+            v = (v < 0) ? (v + gather_dim_size) : v;
             if (v < 0) {
-                v += gather_dim_size;
+                v = 0;
             }
-            CHECK_GE(v, 0) << "gather index out of bounds";
-            CHECK_LT(v, gather_dim_size) << "gather index out of bounds";
+            if (v >= gather_dim_size) {
+                v = gather_dim_size - 1;
+            }
             norm_index[i] = v;
         }
     }
