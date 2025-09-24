@@ -62,6 +62,10 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
     const auto *device = grad_output->GetDevice();
     device->SetDevice();
 
+    // std::cout << "[BACKWARD] Enter: " << typeid(*this).name()
+    //           << " @ " << this
+    //           << ", grad_output_idx=" << grad_output_idx
+    //           << ", device=" << device->ToString() <<std::endl;
     // NOTE(dcj): The accumulate autograd function has no grad_outputs.
     // Temporarily resize the vector to hold one nullptr as a buffer.
     if (grad_outputs_.empty()) {
@@ -75,6 +79,7 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
         kernel.Call<void>(grad_output, 1.0f, grad_outputs_.at(grad_output_idx));
     }
     ++dependencies_reached_;
+    // std::cout << "[BWD] IN: " << typeid(*this).name() << " @ " << this << std::endl;
     if (grad_outputs_reached_ == grad_outputs_.size()
         && (dependencies_reached_ == dependencies_number_ || dependencies_number_ == 0)) {
         std::vector<std::shared_ptr<Tensor>> grad_inputs;
@@ -97,6 +102,7 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
             }
         }
     }
+    // std::cout << "[BWD] OUT: " << typeid(*this).name() << " @ " << this<< std::endl;
 }
 
 void Function::IncreaseDependenciesNumber() { ++dependencies_number_; }

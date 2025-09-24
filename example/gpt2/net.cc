@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -183,6 +184,81 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
         }
     });
 }
+
+class EmbeddingLayer : public nn::Module {
+    std::shared_ptr<nn::Module> wte, wpe;
+
+public:
+    EmbeddingLayer(std::shared_ptr<nn::Module> wte, std::shared_ptr<nn::Module> wpe)
+        : wte(std::move(wte)), wpe(std::move(wpe)) {}
+
+    std::vector<std::shared_ptr<infini_train::Tensor>> Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &inputs) override {
+        auto &input_ids = inputs[0];  // (bs, seq_len)
+        const int seq_len = input_ids->Dims()[1];
+        const auto device = input_ids->GetDevice();
+
+        // position ids: [0, 1, ..., seq_len-1]
+        auto pos_ids = nn::init::Arange(0, seq_len, infini_train::DataType::kINT64, device);
+        // (bs, seq_len) -> wte -> (bs, seq_len, n_embd)
+        auto tok_emb = wte->Forward({input_ids})[0];
+        // (seq_len,) -> wpe -> (seq_len, n_embd)
+        auto pos_emb = wpe->Forward({pos_ids})[0];
+
+        auto output = tok_emb + pos_emb; // (bs, seq_len, n_embd)
+
+        return {output};
+    }
+};
+
+class OutputLayer : public nn::Module {
+    std::shared_ptr<nn::Module> ln_f;
+    std::shared_ptr<nn::Module> lm_head;
+
+public:
+    OutputLayer(std::shared_ptr<nn::Module> ln_f, std::shared_ptr<nn::Module> lm_head)
+        : ln_f(std::move(ln_f)), lm_head(std::move(lm_head)) {}
+
+    std::vector<std::shared_ptr<infini_train::Tensor>> Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &inputs) override {
+        auto x = ln_f->Forward(inputs)[0];
+        x = lm_head->Forward({x})[0];
+        return {x};
+    }
+};
+
+std::vector<std::shared_ptr<nn::Module>> GPT2::GetPipelineLayers() {
+    auto &transformer = modules_[kTransformerLayerName];
+
+    std::vector<std::shared_ptr<nn::Module>> layers;
+
+    auto embedding_layer = std::make_shared<EmbeddingLayer>(
+        transformer->mutable_module(kWTELayerName),
+        transformer->mutable_module(kWPELayerName)
+    );
+    layers.push_back(embedding_layer);
+
+    // layers.push_back(transformer->mutable_module(kWTELayerName));
+    // layers.push_back(transformer->mutable_module(kWPELayerName));
+
+    auto seq = std::dynamic_pointer_cast<nn::Sequential>(transformer->mutable_module(kHLayerName));
+    if (seq) {
+        for (int idx = 0; idx < seq->size(); ++idx) { 
+            auto sub_module = (*seq)[idx];
+            layers.push_back(sub_module);
+        }
+    }
+
+    // auto output_layer = std::make_shared<OutputLayer>(
+    //     transformer->mutable_module(kLnFLayerName),
+    //     modules_[kLMHeadLayerName]
+    // );
+    // layers.push_back(output_layer);
+    layers.push_back(transformer->mutable_module(kLnFLayerName));
+    layers.push_back(modules_[kLMHeadLayerName]);
+
+    return layers;
+}
+
+int GPT2::GetHiddenSize() const { return config_.n_embd; }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
 GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {

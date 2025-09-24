@@ -48,6 +48,16 @@ public:
 
     virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
 
+    virtual std::vector<std::shared_ptr<Module>> GetPipelineLayers() { return {}; }
+
+    virtual int GetHiddenSize() const { return 0; }
+
+    virtual float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                            const std::vector<std::shared_ptr<Tensor>> &targets,
+                            const std::shared_ptr<Module> &loss_fn) {
+        return 0.0f;
+    };
+
     virtual void To(const Device *device);
 
     virtual void To(DataType dtype);

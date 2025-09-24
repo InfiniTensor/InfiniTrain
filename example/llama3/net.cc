@@ -287,6 +287,27 @@ LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
     modules_[kLMHeadLayerName] = std::make_shared<nn::Linear>(config.n_embd, config.vocab_size, false);
 }
 
+std::vector<std::shared_ptr<nn::Module>> LLaMA3::GetPipelineLayers() {
+    auto &transformer = modules_[kTransformerLayerName];
+
+    std::vector<std::shared_ptr<nn::Module>> layers;
+
+    layers.push_back(transformer->mutable_module(kWTELayerName));
+
+    auto seq = std::dynamic_pointer_cast<nn::Sequential>(transformer->mutable_module(kHLayerName));
+    if (seq) {
+        for (const auto &sub_module : seq->modules()) { layers.push_back(sub_module); }
+    }
+
+    layers.push_back(transformer->mutable_module(kLnFLayerName));
+
+    layers.push_back(modules_[kLMHeadLayerName]);
+
+    return layers;
+}
+
+int LLaMA3::GetHiddenSize() const { return config_.n_embd; }
+
 std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     // (bs, seq_len)
     auto &idx = x[0];

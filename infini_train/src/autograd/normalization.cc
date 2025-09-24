@@ -14,11 +14,13 @@ std::vector<std::shared_ptr<Tensor>> LayerNorm::Forward(const std::vector<std::s
     const auto &bias = input_tensors[2];
 
     auto device = input->GetDevice()->Type();
+    // printf("LayerNorm::Forward entry\n");
     auto kernel = Dispatcher::Instance().GetKernel({device, "LayerNormForward"});
     auto [output, mean, rstd]
         = kernel.Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
             input, weight, bias, eps_);
     saved_tensors_ = {mean, rstd};
+    // printf("LayerNorm::Forward exit\n");
     return {output};
 }
 
