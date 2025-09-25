@@ -5,21 +5,9 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {
-namespace {
-static inline std::vector<int64_t> ComputeStrides(const std::vector<int64_t> &dims) {
-    if (dims.empty()) {
-        return {};
-    }
-    std::vector<int64_t> strides(dims.size());
-    int64_t s = 1;
-    for (int i = (int)dims.size() - 1; i >= 0; --i) {
-        strides[i] = s;
-        s *= dims[i];
-    }
-    return strides;
-}
-} // namespace
-
+// FIXME(zbl): This kernel aligns with torch.gather
+//             Currently named IndexGather to avoid conflict with communication operators
+//             Should be renamed to Gather later for interface consistency
 template <typename T>
 __global__ void IndexGatherForwardKernel(const T *__restrict__ input, const int64_t *__restrict__ norm_index,
                                          T *__restrict__ output, const int64_t *__restrict__ out_dims,

@@ -64,13 +64,6 @@ void LaunchKernel(Kernel &&kernel, const std::shared_ptr<Tensor> &output, const 
     }
 }
 
-// Helper for stride calculation
-std::vector<int64_t> ComputeStride(const std::vector<int64_t> &dims) {
-    std::vector<int64_t> strides(dims.size(), 1);
-    for (int i = dims.size() - 2; i >= 0; --i) { strides[i] = strides[i + 1] * dims[i + 1]; }
-    return strides;
-}
-
 // launch a forward elementwise operation given the calculation function, output, and the inputs
 // Note: currently only support unary and binary operations
 template <size_t BLOCK_SIZE, typename T, typename Func, typename... Inputs>
@@ -103,9 +96,9 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
         std::copy_backward(b_dims.begin(), b_dims.end(), b_shape.end());
         std::copy_backward(out_dims.begin(), out_dims.end(), out_shape.end());
 
-        auto a_stride_host = ComputeStride(a_shape);
-        auto b_stride_host = ComputeStride(b_shape);
-        auto out_stride_host = ComputeStride(out_shape);
+        auto a_stride_host = ComputeStrides(a_shape);
+        auto b_stride_host = ComputeStrides(b_shape);
+        auto out_stride_host = ComputeStrides(out_shape);
 
         int64_t *device_buffer;
         cudaMallocAsync(&device_buffer, 5 * ndim * sizeof(int64_t), stream);
@@ -314,9 +307,9 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     std::copy_backward(b_dims.begin(), b_dims.end(), b_shape.end());
     std::copy_backward(out_dims.begin(), out_dims.end(), out_shape.end());
 
-    auto a_stride_host = ComputeStride(a_shape);
-    auto b_stride_host = ComputeStride(b_shape);
-    auto out_stride_host = ComputeStride(out_shape);
+    auto a_stride_host = ComputeStrides(a_shape);
+    auto b_stride_host = ComputeStrides(b_shape);
+    auto out_stride_host = ComputeStrides(out_shape);
 
     int64_t *device_buffer;
     cudaMallocAsync(&device_buffer, 5 * ndim * sizeof(int64_t), stream);

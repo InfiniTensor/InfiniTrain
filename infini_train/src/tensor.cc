@@ -225,32 +225,6 @@ Tensor Tensor::To(DataType dtype) {
     return new_tensor;
 }
 
-Tensor Tensor::Clone() const {
-    auto device = GetDevice();
-    Tensor cloned(dims_, dtype_, device);
-
-    device->SetDevice();
-
-    if (device->Type() == DeviceType::kCPU) {
-        std::memcpy(cloned.DataPtr(), DataPtr(), SizeInBytes());
-    }
-#ifdef USE_CUDA
-    else if (device->Type() == DeviceType::kCUDA) {
-        CUDA_CHECK(cudaMemcpyAsync(cloned.DataPtr(), DataPtr(), SizeInBytes(), cudaMemcpyDeviceToDevice,
-                                   dynamic_cast<const CudaDevice *>(device)->Stream()));
-    }
-#endif
-    else {
-        LOG(FATAL) << "Unsupported device type for Clone.";
-    }
-
-    if (grad_) {
-        cloned.grad_ = std::make_unique<Tensor>(grad_->Clone());
-    }
-    cloned.requires_grad_ = requires_grad_;
-    return cloned;
-}
-
 // operator overloading
 std::shared_ptr<Tensor> Tensor::Equals(const std::shared_ptr<Tensor> &other) {
     return std::make_shared<autograd::Equals>()->Apply({shared_from_this(), other})[0];
@@ -373,7 +347,7 @@ std::vector<std::shared_ptr<Tensor>> Tensor::Split(int split_size, int dim) {
     return std::make_shared<autograd::Split>(split_size, dim)->Apply({shared_from_this()});
 }
 
-std::shared_ptr<Tensor> Tensor::Gather(int dim, std::shared_ptr<Tensor> index) {
+std::shared_ptr<Tensor> Tensor::Gather(int dim, const std::shared_ptr<Tensor> &index) {
     CHECK(GetDevice() == index->GetDevice()) << "index must be on the same device as input.";
     return std::make_shared<autograd::IndexGather>(dim)->Apply({shared_from_this(), index})[0];
 }

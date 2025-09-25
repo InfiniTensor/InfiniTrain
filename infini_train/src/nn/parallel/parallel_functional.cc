@@ -41,21 +41,6 @@ void AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op) {
     kernel.Call<void>(tensor, reduce_op);
 }
 
-void AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input) {
-    // TODO(zbl): use no_grad mode later
-    auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "CommNcclAllGather"});
-    kernel.Call<void>(output, input);
-}
-
-void ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
-                   ReduceOpType reduce_op) {
-    // TODO(zbl): use no_grad mode later
-    auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "CommNcclReduceScatter"});
-    kernel.Call<void>(output, input, reduce_op);
-}
-
 std::vector<std::vector<std::shared_ptr<Tensor>>>
 BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors,
                           const std::vector<const Device *> &devices) {

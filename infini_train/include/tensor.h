@@ -82,8 +82,6 @@ public:
     Tensor To(const Device *device);
     Tensor To(DataType dtype);
 
-    Tensor Clone() const;
-
     // operator overloading
     std::shared_ptr<Tensor> Equals(const std::shared_ptr<Tensor> &other);
     std::shared_ptr<Tensor> Equals(float scalar);
@@ -120,7 +118,7 @@ public:
     std::shared_ptr<Tensor> Max(int64_t dim, bool keep_dim = false);
 
     std::vector<std::shared_ptr<Tensor>> Split(int split_size, int dim = 0);
-    std::shared_ptr<Tensor> Gather(int dim, std::shared_ptr<Tensor> index);
+    std::shared_ptr<Tensor> Gather(int dim, const std::shared_ptr<Tensor> &index);
 
     std::shared_ptr<Tensor> Transpose(int dim0, int dim1);
     std::shared_ptr<Tensor> Slice(const std::vector<int64_t> &starts, const std::vector<int64_t> &ends,

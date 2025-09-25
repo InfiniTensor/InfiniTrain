@@ -27,6 +27,9 @@ private:
     std::vector<int64_t> input_dims_;
 };
 
+// FIXME(zbl): This function aligns with torch.gather
+//             Currently named IndexGather to avoid conflict with communication operators
+//             Should be renamed to Gather later for interface consistency
 class IndexGather : public Function {
 public:
     static constexpr char kType[] = "IndexGatherFunction";
@@ -104,7 +107,7 @@ public:
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
 private:
-    int64_t dim_ = 0;
+    const int64_t dim_ = 0;
     std::vector<std::vector<int64_t>> input_dims_list_;
 };
 } // namespace infini_train::autograd

@@ -123,7 +123,7 @@ std::shared_ptr<Tensor> Rsqrt(const std::shared_ptr<Tensor> &input);
 //   A new tensor with the aggregate values computed along the specified dimension.
 std::shared_ptr<Tensor> Mean(const std::shared_ptr<Tensor> &input, int64_t dim, bool keep_dim = false);
 std::shared_ptr<Tensor> Sum(const std::shared_ptr<Tensor> &input, int64_t dim, bool keep_dim = false);
-std::shared_ptr<Tensor> Mim(const std::shared_ptr<Tensor> &input, int64_t dim, bool keep_dim = false);
+std::shared_ptr<Tensor> Min(const std::shared_ptr<Tensor> &input, int64_t dim, bool keep_dim = false);
 std::shared_ptr<Tensor> Max(const std::shared_ptr<Tensor> &input, int64_t dim, bool keep_dim = false);
 
 // Returns a new tensor with the sigmoid of each element in the input.
