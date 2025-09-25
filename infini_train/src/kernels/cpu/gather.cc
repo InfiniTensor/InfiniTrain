@@ -8,7 +8,9 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
-
+// FIXME(zbl): This kernel aligns with torch.gather
+//             Currently named IndexGather to avoid conflict with communication operators
+//             Should be renamed to Gather later for interface consistency
 std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &index,
                                            int64_t dim) {
     const auto &in_dims = input->Dims();
