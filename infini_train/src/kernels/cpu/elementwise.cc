@@ -12,15 +12,6 @@
 
 namespace infini_train::kernels::cpu {
 namespace {
-std::vector<int64_t> ComputeStrides(const std::vector<int64_t> &dims) {
-    std::vector<int64_t> strides(dims.size());
-    int64_t stride = 1;
-    for (int i = dims.size() - 1; i >= 0; --i) {
-        strides[i] = stride;
-        stride *= dims[i];
-    }
-    return strides;
-}
 
 std::shared_ptr<Tensor> UnaryForward(const std::shared_ptr<Tensor> &input, std::function<float(float)> unary_fn) {
     auto output = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32);
