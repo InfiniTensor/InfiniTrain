@@ -10,6 +10,7 @@
 namespace infini_train::kernels::cuda {
 namespace {
 using namespace infini_train::common::cuda;
+constexpr int kWarpSize = 32;
 
 template <typename T, typename Func>
 __global__ void UnaryForwardKernel(T *output, Func fn, size_t num_elements, size_t offset, const T *input) {
@@ -145,6 +146,228 @@ __global__ void UnaryBackwardKernel(T *output, Func fn, size_t num_elements, siz
     }
 }
 
+enum class BF16Path { NoBroadcast, TwoPassHist, BlockReduce };
+
+inline bool ShapesEqual(const std::vector<int64_t>& a, const std::vector<int64_t>& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) if (a[i] != b[i]) return false;
+    return true;
+}
+
+inline size_t EffectiveKeySpaceK(const std::vector<int64_t>& b_shape) {
+    size_t K = 1;
+    for (auto v : b_shape) if (v > 1) K *= static_cast<size_t>(v);
+    return K;
+}
+
+// Lightweight and stable selector for bf16/half execution paths.
+inline BF16Path DecideBF16Path(const std::vector<int64_t>& b_shape,
+                               const std::vector<int64_t>& out_shape) {
+    if (ShapesEqual(b_shape, out_shape)) return BF16Path::NoBroadcast;
+    const bool varies_last = (b_shape.back() > 1);
+    if (varies_last) {
+        const size_t K = EffectiveKeySpaceK(b_shape);
+        if (K <= 4096) return BF16Path::TwoPassHist;   // shared histogram two-pass path
+    }
+    return BF16Path::BlockReduce;                      // fallback to block reduction kernel otherwise
+}
+
+// Each B element is used exactly once, so gradients can be written directly without reduction.
+template <typename T, typename FuncA, typename FuncB>
+__global__ void BinaryBackwardKernel_NoBroadcast(T *__restrict__ outA, T *__restrict__ outB, FuncA fn_a, FuncB fn_b,
+                                                 int ndim, size_t numel, const int64_t *__restrict__ a_strides,
+                                                 const int64_t *__restrict__ a_shape,
+                                                 const int64_t *__restrict__ b_strides,
+                                                 const int64_t *__restrict__ b_shape,
+                                                 const int64_t *__restrict__ out_strides,
+                                                 const T *__restrict__ grad_out, const T *__restrict__ inA,
+                                                 const T *__restrict__ inB) {
+    const size_t grid_stride = static_cast<size_t>(gridDim.x) * blockDim.x;
+    for (size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; idx < numel;
+         idx += grid_stride) {
+        const int64_t a_off = CalcOffset(idx, ndim, a_strides, a_shape, out_strides);
+        const int64_t b_off = CalcOffset(idx, ndim, b_strides, b_shape, out_strides);
+
+        const T a = inA ? inA[a_off] : T(0);
+        const T b = inB ? inB[b_off] : T(0);
+
+        // Gradient for A has a one-to-one mapping, so we write directly.
+        outA[a_off] = Mul<T>(grad_out[idx], fn_a(a, b));
+
+        // Gradient for B also maps one-to-one; no atomics or reductions are required.
+        outB[b_off] = common::cuda::Cast<T>(Mul<T>(grad_out[idx], fn_b(a, b)));
+    }
+}
+
+template <typename T_out, typename T_in>
+__global__ void ConvertKernel(T_out* dst, const T_in* src, size_t n) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n) {
+        dst[idx] = static_cast<T_out>(src[idx]);
+    }
+}
+// First pass of histogram two-pass strategy: per-block accumulation in shared memory.
+template <typename T, typename FuncA, typename FuncB>
+__global__ void BinaryBackwardPass1_Bhist(T *__restrict__ outA, float *__restrict__ work, FuncA fn_a, FuncB fn_b,
+                                          int ndim, size_t numel, int K, const int64_t *__restrict__ a_strides,
+                                          const int64_t *__restrict__ a_shape,
+                                          const int64_t *__restrict__ b_strides,
+                                          const int64_t *__restrict__ b_shape,
+                                          const int64_t *__restrict__ out_strides,
+                                          const T *__restrict__ grad_out, const T *__restrict__ inA,
+                                          const T *__restrict__ inB) {
+    extern __shared__ float s_hist[];   // dynamic shared memory: K bins plus padding for every 32 buckets
+    const int pad = K >> 5;             // insert one padding slot for every 32 buckets
+    const int hist_len = K + pad;
+
+    // Zero the shared histogram buffer.
+    for (int t = threadIdx.x; t < hist_len; t += blockDim.x) s_hist[t] = 0.0f;
+    __syncthreads();
+
+    const size_t total_threads = (size_t)gridDim.x * blockDim.x;
+    for (size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; idx < numel;
+         idx += total_threads) {
+        // Linearized offset for B under general broadcasting.
+        const int64_t b_off = CalcOffset(idx, ndim, b_strides, b_shape, out_strides);
+        const int bin = static_cast<int>(b_off);    // assume K fits in a 32-bit int
+        const int pbin = bin + (bin >> 5);          // apply padding mapping
+
+        // Compute the offset for A under broadcasting.
+        const int64_t a_off = CalcOffset(idx, ndim, a_strides, a_shape, out_strides);
+
+        const T a = inA ? inA[a_off] : T(0);
+        const T b = inB ? inB[bin]   : T(0);        // B is indexed via the flattened bin
+
+        // A is not broadcast, so gradients can be written directly.
+        outA[a_off] = Mul<T>(grad_out[idx], fn_a(a, b));
+
+        // Accumulate B's contribution into the shared histogram using float precision.
+        const float g = common::cuda::Cast<float>(Mul<T>(grad_out[idx], fn_b(a, b)));
+        atomicAdd(&s_hist[pbin], g);
+    }
+    __syncthreads();
+
+    // Write this block's histogram back to the global workspace: work[block, :].
+    float *dst = work + static_cast<size_t>(blockIdx.x) * static_cast<size_t>(K);
+    for (int bin = threadIdx.x; bin < K; bin += blockDim.x) {
+        const int pbin = bin + (bin >> 5);
+        dst[bin] = s_hist[pbin];
+    }
+}
+
+// Second pass for histogram path: tile the workspace along CTA dimension and atomically add into float buffer.
+template <typename T>
+__global__ void BinaryBackwardReduceWorkToB_Bhist_TiledAtomic(const float *__restrict__ work,
+                                                              float *__restrict__ outB_accum, size_t numBlocks,
+                                                              int K, int tile_height) {
+    const int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= K) {
+        return;
+    }
+
+    const size_t begin_row = static_cast<size_t>(blockIdx.y) * static_cast<size_t>(tile_height);
+    const size_t end_row = min(begin_row + static_cast<size_t>(tile_height), numBlocks);
+
+    float acc = 0.0f;
+    for (size_t row = begin_row; row < end_row; ++row) {
+        acc += work[row * static_cast<size_t>(K) + k];
+    }
+
+    atomicAdd(outB_accum + k, acc);
+}
+
+// Convert the accumulated float buffer back to the target type (bf16/half/float).
+template <typename T>
+__global__ void CastFloatToT_Bhist(const float *__restrict__ src, T *__restrict__ dst, int K) {
+    const int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < K) {
+        dst[k] = common::cuda::Cast<T>(src[k]);
+    }
+}
+
+// Legacy single-dimensional reduction fallback for small grids where atomic tiling is unnecessary.
+template <typename T>
+__global__ void BinaryBackwardReduceWorkToB_Bhist(const float *__restrict__ work, T *__restrict__ outB,
+                                                  size_t numBlocks, int K) {
+    const size_t k = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (k >= static_cast<size_t>(K)) {
+        return;
+    }
+
+    float acc = 0.0f;
+    for (size_t b = 0; b < numBlocks; ++b) {
+        acc += work[b * static_cast<size_t>(K) + k];
+    }
+    outB[k] = common::cuda::Cast<T>(acc);
+}
+
+// Helper that materializes the two-pass histogram path for bf16/half B gradients.
+template <typename T, typename FuncA, typename FuncB>
+void LaunchBackward_Bhist(FuncA fn_a, FuncB fn_b, T *outA, T *outB, const T *grad_out, int ndim, size_t numel, int K,
+                          const int64_t *a_strides, const int64_t *a_shape, const int64_t *b_strides,
+                          const int64_t *b_shape, const int64_t *out_strides, const T *inA, const T *inB,
+                          cudaStream_t stream) {
+    const int kBlockSize = 256;
+    int grid = static_cast<int>((numel + kBlockSize - 1) / kBlockSize);
+    if (grid < 1) {
+        grid = 1;
+    }
+
+    // Workspace layout: [grid, K] floats.
+    float *work = nullptr;
+    CUDA_CHECK(cudaMallocAsync(&work, static_cast<size_t>(grid) * static_cast<size_t>(K) * sizeof(float), stream));
+
+    // Pass 1: per-block histogram accumulation.
+    const size_t smem_bytes = static_cast<size_t>(K + (K >> 5)) * sizeof(float);
+    BinaryBackwardPass1_Bhist<T, FuncA, FuncB><<<grid, kBlockSize, smem_bytes, stream>>>(
+        outA, work, fn_a, fn_b, ndim, numel, K, a_strides, a_shape, b_strides, b_shape, out_strides, grad_out, inA,
+        inB);
+    CUDA_CHECK(cudaGetLastError());
+
+    // Pass 2: choose between 1D and 2D reductions depending on workload shape.
+    int dev = 0;
+    int sm_count = 0;
+    CUDA_CHECK(cudaGetDevice(&dev));
+    CUDA_CHECK(cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev));
+
+    const int RED_THREADS = 256;
+    const int oneD_blocks = (K + RED_THREADS - 1) / RED_THREADS;
+
+    // Use the 2D path when the 1D kernel underutilizes the SMs and there are many partial histograms to merge.
+    const bool use2D = (oneD_blocks < sm_count) && (grid > 4 * sm_count);
+
+    if (!use2D) {
+        // Fallback: reuse the legacy 1D kernel without atomics.
+        const dim3 rgrid(oneD_blocks);
+        const dim3 rblock(RED_THREADS);
+        BinaryBackwardReduceWorkToB_Bhist<T><<<rgrid, rblock, 0, stream>>>(work, outB, static_cast<size_t>(grid), K);
+        CUDA_CHECK(cudaGetLastError());
+    } else {
+        // 2D tiling path: slice the workspace and accumulate using float atomics.
+        constexpr int kTileHeight = 128; // rows per CTA; tune between 128 and 256 if needed
+        float *outB_accum = nullptr;
+        CUDA_CHECK(cudaMallocAsync(&outB_accum, static_cast<size_t>(K) * sizeof(float), stream));
+        CUDA_CHECK(cudaMemsetAsync(outB_accum, 0, static_cast<size_t>(K) * sizeof(float), stream));
+
+        const dim3 rblock(RED_THREADS, 1, 1);
+        const dim3 rgrid2((K + RED_THREADS - 1) / RED_THREADS, (grid + kTileHeight - 1) / kTileHeight, 1);
+
+        BinaryBackwardReduceWorkToB_Bhist_TiledAtomic<T><<<rgrid2, rblock, 0, stream>>>(
+            work, outB_accum, static_cast<size_t>(grid), K, kTileHeight);
+        CUDA_CHECK(cudaGetLastError());
+
+        // Convert accumulated floats back to the target dtype.
+        const dim3 cgrid((K + RED_THREADS - 1) / RED_THREADS);
+        CastFloatToT_Bhist<T><<<cgrid, RED_THREADS, 0, stream>>>(outB_accum, outB, K);
+        CUDA_CHECK(cudaGetLastError());
+
+        CUDA_CHECK(cudaFreeAsync(outB_accum, stream));
+    }
+
+    CUDA_CHECK(cudaFreeAsync(work, stream));
+}
+
+
 // Backward kernel for binary operators
 // TODO(lzm): determining and passing b_is_broadcasted from the caller; optimize further
 template <typename T, typename FuncA, typename FuncB>
@@ -209,10 +432,14 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
     }
 }
 
-struct SharedElem {
-    int64_t offset;
-    float grad;
-};
+// ...existing code...
+
+
+
+// struct SharedElem {
+//     int64_t offset;
+//     float grad;
+// };
 // NOTE(dcj): Specialized BinaryBackwardKernel for low-precision types (__half / bfloat16)
 template <typename T, typename FuncA, typename FuncB>
 __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB fn_b, int ndim, size_t num_elements,
@@ -221,12 +448,21 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
                                      const T *grad_output, const T *input_a, const T *input_b, bool fast_atomics) {
     extern __shared__ char shared_memory[];
     // Shared memory stores b_offset and grad_val
-    SharedElem *smem = reinterpret_cast<SharedElem *>(shared_memory);
+    // SharedElem *smem = reinterpret_cast<SharedElem *>(shared_memory);
+   
 
     const int tid = threadIdx.x;
     const int block_threads = blockDim.x;
     const int global_idx = blockIdx.x * blockDim.x + tid;
     bool in_bounds = (global_idx < num_elements);
+    
+     // Dynamic shared memory layout: split offsets and gradients into parallel arrays.
+    extern __shared__ char shared_memory[];
+    int64_t *s_offset = reinterpret_cast<int64_t *>(shared_memory);
+    float *s_grad = reinterpret_cast<float *>(s_offset + block_threads + block_threads / kWarpSize);
+
+    // Padding: insert one slot per 32 threads to avoid bank conflicts.
+    const int padded_tid = tid + (tid >> 5);
 
     // Each thread calculates its own a_offset and b_offset
     int64_t a_offset = 0, b_offset = 0;
@@ -246,28 +482,34 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
         grad_val = common::cuda::Cast<float>(Mul<T>(grad_output[global_idx], fn_b(a_val, b_val)));
     }
 
-    // Write each thread's b_offset and grad_val into shared memory
-    smem[tid].offset = in_bounds ? b_offset : -1;
-    smem[tid].grad = grad_val;
+     // Store partial results in shared memory.
+    s_offset[padded_tid] = in_bounds ? b_offset : -1;
+    s_grad[padded_tid] = grad_val;
 
     __syncthreads();
 
-    // Block-level reduction: threads check if they can accumulate
+    // Perform block-wide reduction with padded indices.
     for (int stride = 1; stride < block_threads; stride *= 2) {
         __syncthreads();
-        if (tid % (2 * stride) == 0 && (tid + stride) < block_threads) {
-            if (smem[tid].offset == smem[tid + stride].offset && smem[tid].offset != -1) {
-                smem[tid].grad += smem[tid + stride].grad;
-                smem[tid + stride].offset = -1;
+        if ((tid % (2 * stride)) == 0 && (tid + stride) < block_threads) {
+            const int p1 = tid + (tid >> 5);
+            const int p2 = (tid + stride) + ((tid + stride) >> 5);
+
+            if (s_offset[p1] == s_offset[p2] && s_offset[p1] != -1) {
+                s_grad[p1] += s_grad[p2];
+                s_offset[p2] = -1;
             }
         }
     }
     __syncthreads();
 
     // Write final result back to global memory
-    if (in_bounds && smem[tid].offset != -1) {
-        fastAtomicAdd<T, size_t>(output_b, smem[tid].offset, b_num_elements, common::cuda::Cast<T>(smem[tid].grad),
-                                 fast_atomics);
+    if (in_bounds) {
+        const int shared_idx = tid + (tid >> 5);
+        if (s_offset[shared_idx] != -1) {
+            fastAtomicAdd<T, size_t>(output_b, s_offset[shared_idx], b_num_elements,
+                                     common::cuda::Cast<T>(s_grad[shared_idx]), fast_atomics);
+        }
     }
 }
 
@@ -333,27 +575,102 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     const size_t num_elements = grad_output->NumElements();
 
     if constexpr (std::is_same_v<T, float>) {
+        // if (ShapesEqual(b_shape, out_shape)){
+        //     // No broadcast: write gradients directly without shared memory or atomics.
+        //     LaunchKernel<BLOCK_SIZE, T>(
+        //         [=](dim3 grid, dim3 block, size_t /*offset*/, auto... ptrs) {
+        //             BinaryBackwardKernel_NoBroadcast<T, FuncA, FuncB>
+        //                 <<<grid, block, 0, stream>>>(
+        //                     output_a_ptr, output_b_ptr, fun_a, fun_b,
+        //                     ndim, num_elements,
+        //                     device_a_strides, device_a_shape,
+        //                     device_b_strides, device_b_shape,
+        //                     device_out_strides,
+        //                     grad_output_ptr, ptrs...);
+        //         },
+        //         output_a, inputs...);
+            
+        //     cudaFreeAsync(device_buffer, stream);
+        //     return;
+        // }
         LaunchKernel<BLOCK_SIZE, T>(
             [=](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
-                const int NUM_WARPS = BLOCK_SIZE / 32;
-                size_t smem_size = NUM_WARPS * sizeof(cub::WarpReduce<float>::TempStorage);
+                const int num_warps = BLOCK_SIZE / kWarpSize;
+                const size_t smem_size = num_warps * sizeof(cub::WarpReduce<float>::TempStorage);
                 BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(
-                    output_a_ptr, output_b_ptr, fun_a, fun_b, ndim, num_elements, device_a_strides, device_a_shape,
-                    device_b_strides, device_b_shape, device_out_strides, grad_output_ptr, ptrs...);
+                    output_a_ptr, output_b_ptr, fun_a, fun_b, ndim, num_elements,
+                    device_a_strides, device_a_shape, device_b_strides, device_b_shape,
+                    device_out_strides, grad_output_ptr, ptrs...);
             },
             output_a, inputs...);
-    } else if constexpr (std::is_same_v<T, __half> || std::is_same_v<T, __nv_bfloat16>) {
-        LaunchKernel<BLOCK_SIZE, T>(
-            [=](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
-                size_t smem_size = BLOCK_SIZE * sizeof(SharedElem);
-                BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(
-                    output_a_ptr, output_b_ptr, fun_a, fun_b, ndim, num_elements, output_b->NumElements(),
-                    device_a_strides, device_a_shape, device_b_strides, device_b_shape, device_out_strides,
-                    grad_output_ptr, ptrs...,
-                    /*fast_atomics=*/true);
-            },
-            output_a, inputs...);
+
     }
+    else if constexpr (std::is_same_v<T, __half> || std::is_same_v<T, __nv_bfloat16>) {
+        // Dynamically choose the most efficient bf16/half strategy based on broadcast pattern.
+        // Compute b_num_elements, which also serves as K for the histogram path.
+        size_t b_num_elements = 1;
+        for (auto v : b_shape) b_num_elements *= static_cast<size_t>(v);
+        const int K_linear = static_cast<int>(b_num_elements);
+
+        // Select the execution path.
+        const BF16Path path = DecideBF16Path(b_shape, out_shape);
+
+       
+
+        if (path == BF16Path::NoBroadcast) {
+            // No broadcast: write gradients directly without shared memory or atomics.
+            LaunchKernel<BLOCK_SIZE, T>(
+                [=](dim3 grid, dim3 block, size_t /*offset*/, auto... ptrs) {
+                    BinaryBackwardKernel_NoBroadcast<T, FuncA, FuncB>
+                        <<<grid, block, 0, stream>>>(
+                            output_a_ptr, output_b_ptr, fun_a, fun_b,
+                            ndim, num_elements,
+                            device_a_strides, device_a_shape,
+                            device_b_strides, device_b_shape,
+                            device_out_strides,
+                            grad_output_ptr, ptrs...);
+                },
+                output_a, inputs...);
+            
+            return;
+        }
+
+        if (path == BF16Path::TwoPassHist) {
+            // Small K with variation in the innermost dimension: use two-pass histogram strategy.
+            LaunchKernel<BLOCK_SIZE, T>(
+                [=](dim3 /*grid*/, dim3 /*block*/, size_t /*offset*/, const T* input_a_ptr, const T* input_b_ptr) {
+                    LaunchBackward_Bhist<T, FuncA, FuncB>(
+                        fun_a, fun_b,output_a_ptr,output_b_ptr,grad_output_ptr,
+                        ndim,num_elements,K_linear,device_a_strides,
+                        device_a_shape,device_b_strides,
+                        device_b_shape,device_out_strides,
+                        input_a_ptr,input_b_ptr,stream);
+                },
+                output_a, inputs...);
+            
+            return;
+        }
+
+        // Otherwise fall back to the block-reduction kernel with SoA layout and fast atomics.
+        LaunchKernel<BLOCK_SIZE, T>(
+            [=](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
+                const int padded_block = BLOCK_SIZE + BLOCK_SIZE / kWarpSize;
+                const size_t smem_size = static_cast<size_t>(padded_block)
+                                         * (sizeof(int64_t) + sizeof(float));
+                BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(
+                    output_a_ptr, output_b_ptr, fun_a, fun_b,
+                    ndim, num_elements, output_b->NumElements(),
+                    device_a_strides, device_a_shape,
+                    device_b_strides, device_b_shape,
+                    device_out_strides,
+                    grad_output_ptr, ptrs..., /*fast_atomics=*/true);
+            },
+            output_a, inputs...);
+
+
+    }
+
+    
     cudaFreeAsync(device_buffer, stream);
 }
 
