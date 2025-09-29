@@ -210,21 +210,6 @@ public:
     }
 };
 
-class OutputLayer : public nn::Module {
-    std::shared_ptr<nn::Module> ln_f;
-    std::shared_ptr<nn::Module> lm_head;
-
-public:
-    OutputLayer(std::shared_ptr<nn::Module> ln_f, std::shared_ptr<nn::Module> lm_head)
-        : ln_f(std::move(ln_f)), lm_head(std::move(lm_head)) {}
-
-    std::vector<std::shared_ptr<infini_train::Tensor>> Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &inputs) override {
-        auto x = ln_f->Forward(inputs)[0];
-        x = lm_head->Forward({x})[0];
-        return {x};
-    }
-};
-
 std::vector<std::shared_ptr<nn::Module>> GPT2::GetPipelineLayers() {
     auto &transformer = modules_[kTransformerLayerName];
 
@@ -236,9 +221,6 @@ std::vector<std::shared_ptr<nn::Module>> GPT2::GetPipelineLayers() {
     );
     layers.push_back(embedding_layer);
 
-    // layers.push_back(transformer->mutable_module(kWTELayerName));
-    // layers.push_back(transformer->mutable_module(kWPELayerName));
-
     auto seq = std::dynamic_pointer_cast<nn::Sequential>(transformer->mutable_module(kHLayerName));
     if (seq) {
         for (int idx = 0; idx < seq->size(); ++idx) { 
@@ -247,18 +229,13 @@ std::vector<std::shared_ptr<nn::Module>> GPT2::GetPipelineLayers() {
         }
     }
 
-    // auto output_layer = std::make_shared<OutputLayer>(
-    //     transformer->mutable_module(kLnFLayerName),
-    //     modules_[kLMHeadLayerName]
-    // );
-    // layers.push_back(output_layer);
     layers.push_back(transformer->mutable_module(kLnFLayerName));
     layers.push_back(modules_[kLMHeadLayerName]);
 
     return layers;
 }
 
-int GPT2::GetHiddenSize() const { return config_.n_embd; }
+std::vector<int64_t> GPT2::GetHiddenSize() const { return {config_.n_embd, config_.n_head}; }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
 GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {

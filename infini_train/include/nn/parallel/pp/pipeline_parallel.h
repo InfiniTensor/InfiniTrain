@@ -15,8 +15,8 @@ namespace infini_train::nn::pipeline {
 
 class PipelineParallel : public Module {
 public:
-    PipelineParallel(const std::shared_ptr<Module> &model, int num_gpus, int num_microbatches, const int batch_size,
-                     const int seq_len, const int hidden_size, float learning_rate);
+    PipelineParallel(const std::shared_ptr<Module> &model, int num_gpus, int num_microbatches,
+                     const std::vector<std::vector<int64_t>> &recv_shape, float learning_rate);
 
     float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input,
                     const std::vector<std::shared_ptr<Tensor>> &target, const std::shared_ptr<Module> &loss_fn);
@@ -31,7 +31,7 @@ private:
     std::vector<std::shared_ptr<PipelineStage>> pipeline_stages_;
     std::vector<std::shared_ptr<PipelineSchedule>> schedules_;
 
-    void SplitModel(const int batch_size, const int seq_len, const int hidden_size, float learning_rate);
+    void SplitModel(const std::vector<std::vector<int64_t>> &recv_shape, float learning_rate);
     void SetupSchedules(int num_microbatches);
 };
 

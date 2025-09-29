@@ -42,8 +42,9 @@ std::vector<std::vector<std::shared_ptr<Module>>> SplitLayersIntoStages(std::vec
 }
 } // namespace
 
-void PipelineParallel::SplitModel(const int batch_size, const int seq_len, const int hidden_size, float learning_rate) {
+void PipelineParallel::SplitModel(const std::vector<std::vector<int64_t>> &recv_shape, float learning_rate) {
     auto layers = original_model_->GetPipelineLayers();
+    printf("PipelineParallel::SplitModel 总分层：%ld\n", layers.size());
     if (layers.empty()) {
         LOG(INFO) << "SplitModel: GetPipelineLayers returned empty vector!";
     }
@@ -59,8 +60,6 @@ void PipelineParallel::SplitModel(const int batch_size, const int seq_len, const
         }
         optims.push_back(std::make_shared<optimizers::SGD>(stage_params, learning_rate));
     }
-
-    ActivationShape recv_shape{.batch_size = batch_size, .seq_len = seq_len, .hidden_size = hidden_size};
 
     for (int s = 0; s < num_stages_; ++s) {
         auto stage = std::make_shared<PipelineStage>(stage_layers[s], s, num_stages_, recv_shape, optims[s]);
@@ -78,13 +77,13 @@ void PipelineParallel::SetupSchedules(int num_microbatches) {
 }
 
 PipelineParallel::PipelineParallel(const std::shared_ptr<Module> &model, int num_gpus, int num_microbatches,
-                                   const int batch_size, const int seq_len, const int hidden_size, float learning_rate)
+                                   const std::vector<std::vector<int64_t>> &recv_shape, float learning_rate)
     : original_model_(model), devices_(DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA)),
       num_stages_(num_gpus) {
     CHECK(!devices_.empty()) << "Devices list is empty";
 
-    // printf("PipelineParallel entry!! devices 个数: %ld num_microbatches: %d\n", devices_.size(), num_microbatches);
-    SplitModel(batch_size, seq_len, hidden_size, learning_rate);
+    printf("PipelineParallel entry!! devices 个数: %d num_microbatches: %d\n", num_stages_, num_microbatches);
+    SplitModel(recv_shape, learning_rate);
     SetupSchedules(num_microbatches);
 }
 
@@ -102,7 +101,7 @@ float PipelineParallel::TrainStep(const std::vector<std::shared_ptr<Tensor>> &in
     for (int si = 0; si < num_stages_; ++si) {
         auto schedule = schedules_[si];
 
-        // printf("[TrainStep] launch thread for stage %d\n", si);
+        printf("[TrainStep] launch thread for stage %d\n", si);
         stage_threads.emplace_back([si, schedule, input, target, loss_fn, &local_losses, this]() {
             devices_[si]->SetDevice();
 

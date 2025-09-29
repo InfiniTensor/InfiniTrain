@@ -10,6 +10,7 @@
 
 namespace infini_train::nn::pipeline {
 void PrintTensorSummary(const std::shared_ptr<Tensor>& tensor, const std::string& tag) {
+    // printf("PrintTensorSummary FLAG1!!!!\n");
     if (!tensor) {
         printf("[TENSOR] %s: NULL tensor\n", tag.c_str());
         return;
@@ -56,7 +57,7 @@ void PrintTensorSummary(const std::shared_ptr<Tensor>& tensor, const std::string
 }
 
 PipelineStage::PipelineStage(std::vector<std::shared_ptr<Module>> &layers, int stage_index, int num_stages,
-                             const ActivationShape &recvShape, std::shared_ptr<Optimizer> optim)
+                            const std::vector<std::vector<int64_t>> &recvShape, std::shared_ptr<Optimizer> optim)
     : stage_index_(stage_index), num_stages_(num_stages), layers_(layers),
       prev_rank_(stage_index > 0 ? stage_index - 1 : -1),
       next_rank_(stage_index < num_stages - 1 ? stage_index + 1 : -1),
@@ -71,7 +72,7 @@ PipelineStage::ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &input
     std::vector<std::shared_ptr<Tensor>> current = inputs;
 
     for (int i = 0; i < layers_.size(); ++i) {
-        // printf("[stage %d] PipelineStage::  single layer Forward! layer %d\n", stage_index_, i);
+        printf("[stage %d] PipelineStage::  single layer Forward! layer %d\n", stage_index_, i);
         auto outputs = layers_[i]->Forward(current);
 
         current = outputs;

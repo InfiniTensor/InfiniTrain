@@ -226,65 +226,80 @@ std::shared_ptr<Tensor> NcclGather(const std::vector<std::shared_ptr<Tensor>> &t
     return output;
 }
 
-std::shared_ptr<Tensor> NcclSend(std::shared_ptr<Tensor> tensor, int dest_rank) {
-    auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
-    cudaStream_t stream = device_ptr->Stream();
-    ncclComm_t comm = device_ptr->NcclComm();
+std::vector<std::shared_ptr<Tensor>> NcclSend(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank) {
+    printf("NcclSend: start!!! %ld\n", tensors.size());
+    for(int i = 0; i < tensors.size(); i++) {
+        auto tensor = tensors[i];
+        if (tensor == nullptr) {
+            printf("NcclSend tensors[%d] is null\n", i);
+            continue;
+        }
+        auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+        cudaStream_t stream = device_ptr->Stream();
+        ncclComm_t comm = device_ptr->NcclComm();
 
-    CHECK_NE(dest_rank, -1) << "Destination device not found in input tensors's devices";
+        CHECK_NE(dest_rank, -1) << "Destination device not found in input tensors's devices";
 
-    // NCCL_CHECK(ncclGroupStart());
+        // NCCL_CHECK(ncclGroupStart());
 
-    auto dtype = tensor->Dtype();
-    auto nccl_dtype = kNcclDtypeMap.at(dtype);
-    auto count = tensor->NumElements();
-    void *buffer = tensor->DataPtr();
-    CHECK(buffer != nullptr) << "NcclSend Tensor data is null";
+        auto dtype = tensor->Dtype();
+        auto nccl_dtype = kNcclDtypeMap.at(dtype);
+        auto count = tensor->NumElements();
+        void *buffer = tensor->DataPtr();
+        CHECK(buffer != nullptr) << "NcclSend Tensor data is null";
 
-    // printf("NcclSend: count=%zu, dtype=%d \n", count, (int)dtype);
+        printf("NcclSend: count=%zu, dtype=%d \n", count, (int)dtype);
 
-    NCCL_CHECK(ncclSend(buffer, count, nccl_dtype, dest_rank, comm, stream));
+        NCCL_CHECK(ncclSend(buffer, count, nccl_dtype, dest_rank, comm, stream));
 
-    // printf(" NcclSend: comm=%p, stream=%p, dest_rank=%d\n", (void *)comm, (void *)stream, dest_rank);
-    // printf("NcclSend finish!!! %d\n", dest_rank);
+        // printf(" NcclSend: comm=%p, stream=%p, dest_rank=%d\n", (void *)comm, (void *)stream, dest_rank);
+        // printf("NcclSend finish!!! %d\n", dest_rank);
 
-    // NCCL_CHECK(ncclGroupEnd());
+        // NCCL_CHECK(ncclGroupEnd());
 
-    // printf("NcclSend(std::shared_ptr<Tensor> tensor, int dest_rank)  OK!!!\n");
-    return tensor;
+        printf("NcclSend(std::shared_ptr<Tensor> tensor, int dest_rank)  OK!!!\n");
+    }
+    return tensors;
 }
 
-std::shared_ptr<Tensor> NcclRecv(std::shared_ptr<Tensor> tensor, int src_rank) {
-    auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
-    CHECK(device_ptr) << "Tensor not on CUDA device";
-    CHECK(tensor->DataPtr() != nullptr) << "Tensor data is null";
+std::vector<std::shared_ptr<Tensor>> NcclRecv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank) {
+    for(int i = 0; i < tensors.size(); i++) {
+        auto tensor = tensors[i];
+        if (tensor == nullptr) {
+            printf("NcclRecv tensors[%d] is null\n", i);
+            continue;
+        }
+        auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+        CHECK(device_ptr) << "Tensor not on CUDA device";
+        CHECK(tensor->DataPtr() != nullptr) << "Tensor data is null";
 
-    cudaStream_t stream = device_ptr->Stream();
-    ncclComm_t comm = device_ptr->NcclComm();
+        cudaStream_t stream = device_ptr->Stream();
+        ncclComm_t comm = device_ptr->NcclComm();
 
-    CHECK(comm != nullptr) << "NCCL communicator is null on device ";
-    CHECK(stream != nullptr) << "CUDA stream is null";
+        CHECK(comm != nullptr) << "NCCL communicator is null on device ";
+        CHECK(stream != nullptr) << "CUDA stream is null";
 
-    CHECK_NE(src_rank, -1) << "Source device not found in input devices";
+        CHECK_NE(src_rank, -1) << "Source device not found in input devices";
 
-    // NCCL_CHECK(ncclGroupStart());
+        // NCCL_CHECK(ncclGroupStart());
 
-    auto dtype = tensor->Dtype();
-    auto nccl_dtype = kNcclDtypeMap.at(dtype);
-    auto count = tensor->NumElements();
-    void *buffer = tensor->DataPtr();
+        auto dtype = tensor->Dtype();
+        auto nccl_dtype = kNcclDtypeMap.at(dtype);
+        auto count = tensor->NumElements();
+        void *buffer = tensor->DataPtr();
 
-    // printf("NcclRecv: count=%zu, dtype=%d \n", count, (int)dtype);
+        // printf("NcclRecv: count=%zu, dtype=%d \n", count, (int)dtype);
 
-    NCCL_CHECK(ncclRecv(buffer, count, nccl_dtype, src_rank, comm, stream));
-    
-    // printf(" NcclRecv: comm=%p, stream=%p, src_rank=%d\n", (void *)comm, (void *)stream, src_rank);
-    // printf("NcclRecv finish!!! %d\n", src_rank);
+        NCCL_CHECK(ncclRecv(buffer, count, nccl_dtype, src_rank, comm, stream));
+        
+        // printf(" NcclRecv: comm=%p, stream=%p, src_rank=%d\n", (void *)comm, (void *)stream, src_rank);
+        // printf("NcclRecv finish!!! %d\n", src_rank);
 
-    // NCCL_CHECK(ncclGroupEnd());
+        // NCCL_CHECK(ncclGroupEnd());
 
-    // printf("NcclRecv OK!!! FLAG 3\n");
-    return tensor;
+        // printf("NcclRecv OK!!! FLAG 3\n");
+    }
+    return tensors;
 }
 } // namespace infini_train::kernels::cuda
 

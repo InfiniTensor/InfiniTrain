@@ -2,7 +2,9 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_schedule.h"
 
 #include "glog/logging.h"
+#include <cstddef>
 #include <cuda_runtime.h>
+#include <memory>
 #include <vector>
 
 #include "infini_train/include/device.h"
@@ -68,8 +70,8 @@ std::vector<std::shared_ptr<Tensor>> PipelineSchedule::SplitTensor(std::shared_p
 
 float PipelineSchedule::Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tensor> target,
                              const std::shared_ptr<Module> &loss_fn) {
-    std::vector<std::shared_ptr<Tensor>> micro_batches;
-    std::vector<std::shared_ptr<Tensor>> target_mbs;
+    std::vector<std::shared_ptr<Tensor>> micro_batches(num_microbatches_);
+    std::vector<std::shared_ptr<Tensor>> target_mbs(num_microbatches_);
 
     if (stage_->IsFirstStage()) {
         // micro_batches = input->Split(NumMicrobatches(), 0);
@@ -97,42 +99,53 @@ float ScheduleGPipe::StepMicrobatches(const std::vector<std::shared_ptr<Tensor>>
     if (n_microbatches == 0) {
         return 0.0;
     }
-    // printf("ScheduleGPipe::StepMicrobatches stage %d n_microbatches %d\n", stage_index_, n_microbatches);
-    std::vector<std::shared_ptr<Tensor>> outputs(n_microbatches);
-    // std::vector<std::shared_ptr<Tensor>> output_grads(n_microbatches);
+    printf("ScheduleGPipe::StepMicrobatches stage %d n_microbatches %d\n", stage_index_, n_microbatches);
+    std::vector<std::vector<std::shared_ptr<Tensor>>> outputs(n_microbatches);
+    std::vector<std::shared_ptr<Tensor>> output_grads(n_microbatches);
 
     for (int mb_idx = 0; mb_idx < n_microbatches; ++mb_idx) {
-        std::shared_ptr<Tensor> input_tensors;
+        std::vector<std::shared_ptr<Tensor>> input_tensors;
         if (stage_->IsFirstStage()) {
             auto &tensor_ref = microbatch_inputs[mb_idx];
 
-            input_tensors = tensor_ref;
+            input_tensors = {tensor_ref};
         } else {
-            auto shape = stage_->recv_shape();
-            auto recv_tensor = std::make_shared<Tensor>(
-                std::vector<int64_t>{shape.batch_size / n_microbatches, shape.seq_len, shape.hidden_size},
-                DataType::kFLOAT32, stage_->device());
-            // printf("[stage %d] recv_tensor shape %ld %ld %ld 接收的rank:%d! \n", stage_index_, recv_tensor->Dims()[0],
-            //        recv_tensor->Dims()[1], recv_tensor->Dims()[2], stage_->prev_rank());
-            auto output = IRecv({recv_tensor}, stage_->device(), stage_->stage_index(), stage_->prev_rank());
+            auto shapes = stage_->recv_shape();
+            std::vector<std::shared_ptr<Tensor>> recv_tensors;
+            for (int shape_i = 0; shape_i < shapes.size(); ++shape_i) {
+                printf("[stage %d] recv_tensor shape :", stage_index_);
+                auto recv_dims = shapes[shape_i];
+                for(int i = 0 ; i < recv_dims.size(); i++) {
+                    printf(" %ld , ", recv_dims[i]);
+                }
+                printf("\n");
+                if (recv_dims.empty()) {
+                    recv_tensors.push_back(nullptr);
+                    continue;
+                }
+                recv_tensors.push_back(std::make_shared<Tensor>(shapes[shape_i], DataType::kFLOAT32, stage_->device()));
 
-            input_tensors = recv_tensor;
+            }
+            auto output = IRecv(recv_tensors, stage_->device(), stage_->stage_index(), stage_->prev_rank());
+
+            input_tensors = recv_tensors;
         }
 
-        if (input_tensors == nullptr) {
-            printf("[stage %d] input_tensors is null\n", stage_index_);
-        }
+        // if (input_tensors == nullptr) {
+        //     printf("[stage %d] input_tensors is null\n", stage_index_);
+        // }
 
-        auto output_tensors = stage_->ForwardOneChunk({input_tensors});
-        outputs[mb_idx] = output_tensors[0];
+        auto output_tensors = stage_->ForwardOneChunk(input_tensors);
+        outputs[mb_idx] = output_tensors;
 
         if (!stage_->IsLastStage()) {
-            // printf("[stage %d] start send!! %d, %d\n", stage_index_, stage_->stage_index(), stage_->next_rank());
+            printf("[stage %d] start send!! %d, %d, 当前是microbatch: %d\n", stage_index_, stage_->stage_index(),
+                   stage_->next_rank(), mb_idx);
 
-            // PrintTensorSummary(outputs[mb_idx], "stage" + std::to_string(stage_index_) + "_mb" +
-            // std::to_string(mb_idx) + "_send_pre");
-            ISend({outputs[mb_idx]}, stage_->device(), stage_->stage_index(), stage_->next_rank());
-            // printf("[stage %d] after send!! microbatch: %d\n", stage_index_, mb_idx);
+            PrintTensorSummary(outputs[mb_idx][0], "stage" + std::to_string(stage_index_) + "_mb____"
+                                                       + std::to_string(mb_idx) + "_send_pre");
+            ISend(outputs[mb_idx], stage_->device(), stage_->stage_index(), stage_->next_rank());
+            printf("[stage %d] after send!! microbatch: %d\n", stage_index_, mb_idx);
         }
     }
 
@@ -147,31 +160,50 @@ float ScheduleGPipe::StepMicrobatches(const std::vector<std::shared_ptr<Tensor>>
             if (!target) {
                 LOG(FATAL) << "[ERROR] target is nullptr for mb_idx = " << mb_idx;
             }
-            if (!output) {
+            if (!output[0]) {
                 LOG(FATAL) << "[ERROR] output is nullptr for mb_idx = " << mb_idx;
             }
 
-            // LOG(INFO) << "output dims: " << output->Dims().size();
-            // for (int i = 0; i < output->Dims().size(); ++i) {
-            //     LOG(INFO) << "output dim[" << i << "] = " << output->Dims()[i];
-            // }
+            // ======== 打印 output[0] 前 10 个值 ==========
+            auto output_cpu = output[0]->To(DeviceManager::Instance()->GetDefaultDevice());
+            float *out_ptr = static_cast<float *>(output_cpu.DataPtr());
+            int out_num = std::min(10, static_cast<int>(output_cpu.NumElements()));
+            std::cout << "[DEBUG] output[0] first " << out_num << " values: ";
+            for (int i = 0; i < out_num; ++i) { std::cout << out_ptr[i] << " "; }
+            std::cout << std::endl;
 
-            // LOG(INFO) << "target dims: " << target->Dims().size();
-            // for (int i = 0; i < target->Dims().size(); ++i) {
-            //     LOG(INFO) << "target dim[" << i << "] = " << target->Dims()[i];
-            // }
+            // ======== 打印 target 前 10 个值 ==========
+            auto target_cpu = target->To(DeviceManager::Instance()->GetDefaultDevice());
+            int64_t *tgt_ptr = static_cast<int64_t *>(target_cpu.DataPtr());
+            int tgt_num = std::min(10, static_cast<int>(target_cpu.NumElements()));
+            std::cout << "[DEBUG] target first " << tgt_num << " values: ";
+            for (int i = 0; i < tgt_num; ++i) { std::cout << tgt_ptr[i] << " "; }
+            std::cout << std::endl;
 
-            // LOG(INFO) << "mb_idx=" << mb_idx << " output_dev=" << output->GetDevice()->ToString()
-            //           << " target_dev=" << target->GetDevice()->ToString();
+            LOG(INFO) << "output dims: " << output[0]->Dims().size();
+            for (int i = 0; i < output[0]->Dims().size(); ++i) {
+                LOG(INFO) << "output dim[" << i << "] = " << output[0]->Dims()[i];
+            }
 
-            auto target_copy = target->To(output->GetDevice());
-            auto loss = loss_fn->Forward({output, std::make_shared<Tensor>(target_copy)})[0];
+            LOG(INFO) << "target dims: " << target->Dims().size();
+            for (int i = 0; i < target->Dims().size(); ++i) {
+                LOG(INFO) << "target dim[" << i << "] = " << target->Dims()[i];
+            }
+
+            LOG(INFO) << "mb_idx=" << mb_idx << " output_dev=" << output[0]->GetDevice()->ToString()
+                      << " target_dev=" << target->GetDevice()->ToString();
+
+            auto target_copy = target->To(output[0]->GetDevice());
+            std::cout << "target->To(output[0]->GetDevice()) ok!!!!!! " << target_copy.GetDevice()->ToString()
+                      << std::endl;
+            auto loss = loss_fn->Forward({output[0], std::make_shared<Tensor>(target_copy)})[0];
+
             if (!loss) {
                 LOG(INFO) << "[ERROR] loss is nullptr at mb_idx = " << mb_idx;
                 continue;
             }
             loss = loss / n_microbatches;
-            // LOG(INFO) << "finish loss forward";
+            LOG(INFO) << "finish loss forward";
             auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
 
             lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
@@ -207,7 +239,6 @@ float ScheduleGPipe::StepMicrobatches(const std::vector<std::shared_ptr<Tensor>>
     //         continue;
     //     }
 
-        
     //     auto w_cpu = w->To(DeviceManager::Instance()->GetDefaultDevice());
     //     if (!w_cpu.DataPtr()) {
     //         printf("Failed to copy tensor to CPU!\n");

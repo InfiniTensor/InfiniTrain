@@ -9,11 +9,6 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::pipeline {
-struct ActivationShape {
-    int batch_size;
-    int seq_len;
-    int hidden_size;
-};
 
 template<typename T>
 std::string VectorToString(const std::vector<T>& vec) {
@@ -34,7 +29,7 @@ void PrintTensorSummary(const std::shared_ptr<Tensor>& tensor, const std::string
 class PipelineStage {
 public:
     PipelineStage(std::vector<std::shared_ptr<Module>> &layers, int stage_index, int num_stages,
-                  const ActivationShape &recvShape, std::shared_ptr<Optimizer> optim);
+                  const std::vector<std::vector<int64_t>> &recvShape, std::shared_ptr<Optimizer> optim);
 
     std::vector<std::shared_ptr<Tensor>> ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &inputs);
 
@@ -46,7 +41,7 @@ public:
     int next_rank() const { return next_rank_; }
     int num_stages() const { return num_stages_; }
     const Device *device() const { return device_; }
-    ActivationShape recv_shape() const { return recv_shape_; }
+    std::vector<std::vector<int64_t>> recv_shape() const { return recv_shape_; }
     std::shared_ptr<Optimizer> optimizer() { return optim_; }
     std::vector<std::shared_ptr<Module>> layers_;
 
@@ -55,7 +50,7 @@ private:
     int num_stages_;
     int prev_rank_;
     int next_rank_;
-    ActivationShape recv_shape_;
+    std::vector<std::vector<int64_t>> recv_shape_;
     const Device *device_ = nullptr;
     std::vector<const Device *> devices_;
     // std::vector<std::shared_ptr<Module>> layers_;

@@ -62,7 +62,8 @@ std::vector<std::shared_ptr<Tensor>> ISend::Forward(const std::vector<std::share
     auto device_type = input_device_->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device_type, "CommNcclSend"});
 
-    auto output = kernel.Call<std::shared_ptr<Tensor>>(input, target_rank_);
+    auto output = kernel.Call<std::vector<std::shared_ptr<Tensor>>>(input_tensors, target_rank_);
+    printf("ISend::Forward OK!!!\n");
     return {};
 }
 
@@ -75,10 +76,10 @@ std::vector<std::shared_ptr<Tensor>> ISend::Backward(const std::vector<std::shar
     auto device_type = target_device_->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device_type, "CommNcclSend"});
 
-    auto grad_input = kernel.Call<std::shared_ptr<Tensor>>(grad_output, cur_rank_);
+    auto grad_input = kernel.Call<std::vector<std::shared_ptr<Tensor>>>(grad_output, cur_rank_);
     
     printf("ISend::Backward OK!!!!!\n");
-    return {grad_input};
+    return grad_input;
 }
 
 std::vector<std::shared_ptr<Tensor>> IRecv::Forward(const std::vector<std::shared_ptr<Tensor>> &recv_tensors) {
@@ -88,9 +89,9 @@ std::vector<std::shared_ptr<Tensor>> IRecv::Forward(const std::vector<std::share
     // printf("[stage %d] IRecv::Forward %d\n", cur_rank_, device_type);
     auto kernel = Dispatcher::Instance().GetKernel({device_type, "CommNcclRecv"});
 
-    auto output = kernel.Call<std::shared_ptr<Tensor>>(recv_tensors[0], src_rank_);
+    auto output = kernel.Call<std::vector<std::shared_ptr<Tensor>>>(recv_tensors, src_rank_);
 
-    return {output};
+    return output;
 }
 
 void IRecv::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -110,21 +111,25 @@ std::vector<std::shared_ptr<Tensor>> IRecv::Backward(const std::vector<std::shar
 
     auto grad_to_send = grad_output;
 
-    auto grad_remote = kernel.Call<std::shared_ptr<Tensor>>(grad_to_send, src_rank_);
+    auto grad_remote = kernel.Call<std::vector<std::shared_ptr<Tensor>>>(grad_to_send, src_rank_);
     printf("IRecv::Backward OK!!!!!\n");
-    return {grad_remote};
+    return grad_remote;
 }
 } // namespace functions
 
 std::vector<std::shared_ptr<Tensor>> ISend(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                                            const Device *target_device, int cur_rank, int target_rank) {
     auto func = std::make_shared<functions::ISend>(target_device, cur_rank, target_rank);
-    return func->Apply(input_tensors);
+    auto res = func->Forward(input_tensors);
+    // auto res = func->Apply(input_tensors);
+    printf("ISend after func->Apply\n");
+    return res;
 }
 
 std::vector<std::shared_ptr<Tensor>> IRecv(const std::vector<std::shared_ptr<Tensor>> &outputs,
                                            const Device *src_device, int cur_rank, int src_rank) {
     auto func = std::make_shared<functions::IRecv>(src_device, cur_rank, src_rank);
-    return func->Apply(outputs);
+    // return func->Apply(outputs);
+    return func->Forward(outputs);
 }
 } // namespace infini_train::nn::pipeline

@@ -12,6 +12,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
@@ -254,6 +255,7 @@ Block::Block(const LLaMA3Config &config) {
 }
 
 std::vector<std::shared_ptr<Tensor>> Block::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
+    printf("Block::Forward x.size() %ld\n", x.size());
     const auto freqs_cis = x.size() > 1 ? x[1] : nullptr;
     const auto start_pos = x.size() > 2 ? x[2] : nullptr;
     const auto mask = x.size() > 3 ? x[3] : nullptr;
@@ -287,26 +289,81 @@ LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
     modules_[kLMHeadLayerName] = std::make_shared<nn::Linear>(config.n_embd, config.vocab_size, false);
 }
 
-std::vector<std::shared_ptr<nn::Module>> LLaMA3::GetPipelineLayers() {
-    auto &transformer = modules_[kTransformerLayerName];
+class LLaMALayer : public nn::Module {
+    std::shared_ptr<nn::Module> decoder_layer_;
+    std::shared_ptr<Tensor> freqs_cis_ = nullptr; // freqs_cis (shape: [max_seq_len, head_dim])
+    int64_t start_pos_ = 0;
+    DataType dtype_;
+    LLaMA3Config config_;
 
+public:
+    LLaMALayer(std::shared_ptr<nn::Module> decoder_layer, DataType dtype, LLaMA3Config config)
+        : decoder_layer_(std::move(decoder_layer)), dtype_(dtype), config_(config) {}
+
+    void SetFreqsCis(std::shared_ptr<Tensor> freqs) { freqs_cis_ = freqs; }
+    void SetStartPos(int64_t pos) { start_pos_ = pos; }
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) override {
+        auto &x = inputs[0]; // (bs, seq_len, n_embd)
+        const int seq_len = x->Dims()[1];
+        const auto device = x->GetDevice();
+
+        printf("LLaMALayer  Forward %ld %ld %f %d\n", config_.n_embd / config_.n_head, config_.block_size * 2, config_.rope_theta,
+                                            config_.use_scaled_rope);
+        if (freqs_cis_ == nullptr) {
+            freqs_cis_ = PrecomputeFreqsCis(config_.n_embd / config_.n_head, config_.block_size * 2, config_.rope_theta,
+                                            config_.use_scaled_rope, device, dtype_);
+        }
+        printf("freqs_cis_ Dims %ld\n", freqs_cis_->Dims().size());
+        for(int i = 0; i < freqs_cis_->Dims().size(); i++) {
+            printf("freqs_cis_ shape %ld \n", freqs_cis_->Dims()[i]);
+        } 
+        // slice freqs_cis: [start_pos:start_pos+seq_len]
+        auto sliced_freqs = freqs_cis_->Slice(0, start_pos_, start_pos_ + seq_len, 1);
+
+        // causal mask: (1, 1, seq_len, seq_len)
+        std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({seq_len, seq_len})->To(device));
+        auto mask = nn::function::Triu(ones, 1)->View({1, 1, seq_len, seq_len});
+        printf("LLaMALayer Forward!!!!!\n");
+        if (dtype_ == DataType::kBFLOAT16) {
+            mask = std::make_shared<Tensor>(mask->To(DataType::kBFLOAT16));
+        }
+
+        // DecoderLayer: {x, freqs, start_pos, mask}
+        std::vector<std::shared_ptr<Tensor>> args = {x, sliced_freqs, nullptr, mask};
+        auto output = decoder_layer_->Forward(args);
+
+        return output;
+    }
+};
+
+std::vector<std::shared_ptr<nn::Module>> LLaMA3::GetPipelineLayers() {
     std::vector<std::shared_ptr<nn::Module>> layers;
 
-    layers.push_back(transformer->mutable_module(kWTELayerName));
+    auto transformer = modules_[kTransformerLayerName];
+    layers.push_back(transformer->mutable_module(kWTELayerName));    //layer 0
 
     auto seq = std::dynamic_pointer_cast<nn::Sequential>(transformer->mutable_module(kHLayerName));
+    auto dtype = modules_[kLMHeadLayerName]->parameter(nn::Linear::kParamWeightName)->Dtype();
     if (seq) {
-        for (const auto &sub_module : seq->modules()) { layers.push_back(sub_module); }
-    }
+        printf("Block size: %ld\n", seq->size());
+        auto first_layer = (*seq)[0];
+        layers.push_back(std::make_shared<LLaMALayer>(first_layer, dtype, config_));
+        for (int idx = 1; idx < seq->size(); ++idx) {
+            auto decoder_layer = (*seq)[idx];
+            auto wrapped_layer = decoder_layer; //std::make_shared<LLaMALayer>(decoder_layer, dtype, config_);    //Block
+            layers.push_back(wrapped_layer);
+        }
+    }  //layer 1 - 16  
 
-    layers.push_back(transformer->mutable_module(kLnFLayerName));
+    layers.push_back(transformer->mutable_module(kLnFLayerName));   //layer 17
 
-    layers.push_back(modules_[kLMHeadLayerName]);
+    layers.push_back(modules_[kLMHeadLayerName]);     // layer 18
 
     return layers;
 }
 
-int LLaMA3::GetHiddenSize() const { return config_.n_embd; }
+std::vector<int64_t> LLaMA3::GetHiddenSize() const { return {config_.n_embd, config_.n_head}; }
 
 std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     // (bs, seq_len)
@@ -316,6 +373,8 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
     CHECK_LE(t, config_.block_size) << "Cannot forward sequence of length " << t << ", block size is only "
                                     << config_.block_size;
 
+    printf("LLaMALayer  Forward %ld %ld %f %d\n", config_.n_embd / config_.n_head, config_.block_size * 2, config_.rope_theta,
+            config_.use_scaled_rope);
     // Init freqs_cis on device only once
     // TODO(zbl): consider moving this to model construction
     if (buffers_[kFreqsCisName] == nullptr) {
@@ -323,7 +382,10 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
             config_.n_embd / config_.n_head, config_.block_size * 2, config_.rope_theta, config_.use_scaled_rope,
             device, modules_[kLMHeadLayerName]->parameter(nn::Linear::kParamWeightName)->Dtype());
     }
-
+    printf("freqs_cis_ Dims %ld\n", buffers_[kFreqsCisName]->Dims().size());
+    for(int i = 0; i < buffers_[kFreqsCisName]->Dims().size(); i++) {
+        printf("freqs_cis_ shape %ld \n", buffers_[kFreqsCisName]->Dims()[i]);
+    }
     // forward the LLaMA3 model itself
     auto &transformer = modules_[kTransformerLayerName];
     // (bs, seq_len) -> Embedding(vocab_size, n_embd) -> (bs, seq_len, n_embd)
@@ -332,6 +394,11 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
     // TODO(zbl): dynamic start_pos
     int64_t start_pos = 0;
     buffers_[kFreqsCisName] = buffers_[kFreqsCisName]->Slice(0, start_pos, start_pos + t, 1);
+
+    printf("Flag 2 freqs_cis_ Dims %ld\n", buffers_[kFreqsCisName]->Dims().size());
+    for(int i = 0; i < buffers_[kFreqsCisName]->Dims().size(); i++) {
+        printf("Flag 2 freqs_cis_ shape %ld \n", buffers_[kFreqsCisName]->Dims()[i]);
+    }
 
     // TODO(lzm): add dtype support for nn::function::Ones later
     std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(idx->GetDevice()));

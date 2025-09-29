@@ -131,7 +131,7 @@ public:
 
     std::vector<std::shared_ptr<infini_train::nn::Module>> GetPipelineLayers() override;
 
-    int GetHiddenSize() const;
+    std::vector<int64_t> GetHiddenSize() const;
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;

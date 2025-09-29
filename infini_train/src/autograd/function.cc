@@ -54,7 +54,6 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         output_tensor->set_grad_fn(output_requires_grad ? shared_from_this() : nullptr);
         output_tensor->set_output_idx(output_idx);
     }
-
     return output_tensors;
 }
 
