@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Eigen/Dense"
+#include "datatype.h"
 #include "glog/logging.h"
 
 #include "infini_train/include/datatype.h"
@@ -16,9 +17,7 @@
 namespace infini_train {
 namespace autograd {
 class Function;
-class AccumulateGrad;
-class PostAccumulateGradHook;
-} // namespace autograd
+}
 
 namespace {
 struct PrintOptions {
@@ -83,19 +82,7 @@ public:
     Tensor To(DataType dtype);
 
     // operator overloading
-    std::shared_ptr<Tensor> Equals(const std::shared_ptr<Tensor> &other);
     std::shared_ptr<Tensor> Equals(float scalar);
-    std::shared_ptr<Tensor> Lt(const std::shared_ptr<Tensor> &other);
-    std::shared_ptr<Tensor> Lt(float scalar);
-    std::shared_ptr<Tensor> Le(const std::shared_ptr<Tensor> &other);
-    std::shared_ptr<Tensor> Le(float scalar);
-    std::shared_ptr<Tensor> Gt(const std::shared_ptr<Tensor> &other);
-    std::shared_ptr<Tensor> Gt(float scalar);
-    std::shared_ptr<Tensor> Ge(const std::shared_ptr<Tensor> &other);
-    std::shared_ptr<Tensor> Ge(float scalar);
-    std::shared_ptr<Tensor> And(const std::shared_ptr<Tensor> &other);
-    std::shared_ptr<Tensor> Or(const std::shared_ptr<Tensor> &other);
-
     std::shared_ptr<Tensor> Add(const std::shared_ptr<Tensor> &other);
     std::shared_ptr<Tensor> Add(float scalar);
     std::shared_ptr<Tensor> Sub(const std::shared_ptr<Tensor> &other);
@@ -109,17 +96,8 @@ public:
     std::shared_ptr<Tensor> Tanh();
     std::shared_ptr<Tensor> Pow(float exponent);
     std::shared_ptr<Tensor> Rsqrt();
-    std::shared_ptr<Tensor> Exp();
-    std::shared_ptr<Tensor> Log();
-
-    std::shared_ptr<Tensor> Mean(int64_t dim, bool keep_dim = false);
-    std::shared_ptr<Tensor> Sum(int64_t dim, bool keep_dim = false);
-    std::shared_ptr<Tensor> Min(int64_t dim, bool keep_dim = false);
-    std::shared_ptr<Tensor> Max(int64_t dim, bool keep_dim = false);
 
     std::vector<std::shared_ptr<Tensor>> Split(int split_size, int dim = 0);
-    std::shared_ptr<Tensor> Gather(int dim, const std::shared_ptr<Tensor> &index);
-
     std::shared_ptr<Tensor> Transpose(int dim0, int dim1);
     std::shared_ptr<Tensor> Slice(const std::vector<int64_t> &starts, const std::vector<int64_t> &ends,
                                   const std::vector<int64_t> &steps);
@@ -131,7 +109,6 @@ public:
     std::shared_ptr<Tensor> Contiguous();
     std::shared_ptr<Tensor> Flatten(int64_t start = 0, int64_t end = -1);
     std::shared_ptr<Tensor> Squeeze(int64_t dim);
-    std::shared_ptr<Tensor> Unsqueeze(int64_t dim);
 
     // distribution
     std::shared_ptr<Tensor> Uniform(float from = 0.0f, float to = 1.0f,
@@ -141,23 +118,7 @@ public:
     std::shared_ptr<Tensor> Outer(const std::shared_ptr<Tensor> &other);
     std::shared_ptr<Tensor> MaskedFill(const std::shared_ptr<Tensor> &mask, float value);
 
-    friend std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
     friend std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar);
-    friend std::shared_ptr<Tensor> operator<(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
-    friend std::shared_ptr<Tensor> operator<(const std::shared_ptr<Tensor> &t, float scalar);
-    friend std::shared_ptr<Tensor> operator<(float scalar, const std::shared_ptr<Tensor> &t);
-    friend std::shared_ptr<Tensor> operator>(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
-    friend std::shared_ptr<Tensor> operator>(const std::shared_ptr<Tensor> &t, float scalar);
-    friend std::shared_ptr<Tensor> operator>(float scalar, const std::shared_ptr<Tensor> &t);
-    friend std::shared_ptr<Tensor> operator<=(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
-    friend std::shared_ptr<Tensor> operator<=(const std::shared_ptr<Tensor> &t, float scalar);
-    friend std::shared_ptr<Tensor> operator<=(float scalar, const std::shared_ptr<Tensor> &t);
-    friend std::shared_ptr<Tensor> operator>=(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
-    friend std::shared_ptr<Tensor> operator>=(const std::shared_ptr<Tensor> &t, float scalar);
-    friend std::shared_ptr<Tensor> operator>=(float scalar, const std::shared_ptr<Tensor> &t);
-    friend std::shared_ptr<Tensor> operator&(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
-    friend std::shared_ptr<Tensor> operator|(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
-
     friend std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor> &t1, const std::shared_ptr<Tensor> &t2);
     friend std::shared_ptr<Tensor> operator+(float scalar, const std::shared_ptr<Tensor> &t);
     friend std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor> &t, float scalar);
@@ -192,41 +153,30 @@ private:
 public:
     std::shared_ptr<Tensor> RequiresGrad();
 
-    std::shared_ptr<Tensor> grad() const;
-    bool requires_grad() const;
-    void set_requires_grad(bool requires_grad);
+    std::shared_ptr<Tensor> grad() const { return grad_; };
+    bool requires_grad() const { return requires_grad_; }
+    void set_requires_grad(bool requires_grad) { requires_grad_ = requires_grad; }
 
-    bool is_leaf() const;
-    void set_is_leaf(bool is_leaf);
+    bool is_leaf() const { return is_leaf_; }
+    void set_is_leaf(bool is_leaf) { is_leaf_ = is_leaf; }
 
-    std::shared_ptr<autograd::Function> grad_fn() const;
-    void set_grad_fn(std::shared_ptr<autograd::Function> grad_fn);
+    std::shared_ptr<autograd::Function> grad_fn() const { return grad_fn_; }
+    void set_grad_fn(std::shared_ptr<autograd::Function> grad_fn) { grad_fn_ = grad_fn; }
 
-    int output_idx() const;
-    void set_output_idx(int output_idx);
+    int output_idx() const { return output_idx_; }
+    void set_output_idx(int output_idx) { output_idx_ = output_idx; }
 
     void ZeroGrad();
 
     void Backward(std::shared_ptr<Tensor> gradient = nullptr, bool retain_graph = false,
                   bool create_graph = false) const;
 
-    std::shared_ptr<autograd::AccumulateGrad> grad_accumulator();
-    void ResetAccumulator();
-
-    void RegisterPostAccumulateGradHook(std::shared_ptr<autograd::PostAccumulateGradHook> hook);
-
-    autograd::PostAccumulateGradHook *post_accumulate_grad_hook() const;
-
 private:
     std::shared_ptr<Tensor> grad_ = nullptr;
     bool requires_grad_ = false;
     bool is_leaf_ = true;
     std::shared_ptr<autograd::Function> grad_fn_ = nullptr;
-    int output_idx_ = 0;
-    // FIXME(dcj): This should be a weak_ptr. The autograd graph should hold
-    // a strong reference to the accumulator to manage its lifetime.
-    std::shared_ptr<autograd::AccumulateGrad> grad_accumulator_ = nullptr;
-    std::shared_ptr<autograd::PostAccumulateGradHook> post_accumulate_grad_hook_ = nullptr;
+    int output_idx_ = -1;
 };
 
 std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar);

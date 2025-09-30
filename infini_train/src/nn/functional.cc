@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 
+#include "infini_train/include/autograd/ScaledDotProductAttention.h"
 #include "infini_train/include/autograd/activations.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/misc.h"
@@ -11,7 +12,6 @@
 #include "infini_train/include/autograd/softmax.h"
 #include "infini_train/include/autograd/transform.h"
 #include "infini_train/include/nn/init.h"
-#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::function {
 std::shared_ptr<Tensor> Tril(const std::shared_ptr<Tensor> &input, int64_t diagonal) {
@@ -47,18 +47,6 @@ std::shared_ptr<Tensor> Mean(const std::shared_ptr<Tensor> &input, int64_t dim, 
     return std::make_shared<autograd::Mean>(dim, keep_dim)->Apply({input})[0];
 }
 
-std::shared_ptr<Tensor> Sum(const std::shared_ptr<Tensor> &input, int64_t dim, bool keep_dim) {
-    return std::make_shared<autograd::Sum>(dim, keep_dim)->Apply({input})[0];
-}
-
-std::shared_ptr<Tensor> Min(const std::shared_ptr<Tensor> &input, int64_t dim, bool keep_dim) {
-    return std::make_shared<autograd::Min>(dim, keep_dim)->Apply({input})[0];
-}
-
-std::shared_ptr<Tensor> Max(const std::shared_ptr<Tensor> &input, int64_t dim, bool keep_dim) {
-    return std::make_shared<autograd::Max>(dim, keep_dim)->Apply({input})[0];
-}
-
 std::shared_ptr<Tensor> Slice(const std::shared_ptr<Tensor> &input, const std::vector<int64_t> &starts,
                               const std::vector<int64_t> &ends, const std::vector<int64_t> &steps) {
     return input->Slice(starts, ends, steps);
@@ -68,15 +56,36 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &inputs
     return std::make_shared<autograd::Stack>(dim)->Apply(inputs)[0];
 }
 
-std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim) {
-    return std::make_shared<autograd::Concat>(dim)->Apply(inputs)[0];
-}
-
 std::shared_ptr<Tensor> Softmax(const std::shared_ptr<Tensor> &input, int64_t dim) {
     return std::make_shared<autograd::Softmax>(dim)->Apply({input})[0];
 }
 
 std::shared_ptr<Tensor> Sigmoid(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<autograd::Sigmoid>()->Apply({input})[0];
+}
+
+std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
+                                                  const std::shared_ptr<Tensor> &v,
+                                                  const std::shared_ptr<Tensor> &attn_mask, int64_t /*dim*/,
+                                                  bool is_causal, std::optional<double> scale, bool enable_gqa) {
+
+    std::vector<std::shared_ptr<Tensor>> inputs;
+    inputs.reserve(attn_mask ? 4 : 3);
+    inputs.push_back(q);
+    inputs.push_back(k);
+    inputs.push_back(v);
+    if (attn_mask) {
+        inputs.push_back(attn_mask);
+    }
+
+    auto fn = std::make_shared<autograd::ScaledDotProductAttention>(
+        /*is_causal=*/is_causal,
+        /*dropout_p=*/0.0,
+        /*scale=*/scale,
+        /*enable_gqa=*/enable_gqa);
+
+    auto outputs = fn->Apply(inputs);
+    CHECK(!outputs.empty());
+    return outputs[0];
 }
 } // namespace infini_train::nn::function

@@ -4,9 +4,7 @@
 #include <memory>
 #include <vector>
 
-namespace infini_train {
-class Tensor;
-}
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::function {
 
@@ -112,7 +110,7 @@ std::shared_ptr<Tensor> Pow(float base, const std::shared_ptr<Tensor> &input);
 //   A tensor containing reciprocal square-root applied element-wise to the input.
 std::shared_ptr<Tensor> Rsqrt(const std::shared_ptr<Tensor> &input);
 
-// Returns the aggregate of all elements in the input tensor.
+// Returns the mean of all elements in the input tensor.
 //
 // Args:
 //   input: The input tensor.
@@ -120,11 +118,8 @@ std::shared_ptr<Tensor> Rsqrt(const std::shared_ptr<Tensor> &input);
 //   keep_dim: Whether the output tensor has dim retained or not (default false).
 //
 // Returns:
-//   A new tensor with the aggregate values computed along the specified dimension.
+//   A new tensor with the mean values computed along the specified dimension.
 std::shared_ptr<Tensor> Mean(const std::shared_ptr<Tensor> &input, int64_t dim, bool keep_dim = false);
-std::shared_ptr<Tensor> Sum(const std::shared_ptr<Tensor> &input, int64_t dim, bool keep_dim = false);
-std::shared_ptr<Tensor> Min(const std::shared_ptr<Tensor> &input, int64_t dim, bool keep_dim = false);
-std::shared_ptr<Tensor> Max(const std::shared_ptr<Tensor> &input, int64_t dim, bool keep_dim = false);
 
 // Returns a new tensor with the sigmoid of each element in the input.
 //
@@ -172,15 +167,12 @@ std::shared_ptr<Tensor> Slice(const std::shared_ptr<Tensor> &input, const std::v
 //   Concatenation of the input tensors.
 std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim = 0);
 
-// Concatenates the given sequence of tensors in tensors in the given dimension.
 //
-// Args:
-//   inputs: The sequence of tensors to concatenate. All tensors must either have the same shape (except in the
-//   concatenating dimension) or be a 1-D empty tensor with size (0,). dim: dimension to insert (defualt 0).
-//   dim: dimension to insert (defualt 0).
 //
-// Returns:
-//   Concatenation of the input tensors.
-std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim = 0);
+std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
+                                                  const std::shared_ptr<Tensor> &v,
+                                                  const std::shared_ptr<Tensor> &attn_mask = nullptr,
+                                                  int64_t /*dim*/ = -1, bool is_causal = true,
+                                                  std::optional<double> scale = std::nullopt, bool enable_gqa = false);
 
 } // namespace infini_train::nn::function

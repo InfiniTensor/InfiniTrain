@@ -3,12 +3,11 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
-#include <map>
+#include <unordered_map>
 
 #ifdef USE_CUDA
-#include <cuda_runtime.h>
+#include "cuda_runtime.h"
 #endif
-
 #include "glog/logging.h"
 
 #ifdef USE_CUDA
@@ -201,8 +200,7 @@ void Profiler::ReportGroupedByRank(std::function<std::ostream &(int64_t)> get_os
 
             os << std::left << std::setw(40) << "Name" << std::setw(10) << "Count" << std::setw(18) << "Host Total(us)"
                << std::setw(10) << "Host %" << std::setw(20) << "Device Total(us)" << std::setw(10) << "Device %"
-               << std::setw(16) << "Avg Host(us)" << std::setw(18) << "Avg Device(us)"
-               << "\n";
+               << std::setw(16) << "Avg Host(us)" << std::setw(18) << "Avg Device(us)" << "\n";
 
             int64_t host_sum = 0, dev_sum = 0;
             for (const auto &[_, info] : kernel_map) {
@@ -299,8 +297,7 @@ void Profiler::PrintRecordsGroupedByRank(std::function<std::ostream &(int64_t)> 
 
             os << std::left << std::setw(8) << "Idx" << std::setw(24) << "Timestamp" << std::setw(40) << "Name"
                << std::setw(10) << "Device" << std::setw(12) << "Host(us)" << std::setw(12) << "Device(us)"
-               << std::setw(16) << "Peak Mem(MB)"
-               << "\n";
+               << std::setw(16) << "Peak Mem(MB)" << "\n";
 
             for (size_t idx = 0; idx < records.size(); ++idx) {
                 const auto &rec = *records[idx];

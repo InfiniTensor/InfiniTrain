@@ -1,12 +1,10 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
 #include <vector>
 
-namespace infini_train {
-class Tensor;
-}
+#include "infini_train/include/tensor.h"
+
 namespace infini_train {
 class Optimizer {
 public:

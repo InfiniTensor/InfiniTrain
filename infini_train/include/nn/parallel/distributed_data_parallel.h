@@ -4,13 +4,7 @@
 
 #include "infini_train/include/nn/modules/module.h"
 
-namespace infini_train {
-class Tensor;
-class Device;
-} // namespace infini_train
-
 namespace infini_train::nn::parallel {
-
 class DistributedDataParallel : public nn::Module {
 public:
     class Rank {
@@ -35,9 +29,7 @@ public:
         const int thread_size_ = 1;
     };
 
-    DistributedDataParallel(std::shared_ptr<nn::Module> module, int device_id);
-
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    DistributedDataParallel(std::shared_ptr<nn::Module> module, int device_id) {}
 };
 
 } // namespace infini_train::nn::parallel

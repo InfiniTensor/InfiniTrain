@@ -45,8 +45,7 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     auto dtype = input->Dtype();
     auto new_tensor = std::make_shared<Tensor>(new_dims, dtype, input->GetDevice());
     // NOTE(zbl): must initialize with 0
-    DispatchFunc<INFINI_ALL_TYPES>(
-        dtype, [=]<typename T>() { new_tensor->Fill<T>(0); }, "CUDA SliceForward");
+    DispatchFunc<INFINI_ALL_TYPES>(dtype, [=]<typename T>() { new_tensor->Fill<T>(0); }, "CUDA SliceForward");
 
     std::vector<int64_t> src_strides(dims.size(), 0), dst_strides(new_dims.size(), 0);
     int64_t stride = 1;
@@ -135,8 +134,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
 
     auto dtype = input->Dtype();
     auto grad_input = std::make_shared<Tensor>(input->Dims(), dtype, grad_output->GetDevice());
-    DispatchFunc<INFINI_ALL_TYPES>(
-        dtype, [=]<typename T>() { grad_input->Fill<T>(0); }, "CUDA SliceBackward");
+    DispatchFunc<INFINI_ALL_TYPES>(dtype, [=]<typename T>() { grad_input->Fill<T>(0); }, "CUDA SliceBackward");
 
     std::vector<int64_t> src_strides(dims.size());
     int64_t stride = 1;

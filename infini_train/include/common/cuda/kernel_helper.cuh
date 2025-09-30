@@ -1,7 +1,8 @@
 #pragma once
 
-#include <cuda_bf16.h>
-#include <cuda_fp16.h>
+#include "cuda.h"
+#include "cuda_bf16.h"
+#include "cuda_fp16.h"
 
 namespace infini_train::common::cuda {
 /**
@@ -145,16 +146,6 @@ template <typename T> __device__ __forceinline__ T Rsqrt(const T &x) {
         return rsqrtf(x);
     } else {
         return T(1) / std::sqrt(T(x));
-    }
-}
-
-template <typename T> __device__ __forceinline__ T Exp(const T &x) {
-    if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
-        return hexp(x);
-    } else if constexpr (std::is_same_v<T, float>) {
-        return __expf(x);
-    } else {
-        return std::exp(x);
     }
 }
 
