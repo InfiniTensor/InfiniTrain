@@ -1,8 +1,7 @@
 #include <cmath>
 #include <cstddef>
 
-#include <cub/block/block_reduce.cuh>
-
+#include "cub/block/block_reduce.cuh"
 #include "glog/logging.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"

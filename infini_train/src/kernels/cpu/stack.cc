@@ -1,5 +1,7 @@
+#include <algorithm>
 #include <memory>
 #include <numeric>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"

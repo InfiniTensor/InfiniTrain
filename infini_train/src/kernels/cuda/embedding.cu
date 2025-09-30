@@ -8,7 +8,7 @@ namespace infini_train::kernels::cuda {
 
 template <typename T>
 __global__ void EmbeddingForwardKernel(const int64_t *input, T *output, const T *weight, int batch_size, int max_seqlen,
-                                       int embed_dim, int vocab_size) {
+                                       int embed_dim) {
     int idx = (blockIdx.x * blockDim.x + threadIdx.x);
     if (idx >= batch_size * max_seqlen * embed_dim) {
         return;
@@ -20,9 +20,7 @@ __global__ void EmbeddingForwardKernel(const int64_t *input, T *output, const T 
     int c = idx % embed_dim;
 
     int ix = static_cast<int>(input[b * max_seqlen + t]);
-    if (ix < 0 || ix >= vocab_size) {
-        return;
-    }
+
     output[b * max_seqlen * embed_dim + t * embed_dim + c] = weight[ix * embed_dim + c];
 }
 
@@ -33,7 +31,6 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     const int batch_size = input->Dims().size() == 2 ? input->Dims()[0] : 1;
     const int max_seqlen = input->Dims().size() == 2 ? input->Dims()[1] : input->Dims()[0];
-    const int vocab_size = weight->Dims()[0];
     const int embed_dim = weight->Dims()[1];
     auto output_dims = input->Dims();
     output_dims.push_back(embed_dim);
@@ -48,7 +45,7 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
         [=]<typename T>() {
             EmbeddingForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
                 static_cast<const int64_t *>(input->DataPtr()), static_cast<T *>(output->DataPtr()),
-                static_cast<const T *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim, vocab_size);
+                static_cast<const T *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim);
         },
         "CUDA EmbeddingForward");
 
@@ -57,14 +54,14 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
 
 template <typename T>
 __global__ void EmbeddingBackwardKernel(const int64_t *input_ptr, const T *grad_output_ptr, T *grad_weight_ptr,
-                                        int num_tokens, int embedding_dim, int vocab_size) {
+                                        int num_tokens, int embedding_dim) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= num_tokens) {
         return;
     }
 
     int token_id = static_cast<int>(input_ptr[idx]);
-    if (token_id < 0 || token_id >= vocab_size) {
+    if (token_id < 0) {
         return;
     }
 
@@ -78,7 +75,6 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
     CHECK(input->Dtype() == DataType::kINT64);
     CHECK_EQ(weight_dims.size(), 2);
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
-    const int vocab_size = weight_dims[0];
     const int embedding_dim = weight_dims[1];
     CHECK_EQ(input->Dims().size() + 1, grad_output->Dims().size());
     for (int idx = 0; idx < input->Dims().size(); ++idx) { CHECK_EQ(input->Dims()[idx], grad_output->Dims()[idx]); }
@@ -96,7 +92,7 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
             grad_weight->Fill<T>(0);
             EmbeddingBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
                 static_cast<const int64_t *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
-                static_cast<T *>(grad_weight->DataPtr()), num_tokens, embedding_dim, vocab_size);
+                static_cast<T *>(grad_weight->DataPtr()), num_tokens, embedding_dim);
         },
         "CUDA EmbeddingBackward");
 

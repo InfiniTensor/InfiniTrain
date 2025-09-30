@@ -1,16 +1,12 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <random>
 #include <utility>
 
-#include "infini_train/include/datatype.h"
-
-namespace infini_train {
-class Tensor;
-class Device;
-} // namespace infini_train
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::init {
 std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean = 0.0, float std = 1.0,

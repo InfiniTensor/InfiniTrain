@@ -4,6 +4,9 @@
 #include <optional>
 #include <unordered_set>
 
+#ifdef USE_CUDA
+#include "cuda_runtime.h"
+#endif
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
@@ -12,12 +15,12 @@
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/distributed_data_parallel.h"
-#include "infini_train/include/nn/parallel/parallel_functional.h"
-#include "infini_train/include/nn/parallel/reduce_op_type.h"
+#include "infini_train/include/nn/parallel_functional.h"
 #include "infini_train/include/optimizer.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
 #endif
+
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
 #include "example/common/utils.h"
@@ -117,15 +120,6 @@ void Train(const nn::parallel::DistributedDataParallel::Rank &rank) {
         LOG(FATAL) << "Rank " << rank.thread_rank() << ": Datatype " << FLAGS_dtype << " not supported.";
     }
 
-    // NOTE(dcj): Complete all device (.to(device)) and dtype (.to(dtype)) conversions
-    // before wrapping the model with DistributedDataParallel (DDP).
-    // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
-    // are created during the conversion.
-    if (rank.IsDDP()) {
-        model = std::make_shared<nn::parallel::DistributedDataParallel>(
-            nn::parallel::DistributedDataParallel(model, rank.thread_rank()));
-    }
-
     DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
                                        FLAGS_batch_size, rank.thread_rank(), rank.WorldSize());
     std::optional<DistributedDataLoader> val_loader = std::nullopt;
@@ -209,6 +203,11 @@ void Train(const nn::parallel::DistributedDataParallel::Rank &rank) {
             }
             LOG(INFO) << "Rank " << rank.thread_rank() << ": start backward";
             loss->Backward();
+            if (rank.IsDDP()) {
+                for (auto param : model->Parameters()) {
+                    nn::parallel::function::AllReduce(param->grad(), nn::parallel::function::ReduceOpType::kAvg);
+                }
+            }
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish backward";
         }
 

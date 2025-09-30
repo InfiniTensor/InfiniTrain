@@ -105,11 +105,6 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() con
     return state;
 }
 
-std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    LOG(FATAL) << "Forward function not implemented for this module";
-    return {};
-}
-
 void Module::To(const Device *device) {
     CHECK_NOTNULL(device);
     if (device == device_) {

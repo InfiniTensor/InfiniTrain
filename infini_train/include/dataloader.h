@@ -5,10 +5,8 @@
 #include <utility>
 
 #include "infini_train/include/dataset.h"
+#include "infini_train/include/tensor.h"
 
-namespace infini_train {
-class Tensor;
-}
 namespace infini_train {
 class DataLoaderIterator {
 public:

@@ -270,48 +270,6 @@ std::shared_ptr<Tensor> TransposeBackward(const std::shared_ptr<Tensor> &grad_ou
     return TransposeForward(grad_output, dim1, dim0);
 }
 
-namespace {
-enum class MaskMode { kLead, kTail };
-
-static bool IsLeadMaskShape(const std::vector<int64_t> &in, const std::vector<int64_t> &mk) {
-    if (mk.empty() || in.empty()) {
-        return false;
-    }
-    if (mk.size() > in.size()) {
-        return false;
-    }
-    for (size_t d = 0; d < mk.size(); ++d) {
-        if (!(mk[d] == in[d] || mk[d] == 1)) {
-            return false;
-        }
-    }
-    return true;
-}
-
-static bool IsTailMaskShape(const std::vector<int64_t> &in, const std::vector<int64_t> &mk) {
-    if (mk.size() > in.size()) {
-        return false;
-    }
-    size_t k = mk.size();
-    for (size_t i = 0; i < k; ++i) {
-        int64_t in_dim = in[in.size() - k + i];
-        int64_t mk_dim = mk[i];
-        if (!(mk_dim == in_dim || mk_dim == 1)) {
-            return false;
-        }
-    }
-    return true;
-}
-
-static MaskMode DecideMaskMode(const std::vector<int64_t> &in, const std::vector<int64_t> &mk) {
-    bool lead = IsLeadMaskShape(in, mk);
-    bool tail = IsTailMaskShape(in, mk);
-    CHECK(lead || tail) << "Mask must align/broadcast to either leading or trailing axes.";
-    // By default mask along tailing dims
-    return tail ? MaskMode::kTail : MaskMode::kLead;
-}
-} // namespace
-
 template <typename T>
 __global__ void MaskForwardKernel(const T *input, const T *mask, T *output, T value, int batch_size, int mask_size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -320,56 +278,39 @@ __global__ void MaskForwardKernel(const T *input, const T *mask, T *output, T va
     }
 }
 
-template <typename T>
-__global__ void MaskLeadsForwardKernel(const T *input, const T *mask, T *output, T value, int rows, int inner) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < rows * inner) {
-        output[i] = (mask[i / inner] == T(1)) ? value : input[i];
-    }
-}
-
 std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &mask,
                                     float value) {
     auto input_shape = input->Dims();
     auto mask_shape = mask->Dims();
     auto dtype = input->Dtype();
-    // TODO(zbl): support bool mask
-    CHECK_EQ(static_cast<int>(dtype), static_cast<int>(mask->Dtype())) << "For now, input/mask dtypes must match.";
+    CHECK_EQ(static_cast<int>(dtype), static_cast<int>(mask->Dtype()));
 
-    MaskMode mode = DecideMaskMode(input_shape, mask_shape);
-
-    auto output = std::make_shared<Tensor>(input_shape, dtype, input->GetDevice());
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
-    int threads_per_block = 256;
-
-    if (mode == MaskMode::kLead) {
-        int64_t rows = mask->NumElements();
-        int64_t inner = input->NumElements() / rows;
-        int num_blocks = static_cast<int>((input->NumElements() + threads_per_block - 1) / threads_per_block);
-
-        DispatchFunc<INFINI_ALL_TYPES>(
-            dtype,
-            [=]<typename T>() {
-                MaskLeadsForwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                    static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask->DataPtr()),
-                    static_cast<T *>(output->DataPtr()), common::cuda::Cast<T>(value), rows, inner);
-            },
-            "CUDA MaskForward(rows)");
-    } else { // kTail
-        int64_t mask_size = mask->NumElements();
-        int64_t batch_size = input->NumElements() / mask_size;
-        int num_blocks = static_cast<int>((input->NumElements() + threads_per_block - 1) / threads_per_block);
-
-        DispatchFunc<INFINI_ALL_TYPES>(
-            dtype,
-            [=]<typename T>() {
-                MaskForwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                    static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask->DataPtr()),
-                    static_cast<T *>(output->DataPtr()), common::cuda::Cast<T>(value), static_cast<int>(batch_size),
-                    static_cast<int>(mask_size));
-            },
-            "CUDA MaskForward(tail)");
+    int64_t input_dims = input_shape.size();
+    int64_t mask_dims = mask_shape.size();
+    for (int i = 0; i < mask_dims; ++i) {
+        int input_dim = input_shape[input_dims - mask_dims + i];
+        int mask_dim = mask_shape[i];
+        CHECK(input_dim == mask_dim || mask_dim == 1);
     }
+
+    int64_t mask_size = mask->NumElements();
+    int64_t batch_size = input->NumElements() / mask_size;
+
+    auto output = std::make_shared<Tensor>(input->Dims(), dtype, input->GetDevice());
+
+    int threads_per_block = 256;
+    int num_blocks = (input->NumElements() + threads_per_block - 1) / threads_per_block;
+
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
+
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            MaskForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask->DataPtr()),
+                static_cast<T *>(output->DataPtr()), common::cuda::Cast<T>(value), batch_size, mask_size);
+        },
+        "CUDA MaskForward");
 
     return output;
 }
@@ -382,56 +323,39 @@ __global__ void MaskBackwardKernel(const T *grad_output, const T *mask, T *grad_
     }
 }
 
-template <typename T>
-__global__ void MaskLeadsBackwardKernel(const T *grad_output, const T *mask, T *grad_input, int rows, int inner) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < rows * inner) {
-        grad_input[i] = (mask[i / inner] == T(1)) ? T(0) : grad_output[i];
-    }
-}
-
 std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &mask) {
     auto output_shape = grad_output->Dims();
     auto mask_shape = mask->Dims();
     auto dtype = grad_output->Dtype();
-    CHECK_EQ(static_cast<int>(dtype), static_cast<int>(mask->Dtype()))
-        << "For now, grad_output/mask dtypes must match.";
+    CHECK_EQ(static_cast<int>(dtype), static_cast<int>(mask->Dtype()));
 
-    MaskMode mode = DecideMaskMode(output_shape, mask_shape);
-
-    auto grad_input = std::make_shared<Tensor>(output_shape, dtype, grad_output->GetDevice());
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
-    int threads_per_block = 256;
-
-    if (mode == MaskMode::kLead) {
-        int64_t rows = mask->NumElements();
-        int64_t inner = grad_output->NumElements() / rows;
-        int num_blocks = static_cast<int>((grad_output->NumElements() + threads_per_block - 1) / threads_per_block);
-
-        DispatchFunc<INFINI_ALL_TYPES>(
-            dtype,
-            [=]<typename T>() {
-                grad_input->Fill<T>(0);
-                MaskLeadsBackwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                    static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask->DataPtr()),
-                    static_cast<T *>(grad_input->DataPtr()), rows, inner);
-            },
-            "CUDA MaskBackward(rows)");
-    } else { // kTail
-        int64_t mask_size = mask->NumElements();
-        int64_t batch_size = grad_output->NumElements() / mask_size;
-        int num_blocks = static_cast<int>((grad_output->NumElements() + threads_per_block - 1) / threads_per_block);
-
-        DispatchFunc<INFINI_ALL_TYPES>(
-            dtype,
-            [=]<typename T>() {
-                grad_input->Fill<T>(0);
-                MaskBackwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                    static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask->DataPtr()),
-                    static_cast<T *>(grad_input->DataPtr()), static_cast<int>(batch_size), static_cast<int>(mask_size));
-            },
-            "CUDA MaskBackward(tail)");
+    int64_t output_dims = output_shape.size();
+    int64_t mask_dims = mask_shape.size();
+    for (int i = 0; i < mask_dims; ++i) {
+        int out_dim = output_shape[output_dims - mask_dims + i];
+        int mask_dim = mask_shape[i];
+        CHECK(out_dim == mask_dim || mask_dim == 1);
     }
+
+    int64_t mask_size = mask->NumElements();
+    int64_t batch_size = grad_output->NumElements() / mask_size;
+
+    auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), grad_output->Dtype(), grad_output->GetDevice());
+
+    int threads_per_block = 256;
+    int num_blocks = (grad_output->NumElements() + threads_per_block - 1) / threads_per_block;
+
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
+
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype,
+        [=]<typename T>() {
+            grad_input->Fill<T>(0);
+            MaskBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask->DataPtr()),
+                static_cast<T *>(grad_input->DataPtr()), batch_size, mask_size);
+        },
+        "CUDA MaskBackward");
 
     return grad_input;
 }

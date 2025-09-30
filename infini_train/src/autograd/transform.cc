@@ -2,7 +2,6 @@
 
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
-
 namespace infini_train::autograd {
 std::vector<std::shared_ptr<Tensor>> Tril::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1);

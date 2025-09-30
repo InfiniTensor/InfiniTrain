@@ -1,8 +1,9 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
+#include <type_traits>
 #include <unordered_map>
+
 #ifdef USE_CUDA
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>

@@ -3,17 +3,20 @@
 #include <memory>
 #include <vector>
 
-#include "infini_train/include/nn/parallel/reduce_op_type.h"
-
-namespace infini_train {
-class Tensor;
-class Device;
-namespace nn {
-class Module;
-}
-} // namespace infini_train
+#include "infini_train/include/device.h"
+#include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel::function {
+
+enum class ReduceOpType : int8_t {
+    kSum,
+    kProd,
+    kMin,
+    kMax,
+    kAvg,
+};
+
 std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                                                           const std::vector<const Device *> &device_ids, int dim);
 

@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/init.h"
 
+#include <algorithm>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -7,16 +8,14 @@
 #include <random>
 #include <unordered_set>
 
+#include "glog/logging.h"
 #ifdef USE_CUDA
-#include <cuda_runtime_api.h>
+#include "cuda_runtime_api.h"
 #endif
 #ifdef USE_OMP
-#include <omp.h>
+#include "omp.h"
 #endif
 
-#include "glog/logging.h"
-
-#include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::init {

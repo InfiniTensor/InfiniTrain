@@ -4,10 +4,7 @@
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
-
-namespace infini_train {
-class Tensor;
-}
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
 class Split : public Function {
@@ -24,25 +21,6 @@ public:
 private:
     const int64_t split_size_ = 0;
     const int dim_ = 0;
-    std::vector<int64_t> input_dims_;
-};
-
-// FIXME(zbl): This function aligns with torch.gather
-//             Currently named IndexGather to avoid conflict with communication operators
-//             Should be renamed to Gather later for interface consistency
-class IndexGather : public Function {
-public:
-    static constexpr char kType[] = "IndexGatherFunction";
-
-    IndexGather(int64_t dim = 0) : Function(kType), dim_(dim) {}
-
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
-    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
-    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
-
-private:
-    const int64_t dim_ = 0;
     std::vector<int64_t> input_dims_;
 };
 
@@ -93,21 +71,5 @@ public:
 private:
     int64_t dim_ = 0;
     std::vector<int64_t> input_dims_;
-};
-
-class Concat : public Function {
-public:
-    static constexpr char kType[] = "ConcatFunction";
-
-    Concat(int64_t dim) : Function(kType), dim_(dim) {}
-
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
-    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
-    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
-
-private:
-    const int64_t dim_ = 0;
-    std::vector<std::vector<int64_t>> input_dims_list_;
 };
 } // namespace infini_train::autograd

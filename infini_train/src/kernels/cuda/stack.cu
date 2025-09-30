@@ -107,8 +107,7 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
     std::vector<std::shared_ptr<Tensor>> grads;
     for (int i = 0; i < num_inputs; ++i) {
         auto t = std::make_shared<Tensor>(base_dims, dtype, grad_output->GetDevice());
-        DispatchFunc<INFINI_ALL_TYPES>(
-            dtype, [=]<typename T>() { t->Fill<T>(0); }, "CUDA StackBackward");
+        DispatchFunc<INFINI_ALL_TYPES>(dtype, [=]<typename T>() { t->Fill<T>(0); }, "CUDA StackBackward");
         grads.push_back(t);
     }
 

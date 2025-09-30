@@ -76,8 +76,7 @@ int main(int argc, char *argv[]) {
             total_loss += current_loss;
             if (train_idx % kNumItersOfOutputDuration == 0) {
                 LOG(ERROR) << "epoch: " << epoch << ", [" << train_idx * FLAGS_bs << "/" << train_dataset->Size()
-                           << "] "
-                           << " loss: " << current_loss;
+                           << "] " << " loss: " << current_loss;
             }
 
             loss[0]->Backward();

@@ -1,12 +1,10 @@
 #pragma once
 
-#include <cublas_v2.h>
-#include <cuda.h>
-#include <cuda_runtime.h>
+#include "cuda.h"
+#include "cuda_runtime.h"
 #ifdef USE_NCCL
-#include <nccl.h>
+#include "nccl.h"
 #endif
-
 #include "glog/logging.h"
 
 namespace infini_train::common::cuda {

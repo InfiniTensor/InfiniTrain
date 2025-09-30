@@ -21,6 +21,9 @@
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/tensor.h"
 
+#include "gflags/gflags.h"
+DECLARE_bool(flash);
+
 namespace nn = infini_train::nn;
 
 namespace {
@@ -88,18 +91,35 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     // manual implementation of attention
     // this materializes the large (T,T) matrix for all the queries and keys
 
-    // q: (bs, n_head, seq_len, n_embd / n_head)
-    // k: (bs, n_head, seq_len, n_embd / n_head) -> (bs, n_head, n_embd / n_head, seq_len)
-    // q matmul k: (bs, n_head, seq_len, seq_len) -> mul 1.0 / sqrt(n_embd / n_head) -> (bs, n_head, seq_len, seq_len)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(*k->Dims().rbegin()));
-    // (1, 1, seq_len, seq_len)
-    auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
-    // (1, 1, seq_len, seq_len) -> eq 0 -> (1, 1, seq_len, seq_len) -> masked_fill -> (bs, n_head, seq_len, seq_len)
-    att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
-    // (bs, n_head, seq_len, seq_len)
-    att = nn::function::Softmax(att, -1);
-    // (bs, n_head, seq_len, n_embd / n_head)
-    auto y = att->Matmul(v);
+    std::shared_ptr<infini_train::Tensor> y;
+
+    if (FLAGS_flash) {
+        // TODO
+
+        y = nn::function::ScaledDotProductAttention(
+            /*query =*/q, // (B,H,T,Dh)
+            /*key   =*/k, // (B,H,T,Dh)
+            /*value =*/v, // (B,H,T,Dh)
+            /*attn_mask =*/nullptr,
+            /*dropout_p =*/0,
+            /*is_causal =*/true,
+            /*scale =*/std::nullopt,
+            /*enable_gqa =*/false);
+    } else {
+        // q: (bs, n_head, seq_len, n_embd / n_head)
+        // k: (bs, n_head, seq_len, n_embd / n_head) -> (bs, n_head, n_embd / n_head, seq_len)
+        // q matmul k: (bs, n_head, seq_len, seq_len) -> mul 1.0 / sqrt(n_embd / n_head) -> (bs, n_head, seq_len,
+        // seq_len)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(*k->Dims().rbegin()));
+        // (1, 1, seq_len, seq_len)
+        auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
+        // (1, 1, seq_len, seq_len) -> eq 0 -> (1, 1, seq_len, seq_len) -> masked_fill -> (bs, n_head, seq_len, seq_len)
+        att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
+        // (bs, n_head, seq_len, seq_len)
+        att = nn::function::Softmax(att, -1);
+        // (bs, n_head, seq_len, n_embd / n_head)
+        y = att->Matmul(v);
+    }
     // (bs, n_head, seq_len, n_embd / n_head) -> Transpose(1, 2) -> (bs, seq_len, n_head, n_embd / n_head)
     // -> (bs, seq_len, n_embd)
     y = y->Transpose(1, 2)->Contiguous()->View({B, T, C});

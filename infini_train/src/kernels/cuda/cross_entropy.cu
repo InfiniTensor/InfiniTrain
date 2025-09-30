@@ -2,8 +2,8 @@
 #include <limits>
 #include <numeric>
 
-#include <cub/block/block_reduce.cuh>
-#include <cuda_runtime.h>
+#include "cub/block/block_reduce.cuh"
+#include "cuda_runtime.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
@@ -44,10 +44,7 @@ __global__ void CrossEntropyForwardKernel(const InputType *__restrict__ input_pt
     for (int i = tid; i < num_classes; i += BLOCK_SIZE) {
         thread_max = fmaxf(thread_max, common::cuda::Cast<float>(input_ptr[base + i]));
     }
-    const float block_max = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Reduce(thread_max, cub::Max());
-    if (tid == 0) {
-        shared.max_logit = block_max;
-    }
+    shared.max_logit = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Reduce(thread_max, cub::Max());
     __syncthreads();
 
     // calculate the sum of exponents
@@ -55,10 +52,7 @@ __global__ void CrossEntropyForwardKernel(const InputType *__restrict__ input_pt
     for (int i = tid; i < num_classes; i += BLOCK_SIZE) {
         thread_sum += expf(common::cuda::Cast<float>(input_ptr[base + i]) - shared.max_logit);
     }
-    const float block_sum = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Sum(thread_sum);
-    if (tid == 0) {
-        shared.sum_exp = block_sum;
-    }
+    shared.sum_exp = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Sum(thread_sum);
     __syncthreads();
 
     // calculate the loss
@@ -139,10 +133,7 @@ __global__ void CrossEntropyBackwardKernel(const InputType *__restrict__ input_p
     for (int i = tid; i < num_classes; i += BLOCK_SIZE) {
         thread_max = fmaxf(thread_max, common::cuda::Cast<float>(input_ptr[idx_base + i]));
     }
-    const float block_max = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Reduce(thread_max, cub::Max());
-    if (tid == 0) {
-        shared.max_logit = block_max;
-    }
+    shared.max_logit = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Reduce(thread_max, cub::Max());
     __syncthreads();
 
     // calculate the sum
@@ -150,11 +141,7 @@ __global__ void CrossEntropyBackwardKernel(const InputType *__restrict__ input_p
     for (int i = tid; i < num_classes; i += BLOCK_SIZE) {
         thread_sum += expf(common::cuda::Cast<float>(input_ptr[idx_base + i]) - shared.max_logit);
     }
-
-    const float block_sum = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Sum(thread_sum);
-    if (tid == 0) {
-        shared.sum_exp = block_sum;
-    }
+    shared.sum_exp = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Sum(thread_sum);
     __syncthreads();
 
     // calculate the gradient
