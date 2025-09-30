@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "infini_train/include/autograd/accumulate.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
@@ -20,10 +21,8 @@ SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate
 
 void SGD::Step() {
     for (auto param : params_) {
-        auto device = param->GetDevice();
-        device->SetDevice();
-        auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
-        kernel.Call<void>(param->grad(), -learning_rate_, param);
+        auto accumulate_function = std::make_shared<infini_train::autograd::AccumulateGrad>(param, -learning_rate_);
+        accumulate_function->BackwardPartial(param->grad(), 0);
     }
 }
 

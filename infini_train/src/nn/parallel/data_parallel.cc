@@ -10,8 +10,9 @@
 
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/tensor.h"
+
+#include "infini_train/include/nn/parallel_functional.h"
 
 namespace infini_train::nn::parallel {
 namespace {

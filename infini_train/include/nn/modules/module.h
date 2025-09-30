@@ -6,12 +6,10 @@
 #include <unordered_set>
 #include <vector>
 
-#include "infini_train/include/datatype.h"
+#include "glog/logging.h"
 
-namespace infini_train {
-class Tensor;
-class Device;
-} // namespace infini_train
+#include "infini_train/include/device.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
 class Module;
@@ -46,7 +44,10 @@ public:
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
 
-    virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
+    virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+        LOG(FATAL) << "Forward function not implemented for this module";
+        return {};
+    }
 
     virtual void To(const Device *device);
 
@@ -76,7 +77,6 @@ template <typename Derived> class CloneableModule : public Module {
 public:
     CloneableModule() = default;
     explicit CloneableModule(const std::string &type) : Module(type) {}
-
     std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const override {
         return std::make_shared<Derived>(static_cast<const Derived &>(*this));
     }

@@ -4,11 +4,8 @@
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
-
-namespace infini_train {
-class Tensor;
-class Device;
-} // namespace infini_train
+#include "infini_train/include/device.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
 class Scatter : public autograd::Function {

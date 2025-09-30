@@ -4,7 +4,6 @@
 
 #include "infini_train/include/autograd/accumulate.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
@@ -22,8 +21,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     for (int idx = 0; idx < input_tensors.size(); ++idx) {
         const auto &input_tensor = input_tensors[idx];
         if (input_tensor->requires_grad() && input_tensor->is_leaf()) {
-            next_functions_.emplace_back(input_tensor->grad_accumulator(), input_tensor->output_idx());
-            input_tensor->grad_accumulator()->IncreaseDependenciesNumber();
+            next_functions_.emplace_back(std::make_shared<AccumulateGrad>(input_tensor->grad()), 0);
         } else {
             next_functions_.emplace_back(input_tensor->grad_fn(), input_tensor->output_idx());
             if (input_tensor->grad_fn()) {
@@ -51,17 +49,12 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
     const auto *device = grad_output->GetDevice();
     device->SetDevice();
 
-    // NOTE(dcj): The accumulate autograd function has no grad_outputs.
-    // Temporarily resize the vector to hold one nullptr as a buffer.
-    if (grad_outputs_.empty()) {
-        grad_outputs_.resize(1, nullptr);
-    }
     if (!grad_outputs_.at(grad_output_idx)) {
         grad_outputs_[grad_output_idx] = grad_output;
         ++grad_outputs_reached_;
     } else {
-        auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
-        kernel.Call<void>(grad_output, 1.0f, grad_outputs_.at(grad_output_idx));
+        auto accumulate_function = std::make_shared<AccumulateGrad>(grad_outputs_.at(grad_output_idx));
+        accumulate_function->BackwardPartial(grad_output, 0);
     }
     ++dependencies_reached_;
     if (grad_outputs_reached_ == grad_outputs_.size()
@@ -82,6 +75,5 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
         }
     }
 }
-
 void Function::IncreaseDependenciesNumber() { ++dependencies_number_; }
 } // namespace infini_train::autograd

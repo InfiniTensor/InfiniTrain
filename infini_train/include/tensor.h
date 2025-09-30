@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Eigen/Dense"
+#include "datatype.h"
 #include "glog/logging.h"
 
 #include "infini_train/include/datatype.h"
@@ -16,9 +17,7 @@
 namespace infini_train {
 namespace autograd {
 class Function;
-class AccumulateGrad;
-class PostAccumulateGradHook;
-} // namespace autograd
+}
 
 namespace {
 struct PrintOptions {
@@ -154,41 +153,30 @@ private:
 public:
     std::shared_ptr<Tensor> RequiresGrad();
 
-    std::shared_ptr<Tensor> grad() const;
-    bool requires_grad() const;
-    void set_requires_grad(bool requires_grad);
+    std::shared_ptr<Tensor> grad() const { return grad_; };
+    bool requires_grad() const { return requires_grad_; }
+    void set_requires_grad(bool requires_grad) { requires_grad_ = requires_grad; }
 
-    bool is_leaf() const;
-    void set_is_leaf(bool is_leaf);
+    bool is_leaf() const { return is_leaf_; }
+    void set_is_leaf(bool is_leaf) { is_leaf_ = is_leaf; }
 
-    std::shared_ptr<autograd::Function> grad_fn() const;
-    void set_grad_fn(std::shared_ptr<autograd::Function> grad_fn);
+    std::shared_ptr<autograd::Function> grad_fn() const { return grad_fn_; }
+    void set_grad_fn(std::shared_ptr<autograd::Function> grad_fn) { grad_fn_ = grad_fn; }
 
-    int output_idx() const;
-    void set_output_idx(int output_idx);
+    int output_idx() const { return output_idx_; }
+    void set_output_idx(int output_idx) { output_idx_ = output_idx; }
 
     void ZeroGrad();
 
     void Backward(std::shared_ptr<Tensor> gradient = nullptr, bool retain_graph = false,
                   bool create_graph = false) const;
 
-    std::shared_ptr<autograd::AccumulateGrad> grad_accumulator();
-    void ResetAccumulator();
-
-    void RegisterPostAccumulateGradHook(std::shared_ptr<autograd::PostAccumulateGradHook> hook);
-
-    autograd::PostAccumulateGradHook *post_accumulate_grad_hook() const;
-
 private:
     std::shared_ptr<Tensor> grad_ = nullptr;
     bool requires_grad_ = false;
     bool is_leaf_ = true;
     std::shared_ptr<autograd::Function> grad_fn_ = nullptr;
-    int output_idx_ = 0;
-    // FIXME(dcj): This should be a weak_ptr. The autograd graph should hold
-    // a strong reference to the accumulator to manage its lifetime.
-    std::shared_ptr<autograd::AccumulateGrad> grad_accumulator_ = nullptr;
-    std::shared_ptr<autograd::PostAccumulateGradHook> post_accumulate_grad_hook_ = nullptr;
+    int output_idx_ = -1;
 };
 
 std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar);

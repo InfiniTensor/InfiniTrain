@@ -6,17 +6,15 @@
 #include <unordered_map>
 #include <vector>
 
-#include <cuda_runtime.h>
-#include <nccl.h>
-
+#include "cuda_runtime.h"
 #include "glog/logging.h"
+#include "nccl.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
-#include "infini_train/include/nn/parallel/parallel_functional.h"
-#include "infini_train/include/nn/parallel/reduce_op_type.h"
+#include "infini_train/include/nn/parallel_functional.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cuda {

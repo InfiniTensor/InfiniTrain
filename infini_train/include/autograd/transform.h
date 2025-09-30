@@ -5,10 +5,7 @@
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
-
-namespace infini_train {
-class Tensor;
-}
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
 class Tril : public Function {

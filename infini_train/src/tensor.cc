@@ -6,19 +6,15 @@
 #include <numeric>
 
 #ifdef USE_CUDA
-#include <cuda_runtime_api.h>
+#include "cuda_runtime_api.h"
 #endif
-
 #include "Eigen/Dense"
 #include "glog/logging.h"
 
 #ifdef USE_CUDA
 #include "infini_train/include/common/cuda/common_cuda.h"
 #endif
-#include "infini_train/include/autograd/accumulate.h"
 #include "infini_train/include/autograd/elementwise.h"
-#include "infini_train/include/autograd/function.h"
-#include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/autograd/matmul.h"
 #include "infini_train/include/autograd/misc.h"
 #include "infini_train/include/autograd/outer.h"
@@ -381,25 +377,6 @@ std::shared_ptr<Tensor> Tensor::RequiresGrad() {
     return shared_from_this();
 }
 
-std::shared_ptr<Tensor> Tensor::grad() const { return grad_; };
-bool Tensor::requires_grad() const { return requires_grad_; }
-void Tensor::set_requires_grad(bool requires_grad) { requires_grad_ = requires_grad; }
-
-bool Tensor::is_leaf() const { return is_leaf_; }
-void Tensor::set_is_leaf(bool is_leaf) { is_leaf_ = is_leaf; }
-
-std::shared_ptr<autograd::Function> Tensor::grad_fn() const { return grad_fn_; }
-void Tensor::set_grad_fn(std::shared_ptr<autograd::Function> grad_fn) { grad_fn_ = grad_fn; }
-
-int Tensor::output_idx() const { return output_idx_; }
-void Tensor::set_output_idx(int output_idx) { output_idx_ = output_idx; }
-
-void Tensor::ZeroGrad() {
-    if (grad_) {
-        grad_->Fill<float>(0.0f);
-    }
-}
-
 void Tensor::Backward(std::shared_ptr<Tensor> gradient, bool retain_graph, bool create_graph) const {
     CHECK(!retain_graph && !create_graph) << "Not implemented yet!";
     if (grad_fn_) {
@@ -417,37 +394,11 @@ void Tensor::Backward(std::shared_ptr<Tensor> gradient, bool retain_graph, bool 
     }
 }
 
-std::shared_ptr<autograd::AccumulateGrad> Tensor::grad_accumulator() {
-    CHECK_EQ(grad_fn_, nullptr) << "grad_accumulator() should only be called on leaf tensors";
-
-    if (!requires_grad_) {
-        return nullptr;
-    }
-
-    // TODO(dcj): should lock in multi-thread environment
-
-    if (grad_accumulator_ == nullptr) {
-        grad_accumulator_ = std::make_shared<autograd::AccumulateGrad>(shared_from_this());
-    }
-
-    return grad_accumulator_;
-}
-
-void Tensor::ResetAccumulator() {
-    if (grad_accumulator_) {
-        grad_accumulator_.reset();
+void Tensor::ZeroGrad() {
+    if (grad_) {
+        grad_->Fill<float>(0.0f);
     }
 }
-
-void Tensor::RegisterPostAccumulateGradHook(std::shared_ptr<autograd::PostAccumulateGradHook> hook) {
-    CHECK(requires_grad_) << "cannot register a hook on a tensor that doesn't require gradient";
-
-    CHECK_EQ(grad_fn_, nullptr) << "post accumulate grad hooks cannot be registered on non-leaf tensors";
-
-    post_accumulate_grad_hook_ = hook;
-}
-
-autograd::PostAccumulateGradHook *Tensor::post_accumulate_grad_hook() const { return post_accumulate_grad_hook_.get(); }
 
 std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
     os << "Tensor(data_ptr=" << static_cast<const void *>(tensor.DataPtr()) << ", dims=[";

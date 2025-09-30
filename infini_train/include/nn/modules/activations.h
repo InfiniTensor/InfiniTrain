@@ -4,10 +4,7 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
-
-namespace infini_train {
-class Tensor;
-}
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
 class Sigmoid : public CloneableModule<Sigmoid> {
