@@ -1,0 +1,308 @@
+[LAST_CMAKE] cmake -DUSE_CUDA=ON .. && make -j
+[COMMAND] cmake -DUSE_CUDA=ON .. && make -j
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/lib/ccache/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+CMake Deprecation Warning at third_party/gflags/CMakeLists.txt:73 (cmake_minimum_required):
+  Compatibility with CMake < 3.5 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value or use a ...<max> suffix to tell
+  CMake that the project does not need compatibility with older versions.
+
+
+-- Looking for C++ include unistd.h
+-- Looking for C++ include unistd.h - found
+-- Looking for C++ include stdint.h
+-- Looking for C++ include stdint.h - found
+-- Looking for C++ include inttypes.h
+-- Looking for C++ include inttypes.h - found
+-- Looking for C++ include sys/types.h
+-- Looking for C++ include sys/types.h - found
+-- Looking for C++ include sys/stat.h
+-- Looking for C++ include sys/stat.h - found
+-- Looking for C++ include fnmatch.h
+-- Looking for C++ include fnmatch.h - found
+-- Looking for C++ include stddef.h
+-- Looking for C++ include stddef.h - found
+-- Check size of uint32_t
+-- Check size of uint32_t - done
+-- Looking for strtoll
+-- Looking for strtoll - found
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- Could NOT find Unwind (missing: Unwind_INCLUDE_DIR Unwind_LIBRARY) 
+-- Looking for C++ include dlfcn.h
+-- Looking for C++ include dlfcn.h - found
+-- Looking for C++ include elf.h
+-- Looking for C++ include elf.h - found
+-- Looking for C++ include glob.h
+-- Looking for C++ include glob.h - found
+-- Looking for C++ include link.h
+-- Looking for C++ include link.h - found
+-- Looking for C++ include pwd.h
+-- Looking for C++ include pwd.h - found
+-- Looking for C++ include sys/exec_elf.h
+-- Looking for C++ include sys/exec_elf.h - not found
+-- Looking for C++ include sys/syscall.h
+-- Looking for C++ include sys/syscall.h - found
+-- Looking for C++ include sys/time.h
+-- Looking for C++ include sys/time.h - found
+-- Looking for C++ include sys/utsname.h
+-- Looking for C++ include sys/utsname.h - found
+-- Looking for C++ include sys/wait.h
+-- Looking for C++ include sys/wait.h - found
+-- Looking for C++ include syscall.h
+-- Looking for C++ include syscall.h - found
+-- Looking for C++ include syslog.h
+-- Looking for C++ include syslog.h - found
+-- Looking for C++ include ucontext.h
+-- Looking for C++ include ucontext.h - found
+-- Check size of mode_t
+-- Check size of mode_t - done
+-- Check size of ssize_t
+-- Check size of ssize_t - done
+-- Looking for dladdr
+-- Looking for dladdr - found
+-- Looking for fcntl
+-- Looking for fcntl - found
+-- Looking for posix_fadvise
+-- Looking for posix_fadvise - found
+-- Looking for pread
+-- Looking for pread - found
+-- Looking for pwrite
+-- Looking for pwrite - found
+-- Looking for sigaction
+-- Looking for sigaction - found
+-- Looking for sigaltstack
+-- Looking for sigaltstack - found
+-- Looking for backtrace
+-- Looking for backtrace - found
+-- Looking for backtrace_symbols
+-- Looking for backtrace_symbols - found
+-- Looking for _chsize_s
+-- Looking for _chsize_s - not found
+-- Looking for UnDecorateSymbolName
+-- Looking for UnDecorateSymbolName - not found
+-- Looking for abi::__cxa_demangle
+-- Looking for abi::__cxa_demangle - found
+-- Looking for __argv
+-- Looking for __argv - not found
+-- Looking for getprogname
+-- Looking for getprogname - not found
+-- Looking for program_invocation_short_name
+-- Looking for program_invocation_short_name - found
+-- Performing Test HAVE___PROGNAME
+-- Performing Test HAVE___PROGNAME - Success
+-- Performing Test HAVE_PC_FROM_UCONTEXT_uc_mcontext_gregs_REG_PC
+-- Performing Test HAVE_PC_FROM_UCONTEXT_uc_mcontext_gregs_REG_PC - Failed
+-- Performing Test HAVE_PC_FROM_UCONTEXT_uc_mcontext_gregs_REG_EIP
+-- Performing Test HAVE_PC_FROM_UCONTEXT_uc_mcontext_gregs_REG_EIP - Failed
+-- Performing Test HAVE_PC_FROM_UCONTEXT_uc_mcontext_gregs_REG_RIP
+-- Performing Test HAVE_PC_FROM_UCONTEXT_uc_mcontext_gregs_REG_RIP - Success
+-- Looking for gmtime_r
+-- Looking for gmtime_r - found
+-- Looking for localtime_r
+-- Looking for localtime_r - found
+-- Performing Test COMPILER_HAS_HIDDEN_VISIBILITY
+-- Performing Test COMPILER_HAS_HIDDEN_VISIBILITY - Success
+-- Performing Test COMPILER_HAS_HIDDEN_INLINE_VISIBILITY
+-- Performing Test COMPILER_HAS_HIDDEN_INLINE_VISIBILITY - Success
+-- Performing Test COMPILER_HAS_DEPRECATED_ATTR
+-- Performing Test COMPILER_HAS_DEPRECATED_ATTR - Success
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Found OpenMP: TRUE (found version "4.5")  
+-- The C compiler identification is GNU 13.3.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/lib/ccache/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- 
+-- Configured Eigen 3.4.1
+-- 
+-- The CUDA compiler identification is NVIDIA 12.9.86
+-- Detecting CUDA compiler ABI info
+-- Detecting CUDA compiler ABI info - done
+-- Check for working CUDA compiler: /usr/local/cuda/bin/nvcc - skipped
+-- Detecting CUDA compile features
+-- Detecting CUDA compile features - done
+-- Found CUDAToolkit: /usr/local/cuda/targets/x86_64-linux/include (found version "12.9.86") 
+-- Configuring done (70.7s)
+-- Generating done (3.7s)
+-- Build files have been written to: /mnt/d/InfiniTensor/InfiniTrain/build
+[  0%] Building CXX object third_party/gflags/CMakeFiles/gflags_nothreads_static.dir/src/gflags.cc.o
+[  1%] Building CXX object third_party/gflags/CMakeFiles/gflags_nothreads_static.dir/src/gflags_reporting.cc.o
+[  2%] Building CXX object third_party/gflags/CMakeFiles/gflags_nothreads_static.dir/src/gflags_completions.cc.o
+[  3%] Building CXX object third_party/glog/CMakeFiles/glog_internal.dir/src/demangle.cc.o
+[  3%] Building CXX object third_party/glog/CMakeFiles/glog_internal.dir/src/flags.cc.o
+[  5%] Building CXX object third_party/glog/CMakeFiles/glog_internal.dir/src/logging.cc.o
+[  5%] Building CXX object third_party/glog/CMakeFiles/glog_internal.dir/src/raw_logging.cc.o
+[  7%] Building CXX object third_party/glog/CMakeFiles/glog_internal.dir/src/signalhandler.cc.o
+[  7%] Building CXX object third_party/glog/CMakeFiles/glog_internal.dir/src/stacktrace.cc.o
+[  7%] Building CXX object third_party/glog/CMakeFiles/glog_internal.dir/src/symbolize.cc.o
+[  8%] Building CXX object third_party/glog/CMakeFiles/glog_internal.dir/src/utilities.cc.o
+[  9%] Building CXX object third_party/glog/CMakeFiles/glog_internal.dir/src/vlog_is_on.cc.o
+[ 10%] Linking CXX static library libgflags_nothreads.a
+[ 10%] Built target glog_internal
+[ 10%] Generating CMakeFiles/glog.cc
+[ 11%] Building CXX object third_party/glog/CMakeFiles/stl_logging_unittest.dir/src/stl_logging_unittest.cc.o
+[ 11%] Building CXX object third_party/glog/CMakeFiles/logging_unittest.dir/src/logging_unittest.cc.o
+[ 12%] Building CXX object third_party/glog/CMakeFiles/symbolize_unittest.dir/src/symbolize_unittest.cc.o
+[ 13%] Building CXX object third_party/glog/CMakeFiles/demangle_unittest.dir/src/demangle_unittest.cc.o
+[ 15%] Building CXX object third_party/glog/CMakeFiles/stacktrace_unittest.dir/src/stacktrace_unittest.cc.o
+[ 15%] Building CXX object third_party/glog/CMakeFiles/utilities_unittest.dir/src/utilities_unittest.cc.o
+[ 16%] Building CXX object third_party/glog/CMakeFiles/signalhandler_unittest.dir/src/signalhandler_unittest.cc.o
+[ 16%] Building CXX object third_party/glog/CMakeFiles/cleanup_immediately_unittest.dir/src/cleanup_immediately_unittest.cc.o
+[ 17%] Building CXX object third_party/glog/CMakeFiles/cleanup_with_relative_prefix_unittest.dir/src/cleanup_with_relative_prefix_unittest.cc.o
+[ 17%] Building CXX object third_party/glog/CMakeFiles/cleanup_with_absolute_prefix_unittest.dir/src/cleanup_with_absolute_prefix_unittest.cc.o
+[ 18%] Building CXX object third_party/glog/CMakeFiles/striplog0_unittest.dir/src/striplog_unittest.cc.o
+[ 19%] Building CXX object third_party/glog/CMakeFiles/striplog2_unittest.dir/src/striplog_unittest.cc.o
+[ 20%] Building CXX object third_party/glog/CMakeFiles/striplog10_unittest.dir/src/striplog_unittest.cc.o
+[ 21%] Building CXX object third_party/glog/CMakeFiles/glog.dir/CMakeFiles/glog.cc.o
+[ 24%] Linking CXX executable stl_logging_unittest
+[ 24%] Linking CXX executable symbolize_unittest
+[ 24%] Linking CXX executable logging_unittest
+[ 26%] Linking CXX executable stacktrace_unittest
+[ 26%] Linking CXX executable utilities_unittest
+[ 26%] Linking CXX executable demangle_unittest
+[ 30%] Linking CXX executable signalhandler_unittest
+[ 30%] Linking CXX executable cleanup_immediately_unittest
+[ 30%] Linking CXX executable cleanup_with_absolute_prefix_unittest
+[ 30%] Linking CXX executable cleanup_with_relative_prefix_unittest
+[ 30%] Linking CXX executable striplog0_unittest
+[ 30%] Linking CXX executable striplog2_unittest
+[ 31%] Linking CXX executable striplog10_unittest
+[ 32%] Linking CXX shared library libglog.so
+[ 32%] Built target gflags_nothreads_static
+[ 32%] Built target stacktrace_unittest
+[ 32%] Built target striplog2_unittest
+[ 32%] Built target striplog0_unittest
+[ 32%] Built target signalhandler_unittest
+[ 32%] Built target demangle_unittest
+[ 32%] Built target symbolize_unittest
+[ 32%] Built target striplog10_unittest
+[ 32%] Built target utilities_unittest
+[ 32%] Built target glog
+[ 32%] Built target cleanup_immediately_unittest
+[ 32%] Built target cleanup_with_absolute_prefix_unittest
+[ 32%] Built target cleanup_with_relative_prefix_unittest
+[ 32%] Built target stl_logging_unittest
+[ 33%] Built target logging_unittest
+[ 33%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/ScaledDotProductAttention.cc.o
+[ 34%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/accumulate_grad.cc.o
+[ 36%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/accumulate_grad.cu.o
+[ 36%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/cast.cc.o
+[ 36%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/ScaledDotProductAttention.cu.o
+[ 37%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/cross_entropy.cc.o
+[ 38%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/cast.cu.o
+[ 38%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/elementwise.cc.o
+[ 40%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/comm.cu.o
+[ 40%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/embedding.cc.o
+[ 42%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/fill.cc.o
+[ 42%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/comm_nccl.cu.o
+[ 42%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/layernorm.cc.o
+[ 42%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/cross_entropy.cu.o
+[ 43%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/linear.cc.o
+[ 46%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/elementwise.cu.o
+[ 46%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/no_op.cc.o
+[ 46%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/embedding.cu.o
+[ 49%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/outer.cc.o
+[ 49%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/reduction.cc.o
+[ 50%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/layernorm.cu.o
+[ 51%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/sigmoid.cc.o
+[ 51%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/fill.cu.o
+[ 51%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/linear.cu.o
+[ 51%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/slice.cc.o
+[ 52%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/no_op.cu.o
+[ 53%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/softmax.cc.o
+[ 55%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/outer.cu.o
+[ 55%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/split.cc.o
+[ 56%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/stack.cc.o
+[ 56%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/reduction.cu.o
+[ 56%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/slice.cu.o
+[ 58%] Building CXX object CMakeFiles/infini_train_cpu_kernels.dir/infini_train/src/kernels/cpu/transform.cc.o
+[ 58%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/softmax.cu.o
+[ 59%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/stack.cu.o
+[ 60%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/transform.cu.o
+[ 60%] Building CUDA object CMakeFiles/infini_train_cuda_kernels.dir/infini_train/src/kernels/cuda/split.cu.o
+[ 61%] Linking CXX static library libinfini_train_cpu_kernels.a
+[ 61%] Built target infini_train_cpu_kernels
+/mnt/d/InfiniTensor/InfiniTrain/infini_train/src/kernels/cuda/reduction.cu:20:43: warning: ‘using cub::CUB_200802_SM_750_800::Sum = struct cuda::std::__4::plus<>’ is deprecated: use cuda::std::plus instead [-Wdeprecated-declarations]
+   20 |     __device__ static cub::Sum Op() { return cub::Sum(); }
+      |                                           ^
+/usr/local/cuda/targets/x86_64-linux/include/cub/thread/thread_operators.cuh:95:7: note: declared here
+   95 | using Sum CCCL_DEPRECATED_BECAUSE("use cuda::std::plus instead")                = ::cuda::std::plus<>;
+      |       ^~~
+/mnt/d/InfiniTensor/InfiniTrain/infini_train/src/kernels/cuda/reduction.cu:26:43: warning: ‘using cub::CUB_200802_SM_750_800::Max = struct cuda::__4::maximum<>’ is deprecated: use cuda::maximum instead [-Wdeprecated-declarations]
+   26 |     __device__ static cub::Max Op() { return cub::Max(); }
+      |                                           ^
+/usr/local/cuda/targets/x86_64-linux/include/cub/thread/thread_operators.cuh:98:7: note: declared here
+   98 | using Max CCCL_DEPRECATED_BECAUSE("use cuda::maximum instead")                  = ::cuda::maximum<>;
+      |       ^~~
+/mnt/d/InfiniTensor/InfiniTrain/infini_train/src/kernels/cuda/reduction.cu:32:43: warning: ‘using cub::CUB_200802_SM_750_800::Min = struct cuda::__4::minimum<>’ is deprecated: use cuda::minimum instead [-Wdeprecated-declarations]
+   32 |     __device__ static cub::Min Op() { return cub::Min(); }
+      |                                           ^
+/usr/local/cuda/targets/x86_64-linux/include/cub/thread/thread_operators.cuh:99:7: note: declared here
+   99 | using Min CCCL_DEPRECATED_BECAUSE("use cuda::minimum instead")                  = ::cuda::minimum<>;
+      |       ^~~
+[ 62%] Linking CUDA static library libinfini_train_cuda_kernels.a
+[ 62%] Built target infini_train_cuda_kernels
+[ 63%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/ScaledDotProductAttention.cc.o
+[ 65%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/accumulate.cc.o
+[ 65%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/activations.cc.o
+[ 65%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/comm.cc.o
+[ 67%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/elementwise.cc.o
+[ 67%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/function.cc.o
+[ 68%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/linear.cc.o
+[ 69%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/loss.cc.o
+[ 69%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/matmul.cc.o
+[ 71%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/misc.cc.o
+[ 71%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/normalization.cc.o
+[ 72%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/reduction.cc.o
+[ 72%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/outer.cc.o
+[ 73%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/softmax.cc.o
+[ 74%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/sparse.cc.o
+[ 75%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/autograd/transform.cc.o
+[ 75%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/dataloader.cc.o
+[ 76%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/device.cc.o
+[ 77%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/nn/functional.cc.o
+[ 78%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/nn/init.cc.o
+[ 78%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/nn/modules/activations.cc.o
+[ 79%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/nn/modules/container.cc.o
+[ 80%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/nn/modules/linear.cc.o
+[ 81%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/nn/modules/loss.cc.o
+[ 81%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/nn/modules/module.cc.o
+[ 82%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/nn/modules/normalization.cc.o
+[ 83%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/nn/modules/sparse.cc.o
+[ 85%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/nn/parallel/data_parallel.cc.o
+[ 85%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/nn/parallel/distributed_data_parallel.cc.o
+[ 85%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/nn/parallel_functional.cc.o
+[ 87%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/optimizer.cc.o
+[ 87%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/profiler.cc.o
+[ 88%] Building CXX object CMakeFiles/infini_train.dir/infini_train/src/tensor.cc.o
+[ 88%] Linking CXX static library libinfini_train.a
+[ 88%] Built target infini_train
+[ 91%] Building CXX object CMakeFiles/mnist.dir/example/mnist/dataset.cc.o
+[ 91%] Building CXX object CMakeFiles/gpt2.dir/example/gpt2/main.cc.o
+[ 91%] Building CXX object CMakeFiles/mnist.dir/example/mnist/main.cc.o
+[ 92%] Building CXX object CMakeFiles/gpt2.dir/example/common/tiny_shakespeare_dataset.cc.o
+[ 92%] Building CXX object CMakeFiles/mnist.dir/example/mnist/net.cc.o
+[ 94%] Building CXX object CMakeFiles/llama3.dir/example/llama3/main.cc.o
+[ 94%] Building CXX object CMakeFiles/gpt2.dir/example/common/utils.cc.o
+[ 96%] Building CXX object CMakeFiles/llama3.dir/example/common/tiny_shakespeare_dataset.cc.o
+[ 96%] Building CXX object CMakeFiles/gpt2.dir/example/gpt2/net.cc.o
+[ 96%] Building CXX object CMakeFiles/llama3.dir/example/common/utils.cc.o
+[ 97%] Building CXX object CMakeFiles/gpt2.dir/example/common/tokenizer.cc.o
+[ 98%] Building CXX object CMakeFiles/llama3.dir/example/llama3/net.cc.o
+[ 99%] Building CXX object CMakeFiles/llama3.dir/example/common/tokenizer.cc.o
+[ 99%] Linking CXX executable mnist
+[ 99%] Linking CXX executable gpt2
+[100%] Linking CXX executable llama3
+[100%] Built target mnist
+[100%] Built target llama3
+[100%] Built target gpt2
