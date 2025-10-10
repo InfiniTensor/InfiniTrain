@@ -15,7 +15,9 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
+#include "infini_train/include/nn/parallel/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
+#include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/tensor.h"
 
@@ -29,6 +31,10 @@ const std::unordered_map<DataType, ncclDataType_t> kNcclDtypeMap = {
     {DataType::kFLOAT64, ncclFloat64},
 };
 
+std::string GetTensorParallelProcessFactoryName(const nn::parallel::DistributedDataParallel::Rank &rank, int tp_size) {
+    return "TP" + std::to_string(rank.thread_rank() % tp_size);
+}
+
 using nn::parallel::function::ReduceOpType;
 
 const std::unordered_map<ReduceOpType, ncclRedOp_t> kNcclReduceOpMap = {
@@ -39,9 +45,16 @@ const std::unordered_map<ReduceOpType, ncclRedOp_t> kNcclReduceOpMap = {
 };
 } // namespace
 
-void NcclAllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op) {
-    auto stream = dynamic_cast<const CudaDevice *>(tensor->GetDevice())->Stream();
-    auto comm = dynamic_cast<const CudaDevice *>(tensor->GetDevice())->NcclComm();
+void NcclAllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op,
+                   const infini_train::nn::parallel::ProcessGroup *pg) {
+    const auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+    auto rank = device->rank();
+    // auto tp_size = global::GetTensorParallelSize();
+    // auto comm = infini_train::nn::parallel::ProcessGroupFactory::Instance()
+    //                 ->Get(GetTensorParallelProcessFactoryName(rank, tp_size))
+    //                 ->comm(rank.thread_rank());
+    auto comm = pg->comm(rank.thread_rank());
+
     auto dtype = tensor->Dtype();
     auto nccl_dtype = kNcclDtypeMap.at(dtype);
     auto count = tensor->NumElements();
@@ -49,7 +62,8 @@ void NcclAllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op
 
     tensor->GetDevice()->SetDevice();
 
-    NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, kNcclReduceOpMap.at(reduce_op), comm, stream));
+    NCCL_CHECK(
+        ncclAllReduce(buffer, buffer, count, nccl_dtype, kNcclReduceOpMap.at(reduce_op), comm, device->Stream()));
 }
 
 std::vector<std::shared_ptr<Tensor>> NcclBroadcast(const std::vector<std::shared_ptr<Tensor>> &input_tensors,

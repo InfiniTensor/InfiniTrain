@@ -4,6 +4,7 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
+
 #ifdef USE_CUDA
 #include <cublas_v2.h>
 #endif
@@ -12,6 +13,9 @@
 #endif
 
 #include "glog/logging.h"
+
+#include "infini_train/include/nn/parallel/distributed_data_parallel.h"
+#include "infini_train/include/nn/parallel/global.h"
 
 namespace infini_train {
 
@@ -34,6 +38,8 @@ public:
     virtual void Synchronize() const {}
 
     std::string ToString() const;
+
+    virtual nn::parallel::DistributedDataParallel::Rank rank() const { LOG(FATAL) << "Unimplemented"; }
 
     friend std::ostream &operator<<(std::ostream &os, const Device &device);
 
@@ -66,12 +72,17 @@ public:
     ncclComm_t NcclComm() const;
 #endif
 
+    nn::parallel::DistributedDataParallel::Rank rank() const override {
+        return {0, Index(), 1, global::GetWorldSize()};
+    }
+
 private:
     CudaDevice(int8_t index);
 
     cudaStream_t stream_ = nullptr;
 
     cublasHandle_t cublas_handle_ = nullptr;
+
 #ifdef USE_NCCL
     ncclComm_t nccl_comm_ = nullptr;
 #endif

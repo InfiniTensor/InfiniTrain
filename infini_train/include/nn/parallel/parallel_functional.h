@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 
+#include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 
 namespace infini_train {
@@ -20,7 +21,7 @@ std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std:
 std::vector<std::shared_ptr<Tensor>> Gather(const std::vector<std::vector<std::shared_ptr<Tensor>>> &outputs,
                                             const Device *target_device, int dim);
 
-void AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op);
+void AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op, const ProcessGroup *pg);
 
 std::vector<std::vector<std::shared_ptr<Tensor>>>
 BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors,
