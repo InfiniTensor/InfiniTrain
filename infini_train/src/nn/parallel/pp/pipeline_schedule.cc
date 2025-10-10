@@ -113,18 +113,19 @@ float ScheduleGPipe::StepMicrobatches(const std::vector<std::shared_ptr<Tensor>>
             auto shapes = stage_->recv_shape();
             std::vector<std::shared_ptr<Tensor>> recv_tensors;
             for (int shape_i = 0; shape_i < shapes.size(); ++shape_i) {
-                printf("[stage %d] recv_tensor shape :", stage_index_);
-                auto recv_dims = shapes[shape_i];
-                for(int i = 0 ; i < recv_dims.size(); i++) {
-                    printf(" %ld , ", recv_dims[i]);
-                }
-                printf("\n");
-                if (recv_dims.empty()) {
-                    recv_tensors.push_back(nullptr);
-                    continue;
-                }
-                recv_tensors.push_back(std::make_shared<Tensor>(shapes[shape_i], DataType::kFLOAT32, stage_->device()));
-
+                // printf("[stage %d] recv_tensor shape :", stage_index_);
+                // auto recv_dims = shapes[shape_i];
+                // for(int i = 0 ; i < recv_dims.size(); i++) {
+                //     printf(" %ld , ", recv_dims[i]);
+                // }
+                // printf("\n");
+                // if (recv_dims.empty()) {
+                //     recv_tensors.push_back(nullptr);
+                //     continue;
+                // }
+                auto r_tensor = std::make_shared<Tensor>(shapes[shape_i], DataType::kFLOAT32, stage_->device());
+                // printf("构造的接收张量：%d %ld\n", shape_i, r_tensor->NumElements());
+                recv_tensors.push_back(r_tensor);
             }
             auto output = IRecv(recv_tensors, stage_->device(), stage_->stage_index(), stage_->prev_rank());
 
@@ -139,20 +140,26 @@ float ScheduleGPipe::StepMicrobatches(const std::vector<std::shared_ptr<Tensor>>
         outputs[mb_idx] = output_tensors;
 
         if (!stage_->IsLastStage()) {
-            printf("[stage %d] start send!! %d, %d, 当前是microbatch: %d\n", stage_index_, stage_->stage_index(),
-                   stage_->next_rank(), mb_idx);
+            // printf("[stage %d] start send!! %d, %d, 当前是microbatch: %d\n", stage_index_, stage_->stage_index(),
+            //        stage_->next_rank(), mb_idx);
 
-            PrintTensorSummary(outputs[mb_idx][0], "stage" + std::to_string(stage_index_) + "_mb____"
-                                                       + std::to_string(mb_idx) + "_send_pre");
+            // PrintTensorSummary(outputs[mb_idx][0], "stage" + std::to_string(stage_index_) + "_mb____"
+            //                                            + std::to_string(mb_idx) + "_send_pre");
+            for (int i = 0; i < outputs[mb_idx].size(); i++) {
+                if (outputs[mb_idx][i] == nullptr) {
+                    outputs[mb_idx][i]
+                        = std::make_shared<Tensor>((std::vector<int64_t>){}, DataType::kFLOAT32, stage_->device());
+                }
+            }
             ISend(outputs[mb_idx], stage_->device(), stage_->stage_index(), stage_->next_rank());
-            printf("[stage %d] after send!! microbatch: %d\n", stage_index_, mb_idx);
+            // printf("[stage %d] after send!! microbatch: %d\n", stage_index_, mb_idx);
         }
     }
 
     float lossf = 0.0;
     if (stage_->IsLastStage()) {
         for (int mb_idx = 0; mb_idx < n_microbatches; ++mb_idx) {
-            std::cout << "[DEBUG] Processing microbatch " << mb_idx << "/" << n_microbatches << std::endl;
+            // std::cout << "[DEBUG] Processing microbatch " << mb_idx << "/" << n_microbatches << std::endl;
 
             auto &target = microbatch_targets[mb_idx];
             auto &output = outputs[mb_idx];
@@ -164,34 +171,34 @@ float ScheduleGPipe::StepMicrobatches(const std::vector<std::shared_ptr<Tensor>>
                 LOG(FATAL) << "[ERROR] output is nullptr for mb_idx = " << mb_idx;
             }
 
-            // ======== 打印 output[0] 前 10 个值 ==========
-            auto output_cpu = output[0]->To(DeviceManager::Instance()->GetDefaultDevice());
-            float *out_ptr = static_cast<float *>(output_cpu.DataPtr());
-            int out_num = std::min(10, static_cast<int>(output_cpu.NumElements()));
-            std::cout << "[DEBUG] output[0] first " << out_num << " values: ";
-            for (int i = 0; i < out_num; ++i) { std::cout << out_ptr[i] << " "; }
-            std::cout << std::endl;
+            // // ======== 打印 output[0] 前 10 个值 ==========
+            // auto output_cpu = output[0]->To(DeviceManager::Instance()->GetDefaultDevice());
+            // float *out_ptr = static_cast<float *>(output_cpu.DataPtr());
+            // int out_num = std::min(10, static_cast<int>(output_cpu.NumElements()));
+            // std::cout << "[DEBUG] output[0] first " << out_num << " values: ";
+            // for (int i = 0; i < out_num; ++i) { std::cout << out_ptr[i] << " "; }
+            // std::cout << std::endl;
 
-            // ======== 打印 target 前 10 个值 ==========
-            auto target_cpu = target->To(DeviceManager::Instance()->GetDefaultDevice());
-            int64_t *tgt_ptr = static_cast<int64_t *>(target_cpu.DataPtr());
-            int tgt_num = std::min(10, static_cast<int>(target_cpu.NumElements()));
-            std::cout << "[DEBUG] target first " << tgt_num << " values: ";
-            for (int i = 0; i < tgt_num; ++i) { std::cout << tgt_ptr[i] << " "; }
-            std::cout << std::endl;
+            // // ======== 打印 target 前 10 个值 ==========
+            // auto target_cpu = target->To(DeviceManager::Instance()->GetDefaultDevice());
+            // int64_t *tgt_ptr = static_cast<int64_t *>(target_cpu.DataPtr());
+            // int tgt_num = std::min(10, static_cast<int>(target_cpu.NumElements()));
+            // std::cout << "[DEBUG] target first " << tgt_num << " values: ";
+            // for (int i = 0; i < tgt_num; ++i) { std::cout << tgt_ptr[i] << " "; }
+            // std::cout << std::endl;
 
-            LOG(INFO) << "output dims: " << output[0]->Dims().size();
-            for (int i = 0; i < output[0]->Dims().size(); ++i) {
-                LOG(INFO) << "output dim[" << i << "] = " << output[0]->Dims()[i];
-            }
+            // LOG(INFO) << "output dims: " << output[0]->Dims().size();
+            // for (int i = 0; i < output[0]->Dims().size(); ++i) {
+            //     LOG(INFO) << "output dim[" << i << "] = " << output[0]->Dims()[i];
+            // }
 
-            LOG(INFO) << "target dims: " << target->Dims().size();
-            for (int i = 0; i < target->Dims().size(); ++i) {
-                LOG(INFO) << "target dim[" << i << "] = " << target->Dims()[i];
-            }
+            // LOG(INFO) << "target dims: " << target->Dims().size();
+            // for (int i = 0; i < target->Dims().size(); ++i) {
+            //     LOG(INFO) << "target dim[" << i << "] = " << target->Dims()[i];
+            // }
 
-            LOG(INFO) << "mb_idx=" << mb_idx << " output_dev=" << output[0]->GetDevice()->ToString()
-                      << " target_dev=" << target->GetDevice()->ToString();
+            // LOG(INFO) << "mb_idx=" << mb_idx << " output_dev=" << output[0]->GetDevice()->ToString()
+            //           << " target_dev=" << target->GetDevice()->ToString();
 
             auto target_copy = target->To(output[0]->GetDevice());
             std::cout << "target->To(output[0]->GetDevice()) ok!!!!!! " << target_copy.GetDevice()->ToString()

@@ -192,8 +192,9 @@ public:
     EmbeddingLayer(std::shared_ptr<nn::Module> wte, std::shared_ptr<nn::Module> wpe)
         : wte(std::move(wte)), wpe(std::move(wpe)) {}
 
-    std::vector<std::shared_ptr<infini_train::Tensor>> Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &inputs) override {
-        auto &input_ids = inputs[0];  // (bs, seq_len)
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &inputs) override {
+        auto &input_ids = inputs[0]; // (bs, seq_len)
         const int seq_len = input_ids->Dims()[1];
         const auto device = input_ids->GetDevice();
 
@@ -215,15 +216,13 @@ std::vector<std::shared_ptr<nn::Module>> GPT2::GetPipelineLayers() {
 
     std::vector<std::shared_ptr<nn::Module>> layers;
 
-    auto embedding_layer = std::make_shared<EmbeddingLayer>(
-        transformer->mutable_module(kWTELayerName),
-        transformer->mutable_module(kWPELayerName)
-    );
+    auto embedding_layer = std::make_shared<EmbeddingLayer>(transformer->mutable_module(kWTELayerName),
+                                                            transformer->mutable_module(kWPELayerName));
     layers.push_back(embedding_layer);
 
     auto seq = std::dynamic_pointer_cast<nn::Sequential>(transformer->mutable_module(kHLayerName));
     if (seq) {
-        for (int idx = 0; idx < seq->size(); ++idx) { 
+        for (int idx = 0; idx < seq->size(); ++idx) {
             auto sub_module = (*seq)[idx];
             layers.push_back(sub_module);
         }
@@ -235,7 +234,9 @@ std::vector<std::shared_ptr<nn::Module>> GPT2::GetPipelineLayers() {
     return layers;
 }
 
-std::vector<int64_t> GPT2::GetHiddenSize() const { return {config_.n_embd, config_.n_head}; }
+std::unordered_map<std::string, int64_t> GPT2::GetConfig() const {
+    return {{"n_embd", config_.n_embd}, {"n_head", config_.n_head}};
+}
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
 GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {

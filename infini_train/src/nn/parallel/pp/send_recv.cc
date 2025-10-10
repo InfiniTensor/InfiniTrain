@@ -77,7 +77,6 @@ std::vector<std::shared_ptr<Tensor>> ISend::Backward(const std::vector<std::shar
     auto kernel = Dispatcher::Instance().GetKernel({device_type, "CommNcclSend"});
 
     auto grad_input = kernel.Call<std::vector<std::shared_ptr<Tensor>>>(grad_output, cur_rank_);
-    
     printf("ISend::Backward OK!!!!!\n");
     return grad_input;
 }
@@ -120,16 +119,12 @@ std::vector<std::shared_ptr<Tensor>> IRecv::Backward(const std::vector<std::shar
 std::vector<std::shared_ptr<Tensor>> ISend(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                                            const Device *target_device, int cur_rank, int target_rank) {
     auto func = std::make_shared<functions::ISend>(target_device, cur_rank, target_rank);
-    auto res = func->Forward(input_tensors);
-    // auto res = func->Apply(input_tensors);
-    printf("ISend after func->Apply\n");
-    return res;
+    return func->Forward(input_tensors);
 }
 
 std::vector<std::shared_ptr<Tensor>> IRecv(const std::vector<std::shared_ptr<Tensor>> &outputs,
                                            const Device *src_device, int cur_rank, int src_rank) {
     auto func = std::make_shared<functions::IRecv>(src_device, cur_rank, src_rank);
-    // return func->Apply(outputs);
-    return func->Forward(outputs);
+    return func->Apply(outputs);
 }
 } // namespace infini_train::nn::pipeline

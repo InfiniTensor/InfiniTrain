@@ -227,13 +227,11 @@ std::shared_ptr<Tensor> NcclGather(const std::vector<std::shared_ptr<Tensor>> &t
 }
 
 std::vector<std::shared_ptr<Tensor>> NcclSend(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank) {
-    printf("NcclSend: start!!! %ld\n", tensors.size());
-    for(int i = 0; i < tensors.size(); i++) {
+    // printf("NcclSend: start!!! %ld\n", tensors.size());
+    for (int i = 0; i < tensors.size(); i++) {
         auto tensor = tensors[i];
-        if (tensor == nullptr) {
-            printf("NcclSend tensors[%d] is null\n", i);
-            continue;
-        }
+        CHECK(tensor != nullptr) << "tensor is null";
+
         auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
         cudaStream_t stream = device_ptr->Stream();
         ncclComm_t comm = device_ptr->NcclComm();
@@ -248,7 +246,7 @@ std::vector<std::shared_ptr<Tensor>> NcclSend(std::vector<std::shared_ptr<Tensor
         void *buffer = tensor->DataPtr();
         CHECK(buffer != nullptr) << "NcclSend Tensor data is null";
 
-        printf("NcclSend: count=%zu, dtype=%d \n", count, (int)dtype);
+        // printf("NcclSend: count=%zu, dtype=%d \n", count, (int)dtype);
 
         NCCL_CHECK(ncclSend(buffer, count, nccl_dtype, dest_rank, comm, stream));
 
@@ -257,18 +255,16 @@ std::vector<std::shared_ptr<Tensor>> NcclSend(std::vector<std::shared_ptr<Tensor
 
         // NCCL_CHECK(ncclGroupEnd());
 
-        printf("NcclSend(std::shared_ptr<Tensor> tensor, int dest_rank)  OK!!!\n");
+        // printf("NcclSend(std::shared_ptr<Tensor> tensor, int dest_rank)  OK!!!\n");
     }
     return tensors;
 }
 
 std::vector<std::shared_ptr<Tensor>> NcclRecv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank) {
-    for(int i = 0; i < tensors.size(); i++) {
+    for (int i = 0; i < tensors.size(); i++) {
         auto tensor = tensors[i];
-        if (tensor == nullptr) {
-            printf("NcclRecv tensors[%d] is null\n", i);
-            continue;
-        }
+        CHECK(tensor != nullptr) << "tensor is null";
+
         auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
         CHECK(device_ptr) << "Tensor not on CUDA device";
         CHECK(tensor->DataPtr() != nullptr) << "Tensor data is null";
@@ -291,7 +287,7 @@ std::vector<std::shared_ptr<Tensor>> NcclRecv(std::vector<std::shared_ptr<Tensor
         // printf("NcclRecv: count=%zu, dtype=%d \n", count, (int)dtype);
 
         NCCL_CHECK(ncclRecv(buffer, count, nccl_dtype, src_rank, comm, stream));
-        
+
         // printf(" NcclRecv: comm=%p, stream=%p, src_rank=%d\n", (void *)comm, (void *)stream, src_rank);
         // printf("NcclRecv finish!!! %d\n", src_rank);
 

@@ -10,9 +10,10 @@
 
 namespace infini_train::nn::pipeline {
 
-template<typename T>
-std::string VectorToString(const std::vector<T>& vec) {
-    if (vec.empty()) return "[]";
+template <typename T> std::string VectorToString(const std::vector<T> &vec) {
+    if (vec.empty()) {
+        return "[]";
+    }
     std::string result = "[";
     for (size_t i = 0; i < vec.size(); ++i) {
         result += std::to_string(vec[i]);
@@ -24,7 +25,7 @@ std::string VectorToString(const std::vector<T>& vec) {
     return result;
 }
 
-void PrintTensorSummary(const std::shared_ptr<Tensor>& tensor, const std::string& tag);
+void PrintTensorSummary(const std::shared_ptr<Tensor> &tensor, const std::string &tag);
 
 class PipelineStage {
 public:

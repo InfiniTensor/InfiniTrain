@@ -14,8 +14,7 @@ public:
 
     virtual ~PipelineSchedule() = default;
 
-    float Step(std::shared_ptr<Tensor>input, std::shared_ptr<Tensor> target,
-               const std::shared_ptr<Module> &loss_fn);
+    float Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tensor> target, const std::shared_ptr<Module> &loss_fn);
 
     virtual float StepMicrobatches(const std::vector<std::shared_ptr<Tensor>> &arg_mbs,
                                    const std::vector<std::shared_ptr<Tensor>> &target_mbs,

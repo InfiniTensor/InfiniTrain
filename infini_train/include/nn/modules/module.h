@@ -50,7 +50,7 @@ public:
 
     virtual std::vector<std::shared_ptr<Module>> GetPipelineLayers() { return {}; }
 
-    virtual std::vector<int64_t> GetHiddenSize() const { return {}; }
+    virtual std::unordered_map<std::string, int64_t> GetConfig() const { return {}; }
 
     virtual float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                             const std::vector<std::shared_ptr<Tensor>> &targets,
