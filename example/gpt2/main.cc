@@ -82,6 +82,8 @@ const std::unordered_map<std::string, GPT2::ModelType> kStrToModelType = {
     {"gpt2-large", GPT2::ModelType::kGPT2Large},
     {"gpt2-xl", GPT2::ModelType::kGPT2XL},
 };
+
+std::string GetDataParallelFactoryName(const nn::parallel::DistributedDataParallel::Rank &rank) { return "DDP"; }
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
@@ -217,7 +219,9 @@ void Train(const nn::parallel::DistributedDataParallel::Rank &rank) {
             loss = loss / grad_accum_steps;
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
             if (rank.IsDDP()) {
-                nn::parallel::function::AllReduce(loss, nn::parallel::function::ReduceOpType::kAvg);
+                auto pg = infini_train::nn::parallel::ProcessGroupFactory::Instance()->Get(
+                    GetDataParallelFactoryName(rank));
+                nn::parallel::function::AllReduce(loss, nn::parallel::function::ReduceOpType::kAvg, pg);
             }
             auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
             if (FLAGS_dtype == kDtypeFP32) {
