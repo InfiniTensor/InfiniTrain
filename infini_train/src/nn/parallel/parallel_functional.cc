@@ -39,6 +39,10 @@ void AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op, co
     // TODO(dcj): use no_grad mode later
     auto device = tensor->GetDevice()->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device, "CommNcclAllReduce"});
+    if (pg == nullptr) {
+        pg = ProcessGroupFactory::Instance()->GetDefaultProcessGroup();
+    }
+    pg->AllReduce(tensor, reduce_op);
     kernel.Call<void>(tensor, reduce_op, pg);
 }
 

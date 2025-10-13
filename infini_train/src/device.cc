@@ -13,6 +13,7 @@
 #ifdef USE_CUDA
 #include "infini_train/include/common/cuda/common_cuda.h"
 #endif
+#include "infini_train/include/nn/parallel/global.h"
 
 namespace infini_train {
 Device::Device(DeviceType type, int8_t index) : type_(type), index_(index) {
@@ -62,7 +63,8 @@ cublasHandle_t CudaDevice::CublasHandle() const { return cublas_handle_; }
 ncclComm_t CudaDevice::NcclComm() const { return nccl_comm_; }
 #endif
 
-CudaDevice::CudaDevice(int8_t index) : Device(DeviceType::kCUDA, index) {
+CudaDevice::CudaDevice(int8_t index)
+    : Device(DeviceType::kCUDA, index), rank_({0, index, 1, global::GetIntraWorldSize()}) {
     // TODO(dcj): make CudaDevice initialization lazy to avoid allocating memory on all GPUs in single-GPU mode
     SetDevice();
     cudaStreamCreate(&stream_);

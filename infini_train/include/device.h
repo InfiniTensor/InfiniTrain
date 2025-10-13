@@ -15,7 +15,6 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/nn/parallel/distributed_data_parallel.h"
-#include "infini_train/include/nn/parallel/global.h"
 
 namespace infini_train {
 
@@ -72,9 +71,7 @@ public:
     ncclComm_t NcclComm() const;
 #endif
 
-    nn::parallel::DistributedDataParallel::Rank rank() const override {
-        return {0, Index(), 1, global::GetWorldSize()};
-    }
+    nn::parallel::DistributedDataParallel::Rank rank() const override { return rank_; }
 
 private:
     CudaDevice(int8_t index);
@@ -86,6 +83,8 @@ private:
 #ifdef USE_NCCL
     ncclComm_t nccl_comm_ = nullptr;
 #endif
+
+    nn::parallel::DistributedDataParallel::Rank rank_;
 
     friend class DeviceManager;
 };

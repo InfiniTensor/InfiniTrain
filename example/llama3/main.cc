@@ -74,12 +74,6 @@ bool IsTensorParallelMainRank(int tp_size, int rank) {
     // tp size: 2, world size: 8, rank: #
     return rank % tp_size == 0;
 }
-
-std::string GetTensorParallelProcessFactoryName(const nn::parallel::DistributedDataParallel::Rank &rank, int tp_size) {
-    return "TP" + std::to_string(rank.thread_rank() % tp_size);
-}
-
-std::string GetDataParallelFactoryName(const nn::parallel::DistributedDataParallel::Rank &rank) { return "DDP"; }
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
@@ -92,14 +86,12 @@ void Train(const nn::parallel::DistributedDataParallel::Rank &rank) {
     if (rank.IsDDP()) {
         device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, rank.thread_rank());
 
-        if (rank.IsMainRank()) {
-            infini_train::nn::parallel::ProcessGroupFactory::Instance()->Create("DDP", FLAGS_data_parallel);
-        }
         if (FLAGS_tensor_parallel > 1) {
             // tensor parallel enabled
             if (IsTensorParallelMainRank(FLAGS_tensor_parallel, rank.thread_rank())) {
                 infini_train::nn::parallel::ProcessGroupFactory::Instance()->Create(
-                    GetTensorParallelProcessFactoryName(rank, FLAGS_tensor_parallel), FLAGS_tensor_parallel);
+                    infini_train::nn::parallel::GetTensorParallelProcessFactoryName(rank, FLAGS_tensor_parallel),
+                    FLAGS_tensor_parallel);
             }
         }
     } else {
@@ -224,9 +216,7 @@ void Train(const nn::parallel::DistributedDataParallel::Rank &rank) {
             loss = loss / grad_accum_steps;
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
             if (rank.IsDDP()) {
-                auto pg = infini_train::nn::parallel::ProcessGroupFactory::Instance()->Get(
-                    GetDataParallelFactoryName(rank));
-                nn::parallel::function::AllReduce(loss, nn::parallel::function::ReduceOpType::kAvg, pg);
+                nn::parallel::function::AllReduce(loss, nn::parallel::function::ReduceOpType::kAvg);
             }
             auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
             if (FLAGS_dtype == kDtypeFP32) {
@@ -268,7 +258,7 @@ int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
-    infini_train::global::InitAllEnv(FLAGS_tensor_parallel);
+    infini_train::global::InitAllEnv(FLAGS_data_parallel, FLAGS_tensor_parallel);
 
     // NOTE(dcj): currently we only support single process
     if (FLAGS_data_parallel > 1) {
