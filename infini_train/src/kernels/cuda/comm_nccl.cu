@@ -31,10 +31,6 @@ const std::unordered_map<DataType, ncclDataType_t> kNcclDtypeMap = {
     {DataType::kFLOAT64, ncclFloat64},
 };
 
-std::string GetTensorParallelProcessFactoryName(const nn::parallel::DistributedDataParallel::Rank &rank, int tp_size) {
-    return "TP" + std::to_string(rank.thread_rank() % tp_size);
-}
-
 using nn::parallel::function::ReduceOpType;
 
 const std::unordered_map<ReduceOpType, ncclRedOp_t> kNcclReduceOpMap = {
@@ -49,10 +45,6 @@ void NcclAllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op
                    const infini_train::nn::parallel::ProcessGroup *pg) {
     const auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
     auto rank = device->rank();
-    // auto tp_size = global::GetTensorParallelSize();
-    // auto comm = infini_train::nn::parallel::ProcessGroupFactory::Instance()
-    //                 ->Get(GetTensorParallelProcessFactoryName(rank, tp_size))
-    //                 ->comm(rank.thread_rank());
     auto comm = pg->comm(rank.thread_rank());
 
     auto dtype = tensor->Dtype();

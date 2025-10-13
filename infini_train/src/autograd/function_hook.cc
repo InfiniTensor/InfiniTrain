@@ -16,7 +16,6 @@ std::string GetDataParallelFactoryName(const nn::parallel::DistributedDataParall
 void AllReducePostAccumulateHook::operator()(const std::shared_ptr<Tensor> &tensor) {
     const auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
     auto rank = device->rank();
-    auto pg = infini_train::nn::parallel::ProcessGroupFactory::Instance()->Get(GetDataParallelFactoryName(rank));
-    infini_train::nn::parallel::function::AllReduce(tensor, reduce_op_, pg);
+    infini_train::nn::parallel::function::AllReduce(tensor, reduce_op_);
 }
 } // namespace infini_train::autograd
