@@ -54,10 +54,10 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
     {"Matmul", CastPolicy::kLowerPrecision},
     {"Linear", CastPolicy::kLowerPrecision},
     {"Mask", CastPolicy::kLowerPrecision},
-    {"Add", CastPolicy::kLowerPrecision},
-    {"AddScalar", CastPolicy::kLowerPrecision},
-    {"Mul", CastPolicy::kLowerPrecision},
-    {"MulScalar", CastPolicy::kLowerPrecision},
+    // {"Add", CastPolicy::kLowerPrecision},
+    // {"AddScalar", CastPolicy::kLowerPrecision},
+    // {"Mul", CastPolicy::kLowerPrecision},
+    // {"MulScalar", CastPolicy::kLowerPrecision},
     {"Sin", CastPolicy::kFP32},
     {"Cos", CastPolicy::kFP32},
     {"Tan", CastPolicy::kFP32},
@@ -76,6 +76,9 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
     {"Sqrt", CastPolicy::kFP32},
     {"Rsqrt", CastPolicy::kFP32},
     {"Pow", CastPolicy::kFP32},
+    {"CrossEntropy", CastPolicy::kFP32},
+    // {"Softmax", CastPolicy::kFP32},
+    {"Layernorm", CastPolicy::kFP32},
 };
 
 inline constexpr std::array<DataType, static_cast<size_t>(DeviceType::kCount)> kDeviceDefaultDtype = {

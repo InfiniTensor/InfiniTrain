@@ -16,8 +16,9 @@ std::vector<std::shared_ptr<Tensor>> LayerNorm::Forward(const std::vector<std::s
     auto device = input->GetDevice()->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device, "LayerNormForward"});
     auto [output, mean, rstd]
-        = kernel.Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
-            input, weight, bias, eps_);
+        = Dispatcher::Instance()
+              .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+                  {device, "LayerNormForward"}, input, weight, bias, eps_);
     saved_tensors_ = {mean, rstd};
     return {output};
 }
@@ -43,8 +44,9 @@ std::vector<std::shared_ptr<Tensor>> LayerNorm::Backward(const std::vector<std::
     auto device = input->GetDevice()->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device, "LayerNormBackward"});
     auto [grad_input, grad_weight, grad_bias]
-        = kernel.Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
-            input, weight, bias, mean, rstd, grad_output);
+        = Dispatcher::Instance()
+              .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+                  {device, "LayerNormBackward"}, input, weight, bias, mean, rstd, grad_output);
     return {grad_input, grad_weight, grad_bias};
 }
 } // namespace infini_train::autograd

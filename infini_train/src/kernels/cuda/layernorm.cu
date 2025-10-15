@@ -159,10 +159,19 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     const int max_seqlen = input->Dims()[1];
     const int embed_dim = input->Dims()[2];
 
-    auto dtype = input->Dtype();
+    auto input_ = input;             // std::make_shared<Tensor>(input->To(DataType::kFLOAT32));
+    auto weight_ = weight;           // std::make_shared<Tensor>(weight->To(DataType::kFLOAT32));
+    auto bias_ = bias;               // std::make_shared<Tensor>(bias->To(DataType::kFLOAT32));
+    auto grad_output_ = grad_output; // std::make_shared<Tensor>(grad_output->To(DataType::kFLOAT32));
+
+    auto dtype = input_->Dtype();
     auto grad_input = std::make_shared<Tensor>(input->Dims(), dtype, grad_output->GetDevice());
     auto grad_weight = std::make_shared<Tensor>(weight->Dims(), dtype, grad_output->GetDevice());
     auto grad_bias = std::make_shared<Tensor>(bias->Dims(), dtype, grad_output->GetDevice());
+
+    // printf("layernorm Backward input dtype: %d, weight dtype: %d, bias dtype: %d, grad_output dtype: %d\n",
+    //        static_cast<int>(input_->Dtype()), static_cast<int>(weight_->Dtype()), static_cast<int>(bias_->Dtype()),
+    //        static_cast<int>(grad_output_->Dtype()));
 
     constexpr int BLOCK_SIZE = 256;
     int threads_per_block = BLOCK_SIZE;
@@ -176,9 +185,9 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
             grad_weight->Fill<T>(0);
             grad_bias->Fill<T>(0);
             LayerNormBackwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                static_cast<const T *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
+                static_cast<const T *>(input_->DataPtr()), static_cast<const T *>(grad_output_->DataPtr()),
                 static_cast<const float *>(mean->DataPtr()), static_cast<const float *>(rstd->DataPtr()),
-                static_cast<const T *>(weight->DataPtr()), static_cast<T *>(grad_input->DataPtr()),
+                static_cast<const T *>(weight_->DataPtr()), static_cast<T *>(grad_input->DataPtr()),
                 static_cast<T *>(grad_weight->DataPtr()), static_cast<T *>(grad_bias->DataPtr()), embed_dim,
                 grad_weight->NumElements(), grad_bias->NumElements());
         },

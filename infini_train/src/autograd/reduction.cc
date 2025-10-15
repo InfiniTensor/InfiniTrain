@@ -14,8 +14,7 @@ std::vector<std::shared_ptr<Tensor>> Mean::Forward(const std::vector<std::shared
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MeanForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, dim_, keep_dim_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MeanForward"}, input, dim_, keep_dim_)};
 }
 
 void Mean::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -29,8 +28,8 @@ std::vector<std::shared_ptr<Tensor>> Mean::Backward(const std::vector<std::share
     const auto &grad_output = grad_outputs[0];
 
     auto device = grad_output->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MeanBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, input_dims_, dim_, keep_dim_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MeanBackward"}, grad_output, input_dims_,
+                                                                 dim_, keep_dim_)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Sum::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -38,8 +37,7 @@ std::vector<std::shared_ptr<Tensor>> Sum::Forward(const std::vector<std::shared_
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "SumForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, dim_, keep_dim_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SumForward"}, input, dim_, keep_dim_)};
 }
 
 void Sum::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -53,8 +51,8 @@ std::vector<std::shared_ptr<Tensor>> Sum::Backward(const std::vector<std::shared
     const auto &grad_output = grad_outputs[0];
 
     auto device = grad_output->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "SumBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, input_dims_, dim_, keep_dim_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SumBackward"}, grad_output, input_dims_,
+                                                                 dim_, keep_dim_)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Max::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -62,8 +60,7 @@ std::vector<std::shared_ptr<Tensor>> Max::Forward(const std::vector<std::shared_
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MaxForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, dim_, keep_dim_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MaxForward"}, input, dim_, keep_dim_)};
 }
 
 void Max::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -81,8 +78,8 @@ std::vector<std::shared_ptr<Tensor>> Max::Backward(const std::vector<std::shared
     const auto &reduced = saved_tensors_[1];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MaxBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, input, reduced, dim_, keep_dim_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MaxBackward"}, grad_output, input, reduced,
+                                                                 dim_, keep_dim_)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Min::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -90,8 +87,7 @@ std::vector<std::shared_ptr<Tensor>> Min::Forward(const std::vector<std::shared_
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MinForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, dim_, keep_dim_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MinForward"}, input, dim_, keep_dim_)};
 }
 
 void Min::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -109,7 +105,7 @@ std::vector<std::shared_ptr<Tensor>> Min::Backward(const std::vector<std::shared
     const auto &reduced = saved_tensors_[1];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MinBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, input, reduced, dim_, keep_dim_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MinBackward"}, grad_output, input, reduced,
+                                                                 dim_, keep_dim_)};
 }
 } // namespace infini_train::autograd

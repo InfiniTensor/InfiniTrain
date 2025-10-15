@@ -12,8 +12,7 @@ std::vector<std::shared_ptr<Tensor>> Embedding::Forward(const std::vector<std::s
     const auto &weight = input_tensors[1];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "EmbeddingForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, weight)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "EmbeddingForward"}, input, weight)};
 }
 
 void Embedding::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -31,7 +30,8 @@ std::vector<std::shared_ptr<Tensor>> Embedding::Backward(const std::vector<std::
 
     auto device = input->GetDevice()->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device, "EmbeddingBackward"});
-    auto grad_weight = kernel.Call<std::shared_ptr<Tensor>>(input, weight_dims_, grad_output);
+    auto grad_weight = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "EmbeddingBackward"}, input,
+                                                                            weight_dims_, grad_output);
     return {nullptr, grad_weight};
 }
 } // namespace infini_train::autograd

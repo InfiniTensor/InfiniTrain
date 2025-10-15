@@ -15,8 +15,7 @@ std::vector<std::shared_ptr<Tensor>> Outer::Forward(const std::vector<std::share
     const auto &input2 = input_tensors[1];
 
     auto device = input1->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "OuterForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input1, input2)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "OuterForward"}, input1, input2)};
 }
 
 void Outer::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -36,7 +35,8 @@ std::vector<std::shared_ptr<Tensor>> Outer::Backward(const std::vector<std::shar
     auto device = input1->GetDevice()->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device, "OuterBackward"});
     auto [grad_input1, grad_input2]
-        = kernel.Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(input1, input2, grad_output);
+        = Dispatcher::Instance().Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+            {device, "OuterBackward"}, input1, input2, grad_output);
     return {grad_input1, grad_input2};
 }
 } // namespace infini_train::autograd
