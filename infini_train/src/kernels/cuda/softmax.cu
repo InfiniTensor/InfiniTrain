@@ -2,6 +2,7 @@
 #include <cstddef>
 
 #include <cub/block/block_reduce.cuh>
+#include <type_traits>
 
 #include "glog/logging.h"
 
@@ -110,22 +111,22 @@ std::shared_ptr<Tensor> SoftmaxForward(const std::shared_ptr<Tensor> &input, int
 template <size_t BLOCK_SIZE, typename T>
 __global__ void SoftmaxBackwardKernel(T *grad_input, const T *grad_output, const T *output, int64_t outer_size,
                                       int64_t axis_size, int64_t inner_size) {
-    using BlockReduce = cub::BlockReduce<T, BLOCK_SIZE>;
+    using BlockReduce = cub::BlockReduce<float, BLOCK_SIZE>;
 
     __shared__ typename BlockReduce::TempStorage temp_storage_sum;
-    __shared__ T row_sum;
+    __shared__ float row_sum;
 
     const int64_t group = blockIdx.x;
     const int64_t inner_idx = blockIdx.y;
     const int tid = threadIdx.x;
 
     // calculate the sum of the dot product of gradients
-    T thread_sum = 0;
+    float thread_sum = 0;
     for (int64_t axis = tid; axis < axis_size; axis += BLOCK_SIZE) {
         const int64_t idx = (group * axis_size + axis) * inner_size + inner_idx;
-        thread_sum += grad_output[idx] * output[idx];
+        thread_sum += common::cuda::Cast<float>(grad_output[idx] * output[idx]);
     }
-    T block_sum = BlockReduce(temp_storage_sum).Sum(thread_sum);
+    float block_sum = BlockReduce(temp_storage_sum).Sum(thread_sum);
 
     if (tid == 0) {
         row_sum = block_sum;
@@ -135,7 +136,7 @@ __global__ void SoftmaxBackwardKernel(T *grad_input, const T *grad_output, const
     // update the input gradient
     for (int64_t axis = tid; axis < axis_size; axis += BLOCK_SIZE) {
         const int64_t idx = (group * axis_size + axis) * inner_size + inner_idx;
-        grad_input[idx] = output[idx] * (grad_output[idx] - row_sum);
+        grad_input[idx] = output[idx] * (grad_output[idx] - common::cuda::Cast<T>(row_sum));
     }
 }
 
@@ -174,7 +175,12 @@ void LaunchBackward(const std::shared_ptr<Tensor> &grad_input, const std::shared
 
 std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_output,
                                         const std::shared_ptr<Tensor> &output, int64_t dim) {
-    auto dtype = output->Dtype();
+    // printf("SoftmaxBackward dtype: %d, grad_output dtype: %d\n", static_cast<int>(grad_output->Dtype()),
+    //        static_cast<int>(output->Dtype()));
+    auto grad_output_ = grad_output; // std::make_shared<Tensor>(grad_output->To(output_->Dtype()));
+    auto output_ = std::make_shared<Tensor>(output->To(DataType::kFLOAT32));
+
+    auto dtype = output_->Dtype();
     const auto &output_dims = output->Dims();
     dim = dim < 0 ? dim + output->Dims().size() : dim;
     CHECK(dim >= 0 && dim < output->Dims().size());
@@ -182,9 +188,12 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
     auto grad_input = std::make_shared<Tensor>(output_dims, dtype, output->GetDevice());
     grad_input->Fill<float>(0.0f);
 
+    // printf("SoftmaxBackward dtype: %d, grad_output dtype: %d, grad_input dtype: %d\n", static_cast<int>(dtype),
+    //        static_cast<int>(grad_output_->Dtype()), static_cast<int>(grad_input->Dtype()));
+
     switch (dtype) {
-        DISPATCH_CASE(WRAP(LaunchBackward<256, float>(grad_input, grad_output, output, dim);), DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP(LaunchBackward<256, nv_bfloat16>(grad_input, grad_output, output, dim);),
+        DISPATCH_CASE(WRAP(LaunchBackward<256, float>(grad_input, grad_output_, output_, dim);), DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(LaunchBackward<256, nv_bfloat16>(grad_input, grad_output_, output_, dim);),
                       DataType::kBFLOAT16)
     default:
         LOG_LOC(FATAL, "CUDA softmax backward: 'Unsupported data type'");

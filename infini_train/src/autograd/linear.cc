@@ -13,8 +13,6 @@ std::vector<std::shared_ptr<Tensor>> Linear::Forward(const std::vector<std::shar
     const auto &bias = input_tensors.size() == 3 ? input_tensors[2] : nullptr;
 
     auto device = input->GetDevice()->Type();
-    // auto kernel = Dispatcher::Instance().GetKernel({device, "LinearForward"});
-    // return {kernel.Call<std::shared_ptr<Tensor>>(input, weight, true, bias)};
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "LinearForward"}, input, weight, true, bias)};
 }
 
@@ -35,10 +33,10 @@ std::vector<std::shared_ptr<Tensor>> Linear::Backward(const std::vector<std::sha
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "LinearBackward"});
     auto [grad_input, grad_weight, grad_bias]
-        = kernel.Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
-            input, weight, true, out_features_, grad_output, bias_);
+        = Dispatcher::Instance()
+              .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+                  {device, "LinearBackward"}, input, weight, true, out_features_, grad_output, bias_);
     return bias_ ? std::vector<std::shared_ptr<Tensor>>{grad_input, grad_weight, grad_bias}
                  : std::vector<std::shared_ptr<Tensor>>{grad_input, grad_weight};
     ;

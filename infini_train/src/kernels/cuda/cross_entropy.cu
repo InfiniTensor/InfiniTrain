@@ -1,5 +1,7 @@
 #include <cmath>
+#include <cstdio>
 #include <limits>
+#include <memory>
 #include <numeric>
 
 #include <cub/block/block_reduce.cuh>
@@ -83,6 +85,8 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
     int num_blocks = bs;
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(target->GetDevice());
+    // printf("cross entropy loss Forward input dtype: %d, target dtype: %d\n", static_cast<int>(input->Dtype()),
+    //        static_cast<int>(target->Dtype()));
     return DispatchFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>, DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
         {target->Dtype(), input->Dtype()},
         [=]<typename Ttarget, typename Tinput>() {
@@ -178,20 +182,34 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
     const int bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
     const int num_classes = *input_dims.rbegin();
 
+    auto input_ = std::make_shared<Tensor>(input->To(grad_output->Dtype()));
+
     CHECK_EQ(grad_output->Dims().size(), 0);
-    auto grad_input = std::make_shared<Tensor>(input->Dims(), input->Dtype(), grad_output->GetDevice());
+    auto grad_input = std::make_shared<Tensor>(input_->Dims(), input_->Dtype(), grad_output->GetDevice());
 
     constexpr int threads_per_block = 256;
     int num_blocks = bs;
 
+    // printf("cross entropy loss Backward input dtype: %d, target dtype: %d, grad_output: %d, grad_input: %d\n",
+    //        static_cast<int>(input_->Dtype()), static_cast<int>(target->Dtype()),
+    //        grad_output ? static_cast<int>(grad_output->Dtype()) : -1,
+    //        grad_input ? static_cast<int>(grad_input->Dtype()) : -1);
+
+    // printf(" - cross entorpy input:\n");
+    // auto input_fp32 = input_->To(DataType::kFLOAT32);
+    // input_fp32.Print();
+    // printf(" - cross entorpy grad_output:\n");
+    // auto grad_output_fp32 = grad_output->To(DataType::kFLOAT32);
+    // grad_output_fp32.Print();
+
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(target->GetDevice());
     DispatchFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>, DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
-        {target->Dtype(), input->Dtype()},
+        {target->Dtype(), input_->Dtype()},
         [=]<typename Ttarget, typename Tinput>() {
             grad_input->Fill<Tinput>(0);
             const Tinput *output_grad_ptr = static_cast<const Tinput *>(grad_output->DataPtr());
             const Ttarget *target_ptr = static_cast<const Ttarget *>(target->DataPtr());
-            const Tinput *input_ptr = static_cast<const Tinput *>(input->DataPtr());
+            const Tinput *input_ptr = static_cast<const Tinput *>(input_->DataPtr());
             Tinput *input_grad_ptr = static_cast<Tinput *>(grad_input->DataPtr());
             CrossEntropyBackwardKernel<threads_per_block, Ttarget, Tinput>
                 <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(input_ptr, input_grad_ptr, target_ptr,
@@ -199,7 +217,13 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
         },
         "CUDA CrossEntropyBackward");
 
+    // cudaDeviceSynchronize();
+    // printf(" - cross entorpy grad_input:\n");
+    // auto grad_input_fp32 = grad_input->To(DataType::kFLOAT32);
+    // grad_input_fp32.Print();
+
     return {grad_input};
+    // return {std::make_shared<Tensor>(grad_input->To(DataType::kFLOAT32))};
 }
 } // namespace infini_train::kernels::cuda
 

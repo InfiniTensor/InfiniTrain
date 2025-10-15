@@ -12,8 +12,7 @@ std::vector<std::shared_ptr<Tensor>> Matmul::Forward(const std::vector<std::shar
     const auto &input2 = input_tensors[1];
 
     auto device = input1->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MatmulForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input1, input2)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MatmulForward"}, input1, input2)};
 }
 
 void Matmul::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -33,9 +32,9 @@ std::vector<std::shared_ptr<Tensor>> Matmul::Backward(const std::vector<std::sha
     const auto &grad_output = grad_outputs[0];
 
     auto device = input1->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MatmulBackward"});
     auto [grad_input1, grad_input2]
-        = kernel.Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(input1, input2, grad_output);
+        = Dispatcher::Instance().Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+            {device, "MatmulBackward"}, input1, input2, grad_output);
     return {grad_input1, grad_input2};
 }
 } // namespace infini_train::autograd

@@ -7,6 +7,7 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include <memory>
 
 namespace infini_train::autograd {
 
@@ -77,6 +78,74 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
     ++dependencies_reached_;
     if (grad_outputs_reached_ == grad_outputs_.size()
         && (dependencies_reached_ == dependencies_number_ || dependencies_number_ == 0)) {
+
+        // cudaDeviceSynchronize();
+        // std::cout << "----------------------------------------------------------------------------------------------"
+        //           << std::endl;
+        // std::cout << "Start BackwardPartial of " << type_ << " for output idx " << grad_output_idx << std::endl;
+        // std::cout << " - grad_output: " << std::endl;
+        // if (grad_output) {
+        //     std::shared_ptr<Tensor> tensor_to_print;
+
+        //     if (grad_output->Dtype() == DataType::kBFLOAT16) {
+        //         tensor_to_print = std::make_shared<Tensor>(grad_output->To(DataType::kFLOAT32));
+        //     } else {
+        //         tensor_to_print = grad_output;
+        //     }
+
+        //     // Print as usual
+        //     tensor_to_print->Print();
+
+        //             if (tensor_to_print->Dtype() == DataType::kFLOAT32) {
+        //                 const size_t num_elements = tensor_to_print->NumElements();
+        //                 const size_t num_bytes = num_elements * sizeof(float);
+
+        //                 std::vector<float> host_buffer(num_elements);
+
+        //                 if (tensor_to_print->GetDevice()->Type() == DeviceType::kCPU) {
+        //                     std::memcpy(host_buffer.data(), tensor_to_print->DataPtr(), num_bytes);
+        //                 }
+        // #ifdef USE_CUDA
+        //                 else if (tensor_to_print->GetDevice()->Type() == DeviceType::kCUDA) {
+        //                     cudaDeviceSynchronize();
+        //                     cudaError_t err
+        //                         = cudaMemcpy(host_buffer.data(), tensor_to_print->DataPtr(), num_bytes,
+        //                         cudaMemcpyDeviceToHost);
+        //                     CHECK_EQ(err, cudaSuccess) << "cudaMemcpy failed: " << cudaGetErrorString(err);
+        //                 }
+        // #endif
+        //                 else {
+        //                     LOG(FATAL) << "Unsupported device type for Print.";
+        //                 }
+
+        //                 // Cast raw pointer to float* (since we ensured float32)
+        //                 float min_val = std::numeric_limits<float>::infinity();
+        //                 float max_val = -std::numeric_limits<float>::infinity();
+
+        //                 for (size_t i = 0; i < num_elements; i++) {
+        //                     float v = host_buffer[i];
+        //                     if (v < min_val) {
+        //                         min_val = v;
+        //                     }
+        //                     if (v > max_val) {
+        //                         max_val = v;
+        //                     }
+        //                 }
+
+        //                 std::cout << "   min value: " << min_val << ", max value: " << max_val << std::endl;
+
+        //                 float abs_max = std::max(std::fabs(min_val), std::fabs(max_val));
+        //                 if (abs_max > 15.0f) {
+        //                     std::cerr << "Detected value with |v| > 15 (abs_max=" << abs_max << "). Exiting..."
+        //                     << std::endl;
+        //                     // std::exit(0);
+        //                 }
+        //             }
+        // }
+        // if (type_ == "MaskFunction") {
+        //     std::exit(0);
+        // }
+
         std::vector<std::shared_ptr<Tensor>> grad_inputs;
         {
             autograd::NoGradGuard no_grad;

@@ -11,8 +11,7 @@ std::vector<std::shared_ptr<Tensor>> Neg::Forward(const std::vector<std::shared_
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "NegForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "NegForward"}, input)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Neg::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
@@ -20,8 +19,7 @@ std::vector<std::shared_ptr<Tensor>> Neg::Backward(const std::vector<std::shared
     const auto &grad_output = grad_outputs[0];
 
     auto device = grad_output->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "NegBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "NegBackward"}, grad_output)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Reciprocal::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -29,8 +27,7 @@ std::vector<std::shared_ptr<Tensor>> Reciprocal::Forward(const std::vector<std::
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "ReciprocalForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "ReciprocalForward"}, input)};
 }
 
 void Reciprocal::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -46,8 +43,7 @@ std::vector<std::shared_ptr<Tensor>> Reciprocal::Backward(const std::vector<std:
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "ReciprocalBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, input)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "ReciprocalBackward"}, grad_output, input)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Sin::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -55,8 +51,7 @@ std::vector<std::shared_ptr<Tensor>> Sin::Forward(const std::vector<std::shared_
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "SinForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SinForward"}, input)};
 }
 
 void Sin::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -72,8 +67,7 @@ std::vector<std::shared_ptr<Tensor>> Sin::Backward(const std::vector<std::shared
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "SinBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, input)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SinBackward"}, grad_output, input)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Cos::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -81,8 +75,7 @@ std::vector<std::shared_ptr<Tensor>> Cos::Forward(const std::vector<std::shared_
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "CosForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "CosForward"}, input)};
 }
 
 void Cos::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -98,8 +91,7 @@ std::vector<std::shared_ptr<Tensor>> Cos::Backward(const std::vector<std::shared
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "CosBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, input)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "CosBackward"}, grad_output, input)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Tanh::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -107,8 +99,7 @@ std::vector<std::shared_ptr<Tensor>> Tanh::Forward(const std::vector<std::shared
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "TanhForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "TanhForward"}, input)};
 }
 
 void Tanh::SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
@@ -124,8 +115,7 @@ std::vector<std::shared_ptr<Tensor>> Tanh::Backward(const std::vector<std::share
     const auto &grad_output = grad_outputs[0];
 
     auto device = output->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "TanhBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, output)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "TanhBackward"}, grad_output, output)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Pow::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -133,8 +123,8 @@ std::vector<std::shared_ptr<Tensor>> Pow::Forward(const std::vector<std::shared_
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "PowForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, exponent_, scalar_is_base_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "PowForward"}, input, exponent_,
+                                                                 scalar_is_base_)};
 }
 
 void Pow::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -150,8 +140,8 @@ std::vector<std::shared_ptr<Tensor>> Pow::Backward(const std::vector<std::shared
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "PowBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, input, exponent_, scalar_is_base_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "PowBackward"}, grad_output, input, exponent_,
+                                                                 scalar_is_base_)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Rsqrt::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -159,8 +149,7 @@ std::vector<std::shared_ptr<Tensor>> Rsqrt::Forward(const std::vector<std::share
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "RsqrtForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "RsqrtForward"}, input)};
 }
 
 void Rsqrt::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -176,8 +165,7 @@ std::vector<std::shared_ptr<Tensor>> Rsqrt::Backward(const std::vector<std::shar
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "RsqrtBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, input)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "RsqrtBackward"}, grad_output, input)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Exp::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -244,8 +232,7 @@ std::vector<std::shared_ptr<Tensor>> EqualsScalar::Forward(const std::vector<std
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "EqualsScalarForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "EqualsScalarForward"}, input, scalar_)};
 }
 
 std::vector<std::shared_ptr<Tensor>> EqualsScalar::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
@@ -405,8 +392,6 @@ std::vector<std::shared_ptr<Tensor>> Add::Forward(const std::vector<std::shared_
     const auto &b = input_tensors[1];
 
     auto device = a->GetDevice()->Type();
-    // auto kernel = Dispatcher::Instance().GetKernel({device, "AddForward"});
-    // return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "AddForward"}, a, b)};
 }
 
@@ -422,8 +407,8 @@ std::vector<std::shared_ptr<Tensor>> Add::Backward(const std::vector<std::shared
 
     auto device = grad_output->GetDevice()->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device, "AddBackward"});
-    auto [grad_a, grad_b]
-        = kernel.Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(grad_output, a_dims_, b_dims_);
+    auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+        {device, "AddBackward"}, grad_output, a_dims_, b_dims_);
     return {grad_a, grad_b};
 }
 
@@ -432,8 +417,6 @@ std::vector<std::shared_ptr<Tensor>> AddScalar::Forward(const std::vector<std::s
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    // auto kernel = Dispatcher::Instance().GetKernel({device, "AddScalarForward"});
-    // return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "AddScalarForward"}, input, scalar_)};
 }
 
@@ -442,8 +425,7 @@ std::vector<std::shared_ptr<Tensor>> AddScalar::Backward(const std::vector<std::
     const auto &grad_output = grad_outputs[0];
 
     auto device = grad_output->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "AddScalarBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "AddScalarBackward"}, grad_output)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Sub::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -452,8 +434,7 @@ std::vector<std::shared_ptr<Tensor>> Sub::Forward(const std::vector<std::shared_
     const auto &b = input_tensors[1];
 
     auto device = a->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "SubForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SubForward"}, a, b)};
 }
 
 void Sub::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -467,9 +448,8 @@ std::vector<std::shared_ptr<Tensor>> Sub::Backward(const std::vector<std::shared
     const auto &grad_output = grad_outputs[0];
 
     auto device = grad_output->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "SubBackward"});
-    auto [grad_a, grad_b]
-        = kernel.Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(grad_output, a_dims_, b_dims_);
+    auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+        {device, "SubBackward"}, grad_output, a_dims_, b_dims_);
     return {grad_a, grad_b};
 }
 
@@ -479,8 +459,6 @@ std::vector<std::shared_ptr<Tensor>> Mul::Forward(const std::vector<std::shared_
     const auto &b = input_tensors[1];
 
     auto device = a->GetDevice()->Type();
-    // auto kernel = Dispatcher::Instance().GetKernel({device, "MulForward"});
-    // return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MulForward"}, a, b)};
 }
 
@@ -499,8 +477,8 @@ std::vector<std::shared_ptr<Tensor>> Mul::Backward(const std::vector<std::shared
     const auto &grad_output = grad_outputs[0];
 
     auto device = grad_output->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MulBackward"});
-    auto [grad_a, grad_b] = kernel.Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(grad_output, a, b);
+    auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+        {device, "MulBackward"}, grad_output, a, b);
     return {grad_a, grad_b};
 }
 
@@ -509,8 +487,6 @@ std::vector<std::shared_ptr<Tensor>> MulScalar::Forward(const std::vector<std::s
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    // auto kernel = Dispatcher::Instance().GetKernel({device, "MulScalarForward"});
-    // return {kernel.Call<std::shared_ptr<Tensor>>(input, scalar_)};
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MulScalarForward"}, input, scalar_)};
 }
 
@@ -519,8 +495,7 @@ std::vector<std::shared_ptr<Tensor>> MulScalar::Backward(const std::vector<std::
     const auto &grad_output = grad_outputs[0];
 
     auto device = grad_output->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "MulScalarBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, scalar_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MulScalarBackward"}, grad_output, scalar_)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Div::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -529,8 +504,7 @@ std::vector<std::shared_ptr<Tensor>> Div::Forward(const std::vector<std::shared_
     const auto &b = input_tensors[1];
 
     auto device = a->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "DivForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(a, b)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "DivForward"}, a, b)};
 }
 
 void Div::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -548,8 +522,8 @@ std::vector<std::shared_ptr<Tensor>> Div::Backward(const std::vector<std::shared
     const auto &grad_output = grad_outputs[0];
 
     auto device = grad_output->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "DivBackward"});
-    auto [grad_a, grad_b] = kernel.Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(grad_output, a, b);
+    auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+        {device, "DivBackward"}, grad_output, a, b);
     return {grad_a, grad_b};
 }
 } // namespace infini_train::autograd

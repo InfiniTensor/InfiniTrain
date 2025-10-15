@@ -11,8 +11,7 @@ std::vector<std::shared_ptr<Tensor>> Sigmoid::Forward(const std::vector<std::sha
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "SigmoidForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SigmoidForward"}, input)};
 }
 
 void Sigmoid::SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
@@ -28,7 +27,6 @@ std::vector<std::shared_ptr<Tensor>> Sigmoid::Backward(const std::vector<std::sh
     const auto &grad_output = grad_outputs[0];
 
     auto device = output->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "SigmoidBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(output, grad_output)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SigmoidBackward"}, output, grad_output)};
 }
 } // namespace infini_train::autograd

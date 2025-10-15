@@ -12,8 +12,7 @@ std::vector<std::shared_ptr<Tensor>> CrossEntropy::Forward(const std::vector<std
     const auto &target = input_tensors[1];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "CrossEntropyForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, target)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "CrossEntropyForward"}, input, target)};
 }
 
 void CrossEntropy::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -31,8 +30,8 @@ std::vector<std::shared_ptr<Tensor>> CrossEntropy::Backward(const std::vector<st
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "CrossEntropyBackward"});
-    auto grad_input = kernel.Call<std::shared_ptr<Tensor>>(input, target, grad_output);
+    auto grad_input = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "CrossEntropyBackward"}, input,
+                                                                           target, grad_output);
     return {grad_input, nullptr};
 }
 } // namespace infini_train::autograd
