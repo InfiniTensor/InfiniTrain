@@ -7,6 +7,7 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
+#include "infini_train/include/autocast.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
@@ -224,6 +225,8 @@ void Train(const nn::parallel::Rank &rank) {
         Profiler::Instance().SetTag("Step_" + std::to_string(step));
 #endif
         for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
+            infini_train::AutocastGuard autocast_guard(device->Type(),
+                                                       DataType::kBFLOAT16); // enable autocast for the current step
             // (bs, seq_len), (bs, seq_len)
             auto [x, y] = *train_iter;
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
@@ -237,16 +240,19 @@ void Train(const nn::parallel::Rank &rank) {
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish model forward, start loss forward";
             auto loss = loss_fn->Forward({logits, y})[0];
             loss = loss / grad_accum_steps;
+
+            autocast_guard.Disable(); // disable autocast for the current step
+
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
             if (ddp_world_size > 1) {
                 function::AllReduce(loss, function::ReduceOpType::kAvg);
             }
             auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
-            if (FLAGS_dtype == kDtypeFP32) {
-                lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
-            } else if (FLAGS_dtype == kDtypeBF16) {
-                lossf += ConvertBF16ToFloat(loss_cpu.DataPtr());
-            }
+            // if (FLAGS_dtype == kDtypeFP32) {
+            //     lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
+            // } else if (FLAGS_dtype == kDtypeBF16) {
+            lossf += ConvertBF16ToFloat(loss_cpu.DataPtr());
+            // }
             LOG(INFO) << "Rank " << rank.thread_rank() << ": start backward";
             loss->Backward();
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish backward";

@@ -11,8 +11,7 @@ std::vector<std::shared_ptr<Tensor>> Softmax::Forward(const std::vector<std::sha
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "SoftmaxForward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input, dim_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SoftmaxForward"}, input, dim_)};
 }
 
 void Softmax::SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
@@ -28,7 +27,7 @@ std::vector<std::shared_ptr<Tensor>> Softmax::Backward(const std::vector<std::sh
     const auto &grad_output = grad_outputs[0];
 
     auto device = output->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "SoftmaxBackward"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(grad_output, output, dim_)};
+    return {
+        Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SoftmaxBackward"}, grad_output, output, dim_)};
 }
 } // namespace infini_train::autograd
