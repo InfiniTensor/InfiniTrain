@@ -87,3 +87,10 @@ target_link_libraries(gpt2 infini_train)
 
 add_executable(llama3 example/llama3/main.cc example/common/tiny_shakespeare_dataset.cc example/common/utils.cc example/llama3/net.cc example/common/tokenizer.cc)
 target_link_libraries(llama3 infini_train)
+
+add_subdirectory(tools/infini_run)
+
+set_target_properties(infini_run PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+

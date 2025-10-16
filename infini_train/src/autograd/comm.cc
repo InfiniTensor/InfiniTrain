@@ -5,22 +5,21 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/dispatcher.h"
+#include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
+
+Scatter::Scatter(const std::vector<const Device *> &target_gpus, int64_t dim,
+                 const infini_train::nn::parallel::ProcessGroup *pg)
+    : autograd::Function(kType), target_gpus_(target_gpus), dim_(dim),
+      pg_(pg ? pg : infini_train::nn::parallel::ProcessGroupFactory::Instance()->GetDefaultProcessGroup()) {}
+
 std::vector<std::shared_ptr<Tensor>> Scatter::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     const auto &input = input_tensors[0];
     std::vector<std::shared_ptr<Tensor>> output_tensors;
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device,
-#ifdef USE_NCCL
-                                                    "CommNcclScatter"
-#else
-                                                    "CommScatter"
-#endif
-    });
-    output_tensors = kernel.Call<std::vector<std::shared_ptr<Tensor>>>(input, target_gpus_, dim_);
+    output_tensors = pg_->Scatter(input, target_gpus_, dim_);
     return output_tensors;
 }
 
@@ -32,6 +31,10 @@ void Scatter::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_ten
 std::vector<std::shared_ptr<Tensor>> Scatter::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     return std::make_shared<Gather>(input_device_, dim_)->Apply(grad_outputs);
 }
+
+Gather::Gather(const Device *target_device, int64_t dim, const infini_train::nn::parallel::ProcessGroup *pg)
+    : autograd::Function(kType), target_device_(target_device), dim_(dim),
+      pg_(pg ? pg : infini_train::nn::parallel::ProcessGroupFactory::Instance()->GetDefaultProcessGroup()) {}
 
 std::vector<std::shared_ptr<Tensor>> Gather::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     for (const auto &tensor : input_tensors) {
@@ -49,8 +52,7 @@ std::vector<std::shared_ptr<Tensor>> Gather::Forward(const std::vector<std::shar
         unsqueezed_scalar_ = false;
     }
     auto device = input_tensors[0]->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "CommGather"});
-    return {kernel.Call<std::shared_ptr<Tensor>>(input_tensors, target_device_, dim_)};
+    return {pg_->Gather(input_tensors, target_device_, dim_)};
 }
 
 void Gather::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -62,6 +64,10 @@ std::vector<std::shared_ptr<Tensor>> Gather::Backward(const std::vector<std::sha
     // TODO(dcj): do squeeze here if unsqueezed_scalar_ is true
     return std::make_shared<Scatter>(std::vector<const Device *>{input_gpus_}, dim_)->Apply(grad_outputs);
 }
+
+Broadcast::Broadcast(const std::vector<const Device *> &target_gpus, const infini_train::nn::parallel::ProcessGroup *pg)
+    : autograd::Function(kType), target_gpus_(target_gpus),
+      pg_(pg ? pg : infini_train::nn::parallel::ProcessGroupFactory::Instance()->GetDefaultProcessGroup()) {}
 
 std::vector<std::shared_ptr<Tensor>> Broadcast::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     if (target_gpus_.size() == 0) {
@@ -77,14 +83,7 @@ std::vector<std::shared_ptr<Tensor>> Broadcast::Forward(const std::vector<std::s
     }
 
     // TODO(dcj): mark non differentiable
-    auto kernel = Dispatcher::Instance().GetKernel({input_device_->Type(),
-#ifdef USE_NCCL
-                                                    "CommNcclBroadcast"
-#else
-                                                    "CommBroadcast"
-#endif
-    });
-    return kernel.Call<std::vector<std::shared_ptr<Tensor>>>(input_tensors, target_gpus_);
+    return pg_->BroadCast(input_tensors);
 }
 
 void Broadcast::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -96,6 +95,11 @@ std::vector<std::shared_ptr<Tensor>> Broadcast::Backward(const std::vector<std::
     return std::make_shared<ReduceAddCoalesced>(input_device_, num_inputs_)->Apply(grad_outputs);
 }
 
+ReduceAddCoalesced::ReduceAddCoalesced(const Device *destination, int64_t num_inputs,
+                                       const infini_train::nn::parallel::ProcessGroup *pg)
+    : autograd::Function(kType), destination_(destination), num_inputs_(num_inputs),
+      pg_(pg ? pg : infini_train::nn::parallel::ProcessGroupFactory::Instance()->GetDefaultProcessGroup()) {}
+
 std::vector<std::shared_ptr<Tensor>>
 ReduceAddCoalesced::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     std::vector<std::vector<std::shared_ptr<Tensor>>> tensor_reshaped(input_tensors.size() / num_inputs_);
@@ -106,14 +110,7 @@ ReduceAddCoalesced::Forward(const std::vector<std::shared_ptr<Tensor>> &input_te
         }
     }
 
-    auto kernel = Dispatcher::Instance().GetKernel({input_tensors[0]->GetDevice()->Type(),
-#ifdef USE_NCCL
-                                                    "CommNcclReduceAddCoalesced"
-#else
-                                                    "CommReduceAddCoalesced"
-#endif
-    });
-    return kernel.Call<std::vector<std::shared_ptr<Tensor>>>(tensor_reshaped, destination_);
+    return pg_->ReduceAddCoalesced(tensor_reshaped, destination_);
 }
 
 void ReduceAddCoalesced::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,

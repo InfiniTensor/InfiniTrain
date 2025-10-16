@@ -6,8 +6,8 @@
 
 #include "infini_train/include/autograd/comm.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/tensor.h"
 
@@ -34,11 +34,13 @@ std::vector<std::shared_ptr<Tensor>> Gather(const std::vector<std::vector<std::s
     return std::make_shared<autograd::Gather>(target_device, dim)->Apply(gather_tensors);
 }
 
-void AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op) {
+void AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op, const ProcessGroup *pg) {
     // TODO(dcj): use no_grad mode later
     auto device = tensor->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "CommNcclAllReduce"});
-    kernel.Call<void>(tensor, reduce_op);
+    if (pg == nullptr) {
+        pg = ProcessGroupFactory::Instance()->GetDefaultProcessGroup();
+    }
+    pg->AllReduce(tensor, reduce_op);
 }
 
 std::vector<std::vector<std::shared_ptr<Tensor>>>
