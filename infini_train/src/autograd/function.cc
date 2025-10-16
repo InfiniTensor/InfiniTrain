@@ -62,6 +62,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
 void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int grad_output_idx) {
     const auto *device = grad_output->GetDevice();
     device->SetDevice();
+    // std::cout << "Start BackwardPartial of " << type_ << " for output idx " << grad_output_idx << std::endl;
 
     // NOTE(dcj): The accumulate autograd function has no grad_outputs.
     // Temporarily resize the vector to hold one nullptr as a buffer.
@@ -80,21 +81,26 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
         && (dependencies_reached_ == dependencies_number_ || dependencies_number_ == 0)) {
 
         // cudaDeviceSynchronize();
+        // cudaError_t err = cudaGetLastError();
+        // if (err != cudaSuccess) {
+        //     fprintf(stderr, "CUDA kernel launch error: %s (at %s:%d)\n", cudaGetErrorString(err), __FILE__,
+        //     __LINE__);
+        // }
         // std::cout << "----------------------------------------------------------------------------------------------"
         //           << std::endl;
         // std::cout << "Start BackwardPartial of " << type_ << " for output idx " << grad_output_idx << std::endl;
         // std::cout << " - grad_output: " << std::endl;
         // if (grad_output) {
-        //     std::shared_ptr<Tensor> tensor_to_print;
+        // std::shared_ptr<Tensor> tensor_to_print;
 
-        //     if (grad_output->Dtype() == DataType::kBFLOAT16) {
-        //         tensor_to_print = std::make_shared<Tensor>(grad_output->To(DataType::kFLOAT32));
-        //     } else {
-        //         tensor_to_print = grad_output;
-        //     }
+        // if (grad_output->Dtype() == DataType::kBFLOAT16) {
+        //     tensor_to_print = std::make_shared<Tensor>(grad_output->To(DataType::kFLOAT32));
+        // } else {
+        //     tensor_to_print = grad_output;
+        // }
 
-        //     // Print as usual
-        //     tensor_to_print->Print();
+        // // // Print as usual
+        // tensor_to_print->Print();
 
         //             if (tensor_to_print->Dtype() == DataType::kFLOAT32) {
         //                 const size_t num_elements = tensor_to_print->NumElements();

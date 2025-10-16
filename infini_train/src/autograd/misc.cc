@@ -92,7 +92,7 @@ std::vector<std::shared_ptr<Tensor>> Stack::Backward(const std::vector<std::shar
     const auto &grad_output = grad_outputs[0];
 
     auto device = grad_output->GetDevice()->Type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "StackBackward"}, input_dims_, dim_,
-                                                                 grad_output)};
+    return {Dispatcher::Instance().Call<std::vector<std::shared_ptr<Tensor>>>({device, "StackBackward"}, input_dims_,
+                                                                              dim_, grad_output)};
 }
 } // namespace infini_train::autograd

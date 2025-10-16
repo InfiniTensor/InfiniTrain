@@ -115,9 +115,6 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
     int64_t N = std::accumulate(input_dims.begin(), input_dims.begin() + dim, 1, std::multiplies<int64_t>());
     int64_t D = std::accumulate(input_dims.begin() + dim, input_dims.end(), 1, std::multiplies<int64_t>());
 
-    std::vector<float *> host_ptrs;
-    for (auto &t : grads) { host_ptrs.push_back(static_cast<float *>(t->DataPtr())); }
-
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
     const auto &stream = cuda_device->Stream();
 
