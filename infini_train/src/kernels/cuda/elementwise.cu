@@ -625,16 +625,24 @@ template <typename Func>
 std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &a,
                                       Func unary_fn) {
     auto dtype = grad_output->Dtype();
-    auto output = std::make_shared<Tensor>(grad_output->Dims(), dtype, grad_output->GetDevice());
-    switch (dtype) {
+    auto a_dtype = a ? a->Dtype() : dtype;
+    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
+        {dtype, a_dtype}, [=]<typename Tgrad, typename Ta>() { return DataTypeMap_v<WidestType_t<Tgrad, Ta>>; },
+        "CUDA UnaryBackward");
+
+    auto grad_output_ = dtype == promoted_type ? grad_output : std::make_shared<Tensor>(grad_output->To(promoted_type));
+    auto a_ = a_dtype == promoted_type ? a : std::make_shared<Tensor>(a->To(promoted_type));
+    auto output = std::make_shared<Tensor>(grad_output->Dims(), promoted_type, grad_output->GetDevice());
+
+    switch (promoted_type) {
         DISPATCH_CASE(WRAP({
                           output->Fill<float>(0.0f);
-                          LaunchBackward<256, float>(unary_fn, output, grad_output, a);
+                          LaunchBackward<256, float>(unary_fn, output, grad_output_, a_);
                       }),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
                           output->Fill<nv_bfloat16>(0);
-                          LaunchBackward<256, nv_bfloat16>(unary_fn, output, grad_output, a);
+                          LaunchBackward<256, nv_bfloat16>(unary_fn, output, grad_output_, a_);
                       }),
                       DataType::kBFLOAT16)
         DISPATCH_CASE(WRAP({
@@ -782,7 +790,6 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     //        static_cast<int>(grad_b->Dtype()), a_dtype, b_dtype);
 
     return {grad_a, grad_b};
-    // return {std::make_shared<Tensor>(grad_a->To(a_dtype)), std::make_shared<Tensor>(grad_b->To(b_dtype))};
 }
 } // namespace
 

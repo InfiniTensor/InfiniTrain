@@ -248,11 +248,11 @@ void Train(const nn::parallel::Rank &rank) {
                 function::AllReduce(loss, function::ReduceOpType::kAvg);
             }
             auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
-            // if (FLAGS_dtype == kDtypeFP32) {
-            //     lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
-            // } else if (FLAGS_dtype == kDtypeBF16) {
-            lossf += ConvertBF16ToFloat(loss_cpu.DataPtr());
-            // }
+            if (FLAGS_dtype == kDtypeFP32) {
+                lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
+            } else if (FLAGS_dtype == kDtypeBF16) {
+                lossf += ConvertBF16ToFloat(loss_cpu.DataPtr());
+            }
             LOG(INFO) << "Rank " << rank.thread_rank() << ": start backward";
             loss->Backward();
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish backward";

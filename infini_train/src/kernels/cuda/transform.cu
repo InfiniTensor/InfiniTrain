@@ -333,8 +333,9 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
     auto input_shape = input->Dims();
     auto mask_shape = mask->Dims();
     auto dtype = input->Dtype();
+    auto mask_ = mask->Dtype() == dtype ? mask : std::make_shared<Tensor>(mask->To(dtype));
     // TODO(zbl): support bool mask
-    CHECK_EQ(static_cast<int>(dtype), static_cast<int>(mask->Dtype())) << "For now, input/mask dtypes must match.";
+    CHECK_EQ(static_cast<int>(dtype), static_cast<int>(mask_->Dtype())) << "For now, input/mask dtypes must match.";
 
     MaskMode mode = DecideMaskMode(input_shape, mask_shape);
 
@@ -364,7 +365,7 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
             dtype,
             [=]<typename T>() {
                 MaskForwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                    static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask->DataPtr()),
+                    static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask_->DataPtr()),
                     static_cast<T *>(output->DataPtr()), common::cuda::Cast<T>(value), static_cast<int>(batch_size),
                     static_cast<int>(mask_size));
             },

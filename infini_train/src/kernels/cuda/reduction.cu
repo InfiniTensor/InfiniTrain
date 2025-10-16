@@ -154,6 +154,9 @@ std::shared_ptr<Tensor> ReduceOpBackward(const std::shared_ptr<Tensor> &grad_out
     CHECK_GE(actual_dim, 0);
     CHECK_LT(actual_dim, input_dims.size());
 
+    // printf("ReductionBackward grad_output dtype: %d, input dtype: %d, reduced dtype: %d\n",
+    //        static_cast<int>(grad_output->Dtype()), input ? static_cast<int>(input->Dtype()) : -1,
+    //        reduced ? static_cast<int>(reduced->Dtype()) : -1);
     auto dtype = grad_output->Dtype();
     auto grad_input = std::make_shared<Tensor>(input_dims, dtype, grad_output->GetDevice());
 
