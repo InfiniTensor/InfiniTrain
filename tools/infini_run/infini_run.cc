@@ -29,13 +29,14 @@ int main(int argc, char** argv) {
     std::string master_addr = FLAGS_rdzv_endpoint.substr(0, FLAGS_rdzv_endpoint.find(':'));
     std::string master_port = FLAGS_rdzv_endpoint.substr(FLAGS_rdzv_endpoint.find(':') + 1);
 
-    for (int local_rank = 0; local_rank < FLAGS_nproc_per_node; ++local_rank) {
+    for (int local_proc_rank = 0; local_proc_rank < FLAGS_nproc_per_node; ++local_proc_rank) {
         pid_t pid = fork();
         if (pid == 0) {
-            int global_rank = FLAGS_node_rank * FLAGS_nproc_per_node + local_rank;
-            setenv("RANK", std::to_string(global_rank).c_str(), 1);
-            setenv("LOCAL_RANK", std::to_string(local_rank).c_str(), 1);
-            setenv("WORLD_SIZE", std::to_string(world_size).c_str(), 1);
+            int global_proc_rank = FLAGS_node_rank * FLAGS_nproc_per_node + local_proc_rank;
+            setenv("GLOBAL_PROC_RANK", std::to_string(global_proc_rank).c_str(), 1);
+            setenv("LOCAL_PROC_RANK", std::to_string(local_proc_rank).c_str(), 1);
+            setenv("PROC_WORLD_SIZE", std::to_string(world_size).c_str(), 1);
+            setenv("NPROC_PER_NODE", std::to_string(FLAGS_nproc_per_node).c_str(), 1);
             setenv("MASTER_ADDR", master_addr.c_str(), 1);
             setenv("MASTER_PORT", master_port.c_str(), 1);
 

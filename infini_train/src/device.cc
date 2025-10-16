@@ -3,17 +3,12 @@
 #include <cstdint>
 #include <vector>
 
-#ifdef USE_NCCL
-#include <mutex>
-#include <nccl.h>
-#endif
-
 #include "glog/logging.h"
 
+#include "infini_train/include/nn/parallel/global.h"
 #ifdef USE_CUDA
 #include "infini_train/include/common/cuda/common_cuda.h"
 #endif
-#include "infini_train/include/nn/parallel/global.h"
 
 namespace infini_train {
 Device::Device(DeviceType type, int8_t index) : type_(type), index_(index) {
@@ -34,6 +29,12 @@ std::string Device::ToString() const {
     return oss.str();
 }
 
+nn::parallel::Rank Device::rank() const {
+    LOG(FATAL) << "Unimplemented";
+    // prevent the compiler warning about control reaching the end of non-void function
+    std::abort();
+}
+
 std::ostream &operator<<(std::ostream &os, const Device &device) {
     os << device.ToString();
     return os;
@@ -44,42 +45,38 @@ CpuDevice::CpuDevice() : Device(DeviceType::kCPU, 0) {}
 #ifdef USE_CUDA
 CudaDevice::~CudaDevice() {
     if (stream_ != nullptr) {
-        cudaStreamDestroy(stream_);
+        CUDA_CHECK(cudaStreamDestroy(stream_));
     }
 
     if (cublas_handle_ != nullptr) {
-        cublasDestroy(cublas_handle_);
+        CUBLAS_CHECK(cublasDestroy(cublas_handle_));
     }
 }
 
-void CudaDevice::SetDevice() const { cudaSetDevice(index_); }
-void CudaDevice::Synchronize() const { cudaDeviceSynchronize(); }
+void CudaDevice::SetDevice() const { CUDA_CHECK(cudaSetDevice(index_)); }
+void CudaDevice::Synchronize() const { CUDA_CHECK(cudaDeviceSynchronize()); }
 
 cudaStream_t CudaDevice::Stream() const { return stream_; }
 
 cublasHandle_t CudaDevice::CublasHandle() const { return cublas_handle_; }
 
-#ifdef USE_NCCL
-ncclComm_t CudaDevice::NcclComm() const { return nccl_comm_; }
-#endif
+nn::parallel::Rank CudaDevice::rank() const { return rank_; }
 
 CudaDevice::CudaDevice(int8_t index)
-    : Device(DeviceType::kCUDA, index), rank_({0, index, 1, global::GetIntraWorldSize()}) {
+    : Device(DeviceType::kCUDA, index),
+      rank_({nn::parallel::global::GetLocalProcRank(), index, nn::parallel::global::GetNprocPerNode(),
+             nn::parallel::global::GetNthreadPerProc()}) {
     // TODO(dcj): make CudaDevice initialization lazy to avoid allocating memory on all GPUs in single-GPU mode
     SetDevice();
-    cudaStreamCreate(&stream_);
+    CUDA_CHECK(cudaStreamCreate(&stream_));
 
-    cublasCreate(&cublas_handle_);
-    cublasSetStream(cublas_handle_, stream_);
+    CUBLAS_CHECK(cublasCreate(&cublas_handle_));
+    CUBLAS_CHECK(cublasSetStream(cublas_handle_, stream_));
 }
 #endif // USE_CUDA
 
 const DeviceManager *DeviceManager::Instance() {
     static auto instance = std::unique_ptr<DeviceManager>(new DeviceManager());
-#ifdef USE_NCCL
-    static std::once_flag flag;
-    std::call_once(flag, [&]() { instance->InitNcclCommunicators(); });
-#endif
     return instance.get();
 }
 
@@ -110,25 +107,4 @@ DeviceManager::DeviceManager() {
 #endif
 }
 
-#ifdef USE_NCCL
-void DeviceManager::InitNcclCommunicators() {
-    const auto &cuda_devices = devices_map_.at(DeviceType::kCUDA);
-    int num_devices = cuda_devices.size();
-
-    std::vector<int> device_indices;
-    std::vector<cudaStream_t> streams;
-    for (const auto &device : cuda_devices) {
-        const auto *cuda_device = dynamic_cast<const CudaDevice *>(device.get());
-        device_indices.push_back(cuda_device->Index());
-    }
-
-    std::vector<ncclComm_t> nccl_comms(num_devices, nullptr);
-    NCCL_CHECK(ncclCommInitAll(nccl_comms.data(), num_devices, device_indices.data()));
-
-    for (int i = 0; i < num_devices; ++i) {
-        auto *device = dynamic_cast<CudaDevice *>(cuda_devices[i].get());
-        device->nccl_comm_ = nccl_comms[i];
-    }
-}
-#endif
 } // namespace infini_train

@@ -8,6 +8,8 @@
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
+#include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
@@ -15,24 +17,15 @@ namespace {
 constexpr char kModuleName[] = "module";
 } // namespace
 
-DistributedDataParallel::Rank::Rank(int process_rank, int thread_rank, int process_size, int thread_size)
-    : process_rank_(process_rank), thread_rank_(thread_rank), process_size_(process_size), thread_size_(thread_size) {}
-
-int DistributedDataParallel::Rank::process_rank() const { return process_rank_; }
-int DistributedDataParallel::Rank::thread_rank() const { return thread_rank_; }
-int DistributedDataParallel::Rank::process_size() const { return process_size_; }
-int DistributedDataParallel::Rank::thread_size() const { return thread_size_; }
-
-int DistributedDataParallel::Rank::WorldSize() const { return process_size_ * thread_size_; }
-
-bool DistributedDataParallel::Rank::IsDDP() const { return process_size_ * thread_size_ > 1; }
-
-bool DistributedDataParallel::Rank::IsMainRank() const { return thread_rank_ == 0; }
-
 DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, int device_id) {
     for (auto &param : module->Parameters()) {
-        CHECK_EQ(param->GetDevice()->Index(), device_id) << "All parameters must be on the same device as the module";
-        auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(function::ReduceOpType::kAvg);
+        auto device = param->GetDevice();
+        CHECK_EQ(device->Index(), device_id) << "All parameters must be on the same device as the module";
+
+        auto ddp_pg
+            = ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(device->rank().thread_rank()));
+        auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(function::ReduceOpType::kAvg,
+                                                                                          ddp_pg);
         param->RegisterPostAccumulateGradHook(std::move(hook));
     }
     for (auto &buffer : module->Buffers()) {
