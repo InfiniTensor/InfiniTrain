@@ -1,42 +1,28 @@
 #pragma once
 
-#include <cstdlib>
 #include <mutex>
-#include <string>
 
-#include "glog/logging.h"
-
-namespace infini_train::global {
+namespace infini_train::nn::parallel::global {
 
 class GlobalEnv {
 public:
-    static GlobalEnv &Instance() {
-        static GlobalEnv instance;
-        return instance;
-    }
+    static GlobalEnv &Instance();
 
-    void Init(int intra_world_size, int tensor_parallel_size) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        inter_world_size_ = GetEnvAsInt("WORLD_SIZE", 1);
-        intra_world_size_ = intra_world_size;
-        tensor_parallel_size_ = tensor_parallel_size;
-        initialized_ = true;
-    }
+    void Init(int threads_per_process, int tensor_parallel_size);
 
-    int inter_world_size() const {
-        CHECK(initialized_) << "GlobalEnv is not initialized";
-        return inter_world_size_;
-    }
+    int world_size() const;
 
-    int intra_world_size() const {
-        CHECK(initialized_) << "GlobalEnv is not initialized";
-        return intra_world_size_;
-    }
+    int global_proc_rank() const;
 
-    int tensor_parallel_size() const {
-        CHECK(initialized_) << "GlobalEnv is not initialized";
-        return tensor_parallel_size_;
-    }
+    int local_proc_rank() const;
+
+    int nproc_per_node() const;
+
+    int nthread_per_process() const;
+
+    int tensor_parallel_size() const;
+
+    int data_parallel_size() const;
 
 private:
     GlobalEnv() = default;
@@ -45,29 +31,31 @@ private:
     GlobalEnv(const GlobalEnv &) = delete;
     GlobalEnv &operator=(const GlobalEnv &) = delete;
 
-    static int GetEnvAsInt(const std::string &name, int default_value) {
-        const char *value = std::getenv(name.c_str());
-        return value ? std::atoi(value) : default_value;
-    }
-
-    static std::string GetEnvAsStr(const std::string &name, const std::string &default_value) {
-        const char *value = std::getenv(name.c_str());
-        return value ? std::string(value) : default_value;
-    }
-
 private:
-    int inter_world_size_ = 1;
-    int intra_world_size_ = 1;
+    int world_size_ = 1;
+    int nproc_per_node_ = 1;
+    int nthread_per_process_ = 1;
+    int global_proc_rank_ = 0;
+    int local_proc_rank_ = 0;
+
     int tensor_parallel_size_ = 1;
+    int data_parallel_size_ = 1;
+
     mutable std::mutex mutex_;
     bool initialized_ = false;
 };
 
-inline void InitAllEnv(int data_parallel_size, int tensor_parallel_size) {
-    GlobalEnv::Instance().Init(data_parallel_size, tensor_parallel_size);
+inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size) {
+    GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size);
 }
-inline int GetIntraWorldSize() { return GlobalEnv::Instance().intra_world_size(); }
-inline int GetInterWorldSize() { return GlobalEnv::Instance().inter_world_size(); }
-inline int GetTensorParallelSize() { return GlobalEnv::Instance().tensor_parallel_size(); }
 
-} // namespace infini_train::global
+inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }
+inline int GetNprocPerNode() { return GlobalEnv::Instance().nproc_per_node(); }
+inline int GetNthreadPerProc() { return GlobalEnv::Instance().nthread_per_process(); }
+inline int GetGlobalProcRank() { return GlobalEnv::Instance().global_proc_rank(); }
+inline int GetLocalProcRank() { return GlobalEnv::Instance().local_proc_rank(); }
+
+inline int GetTensorParallelSize() { return GlobalEnv::Instance().tensor_parallel_size(); }
+inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
+
+} // namespace infini_train::nn::parallel::global

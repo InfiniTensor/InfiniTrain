@@ -8,13 +8,10 @@
 #ifdef USE_CUDA
 #include <cublas_v2.h>
 #endif
-#ifdef USE_NCCL
-#include <nccl.h>
-#endif
 
 #include "glog/logging.h"
 
-#include "infini_train/include/nn/parallel/distributed_data_parallel.h"
+#include "infini_train/include/nn/parallel/rank.h"
 
 namespace infini_train {
 
@@ -38,7 +35,7 @@ public:
 
     std::string ToString() const;
 
-    virtual nn::parallel::DistributedDataParallel::Rank rank() const { LOG(FATAL) << "Unimplemented"; }
+    virtual nn::parallel::Rank rank() const;
 
     friend std::ostream &operator<<(std::ostream &os, const Device &device);
 
@@ -67,11 +64,8 @@ public:
     cudaStream_t Stream() const;
 
     cublasHandle_t CublasHandle() const;
-#ifdef USE_NCCL
-    ncclComm_t NcclComm() const;
-#endif
 
-    nn::parallel::DistributedDataParallel::Rank rank() const override { return rank_; }
+    nn::parallel::Rank rank() const override;
 
 private:
     CudaDevice(int8_t index);
@@ -80,11 +74,7 @@ private:
 
     cublasHandle_t cublas_handle_ = nullptr;
 
-#ifdef USE_NCCL
-    ncclComm_t nccl_comm_ = nullptr;
-#endif
-
-    nn::parallel::DistributedDataParallel::Rank rank_;
+    nn::parallel::Rank rank_;
 
     friend class DeviceManager;
 };
@@ -102,10 +92,6 @@ public:
 
 private:
     DeviceManager();
-
-#ifdef USE_NCCL
-    void InitNcclCommunicators();
-#endif
 
     std::unordered_map<DeviceType, std::vector<std::unique_ptr<Device>>> devices_map_;
 };
