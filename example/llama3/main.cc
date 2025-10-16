@@ -158,12 +158,14 @@ int main(int argc, char *argv[]) {
         CHECK_EQ(FLAGS_batch_size % FLAGS_num_microbatches, 0)
             << "FLAGS_batch_size (" << FLAGS_batch_size << ") must be divisible by FLAGS_num_microbatches ("
             << FLAGS_num_microbatches << ")";
-        printf("main: %d %ld\n", FLAGS_sequence_length, model->GetHiddenSize()[0] / model->GetHiddenSize()[1]);
+        printf("main: %d %ld\n", FLAGS_sequence_length, model->GetConfig()["n_embd"] / model->GetConfig()["n_head"]);
         auto shapes = std::vector<std::vector<int64_t>>{
-            {FLAGS_batch_size / FLAGS_num_microbatches, FLAGS_sequence_length, model->GetHiddenSize()[0]},
-            {FLAGS_sequence_length, (model->GetHiddenSize()[0] / model->GetHiddenSize()[1]) / 2, 2},
+            {FLAGS_batch_size / FLAGS_num_microbatches, FLAGS_sequence_length, model->GetConfig()["n_embd"]},
+            {FLAGS_sequence_length, (model->GetConfig()["n_embd"] / model->GetConfig()["n_head"]) / 2, 2},
             {},
             {1, 1, FLAGS_sequence_length, FLAGS_sequence_length}};
+        // auto shapes = std::vector<std::vector<int64_t>>{
+        //     {FLAGS_batch_size / FLAGS_num_microbatches, FLAGS_sequence_length, model->GetConfig()["n_embd"]}};
         model = std::make_shared<nn::pipeline::PipelineParallel>(model, FLAGS_num_stages, FLAGS_num_microbatches,
                                                                  shapes, FLAGS_learning_rate);
     }

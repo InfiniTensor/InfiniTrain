@@ -27,6 +27,12 @@ std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
     return params;
 }
 
+size_t Module::Parameters_num_tem() const {
+    size_t total_params = 0;
+    for (auto &[_, p] : parameters_) { total_params += p->NumElements(); }
+    return total_params;
+}
+
 bool Module::has_parameter(const std::string &name) const { return parameters_.find(name) != parameters_.end(); }
 
 std::shared_ptr<Tensor> *Module::mutable_parameter(const std::string &name) {

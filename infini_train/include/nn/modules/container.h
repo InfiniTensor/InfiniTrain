@@ -18,9 +18,7 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
-    size_t size() const {
-        return modules_.size();
-    }
+    size_t size() const { return modules_.size(); }
 
     std::shared_ptr<Module> operator[](size_t idx) const {
         auto it = modules_.find(std::to_string(idx));

@@ -106,7 +106,8 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
                 <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(input_ptr, target_ptr, batched_loss_ptr,
                                                                               bs, num_classes);
             // std::cout<< "before   batched_output->To(DeviceManager::Instance()->GetDefaultDevice()) !!!!!!!!!! " <<
-            //        batched_output->GetDevice()->ToString() << "数据个数：" << batched_output->NumElements() <<std::endl;
+            //        batched_output->GetDevice()->ToString() << "数据个数：" << batched_output->NumElements()
+            //        <<std::endl;
             auto loss_cpu = batched_output->To(DeviceManager::Instance()->GetDefaultDevice());
             // printf("after   batched_output->To(DeviceManager::Instance()->GetDefaultDevice()) !!!!!!!!!!\n");
             auto loss = std::make_shared<Tensor>(std::vector<int64_t>{}, input->Dtype(),

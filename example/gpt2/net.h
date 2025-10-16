@@ -86,7 +86,7 @@ public:
 
     explicit GPT2(const GPT2Config &config);
 
-    std::vector<int64_t> GetHiddenSize() const override;
+    std::unordered_map<std::string, int64_t> GetConfig() const override;
     std::vector<std::shared_ptr<infini_train::nn::Module>> GetPipelineLayers() override;
 
     std::vector<std::shared_ptr<infini_train::Tensor>>

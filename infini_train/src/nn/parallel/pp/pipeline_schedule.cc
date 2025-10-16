@@ -3,8 +3,10 @@
 
 #include "glog/logging.h"
 #include <cstddef>
+#include <cstdint>
 #include <cuda_runtime.h>
 #include <memory>
+#include <unistd.h>
 #include <vector>
 
 #include "infini_train/include/device.h"
@@ -99,7 +101,7 @@ float ScheduleGPipe::StepMicrobatches(const std::vector<std::shared_ptr<Tensor>>
     if (n_microbatches == 0) {
         return 0.0;
     }
-    printf("ScheduleGPipe::StepMicrobatches stage %d n_microbatches %d\n", stage_index_, n_microbatches);
+    // printf("ScheduleGPipe::StepMicrobatches stage %d n_microbatches %d\n", stage_index_, n_microbatches);
     std::vector<std::vector<std::shared_ptr<Tensor>>> outputs(n_microbatches);
     std::vector<std::shared_ptr<Tensor>> output_grads(n_microbatches);
 
@@ -113,47 +115,44 @@ float ScheduleGPipe::StepMicrobatches(const std::vector<std::shared_ptr<Tensor>>
             auto shapes = stage_->recv_shape();
             std::vector<std::shared_ptr<Tensor>> recv_tensors;
             for (int shape_i = 0; shape_i < shapes.size(); ++shape_i) {
-                printf("[stage %d] recv_tensor shape :", stage_index_);
-                auto recv_dims = shapes[shape_i];
-                for(int i = 0 ; i < recv_dims.size(); i++) {
-                    printf(" %ld , ", recv_dims[i]);
-                }
-                printf("\n");
-                if (recv_dims.empty()) {
-                    recv_tensors.push_back(nullptr);
-                    continue;
-                }
-                recv_tensors.push_back(std::make_shared<Tensor>(shapes[shape_i], DataType::kFLOAT32, stage_->device()));
+                auto r_tensor = std::make_shared<Tensor>(shapes[shape_i], DataType::kFLOAT32, stage_->device());
 
+                // TODO:只给第一个设置梯度
+                if (shape_i == 0) {
+                    r_tensor->set_requires_grad(true);
+                    r_tensor->set_is_leaf(false);
+                }
+                recv_tensors.push_back(r_tensor);
             }
-            auto output = IRecv(recv_tensors, stage_->device(), stage_->stage_index(), stage_->prev_rank());
+            auto outputs = IRecv(recv_tensors, stage_->device(), stage_->stage_index(), stage_->prev_rank());
 
-            input_tensors = recv_tensors;
+            input_tensors = outputs;
         }
-
-        // if (input_tensors == nullptr) {
-        //     printf("[stage %d] input_tensors is null\n", stage_index_);
-        // }
 
         auto output_tensors = stage_->ForwardOneChunk(input_tensors);
         outputs[mb_idx] = output_tensors;
 
         if (!stage_->IsLastStage()) {
-            printf("[stage %d] start send!! %d, %d, 当前是microbatch: %d\n", stage_index_, stage_->stage_index(),
-                   stage_->next_rank(), mb_idx);
+            // printf("[stage %d] start send!! %d, %d, 当前是microbatch: %d\n", stage_index_, stage_->stage_index(),
+            //        stage_->next_rank(), mb_idx);
 
-            PrintTensorSummary(outputs[mb_idx][0], "stage" + std::to_string(stage_index_) + "_mb____"
-                                                       + std::to_string(mb_idx) + "_send_pre");
-            ISend(outputs[mb_idx], stage_->device(), stage_->stage_index(), stage_->next_rank());
-            printf("[stage %d] after send!! microbatch: %d\n", stage_index_, mb_idx);
+            // PrintTensorSummary(outputs[mb_idx][0], "stage" + std::to_string(stage_index_) + "_mb____"
+            //                                            + std::to_string(mb_idx) + "_send_pre");
+            for (int i = 0; i < outputs[mb_idx].size(); i++) {
+                if (outputs[mb_idx][i] == nullptr) {
+                    outputs[mb_idx][i]
+                        = std::make_shared<Tensor>((std::vector<int64_t>){}, DataType::kFLOAT32, stage_->device());
+                }
+            }
+            outputs[mb_idx] = ISend(outputs[mb_idx], stage_->device(), stage_->stage_index(), stage_->next_rank(),
+                                    stage_->recv_shape());
+            // printf("[stage %d] 单stage正向发送OK %d\n", stage_index_, mb_idx);
         }
     }
 
     float lossf = 0.0;
     if (stage_->IsLastStage()) {
         for (int mb_idx = 0; mb_idx < n_microbatches; ++mb_idx) {
-            std::cout << "[DEBUG] Processing microbatch " << mb_idx << "/" << n_microbatches << std::endl;
-
             auto &target = microbatch_targets[mb_idx];
             auto &output = outputs[mb_idx];
 
@@ -164,38 +163,7 @@ float ScheduleGPipe::StepMicrobatches(const std::vector<std::shared_ptr<Tensor>>
                 LOG(FATAL) << "[ERROR] output is nullptr for mb_idx = " << mb_idx;
             }
 
-            // ======== 打印 output[0] 前 10 个值 ==========
-            auto output_cpu = output[0]->To(DeviceManager::Instance()->GetDefaultDevice());
-            float *out_ptr = static_cast<float *>(output_cpu.DataPtr());
-            int out_num = std::min(10, static_cast<int>(output_cpu.NumElements()));
-            std::cout << "[DEBUG] output[0] first " << out_num << " values: ";
-            for (int i = 0; i < out_num; ++i) { std::cout << out_ptr[i] << " "; }
-            std::cout << std::endl;
-
-            // ======== 打印 target 前 10 个值 ==========
-            auto target_cpu = target->To(DeviceManager::Instance()->GetDefaultDevice());
-            int64_t *tgt_ptr = static_cast<int64_t *>(target_cpu.DataPtr());
-            int tgt_num = std::min(10, static_cast<int>(target_cpu.NumElements()));
-            std::cout << "[DEBUG] target first " << tgt_num << " values: ";
-            for (int i = 0; i < tgt_num; ++i) { std::cout << tgt_ptr[i] << " "; }
-            std::cout << std::endl;
-
-            LOG(INFO) << "output dims: " << output[0]->Dims().size();
-            for (int i = 0; i < output[0]->Dims().size(); ++i) {
-                LOG(INFO) << "output dim[" << i << "] = " << output[0]->Dims()[i];
-            }
-
-            LOG(INFO) << "target dims: " << target->Dims().size();
-            for (int i = 0; i < target->Dims().size(); ++i) {
-                LOG(INFO) << "target dim[" << i << "] = " << target->Dims()[i];
-            }
-
-            LOG(INFO) << "mb_idx=" << mb_idx << " output_dev=" << output[0]->GetDevice()->ToString()
-                      << " target_dev=" << target->GetDevice()->ToString();
-
             auto target_copy = target->To(output[0]->GetDevice());
-            std::cout << "target->To(output[0]->GetDevice()) ok!!!!!! " << target_copy.GetDevice()->ToString()
-                      << std::endl;
             auto loss = loss_fn->Forward({output[0], std::make_shared<Tensor>(target_copy)})[0];
 
             if (!loss) {
@@ -203,51 +171,31 @@ float ScheduleGPipe::StepMicrobatches(const std::vector<std::shared_ptr<Tensor>>
                 continue;
             }
             loss = loss / n_microbatches;
-            LOG(INFO) << "finish loss forward";
+            // LOG(INFO) << "finish loss forward";
             auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
 
             lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
 
+            // LOG(INFO) << "before backward";
             loss->Backward();
             // LOG(INFO) << "finish backward";
         }
     }
 
-    // // 打印参数验证
-    // if (stage_->layers_.empty()) {
-    //     printf("stage_->layers_ is empty!\n");
-    //     return 0;
-    // }
+    if (!stage_->IsLastStage()) {
+        for (int mb_idx = 0; mb_idx < n_microbatches; ++mb_idx) {
+            auto &out_tensor = outputs[mb_idx][0];
+            // printf("[stage %d] 触发单stage的反向 %d, 构造的接收梯度的张量维度:", stage_index_, mb_idx);
+            // for (auto i : out_tensor->Dims()) { printf("%ld ", i); }
+            // printf("\n");
 
-    // for (size_t li = 0; li < stage_->layers_.size(); ++li) {
-    //     auto layer = stage_->layers_[li];
-    //     auto params = layer->Parameters();
-
-    //     if (params.empty()) {
-    //         printf("Layer %s has no parameters!\n", layer->type().c_str());
-    //         continue;
-    //     }
-
-    //     auto w = params[0];
-    //     if (!w) {
-    //         printf("Parameter tensor is null!\n");
-    //         continue;
-    //     }
-
-    //     if (!w->DataPtr()) {
-    //         printf("Parameter data is not allocated! shape=%ld\n", w->Dims()[0]);
-    //         continue;
-    //     }
-
-    //     auto w_cpu = w->To(DeviceManager::Instance()->GetDefaultDevice());
-    //     if (!w_cpu.DataPtr()) {
-    //         printf("Failed to copy tensor to CPU!\n");
-    //         continue;
-    //     }
-
-    //     float *data = static_cast<float *>(w_cpu.DataPtr());
-    //     printf("Weight[0][0] = %f\n", data[0]);
-    // }
+            auto gradient = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
+            usleep(2000);
+            // std::cout << "=====输出张量========, 梯度函数：" << out_tensor->grad_fn() << std::endl;
+            out_tensor->Backward(gradient);
+        }
+    }
     return lossf;
 }
+
 } // namespace infini_train::nn::pipeline

@@ -26,7 +26,7 @@ __global__ void LayerNormForwardKernel(const T *input, const T *weight, const T 
 
     float sum = 0.0f;
     float sqsum = 0.0f;
-    
+
     for (int i = threadIdx.x; i < embed_dim; i += BLOCK_SIZE) {
         float val = common::cuda::Cast<float>(x[i]);
         sum += val;
