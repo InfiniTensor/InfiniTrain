@@ -73,7 +73,6 @@ __global__ void CrossEntropyForwardKernel(const InputType *__restrict__ input_pt
 
 std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input,
                                             const std::shared_ptr<Tensor> &target) {
-    // printf("CrossEntropyForward Entry!!!!!!!!!!\n");
     const auto &input_dims = input->Dims();
     CHECK_GE(input_dims.size(), 2);
     const int bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
@@ -92,24 +91,12 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
             const Ttarget *target_ptr = static_cast<const Ttarget *>(target->DataPtr());
             const Tinput *input_ptr = static_cast<const Tinput *>(input->DataPtr());
             Tinput *batched_loss_ptr = static_cast<Tinput *>(batched_output->DataPtr());
-            // 🔥 打印前 20 个 target 值
-            // auto target_cpu = target->To(DeviceManager::Instance()->GetDefaultDevice());
-            // auto target_print = static_cast<const int64_t*>(target_cpu.DataPtr());
-            // std::cout << "[CELoss] first 20 target values: " << std::endl;
-            // for (int i = 0; i < std::min(20, bs); ++i) {
-            //     std::cout << static_cast<int64_t>(target_print[i]) << " ";
-            // }
-            // std::cout << std::endl;
 
             // FIXME(dcj): do reduce on GPU
             CrossEntropyForwardKernel<threads_per_block, Ttarget, Tinput>
                 <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(input_ptr, target_ptr, batched_loss_ptr,
                                                                               bs, num_classes);
-            // std::cout<< "before   batched_output->To(DeviceManager::Instance()->GetDefaultDevice()) !!!!!!!!!! " <<
-            //        batched_output->GetDevice()->ToString() << "数据个数：" << batched_output->NumElements()
-            //        <<std::endl;
             auto loss_cpu = batched_output->To(DeviceManager::Instance()->GetDefaultDevice());
-            // printf("after   batched_output->To(DeviceManager::Instance()->GetDefaultDevice()) !!!!!!!!!!\n");
             auto loss = std::make_shared<Tensor>(std::vector<int64_t>{}, input->Dtype(),
                                                  DeviceManager::Instance()->GetDefaultDevice());
             auto loss_cpu_typed_ptr = static_cast<const Tinput *>(loss_cpu.DataPtr());

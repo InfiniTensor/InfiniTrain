@@ -21,8 +21,6 @@ public:
     float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input,
                     const std::vector<std::shared_ptr<Tensor>> &target, const std::shared_ptr<Module> &loss_fn);
 
-    // std::vector<std::shared_ptr<Tensor>> Parameters() const override;
-
 private:
     int num_stages_;
     int rank_;
@@ -31,7 +29,18 @@ private:
     std::vector<std::shared_ptr<PipelineStage>> pipeline_stages_;
     std::vector<std::shared_ptr<PipelineSchedule>> schedules_;
 
+    std::vector<std::vector<std::shared_ptr<Module>>>
+    SplitLayersIntoStages(std::vector<std::shared_ptr<Module>> layers);
+
     void SplitModel(const std::vector<std::vector<int64_t>> &recv_shape, float learning_rate);
+
+    std::vector<std::shared_ptr<Optimizer>>
+    CreateOptimizers(const std::vector<std::vector<std::shared_ptr<Module>>> &stage_layers, float lr);
+
+    void BuildPipelineStages(const std::vector<std::vector<std::shared_ptr<Module>>> &stage_layers,
+                             const std::vector<std::shared_ptr<Optimizer>> &optimizers,
+                             const std::vector<std::vector<int64_t>> &recv_shape);
+
     void SetupSchedules(int num_microbatches);
 };
 

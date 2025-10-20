@@ -9,8 +9,7 @@ namespace infini_train::nn::pipeline {
 class PipelineSchedule {
 public:
     PipelineSchedule(std::shared_ptr<PipelineStage> stage, int num_stages, int num_microbatches, int stage_index)
-        : stage_(std::move(stage)), num_stages_(num_stages), num_microbatches_(num_microbatches),
-          stage_index_(stage_index) {}
+        : stage_(std::move(stage)), num_microbatches_(num_microbatches), stage_index_(stage_index) {}
 
     virtual ~PipelineSchedule() = default;
 
@@ -21,21 +20,18 @@ public:
                                    const std::shared_ptr<Module> &loss_fn)
         = 0;
 
-    void OptimizerStep();
-
-    int NumMicrobatches() const { return num_microbatches_; }
-
-    std::shared_ptr<PipelineStage> stage() const { return stage_; }
+    std::vector<std::shared_ptr<Tensor>> ReceiveFromPrev();
+    std::vector<std::shared_ptr<Tensor>> SendToNext(const std::vector<std::shared_ptr<Tensor>> &tensors);
 
 protected:
+    int num_microbatches_;
+
     std::shared_ptr<PipelineStage> stage_;
-    int stage_index_;
-    int num_stages_;
 
 private:
-    std::vector<std::shared_ptr<Tensor>> SplitTensor(std::shared_ptr<Tensor> full_inputs);
+    int stage_index_;
 
-    int num_microbatches_;
+    std::vector<std::shared_ptr<Tensor>> SplitTensor(std::shared_ptr<Tensor> full_inputs);
 };
 
 class Schedule1F1B : public PipelineSchedule {

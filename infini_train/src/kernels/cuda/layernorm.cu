@@ -35,7 +35,6 @@ __global__ void LayerNormForwardKernel(const T *input, const T *weight, const T 
 
     float total_sum = BlockReduce(temp_storage_mean).Sum(sum);
     float total_sqsum = BlockReduce(temp_storage_rstd).Sum(sqsum);
-    // printf("LayerNormForwardKernel Entry %d\n", threadIdx.x );
     if (threadIdx.x == 0) {
         float mean = total_sum / embed_dim;
         float var = total_sqsum / embed_dim - mean * mean;
@@ -55,7 +54,6 @@ __global__ void LayerNormForwardKernel(const T *input, const T *weight, const T 
         float norm = (common::cuda::Cast<float>(x[i]) - shared_mean) * shared_rstd;
         y[i] = common::cuda::Cast<T>(norm * common::cuda::Cast<float>(weight[i]) + common::cuda::Cast<float>(bias[i]));
     }
-    // printf("LayerNormForwardKernel exit %d\n", threadIdx.x );
 }
 
 std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
@@ -64,7 +62,6 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
     CHECK_EQ(input->Dims().size(), 3);
     CHECK_LE(input->Dims()[2], weight->Dims()[0]);
     CHECK_LE(input->Dims()[2], bias->Dims()[0]);
-    // printf("LayerNormForward Entry!!!!\n");
     const int batch_size = input->Dims()[0];
     const int max_seqlen = input->Dims()[1];
     const int embed_dim = input->Dims()[2];
@@ -76,7 +73,6 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
                                          input->GetDevice());
     auto rstd = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32,
                                          input->GetDevice());
-    // printf("LayerNormForward Entry!!!! 2\n");
     constexpr int BLOCK_SIZE = 256;
     int threads_per_block = BLOCK_SIZE;
     int num_blocks = batch_size * max_seqlen;
@@ -93,7 +89,6 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
                 static_cast<float *>(rstd->DataPtr()), static_cast<T *>(output->DataPtr()), eps, embed_dim);
         },
         "CUDA LayerNormForward");
-    // printf("LayerNormForward Entry  3!!!!\n");
     return {output, mean, rstd};
 }
 

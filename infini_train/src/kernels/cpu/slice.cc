@@ -10,7 +10,6 @@
 namespace infini_train::kernels::cpu {
 std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const std::vector<int64_t> &starts,
                                      const std::vector<int64_t> &ends, const std::vector<int64_t> &steps) {
-    printf("[CPU] SliceForward entry!");
     CHECK_EQ(starts.size(), ends.size());
     CHECK_EQ(starts.size(), steps.size());
     auto &dims = input->Dims();

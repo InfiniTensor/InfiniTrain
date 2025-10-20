@@ -82,14 +82,12 @@ private:
 };
 
 std::vector<std::shared_ptr<Tensor>> ISend::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    // printf("ISend::Forward Entry!!! %d\n", cur_rank_);
     const auto &input = input_tensors[0];
     input_device_ = input->GetDevice();
 
     auto device_type = input_device_->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device_type, "CommNcclSend"});
     kernel.Call<std::vector<std::shared_ptr<Tensor>>>(input_tensors, peer_rank_);
-    // auto outputs = kernel.Call<std::vector<std::shared_ptr<Tensor>>>(input_tensors, peer_rank_);
     std::vector<std::shared_ptr<Tensor>> outputs;
     for (int i = 0; i < input_tensors.size(); i++) {
         auto &t = input_tensors[i];
@@ -97,7 +95,6 @@ std::vector<std::shared_ptr<Tensor>> ISend::Forward(const std::vector<std::share
         i == 0 ? t_item->set_requires_grad(true) : t_item->set_requires_grad(false);
         outputs.push_back(t_item);
     }
-    // printf("ISend::Forward OK!!! %d\n", cur_rank_);
     return outputs;
 }
 
@@ -105,70 +102,20 @@ void ISend::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tenso
                          const std::vector<std::shared_ptr<Tensor>> &output_tensors) {}
 
 std::vector<std::shared_ptr<Tensor>> ISend::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    // printf("[stage: %d] ISend::Backward Entry!!!!!\n", cur_rank_);
-
     auto device_type = input_device_->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device_type, "CommNcclRecv"});
 
     auto shapes = shapes_;
     std::vector<std::shared_ptr<Tensor>> recv_tensors;
+    auto need_grad = OutputRequiresGrad(grad_outputs);
     for (int shape_i = 0; shape_i < shapes.size(); ++shape_i) {
         auto r_tensor = std::make_shared<Tensor>(shapes[shape_i], DataType::kFLOAT32, input_device_);
-
-        recv_tensors.push_back(r_tensor);
-        // TODO:hack
-        break;
+        if (need_grad[shape_i]) {
+            recv_tensors.push_back(r_tensor);
+        }
     }
-    // printf("[stages %d / %d] 反向接收的对象是 [stages %d]\n", cur_rank_, input_device_->Index(), peer_rank_);
+
     auto grad_inputs = kernel.Call<std::vector<std::shared_ptr<Tensor>>>(recv_tensors, peer_rank_);
-    // printf("[stages %d] ISend::Backward OK!!!!!\n", cur_rank_);
-
-    // if (grad_inputs.empty()) {
-    //     printf("[Rank %d] ERROR: grad_inputs 为空！\n", cur_rank_);
-    // } else {
-    //     printf("[Rank %d] 成功接收到 %zu 个梯度张量。\n", cur_rank_, grad_inputs.size());
-
-    //     for (size_t i = 0; i < grad_inputs.size(); ++i) {
-    //         auto &grad_tensor = grad_inputs[i];
-
-    //         // 检查指针是否为空
-    //         if (!grad_tensor) {
-    //             printf("[Rank %d] ERROR: grad_inputs[%zu] 是空指针！\n", cur_rank_, i);
-    //             continue;
-    //         }
-
-    //         // 打印张量的基本信息
-    //         printf("[Rank %d] grad_inputs[%zu]: ", cur_rank_, i);
-    //         printf("设备=%d, ", grad_tensor->GetDevice()->Index());
-    //         printf("数据类型=%d, ", static_cast<int>(grad_tensor->Dtype()));
-    //         printf("维度=[");
-
-    //         auto dims = grad_tensor->Dims();
-    //         for (size_t dim = 0; dim < dims.size(); ++dim) {
-    //             printf("%ld", dims[dim]);
-    //             if (dim < dims.size() - 1) {
-    //                 printf(", ");
-    //             }
-    //         }
-    //         printf("], ");
-    //         printf("元素数量=%ld\n", grad_tensor->NumElements());
-
-    //         auto grad_tensor_copy = grad_tensor->To(DeviceManager::Instance()->GetDefaultDevice());
-    //         if (grad_tensor->NumElements() > 0 && grad_tensor->Dtype() == DataType::kFLOAT32) {
-    //             float *data_ptr = static_cast<float *>(grad_tensor_copy.DataPtr());
-    //             if (!data_ptr) {
-    //                 printf("接收的梯度是空\n");
-    //                 break;
-    //             }
-
-    //             printf(", 前n个值=");
-    //             for (int i = 0; i < 20; i++) { std::cout << data_ptr[i] << " "; }
-    //         }
-
-    //         printf("\n");
-    //     }
-    //     printf("验证OK\n");
-    // }
 
     return grad_inputs;
 }
@@ -177,7 +124,7 @@ std::vector<std::shared_ptr<Tensor>> IRecv::Forward(const std::vector<std::share
     CHECK_NE(src_device_, nullptr) << "src_device_ must be set";
 
     auto device_type = src_device_->Type();
-    // printf("[stage %d] IRecv::Forward %d\n", cur_rank_, device_type);
+
     auto kernel = Dispatcher::Instance().GetKernel({device_type, "CommNcclRecv"});
 
     kernel.Call<std::vector<std::shared_ptr<Tensor>>>(recv_tensors, peer_rank_);
@@ -188,7 +135,6 @@ std::vector<std::shared_ptr<Tensor>> IRecv::Forward(const std::vector<std::share
         outputs.push_back(t_item);
     }
 
-    // printf("[stage:  %d] IRecv::Forward OK!!!\n", cur_rank_);
     return outputs;
 }
 
@@ -202,41 +148,10 @@ void IRecv::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tenso
 }
 
 std::vector<std::shared_ptr<Tensor>> IRecv::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    // printf("IRecv::Backward Entry!!!!!\n");
-
     auto device_type = cur_device_->Type();
     auto kernel = Dispatcher::Instance().GetKernel({device_type, "CommNcclSend"});
 
-    // for (size_t i = 0; i < grad_outputs.size(); ++i) {
-    //     auto &grad_tensor = grad_outputs[i];
-    //     // 打印张量的基本信息
-    //     printf("[Rank %d] grad_inputs[%zu]: ", cur_rank_, i);
-    //     printf("设备=%d, ", grad_tensor->GetDevice()->Index());
-    //     printf("数据类型=%d, ", static_cast<int>(grad_tensor->Dtype()));
-    //     printf("维度=[");
-    //     auto dims = grad_tensor->Dims();
-    //     for (size_t dim = 0; dim < dims.size(); ++dim) {
-    //         printf("%ld", dims[dim]);
-    //         if (dim < dims.size() - 1) {
-    //             printf(", ");
-    //         }
-    //     }
-    //     printf("], ");
-    //     printf("元素数量=%ld\n", grad_tensor->NumElements());
-
-    //     auto grad_tensor_copy = grad_tensor->To(DeviceManager::Instance()->GetDefaultDevice());
-    //     if (grad_tensor->NumElements() > 0 && grad_tensor->Dtype() == DataType::kFLOAT32) {
-    //         float *data_ptr = static_cast<float *>(grad_tensor_copy.DataPtr());
-
-    //         printf(", 前n个值=");
-    //         for (int i = 0; i < 20; i++) { std::cout << data_ptr[i] << " "; }
-    //     }
-
-    //     printf("\n");
-    // }
-    // printf("[stages %d / %d] 发送的对象是 [stages %d]\n", cur_rank_, cur_device_->Index(), peer_rank_);
     auto grad_remote = kernel.Call<std::vector<std::shared_ptr<Tensor>>>(grad_outputs, peer_rank_);
-    // printf("[stage %d] IRecv::Backward OK!!!!! \n", cur_rank_);
     return grad_remote;
 }
 } // namespace functions
