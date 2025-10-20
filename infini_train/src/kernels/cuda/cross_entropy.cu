@@ -44,7 +44,7 @@ __global__ void CrossEntropyForwardKernel(const InputType *__restrict__ input_pt
     for (int i = tid; i < num_classes; i += BLOCK_SIZE) {
         thread_max = fmaxf(thread_max, common::cuda::Cast<float>(input_ptr[base + i]));
     }
-    const float block_max = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Reduce(thread_max, cub::Max());
+    const float block_max = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Reduce(thread_max, ::cuda::maximum<>());
     if (tid == 0) {
         shared.max_logit = block_max;
     }
@@ -139,7 +139,7 @@ __global__ void CrossEntropyBackwardKernel(const InputType *__restrict__ input_p
     for (int i = tid; i < num_classes; i += BLOCK_SIZE) {
         thread_max = fmaxf(thread_max, common::cuda::Cast<float>(input_ptr[idx_base + i]));
     }
-    const float block_max = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Reduce(thread_max, cub::Max());
+    const float block_max = cub::BlockReduce<float, BLOCK_SIZE>(shared.reduce).Reduce(thread_max, ::cuda::maximum<>());
     if (tid == 0) {
         shared.max_logit = block_max;
     }
