@@ -12,7 +12,7 @@ class Optimizer {
 public:
     explicit Optimizer(const std::vector<std::shared_ptr<Tensor>> &params);
 
-    void ZeroGrad();
+    void ZeroGrad(bool set_to_none = true);
 
     virtual void Step() = 0;
 

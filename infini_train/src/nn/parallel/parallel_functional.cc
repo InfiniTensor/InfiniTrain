@@ -41,6 +41,13 @@ void AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op) {
     kernel.Call<void>(tensor, reduce_op);
 }
 
+void AllReduceOnCommStream(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op, void *stream) {
+    // TODO(dcj): use no_grad mode later
+    auto device = tensor->GetDevice()->Type();
+    auto kernel = Dispatcher::Instance().GetKernel({device, "CommNcclAllReduceOnCommStream"});
+    kernel.Call<void>(tensor, reduce_op, stream);
+}
+
 std::vector<std::vector<std::shared_ptr<Tensor>>>
 BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors,
                           const std::vector<const Device *> &devices) {

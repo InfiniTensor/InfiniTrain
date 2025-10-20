@@ -22,6 +22,8 @@ std::vector<std::shared_ptr<Tensor>> Gather(const std::vector<std::vector<std::s
 
 void AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op);
 
+void AllReduceOnCommStream(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op, void *stream);
+
 std::vector<std::vector<std::shared_ptr<Tensor>>>
 BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors,
                           const std::vector<const Device *> &devices);

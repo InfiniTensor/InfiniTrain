@@ -59,7 +59,7 @@ public:
     void SetDevice() const override;
     void Synchronize() const override;
 
-    cudaStream_t Stream() const;
+    cudaStream_t Stream(bool comm_stream = false) const;
 
     cublasHandle_t CublasHandle() const;
 #ifdef USE_NCCL
@@ -69,7 +69,8 @@ public:
 private:
     CudaDevice(int8_t index);
 
-    cudaStream_t stream_ = nullptr;
+    cudaStream_t compute_stream_ = nullptr;
+    cudaStream_t comm_stream_ = nullptr;
 
     cublasHandle_t cublas_handle_ = nullptr;
 #ifdef USE_NCCL

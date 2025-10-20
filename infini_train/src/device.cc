@@ -42,8 +42,12 @@ CpuDevice::CpuDevice() : Device(DeviceType::kCPU, 0) {}
 
 #ifdef USE_CUDA
 CudaDevice::~CudaDevice() {
-    if (stream_ != nullptr) {
-        cudaStreamDestroy(stream_);
+    if (compute_stream_ != nullptr) {
+        cudaStreamDestroy(compute_stream_);
+    }
+
+    if (comm_stream_ != nullptr) {
+        cudaStreamDestroy(comm_stream_);
     }
 
     if (cublas_handle_ != nullptr) {
@@ -54,7 +58,7 @@ CudaDevice::~CudaDevice() {
 void CudaDevice::SetDevice() const { cudaSetDevice(index_); }
 void CudaDevice::Synchronize() const { cudaDeviceSynchronize(); }
 
-cudaStream_t CudaDevice::Stream() const { return stream_; }
+cudaStream_t CudaDevice::Stream(bool comm_stream) const { return comm_stream ? comm_stream_ : compute_stream_; }
 
 cublasHandle_t CudaDevice::CublasHandle() const { return cublas_handle_; }
 
@@ -65,10 +69,11 @@ ncclComm_t CudaDevice::NcclComm() const { return nccl_comm_; }
 CudaDevice::CudaDevice(int8_t index) : Device(DeviceType::kCUDA, index) {
     // TODO(dcj): make CudaDevice initialization lazy to avoid allocating memory on all GPUs in single-GPU mode
     SetDevice();
-    cudaStreamCreate(&stream_);
+    cudaStreamCreate(&compute_stream_);
+    cudaStreamCreate(&comm_stream_);
 
     cublasCreate(&cublas_handle_);
-    cublasSetStream(cublas_handle_, stream_);
+    cublasSetStream(cublas_handle_, compute_stream_);
 }
 #endif // USE_CUDA
 

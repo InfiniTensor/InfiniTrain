@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/reducer.h"
 
 namespace infini_train {
 class Tensor;
@@ -35,9 +36,16 @@ public:
         const int thread_size_ = 1;
     };
 
-    DistributedDataParallel(std::shared_ptr<nn::Module> module, int device_id);
+    DistributedDataParallel(std::shared_ptr<nn::Module> module, int device_id,
+                            const ReducerOptions &opts = ReducerOptions{},
+                            std::shared_ptr<CommHookInterface> comm_hook = nullptr);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+    void FinalizeBackward() const;
+
+private:
+    std::shared_ptr<Reducer> reducer_;
 };
 
 } // namespace infini_train::nn::parallel

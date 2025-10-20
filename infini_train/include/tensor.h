@@ -82,6 +82,10 @@ public:
     Tensor To(const Device *device);
     Tensor To(DataType dtype);
 
+    Tensor Detach() const;
+    void CopyFrom(const Tensor &src);
+    void CopyFrom(const std::shared_ptr<Tensor> &src);
+
     // operator overloading
     std::shared_ptr<Tensor> Equals(float scalar);
     std::shared_ptr<Tensor> Add(const std::shared_ptr<Tensor> &other);
@@ -155,6 +159,7 @@ public:
     std::shared_ptr<Tensor> RequiresGrad();
 
     std::shared_ptr<Tensor> grad() const;
+    void set_grad(std::shared_ptr<Tensor> grad);
     bool requires_grad() const;
     void set_requires_grad(bool requires_grad);
 
@@ -167,7 +172,9 @@ public:
     int output_idx() const;
     void set_output_idx(int output_idx);
 
-    void ZeroGrad();
+    void ZeroGrad(bool set_to_none = true);
+    void MarkGradOverwriteOnNextAccum();
+    bool ConsumeGradOverwriteFlag();
 
     void Backward(std::shared_ptr<Tensor> gradient = nullptr, bool retain_graph = false,
                   bool create_graph = false) const;
@@ -189,6 +196,8 @@ private:
     // a strong reference to the accumulator to manage its lifetime.
     std::shared_ptr<autograd::AccumulateGrad> grad_accumulator_ = nullptr;
     std::shared_ptr<autograd::PostAccumulateGradHook> post_accumulate_grad_hook_ = nullptr;
+
+    bool grad_overwrite_once_ = false;
 };
 
 std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar);

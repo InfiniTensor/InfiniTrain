@@ -52,6 +52,19 @@ void NcclAllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op
     NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, kNcclReduceOpMap.at(reduce_op), comm, stream));
 }
 
+void NcclAllReduceOnCommStream(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op, void *stream) {
+    auto comm_stream = reinterpret_cast<cudaStream_t>(stream);
+    auto comm = dynamic_cast<const CudaDevice *>(tensor->GetDevice())->NcclComm();
+    auto dtype = tensor->Dtype();
+    auto nccl_dtype = kNcclDtypeMap.at(dtype);
+    auto count = tensor->NumElements();
+    void *buffer = tensor->DataPtr();
+
+    tensor->GetDevice()->SetDevice();
+
+    NCCL_CHECK(ncclAllReduce(buffer, buffer, count, nccl_dtype, kNcclReduceOpMap.at(reduce_op), comm, comm_stream));
+}
+
 std::vector<std::shared_ptr<Tensor>> NcclBroadcast(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                                                    const std::vector<const Device *> &devices) {
     std::vector<std::shared_ptr<Tensor>> outputs;
@@ -235,6 +248,7 @@ REGISTER_CUDA_COMM_KERNEL(NcclScatter)
 REGISTER_CUDA_COMM_KERNEL(NcclGather)
 REGISTER_CUDA_COMM_KERNEL(NcclReduceAddCoalesced)
 REGISTER_CUDA_COMM_KERNEL(NcclAllReduce)
+REGISTER_CUDA_COMM_KERNEL(NcclAllReduceOnCommStream)
 
 #undef REGISTER_CUDA_COMM_KERNEL
 

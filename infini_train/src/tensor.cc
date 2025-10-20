@@ -224,6 +224,102 @@ Tensor Tensor::To(DataType dtype) {
     return new_tensor;
 }
 
+Tensor Tensor::Detach() const {
+    Tensor detached(*this, offset_, dims_);
+
+    detached.grad_.reset();
+    detached.grad_fn_.reset();
+    detached.requires_grad_ = false;
+    detached.is_leaf_ = true;
+    detached.output_idx_ = 0;
+
+    detached.grad_accumulator_.reset();
+    detached.post_accumulate_grad_hook_.reset();
+
+    return detached;
+}
+
+void Tensor::CopyFrom(const Tensor &src) {
+    CHECK_EQ(static_cast<int>(Dtype()), static_cast<int>(src.Dtype()))
+        << "Tensor::CopyFrom dtype mismatch: dst=" << static_cast<int>(Dtype())
+        << " src=" << static_cast<int>(src.Dtype());
+    CHECK_EQ(NumElements(), src.NumElements()) << "Tensor::CopyFrom element count mismatch";
+    CHECK(Dims() == src.Dims()) << "Tensor::CopyFrom shape mismatch";
+
+    const size_t nbytes = SizeInBytes();
+    const Device *dst_dev = GetDevice();
+    const Device *src_dev = src.GetDevice();
+
+    switch (dst_dev->Type()) {
+    case DeviceType::kCPU: {
+        switch (src_dev->Type()) {
+        case DeviceType::kCPU: {
+            std::memcpy(DataPtr(), src.DataPtr(), nbytes);
+            break;
+        }
+#ifdef USE_CUDA
+        case DeviceType::kCUDA: {
+            // CUDA -> CPU
+            cudaError_t err = cudaMemcpy(DataPtr(), src.DataPtr(), nbytes, cudaMemcpyDeviceToHost);
+            CHECK_EQ(err, cudaSuccess) << "cudaMemcpy D2H failed: " << cudaGetErrorString(err);
+            break;
+        }
+#endif
+        default:
+            LOG(FATAL) << "Unsupported src device type: " << static_cast<int>(src_dev->Type());
+        }
+        break;
+    }
+
+#ifdef USE_CUDA
+    case DeviceType::kCUDA: {
+        int prev = -1;
+        CUDA_CHECK(cudaGetDevice(&prev));
+        dst_dev->SetDevice();
+
+        const auto *dst_cuda = dynamic_cast<const CudaDevice *>(dst_dev);
+
+        switch (src_dev->Type()) {
+        case DeviceType::kCPU: {
+            // CPU -> CUDA
+            CUDA_CHECK(cudaMemcpyAsync(DataPtr(), src.DataPtr(), nbytes, cudaMemcpyHostToDevice, dst_cuda->Stream()));
+            break;
+        }
+        case DeviceType::kCUDA: {
+            const auto *src_cuda = dynamic_cast<const CudaDevice *>(src_dev);
+
+            if (src_cuda->Index() == dst_cuda->Index()) {
+                CUDA_CHECK(
+                    cudaMemcpyAsync(DataPtr(), src.DataPtr(), nbytes, cudaMemcpyDeviceToDevice, dst_cuda->Stream()));
+            } else {
+                int canAccessPeer = 0;
+                CUDA_CHECK(cudaDeviceCanAccessPeer(&canAccessPeer, dst_cuda->Index(), src_cuda->Index()));
+                if (canAccessPeer) {
+                    CUDA_CHECK(cudaMemcpyPeerAsync(DataPtr(), dst_cuda->Index(), src.DataPtr(), src_cuda->Index(),
+                                                   nbytes, dst_cuda->Stream()));
+                } else {
+                    LOG(FATAL) << "Check accessibility between Device " << src_cuda->Index() << " and Device "
+                               << dst_cuda->Index();
+                }
+            }
+            break;
+        }
+        default:
+            LOG(FATAL) << "Unsupported src device type: " << static_cast<int>(src_dev->Type());
+        }
+
+        CUDA_CHECK(cudaSetDevice(prev));
+        break;
+    }
+#endif
+
+    default:
+        LOG(FATAL) << "Unsupported dst device type: " << static_cast<int>(dst_dev->Type());
+    }
+}
+
+void Tensor::CopyFrom(const std::shared_ptr<Tensor> &src) { CopyFrom(*src); }
+
 // operator overloading
 std::shared_ptr<Tensor> Tensor::Equals(float scalar) {
     return std::make_shared<autograd::EqualsScalar>(scalar)->Apply({shared_from_this()})[0];
@@ -382,6 +478,16 @@ std::shared_ptr<Tensor> Tensor::RequiresGrad() {
 }
 
 std::shared_ptr<Tensor> Tensor::grad() const { return grad_; };
+void Tensor::set_grad(std::shared_ptr<Tensor> grad) {
+    if (grad) {
+        CHECK(grad->GetDevice() == GetDevice());
+        CHECK(grad->Dtype() == Dtype());
+        CHECK(grad->Dims() == Dims());
+        grad_ = grad;
+    } else {
+        grad_.reset();
+    }
+}
 bool Tensor::requires_grad() const { return requires_grad_; }
 void Tensor::set_requires_grad(bool requires_grad) { requires_grad_ = requires_grad; }
 
@@ -394,10 +500,22 @@ void Tensor::set_grad_fn(std::shared_ptr<autograd::Function> grad_fn) { grad_fn_
 int Tensor::output_idx() const { return output_idx_; }
 void Tensor::set_output_idx(int output_idx) { output_idx_ = output_idx; }
 
-void Tensor::ZeroGrad() {
+void Tensor::ZeroGrad(bool set_to_none) {
     if (grad_) {
-        grad_->Fill<float>(0.0f);
+        if (set_to_none) {
+            grad_.reset();
+        } else {
+            grad_->Fill<float>(0.0f);
+        }
     }
+}
+
+void Tensor::MarkGradOverwriteOnNextAccum() { grad_overwrite_once_ = true; }
+
+bool Tensor::ConsumeGradOverwriteFlag() {
+    bool flag = grad_overwrite_once_;
+    grad_overwrite_once_ = false;
+    return flag;
 }
 
 void Tensor::Backward(std::shared_ptr<Tensor> gradient, bool retain_graph, bool create_graph) const {

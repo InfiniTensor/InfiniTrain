@@ -9,8 +9,8 @@
 namespace infini_train {
 Optimizer::Optimizer(const std::vector<std::shared_ptr<Tensor>> &params) : params_(params) {}
 
-void Optimizer::ZeroGrad() {
-    for (auto param : params_) { param->ZeroGrad(); }
+void Optimizer::ZeroGrad(bool set_to_none) {
+    for (auto param : params_) { param->ZeroGrad(set_to_none); }
 }
 
 namespace optimizers {
