@@ -65,6 +65,26 @@ void ProcessGroup::AllReduce(const std::shared_ptr<Tensor> &tensor, function::Re
                              kNcclReduceOpMap.at(reduce_op), comm, device->Stream()));
 }
 
+void ProcessGroup::AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input) const {
+    const auto *device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto comm = device_comm_map_.at(device);
+
+    device->SetDevice();
+    NCCL_CHECK(ncclAllGather(input->DataPtr(), output->DataPtr(), input->NumElements(),
+                             kNcclDtypeMap.at(input->Dtype()), comm, device->Stream()));
+}
+
+void ProcessGroup::ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                                 function::ReduceOpType reduce_op) const {
+    const auto *device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto comm = device_comm_map_.at(device);
+
+    device->SetDevice();
+    NCCL_CHECK(ncclReduceScatter(input->DataPtr(), output->DataPtr(), output->NumElements(),
+                                 kNcclDtypeMap.at(input->Dtype()), kNcclReduceOpMap.at(reduce_op), comm,
+                                 device->Stream()));
+}
+
 std::vector<std::shared_ptr<Tensor>>
 ProcessGroup::BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const {
     std::vector<std::shared_ptr<Tensor>> outputs;

@@ -32,6 +32,11 @@ public:
 
     void AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const;
 
+    void AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input) const;
+
+    void ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                       function::ReduceOpType reduce_op) const;
+
     std::vector<std::shared_ptr<Tensor>> BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const;
 
     std::vector<std::shared_ptr<Tensor>>

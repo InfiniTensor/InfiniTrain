@@ -43,6 +43,25 @@ void AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op, co
     pg->AllReduce(tensor, reduce_op);
 }
 
+void AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input, const ProcessGroup *pg) {
+    // TODO(zbl): use no_grad mode later
+    auto device = output->GetDevice()->Type();
+    if (pg == nullptr) {
+        pg = ProcessGroupFactory::Instance()->GetDefaultProcessGroup();
+    }
+    pg->AllGather(output, input);
+}
+
+void ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input, ReduceOpType reduce_op,
+                   const ProcessGroup *pg) {
+    // TODO(zbl): use no_grad mode later
+    auto device = output->GetDevice()->Type();
+    if (pg == nullptr) {
+        pg = ProcessGroupFactory::Instance()->GetDefaultProcessGroup();
+    }
+    pg->ReduceScatter(output, input, reduce_op);
+}
+
 std::vector<std::vector<std::shared_ptr<Tensor>>>
 BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors,
                           const std::vector<const Device *> &devices) {

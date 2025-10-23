@@ -5,11 +5,13 @@
 namespace infini_train::nn::parallel {
 
 std::string GetDataParallelProcessGroupName(int thread_rank) {
-    return "DP" + std::to_string(thread_rank / global::GetDataParallelSize());
+    // FIXME(zbl): Need a layout definition of parallel coords
+    return "DP" + std::to_string(thread_rank % global::GetTensorParallelSize());
 }
 
 std::string GetTensorParallelProcessGroupName(int thread_rank) {
-    return "TP" + std::to_string(thread_rank % global::GetTensorParallelSize());
+    // FIXME(zbl): Need a layout definition of parallel coords
+    return "TP" + std::to_string(thread_rank / global::GetTensorParallelSize());
 }
 
 } // namespace infini_train::nn::parallel
