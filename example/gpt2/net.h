@@ -13,7 +13,8 @@
 
 struct GPT2Config {
     int64_t block_size = 1024;
-    int64_t vocab_size = 50257;
+    int64_t vocab_size = 50304;
+    int64_t original_vocab_size = 50257;
     int64_t n_layer = 12;
     int64_t n_head = 12;
     int64_t n_embd = 768;
@@ -41,11 +42,13 @@ private:
     GPT2Config config_;
     int64_t n_head_ = 0;
     int64_t n_embd_ = 0;
+
+    int64_t local_n_head_ = 0;
 };
 
 class MLP : public infini_train::nn::CloneableModule<MLP> {
 public:
-    static constexpr char kCFclayerName[] = "c_fc";
+    static constexpr char kCFcLayerName[] = "c_fc";
     static constexpr char kGeluLayerName[] = "gelu";
     static constexpr char kCProjLayerName[] = "c_proj";
 

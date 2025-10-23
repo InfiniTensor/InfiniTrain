@@ -21,7 +21,7 @@ GlobalEnv &GlobalEnv::Instance() {
     return instance;
 }
 
-void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size) {
+void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
@@ -32,7 +32,9 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size) {
     local_proc_rank_ = GetEnvAsInt("LOCAL_PROC_RANK", 0);
 
     nthread_per_process_ = nthread_per_process;
+    CHECK_GE(tensor_parallel_size, 1) << "Tensor Parallel size must be >= 1";
     tensor_parallel_size_ = tensor_parallel_size;
+    sequence_parallel_enabled_ = sequence_parallel_enabled;
     data_parallel_size_ = world_size_ / tensor_parallel_size_;
     initialized_ = true;
 }
@@ -65,6 +67,11 @@ int GlobalEnv::nthread_per_process() const {
 int GlobalEnv::tensor_parallel_size() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return tensor_parallel_size_;
+}
+
+bool GlobalEnv::sequence_parallel_enabled() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return sequence_parallel_enabled_;
 }
 
 int GlobalEnv::data_parallel_size() const {

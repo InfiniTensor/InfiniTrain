@@ -18,6 +18,7 @@
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
+#include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/optimizer.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
@@ -59,7 +60,8 @@ DEFINE_int32(
     nthread_per_process, 1,
     "Number of threads to use for each process. "
     "When set > 1, enables data parallelism with device=cuda on the specified number of visible CUDA devices.");
-DEFINE_int32(tensor_parallel, 1, "");
+DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
+DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 
@@ -101,8 +103,19 @@ void Train(const nn::parallel::Rank &rank) {
     const Device *device;
 
     int ddp_world_size = global::GetDataParallelSize();
+    int tp_world_size = global::GetTensorParallelSize();
+    int sp_world_size = global::GetSequenceParallelEnabled() ? tp_world_size : 0;
+
+    if (FLAGS_sequence_parallel) {
+        CHECK_EQ(FLAGS_sequence_length % tp_world_size, 0)
+            << "sequence_length must be divisible by tp_world_size when SP is enabled (pad later if needed).";
+    }
+
     int ddp_rank = 0;
+    int tp_rank = 0;
+
     const ProcessGroup *ddp_pg = nullptr;
+    const ProcessGroup *tp_pg = nullptr;
 
     if (rank.IsParallel()) {
         device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, rank.thread_rank());
@@ -113,9 +126,12 @@ void Train(const nn::parallel::Rank &rank) {
             ddp_rank = ddp_pg->GetGroupRank(rank.thread_rank());
         }
 
-        if (global::GetTensorParallelSize() > 1) {
-            ProcessGroupFactory::Instance()->GetOrCreate(GetTensorParallelProcessGroupName(rank.thread_rank()),
-                                                         GetTensorParallelGroupRanks(rank.thread_rank()));
+        if (tp_world_size > 1) {
+            tp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetTensorParallelProcessGroupName(rank.thread_rank()),
+                                                                 GetTensorParallelGroupRanks(rank.thread_rank()));
+            tp_rank = tp_pg->GetGroupRank(rank.thread_rank());
+            // NOTE(zbl): Reserved for VocabParallelEmbedding
+            nn::parallel::tp_rank = tp_rank;
         }
     } else {
         device = FLAGS_device == kDeviceCPU ? DeviceManager::Instance()->GetDefaultDevice()
@@ -163,7 +179,7 @@ void Train(const nn::parallel::Rank &rank) {
     // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
     // are created during the conversion.
     if (ddp_world_size > 1) {
-        model = std::make_shared<DistributedDataParallel>(DistributedDataParallel(model, rank.thread_rank()));
+        model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank());
     }
 
     DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
@@ -188,8 +204,11 @@ void Train(const nn::parallel::Rank &rank) {
     auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
 
     auto train_iter = train_loader.begin();
-    auto loss_fn = nn::CrossEntropyLoss();
-    loss_fn.To(device);
+    std::shared_ptr<nn::Module> loss_fn
+        = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(
+              std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
+                              : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
+    loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.thread_rank() << ": start training";
 
     for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
@@ -236,11 +255,11 @@ void Train(const nn::parallel::Rank &rank) {
             // (bs, seq_len, vocab_size)
             auto logits = model->Forward({x, y})[0];
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish model forward, start loss forward";
-            auto loss = loss_fn.Forward({logits, y})[0];
+            auto loss = loss_fn->Forward({logits, y})[0];
             loss = loss / grad_accum_steps;
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
             if (ddp_world_size > 1) {
-                function::AllReduce(loss, function::ReduceOpType::kAvg, ddp_pg);
+                function::AllReduce(loss, function::ReduceOpType::kAvg);
             }
             auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
             if (FLAGS_dtype == kDtypeFP32) {
@@ -259,9 +278,10 @@ void Train(const nn::parallel::Rank &rank) {
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
         if (rank.IsMainRank()) {
-            LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s)",
-                                      step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
-                                      tps);
+            LOG(ERROR) << std::format(
+                "step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, DP={}, TP={}, SP={})",
+                step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f, tps, ddp_world_size,
+                tp_world_size, sp_world_size);
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
                 if (!tokenizer) {
@@ -281,7 +301,7 @@ int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
-    nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel);
+    nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel);
 
     // NOTE(dcj): currently we only support single process
     if (FLAGS_nthread_per_process > 1) {
