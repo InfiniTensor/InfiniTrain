@@ -372,9 +372,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
                                                         .n_head = n_head,
                                                         .n_embd = n_embd});
 
-    LOG(ERROR) << "magic: " << magic << " version: " << version << " block_size: " << block_size
-               << " vocab_size: " << vocab_size << " n_layer: " << n_layer << " n_head: " << n_head
-               << " n_embd: " << n_embd << " padded_vocab_size: " << padded_vocab_size;
+    LOG(INFO) << "magic: " << magic << " version: " << version << " block_size: " << block_size
+              << " vocab_size: " << vocab_size << " n_layer: " << n_layer << " n_head: " << n_head
+              << " n_embd: " << n_embd << " padded_vocab_size: " << padded_vocab_size;
 
     CHECK_EQ(n_embd % tp_size, 0) << "n_embd must be divisible by TP world size.";
     CHECK_EQ(n_embd % n_head, 0) << "n_embd must be divisible by n_head.";

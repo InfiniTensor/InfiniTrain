@@ -178,7 +178,7 @@ def load_config(config_file):
 
 def parse_training_log(log_content):
     """Parse training log to extract avg latency and throughput from step >= 2"""
-    pattern = r"step\s+(\d+)/\d+\s+\|.*?\|\s+\(\s*(\d+\.\d+)\s+ms\s+\|\s+(\d+)\s+tok/s\s*\)"
+    pattern = r"step\s+(\d+)/\d+\s+\|.*?\|\s+\(\s*(\d+\.\d+)\s+ms\s+\|\s+(\d+)\s+tok/s.*?\)"
     matches = re.findall(pattern, log_content)
 
     filtered = [m for m in matches if int(m[0]) > 1]
