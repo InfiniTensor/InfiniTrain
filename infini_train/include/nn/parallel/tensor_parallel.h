@@ -18,19 +18,6 @@ namespace infini_train::nn::parallel {
 //            On other occasions, should use Device::Rank()
 extern thread_local int tp_rank;
 
-// Comm Helper Functions
-std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(const std::shared_ptr<Tensor> &input);
-
-std::vector<std::shared_ptr<Tensor>> GatherFromTPRegionFunc(const std::shared_ptr<Tensor> &input);
-
-std::vector<std::shared_ptr<Tensor>> ScatterToTPRegionFunc(const std::shared_ptr<Tensor> &input);
-
-std::vector<std::shared_ptr<Tensor>> ReduceFromTPRegionFunc(const std::shared_ptr<Tensor> &input);
-
-std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(const std::shared_ptr<Tensor> &input);
-
-std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_ptr<Tensor> &input);
-
 class ColumnParallelLinear : public nn::CloneableModule<ColumnParallelLinear> {
 public:
     static constexpr char kType[] = "ColumnParallelLinear";
