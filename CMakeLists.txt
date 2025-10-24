@@ -1,7 +1,7 @@
 option(USE_CUDA "Support NVIDIA CUDA" OFF)
 option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
-option(USE_NCCL "Build project for distributed running" OFF)
+option(USE_NCCL "Build project for distributed running" ON)
 cmake_minimum_required(VERSION 3.28)
 
 project(infini_train VERSION 0.3.0 LANGUAGES CXX)

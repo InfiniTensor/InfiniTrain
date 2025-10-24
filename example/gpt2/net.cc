@@ -34,11 +34,6 @@ constexpr int kRandomSeed = 42;
 
 // TODO(dcj): make this rng generator compatible with torch later
 static std::mt19937 gen{kRandomSeed};
-
-inline int64_t PaddedVocab(int64_t v, int64_t tp_size, int64_t align = 128) {
-    int64_t m = tp_size * align;
-    return ((v + m - 1) / m) * m;
-}
 } // namespace
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
@@ -51,7 +46,6 @@ NewGELU::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
 CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
     : config_(config), n_head_(config.n_head), n_embd_(config.n_embd) {
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
-    auto sequence_parallel_enabled = nn::parallel::global::GetSequenceParallelEnabled();
     CHECK_EQ(config.n_embd % config.n_head, 0);
     CHECK_EQ(n_head_ % tp_world_size, 0) << "n_head must be divisible by TP world size";
     local_n_head_ = n_head_ / tp_world_size;
@@ -64,7 +58,7 @@ CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
         /*skip_bias_add=*/false,
-        /*sequence_parallel=*/sequence_parallel_enabled);
+        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 
     // proj: RowParallel (input is parallel and output is full)
     modules_[kCProjLayerName] = std::make_shared<tp::RowParallelLinear>(
@@ -74,7 +68,7 @@ CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
         /*reduce_output=*/true,
         /*input_is_parallel=*/true,
         /*skip_bias_add=*/false,
-        /*sequence_parallel=*/sequence_parallel_enabled);
+        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 
     // causal mask: (1, 1, block_size, block_size)
     buffers_[kParamBiasName] = nn::function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
@@ -129,8 +123,6 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
 }
 
 MLP::MLP(const GPT2Config &config) {
-    auto sequence_parallel_enabled = nn::parallel::global::GetSequenceParallelEnabled();
-
     // c_fc: ColumnParallel (input full, output parallel)
     modules_[kCFcLayerName] = std::make_shared<tp::ColumnParallelLinear>(
         /*in_features=*/config.n_embd, /*out_features=*/4 * config.n_embd,
@@ -138,7 +130,7 @@ MLP::MLP(const GPT2Config &config) {
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
         /*skip_bias_add=*/false,
-        /*sequence_parallel=*/sequence_parallel_enabled);
+        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 
     modules_[kGeluLayerName] = std::make_shared<NewGELU>();
 
@@ -149,7 +141,7 @@ MLP::MLP(const GPT2Config &config) {
         /*reduce_output=*/true,
         /*input_is_parallel=*/true,
         /*skip_bias_add=*/false,
-        /*sequence_parallel=*/sequence_parallel_enabled);
+        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
@@ -185,7 +177,6 @@ Block::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
 
 GPT2::GPT2(const GPT2Config &config) : config_(config) {
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
-    auto sequence_parallel_enabled = nn::parallel::global::GetSequenceParallelEnabled();
 
     // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
     //            Megatron-LM has an optional argument `--make-vocab-size-divisible-by`, would do padding to vocab
@@ -193,8 +184,8 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
     CHECK_EQ(config.vocab_size % tp_world_size, 0) << "Vocab size should be divisible by TP world size";
     {
         std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
-        transformer[kWTELayerName] = std::make_shared<tp::VocabParallelEmbedding>(config_.vocab_size, config_.n_embd,
-                                                                                  sequence_parallel_enabled);
+        transformer[kWTELayerName] = std::make_shared<tp::VocabParallelEmbedding>(
+            config_.vocab_size, config_.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
         transformer[kWPELayerName] = std::make_shared<nn::Embedding>(config_.block_size, config_.n_embd);
         {
             std::vector<std::shared_ptr<nn::Module>> h;
@@ -212,7 +203,7 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
         /*skip_bias_add=*/false,
-        /*sequence_parallel=*/sequence_parallel_enabled);
+        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 
     // https://paperswithcode.com/method/weight-tying
     *mutable_module(kTransformerLayerName)
@@ -234,9 +225,12 @@ GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     // NOTE(zbl): Slice pos sequence when SP is enabled
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
     auto sequence_parallel_enabled = nn::parallel::global::GetSequenceParallelEnabled();
-    auto tp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
-        nn::parallel::GetTensorParallelProcessGroupName(device->rank().thread_rank()));
-    auto rank = tp_group->GetGroupRank(device->rank().thread_rank());
+    int rank = 0;
+    if (tp_world_size > 1) {
+        auto tp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
+            nn::parallel::GetTensorParallelProcessGroupName(device->rank().thread_rank()));
+        rank = tp_group->GetGroupRank(device->rank().thread_rank());
+    }
 
     int64_t t_local = sequence_parallel_enabled ? (t / tp_world_size) : t;
     int64_t start = sequence_parallel_enabled ? rank * t_local : 0;
@@ -257,10 +251,10 @@ GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
 
     // TODO(dcj): add inference-time mini-optimization
     // (B, T, C) -> Linear(C, V) -> (B, T, V)
-    auto logits = modules_[kLMHeadLayerName]->Forward(x3)[0];
+    auto logits = modules_[kLMHeadLayerName]->Forward(x3);
 
     // (B, T, V_original)
-    return {logits};
+    return logits;
 }
 
 std::shared_ptr<GPT2> GPT2::FromPretrained(ModelType model_type) {
@@ -361,15 +355,18 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     auto [version, dtype] = DetermineAndCheckVersion(header, 4);
     CHECK_EQ(version, kHeaderFP32Version);
 
+    auto tp_size = nn::parallel::global::GetTensorParallelSize();
+
     const auto block_size = BytesToType<uint32_t>(header, 8);
     const auto vocab_size = BytesToType<uint32_t>(header, 12);
     const auto n_layer = BytesToType<uint32_t>(header, 16);
     const auto n_head = BytesToType<uint32_t>(header, 20);
     const auto n_embd = BytesToType<uint32_t>(header, 24);
     const auto padded_vocab_size = BytesToType<uint32_t>(header, 28);
+    // NOTE(zbl): vocab_size needs to be padded to multiple of TP size
+    const auto model_vocab_size = tp_size > 1 ? padded_vocab_size : vocab_size;
     auto local_gpt2 = std::make_shared<GPT2>(GPT2Config{.block_size = block_size,
-                                                        // NOTE(zbl): use padded vocab size
-                                                        .vocab_size = padded_vocab_size,
+                                                        .vocab_size = model_vocab_size,
                                                         .original_vocab_size = vocab_size,
                                                         .n_layer = n_layer,
                                                         .n_head = n_head,
@@ -379,37 +376,40 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
                << " vocab_size: " << vocab_size << " n_layer: " << n_layer << " n_head: " << n_head
                << " n_embd: " << n_embd << " padded_vocab_size: " << padded_vocab_size;
 
-    auto world_size = nn::parallel::global::GetTensorParallelSize();
-    CHECK_EQ(n_embd % world_size, 0) << "n_embd must be divisible by TP world size.";
+    CHECK_EQ(n_embd % tp_size, 0) << "n_embd must be divisible by TP world size.";
     CHECK_EQ(n_embd % n_head, 0) << "n_embd must be divisible by n_head.";
-    CHECK_EQ(n_head % world_size, 0) << "n_head must be divisible by TP world size.";
+    CHECK_EQ(n_head % tp_size, 0) << "n_head must be divisible by TP world size.";
 
     auto rank = tp::tp_rank;
     // calculate xx_size_per_partition
-    const int64_t vpp = padded_vocab_size / world_size;
+    const int64_t vpp = model_vocab_size / tp_size;
     const int64_t v_start = static_cast<int64_t>(rank) * vpp;
     const int64_t v_end = v_start + vpp;
 
     const int64_t qkv_out = 3 * n_embd;
-    const int64_t qkv_pp = qkv_out / world_size;
+    const int64_t qkv_pp = qkv_out / tp_size;
     const int64_t qkv_start = static_cast<int64_t>(rank) * qkv_pp;
 
     const int64_t fc_out = 4 * n_embd;
-    const int64_t fc_pp = fc_out / world_size;
+    const int64_t fc_pp = fc_out / tp_size;
     const int64_t fc_start = static_cast<int64_t>(rank) * fc_pp;
 
-    const int64_t in_pp = n_embd / world_size;        // for c_proj (row-parallel, shard on input)
-    const int64_t in4_pp = (4 * n_embd) / world_size; // for mlp.c_proj (input shard)
+    const int64_t in_pp = n_embd / tp_size;        // for c_proj (row-parallel, shard on input)
+    const int64_t in4_pp = (4 * n_embd) / tp_size; // for mlp.c_proj (input shard)
 
     auto state_dict = local_gpt2->StateDict();
 
     // transformer.wte.weight (also transformer.lm_head.weight)
-    // full: (padded_vocab_size, n_embd)
+    // full: (model_vocab_size, n_embd)
     // local: (vocab_size_per_partition, n_embd)
     auto &transformer_wte_weight = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kWTELayerName,
                                                           tp::VocabParallelEmbedding::kParamWeightName)];
-    ReadMatrixRowShardFloat(ifs, static_cast<float *>(transformer_wte_weight->DataPtr()), padded_vocab_size, n_embd,
+    ReadMatrixRowShardFloat(ifs, static_cast<float *>(transformer_wte_weight->DataPtr()), model_vocab_size, n_embd,
                             v_start, vpp);
+    if (tp_size == 1) {
+        // Skip padded vocab part when TP is not enabled
+        ifs.ignore((padded_vocab_size - vocab_size) * n_embd * sizeof(float));
+    }
     // transformer.wpe.weight
     auto &transformer_wpe_weight = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kWPELayerName,
                                                           nn::Embedding::kParamWeightName)];
@@ -437,7 +437,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
         //            i.e. [Q|K|V].T = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn].T
         //            However, each rank needs to get [q_i|k_i|v_i].T, so we need to jump and read them respectively
         float *dst = static_cast<float *>(tensor->DataPtr());
-        const int64_t local_C = n_embd / world_size;
+        const int64_t local_C = n_embd / tp_size;
         const int64_t rows_all = 3 * n_embd;
         const int64_t cols_all = n_embd;
         const std::streampos base_pos = ifs.tellg();
@@ -469,7 +469,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
         //            i.e. [Q|K|V] = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn]
         //            However, each rank needs to get [q_i|k_i|v_i], so we need to jump and read them respectively
         float *dst = static_cast<float *>(tensor->DataPtr());
-        const int64_t local_C = n_embd / world_size;
+        const int64_t local_C = n_embd / tp_size;
         const int64_t len_all = 3 * n_embd;
         const std::streampos base_pos = ifs.tellg();
         // Read q_i

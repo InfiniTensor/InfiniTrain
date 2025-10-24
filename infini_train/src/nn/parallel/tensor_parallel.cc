@@ -41,13 +41,8 @@ std::shared_ptr<Tensor> GatherAlongFirstDim(const std::shared_ptr<Tensor> &tenso
     output_shape[0] *= world_size;
     auto gathered_output = std::make_shared<Tensor>(output_shape, tensor->Dtype(), device);
 
-#ifdef USE_NCCL
     tp_group->AllGather(gathered_output, tensor);
     return gathered_output;
-#else
-    LOG(FATAL) << "AllGather requires NCCL enabled";
-    return nullptr;
-#endif
 }
 
 std::shared_ptr<Tensor> GatherAlongLastDim(const std::shared_ptr<Tensor> &tensor) {
@@ -66,12 +61,8 @@ std::shared_ptr<Tensor> GatherAlongLastDim(const std::shared_ptr<Tensor> &tensor
     output_shape[0] *= world_size;
     auto gathered_output = std::make_shared<Tensor>(output_shape, tensor->Dtype(), device);
 
-#ifdef USE_NCCL
     tp_group->AllGather(gathered_output, tensor);
-#else
-    LOG(FATAL) << "AllGather requires NCCL enabled";
-    return nullptr;
-#endif
+
     // AllGather gather along dim 0 by default
     auto output_list = gathered_output->Split(tensor->Dims()[0], 0);
     auto output = nn::function::Concat(output_list, -1)->Contiguous();
@@ -111,13 +102,8 @@ std::shared_ptr<Tensor> Reduce(const std::shared_ptr<Tensor> &tensor) {
 
     auto output = std::make_shared<Tensor>(*tensor);
 
-#ifdef USE_NCCL
     tp_group->AllReduce(output, function::ReduceOpType::kSum);
     return output;
-#else
-    LOG(FATAL) << "AllReduce requires NCCL enabled";
-    return nullptr;
-#endif
 }
 
 std::shared_ptr<Tensor> ReduceScatterAlongFirstDim(const std::shared_ptr<Tensor> &tensor) {
@@ -138,13 +124,8 @@ std::shared_ptr<Tensor> ReduceScatterAlongFirstDim(const std::shared_ptr<Tensor>
 
     auto output = std::make_shared<Tensor>(output_shape, tensor->Dtype(), device);
 
-#ifdef USE_NCCL
     tp_group->ReduceScatter(output, tensor, function::ReduceOpType::kSum);
     return output;
-#else
-    LOG(FATAL) << "ReduceScatter requires NCCL enabled";
-    return nullptr;
-#endif
 }
 
 // Autograd Function definitions
@@ -258,8 +239,6 @@ void LinearResetParameters(std::shared_ptr<Tensor> weight, std::shared_ptr<Tenso
     }
 }
 
-} // namespace
-
 // Comm Helper Functions
 std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<CopyToTPRegion>()->Apply({input});
@@ -284,6 +263,7 @@ std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(const std::shar
 std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<GatherFromSPRegion>()->Apply({input});
 }
+} // namespace
 
 ColumnParallelLinear::ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool gather_output,
                                            bool input_is_parallel, bool skip_bias_add, bool sequence_parallel)
@@ -449,9 +429,13 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     CHECK_LT(label_smoothing_, 1.0f);
 
     int tp_size = global::GetTensorParallelSize();
-    auto tp_group
-        = ProcessGroupFactory::Instance()->Get(GetTensorParallelProcessGroupName(device->rank().thread_rank()));
-    int rank = tp_group->GetGroupRank(device->rank().thread_rank());
+    const ProcessGroup *tp_group = nullptr;
+    int rank = 0;
+    if (tp_size > 1) {
+        tp_group
+            = ProcessGroupFactory::Instance()->Get(GetTensorParallelProcessGroupName(device->rank().thread_rank()));
+        rank = tp_group->GetGroupRank(device->rank().thread_rank());
+    }
 
     vocab_size_local_ = logits->Dims().back();
     vocab_size_global_ = static_cast<int64_t>(vocab_size_local_) * tp_size;
@@ -477,12 +461,7 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     auto local_max = logits_masked->Max(-1);
     auto global_max = local_max;
     if (tp_size > 1) {
-#ifdef USE_NCCL
         tp_group->AllReduce(global_max, function::ReduceOpType::kMax);
-#else
-        LOG(FATAL) << "AllReduce requires NCCL enabled";
-        return {nullptr};
-#endif
     }
     auto shifted = logits_masked->Sub(global_max->Unsqueeze(-1));
 
