@@ -2,7 +2,6 @@
 #include <cstddef>
 
 #include <cub/block/block_reduce.cuh>
-#include <type_traits>
 
 #include "glog/logging.h"
 
@@ -175,8 +174,6 @@ void LaunchBackward(const std::shared_ptr<Tensor> &grad_input, const std::shared
 
 std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_output,
                                         const std::shared_ptr<Tensor> &output, int64_t dim) {
-    // printf("SoftmaxBackward dtype: %d, grad_output dtype: %d\n", static_cast<int>(grad_output->Dtype()),
-    //        static_cast<int>(output->Dtype()));
     auto grad_output_dtype = grad_output->Dtype();
     auto output_dtype = output->Dtype();
     DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
@@ -196,9 +193,6 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
     DispatchFunc<INFINI_ALL_TYPES>(
         promoted_type, [=]<typename T>() { grad_input->Fill<T>(0); }, "CUDA SoftmaxBackward");
 
-    // printf("SoftmaxBackward dtype: %d, grad_output dtype: %d, grad_input dtype: %d\n", static_cast<int>(dtype),
-    //        static_cast<int>(grad_output_->Dtype()), static_cast<int>(grad_input->Dtype()));
-
     switch (promoted_type) {
         DISPATCH_CASE(WRAP(LaunchBackward<256, float>(grad_input, grad_output_, output_, dim);), DataType::kFLOAT32)
         DISPATCH_CASE(WRAP(LaunchBackward<256, nv_bfloat16>(grad_input, grad_output_, output_, dim);),
@@ -207,7 +201,6 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
         LOG_LOC(FATAL, "CUDA softmax backward: 'Unsupported data type'");
     }
 
-    // cudaDeviceSynchronize();
     return grad_input;
 }
 } // namespace infini_train::kernels::cuda

@@ -53,11 +53,6 @@ inline constexpr std::array kFP32Ops = {"Sin",   "Cos",   "Tan",   "Asin", "Acos
 inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap = {
     {"Matmul", CastPolicy::kLowerPrecision},
     {"Linear", CastPolicy::kLowerPrecision},
-    // {"Mask", CastPolicy::kLowerPrecision},
-    // {"Add", CastPolicy::kLowerPrecision},
-    // {"AddScalar", CastPolicy::kLowerPrecision},
-    // {"Mul", CastPolicy::kLowerPrecision},
-    // {"MulScalar", CastPolicy::kLowerPrecision},
     {"Sin", CastPolicy::kFP32},
     {"Cos", CastPolicy::kFP32},
     {"Tan", CastPolicy::kFP32},
@@ -79,7 +74,6 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
     {"Prod", CastPolicy::kFP32},
     {"Pow", CastPolicy::kFP32},
     {"CrossEntropy", CastPolicy::kFP32},
-    // {"Softmax", CastPolicy::kFP32},
     {"Layernorm", CastPolicy::kFP32},
 };
 

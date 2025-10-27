@@ -221,13 +221,6 @@ Tensor Tensor::To(DataType dtype) {
     }
 
     new_tensor.requires_grad_ = requires_grad_;
-    // new_tensor.set_grad_fn(this->grad_fn());
-    // new_tensor.set_is_leaf(this->is_leaf());
-    // if (!this->is_leaf()) {
-    //     new_tensor.set_grad_fn(std::make_shared<autograd::NoOp>(new_tensor.Dims()));
-    // } else {
-    //     new_tensor.set_grad_fn(nullptr);
-    // }
 
     return new_tensor;
 }

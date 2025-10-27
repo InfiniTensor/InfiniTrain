@@ -14,7 +14,6 @@ std::vector<std::shared_ptr<Tensor>> LayerNorm::Forward(const std::vector<std::s
     const auto &bias = input_tensors[2];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "LayerNormForward"});
     auto [output, mean, rstd]
         = Dispatcher::Instance()
               .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
@@ -42,7 +41,6 @@ std::vector<std::shared_ptr<Tensor>> LayerNorm::Backward(const std::vector<std::
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "LayerNormBackward"});
     auto [grad_input, grad_weight, grad_bias]
         = Dispatcher::Instance()
               .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(

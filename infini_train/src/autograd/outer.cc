@@ -33,7 +33,6 @@ std::vector<std::shared_ptr<Tensor>> Outer::Backward(const std::vector<std::shar
     const auto &grad_output = grad_outputs[0];
 
     auto device = input1->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "OuterBackward"});
     auto [grad_input1, grad_input2]
         = Dispatcher::Instance().Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
             {device, "OuterBackward"}, input1, input2, grad_output);
