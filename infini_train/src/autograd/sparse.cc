@@ -29,7 +29,6 @@ std::vector<std::shared_ptr<Tensor>> Embedding::Backward(const std::vector<std::
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "EmbeddingBackward"});
     auto grad_weight = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "EmbeddingBackward"}, input,
                                                                             weight_dims_, grad_output);
     return {nullptr, grad_weight};
