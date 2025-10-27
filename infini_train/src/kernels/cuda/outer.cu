@@ -71,12 +71,21 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
     CHECK_EQ(grad_output->Dims()[0], M);
     CHECK_EQ(grad_output->Dims()[1], N);
 
-    auto dtype = grad_output->Dtype();
-    auto grad_input = std::make_shared<Tensor>(std::vector<int64_t>{M}, dtype, grad_output->GetDevice());
-    auto grad_other = std::make_shared<Tensor>(std::vector<int64_t>{N}, dtype, grad_output->GetDevice());
+    auto input_dtype = input->Dtype();
+    auto other_dtype = other->Dtype();
+
+    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
+        {input_dtype, other_dtype}, [=]<typename Tin, typename To>() { return DataTypeMap_v<WidestType_t<Tin, To>>; },
+        "CUDA OuterForward");
+
+    auto input_ = input_dtype == promoted_type ? input : std::make_shared<Tensor>(input->To(promoted_type));
+    auto other_ = other_dtype == promoted_type ? other : std::make_shared<Tensor>(other->To(promoted_type));
+
+    auto grad_input = std::make_shared<Tensor>(std::vector<int64_t>{M}, promoted_type, grad_output->GetDevice());
+    auto grad_other = std::make_shared<Tensor>(std::vector<int64_t>{N}, promoted_type, grad_output->GetDevice());
 
     DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
-        dtype,
+        promoted_type,
         [=]<typename T>() {
             grad_input->Fill<T>(0);
             grad_other->Fill<T>(0);
@@ -88,7 +97,7 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
     float beta = 0.0f;
     cublasHandle_t handle = cuda_device->CublasHandle();
 
-    switch (dtype) {
+    switch (promoted_type) {
         DISPATCH_CASE(WRAP({
                           // grad_input[M, 1] = grad_output[M, N] × other[N, 1]
                           // y = grad_input[M]

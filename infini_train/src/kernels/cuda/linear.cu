@@ -188,8 +188,9 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
         }
     }
 
-    return {input_dtype == promoted_type ? grad_input : std::make_shared<Tensor>(grad_input->To(input_dtype)),
-            other_dtype == promoted_type ? grad_other : std::make_shared<Tensor>(grad_other->To(other_dtype))};
+    return {grad_input, grad_other};
+    // return {input_dtype == promoted_type ? grad_input : std::make_shared<Tensor>(grad_input->To(input_dtype)),
+    //         other_dtype == promoted_type ? grad_other : std::make_shared<Tensor>(grad_other->To(other_dtype))};
 }
 
 template <typename T> __global__ void BiasCopyKernel(T *output, const T *bias, int bs, int out_features) {
