@@ -121,10 +121,6 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto grad_input = std::make_shared<Tensor>(input_dims, promoted_type, grad_output->GetDevice());
     auto grad_other = std::make_shared<Tensor>(other_dims, promoted_type, grad_output->GetDevice());
 
-    // printf("MatmulBackward input dtype: %d, other dtype: %d, grad_output dtype: %d, promoted: %d\n",
-    //        static_cast<int>(input_dtype), static_cast<int>(other_dtype), static_cast<int>(grad_output_dtype),
-    //        static_cast<int>(promoted_type));
-
     DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
         promoted_type,
         [=]<typename T>() {
@@ -189,8 +185,6 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     }
 
     return {grad_input, grad_other};
-    // return {input_dtype == promoted_type ? grad_input : std::make_shared<Tensor>(grad_input->To(input_dtype)),
-    //         other_dtype == promoted_type ? grad_other : std::make_shared<Tensor>(grad_other->To(other_dtype))};
 }
 
 template <typename T> __global__ void BiasCopyKernel(T *output, const T *bias, int bs, int out_features) {
@@ -326,14 +320,11 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto dtype = grad_output->Dtype();
     auto input_dtype = input->Dtype();
     auto weight_dtype = weight->Dtype();
-
     DataType promoted_type
         = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
             {input_dtype, weight_dtype, dtype},
             [=]<typename Tin, typename Tw, typename Tgrad>() { return DataTypeMap_v<WidestType_t<Tin, Tw, Tgrad>>; },
             "CUDA LinearBackward");
-    // DataType promoted_type = DataType::kFLOAT32;
-    // printf("promoted dtype: %d\n", static_cast<int>(promoted_type));
 
     auto input_ = input_dtype == promoted_type ? input : std::make_shared<Tensor>(input->To(promoted_type));
     auto weight_ = weight_dtype == promoted_type ? weight : std::make_shared<Tensor>(weight->To(promoted_type));
@@ -377,10 +368,6 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto ldc2 = transpose ? in_features : out_features;
 
     cublasHandle_t handle = cuda_device->CublasHandle();
-
-    // printf("LinearBackward input dtype: %d, weight dtype: %d, grad_output dtype: %d, promoted: %d\n",
-    //        static_cast<int>(input_dtype), static_cast<int>(weight_dtype), static_cast<int>(dtype),
-    //        static_cast<int>(promoted_type));
 
     switch (promoted_type) {
         // TODO(zbl): use cublasSgemv if possible
@@ -450,30 +437,7 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
                       DataType::kBFLOAT16)
     }
 
-    // printf(" - LinearBackward grad_input dtype: %d, grad_weight dtype: %d, grad_bias dtype: %d\n",
-    //        static_cast<int>(input_dtype), static_cast<int>(grad_weight->Dtype()),
-    //        grad_bias ? static_cast<int>(grad_bias->Dtype()) : -1);
-    // printf(" - LinearBackward grad_input: \n");
-    // auto grad_input_fp32 = grad_input->To(DataType::kFLOAT32);
-    // grad_input_fp32.Print();
-    // printf(" - LinearBackward grad_weight: \n");
-    // auto grad_weight_fp32 = grad_weight->To(DataType::kFLOAT32);
-    // grad_weight_fp32.Print();
-    // if (bias) {
-    //     printf(" - LinearBackward grad_bias: \n");
-    //     auto grad_bias_fp32 = grad_bias->To(DataType::kFLOAT32);
-    //     grad_bias_fp32.Print();
-    // }
-
-    // printf(" - LinearBackward grad_input dtype: %d, grad_weight dtype: %d, grad_bias dtype: %d, input dtype: %d\n",
-    //        static_cast<int>(grad_input->Dtype()), static_cast<int>(grad_weight->Dtype()),
-    //        grad_bias ? static_cast<int>(grad_bias->Dtype()) : -1, static_cast<int>(input->Dtype()));
-
-    // cudaDeviceSynchronize();
     return {grad_input, grad_weight, grad_bias};
-    auto grad_input_
-        = input_dtype == promoted_type ? grad_input : std::make_shared<Tensor>(grad_input->To(input_dtype));
-    return {grad_input_, grad_weight, grad_bias};
 }
 } // namespace infini_train::kernels::cuda
 

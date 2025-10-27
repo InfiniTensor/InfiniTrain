@@ -709,50 +709,30 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
 
     auto a_dtype = a_ ? a_->Dtype() : dtype;
     auto b_dtype = b_ ? b_->Dtype() : dtype;
-    // printf("a_ dtype: %d, b_ dtype: %d, grad_output_ dtype: %d\n", a_ ? static_cast<int>(a_->Dtype()) : -1,
-    //        b_ ? static_cast<int>(b_->Dtype()) : -1, static_cast<int>(grad_output->Dtype()));
-    // printf("a_dtype: %d, b_dtype: %d, dtype: %d\n", static_cast<int>(a_dtype), static_cast<int>(b_dtype),
-    //        static_cast<int>(dtype));
     DataType promoted_type
         = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
             {a_dtype, b_dtype, dtype},
             [=]<typename Ta, typename Tb, typename Tgrad>() { return DataTypeMap_v<WidestType_t<Ta, Tb, Tgrad>>; },
             "CUDA BinaryBackward");
-    // printf("promoted dtype: %d\n", static_cast<int>(promoted_type));
-    // printf(" - BinaryBackward grad_output: \n");
-    // auto grad_output_fp32 = grad_output->To(DataType::kFLOAT32);
-    // grad_output_fp32.Print();
 
     CHECK(a_num_elements >= b_num_elements && a_num_elements % b_num_elements == 0);
-    if (a_) {
-        CHECK(a_num_elements == a->NumElements());
-        if (a_->Dtype() != promoted_type) {
-            a_ = std::make_shared<Tensor>(a_->To(promoted_type));
+
+    auto promote_if_needed = [&](std::shared_ptr<Tensor> &t, size_t expected_numel, DataType promoted_type) {
+        if (t) {
+            CHECK(expected_numel == t->NumElements());
+            if (t->Dtype() != promoted_type) {
+                t = std::make_shared<Tensor>(t->To(promoted_type));
+            }
         }
-    }
-    if (b_) {
-        CHECK(b_num_elements == b->NumElements());
-        if (b_->Dtype() != promoted_type) {
-            b_ = std::make_shared<Tensor>(b_->To(promoted_type));
-        }
-    }
+    };
+    promote_if_needed(a_, a_num_elements, promoted_type);
+    promote_if_needed(b_, b_num_elements, promoted_type);
     if (dtype != promoted_type) {
         grad_output_ = std::make_shared<Tensor>(grad_output_->To(promoted_type));
     }
 
-    // Currently a and b should have the same data type
-    if (a_ && b_) {
-        CHECK(a_->Dtype() == b_->Dtype());
-    }
     auto grad_a = std::make_shared<Tensor>(a_dims, promoted_type, device);
     auto grad_b = std::make_shared<Tensor>(b_dims, promoted_type, device);
-
-    // printf("a_ dtype: %d, b_ dtype: %d, grad_output_ dtype: %d\n", a_ ? static_cast<int>(a_->Dtype()) : -1,
-    //        b_ ? static_cast<int>(b_->Dtype()) : -1, static_cast<int>(grad_output_->Dtype()));
-
-    // printf("grad_a dtype: %d, grad_b dtype: %d, grad_output_ dtype: %d\n",
-    //        grad_a ? static_cast<int>(grad_a->Dtype()) : -1, grad_b ? static_cast<int>(grad_b->Dtype()) : -1,
-    //        static_cast<int>(grad_output_->Dtype()));
 
     switch (promoted_type) {
         DISPATCH_CASE(WRAP({
@@ -779,15 +759,6 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     default:
         LOG_LOC(FATAL, "CUDA binary backward: 'Unsupported data type'");
     }
-
-    // printf(" - BinaryBackward grad_a: \n");
-    // auto grad_a_fp32 = grad_a->To(DataType::kFLOAT32);
-    // grad_a_fp32.Print();
-    // printf(" - BinaryBackward grad_b: \n");
-    // auto grad_b_fp32 = grad_b->To(DataType::kFLOAT32);
-    // grad_b_fp32.Print();
-    // printf("grad_a dtype: %d, grad_b dtype: %d, a_dtype: %d, b_dtype: %d\n", static_cast<int>(grad_a->Dtype()),
-    //        static_cast<int>(grad_b->Dtype()), a_dtype, b_dtype);
 
     return {grad_a, grad_b};
 }
@@ -1080,7 +1051,6 @@ std::shared_ptr<Tensor> MulScalarBackward(const std::shared_ptr<Tensor> &grad_ou
 }
 
 std::shared_ptr<Tensor> DivForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
-    printf("here at DivForward\n");
     DISPATCH(a->Dtype(), return BinaryForward(a, b, [] __device__(auto x, auto y) { return Div(x, y); });
              , INFINI_ALL_FLOATING_TYPES)
 }
@@ -1088,7 +1058,6 @@ std::shared_ptr<Tensor> DivForward(const std::shared_ptr<Tensor> &a, const std::
 std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DivBackward(const std::shared_ptr<Tensor> &grad_output,
                                                                         const std::shared_ptr<Tensor> &a,
                                                                         const std::shared_ptr<Tensor> &b) {
-    printf("here at DivBackward\n");
     DISPATCH_WITH_DEFAULT(grad_output->Dtype(), return BinaryBackward(
                                                     grad_output, a, b, a->Dims(), b->Dims(),
                                                     [] __device__(auto, auto y) { return Reciprocal(y); },

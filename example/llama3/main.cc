@@ -150,9 +150,7 @@ void Train(const nn::parallel::Rank &rank) {
     if (FLAGS_dtype == kDtypeFP32) {
         dtype = DataType::kFLOAT32;
     } else if (FLAGS_dtype == kDtypeBF16) {
-        // TODO(zbl): Use autocast instead of manually casting the whole model params to bf16
         dtype = DataType::kBFLOAT16;
-        model->To(dtype);
     } else {
         LOG(FATAL) << "Rank " << rank.thread_rank() << ": Datatype " << FLAGS_dtype << " not supported.";
     }
@@ -225,8 +223,9 @@ void Train(const nn::parallel::Rank &rank) {
         Profiler::Instance().SetTag("Step_" + std::to_string(step));
 #endif
         for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
-            infini_train::AutocastGuard autocast_guard(device->Type(),
-                                                       DataType::kBFLOAT16); // enable autocast for the current step
+            // enable autocast for the current step
+            infini_train::AutocastGuard autocast_guard(device->Type(), dtype);
+
             // (bs, seq_len), (bs, seq_len)
             auto [x, y] = *train_iter;
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
@@ -241,18 +240,15 @@ void Train(const nn::parallel::Rank &rank) {
             auto loss = loss_fn->Forward({logits, y})[0];
             loss = loss / grad_accum_steps;
 
-            autocast_guard.Disable(); // disable autocast for the current step
+            // disable autocast for the current step (backward is not under autocast)
+            autocast_guard.Disable();
 
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
             if (ddp_world_size > 1) {
                 function::AllReduce(loss, function::ReduceOpType::kAvg);
             }
             auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
-            if (FLAGS_dtype == kDtypeFP32) {
-                lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
-            } else if (FLAGS_dtype == kDtypeBF16) {
-                lossf += ConvertBF16ToFloat(loss_cpu.DataPtr());
-            }
+            lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
             LOG(INFO) << "Rank " << rank.thread_rank() << ": start backward";
             loss->Backward();
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish backward";

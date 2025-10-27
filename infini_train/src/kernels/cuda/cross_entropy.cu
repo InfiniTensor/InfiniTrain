@@ -1,7 +1,5 @@
 #include <cmath>
-#include <cstdio>
 #include <limits>
-#include <memory>
 #include <numeric>
 
 #include <cub/block/block_reduce.cuh>
@@ -85,8 +83,6 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
     int num_blocks = bs;
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(target->GetDevice());
-    // printf("cross entropy loss Forward input dtype: %d, target dtype: %d\n", static_cast<int>(input->Dtype()),
-    //        static_cast<int>(target->Dtype()));
     return DispatchFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>, DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
         {target->Dtype(), input->Dtype()},
         [=]<typename Ttarget, typename Tinput>() {
@@ -190,18 +186,6 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
     constexpr int threads_per_block = 256;
     int num_blocks = bs;
 
-    // printf("cross entropy loss Backward input dtype: %d, target dtype: %d, grad_output: %d, grad_input: %d\n",
-    //        static_cast<int>(input_->Dtype()), static_cast<int>(target->Dtype()),
-    //        grad_output ? static_cast<int>(grad_output->Dtype()) : -1,
-    //        grad_input ? static_cast<int>(grad_input->Dtype()) : -1);
-
-    // printf(" - cross entorpy input:\n");
-    // auto input_fp32 = input_->To(DataType::kFLOAT32);
-    // input_fp32.Print();
-    // printf(" - cross entorpy grad_output:\n");
-    // auto grad_output_fp32 = grad_output->To(DataType::kFLOAT32);
-    // grad_output_fp32.Print();
-
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(target->GetDevice());
     DispatchFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>, DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
         {target->Dtype(), input_->Dtype()},
@@ -217,13 +201,7 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
         },
         "CUDA CrossEntropyBackward");
 
-    // cudaDeviceSynchronize();
-    // printf(" - cross entorpy grad_input:\n");
-    // auto grad_input_fp32 = grad_input->To(DataType::kFLOAT32);
-    // grad_input_fp32.Print();
-
     return {grad_input};
-    // return {std::make_shared<Tensor>(grad_input->To(DataType::kFLOAT32))};
 }
 } // namespace infini_train::kernels::cuda
 
