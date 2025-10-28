@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <format>
+#include <nccl.h>
 #include <string>
 
 #include "glog/logging.h"
@@ -12,6 +13,20 @@ int GetEnvAsInt(const std::string &name, int default_value) {
     const char *value = std::getenv(name.c_str());
     return value ? std::atoi(value) : default_value;
 }
+
+#ifdef USE_NCCL
+ncclUniqueId StringToNcclId(const std::string &str) {
+    ncclUniqueId id;
+    for (int i = 0; i < NCCL_UNIQUE_ID_BYTES; ++i) {
+        unsigned int byte;
+        std::stringstream ss;
+        ss << std::hex << str.substr(i * 2, 2);
+        ss >> byte;
+        id.internal[i] = static_cast<char>(byte);
+    }
+    return id;
+}
+#endif
 
 } // namespace
 
