@@ -39,17 +39,27 @@ inline std::string_view GetBaseOpName(std::string_view op) {
 }
 }; // namespace
 
+/**
+ * @brief Defines the cast policies for autocast operations.
+ *
+ * Aligned with PyTorch's autocast cast policies. Determines how input
+ * types are promoted or demoted during mixed-precision computation.
+ */
 enum class CastPolicy : uint8_t {
-    kLowerPrecision = 0,
-    kFP32,
-    kPromoteWidest,
-    kCount,
+    kLowerPrecision = 0, // Cast all inputs to lower precision (e.g., float16 or bfloat16) before running the op.
+    kFP32,               // Cast all inputs to float32 before running the op.
+    kPromoteWidest,      // Promote all inputs to the widest type among them before running the op.
+    kCount,              // Number of cast policies. **New policies should be added before this**.
 };
 
+// Cast-policy maps and their associated operations. The op names should match the ones defined in the op registry.
 inline constexpr std::array kLowerPrecisionOps = {"Matmul", "Linear"};
-inline constexpr std::array kFP32Ops = {"Sin",   "Cos",   "Tan",   "Asin", "Acos", "Atan", "Sinh",  "Cosh", "Tanh",
-                                        "Asinh", "Acosh", "Atanh", "Exp",  "Log",  "Sqrt", "Rsqrt", "Pow"};
+inline constexpr std::array kFP32Ops
+    = {"Sin",   "Cos", "Tan", "Asin", "Acos",       "Atan",  "Sinh", "Cosh", "Tanh",         "Asinh",    "Acosh",
+       "Atanh", "Exp", "Log", "Sqrt", "Reciprocal", "Rsqrt", "Prod", "Pow",  "CrossEntropy", "Layernorm"};
 
+// Mapping from operation names to their cast policies. This is the primary construct that is used in autocasting. The
+// op names should match the ones defined in the op registry.
 inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap = {
     {"Matmul", CastPolicy::kLowerPrecision},
     {"Linear", CastPolicy::kLowerPrecision},
@@ -77,6 +87,7 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
     {"Layernorm", CastPolicy::kFP32},
 };
 
+// Default autocast data types for each device type
 inline constexpr std::array<DataType, static_cast<size_t>(DeviceType::kCount)> kDeviceDefaultDtype = {
     DataType::kBFLOAT16, // CPU
     DataType::kFLOAT16,  // CUDA.
@@ -117,9 +128,9 @@ struct AutocastContext {
             case CastPolicy::kFP32:
                 return DataType::kFLOAT32;
             case CastPolicy::kPromoteWidest:
-                throw std::runtime_error("kPromoteWidest not implemented");
+                LOG_LOC(FATAL, "kPromoteWidest not yet implemented");
             default:
-                throw std::runtime_error("Invalid cast policy");
+                LOG_LOC(FATAL, "Invalid cast policy");
             }
         };
 

@@ -5,7 +5,6 @@
 #include <type_traits>
 #include <utility>
 
-#include "autocast.h"
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"

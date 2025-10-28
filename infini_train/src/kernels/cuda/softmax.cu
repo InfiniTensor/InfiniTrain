@@ -181,9 +181,9 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
         [=]<typename Tgrad, typename Tout>() { return DataTypeMap_v<WidestType_t<Tgrad, Tout>>; },
         "CUDA SoftmaxBackward");
 
-    auto grad_output_
+    auto grad_output_promoted
         = grad_output_dtype == promoted_type ? grad_output : std::make_shared<Tensor>(grad_output->To(promoted_type));
-    auto output_ = output_dtype == promoted_type ? output : std::make_shared<Tensor>(output->To(promoted_type));
+    auto output_promoted = output_dtype == promoted_type ? output : std::make_shared<Tensor>(output->To(promoted_type));
 
     const auto &output_dims = output->Dims();
     dim = dim < 0 ? dim + output->Dims().size() : dim;
@@ -194,8 +194,9 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
         promoted_type, [=]<typename T>() { grad_input->Fill<T>(0); }, "CUDA SoftmaxBackward");
 
     switch (promoted_type) {
-        DISPATCH_CASE(WRAP(LaunchBackward<256, float>(grad_input, grad_output_, output_, dim);), DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP(LaunchBackward<256, nv_bfloat16>(grad_input, grad_output_, output_, dim);),
+        DISPATCH_CASE(WRAP(LaunchBackward<256, float>(grad_input, grad_output_promoted, output_promoted, dim);),
+                      DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(LaunchBackward<256, nv_bfloat16>(grad_input, grad_output_promoted, output_promoted, dim);),
                       DataType::kBFLOAT16)
     default:
         LOG_LOC(FATAL, "CUDA softmax backward: 'Unsupported data type'");

@@ -133,18 +133,10 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
         new_dims.push_back((ends[i] - starts[i] + steps[i] - 1) / steps[i]);
     }
 
-    auto input_dtype = input->Dtype();
     auto grad_output_dtype = grad_output->Dtype();
-    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-        {input_dtype, grad_output_dtype},
-        [=]<typename Tin, typename Tgrad>() { return DataTypeMap_v<WidestType_t<Tin, Tgrad>>; }, "CUDA SliceBackward");
-
-    auto input_ = input_dtype == promoted_type ? input : std::make_shared<Tensor>(input->To(promoted_type));
-    auto grad_output_
-        = grad_output_dtype == promoted_type ? grad_output : std::make_shared<Tensor>(grad_output->To(promoted_type));
-    auto grad_input = std::make_shared<Tensor>(input->Dims(), promoted_type, grad_output->GetDevice());
+    auto grad_input = std::make_shared<Tensor>(input->Dims(), grad_output_dtype, grad_output->GetDevice());
     DispatchFunc<INFINI_ALL_TYPES>(
-        promoted_type, [=]<typename T>() { grad_input->Fill<T>(0); }, "CUDA SliceBackward");
+        grad_output_dtype, [=]<typename T>() { grad_input->Fill<T>(0); }, "CUDA SliceBackward");
 
     std::vector<int64_t> src_strides(dims.size());
     int64_t stride = 1;
@@ -187,7 +179,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
     DispatchFunc<INFINI_ALL_TYPES>(
-        promoted_type,
+        grad_output_dtype,
         [=]<typename T>() {
             SliceBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), new_dims_dev,

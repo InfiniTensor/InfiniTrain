@@ -73,13 +73,18 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
 
     auto input_dtype = input->Dtype();
     auto other_dtype = other->Dtype();
+    auto grad_output_dtype = grad_output->Dtype();
 
-    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-        {input_dtype, other_dtype}, [=]<typename Tin, typename To>() { return DataTypeMap_v<WidestType_t<Tin, To>>; },
-        "CUDA OuterForward");
+    DataType promoted_type
+        = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
+            {input_dtype, other_dtype, grad_output_dtype},
+            [=]<typename Tin, typename To, typename Tgrad>() { return DataTypeMap_v<WidestType_t<Tin, To, Tgrad>>; },
+            "CUDA OuterBackward");
 
-    auto input_ = input_dtype == promoted_type ? input : std::make_shared<Tensor>(input->To(promoted_type));
-    auto other_ = other_dtype == promoted_type ? other : std::make_shared<Tensor>(other->To(promoted_type));
+    auto input_promoted = input_dtype == promoted_type ? input : std::make_shared<Tensor>(input->To(promoted_type));
+    auto other_promoted = other_dtype == promoted_type ? other : std::make_shared<Tensor>(other->To(promoted_type));
+    auto grad_output_promoted
+        = grad_output_dtype == promoted_type ? grad_output : std::make_shared<Tensor>(grad_output->To(promoted_type));
 
     auto grad_input = std::make_shared<Tensor>(std::vector<int64_t>{M}, promoted_type, grad_output->GetDevice());
     auto grad_other = std::make_shared<Tensor>(std::vector<int64_t>{N}, promoted_type, grad_output->GetDevice());
@@ -104,8 +109,8 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
                           // A = grad_output.T[N, M]
                           // x = other[N]
                           CUBLAS_CHECK(cublasSgemv(handle, CUBLAS_OP_T, N, M, &alpha,
-                                                   static_cast<const float *>(grad_output->DataPtr()), N,
-                                                   static_cast<const float *>(other->DataPtr()), 1, &beta,
+                                                   static_cast<const float *>(grad_output_promoted->DataPtr()), N,
+                                                   static_cast<const float *>(other_promoted->DataPtr()), 1, &beta,
                                                    static_cast<float *>(grad_input->DataPtr()), 1));
 
                           // grad_other[N, 1] = grad_output.T[N, M] × input[M, 1]
@@ -113,8 +118,8 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
                           // A = grad_output.T[N, M]
                           // x = input[M]
                           CUBLAS_CHECK(cublasSgemv(handle, CUBLAS_OP_N, N, M, &alpha,
-                                                   static_cast<const float *>(grad_output->DataPtr()), N,
-                                                   static_cast<const float *>(input->DataPtr()), 1, &beta,
+                                                   static_cast<const float *>(grad_output_promoted->DataPtr()), N,
+                                                   static_cast<const float *>(input_promoted->DataPtr()), 1, &beta,
                                                    static_cast<float *>(grad_other->DataPtr()), 1));
                       }),
                       DataType::kFLOAT32)
@@ -126,16 +131,16 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
                 // C = grad_input.T[1, M]
                 // A = other.T[1, N]
                 // B = grad_output.T[N, M]
-                CUBLAS_CHECK(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, 1, M, N, &alpha, other->DataPtr(),
-                                          CUDA_R_16BF, 1, grad_output->DataPtr(), CUDA_R_16BF, N, &beta,
+                CUBLAS_CHECK(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, 1, M, N, &alpha, other_promoted->DataPtr(),
+                                          CUDA_R_16BF, 1, grad_output_promoted->DataPtr(), CUDA_R_16BF, N, &beta,
                                           grad_input->DataPtr(), CUDA_R_16BF, 1, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));
                 // grad_other[N, 1] = grad_output.T[N, M] × input[M, 1]
                 // grad_other.T[1, N] = input.T[1, M] × grad_output[M, N]
                 // C = grad_other.T[1, N]
                 // A = input.T[1, M]
                 // B = grad_output.T[N, M]
-                CUBLAS_CHECK(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_T, 1, N, M, &alpha, input->DataPtr(),
-                                          CUDA_R_16BF, 1, grad_output->DataPtr(), CUDA_R_16BF, N, &beta,
+                CUBLAS_CHECK(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_T, 1, N, M, &alpha, input_promoted->DataPtr(),
+                                          CUDA_R_16BF, 1, grad_output_promoted->DataPtr(), CUDA_R_16BF, N, &beta,
                                           grad_other->DataPtr(), CUDA_R_16BF, 1, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));
             }),
             DataType::kBFLOAT16)
