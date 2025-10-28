@@ -178,22 +178,22 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
     const int bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
     const int num_classes = *input_dims.rbegin();
 
-    auto input_ = std::make_shared<Tensor>(input->To(grad_output->Dtype()));
+    auto input_casted = std::make_shared<Tensor>(input->To(grad_output->Dtype()));
 
     CHECK_EQ(grad_output->Dims().size(), 0);
-    auto grad_input = std::make_shared<Tensor>(input_->Dims(), input_->Dtype(), grad_output->GetDevice());
+    auto grad_input = std::make_shared<Tensor>(input_casted->Dims(), input_casted->Dtype(), grad_output->GetDevice());
 
     constexpr int threads_per_block = 256;
     int num_blocks = bs;
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(target->GetDevice());
     DispatchFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>, DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
-        {target->Dtype(), input_->Dtype()},
+        {target->Dtype(), input_casted->Dtype()},
         [=]<typename Ttarget, typename Tinput>() {
             grad_input->Fill<Tinput>(0);
             const Tinput *output_grad_ptr = static_cast<const Tinput *>(grad_output->DataPtr());
             const Ttarget *target_ptr = static_cast<const Ttarget *>(target->DataPtr());
-            const Tinput *input_ptr = static_cast<const Tinput *>(input_->DataPtr());
+            const Tinput *input_ptr = static_cast<const Tinput *>(input_casted->DataPtr());
             Tinput *input_grad_ptr = static_cast<Tinput *>(grad_input->DataPtr());
             CrossEntropyBackwardKernel<threads_per_block, Ttarget, Tinput>
                 <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(input_ptr, input_grad_ptr, target_ptr,

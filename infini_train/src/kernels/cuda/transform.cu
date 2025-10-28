@@ -333,9 +333,10 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
     auto input_shape = input->Dims();
     auto mask_shape = mask->Dims();
     auto dtype = input->Dtype();
-    auto mask_ = mask->Dtype() == dtype ? mask : std::make_shared<Tensor>(mask->To(dtype));
+    auto mask_casted = mask->Dtype() == dtype ? mask : std::make_shared<Tensor>(mask->To(dtype));
     // TODO(zbl): support bool mask
-    CHECK_EQ(static_cast<int>(dtype), static_cast<int>(mask_->Dtype())) << "For now, input/mask dtypes must match.";
+    CHECK_EQ(static_cast<int>(dtype), static_cast<int>(mask_casted->Dtype()))
+        << "For now, input/mask dtypes must match.";
 
     MaskMode mode = DecideMaskMode(input_shape, mask_shape);
 
@@ -365,7 +366,7 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
             dtype,
             [=]<typename T>() {
                 MaskForwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                    static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask_->DataPtr()),
+                    static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask_casted->DataPtr()),
                     static_cast<T *>(output->DataPtr()), common::cuda::Cast<T>(value), static_cast<int>(batch_size),
                     static_cast<int>(mask_size));
             },
@@ -394,11 +395,8 @@ __global__ void MaskLeadsBackwardKernel(const T *grad_output, const T *mask, T *
 std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &mask) {
     auto output_shape = grad_output->Dims();
     auto mask_shape = mask->Dims();
-    auto grad_output_ = grad_output; // std::make_shared<Tensor>(grad_output->To(DataType::kFLOAT32));
-    auto dtype = grad_output_->Dtype();
-    auto mask_ = std::make_shared<Tensor>(mask->To(dtype));
-    CHECK_EQ(static_cast<int>(grad_output_->Dtype()), static_cast<int>(mask_->Dtype()))
-        << "For now, grad_output/mask dtypes must match.";
+    auto dtype = grad_output->Dtype();
+    auto mask_casted = std::make_shared<Tensor>(mask->To(dtype));
 
     MaskMode mode = DecideMaskMode(output_shape, mask_shape);
 
@@ -416,7 +414,7 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
             [=]<typename T>() {
                 grad_input->Fill<T>(0);
                 MaskLeadsBackwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                    static_cast<const T *>(grad_output_->DataPtr()), static_cast<const T *>(mask->DataPtr()),
+                    static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask_casted->DataPtr()),
                     static_cast<T *>(grad_input->DataPtr()), rows, inner);
             },
             "CUDA MaskBackward(rows)");
@@ -430,7 +428,7 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
             [=]<typename T>() {
                 grad_input->Fill<T>(0);
                 MaskBackwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                    static_cast<const T *>(grad_output_->DataPtr()), static_cast<const T *>(mask_->DataPtr()),
+                    static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask_casted->DataPtr()),
                     static_cast<T *>(grad_input->DataPtr()), static_cast<int>(batch_size), static_cast<int>(mask_size));
             },
             "CUDA MaskBackward(tail)");

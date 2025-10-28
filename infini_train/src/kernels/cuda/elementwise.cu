@@ -630,24 +630,25 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
         {dtype, a_dtype}, [=]<typename Tgrad, typename Ta>() { return DataTypeMap_v<WidestType_t<Tgrad, Ta>>; },
         "CUDA UnaryBackward");
 
-    auto grad_output_ = dtype == promoted_type ? grad_output : std::make_shared<Tensor>(grad_output->To(promoted_type));
-    auto a_ = a_dtype == promoted_type ? a : std::make_shared<Tensor>(a->To(promoted_type));
+    auto grad_output_promoted
+        = dtype == promoted_type ? grad_output : std::make_shared<Tensor>(grad_output->To(promoted_type));
+    auto a_promoted = a_dtype == promoted_type ? a : std::make_shared<Tensor>(a->To(promoted_type));
     auto output = std::make_shared<Tensor>(grad_output->Dims(), promoted_type, grad_output->GetDevice());
 
     switch (promoted_type) {
         DISPATCH_CASE(WRAP({
                           output->Fill<float>(0.0f);
-                          LaunchBackward<256, float>(unary_fn, output, grad_output_, a_);
+                          LaunchBackward<256, float>(unary_fn, output, grad_output_promoted, a_promoted);
                       }),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
                           output->Fill<nv_bfloat16>(0);
-                          LaunchBackward<256, nv_bfloat16>(unary_fn, output, grad_output_, a_);
+                          LaunchBackward<256, nv_bfloat16>(unary_fn, output, grad_output_promoted, a_promoted);
                       }),
                       DataType::kBFLOAT16)
         DISPATCH_CASE(WRAP({
                           output->Fill<int64_t>(0);
-                          LaunchBackward<256, int64_t>(unary_fn, output, grad_output, a);
+                          LaunchBackward<256, int64_t>(unary_fn, output, grad_output_promoted, a_promoted);
                       }),
                       DataType::kINT64)
     default:
@@ -658,33 +659,28 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
 }
 
 template <typename Func>
-std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a_, const std::shared_ptr<Tensor> &b_,
+std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b,
                                       Func binary_fn) {
-    auto a_dtype = a_->Dtype();
-    auto b_dtype = b_->Dtype();
+    auto a_dtype = a->Dtype();
+    auto b_dtype = b->Dtype();
 
     DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
         {a_dtype, b_dtype}, [=]<typename Ta, typename Tb>() { return DataTypeMap_v<WidestType_t<Ta, Tb>>; },
         "CUDA BinaryForward");
 
-    auto a = a_;
-    auto b = b_;
-    if (a_dtype != promoted_type) {
-        a = std::make_shared<Tensor>(a->To(promoted_type));
-    }
-    if (b_dtype != promoted_type) {
-        b = std::make_shared<Tensor>(b->To(promoted_type));
-    }
+    auto a_promoted = a_dtype == promoted_type ? a : std::make_shared<Tensor>(a->To(promoted_type));
+    auto b_promoted = b_dtype == promoted_type ? b : std::make_shared<Tensor>(b->To(promoted_type));
     // Currently a and b should have the same data type and only one-way broadcasting from b to a is assumed by
     // default
-    CHECK(a->Dtype() == b->Dtype() && a->NumElements() >= b->NumElements() && a->NumElements() % b->NumElements() == 0);
+    CHECK(a->NumElements() >= b->NumElements() && a->NumElements() % b->NumElements() == 0);
 
     auto output = std::make_shared<Tensor>(a->Dims(), promoted_type, a->GetDevice());
 
     switch (promoted_type) {
-        DISPATCH_CASE(WRAP(LaunchForward<256, float>(binary_fn, output, a, b);), DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP(LaunchForward<256, nv_bfloat16>(binary_fn, output, a, b);), DataType::kBFLOAT16)
-        DISPATCH_CASE(WRAP(LaunchForward<256, int64_t>(binary_fn, output, a, b);), DataType::kINT64)
+        DISPATCH_CASE(WRAP(LaunchForward<256, float>(binary_fn, output, a_promoted, b_promoted);), DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(LaunchForward<256, nv_bfloat16>(binary_fn, output, a_promoted, b_promoted);),
+                      DataType::kBFLOAT16)
+        DISPATCH_CASE(WRAP(LaunchForward<256, int64_t>(binary_fn, output, a_promoted, b_promoted);), DataType::kINT64)
     default:
         LOG_LOC(FATAL, "CUDA binary forward: 'Unsupported data type'");
     }
@@ -700,15 +696,15 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     const auto a_num_elements = std::accumulate(a_dims.begin(), a_dims.end(), 1, std::multiplies<int64_t>());
     const auto b_num_elements = std::accumulate(b_dims.begin(), b_dims.end(), 1, std::multiplies<int64_t>());
 
-    std::shared_ptr<Tensor> a_ = a;
-    std::shared_ptr<Tensor> b_ = b;
-    std::shared_ptr<Tensor> grad_output_ = grad_output;
+    std::shared_ptr<Tensor> a_promoted = a;
+    std::shared_ptr<Tensor> b_promoted = b;
+    std::shared_ptr<Tensor> grad_output_promoted = grad_output;
 
-    auto dtype = grad_output_->Dtype();
+    auto dtype = grad_output_promoted->Dtype();
     auto device = grad_output->GetDevice();
 
-    auto a_dtype = a_ ? a_->Dtype() : dtype;
-    auto b_dtype = b_ ? b_->Dtype() : dtype;
+    auto a_dtype = a_promoted ? a_promoted->Dtype() : dtype;
+    auto b_dtype = b_promoted ? b_promoted->Dtype() : dtype;
     DataType promoted_type
         = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
             {a_dtype, b_dtype, dtype},
@@ -725,10 +721,10 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
             }
         }
     };
-    promote_if_needed(a_, a_num_elements, promoted_type);
-    promote_if_needed(b_, b_num_elements, promoted_type);
+    promote_if_needed(a_promoted, a_num_elements, promoted_type);
+    promote_if_needed(b_promoted, b_num_elements, promoted_type);
     if (dtype != promoted_type) {
-        grad_output_ = std::make_shared<Tensor>(grad_output_->To(promoted_type));
+        grad_output_promoted = std::make_shared<Tensor>(grad_output_promoted->To(promoted_type));
     }
 
     auto grad_a = std::make_shared<Tensor>(a_dims, promoted_type, device);
@@ -738,14 +734,15 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
         DISPATCH_CASE(WRAP({
                           grad_a->Fill<float>(0.0f);
                           grad_b->Fill<float>(0.0f);
-                          LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_, a_, b_);
+                          LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
+                                                     a_promoted, b_promoted);
                       }),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
                           grad_a->Fill<nv_bfloat16>(0);
                           grad_b->Fill<nv_bfloat16>(0);
-                          LaunchBackward<256, nv_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
-                                                           b);
+                          LaunchBackward<256, nv_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims,
+                                                           grad_output_promoted, a_promoted, b_promoted);
                       }),
                       DataType::kBFLOAT16)
         // FIXME(zbl): AtomicAdd does not support int64_t
