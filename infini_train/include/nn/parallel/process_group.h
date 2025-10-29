@@ -48,6 +48,10 @@ public:
     std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors, const Device *destination,
                                    int64_t dim) const;
 
+    std::vector<std::shared_ptr<Tensor>> NcclSend(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank) const;
+
+    std::vector<std::shared_ptr<Tensor>> NcclRecv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank) const;
+
 private:
     std::vector<ncclComm_t> comms_;
     std::vector<const Device *> devices_;
