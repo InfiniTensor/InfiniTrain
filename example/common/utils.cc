@@ -61,4 +61,13 @@ std::vector<int> GetTensorParallelGroupRanks(int rank) {
     return ranks;
 }
 
+std::vector<int> GetPipelineParallelGroupRanks(int pp_world_size) {
+    std::vector<int> ranks;
+    ranks.reserve(pp_world_size);
+    for (int i = 0; i < pp_world_size; ++i) {
+        ranks.push_back(i);
+    }
+    return ranks;
+}
+
 } // namespace infini_train

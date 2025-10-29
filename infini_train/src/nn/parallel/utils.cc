@@ -14,4 +14,7 @@ std::string GetTensorParallelProcessGroupName(int thread_rank) {
     return "TP" + std::to_string(thread_rank / global::GetTensorParallelSize());
 }
 
+std::string GetPipelineParallelProcessGroupName(int thread_rank) {
+    return "PP" + std::to_string(thread_rank / global::GetPipelineParallelSize());
+}
 } // namespace infini_train::nn::parallel

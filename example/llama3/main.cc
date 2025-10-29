@@ -13,6 +13,7 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
@@ -59,8 +60,15 @@ DEFINE_int32(
     nthread_per_process, 1,
     "Number of threads to use for each process. "
     "When set > 1, enables data parallelism with device=cuda on the specified number of visible CUDA devices.");
+
 DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
+DEFINE_bool(
+    pipeline_parallel, false,
+    "use pipeline parallelism or not, will always use device=cuda and use all cuda visible devices when set to true");
+DEFINE_uint32(num_stages, 1, "the num of stages in pipeline parallelism");
+DEFINE_uint32(num_microbatches, 4, "the num of microbatches in pipeline parallelism");
+
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 
@@ -125,14 +133,13 @@ void Train(const nn::parallel::Rank &rank) {
     const auto tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size;
     CHECK_EQ(FLAGS_total_batch_size % tokens_per_fwdbwd, 0);
     const auto grad_accum_steps = FLAGS_total_batch_size / tokens_per_fwdbwd;
-    if (rank.IsMainRank()) {
-        LOG(INFO) << "total desired batch size: " << FLAGS_total_batch_size
-                  << " => calculated gradient accumulation steps: " << grad_accum_steps;
-    }
+    LOG(INFO) << "total desired batch size: " << FLAGS_total_batch_size
+              << " => calculated gradient accumulation steps: " << grad_accum_steps;
 
     // rng / reproducibility
     // ManualSeed(42);
 
+    // init the model, either from scratch or from OpenAI pretrained checkpoint
     LLaMA3Config model_config = LLaMA3Config();
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
@@ -185,11 +192,30 @@ void Train(const nn::parallel::Rank &rank) {
     auto optimizer = optimizers::Adam(model->Parameters(), FLAGS_learning_rate);
 
     auto train_iter = train_loader.begin();
+
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(std::make_shared<VocabParallelCrossEntropyLoss>())
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.thread_rank() << ": start training";
+
+    if (FLAGS_pipeline_parallel) {
+        auto total_num_gpus = (DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA)).size();
+        CHECK_LE(FLAGS_num_stages, total_num_gpus);
+        CHECK_LE(FLAGS_num_microbatches, FLAGS_batch_size);
+        CHECK_EQ(FLAGS_batch_size % FLAGS_num_microbatches, 0)
+            << "FLAGS_batch_size (" << FLAGS_batch_size << ") must be divisible by FLAGS_num_microbatches ("
+            << FLAGS_num_microbatches << ")";
+        auto shapes = std::vector<std::vector<int64_t>>{
+            {FLAGS_batch_size / FLAGS_num_microbatches, FLAGS_sequence_length, model->GetConfig()["n_embd"]},
+            {FLAGS_sequence_length, (model->GetConfig()["n_embd"] / model->GetConfig()["n_head"]) / 2, 2},
+            {},
+            {1, 1, FLAGS_sequence_length, FLAGS_sequence_length}};
+        model = std::make_shared<nn::parallel::PipelineParallel>(model, FLAGS_num_stages, FLAGS_num_microbatches,
+                                                                 shapes, FLAGS_learning_rate, 0);
+    }
+
+    LOG(INFO) << "start training";
 
     for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
         const bool last_step = step == FLAGS_num_iteration;
@@ -214,7 +240,9 @@ void Train(const nn::parallel::Rank &rank) {
         }
 
         // model->Train();
-        optimizer.ZeroGrad();
+        if (!FLAGS_pipeline_parallel) {
+            optimizer.ZeroGrad();
+        }
         // if we are trying to overfit a single batch, we reset the loader here
         if (FLAGS_overfit_single_batch) {
             // train_loader.Reset();
@@ -231,7 +259,11 @@ void Train(const nn::parallel::Rank &rank) {
             ++train_iter;
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
-            LOG(INFO) << "Rank " << rank.thread_rank() << ": start forward";
+            // if (FLAGS_pipeline_parallel) {
+            //     lossf = model->TrainStep({x}, {y}, std::make_shared<nn::CrossEntropyLoss>(loss_fn));
+            //     continue;
+            // }
+            LOG(INFO) << "start forward";
             // (bs, seq_len, vocab_size)
             auto logits = model->Forward({x, y})[0];
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish model forward, start loss forward";
@@ -251,8 +283,9 @@ void Train(const nn::parallel::Rank &rank) {
             loss->Backward();
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish backward";
         }
-
-        optimizer.Step();
+        if (!FLAGS_pipeline_parallel) {
+            optimizer.Step();
+        }
 
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
@@ -282,7 +315,8 @@ int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
-    nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel);
+    nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_pipeline_parallel, FLAGS_tensor_parallel,
+                                     FLAGS_sequence_parallel);
 
     // NOTE(dcj): currently we only support single process
     if (FLAGS_nthread_per_process > 1) {

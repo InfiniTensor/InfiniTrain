@@ -29,8 +29,13 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         return output_tensors;
     }
 
+    auto input_requires_grad_flags = InputRequiresGrad(input_tensors);
+
     bool output_requires_grad = false;
     for (int idx = 0; idx < input_tensors.size(); ++idx) {
+        if (!input_requires_grad_flags[idx]) {
+            continue;
+        }
         const auto &input_tensor = input_tensors[idx];
         if (input_tensor->requires_grad() && input_tensor->is_leaf()) {
             next_functions_.emplace_back(input_tensor->grad_accumulator(), input_tensor->output_idx());
@@ -44,17 +49,24 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         output_requires_grad |= input_tensor->requires_grad();
     }
 
+    auto output_requires_grad_flags = OutputRequiresGrad(input_tensors);
     grad_outputs_reached_ = 0;
-    grad_outputs_.resize(output_tensors.size(), nullptr);
+
+    grad_outputs_.clear();
     for (int output_idx = 0; output_idx < output_tensors.size(); ++output_idx) {
         auto &output_tensor = output_tensors[output_idx];
-        // TODO(dcj): Mark if an output tensor need differentiable or not.
-        output_tensor->set_requires_grad(output_requires_grad);
-        output_tensor->set_is_leaf(false);
-        output_tensor->set_grad_fn(output_requires_grad ? shared_from_this() : nullptr);
-        output_tensor->set_output_idx(output_idx);
-    }
 
+        // TODO(dcj): Mark if an output tensor need differentiable or not.
+        bool need_grad = output_requires_grad_flags[output_idx];
+        output_tensor->set_requires_grad(need_grad);
+        output_tensor->set_is_leaf(false);
+        output_tensor->set_grad_fn(need_grad ? shared_from_this() : nullptr);
+        output_tensor->set_output_idx(output_idx);
+
+        if (need_grad) {
+            grad_outputs_.push_back(nullptr);
+        }
+    }
     return output_tensors;
 }
 
@@ -75,19 +87,21 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
         kernel.Call<void>(grad_output, 1.0f, grad_outputs_.at(grad_output_idx));
     }
     ++dependencies_reached_;
+
     if (grad_outputs_reached_ == grad_outputs_.size()
         && (dependencies_reached_ == dependencies_number_ || dependencies_number_ == 0)) {
+
         std::vector<std::shared_ptr<Tensor>> grad_inputs;
         {
             autograd::NoGradGuard no_grad;
             // no_grad in autograd.Function.Backward()
             grad_inputs = Backward(grad_outputs_);
         }
+
         saved_tensors_.clear();
         grad_outputs_.clear();
         grad_outputs_reached_ = 0;
         dependencies_reached_ = 0;
-
         CHECK_EQ(grad_inputs.size(), next_functions_.size());
         for (int idx = 0; idx < grad_inputs.size(); ++idx) {
             auto &grad_input = grad_inputs[idx];

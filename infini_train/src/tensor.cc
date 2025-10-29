@@ -197,7 +197,6 @@ Tensor Tensor::To(const Device *device) {
     }
 
     new_tensor.requires_grad_ = requires_grad_;
-
     return new_tensor;
 }
 

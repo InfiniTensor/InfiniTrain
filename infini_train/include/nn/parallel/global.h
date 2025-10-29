@@ -8,7 +8,8 @@ class GlobalEnv {
 public:
     static GlobalEnv &Instance();
 
-    void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled = false);
+    void Init(int threads_per_process, int pipeline_parallel_size, int tensor_parallel_size,
+              bool sequence_parallel_enabled = false);
 
     int world_size() const;
 
@@ -25,6 +26,8 @@ public:
     bool sequence_parallel_enabled() const;
 
     int data_parallel_size() const;
+
+    int pipeline_parallel_size() const;
 
 private:
     GlobalEnv() = default;
@@ -45,12 +48,16 @@ private:
 
     int data_parallel_size_ = 1;
 
+    int pipeline_parallel_size_ = 1;
+
     mutable std::mutex mutex_;
     bool initialized_ = false;
 };
 
-inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled = false) {
-    GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled);
+inline void InitAllEnv(int nthread_per_process, int pipeline_parallel_size, int tensor_parallel_size,
+                       bool sequence_parallel_enabled = false) {
+    GlobalEnv::Instance().Init(nthread_per_process, pipeline_parallel_size, tensor_parallel_size,
+                               sequence_parallel_enabled);
 }
 
 inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }
@@ -62,5 +69,6 @@ inline int GetLocalProcRank() { return GlobalEnv::Instance().local_proc_rank(); 
 inline int GetTensorParallelSize() { return GlobalEnv::Instance().tensor_parallel_size(); }
 inline bool GetSequenceParallelEnabled() { return GlobalEnv::Instance().sequence_parallel_enabled(); }
 inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
+inline int GetPipelineParallelSize() { return GlobalEnv::Instance().pipeline_parallel_size(); }
 
 } // namespace infini_train::nn::parallel::global

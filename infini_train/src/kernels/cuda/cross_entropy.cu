@@ -1,4 +1,5 @@
 #include <cmath>
+#include <iostream>
 #include <limits>
 #include <numeric>
 
@@ -83,17 +84,18 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
     int num_blocks = bs;
 
     const auto *cuda_device = dynamic_cast<const CudaDevice *>(target->GetDevice());
+
     return DispatchFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>, DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
         {target->Dtype(), input->Dtype()},
         [=]<typename Ttarget, typename Tinput>() {
             const Ttarget *target_ptr = static_cast<const Ttarget *>(target->DataPtr());
             const Tinput *input_ptr = static_cast<const Tinput *>(input->DataPtr());
             Tinput *batched_loss_ptr = static_cast<Tinput *>(batched_output->DataPtr());
+
             // FIXME(dcj): do reduce on GPU
             CrossEntropyForwardKernel<threads_per_block, Ttarget, Tinput>
                 <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(input_ptr, target_ptr, batched_loss_ptr,
                                                                               bs, num_classes);
-
             auto loss_cpu = batched_output->To(DeviceManager::Instance()->GetDefaultDevice());
             auto loss = std::make_shared<Tensor>(std::vector<int64_t>{}, input->Dtype(),
                                                  DeviceManager::Instance()->GetDefaultDevice());

@@ -21,7 +21,8 @@ GlobalEnv &GlobalEnv::Instance() {
     return instance;
 }
 
-void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled) {
+void GlobalEnv::Init(int nthread_per_process, int pipeline_parallel_size, int tensor_parallel_size,
+                     bool sequence_parallel_enabled) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
@@ -36,6 +37,7 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     tensor_parallel_size_ = tensor_parallel_size;
     sequence_parallel_enabled_ = sequence_parallel_enabled;
     data_parallel_size_ = world_size_ / tensor_parallel_size_;
+    pipeline_parallel_size_ = pipeline_parallel_size;
     initialized_ = true;
 }
 
@@ -79,4 +81,8 @@ int GlobalEnv::data_parallel_size() const {
     return data_parallel_size_;
 }
 
+int GlobalEnv::pipeline_parallel_size() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return pipeline_parallel_size_;
+}
 } // namespace infini_train::nn::parallel::global
