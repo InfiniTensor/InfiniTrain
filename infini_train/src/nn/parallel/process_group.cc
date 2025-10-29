@@ -262,6 +262,52 @@ std::shared_ptr<Tensor> ProcessGroup::Gather(const std::vector<std::shared_ptr<T
     NCCL_CHECK(ncclGroupEnd());
     return output;
 }
+
+std::vector<std::shared_ptr<Tensor>> ProcessGroup::NcclSend(std::vector<std::shared_ptr<Tensor>> tensors,
+                                                            int dest_rank) const {
+    for (int i = 0; i < tensors.size(); ++i) {
+        auto tensor = tensors[i];
+        CHECK_NOTNULL(tensor);
+
+        auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+        cudaStream_t stream = device_ptr->Stream();
+        ncclComm_t comm = device_comm_map_.at(device_ptr);
+
+        CHECK_NE(dest_rank, -1) << "Destination device not found in input tensors's devices";
+
+        auto dtype = tensor->Dtype();
+        auto nccl_dtype = kNcclDtypeMap.at(dtype);
+        auto count = tensor->NumElements();
+        void *buffer = tensor->DataPtr();
+        CHECK_NOTNULL(buffer);
+
+        NCCL_CHECK(ncclSend(buffer, count, nccl_dtype, dest_rank, comm, stream));
+    }
+    return tensors;
+}
+
+std::vector<std::shared_ptr<Tensor>> ProcessGroup::NcclRecv(std::vector<std::shared_ptr<Tensor>> tensors,
+                                                            int src_rank) const {
+    for (int i = 0; i < tensors.size(); ++i) {
+        auto tensor = tensors[i];
+        CHECK_NOTNULL(tensor);
+
+        auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+        cudaStream_t stream = device_ptr->Stream();
+        ncclComm_t comm = device_comm_map_.at(device_ptr);
+
+        CHECK_NE(src_rank, -1) << "Source device not found in input devices";
+
+        auto dtype = tensor->Dtype();
+        auto nccl_dtype = kNcclDtypeMap.at(dtype);
+        auto count = tensor->NumElements();
+        void *buffer = tensor->DataPtr();
+        CHECK_NOTNULL(buffer);
+
+        NCCL_CHECK(ncclRecv(buffer, count, nccl_dtype, src_rank, comm, stream));
+    }
+    return tensors;
+}
 #endif
 
 ProcessGroupFactory *ProcessGroupFactory::Instance() {
