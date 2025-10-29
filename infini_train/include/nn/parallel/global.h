@@ -4,6 +4,10 @@
 #include <string>
 #include <vector>
 
+#ifdef USE_NCCL
+#include <nccl.h>
+#endif
+
 namespace infini_train::nn::parallel::global {
 
 enum Axis : uint8_t { DP = 0, TP = 1, PP = 2, AXIS_COUNT = 3 };
@@ -48,6 +52,9 @@ public:
     int pipeline_parallel_size() const;
 
     Layout layout() const;
+#ifdef USE_NCCL
+    ncclUniqueId nccl_id() const;
+#endif
 
 private:
     GlobalEnv() = default;
@@ -116,5 +123,8 @@ inline std::vector<int> GetGroupRanks(Axis target, int rank) {
 }
 
 std::string ProcessGroupOverview(const Layout &L = GlobalEnv::Instance().layout(), bool skip_trivial_axes = true);
+#ifdef USE_NCCL
+inline ncclUniqueId GetNcclId() { return GlobalEnv::Instance().nccl_id(); }
+#endif
 
 } // namespace infini_train::nn::parallel::global

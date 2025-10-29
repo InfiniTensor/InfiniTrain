@@ -3,6 +3,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -27,6 +28,9 @@ namespace infini_train::nn::parallel {
 class ProcessGroup {
 public:
     explicit ProcessGroup(const std::vector<int> &device_indices);
+
+    // support for multi-node distributed training
+    explicit ProcessGroup(const ncclUniqueId &nccl_id);
 
     int GetGroupRank(int thread_rank) const;
 
@@ -53,13 +57,16 @@ public:
     std::vector<std::shared_ptr<Tensor>> NcclRecv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank) const;
 
 private:
+    void Init(const std::vector<int> &device_indices);
+
+private:
     std::vector<ncclComm_t> comms_;
     std::vector<const Device *> devices_;
 
     std::unordered_map<const Device *, ncclComm_t> device_comm_map_;
     std::unordered_map<int, int> thread_group_rank_map_; // thread_rank : group_rank
 
-    int comm_size_ = 0;
+    int world_size_ = 0;
 };
 #endif
 
@@ -73,12 +80,37 @@ public:
 
     const ProcessGroup *GetOrCreate(const std::string &name, const std::vector<int> &device_indices);
 
+#ifdef USE_NCCL
+    const ProcessGroup *GetOrCreate(const std::string &name, const ncclUniqueId &nccl_id);
+#endif
+
     const ProcessGroup *Get(const std::string &name) const;
 
     const ProcessGroup *GetDefaultProcessGroup() const;
 
 private:
     ProcessGroupFactory();
+
+    template <typename Creator, typename = std::enable_if_t<std::is_invocable_v<Creator>>>
+    const ProcessGroup *GetOrCreate(const std::string &name, Creator &&creator) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            auto it = name_to_group_.find(name);
+            if (it != name_to_group_.end()) {
+                return it->second.get();
+            }
+        }
+
+        auto new_group = creator();
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            auto [it, inserted] = name_to_group_.emplace(name, std::move(new_group));
+            return it->second.get();
+        }
+    }
+
+private:
     // TODO(dcj): maybe RWLock later?
     mutable std::mutex mutex_;
     std::unordered_map<std::string, std::unique_ptr<ProcessGroup>> name_to_group_;

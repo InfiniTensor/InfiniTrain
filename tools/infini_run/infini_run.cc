@@ -25,7 +25,7 @@ DEFINE_string(rdzv_endpoint, "127.0.0.1:29500", "Rendezvous endpoint (host:port)
 std::string NcclIdToString(const ncclUniqueId& id) {
     std::ostringstream oss;
     for (int i = 0; i < NCCL_UNIQUE_ID_BYTES; ++i) {
-        oss << std::hex << std::uppercase << (int)(unsigned char)id.internal[i];
+        oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << (int)(unsigned char)id.internal[i];
     }
     return oss.str();
 }
@@ -98,6 +98,12 @@ int main(int argc, char **argv) {
         int status;
         wait(&status);
     }
+
+#ifdef USE_NCCL
+    if (FLAGS_node_rank == 0) {
+        std::remove(nccl_id_path);
+    }
+#endif
 
     return 0;
 }
