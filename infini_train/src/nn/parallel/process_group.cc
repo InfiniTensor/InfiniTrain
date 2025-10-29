@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/parallel/process_group.h"
 
+#include <memory>
 #include <numeric>
 #include <vector>
 
@@ -40,11 +41,32 @@ const std::unordered_map<ReduceOpType, ncclRedOp_t> kNcclReduceOpMap = {
 namespace infini_train::nn::parallel {
 
 #ifdef USE_NCCL
-ProcessGroup::ProcessGroup(const std::vector<int> &device_indices) : comm_size_(device_indices.size()) {
-    comms_.resize(comm_size_);
-    NCCL_CHECK(ncclCommInitAll(comms_.data(), comm_size_, device_indices.data()));
+ProcessGroup::ProcessGroup(const std::vector<int> &device_indices) : world_size_(device_indices.size()) {
+    comms_.resize(world_size_);
+    NCCL_CHECK(ncclCommInitAll(comms_.data(), world_size_, device_indices.data()));
 
-    for (int i = 0; i < comm_size_; i++) {
+    Init(device_indices);
+}
+
+ProcessGroup::ProcessGroup(const ncclUniqueId &nccl_id) : world_size_(global::GetWorldSize()) {
+    int local_comm_size = global::GetNthreadPerProc();
+    comms_.resize(local_comm_size);
+    std::vector<int> device_indices(local_comm_size);
+
+    NCCL_CHECK(ncclGroupStart());
+    for (int i = 0; i < local_comm_size; ++i) {
+        device_indices[i] = i;
+
+        int global_rank = global::GetGlobalProcRank() * global::GetNthreadPerProc() + i;
+        NCCL_CHECK(ncclCommInitRank(&comms_[i], world_size_, nccl_id, global_rank));
+    }
+    NCCL_CHECK(ncclGroupEnd());
+
+    Init(device_indices);
+}
+
+void ProcessGroup::Init(const std::vector<int> &device_indices) {
+    for (int i = 0; i < world_size_; ++i) {
         auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, device_indices[i]);
         devices_.push_back(device);
         device_comm_map_[device] = comms_[i];
@@ -92,7 +114,9 @@ ProcessGroup::BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensor
     std::vector<ncclComm_t> comms;
     std::vector<const Device *> devices;
 
-    for (size_t i = 0; i < comm_size_; ++i) {
+    CHECK_EQ(world_size_, comms_.size());
+
+    for (size_t i = 0; i < world_size_; ++i) {
         auto device = devices_[i];
         for (const auto &input_tensor : input_tensors) {
             outputs.push_back(std::make_shared<Tensor>(input_tensor->Dims(), input_tensor->Dtype(), device));
@@ -277,31 +301,20 @@ ProcessGroupFactory *ProcessGroupFactory::Instance() {
 }
 
 const ProcessGroup *ProcessGroupFactory::GetOrCreate(const std::string &name, int comm_size) {
-    std::vector<int> devices(comm_size);
-    std::iota(devices.begin(), devices.end(), 0);
-    const std::vector<int> &device_indices = devices;
-
-    return GetOrCreate(name, device_indices);
+    std::vector<int> device_indices(comm_size);
+    std::iota(device_indices.begin(), device_indices.end(), 0);
+    return GetOrCreate(name, [&]() { return std::make_unique<ProcessGroup>(device_indices); });
 }
 
 const ProcessGroup *ProcessGroupFactory::GetOrCreate(const std::string &name, const std::vector<int> &device_indices) {
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        auto it = name_to_group_.find(name);
-        if (it != name_to_group_.end()) {
-            return it->second.get();
-        }
-    }
-
-    auto new_group = std::make_unique<ProcessGroup>(device_indices);
-
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        auto [it, inserted] = name_to_group_.emplace(name, std::move(new_group));
-        return it->second.get();
-    }
+    return GetOrCreate(name, [&]() { return std::make_unique<ProcessGroup>(device_indices); });
 }
+
+#ifdef USE_NCCL
+const ProcessGroup *ProcessGroupFactory::GetOrCreate(const std::string &name, const ncclUniqueId &nccl_id) {
+    return GetOrCreate(name, [&]() { return std::make_unique<ProcessGroup>(nccl_id); });
+}
+#endif
 
 const ProcessGroup *ProcessGroupFactory::Get(const std::string &name) const {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -312,5 +325,11 @@ const ProcessGroup *ProcessGroupFactory::GetDefaultProcessGroup() const {
     return name_to_group_.at(kDefaltProcessGroupName).get();
 }
 
-ProcessGroupFactory::ProcessGroupFactory() { GetOrCreate(kDefaltProcessGroupName, global::GetWorldSize()); }
+ProcessGroupFactory::ProcessGroupFactory() {
+#ifdef USE_NCCL
+    GetOrCreate(kDefaltProcessGroupName, global::GetNcclId());
+#else
+    GetOrCreate(kDefaltProcessGroupName, global::GetWorldSize());
+#endif
+}
 } // namespace infini_train::nn::parallel

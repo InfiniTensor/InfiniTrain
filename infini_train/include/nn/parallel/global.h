@@ -2,6 +2,10 @@
 
 #include <mutex>
 
+#ifdef USE_NCCL
+#include <nccl.h>
+#endif
+
 namespace infini_train::nn::parallel::global {
 
 class GlobalEnv {
@@ -26,6 +30,10 @@ public:
 
     int data_parallel_size() const;
 
+#ifdef USE_NCCL
+    ncclUniqueId nccl_id() const;
+#endif
+
 private:
     GlobalEnv() = default;
     ~GlobalEnv() = default;
@@ -45,6 +53,10 @@ private:
 
     int data_parallel_size_ = 1;
 
+#ifdef USE_NCCL
+    ncclUniqueId nccl_id_;
+#endif
+
     mutable std::mutex mutex_;
     bool initialized_ = false;
 };
@@ -62,5 +74,9 @@ inline int GetLocalProcRank() { return GlobalEnv::Instance().local_proc_rank(); 
 inline int GetTensorParallelSize() { return GlobalEnv::Instance().tensor_parallel_size(); }
 inline bool GetSequenceParallelEnabled() { return GlobalEnv::Instance().sequence_parallel_enabled(); }
 inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
+
+#ifdef USE_NCCL
+inline ncclUniqueId GetNcclId() { return GlobalEnv::Instance().nccl_id(); }
+#endif
 
 } // namespace infini_train::nn::parallel::global

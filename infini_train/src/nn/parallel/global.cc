@@ -13,6 +13,11 @@ int GetEnvAsInt(const std::string &name, int default_value) {
     return value ? std::atoi(value) : default_value;
 }
 
+std::string GetEnvAsStr(const std::string &name, const std::string &default_value) {
+    const char *value = std::getenv(name.c_str());
+    return value ? std::string(value) : default_value;
+}
+
 #ifdef USE_NCCL
 ncclUniqueId StringToNcclId(const std::string &str) {
     ncclUniqueId id;
@@ -51,6 +56,12 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     tensor_parallel_size_ = tensor_parallel_size;
     sequence_parallel_enabled_ = sequence_parallel_enabled;
     data_parallel_size_ = world_size_ / tensor_parallel_size_;
+
+    // FIXME(dcj): what if no nccl id?
+#ifdef USE_NCCL
+    nccl_id_ = StringToNcclId(GetEnvAsStr("NCCL_UNIQUE_ID", ""));
+#endif
+
     initialized_ = true;
 }
 
@@ -93,5 +104,12 @@ int GlobalEnv::data_parallel_size() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return data_parallel_size_;
 }
+
+#ifdef USE_NCCL
+ncclUniqueId GlobalEnv::nccl_id() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return nccl_id_;
+}
+#endif
 
 } // namespace infini_train::nn::parallel::global
