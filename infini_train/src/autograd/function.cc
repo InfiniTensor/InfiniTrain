@@ -29,8 +29,12 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         return output_tensors;
     }
 
-    bool output_requires_grad = false;
+    auto input_requires_grad_flags = InputRequiresGrad(input_tensors);
+
     for (int idx = 0; idx < input_tensors.size(); ++idx) {
+        if (!input_requires_grad_flags[idx]) {
+            continue;
+        }
         const auto &input_tensor = input_tensors[idx];
         if (input_tensor->requires_grad() && input_tensor->is_leaf()) {
             next_functions_.emplace_back(input_tensor->grad_accumulator(), input_tensor->output_idx());
@@ -41,18 +45,23 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
                 input_tensor->grad_fn()->IncreaseDependenciesNumber();
             }
         }
-        output_requires_grad |= input_tensor->requires_grad();
     }
 
     grad_outputs_reached_ = 0;
-    grad_outputs_.resize(output_tensors.size(), nullptr);
+    auto output_requires_grad_flags = OutputRequiresGrad(output_tensors);
+    grad_outputs_.clear();
     for (int output_idx = 0; output_idx < output_tensors.size(); ++output_idx) {
         auto &output_tensor = output_tensors[output_idx];
         // TODO(dcj): Mark if an output tensor need differentiable or not.
+        auto output_requires_grad = output_requires_grad_flags[output_idx];
         output_tensor->set_requires_grad(output_requires_grad);
         output_tensor->set_is_leaf(false);
         output_tensor->set_grad_fn(output_requires_grad ? shared_from_this() : nullptr);
         output_tensor->set_output_idx(output_idx);
+
+        if (output_requires_grad) {
+            grad_outputs_.push_back(nullptr);
+        }
     }
 
     return output_tensors;
