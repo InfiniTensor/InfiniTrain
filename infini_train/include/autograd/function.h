@@ -26,6 +26,14 @@ public:
     std::vector<std::shared_ptr<Tensor>> Apply(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
     virtual void BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int idx);
 
+    virtual std::vector<bool> InputRequiresGrad(const std::vector<std::shared_ptr<Tensor>> &inputs) {
+        return std::vector<bool>(inputs.size(), true);
+    }
+
+    virtual std::vector<bool> OutputRequiresGrad(const std::vector<std::shared_ptr<Tensor>> &outputs) {
+        return std::vector<bool>(outputs.size(), true);
+    }
+
     void IncreaseDependenciesNumber();
 
 protected:
