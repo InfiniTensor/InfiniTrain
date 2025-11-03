@@ -112,7 +112,7 @@ void Train(const nn::parallel::Rank &rank) {
         if (ddp_world_size > 1) {
             ddp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetDataParallelProcessGroupName(rank.thread_rank()),
                                                                   GetDataParallelGroupRanks(rank.thread_rank()));
-            ddp_rank = ddp_pg->GetGroupRank(rank.thread_rank());
+            ddp_rank = ddp_pg->GetGroupRank(rank.GlobalRank());
         }
 
         if (tp_world_size > 1) {
