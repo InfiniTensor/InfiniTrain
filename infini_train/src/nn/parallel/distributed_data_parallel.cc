@@ -24,8 +24,8 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
 
         auto ddp_pg
             = ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(device->rank().thread_rank()));
-        auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(function::ReduceOpType::kAvg,
-                                                                                          ddp_pg);
+        // FIXME(dcj): use multi-node ddp_pg here
+        auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(function::ReduceOpType::kAvg);
         param->RegisterPostAccumulateGradHook(std::move(hook));
     }
     for (auto &buffer : module->Buffers()) {
