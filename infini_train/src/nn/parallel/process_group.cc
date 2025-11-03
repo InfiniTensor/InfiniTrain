@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/parallel/process_group.h"
 
+#include <algorithm>
 #include <memory>
 #include <numeric>
 #include <vector>
@@ -52,6 +53,8 @@ ProcessGroup::ProcessGroup(const ncclUniqueId &nccl_id) : world_size_(global::Ge
         device_indices[i] = i;
 
         int global_rank = global::GetGlobalProcRank() * global::GetNthreadPerProc() + i;
+
+        cudaSetDevice(i);
         NCCL_CHECK(ncclCommInitRank(&comms_[i], world_size_, nccl_id, global_rank));
     }
     NCCL_CHECK(ncclGroupEnd());
@@ -64,11 +67,14 @@ void ProcessGroup::Init(const std::vector<int> &device_indices) {
     int current_device = -1;
     CUDA_CHECK(cudaGetDevice(&current_device));
 
-    for (int i = 0; i < world_size_; ++i) {
+    // FIXME(dcj): This is a temporary solution to get the device and comm for each thread.
+    int local_comm_size = std::min(static_cast<int>(device_indices.size()), global::GetNthreadPerProc());
+
+    for (int i = 0; i < local_comm_size; ++i) {
         auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, device_indices[i]);
         devices_.push_back(device);
         device_comm_map_[device] = comms_[i];
-        thread_group_rank_map_[device->rank().thread_rank()] = i;
+        thread_group_rank_map_[device->rank().thread_rank()] = i + global::GetGlobalProcRank() * local_comm_size;
 
         device->SetDevice();
         int low, high;

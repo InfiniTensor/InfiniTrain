@@ -10,6 +10,8 @@ public:
     int process_size() const;
     int thread_size() const;
 
+    int GlobalRank() const;
+
     bool IsParallel() const;
 
     bool IsMainRank() const;
