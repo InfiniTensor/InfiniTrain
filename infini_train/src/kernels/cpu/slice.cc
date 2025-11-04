@@ -16,7 +16,7 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     CHECK_EQ(starts.size(), dims.size());
 
     std::vector<int64_t> new_dims;
-    for (int i = 0; i < starts.size(); i++) {
+    for (int i = 0; i < starts.size(); ++i) {
         CHECK_LE(starts[i], ends[i]);
         CHECK_LE(0, steps[i]);
         new_dims.push_back((ends[i] - starts[i] + steps[i] - 1) / steps[i]);
@@ -76,7 +76,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     CHECK_EQ(starts.size(), dims.size());
 
     std::vector<int64_t> new_dims;
-    for (int i = 0; i < starts.size(); i++) {
+    for (int i = 0; i < starts.size(); ++i) {
         CHECK_LE(starts[i], ends[i]);
         CHECK_LE(0, steps[i]);
         new_dims.push_back((ends[i] - starts[i] + steps[i] - 1) / steps[i]);

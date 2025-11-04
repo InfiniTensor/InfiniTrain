@@ -59,7 +59,7 @@ int SampleMult(float *probabilities, int n, float coin) {
     // sample index from probabilities (they must sum to 1!)
     // coin is a random number in [0, 1), usually from RandomF32()
     float cdf = 0.0f;
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; ++i) {
         cdf += probabilities[i];
         if (coin < cdf) {
             return i;
@@ -133,7 +133,7 @@ void Tokenizer::GenerateText(infini_train::nn::Module &model, uint32_t batch_siz
     LOG(INFO) << "start generate text:";
 
     const auto *cpu_device = DeviceManager::Instance()->GetDefaultDevice();
-    for (int t = prompt_len; t < text_length; t++) {
+    for (int t = prompt_len; t < text_length; ++t) {
         x = std::make_shared<infini_train::Tensor>(x->To(device)); // CPU->calc device
         // TODO(jym): use no_grad forward later
         auto logits = model.Forward({x})[0];

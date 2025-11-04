@@ -189,7 +189,7 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
         transformer[kWPELayerName] = std::make_shared<nn::Embedding>(config_.block_size, config_.n_embd);
         {
             std::vector<std::shared_ptr<nn::Module>> h;
-            for (int64_t i = 0; i < config_.n_layer; i++) { h.push_back(std::make_shared<Block>(config_)); }
+            for (int64_t i = 0; i < config_.n_layer; ++i) { h.push_back(std::make_shared<Block>(config_)); }
             transformer[kHLayerName] = std::make_shared<nn::Sequential>(std::move(h));
         }
         transformer[kLnFLayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd});
@@ -415,21 +415,21 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
                                                           nn::Embedding::kParamWeightName)];
     ReadMatrixAllFloat(ifs, static_cast<float *>(transformer_wpe_weight->DataPtr()), block_size, n_embd);
     // transformer.h.{i}.ln_1.weight
-    for (int idx = 0; idx < n_layer; idx++) {
+    for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor
             = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
                                      std::to_string(idx), Block::kLn1LayerName, nn::LayerNorm::kParamWeightName)];
         ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
     }
     // transformer.h.{i}.ln_1.bias
-    for (int idx = 0; idx < n_layer; idx++) {
+    for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor
             = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
                                      std::to_string(idx), Block::kLn1LayerName, nn::LayerNorm::kParamBiasName)];
         ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
     }
     // transformer.h.{i}.attn.c_attn.weight (ColumnParallelLinear, but actually applies on "rows")
-    for (int idx = 0; idx < n_layer; idx++) {
+    for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor = state_dict[std::format(
             "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(idx),
             Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName, tp::ColumnParallelLinear::kParamWeightName)];
@@ -461,7 +461,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
                                 /*row_start=*/2 * n_embd + rank * local_C, /*row_cnt=*/local_C);
     }
     // transformer.h.{i}.attn.c_attn.bias (ColumnParallelLinear)
-    for (int idx = 0; idx < n_layer; idx++) {
+    for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor = state_dict[std::format(
             "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(idx),
             Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName, tp::ColumnParallelLinear::kParamBiasName)];
@@ -492,56 +492,56 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
                              /*start=*/2 * n_embd + rank * local_C, /*cnt=*/local_C);
     }
     // transformer.h.{i}.attn.c_proj.weight (RowParallelLinear, but actually applies on "columns")
-    for (int idx = 0; idx < n_layer; idx++) {
+    for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor = state_dict[std::format(
             "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(idx),
             Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName, tp::RowParallelLinear::kParamWeightName)];
         ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, n_embd, rank * in_pp, in_pp);
     }
     // transformer.h.{i}.attn.c_proj.bias (RowParallelLinear, no shard on bias)
-    for (int idx = 0; idx < n_layer; idx++) {
+    for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor = state_dict[std::format(
             "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(idx),
             Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName, tp::RowParallelLinear::kParamBiasName)];
         ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
     }
     // transformer.h.{i}.ln_2.weight
-    for (int idx = 0; idx < n_layer; idx++) {
+    for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor
             = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
                                      std::to_string(idx), Block::kLn2LayerName, nn::LayerNorm::kParamWeightName)];
         ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
     }
     // transformer.h.{i}.ln_2.bias
-    for (int idx = 0; idx < n_layer; idx++) {
+    for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor
             = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
                                      std::to_string(idx), Block::kLn2LayerName, nn::LayerNorm::kParamBiasName)];
         ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
     }
     // transformer.h.{i}.mlp.c_fc.weight (ColumnParallelLinear, but actually applies on "rows")
-    for (int idx = 0; idx < n_layer; idx++) {
+    for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
                                               std::to_string(idx), Block::kMlpLayerName, MLP::kCFcLayerName,
                                               tp::ColumnParallelLinear::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, n_embd, fc_start, fc_pp);
     }
     // transformer.h.{i}.mlp.c_fc.bias (ColumnParallelLinear)
-    for (int idx = 0; idx < n_layer; idx++) {
+    for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
                                               std::to_string(idx), Block::kMlpLayerName, MLP::kCFcLayerName,
                                               tp::ColumnParallelLinear::kParamBiasName)];
         ReadVectorShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, fc_start, fc_pp);
     }
     // transformer.h.{i}.mlp.c_proj.weight (RowParallelLinear, but actually applies on "columns")
-    for (int idx = 0; idx < n_layer; idx++) {
+    for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
                                               std::to_string(idx), Block::kMlpLayerName, MLP::kCProjLayerName,
                                               tp::RowParallelLinear::kParamWeightName)];
         ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, fc_out, rank * in4_pp, in4_pp);
     }
     // transformer.h.{i}.mlp.c_proj.bias (RowParallelLinear, no shard on bias)
-    for (int idx = 0; idx < n_layer; idx++) {
+    for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
                                               std::to_string(idx), Block::kMlpLayerName, MLP::kCProjLayerName,
                                               tp::RowParallelLinear::kParamBiasName)];
