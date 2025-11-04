@@ -329,7 +329,7 @@ LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
             config.vocab_size, config.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
         {
             std::vector<std::shared_ptr<nn::Module>> h;
-            for (int64_t i = 0; i < config.n_layer; i++) { h.push_back(std::make_shared<Block>(config)); }
+            for (int64_t i = 0; i < config.n_layer; ++i) { h.push_back(std::make_shared<Block>(config)); }
             transformer[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
         }
         transformer[kLnFLayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);

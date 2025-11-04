@@ -31,16 +31,16 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
     mean->Fill<float>(0.0f);
     rstd->Fill<float>(0.0f);
 
-    for (int b = 0; b < batch_size; b++) {
-        for (int t = 0; t < max_seqlen; t++) {
+    for (int b = 0; b < batch_size; ++b) {
+        for (int t = 0; t < max_seqlen; ++t) {
             float m = 0.0f;
-            for (int i = 0; i < embed_dim; i++) {
+            for (int i = 0; i < embed_dim; ++i) {
                 m += static_cast<float *>(input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i];
             }
             m = m / embed_dim;
 
             float v = 0.0f;
-            for (int i = 0; i < embed_dim; i++) {
+            for (int i = 0; i < embed_dim; ++i) {
                 float xshift
                     = static_cast<float *>(input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i] - m;
                 v += xshift * xshift;
@@ -49,7 +49,7 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
 
             float s = 1.0f / sqrtf(v + eps);
 
-            for (int i = 0; i < embed_dim; i++) {
+            for (int i = 0; i < embed_dim; ++i) {
                 float n = (s
                            * (static_cast<float *>(input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i]
                               - m)); // normalize
@@ -88,15 +88,15 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     grad_weight->Fill<float>(0.0f);
     grad_bias->Fill<float>(0.0f);
 
-    for (int b = 0; b < batch_size; b++) {
-        for (int t = 0; t < max_seqlen; t++) {
+    for (int b = 0; b < batch_size; ++b) {
+        for (int t = 0; t < max_seqlen; ++t) {
             float mean_bt = static_cast<float *>(mean->DataPtr())[b * max_seqlen + t];
             float rstd_bt = static_cast<float *>(rstd->DataPtr())[b * max_seqlen + t];
 
             // first: two reduce operations
             float dnorm_mean = 0.0f;
             float dnorm_norm_mean = 0.0f;
-            for (int i = 0; i < embed_dim; i++) {
+            for (int i = 0; i < embed_dim; ++i) {
                 float norm_bti
                     = (static_cast<float *>(input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i] - mean_bt)
                     * rstd_bt;
@@ -110,7 +110,7 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
             dnorm_norm_mean = dnorm_norm_mean / embed_dim;
 
             // now iterate again and accumulate all the gradients
-            for (int i = 0; i < embed_dim; i++) {
+            for (int i = 0; i < embed_dim; ++i) {
                 float norm_bti
                     = (static_cast<float *>(input->DataPtr())[b * max_seqlen * embed_dim + t * embed_dim + i] - mean_bt)
                     * rstd_bt;

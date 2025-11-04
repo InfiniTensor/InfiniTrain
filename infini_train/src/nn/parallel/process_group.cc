@@ -44,7 +44,7 @@ ProcessGroup::ProcessGroup(const std::vector<int> &device_indices) : comm_size_(
     comms_.resize(comm_size_);
     NCCL_CHECK(ncclCommInitAll(comms_.data(), comm_size_, device_indices.data()));
 
-    for (int i = 0; i < comm_size_; i++) {
+    for (int i = 0; i < comm_size_; ++i) {
         auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, device_indices[i]);
         devices_.push_back(device);
         device_comm_map_[device] = comms_[i];
