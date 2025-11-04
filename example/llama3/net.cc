@@ -319,7 +319,7 @@ std::vector<std::shared_ptr<Tensor>> Block::Forward(const std::vector<std::share
             + modules_[kMlpLayerName]->Forward(
                 std::vector<std::shared_ptr<Tensor>>(modules_[kLn2LayerName]->Forward({x1})))[0];
     // (bs, seq_len, n_embd)
-    return {x2, freqs_cis, start_pos, mask};
+    return {x2};
 }
 
 LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
@@ -330,7 +330,7 @@ LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
         {
             std::vector<std::shared_ptr<nn::Module>> h;
             for (int64_t i = 0; i < config.n_layer; i++) { h.push_back(std::make_shared<Block>(config)); }
-            transformer[kHLayerName] = std::make_shared<nn::Sequential>(std::move(h));
+            transformer[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
         }
         transformer[kLnFLayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
         modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
@@ -381,15 +381,21 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
     }
     std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 
-    // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)
-    auto x2 = transformer->mutable_module(kHLayerName)
-                  ->Forward(std::vector<std::shared_ptr<Tensor>>{x1, freqs_view, start_pos_ptr, mask})[0];
+    auto h_modules = transformer->mutable_module(kHLayerName);
+    if (h_modules->type() == nn::ModuleList::kType) {
+        auto h_layers = std::dynamic_pointer_cast<nn::ModuleList>(h_modules);
+        // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)
+        for (auto &h : *h_layers) { x1 = h->Forward({x1, freqs_view, start_pos_ptr, mask})[0]; }
+    } else {
+        LOG(FATAL) << "Failed to get ModuleList from transformer";
+    }
+
     // (bs, seq_len, n_embd) -> RMSNorm -> (bs, seq_len, n_embd)
-    auto x3 = transformer->mutable_module(kLnFLayerName)->Forward({x2});
+    auto x2 = transformer->mutable_module(kLnFLayerName)->Forward({x1});
 
     // TODO(zbl): add inference-time mini-optimization
     // (bs, seq_len, n_embd) -> Linear(n_embd, vocab_size) -> (bs, seq_len, vocab_size)
-    auto logits = modules_[kLMHeadLayerName]->Forward(x3);
+    auto logits = modules_[kLMHeadLayerName]->Forward(x2);
 
     // (bs, seq_len, vocab_size)
     return logits;

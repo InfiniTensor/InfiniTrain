@@ -26,4 +26,21 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 };
+
+class ModuleList : public CloneableModule<ModuleList> {
+public:
+    static constexpr char kType[] = "ModuleList";
+
+    explicit ModuleList(std::vector<std::shared_ptr<Module>> &&layers);
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+    auto begin() { return module_list_.begin(); }
+    auto end() { return module_list_.end(); }
+    auto begin() const { return module_list_.begin(); }
+    auto end() const { return module_list_.end(); }
+
+private:
+    std::vector<std::shared_ptr<Module>> module_list_;
+};
 } // namespace infini_train::nn

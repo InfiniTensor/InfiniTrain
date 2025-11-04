@@ -28,4 +28,17 @@ ModuleDict::ModuleDict(std::unordered_map<std::string, std::shared_ptr<Module>> 
 std::vector<std::shared_ptr<Tensor>> ModuleDict::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     LOG(FATAL) << "Not implemented";
 }
+
+ModuleList::ModuleList(std::vector<std::shared_ptr<Module>> &&layers)
+    : CloneableModule(kType), module_list_(std::move(layers)) {
+    int idx = 0;
+    for (auto &layer : module_list_) {
+        modules_[std::to_string(idx)] = layer;
+        ++idx;
+    }
+}
+
+std::vector<std::shared_ptr<Tensor>> ModuleList::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    LOG(FATAL) << "Not implemented";
+}
 } // namespace infini_train::nn
