@@ -52,6 +52,7 @@ void ReadMatrixColShardFloat(std::ifstream &ifs, float *dst, int64_t rows, int64
 void ReadVectorAllFloat(std::ifstream &ifs, float *dst, int64_t len) {
     ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(len * sizeof(float)));
 }
+
 // Read Array Shard: [start : start+cnt)
 void ReadVectorShardFloat(std::ifstream &ifs, float *dst, int64_t len, int64_t start, int64_t cnt) {
     std::streampos base = ifs.tellg();
