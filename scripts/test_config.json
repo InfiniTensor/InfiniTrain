@@ -1,0 +1,121 @@
+{
+    "variables": {
+        "BUILD_DIR": "../build",
+        "GPT2_INPUT_BIN": "../../data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin",
+        "GPT2_LLMC_FILEPATH": "../../data/llmc/gpt2/gpt2_124M.bin",
+        "LLAMA3_INPUT_BIN": "../../data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
+        "LLAMA3_LLMC_FILEPATH": "../../data/llmc/llama3/llama3.2_1B_fp32.bin",
+        "PROFILE_LOG_DIR": "./profile_logs",
+        "LOG_DIR": "logs"
+    },
+    "builds": [
+        {
+            "id": "build_1",
+            "profile": false,
+            "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON .. && make -j"
+        },
+        {
+            "id": "build_2",
+            "profile": true,
+            "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON -DPROFILE_MODE=ON .. && make -j"
+        }
+    ],
+    "tests": [
+        {
+            "id": "1",
+            "args": {
+                "dtype": "float32"
+            }
+        },
+        {
+            "id": "1_bfloat16",
+            "args": {
+                "dtype": "bfloat16"
+            }
+        },
+        {
+            "id": "2",
+            "args": {
+                "dtype": "float32",
+                "num_iteration": 10,
+                "batch_size": 80,
+                "total_batch_size": 5120
+            }
+        },
+        {
+            "id": "2_bfloat16",
+            "args": {
+                "dtype": "bfloat16",
+                "num_iteration": 10,
+                "batch_size": 80,
+                "total_batch_size": 5120
+            }
+        },
+        {
+            "id": "3",
+            "args": {
+                "dtype": "float32",
+                "nthread_per_process": 8,
+                "num_iteration": 10,
+                "batch_size": 10,
+                "total_batch_size": 5120
+            }
+        },
+        {
+            "id": "3_bfloat16",
+            "args": {
+                "dtype": "bfloat16",
+                "nthread_per_process": 8,
+                "num_iteration": 10,
+                "batch_size": 10,
+                "total_batch_size": 5120
+            }
+        },
+        {
+            "id": "4",
+            "args": {
+                "dtype": "float32",
+                "nthread_per_process": 8,
+                "num_iteration": 10,
+                "batch_size": 40,
+                "total_batch_size": 5120,
+                "tensor_parallel": 4
+            }
+        },
+        {
+            "id": "4_bfloat16",
+            "args": {
+                "dtype": "bfloat16",
+                "nthread_per_process": 8,
+                "num_iteration": 10,
+                "batch_size": 40,
+                "total_batch_size": 5120,
+                "tensor_parallel": 4
+            }
+        },
+        {
+            "id": "5",
+            "args": {
+                "dtype": "float32",
+                "nthread_per_process": 8,
+                "num_iteration": 10,
+                "batch_size": 40,
+                "total_batch_size": 5120,
+                "tensor_parallel": 4,
+                "sequence_parallel": true
+            }
+        },
+        {
+            "id": "5_bfloat16",
+            "args": {
+                "dtype": "bfloat16",
+                "nthread_per_process": 8,
+                "num_iteration": 10,
+                "batch_size": 40,
+                "total_batch_size": 5120,
+                "tensor_parallel": 4,
+                "sequence_parallel": true
+            }
+        }
+    ]
+}

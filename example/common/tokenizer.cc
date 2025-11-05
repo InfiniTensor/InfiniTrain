@@ -9,6 +9,8 @@
 
 #include "glog/logging.h"
 
+#include "example/common/utils.h"
+
 namespace infini_train {
 
 constexpr uint32_t kGpt2Eot = 50256;
@@ -30,19 +32,6 @@ const std::unordered_map<uint32_t, std::vector<uint32_t>> kPromptMap = {
     {20240328, std::vector<uint32_t>{464, 3616, 286, 1204, 318}}, // GPT-2
     {20240801, std::vector<uint32_t>{791, 7438, 315, 2324, 374}}, // LLaMA-3
 };
-
-std::vector<uint8_t> ReadSeveralBytesFromIfstream(size_t num_bytes, std::ifstream *ifs) {
-    std::vector<uint8_t> result(num_bytes);
-    ifs->read(reinterpret_cast<char *>(result.data()), num_bytes);
-    return result;
-}
-
-template <typename T> T BytesToType(const std::vector<uint8_t> &bytes, size_t offset) {
-    static_assert(std::is_trivially_copyable<T>::value, "T must be trivially copyable.");
-    T value;
-    std::memcpy(&value, &bytes[offset], sizeof(T));
-    return value;
-}
 
 unsigned int RandomU32(uint64_t &state) {
     state ^= state >> 12;
