@@ -212,6 +212,60 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
         = module(kLMHeadLayerName).parameter(nn::parallel::ColumnParallelLinear::kParamWeightName);
 }
 
+class EmbeddingLayer : public nn::Module {
+
+public:
+    EmbeddingLayer(std::shared_ptr<nn::Module> wte, std::shared_ptr<nn::Module> wpe) {
+        modules_["wte"] = wte;
+        modules_["wpe"] = wpe;
+    }
+
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &inputs) override {
+        auto &input_ids = inputs[0]; // (bs, seq_len)
+        const int seq_len = input_ids->Dims()[1];
+        const auto device = input_ids->GetDevice();
+
+        // position ids: [0, 1, ..., seq_len-1]
+        auto pos_ids = nn::init::Arange(0, seq_len, infini_train::DataType::kINT64, device);
+        // (bs, seq_len) -> wte -> (bs, seq_len, n_embd)
+        auto tok_emb = modules_["wte"]->Forward({input_ids})[0];
+        // (seq_len,) -> wpe -> (seq_len, n_embd)
+        auto pos_emb = modules_["wpe"]->Forward({pos_ids})[0];
+
+        auto output = tok_emb + pos_emb; // (bs, seq_len, n_embd)
+
+        return {output};
+    }
+};
+
+std::vector<std::shared_ptr<nn::Module>> GPT2::GetPipelineLayers() {
+    auto &transformer = modules_[kTransformerLayerName];
+
+    std::vector<std::shared_ptr<nn::Module>> layers;
+
+    auto embedding_layer = std::make_shared<EmbeddingLayer>(transformer->mutable_module(kWTELayerName),
+                                                            transformer->mutable_module(kWPELayerName));
+    layers.push_back(embedding_layer);
+
+    auto seq = std::dynamic_pointer_cast<nn::Sequential>(transformer->mutable_module(kHLayerName));
+    if (seq) {
+        for (int idx = 0; idx < seq->size(); ++idx) {
+            auto sub_module = (*seq)[idx];
+            layers.push_back(sub_module);
+        }
+    }
+
+    layers.push_back(transformer->mutable_module(kLnFLayerName));
+    layers.push_back(modules_[kLMHeadLayerName]);
+
+    return layers;
+}
+
+std::unordered_map<std::string, int64_t> GPT2::GetConfig() const {
+    return {{"n_embd", config_.n_embd}, {"n_head", config_.n_head}};
+}
+
 std::vector<std::shared_ptr<infini_train::Tensor>>
 GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     // (B, T)

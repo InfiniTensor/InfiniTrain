@@ -17,6 +17,7 @@
 #include "infini_train/include/nn/parallel/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
@@ -63,6 +64,11 @@ DEFINE_int32(
     "When set > 1, enables data parallelism with device=cuda on the specified number of visible CUDA devices.");
 DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
+DEFINE_bool(
+    pipeline_parallel, false,
+    "use pipeline parallelism or not, will always use device=cuda and use all cuda visible devices when set to true");
+DEFINE_uint32(num_microbatches, 4, "the num of microbatches in pipeline parallelism");
+
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 
@@ -106,6 +112,7 @@ void Train(const nn::parallel::Rank &rank) {
     int ddp_world_size = global::GetDataParallelSize();
     int tp_world_size = global::GetTensorParallelSize();
     int sp_world_size = global::GetSequenceParallelEnabled() ? tp_world_size : 0;
+    int pp_world_size = global::GetPipelineParallelSize();
 
     if (FLAGS_sequence_parallel) {
         CHECK_EQ(FLAGS_sequence_length % tp_world_size, 0)
@@ -114,9 +121,11 @@ void Train(const nn::parallel::Rank &rank) {
 
     int ddp_rank = 0;
     int tp_rank = 0;
+    int pp_rank = 0;
 
     const ProcessGroup *ddp_pg = nullptr;
     const ProcessGroup *tp_pg = nullptr;
+    const ProcessGroup *pp_pg = nullptr;
 
     if (rank.IsParallel()) {
         device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, rank.thread_rank());
@@ -133,6 +142,12 @@ void Train(const nn::parallel::Rank &rank) {
             tp_rank = tp_pg->GetGroupRank(rank.thread_rank());
             // NOTE(zbl): Reserved for VocabParallelEmbedding
             nn::parallel::tp_rank = tp_rank;
+        }
+
+        if (pp_world_size > 1) {
+            pp_pg = ProcessGroupFactory::Instance()->GetOrCreate(
+                GetPipelineParallelProcessGroupName(rank.thread_rank()), GetPipelineParallelGroupRanks(pp_world_size));
+            pp_rank = pp_pg->GetGroupRank(rank.thread_rank());
         }
     } else {
         device = FLAGS_device == kDeviceCPU ? DeviceManager::Instance()->GetDefaultDevice()
@@ -174,6 +189,10 @@ void Train(const nn::parallel::Rank &rank) {
         LOG(FATAL) << "Rank " << rank.thread_rank() << ": Datatype " << FLAGS_dtype << " not supported.";
     }
 
+    // TODO(jym): Temporary implementation before 3D parallelism
+    if (FLAGS_pipeline_parallel) {
+        ddp_world_size = 1;
+    }
     // NOTE(dcj): Complete all device (.to(device)) and dtype (.to(dtype)) conversions
     // before wrapping the model with DistributedDataParallel (DDP).
     // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
@@ -182,8 +201,17 @@ void Train(const nn::parallel::Rank &rank) {
         model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank());
     }
 
-    DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
-                                       FLAGS_batch_size, ddp_rank, ddp_world_size);
+    std::unique_ptr<DataLoader> train_loader;
+    if (FLAGS_pipeline_parallel) {
+        train_loader = std::make_unique<DataLoader>(
+            std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
+            FLAGS_batch_size * pp_world_size);
+    } else {
+        train_loader = std::make_unique<DistributedDataLoader>(
+            std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length), FLAGS_batch_size,
+            ddp_rank, ddp_world_size);
+    }
+
     std::optional<DistributedDataLoader> val_loader = std::nullopt;
     if (!FLAGS_input_val_bin.empty()) {
         val_loader = DistributedDataLoader(
@@ -201,15 +229,32 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     // TODO(dcj): support more complex optimizer later
-    auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
+    auto lr = FLAGS_learning_rate;
+    auto optimizer_factory = [lr](const std::vector<std::shared_ptr<Tensor>> &params) {
+        return std::make_shared<optimizers::SGD>(params, lr);
+    };
+    auto optimizer = optimizer_factory(model->Parameters());
 
-    auto train_iter = train_loader.begin();
+    auto train_iter = train_loader->begin();
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(
               std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.thread_rank() << ": start training";
+
+    if (FLAGS_pipeline_parallel) {
+        CHECK_EQ((FLAGS_batch_size * pp_world_size) % FLAGS_num_microbatches, 0)
+            << "FLAGS_batch_size (" << (FLAGS_batch_size * pp_world_size)
+            << ") must be divisible by FLAGS_num_microbatches (" << FLAGS_num_microbatches << ")";
+        auto shapes = std::vector<std::vector<int64_t>>{{(FLAGS_batch_size * pp_world_size) / FLAGS_num_microbatches,
+                                                         FLAGS_sequence_length, model->GetConfig()["n_embd"]}};
+
+        model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, FLAGS_num_microbatches, shapes,
+                                                                 pp_rank, optimizer_factory);
+    }
+
+    LOG(INFO) << "start training";
 
     for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
         const bool last_step = step == FLAGS_num_iteration;
@@ -234,7 +279,9 @@ void Train(const nn::parallel::Rank &rank) {
         }
 
         // model->Train();
-        optimizer.ZeroGrad();
+        if (!FLAGS_pipeline_parallel) {
+            optimizer->ZeroGrad();
+        }
         // if we are trying to overfit a single batch, we reset the loader here
         if (FLAGS_overfit_single_batch) {
             // train_loader.Reset();
@@ -254,6 +301,19 @@ void Train(const nn::parallel::Rank &rank) {
             ++train_iter;
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
+
+            if (FLAGS_pipeline_parallel) {
+                lossf = model->TrainStep({x}, {y}, loss_fn);
+
+                auto loss_tensor = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kFLOAT32);
+                static_cast<float *>(loss_tensor->DataPtr())[0] = lossf;
+                auto loss_device_ptr = std::make_shared<Tensor>(loss_tensor->To(device));
+                function::AllReduce(loss_device_ptr, function::ReduceOpType::kMax);
+                auto loss_copy = loss_device_ptr->To(DeviceManager::Instance()->GetDefaultDevice());
+                lossf = static_cast<const float *>(loss_copy.DataPtr())[0];
+                continue;
+            }
+
             LOG(INFO) << "Rank " << rank.thread_rank() << ": start forward";
             // (bs, seq_len, vocab_size)
             auto logits = model->Forward({x, y})[0];
@@ -274,17 +334,19 @@ void Train(const nn::parallel::Rank &rank) {
             loss->Backward();
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish backward";
         }
-        optimizer.Step();
 
+        if (!FLAGS_pipeline_parallel) {
+            optimizer->Step();
+        }
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
         if (rank.IsMainRank()) {
-            LOG(ERROR) << std::format(
-                "step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, DP={}, TP={}, SP={})",
-                step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f, tps, ddp_world_size,
-                tp_world_size, sp_world_size);
+            LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
+                                      "DP={}, TP={}, SP={}, PP={})",
+                                      step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
+                                      tps, ddp_world_size, tp_world_size, sp_world_size, pp_world_size);
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
                 if (!tokenizer) {
@@ -304,7 +366,8 @@ int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
-    nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel);
+    nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
+                                     FLAGS_pipeline_parallel);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 
