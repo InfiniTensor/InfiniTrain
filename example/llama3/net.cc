@@ -308,6 +308,7 @@ std::vector<std::shared_ptr<Tensor>> Block::Forward(const std::vector<std::share
     const auto freqs_cis = x.size() > 1 ? x[1] : nullptr;
     const auto start_pos = x.size() > 2 ? x[2] : nullptr;
     const auto mask = x.size() > 3 ? x[3] : nullptr;
+
     // (bs, seq_len, n_embd) -> RMSNorm -> (bs, seq_len, n_embd) -> attention -> (bs, seq_len, n_embd)
     // -> Add -> (bs, seq_len, n_embd)
     auto x1 = x[0]
@@ -344,6 +345,84 @@ LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
         /*input_is_parallel=*/false,
         /*skip_bias_add=*/false,
         /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+}
+
+class LLaMALayer : public nn::Module {
+    std::shared_ptr<nn::Module> h_layer_;
+    std::shared_ptr<Tensor> freqs_cis_ = nullptr; // freqs_cis (shape: [max_seq_len, head_dim])
+    int64_t start_pos_ = 0;
+    DataType dtype_;
+    LLaMA3Config config_;
+
+public:
+    LLaMALayer(std::shared_ptr<nn::Module> h_layer, DataType dtype, LLaMA3Config config)
+        : h_layer_(h_layer), dtype_(dtype), config_(config) {}
+
+    void SetFreqsCis(std::shared_ptr<Tensor> freqs) { freqs_cis_ = freqs; }
+    void SetStartPos(int64_t pos) { start_pos_ = pos; }
+
+    std::vector<std::shared_ptr<Tensor>> Parameters() const override { return h_layer_->Parameters(); }
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) override {
+        auto &x = inputs[0]; // (bs, seq_len, n_embd)
+        const int seq_len = x->Dims()[1];
+        const auto device = x->GetDevice();
+
+        if (freqs_cis_ == nullptr) {
+            freqs_cis_ = PrecomputeFreqsCis(config_.n_embd / config_.n_head, config_.block_size * 2, config_.rope_theta,
+                                            config_.use_scaled_rope, device, dtype_);
+        }
+
+        // slice freqs_cis: [start_pos:start_pos+seq_len]
+        auto freqs_view = freqs_cis_->Slice(0, start_pos_, start_pos_ + seq_len, 1);
+
+        std::shared_ptr<Tensor> start_pos_ptr = nullptr;
+
+        // causal mask: (1, 1, seq_len, seq_len)
+        std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({seq_len, seq_len})->To(device));
+        auto mask = nn::function::Triu(ones, 1)->View({1, 1, seq_len, seq_len});
+        if (dtype_ == DataType::kBFLOAT16) {
+            mask = std::make_shared<Tensor>(mask->To(DataType::kBFLOAT16));
+        }
+
+        // DecoderLayer: {x, freqs, start_pos, mask}
+        // std::vector<std::shared_ptr<Tensor>> args = {x, freqs_view, nullptr, mask};
+        auto output = h_layer_->Forward({x, freqs_view, start_pos_ptr, mask});
+        return output;
+    }
+};
+
+std::vector<std::shared_ptr<nn::Module>> LLaMA3::GetPipelineLayers() {
+    std::vector<std::shared_ptr<nn::Module>> layers;
+
+    auto transformer = modules_[kTransformerLayerName];
+    layers.push_back(transformer->mutable_module(kWTELayerName));
+
+    auto seq = std::dynamic_pointer_cast<nn::ModuleList>(transformer->mutable_module(kHLayerName));
+    auto dtype = modules_[kLMHeadLayerName]->parameter(nn::Linear::kParamWeightName)->Dtype();
+    int idx = 0;
+    for (auto h : *seq) {
+        layers.push_back(std::make_shared<LLaMALayer>(h, dtype, config_));
+        ++idx;
+    }
+    // for (int idx = 0; idx < seq->size(); ++idx) {
+    //     auto wrapped_layer = (*seq)[idx];
+    //     layers.push_back(std::make_shared<LLaMALayer>(wrapped_layer, dtype, config_));
+    // for (int idx = 1; idx < seq->size(); ++idx) {
+    //     auto wrapped_layer = (*seq)[idx];
+    //     layers.push_back(wrapped_layer);
+    // }
+    // }
+
+    layers.push_back(transformer->mutable_module(kLnFLayerName));
+
+    layers.push_back(modules_[kLMHeadLayerName]);
+
+    return layers;
+}
+
+std::unordered_map<std::string, int64_t> LLaMA3::GetConfig() const {
+    return {{"n_embd", config_.n_embd}, {"n_head", config_.n_head}};
 }
 
 std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
