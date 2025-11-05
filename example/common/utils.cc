@@ -1,9 +1,4 @@
-#include "utils.h"
-
-#include <cstdint>
-#include <cstring>
-
-#include "infini_train/include/nn/parallel/global.h"
+#include "example/common/utils.h"
 
 namespace infini_train {
 
@@ -15,50 +10,54 @@ float ConvertBF16ToFloat(void *ptr) {
     return f;
 }
 
-/*
-                DP=4, TP=2, world_size=8
-       ┌───────────── world_size = 8 ─────────────┐
-       │ rank: 0   1   2   3   4   5   6   7      │
-       └──────────────────────────────────────────┘
-DP pg: ┆ [0,2,4,6]   [1,3,5,7]
-TP pg: ┆ [0,1]   [2,3]    [4,5]    [6,7]
-*/
-
-std::vector<int> GetDataParallelGroupRanks(int rank) {
-    std::vector<int> ranks;
-
-    int world_size = nn::parallel::global::GetWorldSize();
-    int tp_size = nn::parallel::global::GetTensorParallelSize();
-    int dp_size = nn::parallel::global::GetDataParallelSize();
-
-    ranks.reserve(dp_size);
-    int dp_group_id = rank % tp_size;
-
-    for (int r = 0; r < world_size; ++r) {
-        if (r % tp_size == dp_group_id) {
-            ranks.push_back(r);
-        }
-    }
-
-    return ranks;
+// Model Reader Helper Function
+std::vector<uint8_t> ReadSeveralBytesFromIfstream(size_t num_bytes, std::ifstream *ifs) {
+    std::vector<uint8_t> result(num_bytes);
+    ifs->read(reinterpret_cast<char *>(result.data()), num_bytes);
+    return result;
 }
 
-std::vector<int> GetTensorParallelGroupRanks(int rank) {
-    std::vector<int> ranks;
+void ReadMatrixAllFloat(std::ifstream &ifs, float *dst, int64_t rows, int64_t cols) {
+    const size_t bytes = static_cast<size_t>(rows) * static_cast<size_t>(cols) * sizeof(float);
+    ifs.read(reinterpret_cast<char *>(dst), bytes);
+}
 
-    int world_size = nn::parallel::global::GetWorldSize();
-    int tp_size = nn::parallel::global::GetTensorParallelSize();
+// Shard Reader Functions
+// Read Row Shard: [row_start : row_start+row_cnt) × [0:cols]
+void ReadMatrixRowShardFloat(std::ifstream &ifs, float *dst, int64_t rows, int64_t cols, int64_t row_start,
+                             int64_t row_cnt) {
+    std::streampos base = ifs.tellg();
+    const size_t row_bytes = static_cast<size_t>(cols) * sizeof(float);
+    ifs.seekg(base + std::streamoff(row_start * row_bytes));
+    // assume row-major
+    ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(row_cnt * row_bytes));
+    ifs.seekg(base + std::streamoff(rows * row_bytes));
+}
 
-    ranks.reserve(tp_size);
-    int tp_group_id = rank / tp_size;
-
-    for (int r = 0; r < world_size; ++r) {
-        if (r / tp_size == tp_group_id) {
-            ranks.push_back(r);
-        }
+// Read Column Shard: [0:rows) × [col_start : col_start+col_cnt)
+void ReadMatrixColShardFloat(std::ifstream &ifs, float *dst, int64_t rows, int64_t cols, int64_t col_start,
+                             int64_t col_cnt) {
+    std::streampos base = ifs.tellg();
+    const size_t row_bytes = static_cast<size_t>(cols) * sizeof(float);
+    const size_t pick_bytes = static_cast<size_t>(col_cnt) * sizeof(float);
+    // assume row-major, need loop
+    for (int64_t r = 0; r < rows; ++r) {
+        ifs.seekg(base + std::streamoff(r * row_bytes + col_start * sizeof(float)));
+        ifs.read(reinterpret_cast<char *>(dst + r * col_cnt), static_cast<std::streamsize>(pick_bytes));
     }
+    ifs.seekg(base + std::streamoff(rows * row_bytes));
+}
 
-    return ranks;
+// Read Whole Array
+void ReadVectorAllFloat(std::ifstream &ifs, float *dst, int64_t len) {
+    ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(len * sizeof(float)));
+}
+// Read Array Shard: [start : start+cnt)
+void ReadVectorShardFloat(std::ifstream &ifs, float *dst, int64_t len, int64_t start, int64_t cnt) {
+    std::streampos base = ifs.tellg();
+    ifs.seekg(base + std::streamoff(start * sizeof(float)));
+    ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(cnt * sizeof(float)));
+    ifs.seekg(base + std::streamoff(len * sizeof(float)));
 }
 
 } // namespace infini_train

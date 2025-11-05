@@ -11,6 +11,7 @@
 
 #include "glog/logging.h"
 
+#include "example/common/utils.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
@@ -27,7 +28,6 @@
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
-namespace tp = infini_train::nn::parallel;
 
 namespace {
 constexpr int kRandomSeed = 42;
@@ -50,8 +50,8 @@ CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
     CHECK_EQ(n_head_ % tp_world_size, 0) << "n_head must be divisible by TP world size";
     local_n_head_ = n_head_ / tp_world_size;
 
-    // qkv: ColumnParallel (do not gather output) -> each rank gets 3 * (n_embd / tp_world) channels
-    modules_[kCAttnLayerName] = std::make_shared<tp::ColumnParallelLinear>(
+    // qkv: ColumnParallel (do not gather output) -> each tp_rank gets 3 * (n_embd / tp_world) channels
+    modules_[kCAttnLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
         /*in_features=*/n_embd_,
         /*out_features=*/3 * n_embd_,
         /*bias=*/true,
@@ -61,7 +61,7 @@ CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
         /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 
     // proj: RowParallel (input is parallel and output is full)
-    modules_[kCProjLayerName] = std::make_shared<tp::RowParallelLinear>(
+    modules_[kCProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(
         /*in_features=*/n_embd_,
         /*out_features=*/n_embd_,
         /*bias=*/true,
@@ -124,7 +124,7 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
 
 MLP::MLP(const GPT2Config &config) {
     // c_fc: ColumnParallel (input full, output parallel)
-    modules_[kCFcLayerName] = std::make_shared<tp::ColumnParallelLinear>(
+    modules_[kCFcLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
         /*in_features=*/config.n_embd, /*out_features=*/4 * config.n_embd,
         /*bias=*/true,
         /*gather_output=*/false,
@@ -135,7 +135,7 @@ MLP::MLP(const GPT2Config &config) {
     modules_[kGeluLayerName] = std::make_shared<NewGELU>();
 
     // c_proj: RowParallel (input parallel, output full)
-    modules_[kCProjLayerName] = std::make_shared<tp::RowParallelLinear>(
+    modules_[kCProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(
         /*in_features=*/4 * config.n_embd, /*out_features=*/config.n_embd,
         /*bias=*/true,
         /*reduce_output=*/true,
@@ -184,7 +184,7 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
     CHECK_EQ(config.vocab_size % tp_world_size, 0) << "Vocab size should be divisible by TP world size";
     {
         std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
-        transformer[kWTELayerName] = std::make_shared<tp::VocabParallelEmbedding>(
+        transformer[kWTELayerName] = std::make_shared<nn::parallel::VocabParallelEmbedding>(
             config_.vocab_size, config_.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
         transformer[kWPELayerName] = std::make_shared<nn::Embedding>(config_.block_size, config_.n_embd);
         {
@@ -196,10 +196,10 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
         modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
     }
     // don't init this one, we will tie weights
-    modules_[kLMHeadLayerName] = std::make_shared<tp::ColumnParallelLinear>(
+    modules_[kLMHeadLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
         /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
         /*bias=*/false,
-        // NOTE(zbl): each rank would get sharded [B, T, V_local] as logits
+        // NOTE(zbl): each tp_rank would get sharded [B, T, V_local] as logits
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
         /*skip_bias_add=*/false,
@@ -208,8 +208,8 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
     // https://paperswithcode.com/method/weight-tying
     *mutable_module(kTransformerLayerName)
          ->mutable_module(kWTELayerName)
-         ->mutable_parameter(tp::VocabParallelEmbedding::kParamWeightName)
-        = module(kLMHeadLayerName).parameter(tp::ColumnParallelLinear::kParamWeightName);
+         ->mutable_parameter(nn::parallel::VocabParallelEmbedding::kParamWeightName)
+        = module(kLMHeadLayerName).parameter(nn::parallel::ColumnParallelLinear::kParamWeightName);
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
@@ -225,15 +225,15 @@ GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     // NOTE(zbl): Slice pos sequence when SP is enabled
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
     auto sequence_parallel_enabled = nn::parallel::global::GetSequenceParallelEnabled();
-    int rank = 0;
+    int tp_rank = 0;
     if (tp_world_size > 1) {
         auto tp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
             nn::parallel::GetTensorParallelProcessGroupName(device->rank().thread_rank()));
-        rank = tp_group->GetGroupRank(device->rank().thread_rank());
+        tp_rank = tp_group->GetGroupRank(device->rank().thread_rank());
     }
 
     int64_t t_local = sequence_parallel_enabled ? (t / tp_world_size) : t;
-    int64_t start = sequence_parallel_enabled ? rank * t_local : 0;
+    int64_t start = sequence_parallel_enabled ? tp_rank * t_local : 0;
     auto pos = nn::init::Arange(start, start + t_local, infini_train::DataType::kINT64, device);
     // forward the GPT2 model itself
     auto &transformer = modules_[kTransformerLayerName];
@@ -264,23 +264,9 @@ std::shared_ptr<GPT2> GPT2::FromPretrained(ModelType model_type) {
 }
 
 namespace {
-
 constexpr int32_t kHeaderMagic = 20240326;
 constexpr int32_t kHeaderFP32Version = 3;
 constexpr int32_t kHeaderBF16Version = 5;
-
-std::vector<uint8_t> ReadSeveralBytesFromIfstream(size_t num_bytes, std::ifstream *ifs) {
-    std::vector<uint8_t> result(num_bytes);
-    ifs->read(reinterpret_cast<char *>(result.data()), num_bytes);
-    return result;
-}
-
-template <typename T> T BytesToType(const std::vector<uint8_t> &bytes, size_t offset) {
-    static_assert(std::is_trivially_copyable<T>::value, "T must be trivially copyable.");
-    T value;
-    std::memcpy(&value, &bytes[offset], sizeof(T));
-    return value;
-}
 
 std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::vector<uint8_t> &header,
                                                                      size_t offset) {
@@ -295,51 +281,6 @@ std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::
         return {}; // Unreachable, but keeps compiler happy
     }
 }
-
-inline void ReadMatrixAllFloat(std::ifstream &ifs, float *dst, int64_t rows, int64_t cols) {
-    const size_t bytes = static_cast<size_t>(rows) * static_cast<size_t>(cols) * sizeof(float);
-    ifs.read(reinterpret_cast<char *>(dst), bytes);
-}
-
-// Shard Reader Functions
-//
-// Read Row Shard: [row_start : row_start+row_cnt) × [0:cols]
-inline void ReadMatrixRowShardFloat(std::ifstream &ifs, float *dst, int64_t rows, int64_t cols, int64_t row_start,
-                                    int64_t row_cnt) {
-    std::streampos base = ifs.tellg();
-    const size_t row_bytes = static_cast<size_t>(cols) * sizeof(float);
-    ifs.seekg(base + std::streamoff(row_start * row_bytes));
-    // assume row-major
-    ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(row_cnt * row_bytes));
-    ifs.seekg(base + std::streamoff(rows * row_bytes));
-}
-
-// Read Column Shard: [0:rows) × [col_start : col_start+col_cnt)
-inline void ReadMatrixColShardFloat(std::ifstream &ifs, float *dst, int64_t rows, int64_t cols, int64_t col_start,
-                                    int64_t col_cnt) {
-    std::streampos base = ifs.tellg();
-    const size_t row_bytes = static_cast<size_t>(cols) * sizeof(float);
-    const size_t pick_bytes = static_cast<size_t>(col_cnt) * sizeof(float);
-    // assume row-major, need loop
-    for (int64_t r = 0; r < rows; ++r) {
-        ifs.seekg(base + std::streamoff(r * row_bytes + col_start * sizeof(float)));
-        ifs.read(reinterpret_cast<char *>(dst + r * col_cnt), static_cast<std::streamsize>(pick_bytes));
-    }
-    ifs.seekg(base + std::streamoff(rows * row_bytes));
-}
-
-// Read Whole Array
-inline void ReadVectorAllFloat(std::ifstream &ifs, float *dst, int64_t len) {
-    ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(len * sizeof(float)));
-}
-// Read Array Shard: [start : start+cnt)
-inline void ReadVectorShardFloat(std::ifstream &ifs, float *dst, int64_t len, int64_t start, int64_t cnt) {
-    std::streampos base = ifs.tellg();
-    ifs.seekg(base + std::streamoff(start * sizeof(float)));
-    ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(cnt * sizeof(float)));
-    ifs.seekg(base + std::streamoff(len * sizeof(float)));
-}
-
 } // namespace
 
 std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
@@ -380,19 +321,19 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     CHECK_EQ(n_embd % n_head, 0) << "n_embd must be divisible by n_head.";
     CHECK_EQ(n_head % tp_size, 0) << "n_head must be divisible by TP world size.";
 
-    auto rank = tp::tp_rank;
+    auto tp_rank = nn::parallel::tp_rank;
     // calculate xx_size_per_partition
     const int64_t vpp = model_vocab_size / tp_size;
-    const int64_t v_start = static_cast<int64_t>(rank) * vpp;
+    const int64_t v_start = static_cast<int64_t>(tp_rank) * vpp;
     const int64_t v_end = v_start + vpp;
 
     const int64_t qkv_out = 3 * n_embd;
     const int64_t qkv_pp = qkv_out / tp_size;
-    const int64_t qkv_start = static_cast<int64_t>(rank) * qkv_pp;
+    const int64_t qkv_start = static_cast<int64_t>(tp_rank) * qkv_pp;
 
     const int64_t fc_out = 4 * n_embd;
     const int64_t fc_pp = fc_out / tp_size;
-    const int64_t fc_start = static_cast<int64_t>(rank) * fc_pp;
+    const int64_t fc_start = static_cast<int64_t>(tp_rank) * fc_pp;
 
     const int64_t in_pp = n_embd / tp_size;        // for c_proj (row-parallel, shard on input)
     const int64_t in4_pp = (4 * n_embd) / tp_size; // for mlp.c_proj (input shard)
@@ -403,7 +344,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     // full: (model_vocab_size, n_embd)
     // local: (vocab_size_per_partition, n_embd)
     auto &transformer_wte_weight = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kWTELayerName,
-                                                          tp::VocabParallelEmbedding::kParamWeightName)];
+                                                          nn::parallel::VocabParallelEmbedding::kParamWeightName)];
     ReadMatrixRowShardFloat(ifs, static_cast<float *>(transformer_wte_weight->DataPtr()), model_vocab_size, n_embd,
                             v_start, vpp);
     if (tp_size == 1) {
@@ -430,12 +371,13 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     }
     // transformer.h.{i}.attn.c_attn.weight (ColumnParallelLinear, but actually applies on "rows")
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor = state_dict[std::format(
-            "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(idx),
-            Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName, tp::ColumnParallelLinear::kParamWeightName)];
+        auto &tensor
+            = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+                                     std::to_string(idx), Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName,
+                                     nn::parallel::ColumnParallelLinear::kParamWeightName)];
         // NOTE(zbl): In the .bin model file, Q/K/V is concated along last dim,
         //            i.e. [Q|K|V].T = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn].T
-        //            However, each rank needs to get [q_i|k_i|v_i].T, so we need to jump and read them respectively
+        //            However, each tp_rank needs to get [q_i|k_i|v_i].T, so we need to jump and read them respectively
         float *dst = static_cast<float *>(tensor->DataPtr());
         const int64_t local_C = n_embd / tp_size;
         const int64_t rows_all = 3 * n_embd;
@@ -446,28 +388,29 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
         ReadMatrixRowShardFloat(ifs,
                                 /*dst=*/dst + (0 * local_C) * cols_all,
                                 /*rows=*/rows_all, /*cols=*/cols_all,
-                                /*row_start=*/rank * local_C, /*row_cnt=*/local_C);
+                                /*row_start=*/tp_rank * local_C, /*row_cnt=*/local_C);
         // Read k_i -> write to dst rows of [local_C : 2*local_C)
         ifs.seekg(base_pos);
         ReadMatrixRowShardFloat(ifs,
                                 /*dst=*/dst + (1 * local_C) * cols_all,
                                 /*rows=*/rows_all, /*cols=*/cols_all,
-                                /*row_start=*/n_embd + rank * local_C, /*row_cnt=*/local_C);
+                                /*row_start=*/n_embd + tp_rank * local_C, /*row_cnt=*/local_C);
         // Read v_i -> write to dst rows of [2*local_C : 3*local_C)
         ifs.seekg(base_pos);
         ReadMatrixRowShardFloat(ifs,
                                 /*dst=*/dst + (2 * local_C) * cols_all,
                                 /*rows=*/rows_all, /*cols=*/cols_all,
-                                /*row_start=*/2 * n_embd + rank * local_C, /*row_cnt=*/local_C);
+                                /*row_start=*/2 * n_embd + tp_rank * local_C, /*row_cnt=*/local_C);
     }
     // transformer.h.{i}.attn.c_attn.bias (ColumnParallelLinear)
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor = state_dict[std::format(
-            "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(idx),
-            Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName, tp::ColumnParallelLinear::kParamBiasName)];
+        auto &tensor
+            = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+                                     std::to_string(idx), Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName,
+                                     nn::parallel::ColumnParallelLinear::kParamBiasName)];
         // NOTE(zbl): Same as c_attn.weight, the bias for Q/K/V is concated
         //            i.e. [Q|K|V] = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn]
-        //            However, each rank needs to get [q_i|k_i|v_i], so we need to jump and read them respectively
+        //            However, each tp_rank needs to get [q_i|k_i|v_i], so we need to jump and read them respectively
         float *dst = static_cast<float *>(tensor->DataPtr());
         const int64_t local_C = n_embd / tp_size;
         const int64_t len_all = 3 * n_embd;
@@ -477,32 +420,34 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
         ReadVectorShardFloat(ifs,
                              /*dst=*/dst + (0 * local_C),
                              /*len=*/len_all,
-                             /*start=*/rank * local_C, /*cnt=*/local_C);
+                             /*start=*/tp_rank * local_C, /*cnt=*/local_C);
         // Read k_i
         ifs.seekg(base_pos);
         ReadVectorShardFloat(ifs,
                              /*dst=*/dst + (1 * local_C),
                              /*len=*/len_all,
-                             /*start=*/n_embd + rank * local_C, /*cnt=*/local_C);
+                             /*start=*/n_embd + tp_rank * local_C, /*cnt=*/local_C);
         // Read v_i
         ifs.seekg(base_pos);
         ReadVectorShardFloat(ifs,
                              /*dst=*/dst + (2 * local_C),
                              /*len=*/len_all,
-                             /*start=*/2 * n_embd + rank * local_C, /*cnt=*/local_C);
+                             /*start=*/2 * n_embd + tp_rank * local_C, /*cnt=*/local_C);
     }
     // transformer.h.{i}.attn.c_proj.weight (RowParallelLinear, but actually applies on "columns")
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor = state_dict[std::format(
-            "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(idx),
-            Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName, tp::RowParallelLinear::kParamWeightName)];
-        ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, n_embd, rank * in_pp, in_pp);
+        auto &tensor
+            = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+                                     std::to_string(idx), Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName,
+                                     nn::parallel::RowParallelLinear::kParamWeightName)];
+        ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, n_embd, tp_rank * in_pp, in_pp);
     }
     // transformer.h.{i}.attn.c_proj.bias (RowParallelLinear, no shard on bias)
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor = state_dict[std::format(
-            "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(idx),
-            Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName, tp::RowParallelLinear::kParamBiasName)];
+        auto &tensor
+            = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+                                     std::to_string(idx), Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName,
+                                     nn::parallel::RowParallelLinear::kParamBiasName)];
         ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
     }
     // transformer.h.{i}.ln_2.weight
@@ -523,28 +468,28 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
                                               std::to_string(idx), Block::kMlpLayerName, MLP::kCFcLayerName,
-                                              tp::ColumnParallelLinear::kParamWeightName)];
+                                              nn::parallel::ColumnParallelLinear::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, n_embd, fc_start, fc_pp);
     }
     // transformer.h.{i}.mlp.c_fc.bias (ColumnParallelLinear)
     for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
                                               std::to_string(idx), Block::kMlpLayerName, MLP::kCFcLayerName,
-                                              tp::ColumnParallelLinear::kParamBiasName)];
+                                              nn::parallel::ColumnParallelLinear::kParamBiasName)];
         ReadVectorShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, fc_start, fc_pp);
     }
     // transformer.h.{i}.mlp.c_proj.weight (RowParallelLinear, but actually applies on "columns")
     for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
                                               std::to_string(idx), Block::kMlpLayerName, MLP::kCProjLayerName,
-                                              tp::RowParallelLinear::kParamWeightName)];
-        ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, fc_out, rank * in4_pp, in4_pp);
+                                              nn::parallel::RowParallelLinear::kParamWeightName)];
+        ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, fc_out, tp_rank * in4_pp, in4_pp);
     }
     // transformer.h.{i}.mlp.c_proj.bias (RowParallelLinear, no shard on bias)
     for (int idx = 0; idx < n_layer; ++idx) {
         auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
                                               std::to_string(idx), Block::kMlpLayerName, MLP::kCProjLayerName,
-                                              tp::RowParallelLinear::kParamBiasName)];
+                                              nn::parallel::RowParallelLinear::kParamBiasName)];
         ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
     }
     // transformer.ln_f.weight

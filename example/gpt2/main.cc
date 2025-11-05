@@ -306,6 +306,8 @@ int main(int argc, char *argv[]) {
 
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel);
 
+    LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
+
     // NOTE(dcj): currently we only support single process
     if (FLAGS_nthread_per_process > 1) {
         std::vector<std::thread> threads;

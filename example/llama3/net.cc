@@ -12,6 +12,7 @@
 
 #include "glog/logging.h"
 
+#include "example/common/utils.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
@@ -26,7 +27,6 @@
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
-namespace tp = infini_train::nn::parallel;
 
 namespace {
 constexpr int kRandomSeed = 42;
@@ -146,7 +146,7 @@ CausalSelfAttention::CausalSelfAttention(const LLaMA3Config &config)
 
     int64_t qkv_dim = (config.n_head + 2 * n_kv_head_) * head_dim_;
     // qkv: ColumnParallel (do not gather output)
-    modules_[kCAttnLayerName] = std::make_shared<tp::ColumnParallelLinear>(
+    modules_[kCAttnLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
         /*in_features=*/n_embd_,
         /*out_features=*/qkv_dim,
         /*bias=*/false,
@@ -156,7 +156,7 @@ CausalSelfAttention::CausalSelfAttention(const LLaMA3Config &config)
         /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 
     // proj: RowParallel (input is parallel and output is full)
-    modules_[kCProjLayerName] = std::make_shared<tp::RowParallelLinear>(
+    modules_[kCProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(
         /*in_features=*/n_embd_,
         /*out_features=*/n_embd_,
         /*bias=*/false,
@@ -170,11 +170,11 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
     const auto B = x[0]->Dims()[0]; // bs
     const auto C = x[0]->Dims()[2]; // n_embd
 
-    const auto tp_world = nn::parallel::global::GetTensorParallelSize();
+    const auto tp_size = nn::parallel::global::GetTensorParallelSize();
 
-    const auto C_local = C / tp_world;
-    const auto H_local = n_head_ / tp_world;
-    const auto KV_local = n_kv_head_ / tp_world;
+    const auto C_local = C / tp_size;
+    const auto H_local = n_head_ / tp_size;
+    const auto KV_local = n_kv_head_ / tp_size;
     const auto D = head_dim_; // n_embd / n_head
 
     const auto freqs_cis = x.size() > 1 ? x[1] : nullptr;
@@ -253,7 +253,7 @@ MLP::MLP(const LLaMA3Config &config) {
     hidden_dim_ = config.multiple_of * ((hidden_dim_ + config.multiple_of - 1) / config.multiple_of);
 
     // c_fc: ColumnParallel (input full, output parallel)
-    modules_[kCFcLayerName] = std::make_shared<tp::ColumnParallelLinear>(
+    modules_[kCFcLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
         /*in_features=*/config.n_embd, /*out_features=*/hidden_dim_,
         /*bias=*/false,
         /*gather_output=*/false,
@@ -262,7 +262,7 @@ MLP::MLP(const LLaMA3Config &config) {
         /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 
     // c_fc2: ColumnParallel (input full, output parallel)
-    modules_[kCFc2LayerName] = std::make_shared<tp::ColumnParallelLinear>(
+    modules_[kCFc2LayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
         /*in_features=*/config.n_embd, /*out_features=*/hidden_dim_,
         /*bias=*/false,
         /*gather_output=*/false,
@@ -273,7 +273,7 @@ MLP::MLP(const LLaMA3Config &config) {
     modules_[kSiluLayerName] = std::make_shared<SwiGLU>();
 
     // c_proj: RowParallel (input parallel, output full)
-    modules_[kCProjLayerName] = std::make_shared<tp::RowParallelLinear>(
+    modules_[kCProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(
         /*in_features=*/hidden_dim_, /*out_features=*/config.n_embd,
         /*bias=*/false,
         /*reduce_output=*/true,
@@ -325,7 +325,7 @@ std::vector<std::shared_ptr<Tensor>> Block::Forward(const std::vector<std::share
 LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
     {
         std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
-        transformer[kWTELayerName] = std::make_shared<tp::VocabParallelEmbedding>(
+        transformer[kWTELayerName] = std::make_shared<nn::parallel::VocabParallelEmbedding>(
             config.vocab_size, config.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
         {
             std::vector<std::shared_ptr<nn::Module>> h;
@@ -336,10 +336,10 @@ LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
         modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
     }
     // NOTE(zbl): weight-tying is possible but torch script did not do so
-    modules_[kLMHeadLayerName] = std::make_shared<tp::ColumnParallelLinear>(
+    modules_[kLMHeadLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
         /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
         /*bias=*/false,
-        // NOTE(zbl): each rank would get sharded [B, T, V_local] as logits
+        // NOTE(zbl): each tp_rank would get sharded [B, T, V_local] as logits
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
         /*skip_bias_add=*/false,
@@ -359,7 +359,8 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
     if (buffers_[kFreqsCisName] == nullptr) {
         buffers_[kFreqsCisName] = PrecomputeFreqsCis(
             config_.n_embd / config_.n_head, config_.block_size * 2, config_.rope_theta, config_.use_scaled_rope,
-            device, modules_[kLMHeadLayerName]->parameter(tp::ColumnParallelLinear::kParamWeightName)->Dtype());
+            device,
+            modules_[kLMHeadLayerName]->parameter(nn::parallel::ColumnParallelLinear::kParamWeightName)->Dtype());
     }
 
     // forward the LLaMA3 model itself
@@ -375,7 +376,7 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
     std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(idx->GetDevice()));
     std::shared_ptr<Tensor> mask = nn::function::Triu(ones, 1)->View({1, 1, t, t});
     // TODO(zbl): nn::function::Ones builds tensor in FP32 by default
-    if (modules_[kLMHeadLayerName]->parameter(tp::ColumnParallelLinear::kParamWeightName)->Dtype()
+    if (modules_[kLMHeadLayerName]->parameter(nn::parallel::ColumnParallelLinear::kParamWeightName)->Dtype()
         == DataType::kBFLOAT16) {
         mask = std::make_shared<Tensor>(mask->To(DataType::kBFLOAT16));
     }
@@ -408,65 +409,8 @@ std::shared_ptr<LLaMA3> LLaMA3::FromPretrained(ModelType model_type) {
 }
 
 namespace {
-std::vector<uint8_t> ReadSeveralBytesFromIfstream(size_t num_bytes, std::ifstream *ifs) {
-    std::vector<uint8_t> result(num_bytes);
-    ifs->read(reinterpret_cast<char *>(result.data()), num_bytes);
-    return result;
-}
-
-template <typename T> T BytesToType(const std::vector<uint8_t> &bytes, size_t offset) {
-    static_assert(std::is_trivially_copyable<T>::value, "T must be trivially copyable.");
-    T value;
-    std::memcpy(&value, &bytes[offset], sizeof(T));
-    return value;
-}
-
 constexpr int32_t kLLaMA3Magic = 20240803;
 constexpr int32_t kLLaMA3FP32Version = 3;
-
-inline void ReadMatrixAllFloat(std::ifstream &ifs, float *dst, int64_t rows, int64_t cols) {
-    const size_t bytes = static_cast<size_t>(rows) * static_cast<size_t>(cols) * sizeof(float);
-    ifs.read(reinterpret_cast<char *>(dst), bytes);
-}
-
-// Shard Reader Functions
-//
-// Read Row Shard: [row_start : row_start+row_cnt) × [0:cols]
-inline void ReadMatrixRowShardFloat(std::ifstream &ifs, float *dst, int64_t rows, int64_t cols, int64_t row_start,
-                                    int64_t row_cnt) {
-    std::streampos base = ifs.tellg();
-    const size_t row_bytes = static_cast<size_t>(cols) * sizeof(float);
-    ifs.seekg(base + std::streamoff(row_start * row_bytes));
-    // assume row-major
-    ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(row_cnt * row_bytes));
-    ifs.seekg(base + std::streamoff(rows * row_bytes));
-}
-
-// Read Column Shard: [0:rows) × [col_start : col_start+col_cnt)
-inline void ReadMatrixColShardFloat(std::ifstream &ifs, float *dst, int64_t rows, int64_t cols, int64_t col_start,
-                                    int64_t col_cnt) {
-    std::streampos base = ifs.tellg();
-    const size_t row_bytes = static_cast<size_t>(cols) * sizeof(float);
-    const size_t pick_bytes = static_cast<size_t>(col_cnt) * sizeof(float);
-    // assume row-major, need loop
-    for (int64_t r = 0; r < rows; ++r) {
-        ifs.seekg(base + std::streamoff(r * row_bytes + col_start * sizeof(float)));
-        ifs.read(reinterpret_cast<char *>(dst + r * col_cnt), static_cast<std::streamsize>(pick_bytes));
-    }
-    ifs.seekg(base + std::streamoff(rows * row_bytes));
-}
-
-// Read Whole Array
-inline void ReadVectorAllFloat(std::ifstream &ifs, float *dst, int64_t len) {
-    ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(len * sizeof(float)));
-}
-// Read Array Shard: [start : start+cnt)
-inline void ReadVectorShardFloat(std::ifstream &ifs, float *dst, int64_t len, int64_t start, int64_t cnt) {
-    std::streampos base = ifs.tellg();
-    ifs.seekg(base + std::streamoff(start * sizeof(float)));
-    ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(cnt * sizeof(float)));
-    ifs.seekg(base + std::streamoff(len * sizeof(float)));
-}
 } // namespace
 
 std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
@@ -510,15 +454,15 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
                                                         .norm_eps = norm_eps,
                                                         .max_gen_batch_size = max_gen_bs});
 
-    const int world_size = nn::parallel::global::GetTensorParallelSize();
-    const int rank = nn::parallel::tp_rank;
+    const int tp_size = nn::parallel::global::GetTensorParallelSize();
+    const int tp_rank = nn::parallel::tp_rank;
 
-    CHECK_EQ(n_embd % world_size, 0) << "n_embd must be divisible by TP world size.";
-    CHECK_EQ(n_head % world_size, 0) << "n_head must be divisible by TP world size.";
-    CHECK_EQ(n_kv_head % world_size, 0) << "n_kv_head must be divisible by TP world size.";
-    CHECK_EQ(vocab_size % world_size, 0) << "vocab_size must be divisible by TP world size.";
+    CHECK_EQ(n_embd % tp_size, 0) << "n_embd must be divisible by TP world size.";
+    CHECK_EQ(n_head % tp_size, 0) << "n_head must be divisible by TP world size.";
+    CHECK_EQ(n_kv_head % tp_size, 0) << "n_kv_head must be divisible by TP world size.";
+    CHECK_EQ(vocab_size % tp_size, 0) << "vocab_size must be divisible by TP world size.";
 
-    if (rank == 0) {
+    if (tp_rank == 0) {
         LOG(INFO) << "Model Config:";
         LOG(INFO) << "  block_size         = " << block_size;
         LOG(INFO) << "  vocab_size         = " << vocab_size;
@@ -551,8 +495,8 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
 
     // ===== Per-rank sizes / offsets =====
     // vocab parallel
-    const int64_t vpp = static_cast<int64_t>(vocab_size) / world_size;
-    const int64_t v_start = static_cast<int64_t>(rank) * vpp;
+    const int64_t vpp = static_cast<int64_t>(vocab_size) / tp_size;
+    const int64_t v_start = static_cast<int64_t>(tp_rank) * vpp;
 
     // attention Q/K/V packed as rows: [Q | K | V]
     const int64_t q_out_rows = static_cast<int64_t>(n_embd);
@@ -560,26 +504,26 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     const int64_t attn_rows_all = q_out_rows + 2 * kv_out_rows;
     const int64_t attn_cols = static_cast<int64_t>(n_embd);
 
-    // local Q/K/V rows per rank
-    const int64_t q_local_rows = static_cast<int64_t>(n_embd) / world_size; // = (n_head/world)*head_dim
-    const int64_t kv_head_local = static_cast<int64_t>(n_kv_head) / world_size;
+    // local Q/K/V rows per tp_rank
+    const int64_t q_local_rows = static_cast<int64_t>(n_embd) / tp_size; // = (n_head/world)*head_dim
+    const int64_t kv_head_local = static_cast<int64_t>(n_kv_head) / tp_size;
     const int64_t kv_local_rows = kv_head_local * head_dim; // for K or V (each)
     const int64_t attn_local_rows = q_local_rows + 2 * kv_local_rows;
 
     // RowParallel (proj)
-    const int64_t in_pp = static_cast<int64_t>(n_embd) / world_size;
+    const int64_t in_pp = static_cast<int64_t>(n_embd) / tp_size;
     // MLP: c_fc/c_fc2（shard along row），c_proj（shard along col）
     const int64_t fc_out = ffn_hidden;
-    const int64_t fc_pp = fc_out / world_size;
-    const int64_t in_fc_pp = ffn_hidden / world_size;
+    const int64_t fc_pp = fc_out / tp_size;
+    const int64_t in_fc_pp = ffn_hidden / tp_size;
 
     auto state_dict = llama3->StateDict();
 
     // ========== Read Sharded Params ==========
-    // transformer.wte.weight : (vocab_size, n_embd) -> local rank: rows of [v_start : v_start+vpp)
+    // transformer.wte.weight : (vocab_size, n_embd) -> local tp_rank: rows of [v_start : v_start+vpp)
     {
         auto &wte = state_dict[std::format("{}.{}.{}", kTransformerLayerName, kWTELayerName,
-                                           tp::VocabParallelEmbedding::kParamWeightName)];
+                                           nn::parallel::VocabParallelEmbedding::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(wte->DataPtr()),
                                 /*rows=*/vocab_size, /*cols=*/n_embd,
                                 /*row_start=*/v_start, /*row_cnt=*/vpp);
@@ -597,7 +541,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         auto &tensor = state_dict[std::format(
             "{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName, std::to_string(i), Block::kAttnLayerName,
-            CausalSelfAttention::kCAttnLayerName, tp::ColumnParallelLinear::kParamWeightName)];
+            CausalSelfAttention::kCAttnLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
         float *dst = static_cast<float *>(tensor->DataPtr());
         const std::streampos base_pos = ifs.tellg();
 
@@ -606,21 +550,21 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
         ReadMatrixRowShardFloat(ifs,
                                 /*dst=*/dst + (0 * attn_cols),
                                 /*rows=*/attn_rows_all, /*cols=*/attn_cols,
-                                /*row_start=*/rank * q_local_rows, /*row_cnt=*/q_local_rows);
+                                /*row_start=*/tp_rank * q_local_rows, /*row_cnt=*/q_local_rows);
 
         // K block -> [q_local_rows : q_local_rows + kv_local_rows)
         ifs.seekg(base_pos);
         ReadMatrixRowShardFloat(ifs,
                                 /*dst=*/dst + (q_local_rows * attn_cols),
                                 /*rows=*/attn_rows_all, /*cols=*/attn_cols,
-                                /*row_start=*/q_out_rows + rank * kv_local_rows, /*row_cnt=*/kv_local_rows);
+                                /*row_start=*/q_out_rows + tp_rank * kv_local_rows, /*row_cnt=*/kv_local_rows);
 
         // V block -> [q_local_rows + kv_local_rows : q_local_rows + 2*kv_local_rows)
         ifs.seekg(base_pos);
         ReadMatrixRowShardFloat(ifs,
                                 /*dst=*/dst + ((q_local_rows + kv_local_rows) * attn_cols),
                                 /*rows=*/attn_rows_all, /*cols=*/attn_cols,
-                                /*row_start=*/q_out_rows + kv_out_rows + rank * kv_local_rows,
+                                /*row_start=*/q_out_rows + kv_out_rows + tp_rank * kv_local_rows,
                                 /*row_cnt=*/kv_local_rows);
     }
 
@@ -628,10 +572,10 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         auto &tensor = state_dict[std::format(
             "{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName, std::to_string(i), Block::kAttnLayerName,
-            CausalSelfAttention::kCProjLayerName, tp::RowParallelLinear::kParamWeightName)];
+            CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];
         ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                 /*rows=*/n_embd, /*cols=*/n_embd,
-                                /*col_start=*/rank * in_pp, /*col_cnt=*/in_pp);
+                                /*col_start=*/tp_rank * in_pp, /*col_cnt=*/in_pp);
     }
 
     // transformer.h.{i}.ln_2.weight : Full version RMSNorm
@@ -645,30 +589,30 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
                                               std::to_string(i), Block::kMlpLayerName, MLP::kCFcLayerName,
-                                              tp::ColumnParallelLinear::kParamWeightName)];
+                                              nn::parallel::ColumnParallelLinear::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                 /*rows=*/fc_out, /*cols=*/n_embd,
-                                /*row_start=*/rank * fc_pp, /*row_cnt=*/fc_pp);
+                                /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
     }
 
     // transformer.h.{i}.mlp.c_fc2.weight : ColumnParallelLinear, but actually applies on "rows"
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
                                               std::to_string(i), Block::kMlpLayerName, MLP::kCFc2LayerName,
-                                              tp::ColumnParallelLinear::kParamWeightName)];
+                                              nn::parallel::ColumnParallelLinear::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                 /*rows=*/fc_out, /*cols=*/n_embd,
-                                /*row_start=*/rank * fc_pp, /*row_cnt=*/fc_pp);
+                                /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
     }
 
     // transformer.h.{i}.mlp.c_proj.weight : RowParallelLinear, but actually applies on "columns"
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
                                               std::to_string(i), Block::kMlpLayerName, MLP::kCProjLayerName,
-                                              tp::RowParallelLinear::kParamWeightName)];
+                                              nn::parallel::RowParallelLinear::kParamWeightName)];
         ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                 /*rows=*/n_embd, /*cols=*/fc_out,
-                                /*col_start=*/rank * in_fc_pp, /*col_cnt=*/in_fc_pp);
+                                /*col_start=*/tp_rank * in_fc_pp, /*col_cnt=*/in_fc_pp);
     }
 
     // transformer.ln_f.weight : Full version RMSNorm
@@ -680,7 +624,8 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
 
     // lm_head.weight : (vocab_size, n_embd) -> ColumnParallelLinear, but actually applies on "rows"
     {
-        auto &lm_head = state_dict[std::format("{}.{}", kLMHeadLayerName, tp::ColumnParallelLinear::kParamWeightName)];
+        auto &lm_head
+            = state_dict[std::format("{}.{}", kLMHeadLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(lm_head->DataPtr()),
                                 /*rows=*/vocab_size, /*cols=*/n_embd,
                                 /*row_start=*/v_start, /*row_cnt=*/vpp);
