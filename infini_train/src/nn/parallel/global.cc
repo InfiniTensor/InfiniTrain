@@ -85,7 +85,7 @@ GlobalEnv &GlobalEnv::Instance() {
 }
 
 void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                     bool pipeline_parallel) {
+                     int pipeline_parallel_size) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
@@ -99,8 +99,8 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     CHECK_GE(tensor_parallel_size, 1) << "Tensor Parallel size must be >= 1";
     tensor_parallel_size_ = tensor_parallel_size;
     sequence_parallel_enabled_ = sequence_parallel_enabled;
-    data_parallel_size_ = world_size_ / tensor_parallel_size_;
-    pipeline_parallel_size_ = pipeline_parallel ? nthread_per_process : 1;
+    pipeline_parallel_size_ = pipeline_parallel_size;
+    data_parallel_size_ = world_size_ / tensor_parallel_size_ / pipeline_parallel_size_;
 
     layout_.sizes[DP] = data_parallel_size_;
     layout_.sizes[TP] = tensor_parallel_size_;
