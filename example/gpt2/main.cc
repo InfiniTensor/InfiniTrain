@@ -64,9 +64,9 @@ DEFINE_int32(
     "When set > 1, enables data parallelism with device=cuda on the specified number of visible CUDA devices.");
 DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
-DEFINE_bool(
-    pipeline_parallel, false,
-    "use pipeline parallelism or not, will always use device=cuda and use all cuda visible devices when set to true");
+DEFINE_uint32(
+    pipeline_parallel, 1,
+    "Pipeline Parallel world size, will always use device=cuda and use all cuda visible devices when set to true");
 DEFINE_uint32(num_microbatches, 4, "the num of microbatches in pipeline parallelism");
 
 // precision
@@ -155,7 +155,7 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
-    const auto tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size;
+    const auto tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length * (ddp_world_size * pp_world_size);
     CHECK_EQ(FLAGS_total_batch_size % tokens_per_fwdbwd, 0);
     const auto grad_accum_steps = FLAGS_total_batch_size / tokens_per_fwdbwd;
     LOG(INFO) << "total desired batch size: " << FLAGS_total_batch_size
@@ -189,10 +189,6 @@ void Train(const nn::parallel::Rank &rank) {
         LOG(FATAL) << "Rank " << rank.thread_rank() << ": Datatype " << FLAGS_dtype << " not supported.";
     }
 
-    // TODO(jym): Temporary implementation before 3D parallelism
-    if (FLAGS_pipeline_parallel) {
-        ddp_world_size = 1;
-    }
     // NOTE(dcj): Complete all device (.to(device)) and dtype (.to(dtype)) conversions
     // before wrapping the model with DistributedDataParallel (DDP).
     // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
@@ -202,7 +198,7 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     std::unique_ptr<DataLoader> train_loader;
-    if (FLAGS_pipeline_parallel) {
+    if (pp_world_size > 1) {
         train_loader = std::make_unique<DataLoader>(
             std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
             FLAGS_batch_size * pp_world_size);
@@ -243,7 +239,7 @@ void Train(const nn::parallel::Rank &rank) {
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.thread_rank() << ": start training";
 
-    if (FLAGS_pipeline_parallel) {
+    if (pp_world_size > 1) {
         CHECK_EQ((FLAGS_batch_size * pp_world_size) % FLAGS_num_microbatches, 0)
             << "FLAGS_batch_size (" << (FLAGS_batch_size * pp_world_size)
             << ") must be divisible by FLAGS_num_microbatches (" << FLAGS_num_microbatches << ")";
@@ -279,7 +275,7 @@ void Train(const nn::parallel::Rank &rank) {
         }
 
         // model->Train();
-        if (!FLAGS_pipeline_parallel) {
+        if (pp_world_size == 1) {
             optimizer->ZeroGrad();
         }
         // if we are trying to overfit a single batch, we reset the loader here
@@ -302,7 +298,7 @@ void Train(const nn::parallel::Rank &rank) {
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
-            if (FLAGS_pipeline_parallel) {
+            if (pp_world_size > 1) {
                 lossf = model->TrainStep({x}, {y}, loss_fn);
 
                 auto loss_tensor = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kFLOAT32);
@@ -335,7 +331,7 @@ void Train(const nn::parallel::Rank &rank) {
             LOG(INFO) << "Rank " << rank.thread_rank() << ": finish backward";
         }
 
-        if (!FLAGS_pipeline_parallel) {
+        if (pp_world_size == 1) {
             optimizer->Step();
         }
         const auto iter_end = std::chrono::high_resolution_clock::now();

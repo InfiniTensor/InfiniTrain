@@ -405,14 +405,6 @@ std::vector<std::shared_ptr<nn::Module>> LLaMA3::GetPipelineLayers() {
         layers.push_back(std::make_shared<LLaMALayer>(h, dtype, config_));
         ++idx;
     }
-    // for (int idx = 0; idx < seq->size(); ++idx) {
-    //     auto wrapped_layer = (*seq)[idx];
-    //     layers.push_back(std::make_shared<LLaMALayer>(wrapped_layer, dtype, config_));
-    // for (int idx = 1; idx < seq->size(); ++idx) {
-    //     auto wrapped_layer = (*seq)[idx];
-    //     layers.push_back(wrapped_layer);
-    // }
-    // }
 
     layers.push_back(transformer->mutable_module(kLnFLayerName));
 

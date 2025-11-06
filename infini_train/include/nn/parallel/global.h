@@ -27,7 +27,7 @@ public:
     static GlobalEnv &Instance();
 
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled = false,
-              bool pipeline_parallel = false);
+              int pipeline_parallel_size = 1);
 
     int world_size() const;
 
@@ -77,8 +77,9 @@ private:
 };
 
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled = false,
-                       bool pipeline_parallel = false) {
-    GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled, pipeline_parallel);
+                       int pipeline_parallel_size = 1) {
+    GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
+                               pipeline_parallel_size);
 }
 
 inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }
