@@ -1,6 +1,7 @@
 #include "infini_train/include/nn/parallel/global.h"
 
 #include <cstdlib>
+#include <format>
 #include <string>
 
 #include "glog/logging.h"
@@ -15,6 +16,68 @@ int GetEnvAsInt(const std::string &name, int default_value) {
 } // namespace
 
 namespace infini_train::nn::parallel::global {
+
+void Layout::InitStrides() {
+    // Calculate strides
+    int stride = 1;
+    for (int i = AXIS_COUNT - 1; i >= 0; --i) {
+        const Axis ax = order[i];
+        strides[ax] = stride;
+        stride *= sizes[ax];
+    }
+}
+
+int Layout::RankOf(int dp, int tp, int pp) const {
+    // Return the thread rank given layout coords
+    const int coord[AXIS_COUNT] = {dp, tp, pp};
+    int r = 0;
+    for (int i = 0; i < AXIS_COUNT; ++i) {
+        const Axis ax = static_cast<Axis>(i);
+        r += coord[ax] * strides[ax];
+    }
+    return r;
+}
+
+void Layout::CoordOf(int rank, int &dp, int &tp, int &pp) const {
+    // Return the layout coords given thread rank
+    dp = (rank / strides[DP]) % sizes[DP];
+    tp = (rank / strides[TP]) % sizes[TP];
+    pp = (rank / strides[PP]) % sizes[PP];
+}
+
+int Layout::GroupId(Axis target, int dp, int tp, int pp) const {
+    // Return the parallel ProcessGroup ID where the rank is in
+    int id = 0;
+    int mult = 1;
+    for (int i = AXIS_COUNT - 1; i >= 0; --i) {
+        Axis ax = order[i];
+        if (ax == target) {
+            continue;
+        }
+        int c = (ax == DP ? dp : (ax == TP ? tp : pp));
+        id += c * mult;
+        mult *= sizes[ax];
+    }
+    return id;
+}
+
+std::vector<int> Layout::GroupRanks(Axis target, int fixed_dp, int fixed_tp, int fixed_pp) const {
+    // Return all the ranks within the same parallel ProcessGroup
+    std::vector<int> ranks;
+    ranks.reserve(sizes[target]);
+    int dp = fixed_dp, tp = fixed_tp, pp = fixed_pp;
+    for (int v = 0; v < sizes[target]; ++v) {
+        if (target == DP) {
+            dp = v;
+        } else if (target == TP) {
+            tp = v;
+        } else {
+            pp = v;
+        }
+        ranks.push_back(RankOf(dp, tp, pp));
+    }
+    return ranks;
+}
 
 GlobalEnv &GlobalEnv::Instance() {
     static GlobalEnv instance;
@@ -106,9 +169,9 @@ inline int NumGroups(const Layout &L, Axis target) {
 } // namespace
 
 inline void AppendAxisGroups(std::ostringstream &oss, const Layout &L, Axis target) {
-    const int ng = NumGroups(L, target);
+    const int num_groups = NumGroups(L, target);
     const auto name = AxisName(target);
-    oss << "[" << name << "] size=" << L.sizes[target] << ", num_groups=" << ng << "\n";
+    oss << std::format("[{}] size={}, num_groups={}\n", name, L.sizes[target], num_groups);
 
     for (int dp = 0; dp < (target == DP ? 1 : L.sizes[DP]); ++dp) {
         for (int tp = 0; tp < (target == TP ? 1 : L.sizes[TP]); ++tp) {
@@ -117,49 +180,68 @@ inline void AppendAxisGroups(std::ostringstream &oss, const Layout &L, Axis targ
                 auto ranks = L.GroupRanks(target, dp, tp, pp);
                 std::sort(ranks.begin(), ranks.end());
 
-                oss << "  - " << name << " " << gid << " (dp=" << (target == DP ? "-" : std::to_string(dp))
-                    << ", tp=" << (target == TP ? "-" : std::to_string(tp))
-                    << ", pp=" << (target == PP ? "-" : std::to_string(pp)) << "): [";
+                auto dp_size_str = (target == DP) ? "-" : std::to_string(dp);
+                auto tp_size_str = (target == TP) ? "-" : std::to_string(tp);
+                auto pp_size_str = (target == PP) ? "-" : std::to_string(pp);
+
+                std::string ranks_str;
+                ranks_str.reserve(ranks.size() * 4);
 
                 for (size_t i = 0; i < ranks.size(); ++i) {
-                    if (i) {
-                        oss << ", ";
+                    if (i > 0) {
+                        ranks_str += ", ";
                     }
-                    oss << ranks[i];
+                    ranks_str += std::to_string(ranks[i]);
                 }
-                oss << "]\n";
+
+                oss << std::format("  - {} {} (dp={}, tp={}, pp={}): [{}]\n", name, gid, dp_size_str, tp_size_str,
+                                   pp_size_str, ranks_str);
             }
         }
     }
 }
 
-/* Example:
-    === Parallel Communication Groups ===
-    world_size = 8, config: {DP=2, TP=4, PP=1}, order: {DP -> TP -> PP}
-    [DP] size=2, num_groups=4
-    - DP 0 (dp=-, tp=0, pp=0): [0, 4]
-    - DP 1 (dp=-, tp=1, pp=0): [1, 5]
-    - DP 2 (dp=-, tp=2, pp=0): [2, 6]
-    - DP 3 (dp=-, tp=3, pp=0): [3, 7]
-
-    [TP] size=4, num_groups=2
-    - TP 0 (dp=0, tp=-, pp=0): [0, 1, 2, 3]
-    - TP 1 (dp=1, tp=-, pp=0): [4, 5, 6, 7]
-
-    [PP] size=1, unenabled
-*/
+/**
+ * @brief Generate a human-readable overview of all parallel communication groups.
+ *
+ * The output is intended for debugging, logging, and runtime verification of
+ * distributed parallelism configuration.
+ *
+ * @param L  The Layout describing DP / TP / PP sizes and axis ordering.
+ * @param skip_trivial_axes
+ *        If true, axes whose size <= 1(i.e. parallel strategy that is not enabled)
+ *        will be marked as "unenabled" and their detailed group listing will be skipped.
+ *
+ * @return A formatted string containing the full overview of process groups.
+ *
+ *         Example:
+ *           === Parallel Communication Groups ===
+ *           world_size = 8, config: {DP=2, TP=4, PP=1}, order: {DP -> TP -> PP}
+ *           [DP] size=2, num_groups=4
+ *           - DP 0 (dp=-, tp=0, pp=0): [0, 4]
+ *           - DP 1 (dp=-, tp=1, pp=0): [1, 5]
+ *           - DP 2 (dp=-, tp=2, pp=0): [2, 6]
+ *           - DP 3 (dp=-, tp=3, pp=0): [3, 7]
+ *
+ *           [TP] size=4, num_groups=2
+ *           - TP 0 (dp=0, tp=-, pp=0): [0, 1, 2, 3]
+ *           - TP 1 (dp=1, tp=-, pp=0): [4, 5, 6, 7]
+ *
+ *           [PP] size=1, unenabled
+ */
 std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
     std::ostringstream oss;
-    oss << "\n=== Parallel Communication Groups ===\n"
-        << "world_size = " << GetWorldSize() << ", config: {DP=" << L.sizes[DP] << ", TP=" << L.sizes[TP]
-        << ", PP=" << L.sizes[PP] << "}, order: {";
+    oss << std::format("\n=== Parallel Communication Groups ===\n"
+                       "world_size = {}, config: {{DP={}, TP={}, PP={}}}, order: {{",
+                       GetWorldSize(), L.sizes[DP], L.sizes[TP], L.sizes[PP]);
+
     for (int i = 0; i < AXIS_COUNT; ++i) { oss << AxisName(L.order[i]) << (i + 1 == AXIS_COUNT ? "" : " -> "); }
     oss << "}\n";
 
     for (int a = 0; a < AXIS_COUNT; ++a) {
         Axis ax = static_cast<Axis>(a);
         if (skip_trivial_axes && L.sizes[ax] <= 1) {
-            oss << "[" << AxisName(ax) << "] size=" << L.sizes[ax] << ", unenabled\n";
+            oss << std::format("[{}] size={}, unenabled\n", AxisName(ax), L.sizes[ax]);
             continue;
         }
         AppendAxisGroups(oss, L, ax);
