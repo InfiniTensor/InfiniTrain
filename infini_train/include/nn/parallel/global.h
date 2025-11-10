@@ -10,70 +10,14 @@ enum Axis : uint8_t { DP = 0, TP = 1, PP = 2, AXIS_COUNT = 3 };
 
 struct Layout {
     int sizes[AXIS_COUNT]{1, 1, 1};
-    Axis order[AXIS_COUNT]{DP, TP, PP};
+    Axis order[AXIS_COUNT]{TP, PP, DP};
     int strides[AXIS_COUNT]{1, 1, 1};
 
-    inline void InitStrides() {
-        // Calculate strides
-        int stride = 1;
-        for (int i = AXIS_COUNT - 1; i >= 0; --i) {
-            const Axis ax = order[i];
-            strides[ax] = stride;
-            stride *= sizes[ax];
-        }
-    }
-
-    inline int RankOf(int dp, int tp, int pp) const {
-        // Return the thread rank given layout coords
-        const int coord[AXIS_COUNT] = {dp, tp, pp};
-        int r = 0;
-        for (int i = 0; i < AXIS_COUNT; ++i) {
-            const Axis ax = static_cast<Axis>(i);
-            r += coord[ax] * strides[ax];
-        }
-        return r;
-    }
-
-    inline void CoordOf(int rank, int &dp, int &tp, int &pp) const {
-        // Return the layout coords given thread rank
-        dp = (rank / strides[DP]) % sizes[DP];
-        tp = (rank / strides[TP]) % sizes[TP];
-        pp = (rank / strides[PP]) % sizes[PP];
-    }
-
-    inline int GroupId(Axis target, int dp, int tp, int pp) const {
-        // Return the parallel ProcessGroup ID where the rank is in
-        int id = 0;
-        int mult = 1;
-        for (int i = AXIS_COUNT - 1; i >= 0; --i) {
-            Axis ax = order[i];
-            if (ax == target) {
-                continue;
-            }
-            int c = (ax == DP ? dp : (ax == TP ? tp : pp));
-            id += c * mult;
-            mult *= sizes[ax];
-        }
-        return id;
-    }
-
-    inline std::vector<int> GroupRanks(Axis target, int fixed_dp, int fixed_tp, int fixed_pp) const {
-        // Return all the ranks within the same parallel ProcessGroup
-        std::vector<int> ranks;
-        ranks.reserve(sizes[target]);
-        int dp = fixed_dp, tp = fixed_tp, pp = fixed_pp;
-        for (int v = 0; v < sizes[target]; ++v) {
-            if (target == DP) {
-                dp = v;
-            } else if (target == TP) {
-                tp = v;
-            } else {
-                pp = v;
-            }
-            ranks.push_back(RankOf(dp, tp, pp));
-        }
-        return ranks;
-    }
+    void InitStrides();
+    int RankOf(int dp, int tp, int pp) const;
+    void CoordOf(int rank, int &dp, int &tp, int &pp) const;
+    int GroupId(Axis target, int dp, int tp, int pp) const;
+    std::vector<int> GroupRanks(Axis target, int fixed_dp, int fixed_tp, int fixed_pp) const;
 };
 
 class GlobalEnv {
@@ -147,17 +91,17 @@ inline void GetCoordOf(int rank, int &dp, int &tp, int &pp) {
 inline int GetGroupId(Axis target, int dp, int tp, int pp) {
     return GlobalEnv::Instance().layout().GroupId(target, dp, tp, pp);
 }
-inline int GetGroupId(Axis target, int thread_rank) {
+inline int GetGroupId(Axis target, int rank) {
     int dp, tp, pp;
-    GetCoordOf(thread_rank, dp, tp, pp);
+    GetCoordOf(rank, dp, tp, pp);
     return GlobalEnv::Instance().layout().GroupId(target, dp, tp, pp);
 }
 inline std::vector<int> GetGroupRanks(Axis target, int dp, int tp, int pp) {
     return GlobalEnv::Instance().layout().GroupRanks(target, dp, tp, pp);
 }
-inline std::vector<int> GetGroupRanks(Axis target, int thread_rank) {
+inline std::vector<int> GetGroupRanks(Axis target, int rank) {
     int dp, tp, pp;
-    GetCoordOf(thread_rank, dp, tp, pp);
+    GetCoordOf(rank, dp, tp, pp);
     return GlobalEnv::Instance().layout().GroupRanks(target, dp, tp, pp);
 }
 
