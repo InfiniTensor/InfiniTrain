@@ -418,7 +418,10 @@ VocabParallelEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>> &inpu
 std::vector<std::shared_ptr<Tensor>>
 VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 2) << kType << " expects {logits, target}";
-    auto logits = input_tensors[0];
+    // NOTE(zbl): CrossEntropy originally requires FP32 in autocast context. Here we explicitly upcast logits to FP32
+    //            at the beginning of the forward pass, in alignment with Megatron-LM's behavior. Ref:
+    //            https://github.com/NVIDIA/Megatron-LM/blob/e07c4a4450b6faa187a1ef4ec082a35ad7d2f085/megatron/core/tensor_parallel/cross_entropy.py#L28
+    auto logits = std::make_shared<Tensor>(input_tensors[0]->To(DataType::kFLOAT32));
     auto target = input_tensors[1];
 
     auto dtype = logits->Dtype();
@@ -531,10 +534,9 @@ VocabParallelCrossEntropy::Backward(const std::vector<std::shared_ptr<Tensor>> &
     auto valid_mask_local = saved_tensors_[3];
 
     auto device = grad_output->GetDevice()->Type();
-    auto kernel = Dispatcher::Instance().GetKernel({device, "VocabParallelCrossEntropyBackward"});
-    auto grad_input
-        = kernel.Call<std::shared_ptr<Tensor>>(grad_output, softmax_local, target_mask, masked_target, valid_mask_local,
-                                               vocab_size_local_, vocab_size_original_, label_smoothing_);
+    auto grad_input = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+        {device, "VocabParallelCrossEntropyBackward"}, grad_output, softmax_local, target_mask, masked_target,
+        valid_mask_local, vocab_size_local_, vocab_size_original_, label_smoothing_);
     return {grad_input, nullptr};
 }
 

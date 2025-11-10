@@ -55,8 +55,10 @@ enum class CastPolicy : uint8_t {
 // Cast-policy maps and their associated operations. The op names should match the ones defined in the op registry.
 inline constexpr std::array kLowerPrecisionOps = {"Matmul", "Linear"};
 inline constexpr std::array kFP32Ops
-    = {"Sin",   "Cos", "Tan", "Asin", "Acos",       "Atan",  "Sinh", "Cosh", "Tanh",         "Asinh",    "Acosh",
-       "Atanh", "Exp", "Log", "Sqrt", "Reciprocal", "Rsqrt", "Prod", "Pow",  "CrossEntropy", "Layernorm"};
+    = {"Sin",      "Cos",        "Tan",   "Asin",  "Acos",  "Atan",         "Sinh",
+       "Cosh",     "Tanh",       "Asinh", "Acosh", "Atanh", "Exp",          "Log",
+       "Sqrt",     "Reciprocal", "Rsqrt", "Prod",  "Pow",   "CrossEntropy", "VocabParallelCrossEntropy",
+       "Layernorm"};
 
 // Mapping from operation names to their cast policies. This is the primary construct that is used in autocasting. The
 // op names should match the ones defined in the op registry.
@@ -84,6 +86,7 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
     {"Prod", CastPolicy::kFP32},
     {"Pow", CastPolicy::kFP32},
     {"CrossEntropy", CastPolicy::kFP32},
+    {"VocabParallelCrossEntropy", CastPolicy::kFP32},
     {"Layernorm", CastPolicy::kFP32},
 };
 
