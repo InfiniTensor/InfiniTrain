@@ -10,7 +10,9 @@ enum Axis : uint8_t { DP = 0, TP = 1, PP = 2, AXIS_COUNT = 3 };
 
 struct Layout {
     int sizes[AXIS_COUNT]{1, 1, 1};
-    Axis order[AXIS_COUNT]{TP, PP, DP};
+    // Default order according to Megatron-LM is TP-DP-PP. Ref:
+    // https://github.com/NVIDIA/Megatron-LM/blob/e07c4a4450b6faa187a1ef4ec082a35ad7d2f085/megatron/core/parallel_state.py#L618
+    Axis order[AXIS_COUNT]{TP, DP, PP};
     int strides[AXIS_COUNT]{1, 1, 1};
 
     void InitStrides();
