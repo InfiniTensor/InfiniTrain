@@ -100,29 +100,84 @@ inline bool GetSequenceParallelEnabled() { return GlobalEnv::Instance().sequence
 inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
 inline int GetPipelineParallelSize() { return GlobalEnv::Instance().pipeline_parallel_size(); }
 
+// =========================
 // Layout Helper Functions
+// =========================
+
+/**
+ * @brief Get the global rank corresponding to the given (dp, tp, pp) coordinate.
+ */
 inline int GetRankOf(int dp, int tp, int pp) { return GlobalEnv::Instance().layout().RankOf(dp, tp, pp); }
+/**
+ * @brief Get the (dp, tp, pp) coordinate corresponding to the given global rank.
+ */
 inline void GetCoordOf(int rank, int &dp, int &tp, int &pp) {
     return GlobalEnv::Instance().layout().CoordOf(rank, dp, tp, pp);
 }
+
+/**
+ * @brief Get the group ID that the (dp, tp, pp) coordinate belongs to along a given parallel axis.
+ */
 inline int GetGroupId(Axis target, int dp, int tp, int pp) {
     return GlobalEnv::Instance().layout().GroupId(target, dp, tp, pp);
 }
+/**
+ * @brief Get the group ID that a given rank belongs to along a specific parallel axis.
+ */
 inline int GetGroupId(Axis target, int rank) {
     int dp, tp, pp;
     GetCoordOf(rank, dp, tp, pp);
     return GlobalEnv::Instance().layout().GroupId(target, dp, tp, pp);
 }
+
+/**
+ * @brief Get all ranks that belong to the same group as the given (dp, tp, pp) coordinate
+ *        along a specified parallel axis (e.g., all ranks in the same TP group).
+ */
 inline std::vector<int> GetGroupRanks(Axis target, int dp, int tp, int pp) {
     return GlobalEnv::Instance().layout().GroupRanks(target, dp, tp, pp);
 }
+
+/**
+ * @brief Get all ranks that belong to the same group as the given rank
+ *        along a specified parallel axis (e.g., all ranks in the same DP group).
+ */
 inline std::vector<int> GetGroupRanks(Axis target, int rank) {
     int dp, tp, pp;
     GetCoordOf(rank, dp, tp, pp);
     return GlobalEnv::Instance().layout().GroupRanks(target, dp, tp, pp);
 }
 
+/**
+ * @brief Generate a human-readable overview of all parallel communication groups.
+ *
+ * The output is intended for debugging, logging, and runtime verification of
+ * distributed parallelism configuration.
+ *
+ * @param L  The Layout describing DP / TP / PP sizes and axis ordering.
+ * @param skip_trivial_axes
+ *        If true, axes whose size <= 1(i.e. parallel strategy that is not enabled)
+ *        will be marked as "unenabled" and their detailed group listing will be skipped.
+ *
+ * @return A formatted string containing the full overview of process groups.
+ *
+ *         Example:
+ *           === Parallel Communication Groups ===
+ *           world_size = 8, config: {DP=2, TP=4, PP=1}, order: {DP -> TP -> PP}
+ *           [DP] size=2, num_groups=4
+ *           - DP 0 (dp=-, tp=0, pp=0): [0, 4]
+ *           - DP 1 (dp=-, tp=1, pp=0): [1, 5]
+ *           - DP 2 (dp=-, tp=2, pp=0): [2, 6]
+ *           - DP 3 (dp=-, tp=3, pp=0): [3, 7]
+ *
+ *           [TP] size=4, num_groups=2
+ *           - TP 0 (dp=0, tp=-, pp=0): [0, 1, 2, 3]
+ *           - TP 1 (dp=1, tp=-, pp=0): [4, 5, 6, 7]
+ *
+ *           [PP] size=1, unenabled
+ */
 std::string ProcessGroupOverview(const Layout &L = GlobalEnv::Instance().layout(), bool skip_trivial_axes = true);
+
 #ifdef USE_NCCL
 inline ncclUniqueId GetNcclId() { return GlobalEnv::Instance().nccl_id(); }
 #endif
