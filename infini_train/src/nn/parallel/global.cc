@@ -96,8 +96,9 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
 
-    world_size_ = GetEnvAsInt("PROC_WORLD_SIZE", 1) * nthread_per_process;
+    nnodes_ = GetEnvAsInt("NNODES", 1);
     nproc_per_node_ = GetEnvAsInt("NPROC_PER_NODE", 1);
+    world_size_ = GetEnvAsInt("PROC_WORLD_SIZE", 1) * nthread_per_process;
     global_proc_rank_ = GetEnvAsInt("GLOBAL_PROC_RANK", 0);
     local_proc_rank_ = GetEnvAsInt("LOCAL_PROC_RANK", 0);
 
@@ -117,6 +118,21 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     initialized_ = true;
 }
 
+int GlobalEnv::nnodes() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return nnodes_;
+}
+
+int GlobalEnv::nproc_per_node() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return nproc_per_node_;
+}
+
+int GlobalEnv::nthread_per_process() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return nthread_per_process_;
+}
+
 int GlobalEnv::world_size() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return world_size_;
@@ -130,16 +146,6 @@ int GlobalEnv::global_proc_rank() const {
 int GlobalEnv::local_proc_rank() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return local_proc_rank_;
-}
-
-int GlobalEnv::nproc_per_node() const {
-    CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return nproc_per_node_;
-}
-
-int GlobalEnv::nthread_per_process() const {
-    CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return nthread_per_process_;
 }
 
 int GlobalEnv::tensor_parallel_size() const {

@@ -55,7 +55,9 @@ public:
     std::vector<std::shared_ptr<Tensor>> NcclRecv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank) const;
 
 private:
-    void Init(const std::vector<int> &device_indices);
+    void InitSingleProcess(const std::vector<int> &ranks);
+
+    void InitMultiProcess(const std::vector<int> &ranks);
 
 private:
     std::vector<ncclComm_t> comms_;
