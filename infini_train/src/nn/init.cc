@@ -46,6 +46,7 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
 #endif
 
     auto device = tensor->GetDevice();
+    device->SetDevice();
 
     switch (device->Type()) {
     case DeviceType::kCPU: {
@@ -151,6 +152,7 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
 #endif
 
     auto device = tensor->GetDevice();
+    device->SetDevice();
 
     switch (device->Type()) {
     case DeviceType::kCPU: {
@@ -180,6 +182,7 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {
     std::vector<float> buffer(num_elements, 1.0f);
 
     auto device = tensor->GetDevice();
+    device->SetDevice();
 
     switch (device->Type()) {
     case DeviceType::kCPU: {
@@ -209,6 +212,7 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
     std::vector<float> buffer(num_elements, 0.0f);
 
     auto device = tensor->GetDevice();
+    device->SetDevice();
 
     switch (device->Type()) {
     case DeviceType::kCPU: {
@@ -250,6 +254,8 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
 std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, const Device *device) {
     int64_t num_elements = end - start;
     auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{num_elements}, dtype, device);
+    device->SetDevice();
+
     if (device->IsCPU()) {
         switch (dtype) {
             CASE(DataType::kUINT8, uint8_t)

@@ -193,6 +193,8 @@ public:
     std::shared_ptr<Tensor> RequiresGrad();
 
     std::shared_ptr<Tensor> grad() const;
+    void set_grad(std::shared_ptr<Tensor> grad);
+
     bool requires_grad() const;
     void set_requires_grad(bool requires_grad);
 
@@ -205,7 +207,7 @@ public:
     int output_idx() const;
     void set_output_idx(int output_idx);
 
-    void ZeroGrad();
+    void ZeroGrad(bool set_to_none = true);
 
     void Backward(std::shared_ptr<Tensor> gradient = nullptr, bool retain_graph = false,
                   bool create_graph = false) const;

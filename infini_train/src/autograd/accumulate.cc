@@ -19,15 +19,22 @@ std::vector<std::shared_ptr<Tensor>>
 AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
     auto grad_output = grad_outputs[0];
+
     auto grad = tensor_->grad();
+    auto device = tensor_->GetDevice();
+    device->SetDevice();
+
     if (grad_output) {
-        auto device = grad->GetDevice();
-        device->SetDevice();
-        auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
-        kernel.Call<void>(grad_output, learning_rate_, grad);
+        if (grad) {
+            auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
+            kernel.Call<void>(grad_output, learning_rate_, grad);
+        } else {
+            auto new_grad = std::make_shared<Tensor>(*grad_output.get(), 0, grad_output->Dims());
+            tensor_->set_grad(std::move(new_grad));
+        }
         auto hook = tensor_->post_accumulate_grad_hook();
         if (hook != nullptr) {
-            (*hook)(grad);
+            (*hook)(tensor_->grad());
         }
         tensor_->ResetAccumulator();
     }
