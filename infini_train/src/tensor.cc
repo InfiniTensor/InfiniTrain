@@ -84,7 +84,7 @@ Tensor::Tensor(const std::vector<int64_t> &dims, DataType dtype, const Device *d
 }
 
 Tensor::Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &dims)
-    : buffer_(tensor.buffer_), offset_(offset), dims_(dims),
+    : buffer_(tensor.buffer_), offset_(tensor.offset_ + offset), dims_(dims),
       num_elements_(std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>())), dtype_(tensor.dtype_) {
     CHECK_LE(offset_ + kDataTypeToSize.at(dtype_) * num_elements_, buffer_->Size());
 }
@@ -471,6 +471,17 @@ std::shared_ptr<Tensor> Tensor::RequiresGrad() {
 }
 
 std::shared_ptr<Tensor> Tensor::grad() const { return grad_; };
+void Tensor::set_grad(std::shared_ptr<Tensor> grad) {
+    if (grad) {
+        CHECK(grad->GetDevice() == GetDevice());
+        CHECK(grad->Dtype() == Dtype());
+        CHECK(grad->Dims() == Dims());
+        grad_ = grad;
+    } else {
+        grad_.reset();
+    }
+}
+
 bool Tensor::requires_grad() const { return requires_grad_; }
 void Tensor::set_requires_grad(bool requires_grad) { requires_grad_ = requires_grad; }
 
@@ -483,9 +494,13 @@ void Tensor::set_grad_fn(std::shared_ptr<autograd::Function> grad_fn) { grad_fn_
 int Tensor::output_idx() const { return output_idx_; }
 void Tensor::set_output_idx(int output_idx) { output_idx_ = output_idx; }
 
-void Tensor::ZeroGrad() {
+void Tensor::ZeroGrad(bool set_to_none) {
     if (grad_) {
-        grad_->Fill<float>(0.0f);
+        if (set_to_none) {
+            grad_.reset();
+        } else {
+            grad_->Fill<float>(0.0f);
+        }
     }
 }
 
