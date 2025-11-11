@@ -64,7 +64,7 @@ nn::parallel::Rank CudaDevice::rank() const { return rank_; }
 
 CudaDevice::CudaDevice(int8_t index)
     : Device(DeviceType::kCUDA, index),
-      rank_({nn::parallel::global::GetLocalProcRank(), index, nn::parallel::global::GetNprocPerNode(),
+      rank_({nn::parallel::global::GetGlobalProcRank(), index, nn::parallel::global::GetNprocPerNode(),
              nn::parallel::global::GetNthreadPerProc()}) {
     // TODO(dcj): make CudaDevice initialization lazy to avoid allocating memory on all GPUs in single-GPU mode
     SetDevice();

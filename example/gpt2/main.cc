@@ -128,14 +128,14 @@ void Train(const nn::parallel::Rank &rank) {
         device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, rank.thread_rank());
 
         if (ddp_world_size > 1) {
-            ddp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetDataParallelProcessGroupName(rank.thread_rank()),
-                                                                  GetDataParallelGroupRanks(rank.thread_rank()));
+            ddp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
+                                                                  GetDataParallelGroupRanks(rank.GlobalRank()));
             ddp_rank = ddp_pg->GetGroupRank(rank.thread_rank());
         }
 
         if (tp_world_size > 1) {
-            tp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetTensorParallelProcessGroupName(rank.thread_rank()),
-                                                                 GetTensorParallelGroupRanks(rank.thread_rank()));
+            tp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetTensorParallelProcessGroupName(rank.GlobalRank()),
+                                                                 GetTensorParallelGroupRanks(rank.GlobalRank()));
             tp_rank = tp_pg->GetGroupRank(rank.thread_rank());
             // NOTE(zbl): Reserved for VocabParallelEmbedding
             nn::parallel::tp_rank = tp_rank;
@@ -355,7 +355,7 @@ int main(int argc, char *argv[]) {
     if (FLAGS_nthread_per_process > 1) {
         std::vector<std::thread> threads;
         for (int idx = 0; idx < FLAGS_nthread_per_process; ++idx) {
-            nn::parallel::Rank rank(nn::parallel::global::GetLocalProcRank(), idx,
+            nn::parallel::Rank rank(nn::parallel::global::GetGlobalProcRank(), idx,
                                     nn::parallel::global::GetNprocPerNode(), FLAGS_nthread_per_process);
             threads.emplace_back(Train, rank);
         }
