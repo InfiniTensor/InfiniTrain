@@ -80,6 +80,26 @@ namespace infini_train::nn::parallel {
 #ifdef USE_NCCL
 ProcessGroup::ProcessGroup(const std::string &process_group_name, const std::vector<int> &ranks)
     : world_size_(ranks.size()), name_(process_group_name) {
+    if (global::GetNnodes() == 1 && global::GetNprocPerNode() == 1) {
+        InitSingleProcess(ranks);
+    } else {
+        InitMultiProcess(ranks);
+    }
+}
+
+void ProcessGroup::InitSingleProcess(const std::vector<int> &ranks) {
+    comms_.resize(world_size_);
+    NCCL_CHECK(ncclCommInitAll(comms_.data(), world_size_, ranks.data()));
+
+    for (int i = 0; i < ranks.size(); ++i) {
+        auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, ranks[i]);
+        devices_.push_back(device);
+        device_comm_map_[device] = comms_[i];
+        thread_group_rank_map_[device->rank().thread_rank()] = i;
+    }
+}
+
+void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
     int n_threads = global::GetNthreadPerProc();
 
     ncclUniqueId nccl_id;
@@ -100,14 +120,16 @@ ProcessGroup::ProcessGroup(const std::string &process_group_name, const std::vec
         auto it = std::ranges::find(ranks, global_rank);
         if (it != ranks.end()) {
             cudaSetDevice(i);
+
             ncclComm_t comm;
             int group_rank = std::distance(ranks.begin(), it);
             NCCL_CHECK(ncclCommInitRank(&comm, world_size_, nccl_id, group_rank));
             comms_.push_back(comm);
-            device_indices.push_back(i);
-            // FIXME(dcj): fix Init function
-            thread_group_rank_map_[DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, i)->rank().thread_rank()]
-                = group_rank;
+
+            auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, i);
+            thread_group_rank_map_[device->rank().thread_rank()] = group_rank;
+            devices_.push_back(device);
+            device_comm_map_[device] = comm;
         }
     }
     NCCL_CHECK(ncclGroupEnd());

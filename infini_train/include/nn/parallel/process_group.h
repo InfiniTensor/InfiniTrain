@@ -64,7 +64,9 @@ public:
     std::shared_ptr<Work> AllReduceAsync(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const;
 
 private:
-    void Init(const std::vector<int> &device_indices);
+    void InitSingleProcess(const std::vector<int> &ranks);
+
+    void InitMultiProcess(const std::vector<int> &ranks);
 
 private:
     std::vector<ncclComm_t> comms_;
