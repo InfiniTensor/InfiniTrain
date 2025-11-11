@@ -1,8 +1,13 @@
 #include "infini_train/include/nn/parallel/process_group.h"
 
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <numeric>
+#include <thread>
 #include <vector>
 
 #ifdef USE_NCCL
@@ -21,6 +26,9 @@
 namespace infini_train {
 
 namespace {
+using nn::parallel::function::ReduceOpType;
+
+#ifdef USE_NCCL
 const std::unordered_map<DataType, ncclDataType_t> kNcclDtypeMap = {
     {DataType::kUINT8, ncclUint8},       {DataType::kINT8, ncclInt8},     {DataType::kUINT32, ncclUint32},
     {DataType::kINT32, ncclInt32},       {DataType::kUINT64, ncclUint64}, {DataType::kINT64, ncclInt64},
@@ -28,14 +36,30 @@ const std::unordered_map<DataType, ncclDataType_t> kNcclDtypeMap = {
     {DataType::kFLOAT64, ncclFloat64},
 };
 
-using nn::parallel::function::ReduceOpType;
-
 const std::unordered_map<ReduceOpType, ncclRedOp_t> kNcclReduceOpMap = {
     {ReduceOpType::kSum, ncclSum},
     {ReduceOpType::kProd, ncclProd},
     {ReduceOpType::kMax, ncclMax},
     {ReduceOpType::kAvg, ncclAvg},
 };
+
+void WriteNcclUniqueId(const ncclUniqueId &nccl_id, const std::string &filename) {
+    std::string tmp_path = filename + ".tmp";
+
+    std::ofstream ofs(tmp_path, std::ios::binary);
+    ofs.write(reinterpret_cast<const char *>(&nccl_id), sizeof(nccl_id));
+    ofs.close();
+
+    std::rename(tmp_path.c_str(), filename.c_str());
+}
+
+void ReadNcclUniqueId(ncclUniqueId &nccl_id, const std::string &filename) {
+    std::ifstream ifs(filename, std::ios::binary);
+    ifs.read(reinterpret_cast<char *>(&nccl_id), sizeof(nccl_id));
+    ifs.close();
+}
+#endif
+
 } // namespace
 
 } // namespace infini_train
@@ -43,19 +67,40 @@ const std::unordered_map<ReduceOpType, ncclRedOp_t> kNcclReduceOpMap = {
 namespace infini_train::nn::parallel {
 
 #ifdef USE_NCCL
-ProcessGroup::ProcessGroup(const ncclUniqueId &nccl_id) : world_size_(global::GetWorldSize()) {
-    int local_comm_size = global::GetNthreadPerProc();
-    comms_.resize(local_comm_size);
-    std::vector<int> device_indices(local_comm_size);
+ProcessGroup::ProcessGroup(const std::string &process_group_name, const std::vector<int> &ranks)
+    : world_size_(ranks.size()), name_(process_group_name) {
+    int n_threads = global::GetNthreadPerProc();
 
+    ncclUniqueId nccl_id;
+
+    if (std::ranges::min(ranks) < (global::GetGlobalProcRank() + 1) * global::GetNthreadPerProc()
+        && std::ranges::min(ranks) >= global::GetGlobalProcRank() * global::GetNthreadPerProc()) {
+        ncclGetUniqueId(&nccl_id);
+
+        WriteNcclUniqueId(nccl_id, name_);
+    } else {
+        while (std::filesystem::exists(name_) == false) {
+            std::this_thread::sleep_for(std::chrono::microseconds(1000));
+        }
+        ReadNcclUniqueId(nccl_id, name_);
+    }
+
+    std::vector<int> device_indices;
     NCCL_CHECK(ncclGroupStart());
-    for (int i = 0; i < local_comm_size; ++i) {
-        device_indices[i] = i;
-
+    for (int i = 0; i < n_threads; ++i) {
         int global_rank = global::GetGlobalProcRank() * global::GetNthreadPerProc() + i;
-
-        cudaSetDevice(i);
-        NCCL_CHECK(ncclCommInitRank(&comms_[i], world_size_, nccl_id, global_rank));
+        auto it = std::ranges::find(ranks, global_rank);
+        if (it != ranks.end()) {
+            cudaSetDevice(i);
+            ncclComm_t comm;
+            int group_rank = std::distance(ranks.begin(), it);
+            NCCL_CHECK(ncclCommInitRank(&comm, world_size_, nccl_id, group_rank));
+            comms_.push_back(comm);
+            device_indices.push_back(i);
+            // FIXME(dcj): fix Init function
+            thread_group_rank_map_[DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, i)->rank().thread_rank()]
+                = group_rank;
+        }
     }
     NCCL_CHECK(ncclGroupEnd());
 
@@ -403,18 +448,12 @@ ProcessGroupFactory *ProcessGroupFactory::Instance() {
 const ProcessGroup *ProcessGroupFactory::GetOrCreate(const std::string &name, int comm_size) {
     std::vector<int> device_indices(comm_size);
     std::iota(device_indices.begin(), device_indices.end(), 0);
-    return GetOrCreate(name, [&]() { return std::make_unique<ProcessGroup>(device_indices); });
+    return GetOrCreate(name, [&]() { return std::make_unique<ProcessGroup>(name, device_indices); });
 }
 
 const ProcessGroup *ProcessGroupFactory::GetOrCreate(const std::string &name, const std::vector<int> &device_indices) {
-    return GetOrCreate(name, [&]() { return std::make_unique<ProcessGroup>(device_indices); });
+    return GetOrCreate(name, [&]() { return std::make_unique<ProcessGroup>(name, device_indices); });
 }
-
-#ifdef USE_NCCL
-const ProcessGroup *ProcessGroupFactory::GetOrCreate(const std::string &name, const ncclUniqueId &nccl_id) {
-    return GetOrCreate(name, [&]() { return std::make_unique<ProcessGroup>(nccl_id); });
-}
-#endif
 
 const ProcessGroup *ProcessGroupFactory::Get(const std::string &name) const {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -425,11 +464,5 @@ const ProcessGroup *ProcessGroupFactory::GetDefaultProcessGroup() const {
     return name_to_group_.at(kDefaltProcessGroupName).get();
 }
 
-ProcessGroupFactory::ProcessGroupFactory() {
-#ifdef USE_NCCL
-    GetOrCreate(kDefaltProcessGroupName, global::GetNcclId());
-#else
-    GetOrCreate(kDefaltProcessGroupName, global::GetWorldSize());
-#endif
-}
+ProcessGroupFactory::ProcessGroupFactory() { GetOrCreate(kDefaltProcessGroupName, global::GetWorldSize()); }
 } // namespace infini_train::nn::parallel
