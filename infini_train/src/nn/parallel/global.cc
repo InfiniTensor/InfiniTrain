@@ -19,20 +19,6 @@ std::string GetEnvAsStr(const std::string &name, const std::string &default_valu
     return value ? std::string(value) : default_value;
 }
 
-#ifdef USE_NCCL
-ncclUniqueId StringToNcclId(const std::string &str) {
-    ncclUniqueId id;
-    for (int i = 0; i < NCCL_UNIQUE_ID_BYTES; ++i) {
-        unsigned int byte;
-        std::stringstream ss;
-        ss << std::hex << str.substr(i * 2, 2);
-        ss >> byte;
-        id.internal[i] = static_cast<char>(byte);
-    }
-    return id;
-}
-#endif
-
 } // namespace
 
 namespace infini_train::nn::parallel::global {
@@ -127,10 +113,6 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     // FIXME(zbl): set PP size
     layout_.sizes[PP] = 1;
     layout_.InitStrides();
-    // FIXME(dcj): what if no nccl id?
-#ifdef USE_NCCL
-    nccl_id_ = StringToNcclId(GetEnvAsStr("NCCL_UNIQUE_ID", ""));
-#endif
 
     initialized_ = true;
 }
@@ -232,34 +214,6 @@ inline void AppendAxisGroups(std::ostringstream &oss, const Layout &L, Axis targ
     }
 }
 
-/**
- * @brief Generate a human-readable overview of all parallel communication groups.
- *
- * The output is intended for debugging, logging, and runtime verification of
- * distributed parallelism configuration.
- *
- * @param L  The Layout describing DP / TP / PP sizes and axis ordering.
- * @param skip_trivial_axes
- *        If true, axes whose size <= 1(i.e. parallel strategy that is not enabled)
- *        will be marked as "unenabled" and their detailed group listing will be skipped.
- *
- * @return A formatted string containing the full overview of process groups.
- *
- *         Example:
- *           === Parallel Communication Groups ===
- *           world_size = 8, config: {DP=2, TP=4, PP=1}, order: {DP -> TP -> PP}
- *           [DP] size=2, num_groups=4
- *           - DP 0 (dp=-, tp=0, pp=0): [0, 4]
- *           - DP 1 (dp=-, tp=1, pp=0): [1, 5]
- *           - DP 2 (dp=-, tp=2, pp=0): [2, 6]
- *           - DP 3 (dp=-, tp=3, pp=0): [3, 7]
- *
- *           [TP] size=4, num_groups=2
- *           - TP 0 (dp=0, tp=-, pp=0): [0, 1, 2, 3]
- *           - TP 1 (dp=1, tp=-, pp=0): [4, 5, 6, 7]
- *
- *           [PP] size=1, unenabled
- */
 std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
     std::ostringstream oss;
     oss << std::format("\n=== Parallel Communication Groups ===\n"
@@ -283,11 +237,5 @@ std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
     oss << "\n";
     return oss.str();
 }
-#ifdef USE_NCCL
-ncclUniqueId GlobalEnv::nccl_id() const {
-    CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return nccl_id_;
-}
-#endif
 
 } // namespace infini_train::nn::parallel::global

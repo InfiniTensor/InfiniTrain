@@ -178,8 +178,4 @@ inline std::vector<int> GetGroupRanks(Axis target, int rank) {
  */
 std::string ProcessGroupOverview(const Layout &L = GlobalEnv::Instance().layout(), bool skip_trivial_axes = true);
 
-#ifdef USE_NCCL
-inline ncclUniqueId GetNcclId() { return GlobalEnv::Instance().nccl_id(); }
-#endif
-
 } // namespace infini_train::nn::parallel::global

@@ -23,9 +23,10 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         CHECK_EQ(device->Index(), device_id) << "All parameters must be on the same device as the module";
 
         auto ddp_pg
-            = ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(device->rank().thread_rank()));
+            = ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(device->rank().GlobalRank()));
         // FIXME(dcj): use multi-node ddp_pg here
-        auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(function::ReduceOpType::kAvg);
+        auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(function::ReduceOpType::kAvg,
+                                                                                          ddp_pg);
         param->RegisterPostAccumulateGradHook(std::move(hook));
     }
     for (auto &buffer : module->Buffers()) {
