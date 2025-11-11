@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iterator>
 #include <memory>
@@ -43,18 +44,28 @@ const std::unordered_map<ReduceOpType, ncclRedOp_t> kNcclReduceOpMap = {
     {ReduceOpType::kAvg, ncclAvg},
 };
 
-void WriteNcclUniqueId(const ncclUniqueId &nccl_id, const std::string &filename) {
-    std::string tmp_path = filename + ".tmp";
+inline std::string NcclFileName(const std::string &name, bool tmp = false) {
+    return std::format("ncclUniqueId_{}.{}", name, tmp ? "tmp" : "bin");
+}
+
+void WriteNcclUniqueId(const ncclUniqueId &nccl_id, const std::string &pg_name) {
+    std::string tmp_path = NcclFileName(pg_name, true);
 
     std::ofstream ofs(tmp_path, std::ios::binary);
     ofs.write(reinterpret_cast<const char *>(&nccl_id), sizeof(nccl_id));
     ofs.close();
 
-    std::rename(tmp_path.c_str(), filename.c_str());
+    std::rename(tmp_path.c_str(), NcclFileName(pg_name).c_str());
 }
 
-void ReadNcclUniqueId(ncclUniqueId &nccl_id, const std::string &filename) {
-    std::ifstream ifs(filename, std::ios::binary);
+void ReadNcclUniqueId(ncclUniqueId &nccl_id, const std::string &pg_name) {
+    std::string file_path = NcclFileName(pg_name);
+
+    while (std::filesystem::exists(file_path) == false) {
+        std::this_thread::sleep_for(std::chrono::microseconds(1000));
+    }
+
+    std::ifstream ifs(file_path, std::ios::binary);
     ifs.read(reinterpret_cast<char *>(&nccl_id), sizeof(nccl_id));
     ifs.close();
 }
@@ -79,9 +90,6 @@ ProcessGroup::ProcessGroup(const std::string &process_group_name, const std::vec
 
         WriteNcclUniqueId(nccl_id, name_);
     } else {
-        while (std::filesystem::exists(name_) == false) {
-            std::this_thread::sleep_for(std::chrono::microseconds(1000));
-        }
         ReadNcclUniqueId(nccl_id, name_);
     }
 
