@@ -463,10 +463,6 @@ std::shared_ptr<Tensor> Tensor::Uniform(float from, float to, std::optional<std:
 // autograd related
 std::shared_ptr<Tensor> Tensor::RequiresGrad() {
     requires_grad_ = true;
-    if (!grad_) {
-        grad_ = std::make_unique<Tensor>(dims_, dtype_, GetDevice());
-        grad_->Fill<float>(0.0f);
-    }
     return shared_from_this();
 }
 
