@@ -7,10 +7,6 @@
 #include <unistd.h>
 #include <vector>
 
-#ifdef USE_NCCL
-#include <nccl.h>
-#endif
-
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
@@ -52,12 +48,16 @@ int main(int argc, char **argv) {
         pid_t pid = fork();
         if (pid == 0) {
             int global_proc_rank = FLAGS_node_rank * FLAGS_nproc_per_node + local_proc_rank;
-            setenv("GLOBAL_PROC_RANK", std::to_string(global_proc_rank).c_str(), 1);
-            setenv("LOCAL_PROC_RANK", std::to_string(local_proc_rank).c_str(), 1);
-            setenv("PROC_WORLD_SIZE", std::to_string(world_size).c_str(), 1);
+            setenv("NNODES", std::to_string(FLAGS_nnodes).c_str(), 1);
             setenv("NPROC_PER_NODE", std::to_string(FLAGS_nproc_per_node).c_str(), 1);
+
             setenv("MASTER_ADDR", master_addr.c_str(), 1);
             setenv("MASTER_PORT", master_port.c_str(), 1);
+
+            setenv("GLOBAL_PROC_RANK", std::to_string(global_proc_rank).c_str(), 1);
+            setenv("LOCAL_PROC_RANK", std::to_string(local_proc_rank).c_str(), 1);
+
+            setenv("PROC_WORLD_SIZE", std::to_string(world_size).c_str(), 1);
 
             execvp(train_program.c_str(), train_argv.data());
             perror("exec failed");
@@ -70,11 +70,9 @@ int main(int argc, char **argv) {
         wait(&status);
     }
 
-#ifdef USE_NCCL
     if (FLAGS_node_rank == 0) {
         CleanupNcclIdFiles();
     }
-#endif
 
     return 0;
 }

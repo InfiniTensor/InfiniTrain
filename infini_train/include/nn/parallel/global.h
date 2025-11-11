@@ -4,10 +4,6 @@
 #include <string>
 #include <vector>
 
-#ifdef USE_NCCL
-#include <nccl.h>
-#endif
-
 namespace infini_train::nn::parallel::global {
 
 enum Axis : uint8_t { DP = 0, TP = 1, PP = 2, AXIS_COUNT = 3 };
@@ -33,13 +29,15 @@ public:
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
               int pipeline_parallel_size);
 
+    int nnodes() const;
+
+    int nproc_per_node() const;
+
     int world_size() const;
 
     int global_proc_rank() const;
 
     int local_proc_rank() const;
-
-    int nproc_per_node() const;
 
     int nthread_per_process() const;
 
@@ -52,9 +50,6 @@ public:
     int pipeline_parallel_size() const;
 
     Layout layout() const;
-#ifdef USE_NCCL
-    ncclUniqueId nccl_id() const;
-#endif
 
 private:
     GlobalEnv() = default;
@@ -64,9 +59,11 @@ private:
     GlobalEnv &operator=(const GlobalEnv &) = delete;
 
 private:
-    int world_size_ = 1;
+    int nnodes_ = 1;
     int nproc_per_node_ = 1;
     int nthread_per_process_ = 1;
+    int world_size_ = 1;
+
     int global_proc_rank_ = 0;
     int local_proc_rank_ = 0;
 
@@ -89,6 +86,7 @@ inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool s
                                pipeline_parallel_size);
 }
 
+inline int GetNnodes() { return GlobalEnv::Instance().nnodes(); }
 inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }
 inline int GetNprocPerNode() { return GlobalEnv::Instance().nproc_per_node(); }
 inline int GetNthreadPerProc() { return GlobalEnv::Instance().nthread_per_process(); }
