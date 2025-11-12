@@ -208,6 +208,8 @@ public:
     void set_output_idx(int output_idx);
 
     void ZeroGrad(bool set_to_none = true);
+    void MarkGradOverwriteOnNextAccum();
+    bool ConsumeGradOverwriteFlag();
 
     void Backward(std::shared_ptr<Tensor> gradient = nullptr, bool retain_graph = false,
                   bool create_graph = false) const;
@@ -229,6 +231,8 @@ private:
     // a strong reference to the accumulator to manage its lifetime.
     std::shared_ptr<autograd::AccumulateGrad> grad_accumulator_ = nullptr;
     std::shared_ptr<autograd::PostAccumulateGradHook> post_accumulate_grad_hook_ = nullptr;
+
+    bool grad_overwrite_once_ = false;
 };
 
 std::shared_ptr<Tensor> operator==(const std::shared_ptr<Tensor> &t, float scalar);

@@ -26,8 +26,13 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
 
     if (grad_output) {
         if (grad) {
-            auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
-            kernel.Call<void>(grad_output, learning_rate_, grad);
+            if (tensor_->ConsumeGradOverwriteFlag()) {
+                auto new_grad = std::make_shared<Tensor>(*grad_output.get(), 0, grad_output->Dims());
+                tensor_->set_grad(std::move(new_grad));
+            } else {
+                auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
+                kernel.Call<void>(grad_output, learning_rate_, grad);
+            }
         } else {
             auto new_grad = std::make_shared<Tensor>(*grad_output.get(), 0, grad_output->Dims());
             tensor_->set_grad(std::move(new_grad));

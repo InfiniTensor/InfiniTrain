@@ -500,6 +500,14 @@ void Tensor::ZeroGrad(bool set_to_none) {
     }
 }
 
+void Tensor::MarkGradOverwriteOnNextAccum() { grad_overwrite_once_ = true; }
+
+bool Tensor::ConsumeGradOverwriteFlag() {
+    bool flag = grad_overwrite_once_;
+    grad_overwrite_once_ = false;
+    return flag;
+}
+
 void Tensor::Backward(std::shared_ptr<Tensor> gradient, bool retain_graph, bool create_graph) const {
     CHECK(!retain_graph && !create_graph) << "Not implemented yet!";
     if (grad_fn_) {

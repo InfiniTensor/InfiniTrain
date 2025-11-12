@@ -28,8 +28,11 @@ class ProcessGroup {
 public:
     explicit ProcessGroup(const std::vector<int> &device_indices);
 
+    ~ProcessGroup();
+
     int GetGroupRank(int thread_rank) const;
 
+    // Communication operations
     void AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const;
 
     void AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input) const;
@@ -52,11 +55,18 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> NcclRecv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank) const;
 
+    // Overlap helper functions
+    void EnqueueAllReduce(cudaEvent_t ready_event, cudaEvent_t done_event, const std::shared_ptr<Tensor> &tensor,
+                          function::ReduceOpType reduce_op) const;
+    void WaitAllReduceDone(cudaEvent_t done_event, const std::shared_ptr<Tensor> &tensor) const;
+
 private:
     std::vector<ncclComm_t> comms_;
+    std::vector<cudaStream_t> comm_streams_;
     std::vector<const Device *> devices_;
 
     std::unordered_map<const Device *, ncclComm_t> device_comm_map_;
+    std::unordered_map<const Device *, cudaStream_t> device_stream_map_;
     std::unordered_map<int, int> thread_group_rank_map_; // thread_rank : group_rank
 
     int comm_size_ = 0;
