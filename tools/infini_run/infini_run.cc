@@ -15,20 +15,6 @@ DEFINE_int32(nproc_per_node, 1, "Number of processes per node");
 DEFINE_int32(node_rank, 0, "Rank of this node");
 DEFINE_string(rdzv_endpoint, "127.0.0.1:29500", "Rendezvous endpoint (host:port)");
 
-void CleanupNcclIdFiles() {
-    const std::filesystem::path cwd = std::filesystem::current_path();
-    std::regex pattern(R"(ncclUniqueId_.*\.bin)");
-
-    for (const auto &entry : std::filesystem::directory_iterator(cwd)) {
-        if (entry.is_regular_file()) {
-            const std::string filename = entry.path().filename().string();
-            if (std::regex_match(filename, pattern)) {
-                std::filesystem::remove(entry.path());
-            }
-        }
-    }
-}
-
 int main(int argc, char **argv) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
@@ -68,10 +54,6 @@ int main(int argc, char **argv) {
     for (int i = 0; i < FLAGS_nproc_per_node; ++i) {
         int status;
         wait(&status);
-    }
-
-    if (FLAGS_node_rank == 0) {
-        CleanupNcclIdFiles();
     }
 
     return 0;

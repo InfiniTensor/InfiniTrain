@@ -29,6 +29,7 @@ namespace infini_train::nn::parallel {
 class ProcessGroup {
 public:
     explicit ProcessGroup(const std::string &process_group_name, const std::vector<int> &device_indices);
+    ~ProcessGroup();
 
     int GetGroupRank(int thread_rank) const;
 
@@ -69,6 +70,8 @@ private:
     int world_size_ = 0;
 
     const std::string name_ = "";
+
+    bool is_main_process_ = false;
 };
 #endif
 
