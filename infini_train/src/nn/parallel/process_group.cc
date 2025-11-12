@@ -69,6 +69,15 @@ void ReadNcclUniqueId(ncclUniqueId &nccl_id, const std::string &pg_name) {
     ifs.read(reinterpret_cast<char *>(&nccl_id), sizeof(nccl_id));
     ifs.close();
 }
+
+void CleanupNcclIdFile(const std::string &pg_name) {
+    const std::filesystem::path cwd = std::filesystem::current_path();
+    std::string file_path = NcclFileName(pg_name);
+
+    if (std::filesystem::exists(file_path)) {
+        std::filesystem::remove(file_path);
+    }
+}
 #endif
 
 } // namespace
@@ -87,6 +96,12 @@ ProcessGroup::ProcessGroup(const std::string &process_group_name, const std::vec
     }
 }
 
+ProcessGroup::~ProcessGroup() {
+    if (is_main_process_) {
+        CleanupNcclIdFile(name_);
+    }
+}
+
 void ProcessGroup::InitSingleProcess(const std::vector<int> &ranks) {
     comms_.resize(world_size_);
     NCCL_CHECK(ncclCommInitAll(comms_.data(), world_size_, ranks.data()));
@@ -101,13 +116,17 @@ void ProcessGroup::InitSingleProcess(const std::vector<int> &ranks) {
 
 void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
     int n_threads = global::GetNthreadPerProc();
+    int global_proc_rank = global::GetGlobalProcRank();
+    int lower_rank = global_proc_rank * n_threads;
+    int upper_rank = (global_proc_rank + 1) * n_threads;
 
     ncclUniqueId nccl_id;
 
-    if (std::ranges::min(ranks) < (global::GetGlobalProcRank() + 1) * global::GetNthreadPerProc()
-        && std::ranges::min(ranks) >= global::GetGlobalProcRank() * global::GetNthreadPerProc()) {
-        ncclGetUniqueId(&nccl_id);
+    int min_rank = std::ranges::min(ranks);
+    if (min_rank < upper_rank && min_rank >= lower_rank) {
+        is_main_process_ = true;
 
+        ncclGetUniqueId(&nccl_id);
         WriteNcclUniqueId(nccl_id, name_);
     } else {
         ReadNcclUniqueId(nccl_id, name_);
@@ -116,8 +135,8 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
     std::vector<int> device_indices;
     NCCL_CHECK(ncclGroupStart());
     for (int i = 0; i < n_threads; ++i) {
-        int global_rank = global::GetGlobalProcRank() * global::GetNthreadPerProc() + i;
-        auto it = std::ranges::find(ranks, global_rank);
+        int global_thread_rank = lower_rank + i;
+        auto it = std::ranges::find(ranks, global_thread_rank);
         if (it != ranks.end()) {
             cudaSetDevice(i);
 
