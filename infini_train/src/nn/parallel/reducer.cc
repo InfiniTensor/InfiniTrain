@@ -16,6 +16,7 @@
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/utils.h"
+#include "infini_train/include/nn/parallel/work.h"
 
 namespace infini_train::nn::parallel {
 namespace {
@@ -178,43 +179,9 @@ Reducer::Reducer(std::vector<std::shared_ptr<Tensor>> parameters, std::vector<st
     : params_(std::move(parameters)), opts_(opts) {
     BuildBuckets(bucket_indices);
     ready_seen_this_iter_.assign(params_.size(), 0);
-    AttachHooksToParameters();
-}
-
-Reducer::~Reducer() {
-#ifdef USE_CUDA
-    for (auto &b : buckets_) {
-        if (!b.contents) {
-            continue;
-        }
-        if (b.contents->GetDevice()->Type() == DeviceType::kCUDA) {
-            if (b.allreduce_done) {
-                CUDA_CHECK(cudaEventDestroy(b.allreduce_done));
-            }
-            if (b.bucket_ready) {
-                CUDA_CHECK(cudaEventDestroy(b.bucket_ready));
-            }
-        }
-    }
-#endif
 }
 
 void Reducer::InitializeBuckets(const std::vector<std::vector<size_t>> &bucket_indices) {
-#ifdef USE_CUDA
-    for (auto &b : buckets_) {
-        if (!b.contents) {
-            continue;
-        }
-        if (b.contents->GetDevice()->Type() == DeviceType::kCUDA) {
-            if (b.allreduce_done) {
-                CUDA_CHECK(cudaEventDestroy(b.allreduce_done));
-            }
-            if (b.bucket_ready) {
-                CUDA_CHECK(cudaEventDestroy(b.bucket_ready));
-            }
-        }
-    }
-#endif
     buckets_.clear();
     locators_.clear();
     next_bucket_ = 0;
@@ -235,16 +202,6 @@ void Reducer::InitializeBucketViews(Bucket &bucket) {
     }
     // Set (out == in) by default when all grads are dense
     bucket.bucket_views_out = bucket.bucket_views_in;
-
-    if (opts_.gradient_as_bucket_view) {
-        for (size_t i = 0; i < bucket.variables.size(); ++i) {
-            auto &v = bucket.variables[i];
-            auto g = v->grad();
-            if (g && g.get() != bucket.bucket_views_in[i].get()) {
-                v->set_grad(bucket.bucket_views_in[i]);
-            }
-        }
-    }
 }
 
 void Reducer::BuildBuckets(const std::vector<std::vector<size_t>> &bucket_indices) {
@@ -280,15 +237,7 @@ void Reducer::BuildBuckets(const std::vector<std::vector<size_t>> &bucket_indice
         auto dev = bucket.variables.front()->GetDevice();
         bucket.contents
             = std::make_shared<Tensor>(std::vector<int64_t>{static_cast<int64_t>(total_elems)}, bucket.dtype, dev);
-        // bucket.contents->Fill(0);
         bucket.pending = bucket.variables.size();
-
-#ifdef USE_CUDA
-        if (bucket.contents->GetDevice()->Type() == DeviceType::kCUDA) {
-            CUDA_CHECK(cudaEventCreateWithFlags(&bucket.allreduce_done, cudaEventDisableTiming));
-            CUDA_CHECK(cudaEventCreateWithFlags(&bucket.bucket_ready, cudaEventDisableTiming));
-        }
-#endif
 
         bucket.variable_indices = bucket_indices[bucket_idx];
         InitializeBucketViews(bucket);
@@ -368,11 +317,18 @@ void Reducer::PrepareForBackward() {
                 auto view = bucket.bucket_views_in[i];
                 auto grad = param->grad();
 
-                if (grad == nullptr) {
-                    param->MarkGradOverwriteOnNextAccum();
+                // NOTE(zbl): This will affect behaviors in `infini_train::autograd::AccumulateGrad::Backward()`
+                // If ZeroGrad(set_to_none=True), grad is nullptr at this point
+                // If ZeroGrad(set_to_none=False), grad is set to view of bucket.contents (or modified by user)
+                // Either way, we reset grad to view of bucket.contents
+                // Since bucket.contents might not be zeroed, we need to overwrite it on next grad accumulation
+                if (!grad || (grad.get() != view.get())) {
+                    if (grad) {
+                        LOG(WARNING) << "gradient_as_bucket_view is enabled, but param " << param
+                                     << " has a non-view grad tensor. Automatically overwriting it with bucket view.";
+                    }
                     param->set_grad(view);
-                } else {
-                    CHECK_EQ(grad.get(), view.get()) << "Param's gradient should be a slice of bucket's flat buffer.";
+                    param->MarkGradOverwriteOnNextAccum();
                 }
             }
         }
@@ -456,6 +412,7 @@ void Reducer::FinalizeBucketDense(size_t bucket_index) {
     auto &bucket = buckets_.at(bucket_index);
     auto ddp_pg = ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(bucket.device_rank));
 
+    std::shared_ptr<Work> work;
     if (comm_hook_) {
         std::vector<std::shared_ptr<Tensor>> bucket_view{bucket.contents};
         // NOTE(zbl): Custom hook should do in-place operations
@@ -463,18 +420,16 @@ void Reducer::FinalizeBucketDense(size_t bucket_index) {
         // FIXME(zbl): support custom hook later
         LOG(FATAL) << "Custom hook is not supported now";
     } else {
-        ddp_pg->EnqueueAllReduce(bucket.bucket_ready, bucket.allreduce_done, bucket.contents,
-                                 function::ReduceOpType::kAvg);
+        work = ddp_pg->AllReduceAsync(bucket.contents, function::ReduceOpType::kAvg);
     }
 
     if (!opts_.gradient_as_bucket_view) {
         for (size_t i = 0; i < bucket.variables.size(); ++i) {
-            // Directly assgin bucket slice to grad instead of copying
-            // Same behavior as `CopyBucketToGrad(bucket.contents, bucket.variables[i]->grad(), bucket.offsets[i]);`
-            bucket.variables[i]->set_grad(bucket.bucket_views_in[i]);
+            // NOTE(zbl): For better performance, try `bucket.variables[i]->set_grad(bucket.bucket_views_in[i]);`
+            //            to directly assgin bucket slice to grad instead of copying
+            CopyBucketToGrad(bucket.contents, bucket.variables[i]->grad(), bucket.offsets[i]);
+            // bucket.variables[i]->set_grad(bucket.bucket_views_in[i]);
         }
     }
-
-    ddp_pg->WaitAllReduceDone(bucket.allreduce_done, bucket.contents);
 }
 } // namespace infini_train::nn::parallel

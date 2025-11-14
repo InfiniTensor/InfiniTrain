@@ -335,36 +335,34 @@ std::vector<std::shared_ptr<Tensor>> ProcessGroup::NcclRecv(std::vector<std::sha
     return tensors;
 }
 
-void ProcessGroup::EnqueueAllReduce(cudaEvent_t ready_event, cudaEvent_t done_event,
-                                    const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const {
-    CHECK(ready_event && done_event) << "Events must be created.";
+std::shared_ptr<Work> ProcessGroup::AllReduceAsync(const std::shared_ptr<Tensor> &tensor,
+                                                   function::ReduceOpType reduce_op) const {
+    void *buffer = tensor->DataPtr();
     const auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
-    CHECK(std::find(devices_.begin(), devices_.end(), device) != devices_.end())
-        << "Device of target Tensor is not in current ProcessGroup";
+    device->SetDevice();
+
+    auto comm = device_comm_map_.at(device);
 
     cudaStream_t compute_stream = device->Stream();
     cudaStream_t comm_stream = device_stream_map_.at(device);
 
-    cudaEventRecord(ready_event, compute_stream);
-    cudaStreamWaitEvent(comm_stream, ready_event, 0);
+    auto work = std::make_shared<WorkNccl>(device, comm);
+
+    cudaEvent_t ready_event = reinterpret_cast<cudaEvent_t>(work->ready_event());
+    cudaEvent_t done_event = reinterpret_cast<cudaEvent_t>(work->done_event());
+
+    CUDA_CHECK(cudaEventRecord(ready_event, compute_stream));
+    CUDA_CHECK(cudaStreamWaitEvent(comm_stream, ready_event, 0));
 
     // Perform NcclAllReduce on comm stream
-    device->SetDevice();
-    NCCL_CHECK(ncclAllReduce(tensor->DataPtr(), tensor->DataPtr(), tensor->NumElements(),
-                             kNcclDtypeMap.at(tensor->Dtype()), kNcclReduceOpMap.at(reduce_op),
-                             device_comm_map_.at(device), comm_stream));
+    NCCL_CHECK(ncclAllReduce(buffer, buffer, tensor->NumElements(), kNcclDtypeMap.at(tensor->Dtype()),
+                             kNcclReduceOpMap.at(reduce_op), comm, comm_stream));
 
-    cudaEventRecord(done_event, comm_stream);
+    CUDA_CHECK(cudaEventRecord(done_event, comm_stream));
+    CUDA_CHECK(cudaStreamWaitEvent(compute_stream, done_event, 0));
+
+    return std::move(work);
 }
-
-void ProcessGroup::WaitAllReduceDone(cudaEvent_t done_event, const std::shared_ptr<Tensor> &tensor) const {
-    CHECK(done_event) << "Events must be created.";
-    const auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
-    CHECK(std::find(devices_.begin(), devices_.end(), device) != devices_.end())
-        << "Device of target Tensor is not in current ProcessGroup";
-    cudaStreamWaitEvent(device->Stream(), done_event, 0);
-}
-
 #endif
 
 ProcessGroupFactory *ProcessGroupFactory::Instance() {

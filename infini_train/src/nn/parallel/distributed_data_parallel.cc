@@ -20,8 +20,7 @@ constexpr char kModuleName[] = "module";
 DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, int device_id,
                                                  const ReducerOptions &opts) {
     for (auto &param : module->Parameters()) {
-        auto device = param->GetDevice();
-        CHECK_EQ(device->Index(), device_id) << "All parameters must be on the same device as the module";
+        CHECK_EQ(param->GetDevice()->Index(), device_id) << "All parameters must be on the same device as the module";
     }
     for (auto &buffer : module->Buffers()) {
         CHECK_EQ(buffer->GetDevice()->Index(), device_id) << "All buffers must be on the same device as the module";
@@ -35,7 +34,8 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
     std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
     auto bucket_indices = ComputeBucketAssignmentBySize(params, bucket_size_limits);
 
-    reducer_ = std::make_shared<Reducer>(std::move(params), bucket_indices, opts);
+    reducer_ = std::make_shared<Reducer>(params, bucket_indices, opts);
+    reducer_->AttachHooksToParameters();
 }
 
 std::vector<std::shared_ptr<Tensor>>

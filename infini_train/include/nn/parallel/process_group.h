@@ -11,6 +11,7 @@
 #endif
 
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
+#include "infini_train/include/nn/parallel/work.h"
 
 namespace infini_train {
 class Tensor;
@@ -55,10 +56,8 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> NcclRecv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank) const;
 
-    // Overlap helper functions
-    void EnqueueAllReduce(cudaEvent_t ready_event, cudaEvent_t done_event, const std::shared_ptr<Tensor> &tensor,
-                          function::ReduceOpType reduce_op) const;
-    void WaitAllReduceDone(cudaEvent_t done_event, const std::shared_ptr<Tensor> &tensor) const;
+    // Async communication functions
+    std::shared_ptr<Work> AllReduceAsync(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const;
 
 private:
     std::vector<ncclComm_t> comms_;

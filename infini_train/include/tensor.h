@@ -82,6 +82,9 @@ public:
     Tensor To(const Device *device);
     Tensor To(DataType dtype);
 
+    void CopyFrom(const Tensor &src);
+    void CopyFrom(const std::shared_ptr<Tensor> &src);
+
     // operator overloading
     std::shared_ptr<Tensor> Equals(const std::shared_ptr<Tensor> &other);
     std::shared_ptr<Tensor> Equals(float scalar);
