@@ -27,13 +27,16 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
     if (grad_output) {
         if (grad) {
             if (tensor_->ConsumeGradOverwriteFlag()) {
-                auto new_grad = std::make_shared<Tensor>(*grad_output.get(), 0, grad_output->Dims());
-                tensor_->set_grad(std::move(new_grad));
+                // If the tensor is marked to overrite its current grad on next grad update
+                // See notes in `infini_train::nn::parallel::Reducer::PrepareForBackward()`
+                // NOTE(zbl): must copy, cannot change grad buffer address
+                grad->CopyFrom(grad_output);
             } else {
                 auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
                 kernel.Call<void>(grad_output, learning_rate_, grad);
             }
         } else {
+            // NOTE(zbl): check whether need to do copying instead of slicing
             auto new_grad = std::make_shared<Tensor>(*grad_output.get(), 0, grad_output->Dims());
             tensor_->set_grad(std::move(new_grad));
         }

@@ -225,6 +225,83 @@ Tensor Tensor::To(DataType dtype) {
     return new_tensor;
 }
 
+void Tensor::CopyFrom(const Tensor &src) {
+    CHECK(Dtype() == src.Dtype()) << "Tensor::CopyFrom dtype mismatch: dst=" << static_cast<int>(Dtype())
+                                  << " src=" << static_cast<int>(src.Dtype());
+    CHECK_EQ(NumElements(), src.NumElements()) << "Tensor::CopyFrom element count mismatch";
+    CHECK(Dims() == src.Dims()) << "Tensor::CopyFrom shape mismatch";
+
+    const size_t nbytes = SizeInBytes();
+    const Device *dst_dev = GetDevice();
+    const Device *src_dev = src.GetDevice();
+
+    switch (dst_dev->Type()) {
+    case DeviceType::kCPU: {
+        switch (src_dev->Type()) {
+        case DeviceType::kCPU: {
+            std::memcpy(DataPtr(), src.DataPtr(), nbytes);
+            break;
+        }
+#ifdef USE_CUDA
+        case DeviceType::kCUDA: {
+            // CUDA -> CPU
+            CUDA_CHECK(cudaMemcpy(DataPtr(), src.DataPtr(), nbytes, cudaMemcpyDeviceToHost));
+            break;
+        }
+#endif
+        default:
+            LOG(FATAL) << "Unsupported src device type: " << static_cast<int>(src_dev->Type());
+        }
+        break;
+    }
+
+#ifdef USE_CUDA
+    case DeviceType::kCUDA: {
+        int current_device = -1;
+        CUDA_CHECK(cudaGetDevice(&current_device));
+        dst_dev->SetDevice();
+
+        const auto *dst_cuda = dynamic_cast<const CudaDevice *>(dst_dev);
+        switch (src_dev->Type()) {
+        case DeviceType::kCPU: {
+            // CPU -> CUDA
+            CUDA_CHECK(cudaMemcpyAsync(DataPtr(), src.DataPtr(), nbytes, cudaMemcpyHostToDevice, dst_cuda->Stream()));
+            break;
+        }
+        case DeviceType::kCUDA: {
+            const auto *src_cuda = dynamic_cast<const CudaDevice *>(src_dev);
+            if (src_cuda->Index() == dst_cuda->Index()) {
+                CUDA_CHECK(
+                    cudaMemcpyAsync(DataPtr(), src.DataPtr(), nbytes, cudaMemcpyDeviceToDevice, dst_cuda->Stream()));
+            } else {
+                int canAccessPeer = 0;
+                CUDA_CHECK(cudaDeviceCanAccessPeer(&canAccessPeer, dst_cuda->Index(), src_cuda->Index()));
+                if (canAccessPeer) {
+                    CUDA_CHECK(cudaMemcpyPeerAsync(DataPtr(), dst_cuda->Index(), src.DataPtr(), src_cuda->Index(),
+                                                   nbytes, dst_cuda->Stream()));
+                } else {
+                    LOG(FATAL) << "Check accessibility between Device " << src_cuda->Index() << " and Device "
+                               << dst_cuda->Index();
+                }
+            }
+            break;
+        }
+        default:
+            LOG(FATAL) << "Unsupported src device type: " << static_cast<int>(src_dev->Type());
+        }
+
+        CUDA_CHECK(cudaSetDevice(current_device));
+        break;
+    }
+#endif
+
+    default:
+        LOG(FATAL) << "Unsupported dst device type: " << static_cast<int>(dst_dev->Type());
+    }
+}
+
+void Tensor::CopyFrom(const std::shared_ptr<Tensor> &src) { CopyFrom(*src); }
+
 // operator overloading
 std::shared_ptr<Tensor> Tensor::Equals(const std::shared_ptr<Tensor> &other) {
     return std::make_shared<autograd::Equals>()->Apply({shared_from_this(), other})[0];
@@ -472,7 +549,7 @@ void Tensor::set_grad(std::shared_ptr<Tensor> grad) {
         CHECK(grad->GetDevice() == GetDevice());
         CHECK(grad->Dtype() == Dtype());
         CHECK(grad->Dims() == Dims());
-        grad_ = grad;
+        grad_ = std::move(grad);
     } else {
         grad_.reset();
     }

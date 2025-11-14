@@ -30,12 +30,15 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
                                                                const std::vector<size_t> &tensor_indices = {});
 
 struct ReducerOptions {
+    // Pack all Reducer-related args together
+    // Ref: https://docs.pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html
+
     // Max capacity for each bucket(in MB)
     size_t first_bucket_cap_mb = 128;
     size_t normal_bucket_cap_mb = 512;
 
     // When set true, map param.grad directly to the slice of bucket.flat(same address in memory) instead of memcpy
-    bool gradient_as_bucket_view = false;
+    bool gradient_as_bucket_view = true;
 };
 
 // DDP Reducer that handles gradient bucketing in backward
@@ -50,7 +53,9 @@ public:
      */
     explicit Reducer(std::vector<std::shared_ptr<Tensor>> parameters, std::vector<std::vector<size_t>> bucket_indices,
                      const ReducerOptions &opts);
-    ~Reducer();
+
+    // Attach PostAllReduceHooks to params
+    void AttachHooksToParameters();
 
     // Prepare bucket info for next step
     void PrepareForBackward();
@@ -91,7 +96,7 @@ private:
 
         // Views into the `gradients` tensor for each individual gradient
         std::vector<std::shared_ptr<Tensor>> bucket_views_in;
-        // NOTE(zbl): reserved for occasions where grads have different stride/layout
+        // TODO(zbl): reserved for occasions where grads have different stride/layout
         std::vector<std::shared_ptr<Tensor>> bucket_views_out;
 
         // Number of gradients left to be computed before the bucket is ready to be reduced
@@ -104,18 +109,10 @@ private:
         // If `true`, then this implies that `bucket.variables.size() == 1`.
         // TODO(zbl): support logics for sparse gradient later
         bool expect_sparse_gradient = false;
-
-#ifdef USE_CUDA
-        // Event to mark that AllReduce is completed
-        cudaEvent_t allreduce_done = nullptr;
-        // Event to mark that all tensors' grad in bucket are ready
-        cudaEvent_t bucket_ready = nullptr;
-#endif
     };
 
 private:
     void InitializeBuckets(const std::vector<std::vector<size_t>> &bucket_indices);
-    void AttachHooksToParameters();
 
     // NOTE(zbl): all grads are assumed dense and stored continously in bucket for now
     void MarkVariableReadyDense(size_t variable_index);
