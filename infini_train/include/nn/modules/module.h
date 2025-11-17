@@ -37,6 +37,7 @@ public:
     bool has_parameter(const std::string &name) const;
     std::shared_ptr<Tensor> *mutable_parameter(const std::string &name);
     const std::shared_ptr<Tensor> &parameter(const std::string &name) const;
+
     virtual std::vector<std::shared_ptr<Tensor>> Buffers() const;
 
     std::vector<std::shared_ptr<Module>> modules();
@@ -46,10 +47,6 @@ public:
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
 
     virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
-
-    virtual std::vector<std::shared_ptr<Module>> GetPipelineLayers() { return {}; }
-
-    virtual std::unordered_map<std::string, int64_t> GetConfig() const { return {}; }
 
     virtual float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                             const std::vector<std::shared_ptr<Tensor>> &targets,

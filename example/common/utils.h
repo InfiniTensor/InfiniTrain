@@ -30,5 +30,4 @@ void ReadVectorAllFloat(std::ifstream &ifs, float *dst, int64_t len);
 
 void ReadVectorShardFloat(std::ifstream &ifs, float *dst, int64_t len, int64_t start, int64_t cnt);
 
-std::vector<int> GetPipelineParallelGroupRanks(int rank);
 } // namespace infini_train

@@ -63,10 +63,7 @@ DEFINE_int32(
     "When set > 1, enables data parallelism with device=cuda on the specified number of visible CUDA devices.");
 DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
-DEFINE_uint32(
-    pipeline_parallel, 1,
-    "Pipeline Parallel world size, will always use device=cuda and use all cuda visible devices when set to true");
-DEFINE_uint32(num_microbatches, 4, "the num of microbatches in pipeline parallelism");
+DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, , specified the number of PP stages.");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 
@@ -130,6 +127,8 @@ void Train(const nn::parallel::Rank &rank) {
             pp_pg = ProcessGroupFactory::Instance()->GetOrCreate(
                 GetPipelineParallelProcessGroupName(rank.thread_rank()), GetPipelineParallelGroupRanks(pp_world_size));
             pp_rank = pp_pg->GetGroupRank(rank.thread_rank());
+
+            nn::parallel::pp_rank = pp_rank;
         }
     } else {
         device = FLAGS_device == kDeviceCPU ? DeviceManager::Instance()->GetDefaultDevice()
@@ -137,7 +136,7 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
-    const auto tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length * (ddp_world_size * pp_world_size);
+    const auto tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size;
     CHECK_EQ(FLAGS_total_batch_size % tokens_per_fwdbwd, 0);
     const auto grad_accum_steps = FLAGS_total_batch_size / tokens_per_fwdbwd;
     if (rank.IsMainRank()) {
@@ -177,16 +176,11 @@ void Train(const nn::parallel::Rank &rank) {
         model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank());
     }
 
-    std::unique_ptr<DataLoader> train_loader;
-    if (pp_world_size > 1) {
-        train_loader = std::make_unique<DataLoader>(
-            std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
-            FLAGS_batch_size * pp_world_size);
-    } else {
-        train_loader = std::make_unique<DistributedDataLoader>(
-            std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length), FLAGS_batch_size,
-            ddp_rank, ddp_world_size);
-    }
+    auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
+
+    DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
+                                       pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size,
+                                       ddp_rank, ddp_world_size);
 
     std::optional<DistributedDataLoader> val_loader = std::nullopt;
     if (!FLAGS_input_val_bin.empty()) {
@@ -204,13 +198,9 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     // TODO(dcj): support more complex optimizer later
-    auto lr = FLAGS_learning_rate;
-    auto optimizer_factory = [lr](const std::vector<std::shared_ptr<Tensor>> &params) {
-        return std::make_shared<optimizers::Adam>(params, lr);
-    };
-    auto optimizer = optimizer_factory(model->Parameters());
+    auto optimizer = optimizers::Adam(model->Parameters(), FLAGS_learning_rate);
 
-    auto train_iter = train_loader->begin();
+    auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(std::make_shared<VocabParallelCrossEntropyLoss>())
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
@@ -218,15 +208,10 @@ void Train(const nn::parallel::Rank &rank) {
     LOG(INFO) << "Rank " << rank.thread_rank() << ": start training";
 
     if (pp_world_size > 1) {
-        CHECK_EQ((FLAGS_batch_size * pp_world_size) % FLAGS_num_microbatches, 0)
-            << "FLAGS_batch_size (" << (FLAGS_batch_size * pp_world_size)
-            << ") must be divisible by FLAGS_num_microbatches (" << FLAGS_num_microbatches << ")";
+        auto shapes = std::vector<std::vector<int64_t>>{{FLAGS_batch_size, FLAGS_sequence_length, model_config.n_embd}};
 
-        auto shapes = std::vector<std::vector<int64_t>>{{FLAGS_batch_size * pp_world_size / FLAGS_num_microbatches,
-                                                         FLAGS_sequence_length, model->GetConfig()["n_embd"]}};
-
-        model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, FLAGS_num_microbatches, shapes,
-                                                                 pp_rank, optimizer_factory);
+        model = std::make_shared<nn::parallel::PipelineParallel>(
+            model, pp_world_size, num_micro_batches, shapes, pp_rank, std::make_shared<optimizers::Adam>(optimizer));
     }
 
     for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
@@ -251,81 +236,81 @@ void Train(const nn::parallel::Rank &rank) {
             break;
         }
 
-        // model->Train();
-        if (pp_world_size == 1) {
-            optimizer->ZeroGrad();
-        }
-        // if we are trying to overfit a single batch, we reset the loader here
-        if (FLAGS_overfit_single_batch) {
-            // train_loader.Reset();
-        }
-        float lossf = 0.0f;
 #ifdef PROFILE_MODE
         Profiler::Instance().SetTag("Step_" + std::to_string(step));
 #endif
-        for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
-            // enable autocast for the current step
-            infini_train::AutocastGuard autocast_guard(device->Type(), dtype);
 
-            // (bs, seq_len), (bs, seq_len)
+        float lossf = 0.0f;
+        if (pp_world_size == 1) {
+            // model->Train();
+            optimizer.ZeroGrad();
+
+            // if we are trying to overfit a single batch, we reset the loader here
+            if (FLAGS_overfit_single_batch) {
+                // train_loader.Reset();
+            }
+
+            for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
+                // enable autocast for the current step
+                infini_train::AutocastGuard autocast_guard(device->Type(), dtype);
+
+                // (bs, seq_len), (bs, seq_len)
+                auto [x, y] = *train_iter;
+                // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
+                // TODO(dcj): support dataloader.reset() later
+                ++train_iter;
+                x = std::make_shared<Tensor>(x->To(device));
+                y = std::make_shared<Tensor>(y->To(device));
+
+                LOG(INFO) << "Rank " << rank.thread_rank() << ": start forward";
+                // (bs, seq_len, vocab_size)
+                auto logits = model->Forward({x, y})[0];
+                LOG(INFO) << "Rank " << rank.thread_rank() << ": finish model forward, start loss forward";
+                auto loss = loss_fn->Forward({logits, y})[0];
+                loss = loss / grad_accum_steps;
+
+                // disable autocast for the current step (backward is not under autocast)
+                autocast_guard.Disable();
+
+                LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
+                if (ddp_world_size > 1) {
+                    function::AllReduce(loss, function::ReduceOpType::kAvg);
+                }
+                auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
+                lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
+                LOG(INFO) << "Rank " << rank.thread_rank() << ": start backward";
+                loss->Backward();
+                LOG(INFO) << "Rank " << rank.thread_rank() << ": finish backward";
+            }
+
+            optimizer.Step();
+        } else {
             auto [x, y] = *train_iter;
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
             // TODO(dcj): support dataloader.reset() later
             ++train_iter;
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
-            if (pp_world_size > 1) {
-                lossf = model->TrainStep({x}, {y}, loss_fn);
 
-                auto loss_tensor = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kFLOAT32);
-                static_cast<float *>(loss_tensor->DataPtr())[0] = lossf;
-                auto loss_device_ptr = std::make_shared<Tensor>(loss_tensor->To(device));
-                function::AllReduce(loss_device_ptr, function::ReduceOpType::kMax);
-                auto loss_copy = loss_device_ptr->To(DeviceManager::Instance()->GetDefaultDevice());
-                lossf = static_cast<const float *>(loss_copy.DataPtr())[0];
-                continue;
-            }
-
-            LOG(INFO) << "Rank " << rank.thread_rank() << ": start forward";
-            // (bs, seq_len, vocab_size)
-            auto logits = model->Forward({x, y})[0];
-            LOG(INFO) << "Rank " << rank.thread_rank() << ": finish model forward, start loss forward";
-            auto loss = loss_fn->Forward({logits, y})[0];
-            loss = loss / grad_accum_steps;
-
-            // disable autocast for the current step (backward is not under autocast)
-            autocast_guard.Disable();
-
-            LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
-            if (ddp_world_size > 1) {
-                function::AllReduce(loss, function::ReduceOpType::kAvg);
-            }
-            auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
-            lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
-            LOG(INFO) << "Rank " << rank.thread_rank() << ": start backward";
-            loss->Backward();
-            LOG(INFO) << "Rank " << rank.thread_rank() << ": finish backward";
-        }
-
-        if (pp_world_size == 1) {
-            optimizer->Step();
+            lossf = model->TrainStep({x}, {y}, loss_fn);
         }
 
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
-        if (rank.IsMainRank()) {
+        if (rank.thread_rank() == pp_world_size - 1) {
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
                                       "DP={}, TP={}, SP={}, PP={})",
                                       step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
                                       tps, ddp_world_size, tp_world_size, sp_world_size, pp_world_size);
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
-                if (!tokenizer) {
-                    continue;
+                // FIXME(jym): to support PP
+                if (tokenizer) {
+                    CHECK_EQ(pp_world_size, 1);
+                    tokenizer->GenerateText(*model, FLAGS_batch_size, FLAGS_sequence_length, FLAGS_text_length, device);
                 }
-                tokenizer->GenerateText(*model, FLAGS_batch_size, FLAGS_sequence_length, FLAGS_text_length, device);
             }
         }
     }

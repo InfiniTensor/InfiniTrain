@@ -20,6 +20,10 @@ SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate
 
 void SGD::Step() {
     for (auto param : params_) {
+        if (!param->grad()) {
+            LOG(INFO) << "Skipping param with null grad.";
+            continue;
+        }
         auto device = param->GetDevice();
         device->SetDevice();
         auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});

@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/parallel/pp/send_recv.h"
 
+#include <exception>
 #include <memory>
 #include <vector>
 
@@ -18,14 +19,12 @@ class ISend : public autograd::Function {
 public:
     static constexpr char kType[] = "ISendFunction";
 
-    explicit ISend(const Device *target_device, int cur_rank, int peer_rank, std::vector<std::vector<int64_t>> shape)
+    explicit ISend(const Device *target_device, int cur_rank, int peer_rank,
+                   const std::vector<std::vector<int64_t>> &shape)
         : autograd::Function(kType), target_device_(target_device), cur_rank_(cur_rank), peer_rank_(peer_rank),
           shapes_(shape) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
-
-    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
 
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
@@ -34,7 +33,7 @@ private:
     const Device *input_device_ = nullptr;
     int cur_rank_ = -1;
     int peer_rank_ = -1;
-    std::vector<std::vector<int64_t>> shapes_;
+    const std::vector<std::vector<int64_t>> &shapes_;
 };
 
 class IRecv : public autograd::Function {
@@ -72,14 +71,11 @@ std::vector<std::shared_ptr<Tensor>> ISend::Forward(const std::vector<std::share
     return outputs;
 }
 
-void ISend::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                         const std::vector<std::shared_ptr<Tensor>> &output_tensors) {}
-
 std::vector<std::shared_ptr<Tensor>> ISend::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    auto shapes = shapes_;
     std::vector<std::shared_ptr<Tensor>> recv_tensors;
-    for (int shape_i = 0; shape_i < shapes.size(); ++shape_i) {
-        auto r_tensor = std::make_shared<Tensor>(shapes[shape_i], DataType::kFLOAT32, input_device_);
+    for (int shape_i = 0; shape_i < shapes_.size(); ++shape_i) {
+        // FIXME(jym): The data type between stages is not float32, which will cause a crash
+        auto r_tensor = std::make_shared<Tensor>(shapes_[shape_i], DataType::kFLOAT32, input_device_);
         recv_tensors.push_back(r_tensor);
     }
 
@@ -90,8 +86,7 @@ std::vector<std::shared_ptr<Tensor>> ISend::Backward(const std::vector<std::shar
 }
 
 std::vector<std::shared_ptr<Tensor>> IRecv::Forward(const std::vector<std::shared_ptr<Tensor>> &recv_tensors) {
-    CHECK_NE(src_device_, nullptr) << "src_device_ must be set";
-
+    CHECK_NOTNULL(src_device_);
     auto pp_group
         = ProcessGroupFactory::Instance()->Get(GetPipelineParallelProcessGroupName(src_device_->rank().thread_rank()));
     pp_group->NcclRecv(recv_tensors, peer_rank_);
@@ -122,7 +117,7 @@ std::vector<std::shared_ptr<Tensor>> IRecv::Backward(const std::vector<std::shar
 
 std::vector<std::shared_ptr<Tensor>> ISend(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                                            const Device *target_device, int cur_rank, int peer_rank,
-                                           std::vector<std::vector<int64_t>> shape) {
+                                           const std::vector<std::vector<int64_t>> &shape) {
     auto func = std::make_shared<functions::ISend>(target_device, cur_rank, peer_rank, shape);
     return func->Apply(input_tensors);
 }
