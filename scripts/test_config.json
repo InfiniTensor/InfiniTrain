@@ -116,6 +116,29 @@
                 "tensor_parallel": 4,
                 "sequence_parallel": true
             }
+        },
+        {
+            "id": "6",
+            "args": {
+                "dtype": "float32",
+                "nthread_per_process": 8,
+                "num_iteration": 10,
+                "batch_size": 10,
+                "total_batch_size": 5120,
+                "pipeline_parallel": 8
+            }
+        },
+        {
+            "id": "6_bfloat16",
+            "args": {
+                "dtype": "bfloat16",
+                "nthread_per_process": 8,
+                "num_iteration": 10,
+                "batch_size": 10,
+                "total_batch_size": 5120,
+                "pipeline_parallel": 8
+            }
         }
     ]
 }
+
