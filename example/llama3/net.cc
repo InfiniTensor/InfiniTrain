@@ -6,6 +6,7 @@
 #include <fstream>
 #include <memory>
 #include <random>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -22,6 +23,7 @@
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
@@ -99,8 +101,8 @@ ApplyRotaryEmbedding(const std::shared_ptr<Tensor> &xq, const std::shared_ptr<Te
 
 std::shared_ptr<Tensor> PrecomputeFreqsCis(int64_t dim, int64_t end, float theta = 10000.0f, bool use_scaled = false,
                                            const infini_train::Device *device
-                                           = DeviceManager::Instance()->GetDefaultDevice(),
-                                           DataType dtype = DataType::kFLOAT32) {
+                                           = DeviceManager::Instance()->GetDefaultDevice()) {
+    DataType dtype = DataType::kFLOAT32;
     CHECK_GE(dim, 2) << "dim must be >= 2 for slicing";
     auto arange = nn::init::Arange(0, dim, dtype, device)->Slice(0, 0, dim, 2);
     auto freqs = 1.0f / nn::function::Pow(theta, arange / float(dim));
@@ -324,153 +326,92 @@ std::vector<std::shared_ptr<Tensor>> Block::Forward(const std::vector<std::share
 }
 
 LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
-    {
-        std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
+    int pp_size = nn::parallel::global::GetPipelineParallelSize();
+    auto [is_first_stage, is_last_stage, start_layer, end_layer]
+        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size);
+
+    std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
+    if (is_first_stage) {
         transformer[kWTELayerName] = std::make_shared<nn::parallel::VocabParallelEmbedding>(
             config.vocab_size, config.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
-        {
-            std::vector<std::shared_ptr<nn::Module>> h;
-            for (int64_t i = 0; i < config.n_layer; ++i) { h.push_back(std::make_shared<Block>(config)); }
-            transformer[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
-        }
+    }
+
+    std::vector<std::shared_ptr<nn::Module>> h_local;
+    for (int64_t i = start_layer; i < end_layer; ++i) { h_local.push_back(std::make_shared<Block>(config)); }
+    transformer[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h_local));
+
+    if (is_last_stage) {
         transformer[kLnFLayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
-        modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
+        // NOTE(zbl): weight-tying is possible but torch script did not do so
+        modules_[kLMHeadLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
+            /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
+            /*bias=*/false,
+            // NOTE(zbl): each rank would get sharded [B, T, V_local] as logits
+            /*gather_output=*/false,
+            /*input_is_parallel=*/false,
+            /*skip_bias_add=*/false,
+            /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
     }
-    // NOTE(zbl): weight-tying is possible but torch script did not do so
-    modules_[kLMHeadLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
-        /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
-        /*bias=*/false,
-        // NOTE(zbl): each tp_rank would get sharded [B, T, V_local] as logits
-        /*gather_output=*/false,
-        /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false,
-        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
-}
-
-class LLaMALayer : public nn::Module {
-    std::shared_ptr<nn::Module> h_layer_;
-    std::shared_ptr<Tensor> freqs_cis_ = nullptr; // freqs_cis (shape: [max_seq_len, head_dim])
-    int64_t start_pos_ = 0;
-    DataType dtype_;
-    LLaMA3Config config_;
-
-public:
-    LLaMALayer(std::shared_ptr<nn::Module> h_layer, DataType dtype, LLaMA3Config config)
-        : h_layer_(h_layer), dtype_(dtype), config_(config) {}
-
-    void SetFreqsCis(std::shared_ptr<Tensor> freqs) { freqs_cis_ = freqs; }
-    void SetStartPos(int64_t pos) { start_pos_ = pos; }
-
-    std::vector<std::shared_ptr<Tensor>> Parameters() const override { return h_layer_->Parameters(); }
-
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) override {
-        auto &x = inputs[0]; // (bs, seq_len, n_embd)
-        const int seq_len = x->Dims()[1];
-        const auto device = x->GetDevice();
-
-        if (freqs_cis_ == nullptr) {
-            freqs_cis_ = PrecomputeFreqsCis(config_.n_embd / config_.n_head, config_.block_size * 2, config_.rope_theta,
-                                            config_.use_scaled_rope, device, dtype_);
-        }
-
-        // slice freqs_cis: [start_pos:start_pos+seq_len]
-        auto freqs_view = freqs_cis_->Slice(0, start_pos_, start_pos_ + seq_len, 1);
-
-        std::shared_ptr<Tensor> start_pos_ptr = nullptr;
-
-        // causal mask: (1, 1, seq_len, seq_len)
-        std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({seq_len, seq_len})->To(device));
-        auto mask = nn::function::Triu(ones, 1)->View({1, 1, seq_len, seq_len});
-        if (dtype_ == DataType::kBFLOAT16) {
-            mask = std::make_shared<Tensor>(mask->To(DataType::kBFLOAT16));
-        }
-
-        // DecoderLayer: {x, freqs, start_pos, mask}
-        // std::vector<std::shared_ptr<Tensor>> args = {x, freqs_view, nullptr, mask};
-        auto output = h_layer_->Forward({x, freqs_view, start_pos_ptr, mask});
-        return output;
-    }
-};
-
-std::vector<std::shared_ptr<nn::Module>> LLaMA3::GetPipelineLayers() {
-    std::vector<std::shared_ptr<nn::Module>> layers;
-
-    auto transformer = modules_[kTransformerLayerName];
-    layers.push_back(transformer->mutable_module(kWTELayerName));
-
-    auto seq = std::dynamic_pointer_cast<nn::ModuleList>(transformer->mutable_module(kHLayerName));
-    auto dtype = modules_[kLMHeadLayerName]->parameter(nn::Linear::kParamWeightName)->Dtype();
-    int idx = 0;
-    for (auto h : *seq) {
-        layers.push_back(std::make_shared<LLaMALayer>(h, dtype, config_));
-        ++idx;
-    }
-
-    layers.push_back(transformer->mutable_module(kLnFLayerName));
-
-    layers.push_back(modules_[kLMHeadLayerName]);
-
-    return layers;
-}
-
-std::unordered_map<std::string, int64_t> LLaMA3::GetConfig() const {
-    return {{"n_embd", config_.n_embd}, {"n_head", config_.n_head}};
+    modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
 }
 
 std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
+    int pp_rank = nn::parallel::pp_rank;
+    int pp_size = nn::parallel::global::GetPipelineParallelSize();
+    bool is_first_stage = (pp_rank == 0);
+    bool is_last_stage = (pp_rank == pp_size - 1);
+
     // (bs, seq_len)
-    auto &idx = x[0];
-    const auto device = idx->GetDevice();
-    const auto t = idx->Dims()[1]; // seq_len
+    auto x1 = x[0];
+    const auto device = x1->GetDevice();
+    const auto t = x1->Dims()[1]; // seq_len
     CHECK_LE(t, config_.block_size) << "Cannot forward sequence of length " << t << ", block size is only "
                                     << config_.block_size;
 
     // Init freqs_cis on device only once
     // TODO(zbl): consider moving this to model construction
     if (buffers_[kFreqsCisName] == nullptr) {
-        buffers_[kFreqsCisName] = PrecomputeFreqsCis(
-            config_.n_embd / config_.n_head, config_.block_size * 2, config_.rope_theta, config_.use_scaled_rope,
-            device,
-            modules_[kLMHeadLayerName]->parameter(nn::parallel::ColumnParallelLinear::kParamWeightName)->Dtype());
+        buffers_[kFreqsCisName] = PrecomputeFreqsCis(config_.n_embd / config_.n_head, config_.block_size * 2,
+                                                     config_.rope_theta, config_.use_scaled_rope, device);
     }
 
     // forward the LLaMA3 model itself
     auto &transformer = modules_[kTransformerLayerName];
-    // (bs, seq_len) -> Embedding(vocab_size, n_embd) -> (bs, seq_len, n_embd)
-    auto x1 = transformer->mutable_module(kWTELayerName)->Forward({idx})[0];
+
+    if (is_first_stage) {
+        // (bs, seq_len) -> Embedding(vocab_size, n_embd) -> (bs, seq_len, n_embd)
+        x1 = transformer->mutable_module(kWTELayerName)->Forward({x1})[0];
+    }
 
     // TODO(zbl): dynamic start_pos
     int64_t start_pos = 0;
     auto freqs_view = buffers_[kFreqsCisName]->Slice(0, start_pos, start_pos + t, 1);
 
     // TODO(lzm): add dtype support for nn::function::Ones later
-    std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(idx->GetDevice()));
+    std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(x1->GetDevice()));
     std::shared_ptr<Tensor> mask = nn::function::Triu(ones, 1)->View({1, 1, t, t});
-    // TODO(zbl): nn::function::Ones builds tensor in FP32 by default
-    if (modules_[kLMHeadLayerName]->parameter(nn::parallel::ColumnParallelLinear::kParamWeightName)->Dtype()
-        == DataType::kBFLOAT16) {
-        mask = std::make_shared<Tensor>(mask->To(DataType::kBFLOAT16));
-    }
+
     std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 
     auto h_modules = transformer->mutable_module(kHLayerName);
-    if (h_modules->type() == nn::ModuleList::kType) {
-        auto h_layers = std::dynamic_pointer_cast<nn::ModuleList>(h_modules);
-        // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)
-        for (auto &h : *h_layers) { x1 = h->Forward({x1, freqs_view, start_pos_ptr, mask})[0]; }
-    } else {
-        LOG(FATAL) << "Failed to get ModuleList from transformer";
+    CHECK_EQ(h_modules->type(), nn::ModuleList::kType) << "Failed to get ModuleList from transformer";
+    auto h_layers = std::dynamic_pointer_cast<nn::ModuleList>(h_modules);
+    // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)
+    for (auto &h : *h_layers) { x1 = h->Forward({x1, freqs_view, start_pos_ptr, mask})[0]; }
+
+    if (is_last_stage) {
+        // (bs, seq_len, n_embd) -> RMSNorm -> (bs, seq_len, n_embd)
+        auto x2 = transformer->mutable_module(kLnFLayerName)->Forward({x1});
+
+        // TODO(zbl): add inference-time mini-optimization
+        // (bs, seq_len, n_embd) -> Linear(n_embd, vocab_size) -> (bs, seq_len, vocab_size)
+        auto logits = modules_[kLMHeadLayerName]->Forward(x2);
+
+        // (bs, seq_len, vocab_size)
+        return logits;
     }
 
-    // (bs, seq_len, n_embd) -> RMSNorm -> (bs, seq_len, n_embd)
-    auto x2 = transformer->mutable_module(kLnFLayerName)->Forward({x1});
-
-    // TODO(zbl): add inference-time mini-optimization
-    // (bs, seq_len, n_embd) -> Linear(n_embd, vocab_size) -> (bs, seq_len, vocab_size)
-    auto logits = modules_[kLMHeadLayerName]->Forward(x2);
-
-    // (bs, seq_len, vocab_size)
-    return logits;
+    return {x1};
 }
 
 std::shared_ptr<LLaMA3> LLaMA3::FromPretrained(ModelType model_type) {
@@ -524,6 +465,9 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
                                                         .use_scaled_rope = static_cast<bool>(use_scaled_rope),
                                                         .norm_eps = norm_eps,
                                                         .max_gen_batch_size = max_gen_bs});
+    int pp_size = nn::parallel::global::GetPipelineParallelSize();
+    auto [is_first_stage, is_last_stage, start_layer, end_layer]
+        = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size);
 
     const int tp_size = nn::parallel::global::GetTensorParallelSize();
     const int tp_rank = nn::parallel::tp_rank;
@@ -592,114 +536,168 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
 
     // ========== Read Sharded Params ==========
     // transformer.wte.weight : (vocab_size, n_embd) -> local tp_rank: rows of [v_start : v_start+vpp)
-    {
+    if (is_first_stage) {
         auto &wte = state_dict[std::format("{}.{}.{}", kTransformerLayerName, kWTELayerName,
                                            nn::parallel::VocabParallelEmbedding::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(wte->DataPtr()),
                                 /*rows=*/vocab_size, /*cols=*/n_embd,
                                 /*row_start=*/v_start, /*row_cnt=*/vpp);
+    } else {
+        size_t wte_bytes = static_cast<size_t>(vocab_size) * n_embd * sizeof(float);
+        ifs.seekg(wte_bytes, std::ios::cur);
     }
 
     // transformer.h.{i}.ln_1.weight : Full version RMSNorm
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
-        auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName, std::to_string(i),
-                                              Block::kLn1LayerName, RMSNorm::kParamWeightName)];
-        ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        bool owned = (i >= start_layer && i < end_layer);
+
+        if (owned) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
+                                                  std::to_string(i - start_layer), Block::kLn1LayerName,
+                                                  RMSNorm::kParamWeightName)];
+            ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        } else {
+            size_t ln_1_bytes = n_embd * sizeof(float);
+            ifs.seekg(ln_1_bytes, std::ios::cur);
+        }
     }
 
     // transformer.h.{i}.attn.c_attn.weight : ColumnParallelLinear, but actually applies on "rows"
     // W-qkv should be [Q(=n_embd) | K(=n_kv_head*head_dim) | V(=n_kv_head*head_dim)] × n_embd
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
-        auto &tensor = state_dict[std::format(
-            "{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName, std::to_string(i), Block::kAttnLayerName,
-            CausalSelfAttention::kCAttnLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
-        float *dst = static_cast<float *>(tensor->DataPtr());
-        const std::streampos base_pos = ifs.tellg();
+        bool owned = (i >= start_layer && i < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
+                                                  std::to_string(i - start_layer), Block::kAttnLayerName,
+                                                  CausalSelfAttention::kCAttnLayerName,
+                                                  nn::parallel::ColumnParallelLinear::kParamWeightName)];
 
-        // Q block -> [0 : q_local_rows)
-        ifs.seekg(base_pos);
-        ReadMatrixRowShardFloat(ifs,
-                                /*dst=*/dst + (0 * attn_cols),
-                                /*rows=*/attn_rows_all, /*cols=*/attn_cols,
-                                /*row_start=*/tp_rank * q_local_rows, /*row_cnt=*/q_local_rows);
+            float *dst = static_cast<float *>(tensor->DataPtr());
+            const std::streampos base_pos = ifs.tellg();
 
-        // K block -> [q_local_rows : q_local_rows + kv_local_rows)
-        ifs.seekg(base_pos);
-        ReadMatrixRowShardFloat(ifs,
-                                /*dst=*/dst + (q_local_rows * attn_cols),
-                                /*rows=*/attn_rows_all, /*cols=*/attn_cols,
-                                /*row_start=*/q_out_rows + tp_rank * kv_local_rows, /*row_cnt=*/kv_local_rows);
+            // Q block -> [0 : q_local_rows)
+            ifs.seekg(base_pos);
+            ReadMatrixRowShardFloat(ifs,
+                                    /*dst=*/dst + (0 * attn_cols),
+                                    /*rows=*/attn_rows_all, /*cols=*/attn_cols,
+                                    /*row_start=*/tp_rank * q_local_rows, /*row_cnt=*/q_local_rows);
 
-        // V block -> [q_local_rows + kv_local_rows : q_local_rows + 2*kv_local_rows)
-        ifs.seekg(base_pos);
-        ReadMatrixRowShardFloat(ifs,
-                                /*dst=*/dst + ((q_local_rows + kv_local_rows) * attn_cols),
-                                /*rows=*/attn_rows_all, /*cols=*/attn_cols,
-                                /*row_start=*/q_out_rows + kv_out_rows + tp_rank * kv_local_rows,
-                                /*row_cnt=*/kv_local_rows);
+            // K block -> [q_local_rows : q_local_rows + kv_local_rows)
+            ifs.seekg(base_pos);
+            ReadMatrixRowShardFloat(ifs,
+                                    /*dst=*/dst + (q_local_rows * attn_cols),
+                                    /*rows=*/attn_rows_all, /*cols=*/attn_cols,
+                                    /*row_start=*/q_out_rows + tp_rank * kv_local_rows, /*row_cnt=*/kv_local_rows);
+
+            // V block -> [q_local_rows + kv_local_rows : q_local_rows + 2*kv_local_rows)
+            ifs.seekg(base_pos);
+            ReadMatrixRowShardFloat(ifs,
+                                    /*dst=*/dst + ((q_local_rows + kv_local_rows) * attn_cols),
+                                    /*rows=*/attn_rows_all, /*cols=*/attn_cols,
+                                    /*row_start=*/q_out_rows + kv_out_rows + tp_rank * kv_local_rows,
+                                    /*row_cnt=*/kv_local_rows);
+        } else {
+            size_t qkv_bytes = static_cast<size_t>(attn_rows_all) * attn_cols * sizeof(float);
+            ifs.seekg(qkv_bytes, std::ios::cur);
+        }
     }
 
     // transformer.h.{i}.attn.c_proj.weight : RowParallelLinear, but actually applies on "columns"
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
-        auto &tensor = state_dict[std::format(
-            "{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName, std::to_string(i), Block::kAttnLayerName,
-            CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];
-        ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
-                                /*rows=*/n_embd, /*cols=*/n_embd,
-                                /*col_start=*/tp_rank * in_pp, /*col_cnt=*/in_pp);
+        bool owned = (i >= start_layer && i < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
+                                                  std::to_string(i - start_layer), Block::kAttnLayerName,
+                                                  CausalSelfAttention::kCProjLayerName,
+                                                  nn::parallel::RowParallelLinear::kParamWeightName)];
+            ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
+                                    /*rows=*/n_embd, /*cols=*/n_embd,
+                                    /*col_start=*/tp_rank * in_pp, /*col_cnt=*/in_pp);
+        } else {
+            size_t c_proj_bytes = static_cast<size_t>(n_embd) * n_embd * sizeof(float);
+            ifs.seekg(c_proj_bytes, std::ios::cur);
+        }
     }
 
     // transformer.h.{i}.ln_2.weight : Full version RMSNorm
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
-        auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName, std::to_string(i),
-                                              Block::kLn2LayerName, RMSNorm::kParamWeightName)];
-        ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        bool owned = (i >= start_layer && i < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
+                                                  std::to_string(i - start_layer), Block::kLn2LayerName,
+                                                  RMSNorm::kParamWeightName)];
+            ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        } else {
+            size_t ln_2_bytes = static_cast<size_t>(n_embd) * sizeof(float);
+            ifs.seekg(ln_2_bytes, std::ios::cur);
+        }
     }
 
     // transformer.h.{i}.mlp.c_fc.weight : ColumnParallelLinear, but actually applies on "rows"
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
-        auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
-                                              std::to_string(i), Block::kMlpLayerName, MLP::kCFcLayerName,
-                                              nn::parallel::ColumnParallelLinear::kParamWeightName)];
-        ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
-                                /*rows=*/fc_out, /*cols=*/n_embd,
-                                /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
+        bool owned = (i >= start_layer && i < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format(
+                "{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName, std::to_string(i - start_layer),
+                Block::kMlpLayerName, MLP::kCFcLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
+            ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
+                                    /*rows=*/fc_out, /*cols=*/n_embd,
+                                    /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
+        } else {
+            size_t fc_bytes = static_cast<size_t>(ffn_hidden) * n_embd * sizeof(float);
+            ifs.seekg(fc_bytes, std::ios::cur);
+        }
     }
 
     // transformer.h.{i}.mlp.c_fc2.weight : ColumnParallelLinear, but actually applies on "rows"
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
-        auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
-                                              std::to_string(i), Block::kMlpLayerName, MLP::kCFc2LayerName,
-                                              nn::parallel::ColumnParallelLinear::kParamWeightName)];
-        ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
-                                /*rows=*/fc_out, /*cols=*/n_embd,
-                                /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
+        bool owned = (i >= start_layer && i < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format(
+                "{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName, std::to_string(i - start_layer),
+                Block::kMlpLayerName, MLP::kCFc2LayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
+            ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
+                                    /*rows=*/fc_out, /*cols=*/n_embd,
+                                    /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
+        } else {
+            size_t fc2_bytes = static_cast<size_t>(ffn_hidden) * n_embd * sizeof(float);
+            ifs.seekg(fc2_bytes, std::ios::cur);
+        }
     }
 
     // transformer.h.{i}.mlp.c_proj.weight : RowParallelLinear, but actually applies on "columns"
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
-        auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
-                                              std::to_string(i), Block::kMlpLayerName, MLP::kCProjLayerName,
-                                              nn::parallel::RowParallelLinear::kParamWeightName)];
-        ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
-                                /*rows=*/n_embd, /*cols=*/fc_out,
-                                /*col_start=*/tp_rank * in_fc_pp, /*col_cnt=*/in_fc_pp);
+        bool owned = (i >= start_layer && i < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format(
+                "{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName, std::to_string(i - start_layer),
+                Block::kMlpLayerName, MLP::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];
+            ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
+                                    /*rows=*/n_embd, /*cols=*/fc_out,
+                                    /*col_start=*/tp_rank * in_fc_pp, /*col_cnt=*/in_fc_pp);
+        } else {
+            size_t c_proj_bytes = static_cast<size_t>(n_embd) * ffn_hidden * sizeof(float);
+            ifs.seekg(c_proj_bytes, std::ios::cur);
+        }
     }
 
     // transformer.ln_f.weight : Full version RMSNorm
-    {
-        auto &ln_f
-            = state_dict[std::format("{}.{}.{}", kTransformerLayerName, kLnFLayerName, RMSNorm::kParamWeightName)];
-        ReadVectorAllFloat(ifs, static_cast<float *>(ln_f->DataPtr()), n_embd);
-    }
-
     // lm_head.weight : (vocab_size, n_embd) -> ColumnParallelLinear, but actually applies on "rows"
     {
-        auto &lm_head
-            = state_dict[std::format("{}.{}", kLMHeadLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
-        ReadMatrixRowShardFloat(ifs, static_cast<float *>(lm_head->DataPtr()),
-                                /*rows=*/vocab_size, /*cols=*/n_embd,
-                                /*row_start=*/v_start, /*row_cnt=*/vpp);
+        if (is_last_stage) {
+            auto &ln_f
+                = state_dict[std::format("{}.{}.{}", kTransformerLayerName, kLnFLayerName, RMSNorm::kParamWeightName)];
+            auto &lm_head = state_dict[std::format("{}.{}", kLMHeadLayerName,
+                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
+            ReadVectorAllFloat(ifs, static_cast<float *>(ln_f->DataPtr()), n_embd);
+            ReadMatrixRowShardFloat(ifs, static_cast<float *>(lm_head->DataPtr()),
+                                    /*rows=*/vocab_size, /*cols=*/n_embd,
+                                    /*row_start=*/v_start, /*row_cnt=*/vpp);
+        } else {
+            size_t ln_f_bytes = static_cast<size_t>(n_embd) * sizeof(float);
+            size_t lm_head_bytes = static_cast<size_t>(vocab_size) * n_embd * sizeof(float);
+            ifs.seekg(ln_f_bytes + lm_head_bytes, std::ios::cur);
+        }
     }
 
     return llama3;

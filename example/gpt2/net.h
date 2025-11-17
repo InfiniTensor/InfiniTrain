@@ -89,9 +89,6 @@ public:
 
     explicit GPT2(const GPT2Config &config);
 
-    std::unordered_map<std::string, int64_t> GetConfig() const override;
-    std::vector<std::shared_ptr<infini_train::nn::Module>> GetPipelineLayers() override;
-
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 

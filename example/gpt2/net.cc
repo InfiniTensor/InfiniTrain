@@ -21,6 +21,7 @@
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
@@ -176,6 +177,10 @@ Block::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
 }
 
 GPT2::GPT2(const GPT2Config &config) : config_(config) {
+    int pp_size = nn::parallel::global::GetPipelineParallelSize();
+    auto [is_first_stage, is_last_stage, start_layer, end_layer]
+        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size);
+
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
 
     // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
@@ -184,131 +189,102 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
     CHECK_EQ(config.vocab_size % tp_world_size, 0) << "Vocab size should be divisible by TP world size";
     {
         std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
-        transformer[kWTELayerName] = std::make_shared<nn::parallel::VocabParallelEmbedding>(
-            config_.vocab_size, config_.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
-        transformer[kWPELayerName] = std::make_shared<nn::Embedding>(config_.block_size, config_.n_embd);
+        if (is_first_stage) {
+            transformer[kWTELayerName] = std::make_shared<nn::parallel::VocabParallelEmbedding>(
+                config_.vocab_size, config_.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
+            transformer[kWPELayerName] = std::make_shared<nn::Embedding>(config_.block_size, config_.n_embd);
+        }
+
         {
             std::vector<std::shared_ptr<nn::Module>> h;
-            for (int64_t i = 0; i < config_.n_layer; ++i) { h.push_back(std::make_shared<Block>(config_)); }
-            transformer[kHLayerName] = std::make_shared<nn::Sequential>(std::move(h));
+            for (int64_t i = start_layer; i < end_layer; ++i) { h.push_back(std::make_shared<Block>(config_)); }
+            transformer[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
+            if (is_last_stage) {
+                transformer[kLnFLayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd});
+            }
+
+            modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
         }
-        transformer[kLnFLayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd});
-        modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
-    }
-    // don't init this one, we will tie weights
-    modules_[kLMHeadLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
-        /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
-        /*bias=*/false,
-        // NOTE(zbl): each tp_rank would get sharded [B, T, V_local] as logits
-        /*gather_output=*/false,
-        /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false,
-        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+        if (is_last_stage) {
+            // don't init this one, we will tie weights
+            modules_[kLMHeadLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
+                /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
+                /*bias=*/false,
+                // NOTE(zbl): each tp_rank would get sharded [B, T, V_local] as logits
+                /*gather_output=*/false,
+                /*input_is_parallel=*/false,
+                /*skip_bias_add=*/false,
+                /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+        }
 
-    // https://paperswithcode.com/method/weight-tying
-    *mutable_module(kTransformerLayerName)
-         ->mutable_module(kWTELayerName)
-         ->mutable_parameter(nn::parallel::VocabParallelEmbedding::kParamWeightName)
-        = module(kLMHeadLayerName).parameter(nn::parallel::ColumnParallelLinear::kParamWeightName);
-}
-
-class EmbeddingLayer : public nn::Module {
-
-public:
-    EmbeddingLayer(std::shared_ptr<nn::Module> wte, std::shared_ptr<nn::Module> wpe) {
-        modules_["wte"] = wte;
-        modules_["wpe"] = wpe;
-    }
-
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &inputs) override {
-        auto &input_ids = inputs[0]; // (bs, seq_len)
-        const int seq_len = input_ids->Dims()[1];
-        const auto device = input_ids->GetDevice();
-
-        // position ids: [0, 1, ..., seq_len-1]
-        auto pos_ids = nn::init::Arange(0, seq_len, infini_train::DataType::kINT64, device);
-        // (bs, seq_len) -> wte -> (bs, seq_len, n_embd)
-        auto tok_emb = modules_["wte"]->Forward({input_ids})[0];
-        // (seq_len,) -> wpe -> (seq_len, n_embd)
-        auto pos_emb = modules_["wpe"]->Forward({pos_ids})[0];
-
-        auto output = tok_emb + pos_emb; // (bs, seq_len, n_embd)
-
-        return {output};
-    }
-};
-
-std::vector<std::shared_ptr<nn::Module>> GPT2::GetPipelineLayers() {
-    auto &transformer = modules_[kTransformerLayerName];
-
-    std::vector<std::shared_ptr<nn::Module>> layers;
-
-    auto embedding_layer = std::make_shared<EmbeddingLayer>(transformer->mutable_module(kWTELayerName),
-                                                            transformer->mutable_module(kWPELayerName));
-    layers.push_back(embedding_layer);
-
-    auto seq = std::dynamic_pointer_cast<nn::Sequential>(transformer->mutable_module(kHLayerName));
-    if (seq) {
-        for (int idx = 0; idx < seq->size(); ++idx) {
-            auto sub_module = (*seq)[idx];
-            layers.push_back(sub_module);
+        // FIXME(jym): Assigning the parameter values of wte to LMHead, which is not real tying operation
+        if (pp_size == 1) {
+            // https://paperswithcode.com/method/weight-tying
+            *mutable_module(kTransformerLayerName)
+                 ->mutable_module(kWTELayerName)
+                 ->mutable_parameter(nn::parallel::VocabParallelEmbedding::kParamWeightName)
+                = module(kLMHeadLayerName).parameter(nn::parallel::ColumnParallelLinear::kParamWeightName);
         }
     }
-
-    layers.push_back(transformer->mutable_module(kLnFLayerName));
-    layers.push_back(modules_[kLMHeadLayerName]);
-
-    return layers;
-}
-
-std::unordered_map<std::string, int64_t> GPT2::GetConfig() const {
-    return {{"n_embd", config_.n_embd}, {"n_head", config_.n_head}};
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
 GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
-    // (B, T)
-    auto &idx = x[0];
-    const auto device = idx->GetDevice();
+    int pp_rank = nn::parallel::pp_rank;
+    int pp_size = nn::parallel::global::GetPipelineParallelSize();
+    bool is_first_stage = (pp_rank == 0);
+    bool is_last_stage = (pp_rank == pp_size - 1);
 
-    const auto t = idx->Dims()[1]; // T
+    // (B, T)
+    auto x1 = x[0];
+    const auto device = x1->GetDevice();
+
+    const auto t = x1->Dims()[1]; // T
     CHECK_LE(t, config_.block_size) << "Cannot forward sequence of length " << t << ", block size is only "
                                     << config_.block_size;
-    // (T_local)
-    // NOTE(zbl): Slice pos sequence when SP is enabled
-    auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
-    auto sequence_parallel_enabled = nn::parallel::global::GetSequenceParallelEnabled();
-    int tp_rank = 0;
-    if (tp_world_size > 1) {
-        auto tp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
-            nn::parallel::GetTensorParallelProcessGroupName(device->rank().thread_rank()));
-        tp_rank = tp_group->GetGroupRank(device->rank().thread_rank());
-    }
-
-    int64_t t_local = sequence_parallel_enabled ? (t / tp_world_size) : t;
-    int64_t start = sequence_parallel_enabled ? tp_rank * t_local : 0;
-    auto pos = nn::init::Arange(start, start + t_local, infini_train::DataType::kINT64, device);
     // forward the GPT2 model itself
     auto &transformer = modules_[kTransformerLayerName];
-    // (B, T) -> Embedding(V_local, C) -> (B, T, C)
-    auto tok_emb = transformer->mutable_module(kWTELayerName)->Forward({idx})[0];
-    // (T) -> Embedding(T_max, C) -> (T, C)
-    auto pos_emb = transformer->mutable_module(kWPELayerName)->Forward({pos})[0];
-    // (B, T, C)
-    auto x1 = tok_emb + pos_emb;
+    if (is_first_stage) {
+        // (T_local)
+        // NOTE(zbl): Slice pos sequence when SP is enabled
+        auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
+        auto sequence_parallel_enabled = nn::parallel::global::GetSequenceParallelEnabled();
+        int tp_rank = 0;
+        if (tp_world_size > 1) {
+            auto tp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
+                nn::parallel::GetTensorParallelProcessGroupName(device->rank().thread_rank()));
+            tp_rank = tp_group->GetGroupRank(device->rank().thread_rank());
+        }
+        int64_t t_local = sequence_parallel_enabled ? (t / tp_world_size) : t;
+        int64_t start = sequence_parallel_enabled ? tp_rank * t_local : 0;
+        auto pos = nn::init::Arange(start, start + t_local, infini_train::DataType::kINT64, device);
+
+        // (B, T) -> Embedding(V_local, C) -> (B, T, C)
+        auto tok_emb = transformer->mutable_module(kWTELayerName)->Forward({x1})[0];
+        // (T) -> Embedding(T_max, C) -> (T, C)
+        auto pos_emb = transformer->mutable_module(kWPELayerName)->Forward({pos})[0];
+        // (B, T, C)
+        x1 = tok_emb + pos_emb;
+    }
 
     // (B, T, C) -> transformer -> (B, T, C)
-    auto x2 = transformer->mutable_module(kHLayerName)->Forward({x1});
-    // (B, T, C) -> Layernorm -> (B, T, C)
-    auto x3 = transformer->mutable_module(kLnFLayerName)->Forward(x2);
+    auto h_modules = transformer->mutable_module(kHLayerName);
+    CHECK_EQ(h_modules->type(), nn::ModuleList::kType) << "Failed to get ModuleList from transformer";
+    auto h_layers = std::dynamic_pointer_cast<nn::ModuleList>(h_modules);
+    // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)
+    for (auto &h : *h_layers) { x1 = h->Forward({x1})[0]; }
 
-    // TODO(dcj): add inference-time mini-optimization
-    // (B, T, C) -> Linear(C, V) -> (B, T, V)
-    auto logits = modules_[kLMHeadLayerName]->Forward(x3);
+    if (is_last_stage) {
+        // (B, T, C) -> Layernorm -> (B, T, C)
+        auto x3 = transformer->mutable_module(kLnFLayerName)->Forward({x1});
 
-    // (B, T, V_original)
-    return logits;
+        // TODO(dcj): add inference-time mini-optimization
+        // (B, T, C) -> Linear(C, V) -> (B, T, V)
+        auto logits = modules_[kLMHeadLayerName]->Forward(x3);
+        // (B, T, V_original)
+        return logits;
+    }
+    return {x1};
 }
 
 std::shared_ptr<GPT2> GPT2::FromPretrained(ModelType model_type) {
@@ -375,6 +351,10 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     CHECK_EQ(n_embd % n_head, 0) << "n_embd must be divisible by n_head.";
     CHECK_EQ(n_head % tp_size, 0) << "n_head must be divisible by TP world size.";
 
+    int pp_size = nn::parallel::global::GetPipelineParallelSize();
+    auto [is_first_stage, is_last_stage, start_layer, end_layer]
+        = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size);
+
     auto tp_rank = nn::parallel::tp_rank;
     // calculate xx_size_per_partition
     const int64_t vpp = model_vocab_size / tp_size;
@@ -397,163 +377,274 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     // transformer.wte.weight (also transformer.lm_head.weight)
     // full: (model_vocab_size, n_embd)
     // local: (vocab_size_per_partition, n_embd)
-    auto &transformer_wte_weight = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kWTELayerName,
-                                                          nn::parallel::VocabParallelEmbedding::kParamWeightName)];
-    ReadMatrixRowShardFloat(ifs, static_cast<float *>(transformer_wte_weight->DataPtr()), model_vocab_size, n_embd,
-                            v_start, vpp);
+    if (is_first_stage) {
+        auto &transformer_wte_weight
+            = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kWTELayerName,
+                                     nn::parallel::VocabParallelEmbedding::kParamWeightName)];
+        ReadMatrixRowShardFloat(ifs, static_cast<float *>(transformer_wte_weight->DataPtr()), model_vocab_size, n_embd,
+                                v_start, vpp);
+    } else if (pp_size > 1 && is_last_stage) {
+        auto &lm_head_weight = state_dict[std::format("{}.{}", GPT2::kLMHeadLayerName,
+                                                      nn::parallel::ColumnParallelLinear::kParamWeightName)];
+        ifs.read(reinterpret_cast<char *>(lm_head_weight->DataPtr()), lm_head_weight->SizeInBytes());
+    } else {
+        size_t wte_bytes = vocab_size * n_embd * sizeof(float);
+        ifs.seekg(wte_bytes, std::ios::cur);
+    }
+
     if (tp_size == 1) {
         // Skip padded vocab part when TP is not enabled
         ifs.ignore((padded_vocab_size - vocab_size) * n_embd * sizeof(float));
     }
-    // transformer.wpe.weight
-    auto &transformer_wpe_weight = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kWPELayerName,
-                                                          nn::Embedding::kParamWeightName)];
-    ReadMatrixAllFloat(ifs, static_cast<float *>(transformer_wpe_weight->DataPtr()), block_size, n_embd);
+
+    if (is_first_stage) {
+        // transformer.wpe.weight
+        auto &transformer_wpe_weight = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName,
+                                                              GPT2::kWPELayerName, nn::Embedding::kParamWeightName)];
+        ReadMatrixAllFloat(ifs, static_cast<float *>(transformer_wpe_weight->DataPtr()), block_size, n_embd);
+    } else {
+        size_t wpe_bytes = block_size * n_embd * sizeof(float);
+        ifs.seekg(wpe_bytes, std::ios::cur);
+    }
+
     // transformer.h.{i}.ln_1.weight
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor
-            = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                     std::to_string(idx), Block::kLn1LayerName, nn::LayerNorm::kParamWeightName)];
-        ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        bool owned = (idx >= start_layer && idx < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+                                                  std::to_string(idx - start_layer), Block::kLn1LayerName,
+                                                  nn::LayerNorm::kParamWeightName)];
+            ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        } else {
+            size_t ln_1_w_bytes = n_embd * sizeof(float);
+            ifs.seekg(ln_1_w_bytes, std::ios::cur);
+        }
     }
+
     // transformer.h.{i}.ln_1.bias
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor
-            = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                     std::to_string(idx), Block::kLn1LayerName, nn::LayerNorm::kParamBiasName)];
-        ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        bool owned = (idx >= start_layer && idx < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+                                                  std::to_string(idx - start_layer), Block::kLn1LayerName,
+                                                  nn::LayerNorm::kParamBiasName)];
+            ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        } else {
+            size_t ln_1_b_bytes = n_embd * sizeof(float);
+            ifs.seekg(ln_1_b_bytes, std::ios::cur);
+        }
     }
+
     // transformer.h.{i}.attn.c_attn.weight (ColumnParallelLinear, but actually applies on "rows")
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor
-            = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                     std::to_string(idx), Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName,
-                                     nn::parallel::ColumnParallelLinear::kParamWeightName)];
-        // NOTE(zbl): In the .bin model file, Q/K/V is concated along last dim,
-        //            i.e. [Q|K|V].T = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn].T
-        //            However, each tp_rank needs to get [q_i|k_i|v_i].T, so we need to jump and read them respectively
-        float *dst = static_cast<float *>(tensor->DataPtr());
-        const int64_t local_C = n_embd / tp_size;
-        const int64_t rows_all = 3 * n_embd;
-        const int64_t cols_all = n_embd;
-        const std::streampos base_pos = ifs.tellg();
-        // Read q_i -> write to dst rows of [0 : local_C)
-        ifs.seekg(base_pos);
-        ReadMatrixRowShardFloat(ifs,
-                                /*dst=*/dst + (0 * local_C) * cols_all,
-                                /*rows=*/rows_all, /*cols=*/cols_all,
-                                /*row_start=*/tp_rank * local_C, /*row_cnt=*/local_C);
-        // Read k_i -> write to dst rows of [local_C : 2*local_C)
-        ifs.seekg(base_pos);
-        ReadMatrixRowShardFloat(ifs,
-                                /*dst=*/dst + (1 * local_C) * cols_all,
-                                /*rows=*/rows_all, /*cols=*/cols_all,
-                                /*row_start=*/n_embd + tp_rank * local_C, /*row_cnt=*/local_C);
-        // Read v_i -> write to dst rows of [2*local_C : 3*local_C)
-        ifs.seekg(base_pos);
-        ReadMatrixRowShardFloat(ifs,
-                                /*dst=*/dst + (2 * local_C) * cols_all,
-                                /*rows=*/rows_all, /*cols=*/cols_all,
-                                /*row_start=*/2 * n_embd + tp_rank * local_C, /*row_cnt=*/local_C);
+        bool owned = (idx >= start_layer && idx < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+                                                  std::to_string(idx - start_layer), Block::kAttnLayerName,
+                                                  CausalSelfAttention::kCAttnLayerName,
+                                                  nn::parallel::ColumnParallelLinear::kParamWeightName)];
+            // NOTE(zbl): In the .bin model file, Q/K/V is concated along last dim,
+            //            i.e. [Q|K|V].T = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn].T
+            //            However, each tp_rank needs to get [q_i|k_i|v_i].T, so we need to jump and read them
+            //            respectively
+            float *dst = static_cast<float *>(tensor->DataPtr());
+            const int64_t local_C = n_embd / tp_size;
+            const int64_t rows_all = 3 * n_embd;
+            const int64_t cols_all = n_embd;
+            const std::streampos base_pos = ifs.tellg();
+            // Read q_i -> write to dst rows of [0 : local_C)
+            ifs.seekg(base_pos);
+            ReadMatrixRowShardFloat(ifs,
+                                    /*dst=*/dst + (0 * local_C) * cols_all,
+                                    /*rows=*/rows_all, /*cols=*/cols_all,
+                                    /*row_start=*/tp_rank * local_C, /*row_cnt=*/local_C);
+            // Read k_i -> write to dst rows of [local_C : 2*local_C)
+            ifs.seekg(base_pos);
+            ReadMatrixRowShardFloat(ifs,
+                                    /*dst=*/dst + (1 * local_C) * cols_all,
+                                    /*rows=*/rows_all, /*cols=*/cols_all,
+                                    /*row_start=*/n_embd + tp_rank * local_C, /*row_cnt=*/local_C);
+            // Read v_i -> write to dst rows of [2*local_C : 3*local_C)
+            ifs.seekg(base_pos);
+            ReadMatrixRowShardFloat(ifs,
+                                    /*dst=*/dst + (2 * local_C) * cols_all,
+                                    /*rows=*/rows_all, /*cols=*/cols_all,
+                                    /*row_start=*/2 * n_embd + tp_rank * local_C, /*row_cnt=*/local_C);
+        } else {
+            size_t c_attn_w_bytes = qkv_out * n_embd * sizeof(float);
+            ifs.seekg(c_attn_w_bytes, std::ios::cur);
+        }
     }
+
     // transformer.h.{i}.attn.c_attn.bias (ColumnParallelLinear)
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor
-            = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                     std::to_string(idx), Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName,
-                                     nn::parallel::ColumnParallelLinear::kParamBiasName)];
-        // NOTE(zbl): Same as c_attn.weight, the bias for Q/K/V is concated
-        //            i.e. [Q|K|V] = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn]
-        //            However, each tp_rank needs to get [q_i|k_i|v_i], so we need to jump and read them respectively
-        float *dst = static_cast<float *>(tensor->DataPtr());
-        const int64_t local_C = n_embd / tp_size;
-        const int64_t len_all = 3 * n_embd;
-        const std::streampos base_pos = ifs.tellg();
-        // Read q_i
-        ifs.seekg(base_pos);
-        ReadVectorShardFloat(ifs,
-                             /*dst=*/dst + (0 * local_C),
-                             /*len=*/len_all,
-                             /*start=*/tp_rank * local_C, /*cnt=*/local_C);
-        // Read k_i
-        ifs.seekg(base_pos);
-        ReadVectorShardFloat(ifs,
-                             /*dst=*/dst + (1 * local_C),
-                             /*len=*/len_all,
-                             /*start=*/n_embd + tp_rank * local_C, /*cnt=*/local_C);
-        // Read v_i
-        ifs.seekg(base_pos);
-        ReadVectorShardFloat(ifs,
-                             /*dst=*/dst + (2 * local_C),
-                             /*len=*/len_all,
-                             /*start=*/2 * n_embd + tp_rank * local_C, /*cnt=*/local_C);
+        bool owned = (idx >= start_layer && idx < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+                                                  std::to_string(idx - start_layer), Block::kAttnLayerName,
+                                                  CausalSelfAttention::kCAttnLayerName,
+                                                  nn::parallel::ColumnParallelLinear::kParamBiasName)];
+            // NOTE(zbl): Same as c_attn.weight, the bias for Q/K/V is concated
+            //            i.e. [Q|K|V] = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn]
+            //            However, each tp_rank needs to get [q_i|k_i|v_i], so we need to jump and read them
+            //            respectively
+            float *dst = static_cast<float *>(tensor->DataPtr());
+            const int64_t local_C = n_embd / tp_size;
+            const int64_t len_all = 3 * n_embd;
+            const std::streampos base_pos = ifs.tellg();
+            // Read q_i
+            ifs.seekg(base_pos);
+            ReadVectorShardFloat(ifs,
+                                 /*dst=*/dst + (0 * local_C),
+                                 /*len=*/len_all,
+                                 /*start=*/tp_rank * local_C, /*cnt=*/local_C);
+            // Read k_i
+            ifs.seekg(base_pos);
+            ReadVectorShardFloat(ifs,
+                                 /*dst=*/dst + (1 * local_C),
+                                 /*len=*/len_all,
+                                 /*start=*/n_embd + tp_rank * local_C, /*cnt=*/local_C);
+            // Read v_i
+            ifs.seekg(base_pos);
+            ReadVectorShardFloat(ifs,
+                                 /*dst=*/dst + (2 * local_C),
+                                 /*len=*/len_all,
+                                 /*start=*/2 * n_embd + tp_rank * local_C, /*cnt=*/local_C);
+        } else {
+            size_t c_attn_b_bytes = qkv_out * sizeof(float);
+            ifs.seekg(c_attn_b_bytes, std::ios::cur);
+        }
     }
+
     // transformer.h.{i}.attn.c_proj.weight (RowParallelLinear, but actually applies on "columns")
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor
-            = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                     std::to_string(idx), Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName,
-                                     nn::parallel::RowParallelLinear::kParamWeightName)];
-        ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, n_embd, tp_rank * in_pp, in_pp);
+        bool owned = (idx >= start_layer && idx < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+                                                  std::to_string(idx - start_layer), Block::kAttnLayerName,
+                                                  CausalSelfAttention::kCProjLayerName,
+                                                  nn::parallel::RowParallelLinear::kParamWeightName)];
+            ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, n_embd, tp_rank * in_pp,
+                                    in_pp);
+        } else {
+            size_t c_proj_w_bytes = n_embd * n_embd * sizeof(float);
+            ifs.seekg(c_proj_w_bytes, std::ios::cur);
+        }
     }
+
     // transformer.h.{i}.attn.c_proj.bias (RowParallelLinear, no shard on bias)
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor
-            = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                     std::to_string(idx), Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName,
-                                     nn::parallel::RowParallelLinear::kParamBiasName)];
-        ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        bool owned = (idx >= start_layer && idx < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+                                                  std::to_string(idx - start_layer), Block::kAttnLayerName,
+                                                  CausalSelfAttention::kCProjLayerName,
+                                                  nn::parallel::RowParallelLinear::kParamBiasName)];
+            ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        } else {
+            size_t c_proj_b_bytes = n_embd * sizeof(float);
+            ifs.seekg(c_proj_b_bytes, std::ios::cur);
+        }
     }
+
     // transformer.h.{i}.ln_2.weight
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor
-            = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                     std::to_string(idx), Block::kLn2LayerName, nn::LayerNorm::kParamWeightName)];
-        ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        bool owned = (idx >= start_layer && idx < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+                                                  std::to_string(idx - start_layer), Block::kLn2LayerName,
+                                                  nn::LayerNorm::kParamWeightName)];
+            ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        } else {
+            size_t ln_2_w_bytes = n_embd * sizeof(float);
+            ifs.seekg(ln_2_w_bytes, std::ios::cur);
+        }
     }
+
     // transformer.h.{i}.ln_2.bias
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor
-            = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                     std::to_string(idx), Block::kLn2LayerName, nn::LayerNorm::kParamBiasName)];
-        ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        bool owned = (idx >= start_layer && idx < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+                                                  std::to_string(idx - start_layer), Block::kLn2LayerName,
+                                                  nn::LayerNorm::kParamBiasName)];
+            ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        } else {
+            size_t ln_2_b_bytes = n_embd * sizeof(float);
+            ifs.seekg(ln_2_b_bytes, std::ios::cur);
+        }
     }
+
     // transformer.h.{i}.mlp.c_fc.weight (ColumnParallelLinear, but actually applies on "rows")
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                              std::to_string(idx), Block::kMlpLayerName, MLP::kCFcLayerName,
-                                              nn::parallel::ColumnParallelLinear::kParamWeightName)];
-        ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, n_embd, fc_start, fc_pp);
+        bool owned = (idx >= start_layer && idx < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format(
+                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(idx - start_layer),
+                Block::kMlpLayerName, MLP::kCFcLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
+            ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, n_embd, fc_start, fc_pp);
+        } else {
+            size_t c_fc_w_bytes = fc_out * n_embd * sizeof(float);
+            ifs.seekg(c_fc_w_bytes, std::ios::cur);
+        }
     }
+
     // transformer.h.{i}.mlp.c_fc.bias (ColumnParallelLinear)
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                              std::to_string(idx), Block::kMlpLayerName, MLP::kCFcLayerName,
-                                              nn::parallel::ColumnParallelLinear::kParamBiasName)];
-        ReadVectorShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, fc_start, fc_pp);
+        bool owned = (idx >= start_layer && idx < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format(
+                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(idx - start_layer),
+                Block::kMlpLayerName, MLP::kCFcLayerName, nn::parallel::ColumnParallelLinear::kParamBiasName)];
+            ReadVectorShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, fc_start, fc_pp);
+        } else {
+            size_t c_fc_b_bytes = fc_out * sizeof(float);
+            ifs.seekg(c_fc_b_bytes, std::ios::cur);
+        }
     }
+
     // transformer.h.{i}.mlp.c_proj.weight (RowParallelLinear, but actually applies on "columns")
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                              std::to_string(idx), Block::kMlpLayerName, MLP::kCProjLayerName,
-                                              nn::parallel::RowParallelLinear::kParamWeightName)];
-        ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, fc_out, tp_rank * in4_pp, in4_pp);
+        bool owned = (idx >= start_layer && idx < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format(
+                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(idx - start_layer),
+                Block::kMlpLayerName, MLP::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];
+            ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, fc_out, tp_rank * in4_pp,
+                                    in4_pp);
+        } else {
+            size_t c_proj_w_bytes = fc_out * n_embd * sizeof(float);
+            ifs.seekg(c_proj_w_bytes, std::ios::cur);
+        }
     }
+
     // transformer.h.{i}.mlp.c_proj.bias (RowParallelLinear, no shard on bias)
     for (int idx = 0; idx < n_layer; ++idx) {
-        auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                              std::to_string(idx), Block::kMlpLayerName, MLP::kCProjLayerName,
-                                              nn::parallel::RowParallelLinear::kParamBiasName)];
-        ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        bool owned = (idx >= start_layer && idx < end_layer);
+        if (owned) {
+            auto &tensor = state_dict[std::format(
+                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(idx - start_layer),
+                Block::kMlpLayerName, MLP::kCProjLayerName, nn::parallel::RowParallelLinear::kParamBiasName)];
+            ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
+        } else {
+            size_t c_proj_b_bytes = n_embd * sizeof(float);
+            ifs.seekg(c_proj_b_bytes, std::ios::cur);
+        }
     }
-    // transformer.ln_f.weight
-    auto &transformer_ln_f_weight = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kLnFLayerName,
-                                                           nn::LayerNorm::kParamWeightName)];
-    ReadVectorAllFloat(ifs, static_cast<float *>(transformer_ln_f_weight->DataPtr()), n_embd);
-    // transformer.ln_f.bias
-    auto &transformer_ln_f_bias = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kLnFLayerName,
-                                                         nn::LayerNorm::kParamBiasName)];
-    ReadVectorAllFloat(ifs, static_cast<float *>(transformer_ln_f_bias->DataPtr()), n_embd);
 
+    if (is_last_stage) {
+        // transformer.ln_f.weight
+        auto &transformer_ln_f_weight = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName,
+                                                               GPT2::kLnFLayerName, nn::LayerNorm::kParamWeightName)];
+        ReadVectorAllFloat(ifs, static_cast<float *>(transformer_ln_f_weight->DataPtr()), n_embd);
+        // transformer.ln_f.bias
+        auto &transformer_ln_f_bias = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName,
+                                                             GPT2::kLnFLayerName, nn::LayerNorm::kParamBiasName)];
+        ReadVectorAllFloat(ifs, static_cast<float *>(transformer_ln_f_bias->DataPtr()), n_embd);
+    } else {
+        size_t ln_f_w_bytes = n_embd * sizeof(float);
+        size_t ln_f_b_bytes = n_embd * sizeof(float);
+        ifs.seekg(ln_f_w_bytes + ln_f_b_bytes, std::ios::cur);
+    }
     return local_gpt2;
 }
