@@ -15,7 +15,8 @@ PipelineStage::PipelineStage(const std::shared_ptr<Module> &model, int stage_ind
       prev_rank_(stage_index > 0 ? stage_index - 1 : -1),
       next_rank_(stage_index < num_stages - 1 ? stage_index + 1 : -1), recv_shape_(recv_shape),
       optimizer_(std::move(optimizer)),
-      device_(DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA).at(stage_index)) {}
+      // FIXME(dcj): use correct device
+      device_(DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA).at(stage_index % 8)) {}
 
 std::vector<std::shared_ptr<Tensor>>
 PipelineStage::ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &inputs) {

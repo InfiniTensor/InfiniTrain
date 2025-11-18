@@ -2,7 +2,6 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_schedule.h"
 
 #include <cstddef>
-#include <cstdint>
 #include <vector>
 
 #include "glog/logging.h"
@@ -93,9 +92,11 @@ float ScheduleGPipe::StepMicroBatches(const std::vector<std::shared_ptr<Tensor>>
         for (int mb = 0; mb < n; ++mb) {
             auto out_tensor = outputs[mb][0];
 
-            auto gradient = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
+            auto dummy_gradient
+                = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
 
-            out_tensor->Backward(gradient);
+            out_tensor->Backward(dummy_gradient);
+            cudaStreamSynchronize(dynamic_cast<const CudaDevice *>(stage_->device())->Stream());
         }
     } else {
         for (int mb = 0; mb < n; ++mb) {

@@ -64,6 +64,8 @@ public:
     // Async communication functions
     std::shared_ptr<Work> AllReduceAsync(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const;
 
+    void Barrier() const;
+
 private:
     void InitSingleProcess(const std::vector<int> &ranks);
 
