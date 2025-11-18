@@ -28,7 +28,6 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
-#include "example/common/utils.h"
 #include "example/llama3/net.h"
 
 // I/O
@@ -124,8 +123,8 @@ void Train(const nn::parallel::Rank &rank) {
         }
 
         if (pp_world_size > 1) {
-            pp_pg = ProcessGroupFactory::Instance()->GetOrCreate(
-                GetPipelineParallelProcessGroupName(rank.thread_rank()), GetPipelineParallelGroupRanks(pp_world_size));
+            pp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetPipelineParallelProcessGroupName(rank.GlobalRank()),
+                                                                 GetPipelineParallelGroupRanks(rank.GlobalRank()));
             pp_rank = pp_pg->GetGroupRank(rank.thread_rank());
 
             nn::parallel::pp_rank = pp_rank;
@@ -299,7 +298,7 @@ void Train(const nn::parallel::Rank &rank) {
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
-        if (rank.thread_rank() == pp_world_size - 1) {
+        if (rank.GlobalRank() == pp_world_size - 1) {
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
                                       "DP={}, TP={}, SP={}, PP={})",
                                       step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
@@ -318,6 +317,10 @@ void Train(const nn::parallel::Rank &rank) {
     Profiler::Instance().Report("llama3.report", Profiler::SortBy::DeviceTimePercentage);
     Profiler::Instance().PrintRecords("llama3.records.log");
 #endif
+
+    if (pp_world_size > 1 && rank.IsMainRank()) {
+        pp_pg->Barrier();
+    }
 }
 
 int main(int argc, char *argv[]) {

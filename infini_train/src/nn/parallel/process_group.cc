@@ -411,6 +411,21 @@ std::vector<std::shared_ptr<Tensor>> ProcessGroup::NcclRecv(std::vector<std::sha
     }
     return tensors;
 }
+
+void ProcessGroup::Barrier() const {
+    // NOTE(dcj): use ncclAllreduce to barrier all processes before destroying the communicators
+    // FIXME(dcj): should only call by one rank
+    int dummy = 1;
+    std::vector<int> results(1, 0);
+
+    NCCL_CHECK(ncclGroupStart());
+    for (const auto &device : devices_) {
+        auto comm = device_comm_map_.at(device);
+        auto cuda_dev = dynamic_cast<const CudaDevice *>(device);
+        NCCL_CHECK(ncclAllReduce(&dummy, &dummy, 1, ncclInt, ncclSum, comm, cuda_dev->Stream()));
+    }
+    NCCL_CHECK(ncclGroupEnd());
+}
 #endif
 
 ProcessGroupFactory *ProcessGroupFactory::Instance() {

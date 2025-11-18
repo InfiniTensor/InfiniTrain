@@ -55,6 +55,8 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> NcclRecv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank) const;
 
+    void Barrier() const;
+
 private:
     void InitSingleProcess(const std::vector<int> &ranks);
 

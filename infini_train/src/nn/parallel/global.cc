@@ -111,8 +111,7 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
 
     layout_.sizes[DP] = data_parallel_size_;
     layout_.sizes[TP] = tensor_parallel_size_;
-    // FIXME(zbl): set PP size
-    layout_.sizes[PP] = 1;
+    layout_.sizes[PP] = pipeline_parallel_size_;
     layout_.InitStrides();
 
     initialized_ = true;
