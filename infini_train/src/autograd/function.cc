@@ -50,8 +50,9 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         auto &output_tensor = output_tensors[output_idx];
         // TODO(dcj): Mark if an output tensor need differentiable or not.
         output_tensor->set_requires_grad(output_requires_grad);
-        output_tensor->set_is_leaf(false);
         output_tensor->set_grad_fn(output_requires_grad ? shared_from_this() : nullptr);
+        output_tensor->set_is_leaf(!output_requires_grad
+                                   || ((output_tensor->grad_fn() == nullptr) && output_requires_grad));
         output_tensor->set_output_idx(output_idx);
     }
 

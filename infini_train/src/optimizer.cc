@@ -53,6 +53,10 @@ void Adam::Step() {
     for (size_t i = 0; i < params_.size(); ++i) {
         auto &param = params_[i];
         const auto &grad = param->grad();
+        if (!grad) {
+            LOG(INFO) << "Skipping param with null grad.";
+            continue;
+        }
         auto &m = m_[i];
         auto &v = v_[i];
 
