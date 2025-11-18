@@ -66,9 +66,7 @@ std::vector<std::shared_ptr<Tensor>> ISend::Forward(const std::vector<std::share
 
     pp_group->NcclSend(input_tensors, peer_rank_);
 
-    std::vector<std::shared_ptr<Tensor>> outputs;
-    for (auto t : input_tensors) { outputs.push_back(t); }
-    return outputs;
+    return input_tensors;
 }
 
 std::vector<std::shared_ptr<Tensor>> ISend::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
@@ -91,13 +89,7 @@ std::vector<std::shared_ptr<Tensor>> IRecv::Forward(const std::vector<std::share
         = ProcessGroupFactory::Instance()->Get(GetPipelineParallelProcessGroupName(src_device_->rank().thread_rank()));
     pp_group->NcclRecv(recv_tensors, peer_rank_);
 
-    std::vector<std::shared_ptr<Tensor>> outputs;
-    for (auto t : recv_tensors) {
-        auto t_item = std::make_shared<Tensor>(*t);
-        t_item->set_requires_grad(true);
-        outputs.push_back(t);
-    }
-    return outputs;
+    return recv_tensors;
 }
 
 void IRecv::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,

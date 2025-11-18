@@ -23,17 +23,11 @@ float PipelineSchedule::Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tens
     std::vector<std::shared_ptr<Tensor>> micro_batches(num_micro_batches_);
     std::vector<std::shared_ptr<Tensor>> target_mbs(num_micro_batches_);
     if (stage_->IsFirstStage()) {
-        {
-            autograd::NoGradGuard no_grad;
-            micro_batches = input->Split(input->Dims()[0] / num_micro_batches_);
-        }
+        micro_batches = input->Split(input->Dims()[0] / num_micro_batches_);
     }
 
     if (stage_->IsLastStage()) {
-        {
-            autograd::NoGradGuard no_grad;
-            target_mbs = target->Split(target->Dims()[0] / num_micro_batches_);
-        }
+        target_mbs = target->Split(target->Dims()[0] / num_micro_batches_);
     }
 
     const auto &optimizer = stage_->optimizer();
@@ -54,7 +48,6 @@ std::vector<std::shared_ptr<Tensor>> PipelineSchedule::ReceiveFromPrev() {
         // FIXME(jym): The data type between stages is not float32, which will cause a crash
         auto tensor = std::make_shared<Tensor>(shapes[i], DataType::kFLOAT32, stage_->device());
         tensor->set_requires_grad(true);
-        tensor->set_is_leaf(false);
         recv_tensors.push_back(tensor);
     }
 
