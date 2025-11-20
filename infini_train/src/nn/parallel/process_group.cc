@@ -412,9 +412,11 @@ std::vector<std::shared_ptr<Tensor>> ProcessGroup::NcclSend(std::vector<std::sha
         auto tensor = tensors[i];
         CHECK_NOTNULL(tensor);
 
-        auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
-        cudaStream_t stream = device_ptr->Stream();
-        ncclComm_t comm = device_comm_map_.at(device_ptr);
+        auto device = tensor->GetDevice();
+        device->SetDevice();
+
+        cudaStream_t stream = dynamic_cast<const CudaDevice *>(device)->Stream();
+        ncclComm_t comm = device_comm_map_.at(device);
 
         CHECK_NE(dest_rank, -1) << "Destination device not found in input tensors's devices";
 
@@ -435,9 +437,11 @@ std::vector<std::shared_ptr<Tensor>> ProcessGroup::NcclRecv(std::vector<std::sha
         auto tensor = tensors[i];
         CHECK_NOTNULL(tensor);
 
-        auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
-        cudaStream_t stream = device_ptr->Stream();
-        ncclComm_t comm = device_comm_map_.at(device_ptr);
+        auto device = tensor->GetDevice();
+        device->SetDevice();
+
+        cudaStream_t stream = dynamic_cast<const CudaDevice *>(device)->Stream();
+        ncclComm_t comm = device_comm_map_.at(device);
 
         CHECK_NE(src_rank, -1) << "Source device not found in input devices";
 
@@ -489,6 +493,7 @@ void ProcessGroup::Barrier() const {
 
     NCCL_CHECK(ncclGroupStart());
     for (const auto &device : devices_) {
+        device->SetDevice();
         auto comm = device_comm_map_.at(device);
         auto cuda_dev = dynamic_cast<const CudaDevice *>(device);
         NCCL_CHECK(ncclAllReduce(&dummy, &dummy, 1, ncclInt, ncclSum, comm, cuda_dev->Stream()));
