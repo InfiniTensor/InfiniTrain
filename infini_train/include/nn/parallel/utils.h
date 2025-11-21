@@ -4,15 +4,15 @@
 #include <vector>
 
 namespace infini_train::nn::parallel {
-std::string GetDataParallelProcessGroupName(int thread_rank);
+std::string GetDataParallelProcessGroupName(int global_rank);
 
-std::string GetTensorParallelProcessGroupName(int thread_rank);
+std::string GetTensorParallelProcessGroupName(int global_rank);
 
-std::string GetPipelineParallelProcessGroupName(int thread_rank);
+std::string GetPipelineParallelProcessGroupName(int global_rank);
 
-std::vector<int> GetDataParallelGroupRanks(int rank);
+std::vector<int> GetDataParallelGroupRanks(int global_rank);
 
-std::vector<int> GetTensorParallelGroupRanks(int rank);
+std::vector<int> GetTensorParallelGroupRanks(int global_rank);
 
-std::vector<int> GetPipelineParallelGroupRanks(int rank);
+std::vector<int> GetPipelineParallelGroupRanks(int global_rank);
 } // namespace infini_train::nn::parallel

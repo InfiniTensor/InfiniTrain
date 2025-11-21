@@ -145,7 +145,7 @@ void Train(const nn::parallel::Rank &rank) {
                 GetPipelineParallelProcessGroupName(rank.thread_rank()), GetPipelineParallelGroupRanks(pp_world_size));
             pp_rank = pp_pg->GetGroupRank(rank.thread_rank());
 
-            nn::parallel::pp_rank = pp_rank;
+            nn::parallel::pp_rank_tls = pp_rank;
         }
     } else {
         device = FLAGS_device == kDeviceCPU ? DeviceManager::Instance()->GetDefaultDevice()
@@ -231,7 +231,8 @@ void Train(const nn::parallel::Rank &rank) {
         auto shapes = std::vector<std::vector<int64_t>>{{FLAGS_batch_size, FLAGS_sequence_length, model_config.n_embd}};
 
         model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
-                                                                 pp_rank, std::make_shared<optimizers::SGD>(optimizer));
+                                                                 pp_rank, std::make_shared<optimizers::SGD>(optimizer),
+                                                                 rank.thread_rank());
     }
 
     LOG(INFO) << "start training";
