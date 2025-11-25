@@ -11,14 +11,16 @@
 #endif
 
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
-#include "infini_train/include/nn/parallel/work.h"
 
 namespace infini_train {
 class Tensor;
 class Device;
 namespace nn {
 class Module;
-}
+namespace parallel {
+class Work;
+} // namespace parallel
+} // namespace nn
 
 } // namespace infini_train
 

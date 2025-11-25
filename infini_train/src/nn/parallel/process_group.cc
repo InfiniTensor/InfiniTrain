@@ -1,6 +1,5 @@
 #include "infini_train/include/nn/parallel/process_group.h"
 
-#include <algorithm>
 #include <numeric>
 #include <vector>
 
@@ -14,6 +13,7 @@
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
@@ -57,8 +57,8 @@ ProcessGroup::ProcessGroup(const std::vector<int> &device_indices) : comm_size_(
 
         device->SetDevice();
         int low, high;
-        cudaDeviceGetStreamPriorityRange(&low, &high);
-        cudaStreamCreateWithPriority(&comm_streams_[i], cudaStreamNonBlocking, high);
+        CUDA_CHECK(cudaDeviceGetStreamPriorityRange(&low, &high));
+        CUDA_CHECK(cudaStreamCreateWithPriority(&comm_streams_[i], cudaStreamNonBlocking, high));
         device_stream_map_[device] = comm_streams_[i];
     }
 

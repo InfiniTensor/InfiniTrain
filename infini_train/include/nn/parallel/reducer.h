@@ -1,21 +1,34 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <vector>
 
-#include "infini_train/include/autograd/function_hook.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
-#include "infini_train/include/tensor.h"
+
+namespace infini_train {
+class Tensor;
+class Device;
+namespace autograd {
+class PostAccumulateGradHook;
+} // namespace autograd
+} // namespace infini_train
 
 namespace infini_train::nn::parallel {
+namespace {
+constexpr int kFirstBucketCapMB = 25;
+constexpr int kNormalBucketCapMB = 25;
+constexpr size_t kBytesPerMB = 1024ULL * 1024ULL;
+} // namespace
 
 // GradBucket passes bucket contents tensor to DDP communication hook.
 // ref: https://github.com/pytorch/pytorch/blob/main/torch/csrc/distributed/c10d/comm.hpp
 class GradBucket {
 public:
     explicit GradBucket(const std::vector<std::shared_ptr<Tensor>> &tensors) : tensors_(tensors) {}
-    const std::vector<std::shared_ptr<Tensor>> &getTensors() const { return tensors_; }
+    const std::vector<std::shared_ptr<Tensor>> &tensors() const { return tensors_; }
 
 private:
     std::vector<std::shared_ptr<Tensor>> tensors_;
@@ -34,11 +47,15 @@ struct ReducerOptions {
     // Ref: https://docs.pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html
 
     // Max capacity for each bucket(in MB)
-    size_t first_bucket_cap_mb = 128;
-    size_t normal_bucket_cap_mb = 512;
+    size_t first_bucket_cap_mb = kFirstBucketCapMB;
+    size_t normal_bucket_cap_mb = kNormalBucketCapMB;
 
     // When set true, map param.grad directly to the slice of bucket.flat(same address in memory) instead of memcpy
     bool gradient_as_bucket_view = true;
+
+    // Whether to enable gradient bucketing
+    // FIXME(zbl): should enable gradient bucketing by default
+    bool gradient_bucketing_enabled = true;
 };
 
 // DDP Reducer that handles gradient bucketing in backward
@@ -60,7 +77,7 @@ public:
     // Prepare bucket info for next step
     void PrepareForBackward();
 
-    // For custom DDP hook to overwrite the default AllReduce. T
+    // For custom DDP hook to overwrite the default AllReduce.
     // This can be used for algorithms like Gradient Compression/GossipGrad.
     // Hook is registered using `Reducer::RegisterCommHook()`.
     // TODO(zbl): Leave the placeholder for the moment

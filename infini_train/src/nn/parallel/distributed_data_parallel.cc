@@ -20,22 +20,32 @@ constexpr char kModuleName[] = "module";
 DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, int device_id,
                                                  const ReducerOptions &opts) {
     for (auto &param : module->Parameters()) {
-        CHECK_EQ(param->GetDevice()->Index(), device_id) << "All parameters must be on the same device as the module";
+        auto device = param->GetDevice();
+        CHECK_EQ(device->Index(), device_id) << "All parameters must be on the same device as the module";
+        if (!opts.gradient_bucketing_enabled) {
+            auto ddp_pg
+                = ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(device->rank().thread_rank()));
+            auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(
+                function::ReduceOpType::kAvg, ddp_pg);
+            param->RegisterPostAccumulateGradHook(std::move(hook));
+        }
     }
     for (auto &buffer : module->Buffers()) {
         CHECK_EQ(buffer->GetDevice()->Index(), device_id) << "All buffers must be on the same device as the module";
     }
     modules_[kModuleName] = std::move(module);
 
-    // Bucket Assignment
-    auto params = modules_[kModuleName]->Parameters();
-    const size_t first_cap_bytes = opts.first_bucket_cap_mb * 1024ULL * 1024ULL;
-    const size_t normal_cap_bytes = opts.normal_bucket_cap_mb * 1024ULL * 1024ULL;
-    std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
-    auto bucket_indices = ComputeBucketAssignmentBySize(params, bucket_size_limits);
+    if (opts.gradient_bucketing_enabled) {
+        // Bucket Assignment
+        auto params = modules_[kModuleName]->Parameters();
+        const size_t first_cap_bytes = opts.first_bucket_cap_mb * kBytesPerMB;
+        const size_t normal_cap_bytes = opts.normal_bucket_cap_mb * kBytesPerMB;
+        std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
+        auto bucket_indices = ComputeBucketAssignmentBySize(params, bucket_size_limits);
 
-    reducer_ = std::make_shared<Reducer>(params, bucket_indices, opts);
-    reducer_->AttachHooksToParameters();
+        reducer_ = std::make_shared<Reducer>(params, bucket_indices, opts);
+        reducer_->AttachHooksToParameters();
+    }
 }
 
 std::vector<std::shared_ptr<Tensor>>
