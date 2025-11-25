@@ -14,9 +14,9 @@
 
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/common/cuda/common_cuda.h"
-#include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/nn/parallel/work.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
 namespace {
@@ -106,7 +106,6 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
             return (std::hash<int>()(k.dev) << 1) ^ std::hash<int>()(static_cast<int>(k.dtype));
         }
     };
-    auto key_of = [&](size_t i) -> Key { return Key{tensors[i]->GetDevice()->Index(), tensors[i]->Dtype()}; };
 
     // Maintain the current state of each bucket
     struct State {
@@ -117,8 +116,6 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
 
     std::unordered_map<Key, State, KeyHash> states;
     std::vector<Key> key_order;
-    // NOTE(zbl): Assume combinations of (device, dtype) <= 8
-    states.reserve(8);
 
     std::vector<std::vector<size_t>> buckets_all;
     buckets_all.reserve(tensors.size());
@@ -130,9 +127,7 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
         }
     };
 
-    auto current_cap = [&](const State &s) -> size_t { return bucket_size_limits[s.limit_idx]; };
-
-    auto flush_current_bucket = [&](State &s) {
+    auto flushCurrentBucket = [&](State &s) {
         if (!s.current_tensors.empty()) {
             buckets_all.push_back(std::move(s.current_tensors));
             s.current_tensors.clear();
@@ -146,7 +141,7 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
         const auto &tensor = tensors[idx_in_order];
         CHECK(tensor);
 
-        const Key k = key_of(idx_in_order);
+        const Key k = Key{tensors[idx_in_order]->GetDevice()->Index(), tensors[idx_in_order]->Dtype()};
         auto it = states.find(k);
         if (it == states.end()) {
             it = states.emplace(k, State{}).first;
@@ -156,7 +151,7 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
 
         const size_t element_size_in_bytes = kDataTypeToSize.at(tensor->Dtype());
         const size_t bytes = tensor->NumElements() * element_size_in_bytes;
-        const size_t cap = current_cap(state);
+        const size_t cap = bucket_size_limits[state.limit_idx];
 
         // Assign current tensor to current bucket first
         state.current_tensors.push_back(idx_in_order);
@@ -164,12 +159,12 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
 
         // If current bucket is out of capacity, then flush and move on to the next bucket
         if (state.current_bytes >= cap) {
-            flush_current_bucket(state);
+            flushCurrentBucket(state);
         }
     }
 
     // Flush the last bucket of each group manually
-    for (auto &key : key_order) { flush_current_bucket(states[key]); }
+    for (auto &key : key_order) { flushCurrentBucket(states[key]); }
 
     return buckets_all;
 }
@@ -215,6 +210,7 @@ void Reducer::BuildBuckets(const std::vector<std::vector<size_t>> &bucket_indice
         CHECK(!bucket_indices[bucket_idx].empty());
         const auto &first_param = params_[bucket_indices[bucket_idx][0]];
         bucket.dtype = first_param->Dtype();
+        // FIXME(zbl): use global_rank() in multi-node settings
         bucket.device_rank = first_param->GetDevice()->rank().thread_rank();
 
         size_t total_elems = 0;
@@ -274,8 +270,8 @@ void Reducer::RebuildBuckets() {
         tensors_in_order.push_back(params_[global_idx]);
     }
 
-    const size_t first_cap_bytes = opts_.first_bucket_cap_mb * 1024ULL * 1024ULL;
-    const size_t normal_cap_bytes = opts_.normal_bucket_cap_mb * 1024ULL * 1024ULL;
+    const size_t first_cap_bytes = opts_.first_bucket_cap_mb * kBytesPerMB;
+    const size_t normal_cap_bytes = opts_.normal_bucket_cap_mb * kBytesPerMB;
     std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
     auto new_bucket_indices = ComputeBucketAssignmentBySize(tensors_in_order, bucket_size_limits, full_order);
 
@@ -364,8 +360,7 @@ void Reducer::MarkVariableReadyDense(size_t variable_index) {
     auto &bucket = buckets_.at(loc.bucket_index);
 
     // Record real order of bucket being ready
-    if (!has_rebuilt_bucket_ && variable_index < ready_seen_this_iter_.size()
-        && !ready_seen_this_iter_[variable_index]) {
+    if (!has_rebuilt_bucket_ && !ready_seen_this_iter_[variable_index]) {
         grad_ready_order_indices_.push_back(variable_index);
         ready_seen_this_iter_[variable_index] = 1;
     }

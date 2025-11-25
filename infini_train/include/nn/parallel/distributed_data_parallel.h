@@ -20,7 +20,7 @@ public:
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
 private:
-    std::shared_ptr<Reducer> reducer_;
+    std::shared_ptr<Reducer> reducer_ = nullptr;
 };
 
 } // namespace infini_train::nn::parallel

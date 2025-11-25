@@ -36,9 +36,9 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
                 kernel.Call<void>(grad_output, learning_rate_, grad);
             }
         } else {
-            // NOTE(zbl): check whether need to do copying instead of slicing
+            // FIXME(zbl): check whether need to do copying instead of slicing
             auto new_grad = std::make_shared<Tensor>(*grad_output.get(), 0, grad_output->Dims());
-            tensor_->set_grad(std::move(new_grad));
+            tensor_->set_grad(new_grad);
         }
         auto hook = tensor_->post_accumulate_grad_hook();
         if (hook != nullptr) {

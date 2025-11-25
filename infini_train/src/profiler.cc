@@ -84,6 +84,11 @@ void Profiler::StartRecord(const std::string &name, DeviceType device) {
         cudaStream_t stream = GetCudaStream();
         CUDA_CHECK(cudaEventCreate(&start));
         CUDA_CHECK(cudaEventCreate(&stop));
+
+        // Make sure the compute stream has done waiting, and ready for the execution of next op
+        CUDA_CHECK(cudaStreamSynchronize(stream));
+        // Start record after waiting
+        cpu_timing_map_[name] = std::chrono::high_resolution_clock::now();
         CUDA_CHECK(cudaEventRecord(start, stream));
         cuda_timing_map_[name] = {reinterpret_cast<void *>(start), reinterpret_cast<void *>(stop)};
         break;
