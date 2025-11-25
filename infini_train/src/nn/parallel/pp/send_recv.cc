@@ -1,6 +1,5 @@
 #include "infini_train/include/nn/parallel/pp/send_recv.h"
 
-#include <exception>
 #include <memory>
 #include <vector>
 
@@ -61,8 +60,8 @@ std::vector<std::shared_ptr<Tensor>> ISend::Forward(const std::vector<std::share
     const auto &input = input_tensors[0];
     input_device_ = input->GetDevice();
 
-    auto pp_group = ProcessGroupFactory::Instance()->Get(
-        GetPipelineParallelProcessGroupName(input_device_->rank().thread_rank()));
+    auto pp_group
+        = ProcessGroupFactory::Instance()->Get(GetPipelineParallelProcessGroupName(input_device_->rank().GlobalRank()));
 
     pp_group->NcclSend(input_tensors, peer_rank_);
 
@@ -77,8 +76,8 @@ std::vector<std::shared_ptr<Tensor>> ISend::Backward(const std::vector<std::shar
         recv_tensors.push_back(r_tensor);
     }
 
-    auto pp_group = ProcessGroupFactory::Instance()->Get(
-        GetPipelineParallelProcessGroupName(input_device_->rank().thread_rank()));
+    auto pp_group
+        = ProcessGroupFactory::Instance()->Get(GetPipelineParallelProcessGroupName(input_device_->rank().GlobalRank()));
 
     return pp_group->NcclRecv(recv_tensors, peer_rank_);
 }
@@ -86,7 +85,7 @@ std::vector<std::shared_ptr<Tensor>> ISend::Backward(const std::vector<std::shar
 std::vector<std::shared_ptr<Tensor>> IRecv::Forward(const std::vector<std::shared_ptr<Tensor>> &recv_tensors) {
     CHECK_NOTNULL(src_device_);
     auto pp_group
-        = ProcessGroupFactory::Instance()->Get(GetPipelineParallelProcessGroupName(src_device_->rank().thread_rank()));
+        = ProcessGroupFactory::Instance()->Get(GetPipelineParallelProcessGroupName(src_device_->rank().GlobalRank()));
     pp_group->NcclRecv(recv_tensors, peer_rank_);
 
     return recv_tensors;
@@ -102,7 +101,7 @@ void IRecv::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tenso
 
 std::vector<std::shared_ptr<Tensor>> IRecv::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     auto pp_group
-        = ProcessGroupFactory::Instance()->Get(GetPipelineParallelProcessGroupName(cur_device_->rank().thread_rank()));
+        = ProcessGroupFactory::Instance()->Get(GetPipelineParallelProcessGroupName(cur_device_->rank().GlobalRank()));
     return pp_group->NcclSend(grad_outputs, peer_rank_);
 }
 } // namespace functions
