@@ -28,7 +28,6 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
-#include "example/common/utils.h"
 #include "example/llama3/net.h"
 
 // I/O
@@ -110,25 +109,25 @@ void Train(const nn::parallel::Rank &rank) {
         device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, rank.thread_rank());
 
         if (ddp_world_size > 1) {
-            ddp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetDataParallelProcessGroupName(rank.thread_rank()),
-                                                                  GetDataParallelGroupRanks(rank.thread_rank()));
+            ddp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
+                                                                  GetDataParallelGroupRanks(rank.GlobalRank()));
             ddp_rank = ddp_pg->GetGroupRank(rank.thread_rank());
         }
 
         if (tp_world_size > 1) {
-            tp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetTensorParallelProcessGroupName(rank.thread_rank()),
-                                                                 GetTensorParallelGroupRanks(rank.thread_rank()));
+            tp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetTensorParallelProcessGroupName(rank.GlobalRank()),
+                                                                 GetTensorParallelGroupRanks(rank.GlobalRank()));
             tp_rank = tp_pg->GetGroupRank(rank.thread_rank());
             // NOTE(zbl): Reserved for VocabParallelEmbedding
             nn::parallel::tp_rank = tp_rank;
         }
 
         if (pp_world_size > 1) {
-            pp_pg = ProcessGroupFactory::Instance()->GetOrCreate(
-                GetPipelineParallelProcessGroupName(rank.thread_rank()), GetPipelineParallelGroupRanks(pp_world_size));
+            pp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetPipelineParallelProcessGroupName(rank.GlobalRank()),
+                                                                 GetPipelineParallelGroupRanks(rank.GlobalRank()));
             pp_rank = pp_pg->GetGroupRank(rank.thread_rank());
 
-            nn::parallel::pp_rank = pp_rank;
+            nn::parallel::pp_rank_tls = pp_rank;
         }
     } else {
         device = FLAGS_device == kDeviceCPU ? DeviceManager::Instance()->GetDefaultDevice()
@@ -210,8 +209,9 @@ void Train(const nn::parallel::Rank &rank) {
     if (pp_world_size > 1) {
         auto shapes = std::vector<std::vector<int64_t>>{{FLAGS_batch_size, FLAGS_sequence_length, model_config.n_embd}};
 
-        model = std::make_shared<nn::parallel::PipelineParallel>(
-            model, pp_world_size, num_micro_batches, shapes, pp_rank, std::make_shared<optimizers::Adam>(optimizer));
+        model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
+                                                                 pp_rank, std::make_shared<optimizers::Adam>(optimizer),
+                                                                 rank.thread_rank());
     }
 
     for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
@@ -274,6 +274,8 @@ void Train(const nn::parallel::Rank &rank) {
 
                 LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
                 if (ddp_world_size > 1) {
+                    // FIXME(dcj): should only allreduce lossf, not the entire loss tensor
+                    // FIXME(dcj): should use ddp_pg
                     function::AllReduce(loss, function::ReduceOpType::kAvg);
                 }
                 auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
@@ -293,13 +295,25 @@ void Train(const nn::parallel::Rank &rank) {
             y = std::make_shared<Tensor>(y->To(device));
 
             lossf = model->TrainStep({x}, {y}, loss_fn);
+
+            // FIXME(dcj): refactor this logic into a separate function
+            if (ddp_world_size > 1) {
+                auto loss_tensor = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kFLOAT32);
+                static_cast<float *>(loss_tensor->DataPtr())[0] = lossf;
+                auto loss_device_ptr = std::make_shared<Tensor>(loss_tensor->To(device));
+                function::AllReduce(loss_device_ptr, function::ReduceOpType::kAvg, ddp_pg);
+                lossf = static_cast<const float *>(
+                    loss_device_ptr->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
+            }
         }
 
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
-        if (rank.thread_rank() == pp_world_size - 1) {
+        if ((pp_world_size == 1 && rank.IsMainRank())
+            || (global::GetGroupId(global::PP, rank.GlobalRank()) == 0 && pp_world_size > 1
+                && pp_rank == pp_world_size - 1)) {
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
                                       "DP={}, TP={}, SP={}, PP={})",
                                       step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
@@ -318,6 +332,10 @@ void Train(const nn::parallel::Rank &rank) {
     Profiler::Instance().Report("llama3.report", Profiler::SortBy::DeviceTimePercentage);
     Profiler::Instance().PrintRecords("llama3.records.log");
 #endif
+
+    if (pp_world_size > 1 && rank.IsMainRank()) {
+        pp_pg->Barrier();
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -333,7 +351,7 @@ int main(int argc, char *argv[]) {
     if (FLAGS_nthread_per_process > 1) {
         std::vector<std::thread> threads;
         for (int idx = 0; idx < FLAGS_nthread_per_process; ++idx) {
-            nn::parallel::Rank rank(nn::parallel::global::GetLocalProcRank(), idx,
+            nn::parallel::Rank rank(nn::parallel::global::GetGlobalProcRank(), idx,
                                     nn::parallel::global::GetNprocPerNode(), FLAGS_nthread_per_process);
             threads.emplace_back(Train, rank);
         }

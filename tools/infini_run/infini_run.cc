@@ -1,8 +1,11 @@
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <regex>
 #include <string>
 #include <sys/wait.h>
-#include <vector>
-#include <cstdlib>
 #include <unistd.h>
+#include <vector>
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -12,17 +15,15 @@ DEFINE_int32(nproc_per_node, 1, "Number of processes per node");
 DEFINE_int32(node_rank, 0, "Rank of this node");
 DEFINE_string(rdzv_endpoint, "127.0.0.1:29500", "Rendezvous endpoint (host:port)");
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
     CHECK_GE(argc, 2) << "No training prgram specified!";
 
     std::string train_program = argv[1];
-    std::vector<char*> train_argv;
-    for (int i = 1; i < argc; ++i) {
-        train_argv.push_back(argv[i]);
-    }
+    std::vector<char *> train_argv;
+    for (int i = 1; i < argc; ++i) { train_argv.push_back(argv[i]); }
     train_argv.push_back(nullptr);
 
     int world_size = FLAGS_nnodes * FLAGS_nproc_per_node;
@@ -33,12 +34,16 @@ int main(int argc, char** argv) {
         pid_t pid = fork();
         if (pid == 0) {
             int global_proc_rank = FLAGS_node_rank * FLAGS_nproc_per_node + local_proc_rank;
-            setenv("GLOBAL_PROC_RANK", std::to_string(global_proc_rank).c_str(), 1);
-            setenv("LOCAL_PROC_RANK", std::to_string(local_proc_rank).c_str(), 1);
-            setenv("PROC_WORLD_SIZE", std::to_string(world_size).c_str(), 1);
+            setenv("NNODES", std::to_string(FLAGS_nnodes).c_str(), 1);
             setenv("NPROC_PER_NODE", std::to_string(FLAGS_nproc_per_node).c_str(), 1);
+
             setenv("MASTER_ADDR", master_addr.c_str(), 1);
             setenv("MASTER_PORT", master_port.c_str(), 1);
+
+            setenv("GLOBAL_PROC_RANK", std::to_string(global_proc_rank).c_str(), 1);
+            setenv("LOCAL_PROC_RANK", std::to_string(local_proc_rank).c_str(), 1);
+
+            setenv("PROC_WORLD_SIZE", std::to_string(world_size).c_str(), 1);
 
             execvp(train_program.c_str(), train_argv.data());
             perror("exec failed");

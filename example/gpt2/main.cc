@@ -29,7 +29,6 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
-#include "example/common/utils.h"
 #include "example/gpt2/net.h"
 
 // I/O
@@ -128,14 +127,14 @@ void Train(const nn::parallel::Rank &rank) {
         device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, rank.thread_rank());
 
         if (ddp_world_size > 1) {
-            ddp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetDataParallelProcessGroupName(rank.thread_rank()),
-                                                                  GetDataParallelGroupRanks(rank.thread_rank()));
+            ddp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
+                                                                  GetDataParallelGroupRanks(rank.GlobalRank()));
             ddp_rank = ddp_pg->GetGroupRank(rank.thread_rank());
         }
 
         if (tp_world_size > 1) {
-            tp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetTensorParallelProcessGroupName(rank.thread_rank()),
-                                                                 GetTensorParallelGroupRanks(rank.thread_rank()));
+            tp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetTensorParallelProcessGroupName(rank.GlobalRank()),
+                                                                 GetTensorParallelGroupRanks(rank.GlobalRank()));
             tp_rank = tp_pg->GetGroupRank(rank.thread_rank());
             // NOTE(zbl): Reserved for VocabParallelEmbedding
             nn::parallel::tp_rank = tp_rank;
@@ -146,7 +145,7 @@ void Train(const nn::parallel::Rank &rank) {
                 GetPipelineParallelProcessGroupName(rank.thread_rank()), GetPipelineParallelGroupRanks(pp_world_size));
             pp_rank = pp_pg->GetGroupRank(rank.thread_rank());
 
-            nn::parallel::pp_rank = pp_rank;
+            nn::parallel::pp_rank_tls = pp_rank;
         }
     } else {
         device = FLAGS_device == kDeviceCPU ? DeviceManager::Instance()->GetDefaultDevice()
@@ -232,7 +231,8 @@ void Train(const nn::parallel::Rank &rank) {
         auto shapes = std::vector<std::vector<int64_t>>{{FLAGS_batch_size, FLAGS_sequence_length, model_config.n_embd}};
 
         model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
-                                                                 pp_rank, std::make_shared<optimizers::SGD>(optimizer));
+                                                                 pp_rank, std::make_shared<optimizers::SGD>(optimizer),
+                                                                 rank.thread_rank());
     }
 
     LOG(INFO) << "start training";
@@ -321,7 +321,7 @@ void Train(const nn::parallel::Rank &rank) {
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
-        if (rank.thread_rank() == pp_world_size - 1) {
+        if (rank.GlobalRank() == pp_world_size - 1) {
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
                                       "DP={}, TP={}, SP={}, PP={})",
                                       step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
@@ -340,6 +340,10 @@ void Train(const nn::parallel::Rank &rank) {
     Profiler::Instance().Report("gpt2.report", Profiler::SortBy::DeviceTimePercentage);
     Profiler::Instance().PrintRecords("gpt2.records.log");
 #endif
+
+    if (pp_world_size > 1 && rank.IsMainRank()) {
+        pp_pg->Barrier();
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -355,7 +359,7 @@ int main(int argc, char *argv[]) {
     if (FLAGS_nthread_per_process > 1) {
         std::vector<std::thread> threads;
         for (int idx = 0; idx < FLAGS_nthread_per_process; ++idx) {
-            nn::parallel::Rank rank(nn::parallel::global::GetLocalProcRank(), idx,
+            nn::parallel::Rank rank(nn::parallel::global::GetGlobalProcRank(), idx,
                                     nn::parallel::global::GetNprocPerNode(), FLAGS_nthread_per_process);
             threads.emplace_back(Train, rank);
         }
