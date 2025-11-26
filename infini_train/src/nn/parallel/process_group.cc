@@ -359,8 +359,8 @@ std::shared_ptr<Work> ProcessGroup::AllReduceAsync(const std::shared_ptr<Tensor>
                              kNcclReduceOpMap.at(reduce_op), comm, comm_stream));
 
     CUDA_CHECK(cudaEventRecord(done_event, comm_stream));
-    CUDA_CHECK(cudaStreamWaitEvent(compute_stream, done_event, 0));
 
+    // Do not let compute stream wait for done event here
     return std::move(work);
 }
 #endif

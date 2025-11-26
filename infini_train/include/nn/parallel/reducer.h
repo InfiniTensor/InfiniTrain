@@ -14,11 +14,15 @@ class Device;
 namespace autograd {
 class PostAccumulateGradHook;
 } // namespace autograd
+namespace nn::parallel {
+class Work;
+} // namespace nn::parallel
 } // namespace infini_train
 
 namespace infini_train::nn::parallel {
 namespace {
-constexpr int kFirstBucketCapMB = 25;
+// Default bucket size in alignment with PyTorch
+constexpr int kFirstBucketCapMB = 1;
 constexpr int kNormalBucketCapMB = 25;
 constexpr size_t kBytesPerMB = 1024ULL * 1024ULL;
 } // namespace
@@ -126,6 +130,9 @@ private:
         // If `true`, then this implies that `bucket.variables.size() == 1`.
         // TODO(zbl): support logics for sparse gradient later
         bool expect_sparse_gradient = false;
+
+        // The result of async communication op
+        std::shared_ptr<Work> work = nullptr;
     };
 
 private:
@@ -135,6 +142,7 @@ private:
     void MarkVariableReadyDense(size_t variable_index);
     void MarkBucketReady(size_t bucket_index);
     void FinalizeBucketDense(size_t bucket_index);
+    void FinalizeBackward();
 
     void BuildBuckets(const std::vector<std::vector<size_t>> &bucket_indices);
     void InitializeBucketViews(Bucket &bucket);
@@ -161,6 +169,8 @@ private:
     bool need_rebuild_ = false;
     // Whether to buckets have already been rebuilt on the second step
     bool has_rebuilt_bucket_ = false;
+    // Whether all buckets are ready and backward can be finalized
+    bool all_buckets_ready_this_iter_ = false;
 };
 
 } // namespace infini_train::nn::parallel

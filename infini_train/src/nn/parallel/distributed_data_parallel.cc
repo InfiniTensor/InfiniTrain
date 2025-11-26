@@ -50,10 +50,11 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
 
 std::vector<std::shared_ptr<Tensor>>
 DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    auto outputs = modules_[kModuleName]->Forward(input_tensors);
     if (reducer_) {
         reducer_->PrepareForBackward();
     }
-    return modules_[kModuleName]->Forward(input_tensors);
+    return outputs;
 }
 
 } // namespace infini_train::nn::parallel

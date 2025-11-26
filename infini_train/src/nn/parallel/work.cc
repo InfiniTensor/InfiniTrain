@@ -5,6 +5,7 @@
 #ifdef USE_CUDA
 #include "infini_train/include/common/cuda/common_cuda.h"
 #endif
+#include "infini_train/include/device.h"
 
 namespace infini_train::nn::parallel {
 #ifdef USE_NCCL
@@ -14,7 +15,7 @@ std::exception_ptr makeCudaError(cudaError_t err) {
 }
 } // namespace
 
-WorkNccl::WorkNccl(const Device *device, ncclComm_t comm) : comm_(comm) {
+WorkNccl::WorkNccl(const Device *device, ncclComm_t comm) : device_(device), comm_(comm) {
     CUDA_CHECK(cudaEventCreateWithFlags(&ready_event_, cudaEventDisableTiming));
     CUDA_CHECK(cudaEventCreateWithFlags(&done_event_, cudaEventDisableTiming));
 }
@@ -28,7 +29,7 @@ WorkNccl::~WorkNccl() {
     }
 }
 
-bool WorkNccl::Wait(std::chrono::milliseconds timeout) {
+bool WorkNccl::WaitBlocking(std::chrono::milliseconds timeout) {
     // Block wait on host
     device_->SetDevice();
 
@@ -63,6 +64,13 @@ bool WorkNccl::Wait(std::chrono::milliseconds timeout) {
     }
 
     return false;
+}
+
+bool WorkNccl::WaitNonBlocking() {
+    // Non-blocking wait on compute stream
+    device_->SetDevice();
+    CUDA_CHECK(cudaStreamWaitEvent(dynamic_cast<const CudaDevice *>(device_)->Stream(), done_event_, 0));
+    return true;
 }
 
 void WorkNccl::Synchronize() const { CUDA_CHECK(cudaEventSynchronize(done_event_)); }

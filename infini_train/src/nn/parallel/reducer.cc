@@ -355,7 +355,7 @@ void Reducer::AttachHooksToParameters() {
 }
 
 void Reducer::MarkVariableReadyDense(size_t variable_index) {
-    std::lock_guard<std::mutex> g(mutex_);
+    std::unique_lock<std::mutex> lock(mutex_);
     const auto loc = locators_.at(variable_index);
     auto &bucket = buckets_.at(loc.bucket_index);
 
@@ -379,6 +379,13 @@ void Reducer::MarkVariableReadyDense(size_t variable_index) {
     if (should_launch_next) {
         MarkBucketReady(loc.bucket_index);
     }
+
+    // Release mutex
+    lock.unlock();
+
+    if (all_buckets_ready_this_iter_) {
+        FinalizeBackward();
+    }
 }
 
 void Reducer::MarkBucketReady(size_t bucket_index) {
@@ -395,19 +402,23 @@ void Reducer::MarkBucketReady(size_t bucket_index) {
         ++next_bucket_;
     }
 
-    // If all buckets are ready, then try to rebuild them in real order
-    if (next_bucket_ == buckets_.size() && !has_rebuilt_bucket_) {
-        if (!grad_ready_order_indices_.empty()) {
+    // If all buckets are ready
+    if (next_bucket_ == buckets_.size()) {
+        // Mark that it's time to finalize backward
+        all_buckets_ready_this_iter_ = true;
+
+        // Try to rebuild them in real order in the first round
+        if (!has_rebuilt_bucket_ && !grad_ready_order_indices_.empty()) {
             need_rebuild_ = true;
         }
     }
 }
 
 void Reducer::FinalizeBucketDense(size_t bucket_index) {
+    // NOTE(zbl): Assume mutex is on when entering this function
     auto &bucket = buckets_.at(bucket_index);
     auto ddp_pg = ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(bucket.device_rank));
 
-    std::shared_ptr<Work> work;
     if (comm_hook_) {
         std::vector<std::shared_ptr<Tensor>> bucket_view{bucket.contents};
         // NOTE(zbl): Custom hook should do in-place operations
@@ -415,16 +426,44 @@ void Reducer::FinalizeBucketDense(size_t bucket_index) {
         // FIXME(zbl): support custom hook later
         LOG(FATAL) << "Custom hook is not supported now";
     } else {
-        work = ddp_pg->AllReduceAsync(bucket.contents, function::ReduceOpType::kAvg);
+        bucket.work = ddp_pg->AllReduceAsync(bucket.contents, function::ReduceOpType::kAvg);
+    }
+}
+
+void Reducer::FinalizeBackward() {
+    // NOTE(zbl): Assume mutex is off when entering this function
+    // Collect all works with mutex on
+    std::vector<std::shared_ptr<Work>> works;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (auto &bucket : buckets_) {
+            if (bucket.work) {
+                works.push_back(bucket.work);
+            }
+        }
     }
 
-    if (!opts_.gradient_as_bucket_view) {
-        for (size_t i = 0; i < bucket.variables.size(); ++i) {
-            // NOTE(zbl): For better performance, try `bucket.variables[i]->set_grad(bucket.bucket_views_in[i]);`
-            //            to directly assgin bucket slice to grad instead of copying
-            CopyBucketToGrad(bucket.contents, bucket.variables[i]->grad(), bucket.offsets[i]);
-            // bucket.variables[i]->set_grad(bucket.bucket_views_in[i]);
+    // Wait for works to be done with mutex off
+    // Note(zbl): Use non-blocking stream wait instead of sync on host
+    for (auto &work : works) { work->WaitNonBlocking(); }
+
+    // Write grad back and reset with mutex on
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (auto &bucket : buckets_) {
+            if (!bucket.work) {
+                continue;
+            }
+            if (!opts_.gradient_as_bucket_view) {
+                for (size_t i = 0; i < bucket.variables.size(); ++i) {
+                    // NOTE(zbl): For better performance, try to directly assgin bucket slice to grad instead of copying
+                    //            i.e. bucket.variables[i]->set_grad(bucket.bucket_views_in[i]);
+                    CopyBucketToGrad(bucket.contents, bucket.variables[i]->grad(), bucket.offsets[i]);
+                }
+            }
+            bucket.work.reset();
         }
+        all_buckets_ready_this_iter_ = false;
     }
 }
 } // namespace infini_train::nn::parallel
