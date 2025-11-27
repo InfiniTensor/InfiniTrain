@@ -544,7 +544,7 @@ std::shared_ptr<Tensor> Tensor::RequiresGrad() {
 }
 
 std::shared_ptr<Tensor> Tensor::grad() const { return grad_; };
-void Tensor::set_grad(std::shared_ptr<Tensor> &grad) {
+void Tensor::set_grad(const std::shared_ptr<Tensor> &grad) {
     if (grad) {
         CHECK(grad->GetDevice() == GetDevice());
         CHECK(grad->Dtype() == Dtype());

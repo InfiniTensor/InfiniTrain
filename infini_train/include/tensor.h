@@ -196,7 +196,7 @@ public:
     std::shared_ptr<Tensor> RequiresGrad();
 
     std::shared_ptr<Tensor> grad() const;
-    void set_grad(std::shared_ptr<Tensor> &grad);
+    void set_grad(const std::shared_ptr<Tensor> &grad);
 
     bool requires_grad() const;
     void set_requires_grad(bool requires_grad);
