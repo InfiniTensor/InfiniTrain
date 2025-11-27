@@ -120,19 +120,15 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
     std::vector<std::vector<size_t>> buckets_all;
     buckets_all.reserve(tensors.size());
 
-    auto advance_limit = [&](State &s) {
-        // Iterate along bucket_size_limits till the last one everytime a bucket is completed
-        if (s.limit_idx + 1 < bucket_size_limits.size()) {
-            ++s.limit_idx;
-        }
-    };
-
-    auto flushCurrentBucket = [&](State &s) {
+    auto FlushCurrentBucket = [&](State &s) {
         if (!s.current_tensors.empty()) {
             buckets_all.push_back(std::move(s.current_tensors));
             s.current_tensors.clear();
             s.current_bytes = 0;
-            advance_limit(s);
+            // Iterate along bucket_size_limits till the last one everytime a bucket is completed
+            if (s.limit_idx + 1 < bucket_size_limits.size()) {
+                ++s.limit_idx;
+            }
         }
     };
 
@@ -159,12 +155,12 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
 
         // If current bucket is out of capacity, then flush and move on to the next bucket
         if (state.current_bytes >= cap) {
-            flushCurrentBucket(state);
+            FlushCurrentBucket(state);
         }
     }
 
     // Flush the last bucket of each group manually
-    for (auto &key : key_order) { flushCurrentBucket(states[key]); }
+    for (auto &key : key_order) { FlushCurrentBucket(states[key]); }
 
     return buckets_all;
 }
