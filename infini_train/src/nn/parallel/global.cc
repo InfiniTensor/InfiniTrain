@@ -229,15 +229,14 @@ std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
             }
         }
         // Sort by the order of Group ID
-        std::sort(groups.begin(), groups.end(),
-                  [](const auto& a, const auto& b) { return a.first < b.first; });
+        std::sort(groups.begin(), groups.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
 
         const int num_groups = NumGroups(L, ax);
         const auto name = AxisName(ax);
         oss << std::format("[{}] size={}, num_groups={}\n", name, L.sizes[ax], num_groups);
 
         // Iterate and print in the order of Group ID
-        for (const auto& pair : groups) {
+        for (const auto &pair : groups) {
             int gid = pair.first;
             int dp, tp, pp;
             std::tie(dp, tp, pp) = pair.second;
