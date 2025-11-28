@@ -20,7 +20,7 @@ namespace infini_train::nn::parallel::global {
 void Layout::InitStrides() {
     // Calculate strides
     int stride = 1;
-    for (int i = AXIS_COUNT - 1; i >= 0; --i) {
+    for (int i = 0; i < AXIS_COUNT; ++i) {
         const Axis ax = order[i];
         strides[ax] = stride;
         stride *= sizes[ax];
@@ -175,39 +175,6 @@ inline int NumGroups(const Layout &L, Axis target) {
 }
 } // namespace
 
-inline void AppendAxisGroups(std::ostringstream &oss, const Layout &L, Axis target) {
-    const int num_groups = NumGroups(L, target);
-    const auto name = AxisName(target);
-    oss << std::format("[{}] size={}, num_groups={}\n", name, L.sizes[target], num_groups);
-
-    for (int dp = 0; dp < (target == DP ? 1 : L.sizes[DP]); ++dp) {
-        for (int tp = 0; tp < (target == TP ? 1 : L.sizes[TP]); ++tp) {
-            for (int pp = 0; pp < (target == PP ? 1 : L.sizes[PP]); ++pp) {
-                const int gid = L.GroupId(target, dp, tp, pp);
-                auto ranks = L.GroupRanks(target, dp, tp, pp);
-                std::sort(ranks.begin(), ranks.end());
-
-                auto dp_size_str = (target == DP) ? "-" : std::to_string(dp);
-                auto tp_size_str = (target == TP) ? "-" : std::to_string(tp);
-                auto pp_size_str = (target == PP) ? "-" : std::to_string(pp);
-
-                std::string ranks_str;
-                ranks_str.reserve(ranks.size() * 4);
-
-                for (size_t i = 0; i < ranks.size(); ++i) {
-                    if (i > 0) {
-                        ranks_str += ", ";
-                    }
-                    ranks_str += std::to_string(ranks[i]);
-                }
-
-                oss << std::format("  - {} {} (dp={}, tp={}, pp={}): [{}]\n", name, gid, dp_size_str, tp_size_str,
-                                   pp_size_str, ranks_str);
-            }
-        }
-    }
-}
-
 /**
  * @brief Generate a human-readable overview of all parallel communication groups.
  *
@@ -251,7 +218,47 @@ std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
             oss << std::format("[{}] size={}, unenabled\n", AxisName(ax), L.sizes[ax]);
             continue;
         }
-        AppendAxisGroups(oss, L, ax);
+        // Build <Group ID, <DP, TP, PP>> mapping
+        std::vector<std::pair<int, std::tuple<int, int, int>>> groups;
+        for (int dp = 0; dp < (ax == DP ? 1 : L.sizes[DP]); ++dp) {
+            for (int tp = 0; tp < (ax == TP ? 1 : L.sizes[TP]); ++tp) {
+                for (int pp = 0; pp < (ax == PP ? 1 : L.sizes[PP]); ++pp) {
+                    int gid = L.GroupId(ax, dp, tp, pp);
+                    groups.emplace_back(gid, std::make_tuple(dp, tp, pp));
+                }
+            }
+        }
+        // Sort by the order of Group ID
+        std::sort(groups.begin(), groups.end(),
+                  [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        const int num_groups = NumGroups(L, ax);
+        const auto name = AxisName(ax);
+        oss << std::format("[{}] size={}, num_groups={}\n", name, L.sizes[ax], num_groups);
+
+        // Iterate and print in the order of Group ID
+        for (const auto& pair : groups) {
+            int gid = pair.first;
+            int dp, tp, pp;
+            std::tie(dp, tp, pp) = pair.second;
+            auto ranks = L.GroupRanks(ax, dp, tp, pp);
+            std::sort(ranks.begin(), ranks.end());
+
+            auto dp_size_str = (ax == DP) ? "-" : std::to_string(dp);
+            auto tp_size_str = (ax == TP) ? "-" : std::to_string(tp);
+            auto pp_size_str = (ax == PP) ? "-" : std::to_string(pp);
+
+            std::string ranks_str;
+            ranks_str.reserve(ranks.size() * 4);
+            for (size_t i = 0; i < ranks.size(); ++i) {
+                if (i > 0) {
+                    ranks_str += ", ";
+                }
+                ranks_str += std::to_string(ranks[i]);
+            }
+            oss << std::format("  - {} {} (dp={}, tp={}, pp={}): [{}]\n", name, gid, dp_size_str, tp_size_str,
+                               pp_size_str, ranks_str);
+        }
         if (a + 1 < AXIS_COUNT) {
             oss << "\n";
         }
