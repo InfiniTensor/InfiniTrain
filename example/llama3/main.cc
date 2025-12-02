@@ -127,7 +127,7 @@ void Train(const nn::parallel::Rank &rank) {
                                                                  GetPipelineParallelGroupRanks(rank.GlobalRank()));
             pp_rank = pp_pg->GetGroupRank(rank.thread_rank());
 
-            nn::parallel::pp_rank_tls = pp_rank;
+            nn::parallel::pp_rank = pp_rank;
         }
     } else {
         device = FLAGS_device == kDeviceCPU ? DeviceManager::Instance()->GetDefaultDevice()
@@ -332,10 +332,6 @@ void Train(const nn::parallel::Rank &rank) {
     Profiler::Instance().Report("llama3.report", Profiler::SortBy::DeviceTimePercentage);
     Profiler::Instance().PrintRecords("llama3.records.log");
 #endif
-
-    if (pp_world_size > 1 && rank.IsMainRank()) {
-        pp_pg->Barrier();
-    }
 }
 
 int main(int argc, char *argv[]) {

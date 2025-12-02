@@ -16,7 +16,7 @@ namespace infini_train::nn::parallel {
 class PipelineStage;
 class PipelineSchedule;
 
-extern thread_local int pp_rank_tls;
+extern thread_local int pp_rank;
 
 class PipelineParallel : public Module {
 public:

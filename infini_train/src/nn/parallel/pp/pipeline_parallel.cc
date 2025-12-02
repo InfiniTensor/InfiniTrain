@@ -15,7 +15,7 @@ namespace {
 constexpr char kModuleName[] = "module";
 } // namespace
 
-thread_local int pp_rank_tls = 0;
+thread_local int pp_rank = 0;
 
 void PipelineParallel::BuildPipelineStage(const std::shared_ptr<Module> &module,
                                           const std::shared_ptr<Optimizer> &optimizer,
