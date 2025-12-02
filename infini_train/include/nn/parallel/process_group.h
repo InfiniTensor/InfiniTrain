@@ -32,7 +32,6 @@ namespace infini_train::nn::parallel {
 class ProcessGroup {
 public:
     explicit ProcessGroup(const std::string &process_group_name, const std::vector<int> &device_indices);
-    ~ProcessGroup();
 
     ~ProcessGroup();
 
@@ -70,6 +69,8 @@ private:
     void InitSingleProcess(const std::vector<int> &ranks);
 
     void InitMultiProcess(const std::vector<int> &ranks);
+
+    void InitStreams();
 
 private:
     std::vector<ncclComm_t> comms_;

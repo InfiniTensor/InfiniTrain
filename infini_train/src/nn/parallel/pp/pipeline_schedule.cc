@@ -96,7 +96,6 @@ float ScheduleGPipe::StepMicroBatches(const std::vector<std::shared_ptr<Tensor>>
                 = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
 
             out_tensor->Backward(dummy_gradient);
-            cudaStreamSynchronize(dynamic_cast<const CudaDevice *>(stage_->device())->Stream());
         }
     } else {
         for (int mb = 0; mb < n; ++mb) {

@@ -145,7 +145,7 @@ void Train(const nn::parallel::Rank &rank) {
                 GetPipelineParallelProcessGroupName(rank.thread_rank()), GetPipelineParallelGroupRanks(pp_world_size));
             pp_rank = pp_pg->GetGroupRank(rank.thread_rank());
 
-            nn::parallel::pp_rank_tls = pp_rank;
+            nn::parallel::pp_rank = pp_rank;
         }
     } else {
         device = FLAGS_device == kDeviceCPU ? DeviceManager::Instance()->GetDefaultDevice()

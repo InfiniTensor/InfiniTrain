@@ -89,16 +89,33 @@ namespace infini_train::nn::parallel {
 #ifdef USE_NCCL
 ProcessGroup::ProcessGroup(const std::string &process_group_name, const std::vector<int> &ranks)
     : world_size_(ranks.size()), name_(process_group_name) {
+    int current_device = -1;
+    CUDA_CHECK(cudaGetDevice(&current_device));
+
     if (global::GetNnodes() == 1 && global::GetNprocPerNode() == 1) {
         InitSingleProcess(ranks);
     } else {
         InitMultiProcess(ranks);
     }
+    InitStreams();
+
+    CUDA_CHECK(cudaSetDevice(current_device));
 }
 
 ProcessGroup::~ProcessGroup() {
     if (is_main_process_) {
         CleanupNcclIdFile(name_);
+    }
+
+    for (auto &s : comm_streams_) {
+        if (s) {
+            cudaStreamDestroy(s);
+        }
+    }
+    for (auto &c : comms_) {
+        if (c) {
+            ncclCommDestroy(c);
+        }
     }
 }
 
@@ -132,7 +149,6 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
         ReadNcclUniqueId(nccl_id, name_);
     }
 
-    std::vector<int> device_indices;
     NCCL_CHECK(ncclGroupStart());
     for (int i = 0; i < n_threads; ++i) {
         int global_thread_rank = lower_rank + i;
@@ -152,44 +168,18 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
         }
     }
     NCCL_CHECK(ncclGroupEnd());
-
-    Init(device_indices);
 }
 
-void ProcessGroup::Init(const std::vector<int> &device_indices) {
-    comm_streams_.resize(world_size_);
-    int current_device = -1;
-    CUDA_CHECK(cudaGetDevice(&current_device));
+void ProcessGroup::InitStreams() {
+    int device_size = devices_.size();
+    comm_streams_.resize(device_size);
 
-    // FIXME(dcj): This is a temporary solution to get the device and comm for each thread.
-    int local_comm_size = std::min(static_cast<int>(device_indices.size()), global::GetNthreadPerProc());
-
-    for (int i = 0; i < local_comm_size; ++i) {
-        auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, device_indices[i]);
-        devices_.push_back(device);
-        device_comm_map_[device] = comms_[i];
-        thread_group_rank_map_[device->rank().thread_rank()] = i + global::GetGlobalProcRank() * local_comm_size;
-
-        device->SetDevice();
+    for (int i = 0; i < device_size; ++i) {
+        devices_[i]->SetDevice();
         int low, high;
         CUDA_CHECK(cudaDeviceGetStreamPriorityRange(&low, &high));
         CUDA_CHECK(cudaStreamCreateWithPriority(&comm_streams_[i], cudaStreamNonBlocking, high));
-        device_stream_map_[device] = comm_streams_[i];
-    }
-
-    CUDA_CHECK(cudaSetDevice(current_device));
-}
-
-ProcessGroup::~ProcessGroup() {
-    for (auto &s : comm_streams_) {
-        if (s) {
-            cudaStreamDestroy(s);
-        }
-    }
-    for (auto &c : comms_) {
-        if (c) {
-            ncclCommDestroy(c);
-        }
+        device_stream_map_[devices_[i]] = comm_streams_[i];
     }
 }
 

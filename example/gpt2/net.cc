@@ -179,7 +179,7 @@ Block::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
 GPT2::GPT2(const GPT2Config &config) : config_(config) {
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
     auto [is_first_stage, is_last_stage, start_layer, end_layer]
-        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, nn::parallel::pp_rank_tls);
+        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, nn::parallel::pp_rank);
 
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
 
@@ -230,7 +230,7 @@ GPT2::GPT2(const GPT2Config &config) : config_(config) {
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
 GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
-    int pp_rank = nn::parallel::pp_rank_tls;
+    int pp_rank = nn::parallel::pp_rank;
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
     bool is_first_stage = (pp_rank == 0);
     bool is_last_stage = (pp_rank == pp_size - 1);
@@ -353,7 +353,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
 
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
     auto [is_first_stage, is_last_stage, start_layer, end_layer]
-        = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size, nn::parallel::pp_rank_tls);
+        = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size, nn::parallel::pp_rank);
 
     auto tp_rank = nn::parallel::tp_rank;
     // calculate xx_size_per_partition
