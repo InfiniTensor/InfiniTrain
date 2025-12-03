@@ -13,5 +13,5 @@ int Rank::thread_size() const { return thread_size_; }
 int Rank::GlobalRank() const { return process_rank_ * thread_size_ + thread_rank_; }
 
 bool Rank::IsParallel() const { return thread_size_ * process_size_ > 1; }
-bool Rank::IsMainRank() const { return thread_rank_ == 0; }
+bool Rank::IsMainRank() const { return GlobalRank() == 0; }
 } // namespace infini_train::nn::parallel

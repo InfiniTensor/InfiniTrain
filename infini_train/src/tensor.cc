@@ -1,8 +1,10 @@
 #include "infini_train/include/tensor.h"
+#include "infini_train/include/datatype.h"
 
 #include <cstring>
 #include <fstream>
 #include <functional>
+#include <memory>
 #include <numeric>
 
 #ifdef USE_CUDA
@@ -87,6 +89,28 @@ Tensor::Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &
     : buffer_(tensor.buffer_), offset_(tensor.offset_ + offset), dims_(dims),
       num_elements_(std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>())), dtype_(tensor.dtype_) {
     CHECK_LE(offset_ + kDataTypeToSize.at(dtype_) * num_elements_, buffer_->Size());
+}
+
+Tensor::Tensor(const float *data, const std::vector<int64_t> &dims, DataType dtype, const Device *device)
+    : dims_(dims), dtype_(dtype),
+      num_elements_(std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>())) {
+    // TODO(dcj): support more datatype
+    CHECK(dtype == DataType::kFLOAT32);
+
+    buffer_ = std::make_shared<TensorBuffer>(device, kDataTypeToSize.at(dtype) * num_elements_);
+    switch (device->Type()) {
+    case DeviceType::kCPU:
+        memcpy(buffer_->DataPtr(), data, buffer_->Size());
+        break;
+#ifdef USE_CUDA
+    case DeviceType::kCUDA:
+        CUDA_CHECK(cudaMemcpyAsync(buffer_->DataPtr(), data, buffer_->Size(), cudaMemcpyHostToDevice,
+                                   dynamic_cast<const CudaDevice *>(device)->Stream()));
+        break;
+#endif
+    default:
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device->Type());
+    }
 }
 
 const Device *Tensor::GetDevice() const { return buffer_->GetDevice(); }

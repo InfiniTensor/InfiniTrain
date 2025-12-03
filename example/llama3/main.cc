@@ -273,11 +273,7 @@ void Train(const nn::parallel::Rank &rank) {
                 autocast_guard.Disable();
 
                 LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
-                if (ddp_world_size > 1) {
-                    // FIXME(dcj): should only allreduce lossf, not the entire loss tensor
-                    // FIXME(dcj): should use ddp_pg
-                    function::AllReduce(loss, function::ReduceOpType::kAvg);
-                }
+
                 auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
                 lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
                 LOG(INFO) << "Rank " << rank.thread_rank() << ": start backward";
@@ -294,26 +290,21 @@ void Train(const nn::parallel::Rank &rank) {
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
-            lossf = model->TrainStep({x}, {y}, loss_fn, dtype);;
+            lossf = model->TrainStep({x}, {y}, loss_fn, dtype);
+        }
 
-            // FIXME(dcj): refactor this logic into a separate function
-            if (ddp_world_size > 1) {
-                auto loss_tensor = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kFLOAT32);
-                static_cast<float *>(loss_tensor->DataPtr())[0] = lossf;
-                auto loss_device_ptr = std::make_shared<Tensor>(loss_tensor->To(device));
-                function::AllReduce(loss_device_ptr, function::ReduceOpType::kAvg, ddp_pg);
-                lossf = static_cast<const float *>(
-                    loss_device_ptr->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
-            }
+        if (ddp_world_size > 1) {
+            auto lossf_tensor = std::make_shared<Tensor>(&lossf, std::vector<int64_t>{}, DataType::kFLOAT32, device);
+            function::AllReduce(lossf_tensor, function::ReduceOpType::kAvg, ddp_pg);
+            lossf = static_cast<const float *>(
+                lossf_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
         }
 
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
-        if ((pp_world_size == 1 && rank.IsMainRank())
-            || (global::GetGroupId(global::PP, rank.GlobalRank()) == 0 && pp_world_size > 1
-                && pp_rank == pp_world_size - 1)) {
+        if (rank.IsMainRank()) {
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
                                       "DP={}, TP={}, SP={}, PP={})",
                                       step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
