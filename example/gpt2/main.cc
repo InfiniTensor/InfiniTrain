@@ -296,9 +296,7 @@ void Train(const nn::parallel::Rank &rank) {
                 autocast_guard.Disable();
 
                 LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
-                if (ddp_world_size > 1) {
-                    function::AllReduce(loss, function::ReduceOpType::kAvg);
-                }
+
                 auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
                 lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
                 LOG(INFO) << "Rank " << rank.thread_rank() << ": start backward";
@@ -317,11 +315,19 @@ void Train(const nn::parallel::Rank &rank) {
 
             lossf = model->TrainStep({x}, {y}, loss_fn, dtype);
         }
+
+        if (ddp_world_size > 1) {
+            auto lossf_tensor = std::make_shared<Tensor>(&lossf, std::vector<int64_t>{}, DataType::kFLOAT32, device);
+            function::AllReduce(lossf_tensor, function::ReduceOpType::kAvg, ddp_pg);
+            lossf = static_cast<const float *>(
+                lossf_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
+        }
+
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
-        if (rank.GlobalRank() == pp_world_size - 1) {
+        if (rank.IsMainRank()) {
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
                                       "DP={}, TP={}, SP={}, PP={})",
                                       step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
@@ -340,10 +346,6 @@ void Train(const nn::parallel::Rank &rank) {
     Profiler::Instance().Report("gpt2.report", Profiler::SortBy::DeviceTimePercentage);
     Profiler::Instance().PrintRecords("gpt2.records.log");
 #endif
-
-    if (pp_world_size > 1 && rank.IsMainRank()) {
-        pp_pg->Barrier();
-    }
 }
 
 int main(int argc, char *argv[]) {
