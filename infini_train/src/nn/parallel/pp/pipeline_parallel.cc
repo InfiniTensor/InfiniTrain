@@ -29,14 +29,14 @@ void PipelineParallel::SetupSchedule(int num_micro_batches) {
 
 float PipelineParallel::TrainStep(const std::vector<std::shared_ptr<Tensor>> &input,
                                   const std::vector<std::shared_ptr<Tensor>> &target,
-                                  const std::shared_ptr<Module> &loss_fn) {
+                                  const std::shared_ptr<Module> &loss_fn, DataType dtype) {
     std::shared_ptr<Tensor> stage_input;
     std::shared_ptr<Tensor> stage_target = target[0];
     if (rank_ == 0) {
         stage_input = input[0];
     }
 
-    return schedule_->Step(stage_input, stage_target, loss_fn);
+    return schedule_->Step(stage_input, stage_target, loss_fn, dtype);
 }
 
 std::tuple<bool, bool, int, int> PipelineParallel::GetStageInfo(int total_layers, int pp_size) {
