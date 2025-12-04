@@ -2,7 +2,6 @@
 
 #include <cstdlib>
 #include <format>
-#include <nccl.h>
 #include <string>
 
 #include "glog/logging.h"
@@ -152,6 +151,11 @@ int GlobalEnv::tensor_parallel_size() const {
     return tensor_parallel_size_;
 }
 
+int GlobalEnv::sequence_parallel_size() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return sequence_parallel_enabled_ ? tensor_parallel_size_ : 1;
+}
+
 bool GlobalEnv::sequence_parallel_enabled() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return sequence_parallel_enabled_;
@@ -185,39 +189,6 @@ inline int NumGroups(const Layout &L, Axis target) {
     return n;
 }
 } // namespace
-
-inline void AppendAxisGroups(std::ostringstream &oss, const Layout &L, Axis target) {
-    const int num_groups = NumGroups(L, target);
-    const auto name = AxisName(target);
-    oss << std::format("[{}] size={}, num_groups={}\n", name, L.sizes[target], num_groups);
-
-    for (int dp = 0; dp < (target == DP ? 1 : L.sizes[DP]); ++dp) {
-        for (int tp = 0; tp < (target == TP ? 1 : L.sizes[TP]); ++tp) {
-            for (int pp = 0; pp < (target == PP ? 1 : L.sizes[PP]); ++pp) {
-                const int gid = L.GroupId(target, dp, tp, pp);
-                auto ranks = L.GroupRanks(target, dp, tp, pp);
-                std::sort(ranks.begin(), ranks.end());
-
-                auto dp_size_str = (target == DP) ? "-" : std::to_string(dp);
-                auto tp_size_str = (target == TP) ? "-" : std::to_string(tp);
-                auto pp_size_str = (target == PP) ? "-" : std::to_string(pp);
-
-                std::string ranks_str;
-                ranks_str.reserve(ranks.size() * 4);
-
-                for (size_t i = 0; i < ranks.size(); ++i) {
-                    if (i > 0) {
-                        ranks_str += ", ";
-                    }
-                    ranks_str += std::to_string(ranks[i]);
-                }
-
-                oss << std::format("  - {} {} (dp={}, tp={}, pp={}): [{}]\n", name, gid, dp_size_str, tp_size_str,
-                                   pp_size_str, ranks_str);
-            }
-        }
-    }
-}
 
 std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
     std::ostringstream oss;

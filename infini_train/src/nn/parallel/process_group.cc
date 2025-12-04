@@ -127,7 +127,7 @@ void ProcessGroup::InitSingleProcess(const std::vector<int> &ranks) {
         auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, ranks[i]);
         devices_.push_back(device);
         device_comm_map_[device] = comms_[i];
-        thread_group_rank_map_[device->rank().thread_rank()] = i;
+        global_group_rank_map_[device->rank().GlobalRank()] = i;
     }
 }
 
@@ -162,7 +162,7 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
             comms_.push_back(comm);
 
             auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, i);
-            thread_group_rank_map_[device->rank().thread_rank()] = group_rank;
+            global_group_rank_map_[device->rank().GlobalRank()] = group_rank;
             devices_.push_back(device);
             device_comm_map_[device] = comm;
         }
@@ -183,7 +183,7 @@ void ProcessGroup::InitStreams() {
     }
 }
 
-int ProcessGroup::GetGroupRank(int thread_rank) const { return thread_group_rank_map_.at(thread_rank); }
+int ProcessGroup::GetGroupRank(int global_rank) const { return global_group_rank_map_.at(global_rank); }
 
 void ProcessGroup::AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const {
     void *buffer = tensor->DataPtr();
@@ -475,21 +475,6 @@ std::shared_ptr<Work> ProcessGroup::AllReduceAsync(const std::shared_ptr<Tensor>
     return std::move(work);
 }
 
-void ProcessGroup::Barrier() const {
-    // NOTE(dcj): use ncclAllreduce to barrier all processes before destroying the communicators
-    // FIXME(dcj): should only call by one rank
-    int dummy = 1;
-    std::vector<int> results(1, 0);
-
-    NCCL_CHECK(ncclGroupStart());
-    for (const auto &device : devices_) {
-        device->SetDevice();
-        auto comm = device_comm_map_.at(device);
-        auto cuda_dev = dynamic_cast<const CudaDevice *>(device);
-        NCCL_CHECK(ncclAllReduce(&dummy, &dummy, 1, ncclInt, ncclSum, comm, cuda_dev->Stream()));
-    }
-    NCCL_CHECK(ncclGroupEnd());
-}
 #endif
 
 ProcessGroupFactory *ProcessGroupFactory::Instance() {

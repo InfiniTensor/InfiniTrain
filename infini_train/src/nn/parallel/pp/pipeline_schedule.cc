@@ -2,6 +2,7 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_schedule.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
