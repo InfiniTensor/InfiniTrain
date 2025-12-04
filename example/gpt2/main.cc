@@ -315,7 +315,7 @@ void Train(const nn::parallel::Rank &rank) {
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
-            lossf = model->TrainStep({x}, {y}, loss_fn);
+            lossf = model->TrainStep({x}, {y}, loss_fn, dtype);
         }
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();

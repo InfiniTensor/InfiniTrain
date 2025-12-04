@@ -3,6 +3,8 @@
 #include <memory>
 #include <vector>
 
+#include "infini_train/include/datatype.h"
+
 namespace infini_train {
 class Tensor;
 namespace nn {
@@ -22,11 +24,11 @@ public:
     virtual ~PipelineSchedule() = default;
 
     float Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tensor> target,
-               const std::shared_ptr<nn::Module> &loss_fn);
+               const std::shared_ptr<nn::Module> &loss_fn, DataType dtype);
 
     virtual float StepMicroBatches(const std::vector<std::shared_ptr<Tensor>> &arg_mbs,
                                    const std::vector<std::shared_ptr<Tensor>> &target_mbs,
-                                   const std::shared_ptr<nn::Module> &loss_fn)
+                                   const std::shared_ptr<nn::Module> &loss_fn, DataType dtype)
         = 0;
 
     std::vector<std::shared_ptr<Tensor>> ReceiveFromPrev();
@@ -45,7 +47,7 @@ public:
 
     float StepMicroBatches(const std::vector<std::shared_ptr<Tensor>> &arg_mbs,
                            const std::vector<std::shared_ptr<Tensor>> &target_mbs,
-                           const std::shared_ptr<nn::Module> &loss_fn) override;
+                           const std::shared_ptr<nn::Module> &loss_fn, DataType dtype) override;
 };
 
 class Schedule1F1B : public PipelineSchedule {
@@ -55,7 +57,7 @@ public:
 
     float StepMicroBatches(const std::vector<std::shared_ptr<Tensor>> &arg_mbs,
                            const std::vector<std::shared_ptr<Tensor>> &target_mbs,
-                           const std::shared_ptr<nn::Module> &loss_fn) override;
+                           const std::shared_ptr<nn::Module> &loss_fn, DataType dtype) override;
 };
 
 } // namespace infini_train::nn::parallel

@@ -25,7 +25,8 @@ public:
                      const std::shared_ptr<Optimizer> &optimizer);
 
     float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input,
-                    const std::vector<std::shared_ptr<Tensor>> &target, const std::shared_ptr<nn::Module> &loss_fn);
+                    const std::vector<std::shared_ptr<Tensor>> &target, const std::shared_ptr<nn::Module> &loss_fn,
+                    DataType dtype);
 
     static std::tuple<bool, bool, int, int> GetStageInfo(int total_layers, int pp_size);
 

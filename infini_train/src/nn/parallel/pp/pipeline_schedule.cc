@@ -7,6 +7,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/autocast.h"
 #include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/init.h"
@@ -19,7 +20,7 @@
 namespace infini_train::nn::parallel {
 
 float PipelineSchedule::Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tensor> target,
-                             const std::shared_ptr<Module> &loss_fn) {
+                             const std::shared_ptr<Module> &loss_fn, DataType dtype) {
     std::vector<std::shared_ptr<Tensor>> micro_batches(num_micro_batches_);
     std::vector<std::shared_ptr<Tensor>> target_mbs(num_micro_batches_);
     if (stage_->IsFirstStage()) {
@@ -34,7 +35,7 @@ float PipelineSchedule::Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tens
 
     optimizer->ZeroGrad();
 
-    float lossf = StepMicroBatches(micro_batches, target_mbs, loss_fn);
+    float lossf = StepMicroBatches(micro_batches, target_mbs, loss_fn, dtype);
 
     optimizer->Step();
 
@@ -60,7 +61,7 @@ std::vector<std::shared_ptr<Tensor>> PipelineSchedule::SendToNext(const std::vec
 
 float ScheduleGPipe::StepMicroBatches(const std::vector<std::shared_ptr<Tensor>> &microbatch_inputs,
                                       const std::vector<std::shared_ptr<Tensor>> &microbatch_targets,
-                                      const std::shared_ptr<Module> &loss_fn) {
+                                      const std::shared_ptr<Module> &loss_fn, DataType dtype) {
     const auto n = num_micro_batches_;
     if (n == 0) {
         return 0.0f;
@@ -70,6 +71,8 @@ float ScheduleGPipe::StepMicroBatches(const std::vector<std::shared_ptr<Tensor>>
 
     // ======== Forward Pass ========
     for (int mb = 0; mb < n; ++mb) {
+        infini_train::AutocastGuard autocast_guard(stage_->device()->Type(), dtype);
+
         std::vector<std::shared_ptr<Tensor>> inputs;
         if (stage_->IsFirstStage()) {
             inputs = {microbatch_inputs[mb]};
@@ -103,13 +106,18 @@ float ScheduleGPipe::StepMicroBatches(const std::vector<std::shared_ptr<Tensor>>
                 LOG(FATAL) << "Output or target is null at mb=" << mb;
             }
 
-            auto target_on_device = target->To(output->GetDevice());
-            auto loss = loss_fn->Forward({output, std::make_shared<Tensor>(target_on_device)})[0];
-            if (!loss) {
-                LOG(FATAL) << "[ERROR] loss is nullptr at mb = " << mb;
+            std::shared_ptr<Tensor> loss;
+            {
+                infini_train::AutocastGuard autocast_guard(stage_->device()->Type(), dtype);
+
+                auto target_on_device = target->To(output->GetDevice());
+                loss = loss_fn->Forward({output, std::make_shared<Tensor>(target_on_device)})[0];
+                if (!loss) {
+                    LOG(FATAL) << "[ERROR] loss is nullptr at mb = " << mb;
+                }
+                loss = loss / n;
             }
 
-            loss = loss / n;
             auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
             total_loss += static_cast<const float *>(loss_cpu.DataPtr())[0];
 
