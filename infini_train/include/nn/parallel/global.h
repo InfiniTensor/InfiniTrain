@@ -43,6 +43,8 @@ public:
 
     int tensor_parallel_size() const;
 
+    int sequence_parallel_size() const;
+
     bool sequence_parallel_enabled() const;
 
     int data_parallel_size() const;
@@ -94,6 +96,7 @@ inline int GetGlobalProcRank() { return GlobalEnv::Instance().global_proc_rank()
 inline int GetLocalProcRank() { return GlobalEnv::Instance().local_proc_rank(); }
 
 inline int GetTensorParallelSize() { return GlobalEnv::Instance().tensor_parallel_size(); }
+inline int GetSequenceParallelSize() { return GlobalEnv::Instance().sequence_parallel_size(); }
 inline bool GetSequenceParallelEnabled() { return GlobalEnv::Instance().sequence_parallel_enabled(); }
 inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
 inline int GetPipelineParallelSize() { return GlobalEnv::Instance().pipeline_parallel_size(); }

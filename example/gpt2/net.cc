@@ -5,7 +5,6 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
-#include <stdexcept>
 #include <string>
 #include <tuple>
 
@@ -239,7 +238,8 @@ GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     auto x1 = x[0];
     const auto device = x1->GetDevice();
 
-    const auto t = x1->Dims()[1]; // T
+    const auto t
+        = x1->Dims()[1] * (is_first_stage ? 1 : nn::parallel::global::GetSequenceParallelSize()); // full_seq_len
     CHECK_LE(t, config_.block_size) << "Cannot forward sequence of length " << t << ", block size is only "
                                     << config_.block_size;
     // forward the GPT2 model itself
@@ -252,8 +252,8 @@ GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
         int tp_rank = 0;
         if (tp_world_size > 1) {
             auto tp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
-                nn::parallel::GetTensorParallelProcessGroupName(device->rank().thread_rank()));
-            tp_rank = tp_group->GetGroupRank(device->rank().thread_rank());
+                nn::parallel::GetTensorParallelProcessGroupName(device->rank().GlobalRank()));
+            tp_rank = tp_group->GetGroupRank(device->rank().GlobalRank());
         }
         int64_t t_local = sequence_parallel_enabled ? (t / tp_world_size) : t;
         int64_t start = sequence_parallel_enabled ? tp_rank * t_local : 0;
@@ -386,7 +386,8 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     } else if (pp_size > 1 && is_last_stage) {
         auto &lm_head_weight = state_dict[std::format("{}.{}", GPT2::kLMHeadLayerName,
                                                       nn::parallel::ColumnParallelLinear::kParamWeightName)];
-        ifs.read(reinterpret_cast<char *>(lm_head_weight->DataPtr()), lm_head_weight->SizeInBytes());
+        ReadMatrixRowShardFloat(ifs, static_cast<float *>(lm_head_weight->DataPtr()), model_vocab_size, n_embd, v_start,
+                                vpp);
     } else {
         size_t wte_bytes = vocab_size * n_embd * sizeof(float);
         ifs.seekg(wte_bytes, std::ios::cur);

@@ -81,7 +81,7 @@ std::shared_ptr<Tensor> SplitAlongLastDim(const std::shared_ptr<Tensor> &tensor)
     auto device = tensor->GetDevice();
     auto tp_group
         = ProcessGroupFactory::Instance()->Get(GetTensorParallelProcessGroupName(device->rank().GlobalRank()));
-    auto rank = tp_group->GetGroupRank(device->rank().thread_rank());
+    auto rank = tp_group->GetGroupRank(device->rank().GlobalRank());
 
     auto last_dim_size = tensor->Dims().back() / world_size;
     auto shards = tensor->Split(last_dim_size, -1);
@@ -436,7 +436,7 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     int rank = 0;
     if (tp_size > 1) {
         tp_group = ProcessGroupFactory::Instance()->Get(GetTensorParallelProcessGroupName(device->rank().GlobalRank()));
-        rank = tp_group->GetGroupRank(device->rank().thread_rank());
+        rank = tp_group->GetGroupRank(device->rank().GlobalRank());
     }
 
     vocab_size_local_ = logits->Dims().back();

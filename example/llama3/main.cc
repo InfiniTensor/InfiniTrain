@@ -89,7 +89,7 @@ void Train(const nn::parallel::Rank &rank) {
 
     int ddp_world_size = global::GetDataParallelSize();
     int tp_world_size = global::GetTensorParallelSize();
-    int sp_world_size = global::GetSequenceParallelEnabled() ? tp_world_size : 0;
+    int sp_world_size = global::GetSequenceParallelEnabled() ? tp_world_size : 1;
     int pp_world_size = global::GetPipelineParallelSize();
 
     if (FLAGS_sequence_parallel) {
@@ -111,13 +111,13 @@ void Train(const nn::parallel::Rank &rank) {
         if (ddp_world_size > 1) {
             ddp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
                                                                   GetDataParallelGroupRanks(rank.GlobalRank()));
-            ddp_rank = ddp_pg->GetGroupRank(rank.thread_rank());
+            ddp_rank = ddp_pg->GetGroupRank(rank.GlobalRank());
         }
 
         if (tp_world_size > 1) {
             tp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetTensorParallelProcessGroupName(rank.GlobalRank()),
                                                                  GetTensorParallelGroupRanks(rank.GlobalRank()));
-            tp_rank = tp_pg->GetGroupRank(rank.thread_rank());
+            tp_rank = tp_pg->GetGroupRank(rank.GlobalRank());
             // NOTE(zbl): Reserved for VocabParallelEmbedding
             nn::parallel::tp_rank = tp_rank;
         }
@@ -125,7 +125,7 @@ void Train(const nn::parallel::Rank &rank) {
         if (pp_world_size > 1) {
             pp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetPipelineParallelProcessGroupName(rank.GlobalRank()),
                                                                  GetPipelineParallelGroupRanks(rank.GlobalRank()));
-            pp_rank = pp_pg->GetGroupRank(rank.thread_rank());
+            pp_rank = pp_pg->GetGroupRank(rank.GlobalRank());
 
             nn::parallel::pp_rank = pp_rank;
         }
@@ -156,7 +156,7 @@ void Train(const nn::parallel::Rank &rank) {
 
     model->To(device);
 
-    LOG(INFO) << "Rank " << rank.thread_rank() << ": Model loaded to device.";
+    LOG(INFO) << "Rank " << rank.GlobalRank() << ": Model loaded to device.";
 
     DataType dtype;
     if (FLAGS_dtype == kDtypeFP32) {
@@ -164,7 +164,7 @@ void Train(const nn::parallel::Rank &rank) {
     } else if (FLAGS_dtype == kDtypeBF16) {
         dtype = DataType::kBFLOAT16;
     } else {
-        LOG(FATAL) << "Rank " << rank.thread_rank() << ": Datatype " << FLAGS_dtype << " not supported.";
+        LOG(FATAL) << "Rank " << rank.GlobalRank() << ": Datatype " << FLAGS_dtype << " not supported.";
     }
 
     // NOTE(dcj): Complete all device (.to(device)) and dtype (.to(dtype)) conversions
@@ -204,10 +204,13 @@ void Train(const nn::parallel::Rank &rank) {
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(std::make_shared<VocabParallelCrossEntropyLoss>())
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
     loss_fn->To(device);
-    LOG(INFO) << "Rank " << rank.thread_rank() << ": start training";
+    LOG(INFO) << "Rank " << rank.GlobalRank() << ": start training";
 
     if (pp_world_size > 1) {
-        auto shapes = std::vector<std::vector<int64_t>>{{FLAGS_batch_size, FLAGS_sequence_length, model_config.n_embd}};
+        // NOTE(dcj): To ensure that the tensor shapes at the pipeline stage boundaries remain correct
+        // when sequence parallelism (SP) is enabled, we need to divide by sp_world_size.
+        auto shapes = std::vector<std::vector<int64_t>>{
+            {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
         model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
                                                                  pp_rank, std::make_shared<optimizers::Adam>(optimizer),
@@ -262,23 +265,23 @@ void Train(const nn::parallel::Rank &rank) {
                 x = std::make_shared<Tensor>(x->To(device));
                 y = std::make_shared<Tensor>(y->To(device));
 
-                LOG(INFO) << "Rank " << rank.thread_rank() << ": start forward";
+                LOG(INFO) << "Rank " << rank.GlobalRank() << ": start forward";
                 // (bs, seq_len, vocab_size)
                 auto logits = model->Forward({x, y})[0];
-                LOG(INFO) << "Rank " << rank.thread_rank() << ": finish model forward, start loss forward";
+                LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish model forward, start loss forward";
                 auto loss = loss_fn->Forward({logits, y})[0];
                 loss = loss / grad_accum_steps;
 
                 // disable autocast for the current step (backward is not under autocast)
                 autocast_guard.Disable();
 
-                LOG(INFO) << "Rank " << rank.thread_rank() << ": finish loss forward";
+                LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
 
                 auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
                 lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
-                LOG(INFO) << "Rank " << rank.thread_rank() << ": start backward";
+                LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
                 loss->Backward();
-                LOG(INFO) << "Rank " << rank.thread_rank() << ": finish backward";
+                LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
             }
 
             optimizer.Step();

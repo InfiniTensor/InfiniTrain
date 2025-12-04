@@ -1,7 +1,5 @@
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
-#include <regex>
 #include <string>
 #include <sys/wait.h>
 #include <unistd.h>

@@ -35,7 +35,7 @@ public:
 
     ~ProcessGroup();
 
-    int GetGroupRank(int thread_rank) const;
+    int GetGroupRank(int global_rank) const;
 
     // Communication operations
     void AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const;
@@ -63,8 +63,6 @@ public:
     // Async communication functions
     std::shared_ptr<Work> AllReduceAsync(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const;
 
-    void Barrier() const;
-
 private:
     void InitSingleProcess(const std::vector<int> &ranks);
 
@@ -79,7 +77,7 @@ private:
 
     std::unordered_map<const Device *, ncclComm_t> device_comm_map_;
     std::unordered_map<const Device *, cudaStream_t> device_stream_map_;
-    std::unordered_map<int, int> thread_group_rank_map_; // thread_rank : group_rank
+    std::unordered_map<int, int> global_group_rank_map_; // global_rank : group_rank
 
     int world_size_ = 0;
 
