@@ -129,4 +129,120 @@ float ScheduleGPipe::StepMicroBatches(const std::vector<std::shared_ptr<Tensor>>
     return total_loss;
 }
 
+float Schedule1F1B::StepMicroBatches(const std::vector<std::shared_ptr<Tensor>> &microbatch_inputs,
+                                     const std::vector<std::shared_ptr<Tensor>> &microbatch_targets,
+                                     const std::shared_ptr<Module> &loss_fn) {
+
+    const int n = num_micro_batches_;
+    if (n == 0) {
+        return 0.0f;
+    }
+
+    float total_loss = 0.0f;
+    const int num_stages = stage_->num_stages();
+    const int stage_index = stage_->stage_index();
+
+    const int warmup_steps = num_stages;
+    const int cooldown_steps = num_stages;
+    const int total_steps = num_stages + n - 1;
+
+    std::vector<std::vector<std::shared_ptr<Tensor>>> activations(n);
+    std::vector<std::shared_ptr<Tensor>> loss_tensors(n);
+
+    int mb_forward_i;  // forward micro_batch index
+    int mb_backward_i; // backward micro_batch index
+    printf("[stage %d] warmup_steps start\n", stage_index_);
+    // warmup_steps
+    for (mb_forward_i = 0, mb_backward_i = 0; mb_forward_i < warmup_steps && mb_forward_i < n;
+         ++mb_forward_i, ++mb_backward_i) {
+        // 正向
+        std::vector<std::shared_ptr<Tensor>> inputs;
+        if (stage_->IsFirstStage()) {
+            inputs = {microbatch_inputs[mb_forward_i]};
+        } else {
+            inputs = ReceiveFromPrev();
+        }
+
+        activations[mb_forward_i] = stage_->ForwardOneChunk(inputs);
+
+        if (!stage_->IsLastStage()) {
+            SendToNext(activations[mb_forward_i]);
+        } else {
+            auto target = microbatch_targets[mb_backward_i];
+            auto output = activations[mb_backward_i][0];
+            auto target_on_device = target->To(output->GetDevice());
+            auto loss = loss_fn->Forward({output, std::make_shared<Tensor>(target_on_device)})[0];
+            loss = loss / n;
+
+            auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
+            total_loss += static_cast<const float *>(loss_cpu.DataPtr())[0];
+
+            printf("warmup_steps start Backward\n");
+            loss->Backward();
+        }
+    }
+
+    if (!stage_->IsLastStage()) {
+        for (mb_backward_i = 0; mb_backward_i <= stage_index && mb_backward_i < n; ++mb_backward_i) {
+            auto out_tensor = activations[mb_backward_i][0];
+
+            auto gradient = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
+
+            out_tensor->Backward(gradient);
+        }
+    }
+
+    printf("[stage %d] steady_steps start\n", stage_index_);
+    // steady_steps
+    for (; mb_forward_i < n; ++mb_forward_i, ++mb_backward_i) {
+        // Forward
+        // printf("[stage %d] steady_steps mb_forward_i %d\n", stage_index_, mb_forward_i);
+        std::vector<std::shared_ptr<Tensor>> inputs;
+        if (stage_->IsFirstStage()) {
+            inputs = {microbatch_inputs[mb_forward_i]};
+        } else {
+            inputs = ReceiveFromPrev();
+        }
+
+        activations[mb_forward_i] = stage_->ForwardOneChunk(inputs);
+
+        printf("[stage %d] steady_steps 开始反向 mb_forward_i: %d mb_backward_i: %d\n", stage_index_, mb_forward_i,
+               mb_backward_i);
+        // Backward
+        if (!stage_->IsLastStage()) {
+            SendToNext(activations[mb_forward_i]);
+
+            auto out_tensor = activations[mb_backward_i][0];
+
+            auto gradient = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
+
+            out_tensor->Backward(gradient);
+        } else {
+            auto target = microbatch_targets[mb_backward_i];
+            auto output = activations[mb_backward_i][0];
+            auto target_on_device = target->To(output->GetDevice());
+            auto loss = loss_fn->Forward({output, std::make_shared<Tensor>(target_on_device)})[0];
+            loss = loss / n;
+
+            auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
+            total_loss += static_cast<const float *>(loss_cpu.DataPtr())[0];
+
+            loss->Backward();
+        }
+    }
+
+    printf("[stage %d] cooldown_steps start\n", stage_index_);
+    // cooldown_steps
+    if (!stage_->IsLastStage()) {
+        for (; mb_backward_i < n; ++mb_backward_i) {
+            auto out_tensor = activations[mb_backward_i][0];
+
+            auto gradient = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
+
+            out_tensor->Backward(gradient);
+        }
+    }
+
+    return total_loss;
+}
 } // namespace infini_train::nn::parallel

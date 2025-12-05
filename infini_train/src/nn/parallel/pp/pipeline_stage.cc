@@ -21,7 +21,7 @@ PipelineStage::PipelineStage(const std::shared_ptr<Module> &model, int stage_ind
 
 std::vector<std::shared_ptr<Tensor>>
 PipelineStage::ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &inputs) {
-    return model_->Forward(inputs);
+    return model_->ForwardChunk(0, inputs);
 }
 
 } // namespace infini_train::nn::parallel

@@ -110,6 +110,12 @@ std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shar
     return {};
 }
 
+std::vector<std::shared_ptr<Tensor>> Module::ForwardChunk(int chunk_idx,
+                                                          const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    LOG(FATAL) << "ForwardChunk function not implemented for this module";
+    return {};
+}
+
 void Module::To(const Device *device) {
     CHECK_NOTNULL(device);
     if (device == device_) {

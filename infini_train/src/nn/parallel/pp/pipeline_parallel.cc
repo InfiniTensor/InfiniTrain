@@ -24,7 +24,8 @@ void PipelineParallel::BuildPipelineStage(const std::shared_ptr<Module> &module,
 }
 
 void PipelineParallel::SetupSchedule(int num_micro_batches) {
-    schedule_ = std::make_shared<ScheduleGPipe>(pipeline_stage_, num_stages_, num_micro_batches);
+    schedule_ = std::make_shared<ScheduleGPipe>(pipeline_stage_, num_stages_, num_micro_batches, rank_);
+    // schedule_ = std::make_shared<Schedule1F1B>(pipeline_stage_, num_stages_, num_micro_batches, rank_);
 }
 
 float PipelineParallel::TrainStep(const std::vector<std::shared_ptr<Tensor>> &input,
@@ -39,22 +40,43 @@ float PipelineParallel::TrainStep(const std::vector<std::shared_ptr<Tensor>> &in
     return schedule_->Step(stage_input, stage_target, loss_fn, dtype);
 }
 
-std::tuple<bool, bool, int, int> PipelineParallel::GetStageInfo(int total_layers, int pp_size, int pp_rank) {
+std::tuple<bool, bool, std::vector<std::pair<int, int>>> PipelineParallel::GetStageInfo(int total_layers, int pp_size,
+                                                                                        int chunks_per_stage) {
+    int rank = pp_rank;
     bool is_first_stage = (pp_rank == 0);
     bool is_last_stage = (pp_rank == pp_size - 1);
 
-    int layers_per_stage = total_layers / pp_size;
-    int remainder = total_layers % pp_size;
-    int start_layer, end_layer;
-    if (pp_rank < remainder) {
-        start_layer = pp_rank * (layers_per_stage + 1);
-        end_layer = start_layer + layers_per_stage + 1;
-    } else {
-        start_layer = pp_rank * layers_per_stage + remainder;
-        end_layer = start_layer + layers_per_stage;
+    std::vector<std::pair<int, int>> layer_chunks;
+
+    int layers_per_chunk = total_layers / (pp_size * chunks_per_stage);
+    int remainder = total_layers % (pp_size * chunks_per_stage);
+
+    for (int chunk_idx = 0; chunk_idx < chunks_per_stage; ++chunk_idx) {
+        int global_chunk_idx = chunk_idx * pp_size + rank;
+
+        if (global_chunk_idx * layers_per_chunk >= total_layers) {
+            break;
+        }
+
+        int chunk_start = global_chunk_idx * layers_per_chunk;
+        int chunk_end = chunk_start + layers_per_chunk;
+
+        if (global_chunk_idx < remainder) {
+            // Assign an additional layer to each of the first remainder chunks
+            chunk_start = global_chunk_idx * (layers_per_chunk + 1);
+            chunk_end = chunk_start + (layers_per_chunk + 1);
+        } else {
+            chunk_start = remainder * (layers_per_chunk + 1) + (global_chunk_idx - remainder) * layers_per_chunk;
+            chunk_end = chunk_start + layers_per_chunk;
+        }
+
+        chunk_end = std::min(chunk_end, total_layers);
+        if (chunk_start < chunk_end) {
+            layer_chunks.push_back({chunk_start, chunk_end});
+        }
     }
 
-    return {is_first_stage, is_last_stage, start_layer, end_layer};
+    return {is_first_stage, is_last_stage, layer_chunks};
 }
 
 PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num_stages, int num_micro_batches,
