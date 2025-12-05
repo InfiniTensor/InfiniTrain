@@ -12,6 +12,10 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
 
+namespace infini_train::nn {
+class ModuleList;
+}
+
 struct LLaMA3Config {
     // ref: https://huggingface.co/meta-llama/Llama-3.2-1B
     // Model basic config
@@ -108,6 +112,18 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
+class LLaMA3Chunk {
+public:
+    bool has_embedding() const { return embedding_ != nullptr; }
+    bool has_norm() const { return norm_ != nullptr; }
+    bool has_head() const { return head_ != nullptr; }
+
+    std::shared_ptr<infini_train::nn::Module> embedding_ = nullptr;
+    std::shared_ptr<infini_train::nn::ModuleList> blocks_ = nullptr;
+    std::shared_ptr<infini_train::nn::Module> norm_ = nullptr;
+    std::shared_ptr<infini_train::nn::Module> head_ = nullptr;
+};
+
 class LLaMA3 : public infini_train::nn::CloneableModule<LLaMA3> {
 public:
     static constexpr char kWTELayerName[] = "wte";
@@ -132,9 +148,14 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
+    void BuildChunks();
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    ForwardChunk(int chunk_idx, const std::vector<std::shared_ptr<infini_train::Tensor>> &input) override;
+
     static std::shared_ptr<LLaMA3> FromPretrained(ModelType model_type);
     static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath);
 
 private:
     LLaMA3Config config_;
+    std::vector<LLaMA3Chunk> chunks_;
 };
