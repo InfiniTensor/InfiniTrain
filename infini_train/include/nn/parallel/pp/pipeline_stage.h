@@ -17,7 +17,8 @@ namespace infini_train::nn::parallel {
 class PipelineStage {
 public:
     PipelineStage(const std::shared_ptr<nn::Module> &model, int stage_index, int num_stages,
-                  const std::vector<std::vector<int64_t>> &recv_shape, std::shared_ptr<Optimizer> optimizer);
+                  const std::vector<std::vector<int64_t>> &recv_shape, std::shared_ptr<Optimizer> optimizer,
+                  int device_id);
 
     std::vector<std::shared_ptr<Tensor>> ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &inputs);
 

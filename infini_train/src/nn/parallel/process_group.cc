@@ -1,6 +1,14 @@
 #include "infini_train/include/nn/parallel/process_group.h"
 
+#include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <iterator>
+#include <memory>
 #include <numeric>
+#include <thread>
 #include <vector>
 
 #ifdef USE_NCCL
@@ -19,6 +27,9 @@
 namespace infini_train {
 
 namespace {
+using nn::parallel::function::ReduceOpType;
+
+#ifdef USE_NCCL
 const std::unordered_map<DataType, ncclDataType_t> kNcclDtypeMap = {
     {DataType::kUINT8, ncclUint8},       {DataType::kINT8, ncclInt8},     {DataType::kUINT32, ncclUint32},
     {DataType::kINT32, ncclInt32},       {DataType::kUINT64, ncclUint64}, {DataType::kINT64, ncclInt64},
@@ -26,14 +37,49 @@ const std::unordered_map<DataType, ncclDataType_t> kNcclDtypeMap = {
     {DataType::kFLOAT64, ncclFloat64},
 };
 
-using nn::parallel::function::ReduceOpType;
-
 const std::unordered_map<ReduceOpType, ncclRedOp_t> kNcclReduceOpMap = {
     {ReduceOpType::kSum, ncclSum},
     {ReduceOpType::kProd, ncclProd},
     {ReduceOpType::kMax, ncclMax},
     {ReduceOpType::kAvg, ncclAvg},
 };
+
+inline std::string NcclFileName(const std::string &name, bool tmp = false) {
+    return std::format("ncclUniqueId_{}.{}", name, tmp ? "tmp" : "bin");
+}
+
+void WriteNcclUniqueId(const ncclUniqueId &nccl_id, const std::string &pg_name) {
+    std::string tmp_path = NcclFileName(pg_name, true);
+
+    std::ofstream ofs(tmp_path, std::ios::binary);
+    ofs.write(reinterpret_cast<const char *>(&nccl_id), sizeof(nccl_id));
+    ofs.close();
+
+    std::rename(tmp_path.c_str(), NcclFileName(pg_name).c_str());
+}
+
+void ReadNcclUniqueId(ncclUniqueId &nccl_id, const std::string &pg_name) {
+    std::string file_path = NcclFileName(pg_name);
+
+    while (std::filesystem::exists(file_path) == false) {
+        std::this_thread::sleep_for(std::chrono::microseconds(1000));
+    }
+
+    std::ifstream ifs(file_path, std::ios::binary);
+    ifs.read(reinterpret_cast<char *>(&nccl_id), sizeof(nccl_id));
+    ifs.close();
+}
+
+void CleanupNcclIdFile(const std::string &pg_name) {
+    const std::filesystem::path cwd = std::filesystem::current_path();
+    std::string file_path = NcclFileName(pg_name);
+
+    if (std::filesystem::exists(file_path)) {
+        std::filesystem::remove(file_path);
+    }
+}
+#endif
+
 } // namespace
 
 } // namespace infini_train
@@ -41,31 +87,26 @@ const std::unordered_map<ReduceOpType, ncclRedOp_t> kNcclReduceOpMap = {
 namespace infini_train::nn::parallel {
 
 #ifdef USE_NCCL
-ProcessGroup::ProcessGroup(const std::vector<int> &device_indices) : comm_size_(device_indices.size()) {
-    comms_.resize(comm_size_);
-    NCCL_CHECK(ncclCommInitAll(comms_.data(), comm_size_, device_indices.data()));
-
-    comm_streams_.resize(comm_size_);
+ProcessGroup::ProcessGroup(const std::string &process_group_name, const std::vector<int> &ranks)
+    : world_size_(ranks.size()), name_(process_group_name) {
     int current_device = -1;
     CUDA_CHECK(cudaGetDevice(&current_device));
 
-    for (int i = 0; i < comm_size_; ++i) {
-        auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, device_indices[i]);
-        devices_.push_back(device);
-        device_comm_map_[device] = comms_[i];
-        thread_group_rank_map_[device->rank().thread_rank()] = i;
-
-        device->SetDevice();
-        int low, high;
-        CUDA_CHECK(cudaDeviceGetStreamPriorityRange(&low, &high));
-        CUDA_CHECK(cudaStreamCreateWithPriority(&comm_streams_[i], cudaStreamNonBlocking, high));
-        device_stream_map_[device] = comm_streams_[i];
+    if (global::GetNnodes() == 1 && global::GetNprocPerNode() == 1) {
+        InitSingleProcess(ranks);
+    } else {
+        InitMultiProcess(ranks);
     }
+    InitStreams();
 
     CUDA_CHECK(cudaSetDevice(current_device));
 }
 
 ProcessGroup::~ProcessGroup() {
+    if (is_main_process_) {
+        CleanupNcclIdFile(name_);
+    }
+
     for (auto &s : comm_streams_) {
         if (s) {
             cudaStreamDestroy(s);
@@ -78,7 +119,71 @@ ProcessGroup::~ProcessGroup() {
     }
 }
 
-int ProcessGroup::GetGroupRank(int thread_rank) const { return thread_group_rank_map_.at(thread_rank); }
+void ProcessGroup::InitSingleProcess(const std::vector<int> &ranks) {
+    comms_.resize(world_size_);
+    NCCL_CHECK(ncclCommInitAll(comms_.data(), world_size_, ranks.data()));
+
+    for (int i = 0; i < ranks.size(); ++i) {
+        auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, ranks[i]);
+        devices_.push_back(device);
+        device_comm_map_[device] = comms_[i];
+        global_group_rank_map_[device->rank().GlobalRank()] = i;
+    }
+}
+
+void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
+    int n_threads = global::GetNthreadPerProc();
+    int global_proc_rank = global::GetGlobalProcRank();
+    int lower_rank = global_proc_rank * n_threads;
+    int upper_rank = (global_proc_rank + 1) * n_threads;
+
+    ncclUniqueId nccl_id;
+
+    int min_rank = std::ranges::min(ranks);
+    if (min_rank < upper_rank && min_rank >= lower_rank) {
+        is_main_process_ = true;
+
+        ncclGetUniqueId(&nccl_id);
+        WriteNcclUniqueId(nccl_id, name_);
+    } else {
+        ReadNcclUniqueId(nccl_id, name_);
+    }
+
+    NCCL_CHECK(ncclGroupStart());
+    for (int i = 0; i < n_threads; ++i) {
+        int global_thread_rank = lower_rank + i;
+        auto it = std::ranges::find(ranks, global_thread_rank);
+        if (it != ranks.end()) {
+            cudaSetDevice(i);
+
+            ncclComm_t comm;
+            int group_rank = std::distance(ranks.begin(), it);
+            NCCL_CHECK(ncclCommInitRank(&comm, world_size_, nccl_id, group_rank));
+            comms_.push_back(comm);
+
+            auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, i);
+            global_group_rank_map_[device->rank().GlobalRank()] = group_rank;
+            devices_.push_back(device);
+            device_comm_map_[device] = comm;
+        }
+    }
+    NCCL_CHECK(ncclGroupEnd());
+}
+
+void ProcessGroup::InitStreams() {
+    int device_size = devices_.size();
+    comm_streams_.resize(device_size);
+
+    for (int i = 0; i < device_size; ++i) {
+        devices_[i]->SetDevice();
+        int low, high;
+        CUDA_CHECK(cudaDeviceGetStreamPriorityRange(&low, &high));
+        CUDA_CHECK(cudaStreamCreateWithPriority(&comm_streams_[i], cudaStreamNonBlocking, high));
+        device_stream_map_[devices_[i]] = comm_streams_[i];
+    }
+}
+
+int ProcessGroup::GetGroupRank(int global_rank) const { return global_group_rank_map_.at(global_rank); }
 
 void ProcessGroup::AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const {
     void *buffer = tensor->DataPtr();
@@ -118,7 +223,9 @@ ProcessGroup::BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensor
     std::vector<ncclComm_t> comms;
     std::vector<const Device *> devices;
 
-    for (size_t i = 0; i < comm_size_; ++i) {
+    CHECK_EQ(world_size_, comms_.size());
+
+    for (size_t i = 0; i < world_size_; ++i) {
         auto device = devices_[i];
         for (const auto &input_tensor : input_tensors) {
             outputs.push_back(std::make_shared<Tensor>(input_tensor->Dims(), input_tensor->Dtype(), device));
@@ -295,9 +402,11 @@ std::vector<std::shared_ptr<Tensor>> ProcessGroup::NcclSend(std::vector<std::sha
         auto tensor = tensors[i];
         CHECK_NOTNULL(tensor);
 
-        auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
-        cudaStream_t stream = device_ptr->Stream();
-        ncclComm_t comm = device_comm_map_.at(device_ptr);
+        auto device = tensor->GetDevice();
+        device->SetDevice();
+
+        cudaStream_t stream = dynamic_cast<const CudaDevice *>(device)->Stream();
+        ncclComm_t comm = device_comm_map_.at(device);
 
         CHECK_NE(dest_rank, -1) << "Destination device not found in input tensors's devices";
 
@@ -318,9 +427,11 @@ std::vector<std::shared_ptr<Tensor>> ProcessGroup::NcclRecv(std::vector<std::sha
         auto tensor = tensors[i];
         CHECK_NOTNULL(tensor);
 
-        auto device_ptr = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
-        cudaStream_t stream = device_ptr->Stream();
-        ncclComm_t comm = device_comm_map_.at(device_ptr);
+        auto device = tensor->GetDevice();
+        device->SetDevice();
+
+        cudaStream_t stream = dynamic_cast<const CudaDevice *>(device)->Stream();
+        ncclComm_t comm = device_comm_map_.at(device);
 
         CHECK_NE(src_rank, -1) << "Source device not found in input devices";
 
@@ -363,6 +474,7 @@ std::shared_ptr<Work> ProcessGroup::AllReduceAsync(const std::shared_ptr<Tensor>
     // Do not let compute stream wait for done event here
     return std::move(work);
 }
+
 #endif
 
 ProcessGroupFactory *ProcessGroupFactory::Instance() {
@@ -378,30 +490,13 @@ ProcessGroupFactory *ProcessGroupFactory::Instance() {
 }
 
 const ProcessGroup *ProcessGroupFactory::GetOrCreate(const std::string &name, int comm_size) {
-    std::vector<int> devices(comm_size);
-    std::iota(devices.begin(), devices.end(), 0);
-    const std::vector<int> &device_indices = devices;
-
-    return GetOrCreate(name, device_indices);
+    std::vector<int> device_indices(comm_size);
+    std::iota(device_indices.begin(), device_indices.end(), 0);
+    return GetOrCreate(name, [&]() { return std::make_unique<ProcessGroup>(name, device_indices); });
 }
 
 const ProcessGroup *ProcessGroupFactory::GetOrCreate(const std::string &name, const std::vector<int> &device_indices) {
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        auto it = name_to_group_.find(name);
-        if (it != name_to_group_.end()) {
-            return it->second.get();
-        }
-    }
-
-    auto new_group = std::make_unique<ProcessGroup>(device_indices);
-
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        auto [it, inserted] = name_to_group_.emplace(name, std::move(new_group));
-        return it->second.get();
-    }
+    return GetOrCreate(name, [&]() { return std::make_unique<ProcessGroup>(name, device_indices); });
 }
 
 const ProcessGroup *ProcessGroupFactory::Get(const std::string &name) const {

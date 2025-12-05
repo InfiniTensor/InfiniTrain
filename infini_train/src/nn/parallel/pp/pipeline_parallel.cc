@@ -19,12 +19,12 @@ thread_local int pp_rank = 0;
 
 void PipelineParallel::BuildPipelineStage(const std::shared_ptr<Module> &module,
                                           const std::shared_ptr<Optimizer> &optimizer,
-                                          const std::vector<std::vector<int64_t>> &recv_shape) {
-    pipeline_stage_ = std::make_shared<PipelineStage>(module, rank_, num_stages_, recv_shape, optimizer);
+                                          const std::vector<std::vector<int64_t>> &recv_shape, int device_id) {
+    pipeline_stage_ = std::make_shared<PipelineStage>(module, rank_, num_stages_, recv_shape, optimizer, device_id);
 }
 
 void PipelineParallel::SetupSchedule(int num_micro_batches) {
-    schedule_ = std::make_shared<ScheduleGPipe>(pipeline_stage_, num_stages_, num_micro_batches, rank_);
+    schedule_ = std::make_shared<ScheduleGPipe>(pipeline_stage_, num_stages_, num_micro_batches);
 }
 
 float PipelineParallel::TrainStep(const std::vector<std::shared_ptr<Tensor>> &input,
@@ -39,8 +39,7 @@ float PipelineParallel::TrainStep(const std::vector<std::shared_ptr<Tensor>> &in
     return schedule_->Step(stage_input, stage_target, loss_fn, dtype);
 }
 
-std::tuple<bool, bool, int, int> PipelineParallel::GetStageInfo(int total_layers, int pp_size) {
-    int rank = pp_rank;
+std::tuple<bool, bool, int, int> PipelineParallel::GetStageInfo(int total_layers, int pp_size, int pp_rank) {
     bool is_first_stage = (pp_rank == 0);
     bool is_last_stage = (pp_rank == pp_size - 1);
 
@@ -59,12 +58,12 @@ std::tuple<bool, bool, int, int> PipelineParallel::GetStageInfo(int total_layers
 }
 
 PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num_stages, int num_micro_batches,
-                                   const std::vector<std::vector<int64_t>> &recv_shape, int rank,
-                                   const std::shared_ptr<Optimizer> &optimizer)
-    : num_stages_(num_stages), rank_(rank) {
+                                   const std::vector<std::vector<int64_t>> &recv_shape, int pp_rank,
+                                   const std::shared_ptr<Optimizer> &optimizer, int device_id)
+    : num_stages_(num_stages), rank_(pp_rank) {
     modules_[kModuleName] = std::move(module);
 
-    BuildPipelineStage(module, optimizer, recv_shape);
+    BuildPipelineStage(module, optimizer, recv_shape, device_id);
 
     SetupSchedule(num_micro_batches);
 }

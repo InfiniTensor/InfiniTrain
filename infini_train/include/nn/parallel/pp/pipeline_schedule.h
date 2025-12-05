@@ -18,8 +18,8 @@ class PipelineStage;
 
 class PipelineSchedule {
 public:
-    PipelineSchedule(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches, int stage_index)
-        : stage_(std::move(stage)), num_micro_batches_(num_micro_batches), stage_index_(stage_index) {}
+    PipelineSchedule(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches)
+        : stage_(std::move(stage)), num_micro_batches_(num_micro_batches) {}
 
     virtual ~PipelineSchedule() = default;
 
@@ -36,14 +36,13 @@ public:
 
 protected:
     int num_micro_batches_ = -1;
-    int stage_index_ = -1;
     std::shared_ptr<PipelineStage> stage_ = nullptr;
 };
 
 class ScheduleGPipe : public PipelineSchedule {
 public:
-    ScheduleGPipe(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches, int stage_index)
-        : PipelineSchedule(std::move(stage), num_stages, num_micro_batches, stage_index){};
+    ScheduleGPipe(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches)
+        : PipelineSchedule(std::move(stage), num_stages, num_micro_batches){};
 
     float StepMicroBatches(const std::vector<std::shared_ptr<Tensor>> &arg_mbs,
                            const std::vector<std::shared_ptr<Tensor>> &target_mbs,
@@ -52,8 +51,8 @@ public:
 
 class Schedule1F1B : public PipelineSchedule {
 public:
-    Schedule1F1B(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches, int stage_index)
-        : PipelineSchedule(std::move(stage), num_stages, num_micro_batches, stage_index){};
+    Schedule1F1B(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches)
+        : PipelineSchedule(std::move(stage), num_stages, num_micro_batches){};
 
     float StepMicroBatches(const std::vector<std::shared_ptr<Tensor>> &arg_mbs,
                            const std::vector<std::shared_ptr<Tensor>> &target_mbs,

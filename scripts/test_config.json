@@ -138,6 +138,32 @@
                 "total_batch_size": 5120,
                 "pipeline_parallel": 8
             }
+        },
+        {
+            "id": "7",
+            "args": {
+                "dtype": "float32",
+                "nthread_per_process": 8,
+                "num_iteration": 10,
+                "batch_size": 40,
+                "total_batch_size": 5120,
+                "tensor_parallel": 2,
+                "sequence_parallel": true,
+                "pipeline_parallel": 2
+            }
+        },
+        {
+            "id": "7_bfloat16",
+            "args": {
+                "dtype": "bfloat16",
+                "nthread_per_process": 8,
+                "num_iteration": 10,
+                "batch_size": 40,
+                "total_batch_size": 5120,
+                "tensor_parallel": 2,
+                "sequence_parallel": true,
+                "pipeline_parallel": 2
+            }
         }
     ]
 }

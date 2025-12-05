@@ -4,26 +4,23 @@
 
 namespace infini_train::nn::parallel {
 
-std::string GetDataParallelProcessGroupName(int thread_rank) {
-    return "DP" + std::to_string(global::GetGroupId(global::DP, thread_rank));
+std::string GetDataParallelProcessGroupName(int global_rank) {
+    return "DP" + std::to_string(global::GetGroupId(global::DP, global_rank));
 }
 
-std::string GetTensorParallelProcessGroupName(int thread_rank) {
-    return "TP" + std::to_string(global::GetGroupId(global::TP, thread_rank));
+std::string GetTensorParallelProcessGroupName(int global_rank) {
+    return "TP" + std::to_string(global::GetGroupId(global::TP, global_rank));
 }
 
-std::string GetPipelineParallelProcessGroupName(int thread_rank) {
-    return "PP" + std::to_string(global::GetGroupId(global::PP, thread_rank));
+std::string GetPipelineParallelProcessGroupName(int global_rank) {
+    return "PP" + std::to_string(global::GetGroupId(global::PP, global_rank));
 }
 
-std::vector<int> GetDataParallelGroupRanks(int thread_rank) { return global::GetGroupRanks(global::DP, thread_rank); }
+std::vector<int> GetDataParallelGroupRanks(int global_rank) { return global::GetGroupRanks(global::DP, global_rank); }
 
-std::vector<int> GetTensorParallelGroupRanks(int thread_rank) { return global::GetGroupRanks(global::TP, thread_rank); }
+std::vector<int> GetTensorParallelGroupRanks(int global_rank) { return global::GetGroupRanks(global::TP, global_rank); }
 
-std::vector<int> GetPipelineParallelGroupRanks(int pp_world_size) {
-    std::vector<int> ranks;
-    ranks.reserve(pp_world_size);
-    for (int i = 0; i < pp_world_size; ++i) { ranks.push_back(i); }
-    return ranks;
+std::vector<int> GetPipelineParallelGroupRanks(int global_rank) {
+    return global::GetGroupRanks(global::PP, global_rank);
 }
 } // namespace infini_train::nn::parallel

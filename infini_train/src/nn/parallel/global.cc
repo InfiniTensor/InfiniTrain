@@ -13,6 +13,11 @@ int GetEnvAsInt(const std::string &name, int default_value) {
     return value ? std::atoi(value) : default_value;
 }
 
+std::string GetEnvAsStr(const std::string &name, const std::string &default_value) {
+    const char *value = std::getenv(name.c_str());
+    return value ? std::string(value) : default_value;
+}
+
 } // namespace
 
 namespace infini_train::nn::parallel::global {
@@ -90,8 +95,9 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
 
-    world_size_ = GetEnvAsInt("PROC_WORLD_SIZE", 1) * nthread_per_process;
+    nnodes_ = GetEnvAsInt("NNODES", 1);
     nproc_per_node_ = GetEnvAsInt("NPROC_PER_NODE", 1);
+    world_size_ = GetEnvAsInt("PROC_WORLD_SIZE", 1) * nthread_per_process;
     global_proc_rank_ = GetEnvAsInt("GLOBAL_PROC_RANK", 0);
     local_proc_rank_ = GetEnvAsInt("LOCAL_PROC_RANK", 0);
 
@@ -104,11 +110,25 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
 
     layout_.sizes[DP] = data_parallel_size_;
     layout_.sizes[TP] = tensor_parallel_size_;
-    // FIXME(zbl): set PP size
-    layout_.sizes[PP] = 1;
+    layout_.sizes[PP] = pipeline_parallel_size_;
     layout_.InitStrides();
 
     initialized_ = true;
+}
+
+int GlobalEnv::nnodes() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return nnodes_;
+}
+
+int GlobalEnv::nproc_per_node() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return nproc_per_node_;
+}
+
+int GlobalEnv::nthread_per_process() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return nthread_per_process_;
 }
 
 int GlobalEnv::world_size() const {
@@ -126,19 +146,14 @@ int GlobalEnv::local_proc_rank() const {
     return local_proc_rank_;
 }
 
-int GlobalEnv::nproc_per_node() const {
-    CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return nproc_per_node_;
-}
-
-int GlobalEnv::nthread_per_process() const {
-    CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return nthread_per_process_;
-}
-
 int GlobalEnv::tensor_parallel_size() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return tensor_parallel_size_;
+}
+
+int GlobalEnv::sequence_parallel_size() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return sequence_parallel_enabled_ ? tensor_parallel_size_ : 1;
 }
 
 bool GlobalEnv::sequence_parallel_enabled() const {
@@ -175,34 +190,6 @@ inline int NumGroups(const Layout &L, Axis target) {
 }
 } // namespace
 
-/**
- * @brief Generate a human-readable overview of all parallel communication groups.
- *
- * The output is intended for debugging, logging, and runtime verification of
- * distributed parallelism configuration.
- *
- * @param L  The Layout describing DP / TP / PP sizes and axis ordering.
- * @param skip_trivial_axes
- *        If true, axes whose size <= 1(i.e. parallel strategy that is not enabled)
- *        will be marked as "unenabled" and their detailed group listing will be skipped.
- *
- * @return A formatted string containing the full overview of process groups.
- *
- *         Example:
- *           === Parallel Communication Groups ===
- *           world_size = 8, config: {DP=2, TP=4, PP=1}, order: {DP -> TP -> PP}
- *           [DP] size=2, num_groups=4
- *           - DP 0 (dp=-, tp=0, pp=0): [0, 4]
- *           - DP 1 (dp=-, tp=1, pp=0): [1, 5]
- *           - DP 2 (dp=-, tp=2, pp=0): [2, 6]
- *           - DP 3 (dp=-, tp=3, pp=0): [3, 7]
- *
- *           [TP] size=4, num_groups=2
- *           - TP 0 (dp=0, tp=-, pp=0): [0, 1, 2, 3]
- *           - TP 1 (dp=1, tp=-, pp=0): [4, 5, 6, 7]
- *
- *           [PP] size=1, unenabled
- */
 std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
     std::ostringstream oss;
     oss << std::format("\n=== Parallel Communication Groups ===\n"

@@ -6,7 +6,6 @@
 #include <fstream>
 #include <memory>
 #include <random>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -328,7 +327,7 @@ std::vector<std::shared_ptr<Tensor>> Block::Forward(const std::vector<std::share
 LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
     auto [is_first_stage, is_last_stage, start_layer, end_layer]
-        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size);
+        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, nn::parallel::pp_rank);
 
     std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
     if (is_first_stage) {
@@ -364,7 +363,8 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
     // (bs, seq_len)
     auto x1 = x[0];
     const auto device = x1->GetDevice();
-    const auto t = x1->Dims()[1]; // seq_len
+    const auto t
+        = x1->Dims()[1] * (is_first_stage ? 1 : nn::parallel::global::GetSequenceParallelSize()); // full_seq_len
     CHECK_LE(t, config_.block_size) << "Cannot forward sequence of length " << t << ", block size is only "
                                     << config_.block_size;
 
@@ -467,7 +467,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
                                                         .max_gen_batch_size = max_gen_bs});
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
     auto [is_first_stage, is_last_stage, start_layer, end_layer]
-        = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size);
+        = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size, nn::parallel::pp_rank);
 
     const int tp_size = nn::parallel::global::GetTensorParallelSize();
     const int tp_rank = nn::parallel::tp_rank;

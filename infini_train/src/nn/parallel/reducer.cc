@@ -206,8 +206,7 @@ void Reducer::BuildBuckets(const std::vector<std::vector<size_t>> &bucket_indice
         CHECK(!bucket_indices[bucket_idx].empty());
         const auto &first_param = params_[bucket_indices[bucket_idx][0]];
         bucket.dtype = first_param->Dtype();
-        // FIXME(zbl): use global_rank() in multi-node settings
-        bucket.device_rank = first_param->GetDevice()->rank().thread_rank();
+        bucket.device_rank = first_param->GetDevice()->rank().GlobalRank();
 
         size_t total_elems = 0;
 

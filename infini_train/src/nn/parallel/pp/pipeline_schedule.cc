@@ -3,12 +3,14 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/autograd/grad_mode.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/module.h"
@@ -93,9 +95,10 @@ float ScheduleGPipe::StepMicroBatches(const std::vector<std::shared_ptr<Tensor>>
         for (int mb = 0; mb < n; ++mb) {
             auto out_tensor = outputs[mb][0];
 
-            auto gradient = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
+            auto dummy_gradient
+                = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
 
-            out_tensor->Backward(gradient);
+            out_tensor->Backward(dummy_gradient);
         }
     } else {
         for (int mb = 0; mb < n; ++mb) {
@@ -122,6 +125,21 @@ float ScheduleGPipe::StepMicroBatches(const std::vector<std::shared_ptr<Tensor>>
             total_loss += static_cast<const float *>(loss_cpu.DataPtr())[0];
 
             loss->Backward();
+        }
+    }
+
+    {
+        // send loss to rank0
+        autograd::NoGradGuard no_grad;
+        auto lossf_tensor
+            = std::make_shared<Tensor>(&total_loss, std::vector<int64_t>{}, DataType::kFLOAT32, stage_->device());
+        if (stage_->IsFirstStage()) {
+            IRecv({lossf_tensor}, stage_->device(), stage_->stage_index(), stage_->num_stages() - 1);
+            total_loss
+                = static_cast<float *>(lossf_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
+        }
+        if (stage_->IsLastStage()) {
+            ISend({lossf_tensor}, stage_->device(), stage_->stage_index(), 0, {});
         }
     }
 

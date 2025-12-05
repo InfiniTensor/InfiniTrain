@@ -1,8 +1,10 @@
 #pragma once
 
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -29,11 +31,11 @@ namespace infini_train::nn::parallel {
 #ifdef USE_NCCL
 class ProcessGroup {
 public:
-    explicit ProcessGroup(const std::vector<int> &device_indices);
+    explicit ProcessGroup(const std::string &process_group_name, const std::vector<int> &device_indices);
 
     ~ProcessGroup();
 
-    int GetGroupRank(int thread_rank) const;
+    int GetGroupRank(int global_rank) const;
 
     // Communication operations
     void AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const;
@@ -62,15 +64,26 @@ public:
     std::shared_ptr<Work> AllReduceAsync(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const;
 
 private:
+    void InitSingleProcess(const std::vector<int> &ranks);
+
+    void InitMultiProcess(const std::vector<int> &ranks);
+
+    void InitStreams();
+
+private:
     std::vector<ncclComm_t> comms_;
     std::vector<cudaStream_t> comm_streams_;
     std::vector<const Device *> devices_;
 
     std::unordered_map<const Device *, ncclComm_t> device_comm_map_;
     std::unordered_map<const Device *, cudaStream_t> device_stream_map_;
-    std::unordered_map<int, int> thread_group_rank_map_; // thread_rank : group_rank
+    std::unordered_map<int, int> global_group_rank_map_; // global_rank : group_rank
 
-    int comm_size_ = 0;
+    int world_size_ = 0;
+
+    const std::string name_ = "";
+
+    bool is_main_process_ = false;
 };
 #endif
 
@@ -90,8 +103,29 @@ public:
 
 private:
     ProcessGroupFactory();
+
+    template <typename Creator, typename = std::enable_if_t<std::is_invocable_v<Creator>>>
+    const ProcessGroup *GetOrCreate(const std::string &name, Creator &&creator) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        auto [it, inserted] = name_to_group_.emplace(name, nullptr);
+        if (!inserted) {
+            while (it->second == nullptr) { cond_.wait(lock); }
+            return it->second.get();
+        }
+
+        lock.unlock();
+        auto new_group = creator();
+        lock.lock();
+
+        it->second = std::move(new_group);
+        cond_.notify_all();
+        return it->second.get();
+    }
+
+private:
     // TODO(dcj): maybe RWLock later?
     mutable std::mutex mutex_;
+    std::condition_variable cond_;
     std::unordered_map<std::string, std::unique_ptr<ProcessGroup>> name_to_group_;
 };
 } // namespace infini_train::nn::parallel
