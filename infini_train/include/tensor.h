@@ -60,8 +60,12 @@ public:
     Tensor(const std::vector<int64_t> &dims, DataType dtype, const Device *device);
     Tensor(const std::vector<int64_t> &dims, DataType dtype)
         : Tensor(dims, dtype, DeviceManager::Instance()->GetDevice(DeviceType::kCPU, 0)) {}
+
     Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &dims);
+
     Tensor(const float *data, const std::vector<int64_t> &dims, DataType dtype, const Device *device);
+    Tensor(const float *data, const std::vector<int64_t> &dims, DataType dtype)
+        : Tensor(data, dims, dtype, DeviceManager::Instance()->GetDevice(DeviceType::kCPU, 0)) {}
 
     const Device *GetDevice() const;
 

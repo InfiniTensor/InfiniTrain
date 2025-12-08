@@ -164,7 +164,7 @@ inline std::vector<int> GetGroupRanks(Axis target, int rank) {
  *
  *         Example:
  *           === Parallel Communication Groups ===
- *           world_size = 8, config: {DP=2, TP=4, PP=1}, order: {DP -> TP -> PP}
+ *           world_size = 8, config: {DP=2, TP=4, PP=1}, order: {TP -> DP -> PP}
  *           [DP] size=2, num_groups=4
  *           - DP 0 (dp=-, tp=0, pp=0): [0, 4]
  *           - DP 1 (dp=-, tp=1, pp=0): [1, 5]
