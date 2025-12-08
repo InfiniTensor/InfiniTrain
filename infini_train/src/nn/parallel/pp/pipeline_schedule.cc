@@ -128,21 +128,6 @@ float ScheduleGPipe::StepMicroBatches(const std::vector<std::shared_ptr<Tensor>>
         }
     }
 
-    {
-        // send loss to rank0
-        autograd::NoGradGuard no_grad;
-        auto lossf_tensor
-            = std::make_shared<Tensor>(&total_loss, std::vector<int64_t>{}, DataType::kFLOAT32, stage_->device());
-        if (stage_->IsFirstStage()) {
-            IRecv({lossf_tensor}, stage_->device(), stage_->stage_index(), stage_->num_stages() - 1);
-            total_loss
-                = static_cast<float *>(lossf_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
-        }
-        if (stage_->IsLastStage()) {
-            ISend({lossf_tensor}, stage_->device(), stage_->stage_index(), 0, {});
-        }
-    }
-
     return total_loss;
 }
 

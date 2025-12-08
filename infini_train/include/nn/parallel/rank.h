@@ -16,6 +16,8 @@ public:
 
     bool IsMainRank() const;
 
+    bool IsLastRank() const;
+
 private:
     const int process_rank_ = 0; // Rank of the current process within the node
     const int thread_rank_ = 0;  // Rank of the current thread within the process
