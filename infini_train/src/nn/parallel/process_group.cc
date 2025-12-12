@@ -185,35 +185,197 @@ void ProcessGroup::InitStreams() {
 
 int ProcessGroup::GetGroupRank(int global_rank) const { return global_group_rank_map_.at(global_rank); }
 
-void ProcessGroup::AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const {
+std::shared_ptr<Work> ProcessGroup::AllReduce(const std::shared_ptr<Tensor> &tensor,
+                                              const function::AllreduceOptions &opts) const {
     void *buffer = tensor->DataPtr();
-
     const auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+    device->SetDevice();
+
     auto comm = device_comm_map_.at(device);
 
-    device->SetDevice();
+    cudaStream_t compute_stream = device->Stream();
+    cudaStream_t comm_stream = device_stream_map_.at(device);
+
+    auto work = std::make_shared<WorkNccl>(device, comm);
+
+    cudaEvent_t ready_event = reinterpret_cast<cudaEvent_t>(work->ready_event());
+    cudaEvent_t done_event = reinterpret_cast<cudaEvent_t>(work->done_event());
+
+    CUDA_CHECK(cudaEventRecord(ready_event, compute_stream));
+    CUDA_CHECK(cudaStreamWaitEvent(comm_stream, ready_event, 0));
+
+    // Perform NcclAllReduce on comm stream
     NCCL_CHECK(ncclAllReduce(buffer, buffer, tensor->NumElements(), kNcclDtypeMap.at(tensor->Dtype()),
-                             kNcclReduceOpMap.at(reduce_op), comm, device->Stream()));
+                             kNcclReduceOpMap.at(opts.reduce_op_type), comm, comm_stream));
+
+    CUDA_CHECK(cudaEventRecord(done_event, comm_stream));
+
+    if (opts.async_op) {
+        return std::move(work);
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
+    }
 }
 
-void ProcessGroup::AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input) const {
+std::shared_ptr<Work> ProcessGroup::AllGather(const std::shared_ptr<Tensor> &output,
+                                              const std::shared_ptr<Tensor> &input, bool async_op) const {
     const auto *device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     auto comm = device_comm_map_.at(device);
 
     device->SetDevice();
+
+    cudaStream_t compute_stream = device->Stream();
+    cudaStream_t comm_stream = device_stream_map_.at(device);
+
+    auto work = std::make_shared<WorkNccl>(device, comm);
+
+    cudaEvent_t ready_event = reinterpret_cast<cudaEvent_t>(work->ready_event());
+    cudaEvent_t done_event = reinterpret_cast<cudaEvent_t>(work->done_event());
+
+    CUDA_CHECK(cudaEventRecord(ready_event, compute_stream));
+    CUDA_CHECK(cudaStreamWaitEvent(comm_stream, ready_event, 0));
+
     NCCL_CHECK(ncclAllGather(input->DataPtr(), output->DataPtr(), input->NumElements(),
-                             kNcclDtypeMap.at(input->Dtype()), comm, device->Stream()));
+                             kNcclDtypeMap.at(input->Dtype()), comm, comm_stream));
+
+    CUDA_CHECK(cudaEventRecord(done_event, comm_stream));
+
+    if (async_op) {
+        return std::move(work);
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
+    }
 }
 
-void ProcessGroup::ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
-                                 function::ReduceOpType reduce_op) const {
+std::shared_ptr<Work> ProcessGroup::ReduceScatter(const std::shared_ptr<Tensor> &output,
+                                                  const std::shared_ptr<Tensor> &input,
+                                                  const function::AllreduceOptions &opts) const {
     const auto *device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     auto comm = device_comm_map_.at(device);
 
     device->SetDevice();
+
+    cudaStream_t compute_stream = device->Stream();
+    cudaStream_t comm_stream = device_stream_map_.at(device);
+
+    auto work = std::make_shared<WorkNccl>(device, comm);
+
+    cudaEvent_t ready_event = reinterpret_cast<cudaEvent_t>(work->ready_event());
+    cudaEvent_t done_event = reinterpret_cast<cudaEvent_t>(work->done_event());
+
+    CUDA_CHECK(cudaEventRecord(ready_event, compute_stream));
+    CUDA_CHECK(cudaStreamWaitEvent(comm_stream, ready_event, 0));
+
     NCCL_CHECK(ncclReduceScatter(input->DataPtr(), output->DataPtr(), output->NumElements(),
-                                 kNcclDtypeMap.at(input->Dtype()), kNcclReduceOpMap.at(reduce_op), comm,
-                                 device->Stream()));
+                                 kNcclDtypeMap.at(input->Dtype()), kNcclReduceOpMap.at(opts.reduce_op_type), comm,
+                                 comm_stream));
+
+    CUDA_CHECK(cudaEventRecord(done_event, comm_stream));
+
+    if (opts.async_op) {
+        return std::move(work);
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
+    }
+}
+
+std::shared_ptr<Work> ProcessGroup::Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
+                                         bool async_op) const {
+    CHECK_GT(tensors.size(), 0);
+    const auto *device = dynamic_cast<const CudaDevice *>(tensors[0]->GetDevice());
+    auto comm = device_comm_map_.at(device);
+
+    device->SetDevice();
+
+    cudaStream_t compute_stream = device->Stream();
+    cudaStream_t comm_stream = device_stream_map_.at(device);
+
+    auto work = std::make_shared<WorkNccl>(device, comm);
+
+    cudaEvent_t ready_event = reinterpret_cast<cudaEvent_t>(work->ready_event());
+    cudaEvent_t done_event = reinterpret_cast<cudaEvent_t>(work->done_event());
+
+    CUDA_CHECK(cudaEventRecord(ready_event, compute_stream));
+    CUDA_CHECK(cudaStreamWaitEvent(comm_stream, ready_event, 0));
+
+    for (int i = 0; i < tensors.size(); ++i) {
+        auto tensor = tensors[i];
+        CHECK_NOTNULL(tensor);
+
+        CHECK_EQ(device, tensor->GetDevice());
+
+        auto dtype = tensor->Dtype();
+        auto nccl_dtype = kNcclDtypeMap.at(dtype);
+        auto count = tensor->NumElements();
+        void *buffer = tensor->DataPtr();
+        CHECK_NOTNULL(buffer);
+
+        NCCL_CHECK(ncclSend(buffer, count, nccl_dtype, dest_rank, comm, comm_stream));
+    }
+
+    CUDA_CHECK(cudaEventRecord(done_event, comm_stream));
+
+    if (async_op) {
+        return std::move(work);
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
+    }
+
+    return std::move(work);
+}
+
+std::shared_ptr<Work> ProcessGroup::Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank,
+                                         bool async_op) const {
+    CHECK_GT(tensors.size(), 0);
+    const auto *device = dynamic_cast<const CudaDevice *>(tensors[0]->GetDevice());
+    auto comm = device_comm_map_.at(device);
+
+    device->SetDevice();
+
+    cudaStream_t compute_stream = device->Stream();
+    cudaStream_t comm_stream = device_stream_map_.at(device);
+
+    auto work = std::make_shared<WorkNccl>(device, comm);
+
+    cudaEvent_t ready_event = reinterpret_cast<cudaEvent_t>(work->ready_event());
+    cudaEvent_t done_event = reinterpret_cast<cudaEvent_t>(work->done_event());
+
+    CUDA_CHECK(cudaEventRecord(ready_event, compute_stream));
+    CUDA_CHECK(cudaStreamWaitEvent(comm_stream, ready_event, 0));
+
+    CHECK_NE(src_rank, -1) << "Destination device not found in input tensors's devices";
+
+    for (int i = 0; i < tensors.size(); ++i) {
+        auto tensor = tensors[i];
+        CHECK_NOTNULL(tensor);
+
+        CHECK_EQ(device, tensor->GetDevice());
+
+        CHECK_NE(src_rank, -1) << "Source device not found in input devices";
+
+        auto dtype = tensor->Dtype();
+        auto nccl_dtype = kNcclDtypeMap.at(dtype);
+        auto count = tensor->NumElements();
+        void *buffer = tensor->DataPtr();
+        CHECK_NOTNULL(buffer);
+
+        NCCL_CHECK(ncclRecv(buffer, count, nccl_dtype, src_rank, comm, compute_stream));
+    }
+
+    CUDA_CHECK(cudaEventRecord(done_event, comm_stream));
+
+    if (async_op) {
+        return std::move(work);
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
+    }
+
+    return std::move(work);
 }
 
 std::vector<std::shared_ptr<Tensor>>
@@ -395,86 +557,6 @@ std::shared_ptr<Tensor> ProcessGroup::Gather(const std::vector<std::shared_ptr<T
     NCCL_CHECK(ncclGroupEnd());
     return output;
 }
-
-std::vector<std::shared_ptr<Tensor>> ProcessGroup::NcclSend(std::vector<std::shared_ptr<Tensor>> tensors,
-                                                            int dest_rank) const {
-    for (int i = 0; i < tensors.size(); ++i) {
-        auto tensor = tensors[i];
-        CHECK_NOTNULL(tensor);
-
-        auto device = tensor->GetDevice();
-        device->SetDevice();
-
-        cudaStream_t stream = dynamic_cast<const CudaDevice *>(device)->Stream();
-        ncclComm_t comm = device_comm_map_.at(device);
-
-        CHECK_NE(dest_rank, -1) << "Destination device not found in input tensors's devices";
-
-        auto dtype = tensor->Dtype();
-        auto nccl_dtype = kNcclDtypeMap.at(dtype);
-        auto count = tensor->NumElements();
-        void *buffer = tensor->DataPtr();
-        CHECK_NOTNULL(buffer);
-
-        NCCL_CHECK(ncclSend(buffer, count, nccl_dtype, dest_rank, comm, stream));
-    }
-    return tensors;
-}
-
-std::vector<std::shared_ptr<Tensor>> ProcessGroup::NcclRecv(std::vector<std::shared_ptr<Tensor>> tensors,
-                                                            int src_rank) const {
-    for (int i = 0; i < tensors.size(); ++i) {
-        auto tensor = tensors[i];
-        CHECK_NOTNULL(tensor);
-
-        auto device = tensor->GetDevice();
-        device->SetDevice();
-
-        cudaStream_t stream = dynamic_cast<const CudaDevice *>(device)->Stream();
-        ncclComm_t comm = device_comm_map_.at(device);
-
-        CHECK_NE(src_rank, -1) << "Source device not found in input devices";
-
-        auto dtype = tensor->Dtype();
-        auto nccl_dtype = kNcclDtypeMap.at(dtype);
-        auto count = tensor->NumElements();
-        void *buffer = tensor->DataPtr();
-        CHECK_NOTNULL(buffer);
-
-        NCCL_CHECK(ncclRecv(buffer, count, nccl_dtype, src_rank, comm, stream));
-    }
-    return tensors;
-}
-
-std::shared_ptr<Work> ProcessGroup::AllReduceAsync(const std::shared_ptr<Tensor> &tensor,
-                                                   function::ReduceOpType reduce_op) const {
-    void *buffer = tensor->DataPtr();
-    const auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
-    device->SetDevice();
-
-    auto comm = device_comm_map_.at(device);
-
-    cudaStream_t compute_stream = device->Stream();
-    cudaStream_t comm_stream = device_stream_map_.at(device);
-
-    auto work = std::make_shared<WorkNccl>(device, comm);
-
-    cudaEvent_t ready_event = reinterpret_cast<cudaEvent_t>(work->ready_event());
-    cudaEvent_t done_event = reinterpret_cast<cudaEvent_t>(work->done_event());
-
-    CUDA_CHECK(cudaEventRecord(ready_event, compute_stream));
-    CUDA_CHECK(cudaStreamWaitEvent(comm_stream, ready_event, 0));
-
-    // Perform NcclAllReduce on comm stream
-    NCCL_CHECK(ncclAllReduce(buffer, buffer, tensor->NumElements(), kNcclDtypeMap.at(tensor->Dtype()),
-                             kNcclReduceOpMap.at(reduce_op), comm, comm_stream));
-
-    CUDA_CHECK(cudaEventRecord(done_event, comm_stream));
-
-    // Do not let compute stream wait for done event here
-    return std::move(work);
-}
-
 #endif
 
 ProcessGroupFactory *ProcessGroupFactory::Instance() {

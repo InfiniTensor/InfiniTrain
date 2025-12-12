@@ -44,7 +44,7 @@ public:
     ~WorkNccl() override;
 
     bool WaitBlocking(std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) override;
-    bool WaitNonBlocking();
+    bool WaitNonBlocking() override;
 
     bool IsCompleted() const override;
     bool IsSuccess() const override;

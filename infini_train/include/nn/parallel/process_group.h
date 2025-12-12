@@ -37,14 +37,21 @@ public:
 
     int GetGroupRank(int global_rank) const;
 
-    // Communication operations
-    void AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const;
+    // Asynchronous communication APIs (Compute / Communication stream decoupled)
+    std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor,
+                                    const function::AllreduceOptions &opts) const;
 
-    void AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input) const;
+    std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                                    bool async_op) const;
 
-    void ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
-                       function::ReduceOpType reduce_op) const;
+    std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                                        const function::AllreduceOptions &opts) const;
 
+    std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank, bool async_op) const;
+
+    std::shared_ptr<Work> Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank, bool async_op) const;
+
+    // Legacy communication APIs (Single-stream)
     std::vector<std::shared_ptr<Tensor>> BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const;
 
     std::vector<std::shared_ptr<Tensor>>
@@ -55,13 +62,6 @@ public:
 
     std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors, const Device *destination,
                                    int64_t dim) const;
-
-    std::vector<std::shared_ptr<Tensor>> NcclSend(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank) const;
-
-    std::vector<std::shared_ptr<Tensor>> NcclRecv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank) const;
-
-    // Async communication functions
-    std::shared_ptr<Work> AllReduceAsync(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op) const;
 
 private:
     void InitSingleProcess(const std::vector<int> &ranks);

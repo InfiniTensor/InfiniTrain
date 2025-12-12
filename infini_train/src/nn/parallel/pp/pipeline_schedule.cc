@@ -2,14 +2,12 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_schedule.h"
 
 #include <cstddef>
-#include <cstdint>
 #include <memory>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
-#include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/init.h"
