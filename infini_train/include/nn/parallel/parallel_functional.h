@@ -21,13 +21,14 @@ std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std:
 std::vector<std::shared_ptr<Tensor>> Gather(const std::vector<std::vector<std::shared_ptr<Tensor>>> &outputs,
                                             const Device *target_device, int dim);
 
-void AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op, const ProcessGroup *pg = nullptr);
+void AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op, const ProcessGroup *pg = nullptr,
+               bool async_op = false);
 
 void AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
-               const ProcessGroup *pg = nullptr);
+               const ProcessGroup *pg = nullptr, bool async_op = false);
 
 void ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input, ReduceOpType reduce_op,
-                   const ProcessGroup *pg = nullptr);
+                   const ProcessGroup *pg = nullptr, bool async_op = false);
 
 std::vector<std::vector<std::shared_ptr<Tensor>>>
 BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors,

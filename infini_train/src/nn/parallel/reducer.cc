@@ -4,7 +4,6 @@
 #include <cstring>
 #include <mutex>
 #include <numeric>
-#include <string>
 
 #ifdef USE_CUDA
 #include <cuda_runtime.h>
@@ -13,7 +12,6 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/function_hook.h"
-#include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
@@ -421,7 +419,7 @@ void Reducer::FinalizeBucketDense(size_t bucket_index) {
         // FIXME(zbl): support custom hook later
         LOG(FATAL) << "Custom hook is not supported now";
     } else {
-        bucket.work = ddp_pg->AllReduceAsync(bucket.contents, function::ReduceOpType::kAvg);
+        bucket.work = ddp_pg->AllReduce(bucket.contents, {function::ReduceOpType::kAvg, true});
     }
 }
 
