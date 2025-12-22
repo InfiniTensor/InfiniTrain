@@ -19,9 +19,9 @@ PipelineStage::PipelineStage(const std::shared_ptr<Module> &model, int stage_ind
       optimizer_(std::move(optimizer)),
       device_(DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA).at(device_id)) {}
 
-std::vector<std::shared_ptr<Tensor>>
-PipelineStage::ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &inputs) {
-    return model_->ForwardChunk(0, inputs);
+std::vector<std::shared_ptr<Tensor>> PipelineStage::ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &inputs,
+                                                                    int local_chunk_idx) {
+    return model_->ForwardChunk(local_chunk_idx, inputs);
 }
 
 } // namespace infini_train::nn::parallel

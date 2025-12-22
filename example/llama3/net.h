@@ -150,7 +150,7 @@ public:
 
     void BuildChunks();
     std::vector<std::shared_ptr<infini_train::Tensor>>
-    ForwardChunk(int chunk_idx, const std::vector<std::shared_ptr<infini_train::Tensor>> &input) override;
+    ForwardChunk(int local_chunk_idx, const std::vector<std::shared_ptr<infini_train::Tensor>> &input) override;
 
     static std::shared_ptr<LLaMA3> FromPretrained(ModelType model_type);
     static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath);

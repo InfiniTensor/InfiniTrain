@@ -18,6 +18,12 @@ class PipelineSchedule;
 
 extern thread_local int pp_rank;
 
+struct StageInfo {
+    bool is_first_stage;
+    bool is_last_stage;
+    std::vector<std::pair<int, int>> layer_chunks;
+};
+
 class PipelineParallel : public Module {
 public:
     PipelineParallel(const std::shared_ptr<nn::Module> module, int num_stages, int num_micro_batches,
@@ -28,8 +34,7 @@ public:
                     const std::vector<std::shared_ptr<Tensor>> &target, const std::shared_ptr<nn::Module> &loss_fn,
                     DataType dtype);
 
-    static std::tuple<bool, bool, std::vector<std::pair<int, int>>> GetStageInfo(int total_layers, int pp_size,
-                                                                                 int chunks_per_stage = 1);
+    static StageInfo GetStageInfo(int total_layers, int pp_size, int chunks_per_stage = 1);
 
 private:
     int num_stages_ = -1;

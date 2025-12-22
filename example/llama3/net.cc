@@ -372,13 +372,13 @@ void LLaMA3::BuildChunks() {
     auto h_layers = std::dynamic_pointer_cast<nn::ModuleList>(transformer->mutable_module(kHLayerName));
 
     int layer_offset = 0;
-    for (size_t chunk_idx = 0; chunk_idx < layer_chunks.size(); ++chunk_idx) {
+    for (size_t local_chunk_idx = 0; local_chunk_idx < layer_chunks.size(); ++local_chunk_idx) {
         LLaMA3Chunk chunk;
-        if (chunk_idx == 0 && is_first_stage) {
+        if (local_chunk_idx == 0 && is_first_stage) {
             chunk.embedding_ = transformer->mutable_module(kWTELayerName);
         }
 
-        const auto &[start, end] = layer_chunks[chunk_idx];
+        const auto &[start, end] = layer_chunks[local_chunk_idx];
         int chunk_layer_count = end - start;
 
         std::vector<std::shared_ptr<nn::Module>> chunk_blocks;
@@ -392,7 +392,7 @@ void LLaMA3::BuildChunks() {
 
         chunk.blocks_ = std::make_shared<nn::ModuleList>(std::move(chunk_blocks));
 
-        if (chunk_idx == layer_chunks.size() - 1 && is_last_stage) {
+        if (local_chunk_idx == layer_chunks.size() - 1 && is_last_stage) {
             chunk.norm_ = transformer->mutable_module(kLnFLayerName);
             chunk.head_ = modules_[kLMHeadLayerName];
         }
@@ -401,16 +401,23 @@ void LLaMA3::BuildChunks() {
     }
 }
 
-std::vector<std::shared_ptr<Tensor>> LLaMA3::ForwardChunk(int chunk_idx,
+std::vector<std::shared_ptr<Tensor>> LLaMA3::ForwardChunk(int local_chunk_idx,
                                                           const std::vector<std::shared_ptr<Tensor>> &input) {
     // printf("[stage %d] LLaMA3::ForwardChunk entry\n", nn::parallel::pp_rank);
-    if (chunks_.size() <= chunk_idx) {
+    if (chunks_.size() <= local_chunk_idx) {
         LOG(FATAL) << "chunk must be built!";
     }
-    auto &chunk = chunks_[chunk_idx];
+    auto &chunk = chunks_[local_chunk_idx];
     auto x1 = input[0];
     const auto device = x1->GetDevice();
-    const auto t = x1->Dims()[1]; // seq_len
+
+    int pp_size = nn::parallel::global::GetPipelineParallelSize();
+    int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
+    auto [is_first_stage, is_last_stage, layer_chunks]
+        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, vpp_size);
+
+    const auto t
+        = x1->Dims()[1] * (is_first_stage ? 1 : nn::parallel::global::GetSequenceParallelSize()); // full_seq_len
 
     if (chunk.has_embedding()) {
         x1 = chunk.embedding_->Forward({x1})[0];
@@ -453,8 +460,7 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shar
     // (bs, seq_len)
     auto x1 = x[0];
     const auto device = x1->GetDevice();
-    const auto t
-        = x1->Dims()[1] * (is_first_stage ? 1 : nn::parallel::global::GetSequenceParallelSize()); // full_seq_len
+    const auto t = x1->Dims()[1]; // full_seq_len
     CHECK_LE(t, config_.block_size) << "Cannot forward sequence of length " << t << ", block size is only "
                                     << config_.block_size;
 
