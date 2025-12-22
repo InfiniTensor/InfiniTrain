@@ -28,40 +28,96 @@ class Work;
 
 namespace infini_train::nn::parallel {
 
-#ifdef USE_NCCL
 class ProcessGroup {
 public:
-    explicit ProcessGroup(const std::string &process_group_name, const std::vector<int> &device_indices);
+    virtual int GetGroupRank(int global_rank) const;
 
-    ~ProcessGroup();
+    // Asynchronous communication APIs (Compute / Communication stream decoupled)
+    virtual std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor,
+                                            const function::AllreduceOptions &opts) const
+        = 0;
 
-    int GetGroupRank(int global_rank) const;
+    virtual std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                                            bool async_op) const
+        = 0;
+
+    virtual std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output,
+                                                const std::shared_ptr<Tensor> &input,
+                                                const function::AllreduceOptions &opts) const
+        = 0;
+
+    virtual std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank, bool async_op) const
+        = 0;
+
+    virtual std::shared_ptr<Work> Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank, bool async_op) const
+        = 0;
+
+    // Legacy communication APIs (Single-stream)
+    virtual std::vector<std::shared_ptr<Tensor>>
+    BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const = 0;
+
+    virtual std::vector<std::shared_ptr<Tensor>>
+    ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads, const Device *destination) const
+        = 0;
+
+    virtual std::vector<std::shared_ptr<Tensor>> Scatter(const std::shared_ptr<Tensor> &tensor,
+                                                         std::vector<const Device *> devices, int64_t dim) const
+        = 0;
+
+    virtual std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors,
+                                           const Device *destination, int64_t dim) const
+        = 0;
+
+protected:
+    ProcessGroup(int world_size, const std::string &name);
+
+    std::vector<const Device *> devices_;
+
+    std::unordered_map<int, int> global_group_rank_map_; // global_rank : group_rank
+
+    int world_size_ = 0;
+
+    const std::string name_ = "";
+
+    bool is_main_process_ = false;
+};
+
+#ifdef USE_NCCL
+class ProcessGroupNCCL final : public ProcessGroup {
+public:
+    explicit ProcessGroupNCCL(const std::string &process_group_name, const std::vector<int> &device_indices);
+
+    ~ProcessGroupNCCL();
 
     // Asynchronous communication APIs (Compute / Communication stream decoupled)
     std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor,
-                                    const function::AllreduceOptions &opts) const;
+                                    const function::AllreduceOptions &opts) const override;
 
     std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
-                                    bool async_op) const;
+                                    bool async_op) const override;
 
     std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
-                                        const function::AllreduceOptions &opts) const;
+                                        const function::AllreduceOptions &opts) const override;
 
-    std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank, bool async_op) const;
+    std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
+                               bool async_op) const override;
 
-    std::shared_ptr<Work> Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank, bool async_op) const;
+    std::shared_ptr<Work> Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank,
+                               bool async_op) const override;
 
     // Legacy communication APIs (Single-stream)
-    std::vector<std::shared_ptr<Tensor>> BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const;
+    std::vector<std::shared_ptr<Tensor>>
+    BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const override;
 
     std::vector<std::shared_ptr<Tensor>>
-    ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads, const Device *destination) const;
+    ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads,
+                       const Device *destination) const override;
 
     std::vector<std::shared_ptr<Tensor>> Scatter(const std::shared_ptr<Tensor> &tensor,
-                                                 std::vector<const Device *> devices, int64_t dim) const;
+                                                 std::vector<const Device *> devices, int64_t dim) const override;
 
     std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors, const Device *destination,
-                                   int64_t dim) const;
+                                   int64_t dim) const override;
 
 private:
     void InitSingleProcess(const std::vector<int> &ranks);
@@ -73,17 +129,9 @@ private:
 private:
     std::vector<ncclComm_t> comms_;
     std::vector<cudaStream_t> comm_streams_;
-    std::vector<const Device *> devices_;
 
     std::unordered_map<const Device *, ncclComm_t> device_comm_map_;
     std::unordered_map<const Device *, cudaStream_t> device_stream_map_;
-    std::unordered_map<int, int> global_group_rank_map_; // global_rank : group_rank
-
-    int world_size_ = 0;
-
-    const std::string name_ = "";
-
-    bool is_main_process_ = false;
 };
 #endif
 
