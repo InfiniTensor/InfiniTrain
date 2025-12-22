@@ -247,14 +247,14 @@ void GPT2::BuildChunks() {
     auto h_layers = std::dynamic_pointer_cast<nn::ModuleList>(transformer->mutable_module(kHLayerName));
 
     int layer_offset = 0;
-    for (size_t chunk_idx = 0; chunk_idx < layer_chunks.size(); ++chunk_idx) {
+    for (size_t local_chunk_idx = 0; local_chunk_idx < layer_chunks.size(); ++local_chunk_idx) {
         GPT2Chunk chunk;
-        if (chunk_idx == 0 && is_first_stage) {
+        if (local_chunk_idx == 0 && is_first_stage) {
             chunk.wte_ = transformer->mutable_module(kWTELayerName);
             chunk.wpe_ = transformer->mutable_module(kWPELayerName);
         }
 
-        const auto &[start, end] = layer_chunks[chunk_idx];
+        const auto &[start, end] = layer_chunks[local_chunk_idx];
         int chunk_layer_count = end - start;
 
         std::vector<std::shared_ptr<nn::Module>> chunk_blocks;
@@ -268,7 +268,7 @@ void GPT2::BuildChunks() {
 
         chunk.blocks_ = std::make_shared<nn::ModuleList>(std::move(chunk_blocks));
 
-        if (chunk_idx == layer_chunks.size() - 1 && is_last_stage) {
+        if (local_chunk_idx == layer_chunks.size() - 1 && is_last_stage) {
             chunk.norm_ = transformer->mutable_module(kLnFLayerName);
             chunk.head_ = modules_[kLMHeadLayerName];
         }
@@ -278,15 +278,20 @@ void GPT2::BuildChunks() {
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
-GPT2::ForwardChunk(int chunk_idx, const std::vector<std::shared_ptr<infini_train::Tensor>> &input) {
-    if (chunks_.size() <= chunk_idx) {
+GPT2::ForwardChunk(int local_chunk_idx, const std::vector<std::shared_ptr<infini_train::Tensor>> &input) {
+    if (chunks_.size() <= local_chunk_idx) {
         LOG(FATAL) << "chunk must be built!";
     }
-    auto &chunk = chunks_[chunk_idx];
+    auto &chunk = chunks_[local_chunk_idx];
 
     // (B, T)
     auto x1 = input[0];
     const auto device = x1->GetDevice();
+
+    int pp_size = nn::parallel::global::GetPipelineParallelSize();
+    int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
+    auto [is_first_stage, is_last_stage, layer_chunks]
+        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, vpp_size);
 
     const auto t
         = x1->Dims()[1] * (is_first_stage ? 1 : nn::parallel::global::GetSequenceParallelSize()); // full_seq_len

@@ -28,35 +28,34 @@ public:
 
     virtual float StepMicroBatches(const std::vector<std::shared_ptr<Tensor>> &arg_mbs,
                                    const std::vector<std::shared_ptr<Tensor>> &target_mbs,
-                                   const std::shared_ptr<nn::Module> &loss_fn, DataType dtype)
-        = 0;
+                                   const std::shared_ptr<nn::Module> &loss_fn, DataType dtype);
 
-    std::vector<std::shared_ptr<Tensor>> ReceiveFromPrev();
-    std::vector<std::shared_ptr<Tensor>> SendToNext(const std::vector<std::shared_ptr<Tensor>> &tensors);
+    std::vector<std::shared_ptr<Tensor>> ReceiveFromPrev(int peer_rank);
+    std::vector<std::shared_ptr<Tensor>> SendToNext(const std::vector<std::shared_ptr<Tensor>> &tensors, int peer_rank);
 
 protected:
     int num_micro_batches_ = -1;
     std::shared_ptr<PipelineStage> stage_ = nullptr;
 };
 
-class ScheduleGPipe : public PipelineSchedule {
+class PipelineParallelScheduler {
 public:
-    ScheduleGPipe(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches)
-        : PipelineSchedule(std::move(stage), num_stages, num_micro_batches){};
+    struct Task {
+        int step;
+        int microbatch_id;
+        int global_chunk_id;
+        int local_chunk_idx;
+        bool is_forward;
+        int stage_id;
+        bool is_first_chunk;
+        bool is_last_chunk;
+    };
 
-    float StepMicroBatches(const std::vector<std::shared_ptr<Tensor>> &arg_mbs,
-                           const std::vector<std::shared_ptr<Tensor>> &target_mbs,
-                           const std::shared_ptr<nn::Module> &loss_fn, DataType dtype) override;
-};
+    static Task CreateTask(int step, int mb, int global_chunk, int num_stages, int total_chunks, bool is_forward);
 
-class Schedule1F1B : public PipelineSchedule {
-public:
-    Schedule1F1B(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches)
-        : PipelineSchedule(std::move(stage), num_stages, num_micro_batches){};
+    static std::vector<Task> GenerateGPipeSchedule(int n, int num_stages, int vpp_size);
 
-    float StepMicroBatches(const std::vector<std::shared_ptr<Tensor>> &arg_mbs,
-                           const std::vector<std::shared_ptr<Tensor>> &target_mbs,
-                           const std::shared_ptr<nn::Module> &loss_fn, DataType dtype) override;
+    static std::vector<Task> GenerateInterleaved1F1BSchedule(int n, int num_stages, int vpp_size);
 };
 
 } // namespace infini_train::nn::parallel
