@@ -3,7 +3,6 @@
 #include <atomic>
 #include <chrono>
 #include <exception>
-#include <memory>
 #include <mutex>
 
 #ifdef USE_CUDA
