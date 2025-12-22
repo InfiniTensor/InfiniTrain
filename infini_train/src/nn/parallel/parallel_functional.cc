@@ -19,7 +19,7 @@ std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpT
     if (pg == nullptr) {
         pg = ProcessGroupFactory::Instance()->GetDefaultProcessGroup();
     }
-    return pg->AllReduce(tensor, {reduce_op, async_op});
+    return pg->AllReduce(tensor, reduce_op, async_op);
 }
 
 std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
@@ -37,7 +37,7 @@ std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output, const
     if (pg == nullptr) {
         pg = ProcessGroupFactory::Instance()->GetDefaultProcessGroup();
     }
-    return pg->ReduceScatter(output, input, {reduce_op, async_op});
+    return pg->ReduceScatter(output, input, reduce_op, async_op);
 }
 
 std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
