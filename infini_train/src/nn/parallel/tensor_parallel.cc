@@ -103,7 +103,7 @@ std::shared_ptr<Tensor> Reduce(const std::shared_ptr<Tensor> &tensor) {
 
     auto output = std::make_shared<Tensor>(*tensor);
 
-    tp_group->AllReduce(output, {function::ReduceOpType::kSum, false});
+    tp_group->AllReduce(output, function::ReduceOpType::kSum, false);
     return output;
 }
 
@@ -125,7 +125,7 @@ std::shared_ptr<Tensor> ReduceScatterAlongFirstDim(const std::shared_ptr<Tensor>
 
     auto output = std::make_shared<Tensor>(output_shape, tensor->Dtype(), device);
 
-    tp_group->ReduceScatter(output, tensor, {function::ReduceOpType::kSum, false});
+    tp_group->ReduceScatter(output, tensor, function::ReduceOpType::kSum, false);
 
     return output;
 }
@@ -465,7 +465,7 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     auto local_max = logits_masked->Max(-1);
     auto global_max = local_max;
     if (tp_size > 1) {
-        tp_group->AllReduce(global_max, {function::ReduceOpType::kMax, false});
+        tp_group->AllReduce(global_max, function::ReduceOpType::kMax, false);
     }
     auto shifted = logits_masked->Sub(global_max->Unsqueeze(-1));
 

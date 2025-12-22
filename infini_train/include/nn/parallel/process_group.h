@@ -34,22 +34,25 @@ public:
 
     // Asynchronous communication APIs (Compute / Communication stream decoupled)
     virtual std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor,
-                                            const function::AllreduceOptions &opts) const
+                                            function::ReduceOpType reduce_op = function::ReduceOpType::kSum,
+                                            bool async_op = false) const
         = 0;
 
     virtual std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
-                                            bool async_op) const
+                                            bool async_op = false) const
         = 0;
 
-    virtual std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output,
-                                                const std::shared_ptr<Tensor> &input,
-                                                const function::AllreduceOptions &opts) const
+    virtual std::shared_ptr<Work>
+    ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                  function::ReduceOpType reduce_op = function::ReduceOpType::kSum, bool async_op = false) const
         = 0;
 
-    virtual std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank, bool async_op) const
+    virtual std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
+                                       bool async_op = false) const
         = 0;
 
-    virtual std::shared_ptr<Work> Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank, bool async_op) const
+    virtual std::shared_ptr<Work> Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank,
+                                       bool async_op = false) const
         = 0;
 
     // Legacy communication APIs (Single-stream)
@@ -90,14 +93,14 @@ public:
     ~ProcessGroupNCCL();
 
     // Asynchronous communication APIs (Compute / Communication stream decoupled)
-    std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor,
-                                    const function::AllreduceOptions &opts) const override;
+    std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op,
+                                    bool async_op) const override;
 
     std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
                                     bool async_op) const override;
 
     std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
-                                        const function::AllreduceOptions &opts) const override;
+                                        function::ReduceOpType reduce_op, bool async_op) const override;
 
     std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
                                bool async_op) const override;

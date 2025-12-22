@@ -188,7 +188,7 @@ void ProcessGroupNCCL::InitStreams() {
 }
 
 std::shared_ptr<Work> ProcessGroupNCCL::AllReduce(const std::shared_ptr<Tensor> &tensor,
-                                                  const function::AllreduceOptions &opts) const {
+                                                  function::ReduceOpType reduce_op, bool async_op) const {
     void *buffer = tensor->DataPtr();
     const auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
     device->SetDevice();
@@ -208,11 +208,11 @@ std::shared_ptr<Work> ProcessGroupNCCL::AllReduce(const std::shared_ptr<Tensor> 
 
     // Perform NcclAllReduce on comm stream
     NCCL_CHECK(ncclAllReduce(buffer, buffer, tensor->NumElements(), kNcclDtypeMap.at(tensor->Dtype()),
-                             kNcclReduceOpMap.at(opts.reduce_op_type), comm, comm_stream));
+                             kNcclReduceOpMap.at(reduce_op), comm, comm_stream));
 
     CUDA_CHECK(cudaEventRecord(done_event, comm_stream));
 
-    if (opts.async_op) {
+    if (async_op) {
         return std::move(work);
     } else {
         work->WaitNonBlocking();
@@ -253,7 +253,7 @@ std::shared_ptr<Work> ProcessGroupNCCL::AllGather(const std::shared_ptr<Tensor> 
 
 std::shared_ptr<Work> ProcessGroupNCCL::ReduceScatter(const std::shared_ptr<Tensor> &output,
                                                       const std::shared_ptr<Tensor> &input,
-                                                      const function::AllreduceOptions &opts) const {
+                                                      function::ReduceOpType reduce_op, bool async_op) const {
     const auto *device = dynamic_cast<const CudaDevice *>(input->GetDevice());
     auto comm = device_comm_map_.at(device);
 
@@ -271,12 +271,11 @@ std::shared_ptr<Work> ProcessGroupNCCL::ReduceScatter(const std::shared_ptr<Tens
     CUDA_CHECK(cudaStreamWaitEvent(comm_stream, ready_event, 0));
 
     NCCL_CHECK(ncclReduceScatter(input->DataPtr(), output->DataPtr(), output->NumElements(),
-                                 kNcclDtypeMap.at(input->Dtype()), kNcclReduceOpMap.at(opts.reduce_op_type), comm,
-                                 comm_stream));
+                                 kNcclDtypeMap.at(input->Dtype()), kNcclReduceOpMap.at(reduce_op), comm, comm_stream));
 
     CUDA_CHECK(cudaEventRecord(done_event, comm_stream));
 
-    if (opts.async_op) {
+    if (async_op) {
         return std::move(work);
     } else {
         work->WaitNonBlocking();
