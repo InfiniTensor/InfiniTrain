@@ -70,6 +70,9 @@ public:
 
     nn::parallel::Rank rank() const override;
 
+    void ResetMemPoolHighWatermarks() const;
+    std::pair<size_t, size_t> GetMemPoolPeakMB() const;
+
 private:
     CudaDevice(int8_t index);
 

@@ -1,11 +1,14 @@
 #include "infini_train/include/nn/parallel/distributed_data_parallel.h"
 
+#include <map>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/function_hook.h"
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/process_group.h"
@@ -17,35 +20,164 @@ namespace {
 constexpr char kModuleName[] = "module";
 } // namespace
 
-DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, int device_id,
-                                                 const ReducerOptions &opts) {
+DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, int thread_rank,
+                                                 const DistributedDataParallelConfig ddp_config)
+    : ddp_config_(ddp_config),
+      ddp_pg_(ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(thread_rank))) {
     for (auto &param : module->Parameters()) {
         auto device = param->GetDevice();
-        CHECK_EQ(device->Index(), device_id) << "All parameters must be on the same device as the module";
-        if (!opts.gradient_bucketing_enabled) {
-            auto ddp_pg
-                = ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(device->rank().thread_rank()));
+        CHECK_EQ(device->Index(), thread_rank) << "All parameters must be on the same device as the module";
+        if (!ddp_config.gradient_bucketing_enabled && !ddp_config.use_distributed_optimizer) {
             auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(
-                function::ReduceOpType::kAvg, ddp_pg);
+                function::ReduceOpType::kAvg, ddp_pg_);
             param->RegisterPostAccumulateGradHook(std::move(hook));
         }
     }
     for (auto &buffer : module->Buffers()) {
-        CHECK_EQ(buffer->GetDevice()->Index(), device_id) << "All buffers must be on the same device as the module";
+        CHECK_EQ(buffer->GetDevice()->Index(), thread_rank) << "All buffers must be on the same device as the module";
     }
     modules_[kModuleName] = std::move(module);
 
-    if (opts.gradient_bucketing_enabled) {
+    if (ddp_config.use_distributed_optimizer) {
+        BuildParamAndGradBuffers();
+        RegisterBackwardHooks();
+    } else if (ddp_config.gradient_bucketing_enabled) {
         // Bucket Assignment
         auto params = modules_[kModuleName]->Parameters();
-        const size_t first_cap_bytes = opts.first_bucket_cap_mb * kBytesPerMB;
-        const size_t normal_cap_bytes = opts.normal_bucket_cap_mb * kBytesPerMB;
+        const size_t first_cap_bytes = ddp_config.first_bucket_cap_mb * kBytesPerMB;
+        const size_t normal_cap_bytes = ddp_config.normal_bucket_cap_mb * kBytesPerMB;
         std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
         auto bucket_indices = ComputeBucketAssignmentBySize(params, bucket_size_limits);
 
-        reducer_ = std::make_shared<Reducer>(params, bucket_indices, opts);
+        reducer_ = std::make_shared<Reducer>(params, bucket_indices, ddp_config);
         reducer_->AttachHooksToParameters();
     }
+}
+
+void DistributedDataParallel::BuildParamAndGradBuffers() {
+    // (param_dtype, grad_dtype)
+    using DTypePair = std::pair<DataType, DataType>;
+    std::map<DTypePair, std::vector<std::shared_ptr<Tensor>>> dtype_to_params;
+
+    for (auto param : modules_[kModuleName]->Parameters()) {
+        if (!param->requires_grad()) {
+            continue;
+        }
+        auto param_dtype = param->Dtype();
+        auto grad_dtype = param->grad() ? param->grad()->Dtype() : param_dtype;
+        dtype_to_params[{param_dtype, grad_dtype}].push_back(param);
+    }
+
+    param_grad_buffers_.clear();
+    param_grad_buffers_.reserve(dtype_to_params.size());
+
+    total_params_ = 0;
+
+    for (auto &kv : dtype_to_params) {
+        auto [param_dtype, grad_dtype] = kv.first;
+        auto param_list = kv.second;
+
+        if (param_list.empty()) {
+            continue;
+        }
+
+        total_params_ += param_list.size();
+
+        auto buffer = std::make_shared<ParamAndGradBuffer>(param_list, param_dtype, grad_dtype, ddp_pg_, ddp_config_);
+
+        param_grad_buffers_.push_back(buffer);
+    }
+
+    // TODO(zbl): option for disable bucketing
+    bucket_groups_ = PartitionBuckets(param_grad_buffers_, /*force_single_bucket_group=*/false);
+
+    if (ddp_config_.use_distributed_optimizer && ddp_config_.overlap_param_gather) {
+        auto num_bucket_groups = bucket_groups_.size();
+        for (auto i = num_bucket_groups - 1; i > 0; --i) {
+            bucket_groups_[i]->SetNextParamGatherBucketGroup(bucket_groups_[i - 1]);
+        }
+    }
+
+    param_to_bucket_group_.clear();
+    for (auto &group : bucket_groups_) {
+        for (auto &bucket : group->buckets()) {
+            for (auto &param : bucket->params()) {
+                auto inserted = param_to_bucket_group_.emplace(param.get(), group).second;
+                if (!inserted) {
+                    LOG(FATAL) << "Parameter appears in more than one bucket group.";
+                }
+            }
+        }
+    }
+
+    num_params_ready_.store(0, std::memory_order_relaxed);
+
+    LOG(INFO) << "DDP BuildParamAndGradBuffers: "
+              << "dtype_groups=" << dtype_to_params.size() << ", param_grad_buffers=" << param_grad_buffers_.size()
+              << ", bucket_groups=" << bucket_groups_.size() << ", total_params=" << total_params_;
+}
+
+void DistributedDataParallel::RegisterBackwardHooks() {
+    class DDPPostAccumulateHook final : public autograd::PostAccumulateGradHook {
+    public:
+        DDPPostAccumulateHook(DistributedDataParallel *ddp, const std::weak_ptr<Tensor> param)
+            : ddp_(ddp), param_(param) {}
+
+        void operator()(const std::shared_ptr<Tensor> &) override {
+            if (auto param = param_.lock()) {
+                ddp_->OnGradReady(param);
+            }
+        }
+
+    private:
+        DistributedDataParallel *ddp_;
+        std::weak_ptr<Tensor> param_;
+    };
+
+    auto &module = modules_.at(kModuleName);
+    for (auto &param : module->Parameters()) {
+        if (!param->requires_grad()) {
+            continue;
+        }
+
+        auto hook = std::make_unique<DDPPostAccumulateHook>(this, param);
+        param->RegisterPostAccumulateGradHook(std::move(hook));
+    }
+}
+
+void DistributedDataParallel::OnGradReady(const std::shared_ptr<Tensor> &param) {
+    auto it = param_to_bucket_group_.find(param.get());
+    if (it != param_to_bucket_group_.end()) {
+        CHECK(param->requires_grad());
+        if (ddp_config_.overlap_grad_reduce) {
+            CHECK(param->grad()) << "param.grad being None is not safe when overlap_grad_reduce is True";
+        }
+
+        if (param->grad()) {
+            // Add to main_grad(buffer)
+            auto kernel = Dispatcher::Instance().GetKernel({param->GetDevice()->Type(), "AccumulateGrad"});
+            kernel.Call<void>(param->grad(), 1.f, param->main_grad());
+        }
+        // Can safely set grad to null because grad has already been added to main_grad(buffer)
+        // param->set_grad(nullptr);
+
+        if (ddp_config_.overlap_grad_reduce) {
+            it->second->RegisterGradReady(param);
+        }
+    }
+
+    // if (!ddp_config_.overlap_grad_reduce && !ddp_config_.use_distributed_optimizer) {
+    //     // Timing of FinishhGradSync: when all params are set ready
+    //     size_t old = num_params_ready_.fetch_add(1, std::memory_order_relaxed) + 1;
+    //     if (old == total_params_) {
+    //         for (auto &group : bucket_groups_) {
+    //             group->FinishGradSync();
+    //             group->Reset();
+    //         }
+
+    //         num_params_ready_.store(0, std::memory_order_relaxed);
+    //     }
+    // }
 }
 
 std::vector<std::shared_ptr<Tensor>>
