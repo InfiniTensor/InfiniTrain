@@ -113,6 +113,22 @@ Tensor::Tensor(const float *data, const std::vector<int64_t> &dims, DataType dty
     }
 }
 
+void Tensor::SetData(const Tensor &tensor, size_t offset, bool overwrite) {
+    CHECK(tensor.GetDevice() == GetDevice());
+    CHECK(tensor.Dtype() == Dtype());
+    CHECK_LE(tensor.offset_ + offset + SizeInBytes(), tensor.buffer_->Size());
+
+    if (overwrite) {
+        // Create a view of original tensor buffer
+        auto new_tensor = Tensor(tensor, offset, Dims());
+        // Copy in data
+        new_tensor.CopyFrom(*this);
+    }
+
+    buffer_ = tensor.buffer_;
+    offset_ = tensor.offset_ + offset;
+}
+
 const Device *Tensor::GetDevice() const { return buffer_->GetDevice(); }
 
 void *Tensor::DataPtr() { return reinterpret_cast<uint8_t *>(buffer_->DataPtr()) + offset_; }
@@ -576,6 +592,18 @@ void Tensor::set_grad(const std::shared_ptr<Tensor> &grad) {
         grad_ = grad;
     } else {
         grad_.reset();
+    }
+}
+
+std::shared_ptr<Tensor> Tensor::main_grad() const { return main_grad_; };
+void Tensor::set_main_grad(const std::shared_ptr<Tensor> &grad) {
+    if (grad) {
+        CHECK(grad->GetDevice() == GetDevice());
+        CHECK(grad->Dtype() == Dtype());
+        CHECK(grad->Dims() == Dims());
+        main_grad_ = grad;
+    } else {
+        main_grad_.reset();
     }
 }
 
