@@ -164,8 +164,8 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
 }
 
 Reducer::Reducer(std::vector<std::shared_ptr<Tensor>> parameters, std::vector<std::vector<size_t>> bucket_indices,
-                 const ReducerOptions &opts)
-    : params_(std::move(parameters)), opts_(opts) {
+                 const DistributedDataParallelConfig ddp_config)
+    : params_(std::move(parameters)), ddp_config_(ddp_config) {
     BuildBuckets(bucket_indices);
     ready_seen_this_iter_.assign(params_.size(), 0);
 }
@@ -263,8 +263,8 @@ void Reducer::RebuildBuckets() {
         tensors_in_order.push_back(params_[global_idx]);
     }
 
-    const size_t first_cap_bytes = opts_.first_bucket_cap_mb * kBytesPerMB;
-    const size_t normal_cap_bytes = opts_.normal_bucket_cap_mb * kBytesPerMB;
+    const size_t first_cap_bytes = ddp_config_.first_bucket_cap_mb * kBytesPerMB;
+    const size_t normal_cap_bytes = ddp_config_.normal_bucket_cap_mb * kBytesPerMB;
     std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
     auto new_bucket_indices = ComputeBucketAssignmentBySize(tensors_in_order, bucket_size_limits, full_order);
 
@@ -299,7 +299,7 @@ void Reducer::PrepareForBackward() {
 
     for (auto &bucket : buckets_) {
         bucket.pending = bucket.variables.size();
-        if (opts_.gradient_as_bucket_view) {
+        if (ddp_config_.gradient_as_bucket_view) {
             for (size_t i = 0; i < bucket.variables.size(); ++i) {
                 // Tie each param.grad to slice of contents
                 const auto &param = bucket.variables[i];
@@ -358,7 +358,7 @@ void Reducer::MarkVariableReadyDense(size_t variable_index) {
         ready_seen_this_iter_[variable_index] = 1;
     }
 
-    if (!opts_.gradient_as_bucket_view) {
+    if (!ddp_config_.gradient_as_bucket_view) {
         auto grad = bucket.variables[loc.intra_bucket_index]->grad();
         CHECK(grad && grad->Dtype() == bucket.dtype && grad->GetDevice() == bucket.contents->GetDevice());
         CopyGradToBucket(grad, bucket.contents, bucket.offsets[loc.intra_bucket_index]);
@@ -447,7 +447,7 @@ void Reducer::FinalizeBackward() {
             if (!bucket.work) {
                 continue;
             }
-            if (!opts_.gradient_as_bucket_view) {
+            if (!ddp_config_.gradient_as_bucket_view) {
                 for (size_t i = 0; i < bucket.variables.size(); ++i) {
                     // NOTE(zbl): For better performance, try to directly assgin bucket slice to grad instead of copying
                     //            i.e. bucket.variables[i]->set_grad(bucket.bucket_views_in[i]);
