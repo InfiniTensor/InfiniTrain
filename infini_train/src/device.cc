@@ -11,6 +11,10 @@
 #endif
 
 namespace infini_train {
+namespace {
+constexpr size_t kBytesPerMB = 1024ULL * 1024ULL;
+} // namespace
+
 Device::Device(DeviceType type, int8_t index) : type_(type), index_(index) {
     if (type_ == DeviceType::kCPU && index_ != 0) {
         LOG(FATAL) << "CPU device index should be 0";
@@ -72,6 +76,32 @@ CudaDevice::CudaDevice(int8_t index)
 
     CUBLAS_CHECK(cublasCreate(&cublas_handle_));
     CUBLAS_CHECK(cublasSetStream(cublas_handle_, stream_));
+}
+
+void CudaDevice::ResetMemPoolHighWatermarks() const {
+    SetDevice();
+    cudaMemPool_t pool;
+    CUDA_CHECK(cudaDeviceGetDefaultMemPool(&pool, index_));
+
+    cuuint64_t zero = 0;
+    // High watermark can only be reset to zero; non-zero is illegal.
+    CUDA_CHECK(cudaMemPoolSetAttribute(pool, cudaMemPoolAttrUsedMemHigh, &zero));
+    CUDA_CHECK(cudaMemPoolSetAttribute(pool, cudaMemPoolAttrReservedMemHigh, &zero));
+}
+
+std::pair<size_t, size_t> CudaDevice::GetMemPoolPeakMB() const {
+    SetDevice();
+    cudaMemPool_t pool;
+    CUDA_CHECK(cudaDeviceGetDefaultMemPool(&pool, index_));
+
+    cuuint64_t used = 0;
+    CUDA_CHECK(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrUsedMemHigh, &used));
+
+    cuuint64_t reserved = 0;
+    CUDA_CHECK(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrReservedMemHigh, &reserved));
+
+    return std::make_pair<size_t, size_t>(static_cast<size_t>(used / kBytesPerMB),
+                                          static_cast<size_t>(reserved / kBytesPerMB));
 }
 #endif // USE_CUDA
 

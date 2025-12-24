@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "infini_train/include/datatype.h"
+#include "infini_train/include/nn/parallel/distributed_data_parallel_config.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 
 namespace infini_train {
@@ -21,9 +22,6 @@ class Work;
 
 namespace infini_train::nn::parallel {
 namespace {
-// Default bucket size in alignment with PyTorch
-constexpr int kFirstBucketCapMB = 1;
-constexpr int kNormalBucketCapMB = 25;
 constexpr size_t kBytesPerMB = 1024ULL * 1024ULL;
 } // namespace
 
@@ -46,22 +44,6 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
                                                                const std::vector<size_t> &bucket_size_limits,
                                                                const std::vector<size_t> &tensor_indices = {});
 
-struct ReducerOptions {
-    // Pack all Reducer-related args together
-    // Ref: https://docs.pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html
-
-    // Max capacity for each bucket(in MB)
-    size_t first_bucket_cap_mb = kFirstBucketCapMB;
-    size_t normal_bucket_cap_mb = kNormalBucketCapMB;
-
-    // When set true, map param.grad directly to the slice of bucket.flat(same address in memory) instead of memcpy
-    bool gradient_as_bucket_view = true;
-
-    // Whether to enable gradient bucketing
-    // FIXME(zbl): should enable gradient bucketing by default
-    bool gradient_bucketing_enabled = true;
-};
-
 // DDP Reducer that handles gradient bucketing in backward
 // ref: https://github.com/pytorch/pytorch/blob/main/torch/csrc/distributed/c10d/reducer.hpp
 class Reducer : public std::enable_shared_from_this<Reducer> {
@@ -70,10 +52,10 @@ public:
      *
      * @param parameters A list of parameters for this process's single model replica
      * @param bucket_indices The bucket assignment for this reducer
-     * @param opts Other options, see definition of ReducerOptions
+     * @param ddp_config DDP related options, see definition of DistributedDataParallelConfig
      */
     explicit Reducer(std::vector<std::shared_ptr<Tensor>> parameters, std::vector<std::vector<size_t>> bucket_indices,
-                     const ReducerOptions &opts);
+                     const DistributedDataParallelConfig ddp_config = DistributedDataParallelConfig());
 
     // Attach PostAllReduceHooks to params
     void AttachHooksToParameters();
@@ -156,7 +138,7 @@ private:
 
     std::atomic<size_t> buckets_finished_{0};
     std::shared_ptr<autograd::PostAccumulateGradHook> comm_hook_ = nullptr;
-    ReducerOptions opts_;
+    DistributedDataParallelConfig ddp_config_;
 
     // Next bucket to be reduced
     // This is to make sure that all-reduce of buckets be launched in the order we expect

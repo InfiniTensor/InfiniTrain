@@ -13,6 +13,7 @@
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/distributed_data_parallel.h"
+#include "infini_train/include/nn/parallel/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/rank.h"
@@ -48,6 +49,7 @@ DEFINE_uint32(freq_generate_txt, 10, "frequency of text generation");
 DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
 DEFINE_double(learning_rate, 1e-5, "learning rate warmup iterations");
+DEFINE_bool(use_distributed_optimizer, false, "Whether to enable DistributedOptimizer(only take effects when DP>1)");
 // evaluation
 DEFINE_uint32(val_loss_every, 0, "every how many steps to evaluate val loss?");
 DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
@@ -171,8 +173,11 @@ void Train(const nn::parallel::Rank &rank) {
     // before wrapping the model with DistributedDataParallel (DDP).
     // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
     // are created during the conversion.
+
+    // FIXME(zbl): set as argument
     if (ddp_world_size > 1) {
-        model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank());
+        auto ddp_config = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
+        model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank(), ddp_config);
     }
 
     auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
@@ -197,7 +202,14 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     // TODO(dcj): support more complex optimizer later
-    auto optimizer = optimizers::Adam(model->Parameters(), FLAGS_learning_rate);
+    // auto optimizer = optimizers::Adam(model->Parameters(), FLAGS_learning_rate);
+    auto optimizer_creator = optimizers::Adam::Create(FLAGS_learning_rate);
+    std::shared_ptr<Optimizer> optimizer
+        = FLAGS_use_distributed_optimizer ? std::make_unique<nn::parallel::DistributedOptimizer>(
+              optimizer_creator, model->Parameters(),
+              dynamic_cast<DistributedDataParallel *>(model.get())->param_grad_buffers(),
+              dynamic_cast<DistributedDataParallel *>(model.get())->bucket_groups(), ddp_pg, ddp_world_size, ddp_rank)
+                                          : optimizer_creator(model->Parameters());
 
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
@@ -213,12 +225,17 @@ void Train(const nn::parallel::Rank &rank) {
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
         model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
-                                                                 pp_rank, std::make_shared<optimizers::Adam>(optimizer),
-                                                                 rank.thread_rank());
+                                                                 pp_rank, optimizer, rank.thread_rank());
     }
+
+    auto cuda_device = device->IsCUDA() ? dynamic_cast<const CudaDevice *>(device) : nullptr;
 
     for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
         const bool last_step = step == FLAGS_num_iteration;
+
+        if (cuda_device) {
+            cuda_device->ResetMemPoolHighWatermarks();
+        }
 
         const auto iter_start = std::chrono::high_resolution_clock::now();
 
@@ -246,7 +263,7 @@ void Train(const nn::parallel::Rank &rank) {
         float lossf = 0.0f;
         if (pp_world_size == 1) {
             // model->Train();
-            optimizer.ZeroGrad();
+            optimizer->ZeroGrad();
 
             // if we are trying to overfit a single batch, we reset the loader here
             if (FLAGS_overfit_single_batch) {
@@ -284,7 +301,7 @@ void Train(const nn::parallel::Rank &rank) {
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
             }
 
-            optimizer.Step();
+            optimizer->Step();
         } else {
             auto [x, y] = *train_iter;
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
@@ -308,10 +325,16 @@ void Train(const nn::parallel::Rank &rank) {
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
         if (rank.IsLastRank()) {
-            LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
-                                      "DP={}, TP={}, SP={}, PP={})",
+            size_t used_mb = 0, reserved_mb = 0;
+            if (cuda_device) {
+                std::tie(used_mb, reserved_mb) = cuda_device->GetMemPoolPeakMB();
+            }
+
+            LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
+                                      "peak used: {:5d} MB | peak reserved: {:5d} MB, DP={}, TP={}, SP={}, PP={})",
                                       step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
-                                      tps, ddp_world_size, tp_world_size, sp_world_size, pp_world_size);
+                                      tps, used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size,
+                                      pp_world_size);
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
                 // FIXME(jym): to support PP
