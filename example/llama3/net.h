@@ -10,11 +10,8 @@
 
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/tensor.h"
-
-namespace infini_train::nn {
-class ModuleList;
-}
 
 struct LLaMA3Config {
     // ref: https://huggingface.co/meta-llama/Llama-3.2-1B
@@ -112,16 +109,62 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
-class LLaMA3Chunk {
+class LLaMA3FirstStage : public infini_train::nn::CloneableModule<LLaMA3FirstStage> {
 public:
-    bool has_embedding() const { return embedding_ != nullptr; }
-    bool has_norm() const { return norm_ != nullptr; }
-    bool has_head() const { return head_ != nullptr; }
+    static constexpr char kWTELayerName[] = "wte";
+    static constexpr char kHLayerName[] = "h";
+    static constexpr char kLnFLayerName[] = "ln_f";
+    static constexpr char kTransformerLayerName[] = "transformer";
+    static constexpr char kLMHeadLayerName[] = "lm_head";
 
-    std::shared_ptr<infini_train::nn::Module> embedding_ = nullptr;
-    std::shared_ptr<infini_train::nn::ModuleList> blocks_ = nullptr;
-    std::shared_ptr<infini_train::nn::Module> norm_ = nullptr;
-    std::shared_ptr<infini_train::nn::Module> head_ = nullptr;
+    static constexpr char kFreqsCisName[] = "freqs_cis";
+
+    explicit LLaMA3FirstStage(const LLaMA3Config &config);
+
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+private:
+    const LLaMA3Config config_;
+};
+
+class LLaMA3Chunk : public infini_train::nn::CloneableModule<LLaMA3Chunk> {
+public:
+    static constexpr char kWTELayerName[] = "wte";
+    static constexpr char kHLayerName[] = "h";
+    static constexpr char kLnFLayerName[] = "ln_f";
+    static constexpr char kTransformerLayerName[] = "transformer";
+    static constexpr char kLMHeadLayerName[] = "lm_head";
+
+    static constexpr char kFreqsCisName[] = "freqs_cis";
+
+    explicit LLaMA3Chunk(const LLaMA3Config &config);
+
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+private:
+    const LLaMA3Config config_;
+    const infini_train::nn::parallel::StageInfo stage_info_;
+};
+
+class LLaMA3LastStage : public infini_train::nn::CloneableModule<LLaMA3LastStage> {
+public:
+    static constexpr char kWTELayerName[] = "wte";
+    static constexpr char kHLayerName[] = "h";
+    static constexpr char kLnFLayerName[] = "ln_f";
+    static constexpr char kTransformerLayerName[] = "transformer";
+    static constexpr char kLMHeadLayerName[] = "lm_head";
+
+    static constexpr char kFreqsCisName[] = "freqs_cis";
+
+    explicit LLaMA3LastStage(const LLaMA3Config &config);
+
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+private:
+    const LLaMA3Config config_;
 };
 
 class LLaMA3 : public infini_train::nn::CloneableModule<LLaMA3> {
@@ -148,14 +191,12 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    void BuildChunks();
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    ForwardChunk(int local_chunk_idx, const std::vector<std::shared_ptr<infini_train::Tensor>> &input) override;
-
     static std::shared_ptr<LLaMA3> FromPretrained(ModelType model_type);
     static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath);
 
+    int GetChunkSize() const;
+
 private:
-    LLaMA3Config config_;
-    std::vector<LLaMA3Chunk> chunks_;
+    const LLaMA3Config config_;
+    const infini_train::nn::parallel::StageInfo stage_info_;
 };

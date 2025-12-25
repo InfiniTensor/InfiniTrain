@@ -54,9 +54,6 @@ public:
         return 0.0f;
     };
 
-    virtual std::vector<std::shared_ptr<Tensor>>
-    ForwardChunk(int local_chunk_idx, const std::vector<std::shared_ptr<Tensor>> &input_tensors);
-
     virtual void To(const Device *device);
 
     virtual void To(DataType dtype);

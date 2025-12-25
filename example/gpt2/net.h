@@ -9,11 +9,9 @@
 
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
 #include "infini_train/include/tensor.h"
-
-namespace infini_train::nn {
-class ModuleList;
-}
 
 struct GPT2Config {
     int64_t block_size = 1024;
@@ -75,28 +73,51 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
-class GPT2Chunk {
+class GPT2FirstStage : public infini_train::nn::CloneableModule<GPT2FirstStage> {
 public:
-    bool has_wte() const { return wte_ != nullptr; }
-    bool has_wpe() const { return wpe_ != nullptr; }
-    bool has_norm() const { return norm_ != nullptr; }
-    bool has_head() const { return head_ != nullptr; }
+    static constexpr char kWTELayerName[] = "wte";
+    static constexpr char kWPELayerName[] = "wpe";
 
-    std::shared_ptr<infini_train::nn::Module> wte_ = nullptr;
-    std::shared_ptr<infini_train::nn::Module> wpe_ = nullptr;
-    std::shared_ptr<infini_train::nn::ModuleList> blocks_ = nullptr;
-    std::shared_ptr<infini_train::nn::Module> norm_ = nullptr;
-    std::shared_ptr<infini_train::nn::Module> head_ = nullptr;
+    explicit GPT2FirstStage(const GPT2Config &config);
+
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+private:
+    const GPT2Config config_;
+};
+
+class GPT2Chunk : public infini_train::nn::CloneableModule<GPT2Chunk> {
+public:
+    static constexpr char kHLayerName[] = "h";
+
+    explicit GPT2Chunk(const GPT2Config &config);
+
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+private:
+    const GPT2Config config_;
+    const infini_train::nn::parallel::StageInfo stage_info_;
+};
+
+class GPT2LastStage : public infini_train::nn::CloneableModule<GPT2LastStage> {
+public:
+    static constexpr char kLnFLayerName[] = "ln_f";
+    static constexpr char kLMHeadLayerName[] = "lm_head";
+
+    explicit GPT2LastStage(const GPT2Config &config);
+
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+private:
+    const GPT2Config config_;
 };
 
 class GPT2 : public infini_train::nn::CloneableModule<GPT2> {
 public:
-    static constexpr char kWTELayerName[] = "wte";
-    static constexpr char kWPELayerName[] = "wpe";
-    static constexpr char kHLayerName[] = "h";
-    static constexpr char kLnFLayerName[] = "ln_f";
     static constexpr char kTransformerLayerName[] = "transformer";
-    static constexpr char kLMHeadLayerName[] = "lm_head";
 
     enum class ModelType : int8_t {
         kGPT2,
@@ -110,14 +131,12 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    void BuildChunks();
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    ForwardChunk(int local_chunk_idx, const std::vector<std::shared_ptr<infini_train::Tensor>> &input) override;
-
     static std::shared_ptr<GPT2> FromPretrained(ModelType model_type);
     static std::shared_ptr<GPT2> FromLLMC(const std::string &filepath);
 
+    int GetChunkSize() const;
+
 private:
-    GPT2Config config_;
-    std::vector<GPT2Chunk> chunks_;
+    const GPT2Config config_;
+    const infini_train::nn::parallel::StageInfo stage_info_;
 };

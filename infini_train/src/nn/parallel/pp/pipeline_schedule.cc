@@ -108,7 +108,7 @@ std::vector<PipelineParallelScheduler::Task> PipelineParallelScheduler::Generate
         }
     }
 
-    // sorted according to step、local_chunk_idx
+    // sorted according to step, local_chunk_idx
     std::sort(schedule.begin(), schedule.end(), [](const Task &a, const Task &b) {
         if (a.step != b.step) {
             return a.step < b.step;
@@ -193,7 +193,7 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
     int stage_idx = stage_->stage_index();
     int vpp_size = global::GetVirtualPipelineParallelSize();
 
-    auto schedule = PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(n, num_stages, vpp_size);
+    auto schedule = PipelineParallelScheduler::GenerateGPipeSchedule(n, num_stages, vpp_size);
 
     if (stage_idx == 0) {
         PrintScheduleTable(schedule, n, num_stages, vpp_size);

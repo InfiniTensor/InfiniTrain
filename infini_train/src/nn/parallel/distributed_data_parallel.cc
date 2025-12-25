@@ -56,5 +56,4 @@ DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &inp
     }
     return outputs;
 }
-
 } // namespace infini_train::nn::parallel

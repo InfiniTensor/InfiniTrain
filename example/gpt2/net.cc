@@ -4,9 +4,12 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <memory>
 #include <random>
 #include <string>
 #include <tuple>
+#include <vector>
 
 #include "glog/logging.h"
 
@@ -175,183 +178,19 @@ Block::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     return {x2};
 }
 
-GPT2::GPT2(const GPT2Config &config) : config_(config) {
-    int pp_size = nn::parallel::global::GetPipelineParallelSize();
-    int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
-    auto [is_first_stage, is_last_stage, layer_chunks]
-        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, vpp_size);
-
-    auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
-
-    // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
-    //            Megatron-LM has an optional argument `--make-vocab-size-divisible-by`, would do padding to vocab
-    //            Here we introduce padding by default, might need modify Tokenizer correspondingly later
-    CHECK_EQ(config.vocab_size % tp_world_size, 0) << "Vocab size should be divisible by TP world size";
-    {
-        std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
-        if (is_first_stage) {
-            transformer[kWTELayerName] = std::make_shared<nn::parallel::VocabParallelEmbedding>(
-                config_.vocab_size, config_.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
-            transformer[kWPELayerName] = std::make_shared<nn::Embedding>(config_.block_size, config_.n_embd);
-        }
-
-        {
-            std::vector<std::shared_ptr<nn::Module>> h;
-            for (const auto &[start_layer, end_layer] : layer_chunks) {
-                for (int64_t i = start_layer; i < end_layer; ++i) { h.push_back(std::make_shared<Block>(config)); }
-            }
-
-            transformer[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
-            if (is_last_stage) {
-                transformer[kLnFLayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd});
-            }
-
-            modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
-        }
-
-        if (is_last_stage) {
-            // don't init this one, we will tie weights
-            modules_[kLMHeadLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
-                /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
-                /*bias=*/false,
-                // NOTE(zbl): each tp_rank would get sharded [B, T, V_local] as logits
-                /*gather_output=*/false,
-                /*input_is_parallel=*/false,
-                /*skip_bias_add=*/false,
-                /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
-        }
-
-        // FIXME(jym): Assigning the parameter values of wte to LMHead, which is not real tying operation
-        if (pp_size == 1) {
-            // https://paperswithcode.com/method/weight-tying
-            *mutable_module(kTransformerLayerName)
-                 ->mutable_module(kWTELayerName)
-                 ->mutable_parameter(nn::parallel::VocabParallelEmbedding::kParamWeightName)
-                = module(kLMHeadLayerName).parameter(nn::parallel::ColumnParallelLinear::kParamWeightName);
-        }
-
-        if (pp_size > 1) {
-            BuildChunks();
-        }
-    }
-}
-
-void GPT2::BuildChunks() {
-    int pp_size = nn::parallel::global::GetPipelineParallelSize();
-    int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
-    auto [is_first_stage, is_last_stage, layer_chunks]
-        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, vpp_size);
-
-    auto &transformer = modules_[kTransformerLayerName];
-
-    auto h_layers = std::dynamic_pointer_cast<nn::ModuleList>(transformer->mutable_module(kHLayerName));
-
-    int layer_offset = 0;
-    for (size_t local_chunk_idx = 0; local_chunk_idx < layer_chunks.size(); ++local_chunk_idx) {
-        GPT2Chunk chunk;
-        if (local_chunk_idx == 0 && is_first_stage) {
-            chunk.wte_ = transformer->mutable_module(kWTELayerName);
-            chunk.wpe_ = transformer->mutable_module(kWPELayerName);
-        }
-
-        const auto &[start, end] = layer_chunks[local_chunk_idx];
-        int chunk_layer_count = end - start;
-
-        std::vector<std::shared_ptr<nn::Module>> chunk_blocks;
-        int current_index = 0;
-        for (auto it = h_layers->begin(); it != h_layers->end(); ++it, ++current_index) {
-            if (current_index >= layer_offset && current_index < layer_offset + chunk_layer_count) {
-                chunk_blocks.push_back(*it);
-            }
-        }
-        layer_offset += chunk_layer_count;
-
-        chunk.blocks_ = std::make_shared<nn::ModuleList>(std::move(chunk_blocks));
-
-        if (local_chunk_idx == layer_chunks.size() - 1 && is_last_stage) {
-            chunk.norm_ = transformer->mutable_module(kLnFLayerName);
-            chunk.head_ = modules_[kLMHeadLayerName];
-        }
-
-        chunks_.push_back(std::move(chunk));
-    }
+GPT2FirstStage::GPT2FirstStage(const GPT2Config &config) : config_(config) {
+    modules_[kWTELayerName] = std::make_shared<nn::parallel::VocabParallelEmbedding>(
+        config_.vocab_size, config_.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
+    modules_[kWPELayerName] = std::make_shared<nn::Embedding>(config_.block_size, config_.n_embd);
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
-GPT2::ForwardChunk(int local_chunk_idx, const std::vector<std::shared_ptr<infini_train::Tensor>> &input) {
-    if (chunks_.size() <= local_chunk_idx) {
-        LOG(FATAL) << "chunk must be built!";
-    }
-    auto &chunk = chunks_[local_chunk_idx];
-
+GPT2FirstStage::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &input) {
     // (B, T)
     auto x1 = input[0];
+    CHECK_LE(x1->Dims()[1], config_.block_size)
+        << "Cannot forward sequence of length " << x1->Dims()[1] << ", block size is only " << config_.block_size;
     const auto device = x1->GetDevice();
-
-    int pp_size = nn::parallel::global::GetPipelineParallelSize();
-    int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
-    auto [is_first_stage, is_last_stage, layer_chunks]
-        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, vpp_size);
-
-    const auto t
-        = x1->Dims()[1] * (is_first_stage ? 1 : nn::parallel::global::GetSequenceParallelSize()); // full_seq_len
-    CHECK_LE(t, config_.block_size) << "Cannot forward sequence of length " << t << ", block size is only "
-                                    << config_.block_size;
-
-    // forward the GPT2 model itself
-    if (chunk.has_wte() && chunk.has_wpe()) {
-        // (T_local)
-        // NOTE(zbl): Slice pos sequence when SP is enabled
-        auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
-        auto sequence_parallel_enabled = nn::parallel::global::GetSequenceParallelEnabled();
-        int tp_rank = 0;
-        if (tp_world_size > 1) {
-            auto tp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
-                nn::parallel::GetTensorParallelProcessGroupName(device->rank().GlobalRank()));
-            tp_rank = tp_group->GetGroupRank(device->rank().GlobalRank());
-        }
-        int64_t t_local = sequence_parallel_enabled ? (t / tp_world_size) : t;
-        int64_t start = sequence_parallel_enabled ? tp_rank * t_local : 0;
-        auto pos = nn::init::Arange(start, start + t_local, infini_train::DataType::kINT64, device);
-
-        // (B, T) -> Embedding(V_local, C) -> (B, T, C)
-        auto tok_emb = chunk.wte_->Forward({x1})[0];
-
-        // (T) -> Embedding(T_max, C) -> (T, C)
-        auto pos_emb = chunk.wpe_->Forward({pos})[0];
-        // (B, T, C)
-        x1 = tok_emb + pos_emb;
-    }
-
-    // (B, T, C) -> transformer -> (B, T, C)
-    // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)
-    for (auto &block : *chunk.blocks_) { x1 = block->Forward({x1})[0]; }
-
-    // (B, T, C) -> Layernorm -> (B, T, C)
-    if (chunk.has_norm() && chunk.has_head()) {
-        auto x2 = chunk.norm_->Forward({x1});
-
-        // TODO(dcj): add inference-time mini-optimization
-        // (B, T, C) -> Linear(C, V) -> (B, T, V)
-        auto logits = chunk.head_->Forward(x2);
-
-        return logits;
-    }
-
-    return {x1};
-}
-
-std::vector<std::shared_ptr<infini_train::Tensor>>
-GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
-    // (B, T)
-    auto x1 = x[0];
-    const auto device = x1->GetDevice();
-
-    const auto t = x1->Dims()[1]; // T
-    CHECK_LE(t, config_.block_size) << "Cannot forward sequence of length " << t << ", block size is only "
-                                    << config_.block_size;
-    // forward the GPT2 model itself
-    auto &transformer = modules_[kTransformerLayerName];
 
     // (T_local)
     // NOTE(zbl): Slice pos sequence when SP is enabled
@@ -363,32 +202,130 @@ GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
             nn::parallel::GetTensorParallelProcessGroupName(device->rank().thread_rank()));
         tp_rank = tp_group->GetGroupRank(device->rank().thread_rank());
     }
-    int64_t t_local = sequence_parallel_enabled ? (t / tp_world_size) : t;
+    int64_t t_local = sequence_parallel_enabled ? x1->Dims()[1] / tp_world_size : x1->Dims()[1];
     int64_t start = sequence_parallel_enabled ? tp_rank * t_local : 0;
     auto pos = nn::init::Arange(start, start + t_local, infini_train::DataType::kINT64, device);
 
     // (B, T) -> Embedding(V_local, C) -> (B, T, C)
-    auto tok_emb = transformer->mutable_module(kWTELayerName)->Forward({x1})[0];
+    auto tok_emb = modules_[kWTELayerName]->Forward({x1})[0];
+
     // (T) -> Embedding(T_max, C) -> (T, C)
-    auto pos_emb = transformer->mutable_module(kWPELayerName)->Forward({pos})[0];
+    auto pos_emb = modules_[kWPELayerName]->Forward({pos})[0];
     // (B, T, C)
-    x1 = tok_emb + pos_emb;
+    return {tok_emb + pos_emb};
+}
 
-    // (B, T, C) -> transformer -> (B, T, C)
-    auto h_modules = transformer->mutable_module(kHLayerName);
-    CHECK_EQ(h_modules->type(), nn::ModuleList::kType) << "Failed to get ModuleList from transformer";
-    auto h_layers = std::dynamic_pointer_cast<nn::ModuleList>(h_modules);
+GPT2Chunk::GPT2Chunk(const GPT2Config &config)
+    : config_(config), stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
+                           config_.n_layer, nn::parallel::global::GetPipelineParallelSize(),
+                           nn::parallel::global::GetVirtualPipelineParallelSize())) {
+    std::vector<std::shared_ptr<nn::Module>> h;
+    for (const auto &[start_layer, end_layer] : stage_info_.layer_chunks) {
+        for (int64_t i = start_layer; i < end_layer; ++i) {
+            auto layer = std::make_shared<Block>(config);
+            h.push_back(layer);
+        }
+    }
+    modules_[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
+}
+
+std::vector<std::shared_ptr<infini_train::Tensor>>
+GPT2Chunk::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
+    auto x1 = x[0];
     // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)
-    for (auto &h : *h_layers) { x1 = h->Forward({x1})[0]; }
+    for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName])) { x1 = h->Forward({x1})[0]; }
+    return {x1};
+}
 
+GPT2LastStage::GPT2LastStage(const GPT2Config &config) : config_(config) {
+    modules_[kLnFLayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd});
+    // don't init this one, we will tie weights
+    modules_[kLMHeadLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
+        /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
+        /*bias=*/false,
+        // NOTE(zbl): each tp_rank would get sharded [B, T, V_local] as logits
+        /*gather_output=*/false,
+        /*input_is_parallel=*/false,
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+}
+
+std::vector<std::shared_ptr<infini_train::Tensor>>
+GPT2LastStage::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     // (B, T, C) -> Layernorm -> (B, T, C)
-    auto x3 = transformer->mutable_module(kLnFLayerName)->Forward({x1});
+    auto x1 = modules_[kLnFLayerName]->Forward(x);
 
     // TODO(dcj): add inference-time mini-optimization
     // (B, T, C) -> Linear(C, V) -> (B, T, V)
-    auto logits = modules_[kLMHeadLayerName]->Forward(x3);
-    // (B, T, V_original)
-    return logits;
+    return modules_[kLMHeadLayerName]->Forward(x1);
+}
+
+GPT2::GPT2(const GPT2Config &config)
+    : config_(config), stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
+                           config_.n_layer, nn::parallel::global::GetPipelineParallelSize(),
+                           nn::parallel::global::GetVirtualPipelineParallelSize())) {
+    auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
+
+    // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
+    //            Megatron-LM has an optional argument `--make-vocab-size-divisible-by`, would do padding to vocab
+    //            Here we introduce padding by default, might need modify Tokenizer correspondingly later
+    CHECK_EQ(config.vocab_size % tp_world_size, 0) << "Vocab size should be divisible by TP world size";
+
+    std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
+    if (stage_info_.is_first_stage) {
+        modules_["__pp_first_stage"] = std::make_shared<GPT2FirstStage>(config_);
+        transformer[GPT2FirstStage::kWTELayerName]
+            = modules_["__pp_first_stage"]->mutable_module(GPT2FirstStage::kWTELayerName);
+        transformer[GPT2FirstStage::kWPELayerName]
+            = modules_["__pp_first_stage"]->mutable_module(GPT2FirstStage::kWPELayerName);
+    }
+
+    {
+        std::map<int, std::pair<int, std::shared_ptr<GPT2Chunk>>> start_layer_to_layer_size_and_chunk;
+        for (int chunk_idx = 0; chunk_idx < stage_info_.layer_chunks.size(); ++chunk_idx) {
+            const auto [start_layer, end_layer] = stage_info_.layer_chunks[chunk_idx];
+            auto chunk = std::make_shared<GPT2Chunk>(config_);
+            start_layer_to_layer_size_and_chunk[start_layer] = std::make_pair(end_layer - start_layer, chunk);
+        }
+        std::vector<std::shared_ptr<nn::Module>> h;
+        int chunk_idx = 0;
+        for (auto &[start_layer, layer_size_and_chunk] : start_layer_to_layer_size_and_chunk) {
+            auto [layer_size, chunk] = layer_size_and_chunk;
+            for (int idx = 0; idx < layer_size; ++idx) {
+                h.push_back(chunk->mutable_module(GPT2Chunk::kHLayerName)->mutable_module(std::to_string(idx)));
+            }
+            modules_["__pp_chunk_" + std::to_string(chunk_idx)] = std::move(chunk);
+            ++chunk_idx;
+        }
+        transformer[GPT2Chunk::kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
+    }
+
+    if (stage_info_.is_last_stage) {
+        modules_["__pp_last_stage"] = std::make_shared<GPT2LastStage>(config_);
+        transformer[GPT2LastStage::kLnFLayerName]
+            = modules_["__pp_last_stage"]->mutable_module(GPT2LastStage::kLnFLayerName);
+        modules_[GPT2LastStage::kLMHeadLayerName]
+            = modules_["__pp_last_stage"]->mutable_module(GPT2LastStage::kLMHeadLayerName);
+    }
+    modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
+
+    // FIXME(jym): Assigning the parameter values of wte to LMHead, which is not real tying operation
+    if (nn::parallel::global::GetPipelineParallelSize() == 1) {
+        // https://paperswithcode.com/method/weight-tying
+        *mutable_module(kTransformerLayerName)
+             ->mutable_module(GPT2FirstStage::kWTELayerName)
+             ->mutable_parameter(nn::parallel::VocabParallelEmbedding::kParamWeightName)
+            = module(GPT2LastStage::kLMHeadLayerName).parameter(nn::parallel::ColumnParallelLinear::kParamWeightName);
+    }
+}
+
+std::vector<std::shared_ptr<infini_train::Tensor>>
+GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
+    auto x1 = modules_["__pp_first_stage"]->Forward(x);
+    for (int chunk_idx = 0; chunk_idx < stage_info_.layer_chunks.size(); ++chunk_idx) {
+        x1 = modules_["__pp_chunk_" + std::to_string(chunk_idx)]->Forward(x1);
+    }
+    return modules_["__pp_last_stage"]->Forward(x1);
 }
 
 std::shared_ptr<GPT2> GPT2::FromPretrained(ModelType model_type) {
@@ -490,12 +427,12 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     // local: (vocab_size_per_partition, n_embd)
     if (is_first_stage) {
         auto &transformer_wte_weight
-            = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kWTELayerName,
+            = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, GPT2FirstStage::kWTELayerName,
                                      nn::parallel::VocabParallelEmbedding::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(transformer_wte_weight->DataPtr()), model_vocab_size, n_embd,
                                 v_start, vpp);
     } else if (pp_size > 1 && is_last_stage) {
-        auto &lm_head_weight = state_dict[std::format("{}.{}", GPT2::kLMHeadLayerName,
+        auto &lm_head_weight = state_dict[std::format("{}.{}", GPT2LastStage::kLMHeadLayerName,
                                                       nn::parallel::ColumnParallelLinear::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(lm_head_weight->DataPtr()), model_vocab_size, n_embd, v_start,
                                 vpp);
@@ -511,8 +448,8 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
 
     if (is_first_stage) {
         // transformer.wpe.weight
-        auto &transformer_wpe_weight = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName,
-                                                              GPT2::kWPELayerName, nn::Embedding::kParamWeightName)];
+        auto &transformer_wpe_weight = state_dict[std::format(
+            "{}.{}.{}", GPT2::kTransformerLayerName, GPT2FirstStage::kWPELayerName, nn::Embedding::kParamWeightName)];
         ReadMatrixAllFloat(ifs, static_cast<float *>(transformer_wpe_weight->DataPtr()), block_size, n_embd);
     } else {
         size_t wpe_bytes = block_size * n_embd * sizeof(float);
@@ -523,7 +460,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     int local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers.find(idx) != owned_layers.end()) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2Chunk::kHLayerName,
                                                   std::to_string(local_layer_index), Block::kLn1LayerName,
                                                   nn::LayerNorm::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
@@ -538,7 +475,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers.find(idx) != owned_layers.end()) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2Chunk::kHLayerName,
                                                   std::to_string(local_layer_index), Block::kLn1LayerName,
                                                   nn::LayerNorm::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
@@ -553,9 +490,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers.find(idx) != owned_layers.end()) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                                  std::to_string(local_layer_index), Block::kAttnLayerName,
-                                                  CausalSelfAttention::kCAttnLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName,
+                                                  GPT2Chunk::kHLayerName, std::to_string(local_layer_index),
+                                                  Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
             // NOTE(zbl): In the .bin model file, Q/K/V is concated along last dim,
             //            i.e. [Q|K|V].T = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn].T
@@ -596,9 +533,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers.find(idx) != owned_layers.end()) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                                  std::to_string(local_layer_index), Block::kAttnLayerName,
-                                                  CausalSelfAttention::kCAttnLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName,
+                                                  GPT2Chunk::kHLayerName, std::to_string(local_layer_index),
+                                                  Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamBiasName)];
             // NOTE(zbl): Same as c_attn.weight, the bias for Q/K/V is concated
             //            i.e. [Q|K|V] = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn]
@@ -638,9 +575,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers.find(idx) != owned_layers.end()) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                                  std::to_string(local_layer_index), Block::kAttnLayerName,
-                                                  CausalSelfAttention::kCProjLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName,
+                                                  GPT2Chunk::kHLayerName, std::to_string(local_layer_index),
+                                                  Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName,
                                                   nn::parallel::RowParallelLinear::kParamWeightName)];
             ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, n_embd, tp_rank * in_pp,
                                     in_pp);
@@ -655,9 +592,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers.find(idx) != owned_layers.end()) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
-                                                  std::to_string(local_layer_index), Block::kAttnLayerName,
-                                                  CausalSelfAttention::kCProjLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName,
+                                                  GPT2Chunk::kHLayerName, std::to_string(local_layer_index),
+                                                  Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName,
                                                   nn::parallel::RowParallelLinear::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
             ++local_layer_index;
@@ -671,7 +608,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers.find(idx) != owned_layers.end()) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2Chunk::kHLayerName,
                                                   std::to_string(local_layer_index), Block::kLn2LayerName,
                                                   nn::LayerNorm::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
@@ -686,7 +623,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers.find(idx) != owned_layers.end()) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2Chunk::kHLayerName,
                                                   std::to_string(local_layer_index), Block::kLn2LayerName,
                                                   nn::LayerNorm::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
@@ -701,9 +638,10 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers.find(idx) != owned_layers.end()) {
-            auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(local_layer_index),
-                Block::kMlpLayerName, MLP::kCFcLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
+            auto &tensor
+                = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                         std::to_string(local_layer_index), Block::kMlpLayerName, MLP::kCFcLayerName,
+                                         nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, n_embd, fc_start, fc_pp);
             ++local_layer_index;
         } else {
@@ -716,9 +654,10 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers.find(idx) != owned_layers.end()) {
-            auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(local_layer_index),
-                Block::kMlpLayerName, MLP::kCFcLayerName, nn::parallel::ColumnParallelLinear::kParamBiasName)];
+            auto &tensor
+                = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                         std::to_string(local_layer_index), Block::kMlpLayerName, MLP::kCFcLayerName,
+                                         nn::parallel::ColumnParallelLinear::kParamBiasName)];
             ReadVectorShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, fc_start, fc_pp);
             ++local_layer_index;
         } else {
@@ -731,9 +670,10 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers.find(idx) != owned_layers.end()) {
-            auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(local_layer_index),
-                Block::kMlpLayerName, MLP::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];
+            auto &tensor
+                = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                         std::to_string(local_layer_index), Block::kMlpLayerName, MLP::kCProjLayerName,
+                                         nn::parallel::RowParallelLinear::kParamWeightName)];
             ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, fc_out, tp_rank * in4_pp,
                                     in4_pp);
             ++local_layer_index;
@@ -747,9 +687,10 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers.find(idx) != owned_layers.end()) {
-            auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2::kHLayerName, std::to_string(local_layer_index),
-                Block::kMlpLayerName, MLP::kCProjLayerName, nn::parallel::RowParallelLinear::kParamBiasName)];
+            auto &tensor
+                = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                         std::to_string(local_layer_index), Block::kMlpLayerName, MLP::kCProjLayerName,
+                                         nn::parallel::RowParallelLinear::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
             ++local_layer_index;
         } else {
@@ -760,12 +701,12 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
 
     if (is_last_stage) {
         // transformer.ln_f.weight
-        auto &transformer_ln_f_weight = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName,
-                                                               GPT2::kLnFLayerName, nn::LayerNorm::kParamWeightName)];
+        auto &transformer_ln_f_weight = state_dict[std::format(
+            "{}.{}.{}", GPT2::kTransformerLayerName, GPT2LastStage::kLnFLayerName, nn::LayerNorm::kParamWeightName)];
         ReadVectorAllFloat(ifs, static_cast<float *>(transformer_ln_f_weight->DataPtr()), n_embd);
         // transformer.ln_f.bias
-        auto &transformer_ln_f_bias = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName,
-                                                             GPT2::kLnFLayerName, nn::LayerNorm::kParamBiasName)];
+        auto &transformer_ln_f_bias = state_dict[std::format(
+            "{}.{}.{}", GPT2::kTransformerLayerName, GPT2LastStage::kLnFLayerName, nn::LayerNorm::kParamBiasName)];
         ReadVectorAllFloat(ifs, static_cast<float *>(transformer_ln_f_bias->DataPtr()), n_embd);
     } else {
         size_t ln_f_w_bytes = n_embd * sizeof(float);
@@ -774,3 +715,5 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     }
     return local_gpt2;
 }
+
+int GPT2::GetChunkSize() const { return stage_info_.layer_chunks.size(); }
