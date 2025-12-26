@@ -24,6 +24,7 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
+#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
 using namespace infini_train;
@@ -327,8 +328,9 @@ std::vector<std::shared_ptr<Tensor>> Block::Forward(const std::vector<std::share
 LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
     int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
-    auto [is_first_stage, is_last_stage, layer_chunks]
-        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, vpp_size);
+    auto pp_rank = nn::parallel::pp_rank;
+    auto [is_first_stage, is_last_stage, layer_ranges_per_chunk]
+        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, pp_rank, vpp_size);
 
     std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
     if (is_first_stage) {
@@ -337,7 +339,7 @@ LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
     }
 
     std::vector<std::shared_ptr<nn::Module>> h_local;
-    for (const auto &[start_layer, end_layer] : layer_chunks) {
+    for (const auto &[start_layer, end_layer] : layer_ranges_per_chunk) {
         for (int64_t i = start_layer; i < end_layer; ++i) { h_local.push_back(std::make_shared<Block>(config)); }
     }
     transformer[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h_local));
@@ -355,84 +357,68 @@ LLaMA3::LLaMA3(const LLaMA3Config &config) : config_(config) {
             /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
     }
     modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
-
-    if (pp_size > 1) {
-        BuildChunks();
-    }
 }
 
-void LLaMA3::BuildChunks() {
+std::vector<std::shared_ptr<nn::Module>> LLaMA3::BuildChunks(int pp_rank) {
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
     int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
-    auto [is_first_stage, is_last_stage, layer_chunks]
-        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, vpp_size);
 
-    auto &transformer = modules_[kTransformerLayerName];
+    auto [is_first_stage, is_last_stage, layer_ranges_per_chunk]
+        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, pp_rank, vpp_size);
 
-    auto h_layers = std::dynamic_pointer_cast<nn::ModuleList>(transformer->mutable_module(kHLayerName));
+    std::vector<std::shared_ptr<nn::Module>> chunks;
+    chunks.reserve(layer_ranges_per_chunk.size());
 
-    int layer_offset = 0;
-    for (size_t local_chunk_idx = 0; local_chunk_idx < layer_chunks.size(); ++local_chunk_idx) {
-        LLaMA3Chunk chunk;
-        if (local_chunk_idx == 0 && is_first_stage) {
-            chunk.embedding_ = transformer->mutable_module(kWTELayerName);
-        }
+    int stage_layer_off = 0;
+    for (size_t i = 0; i < layer_ranges_per_chunk.size(); ++i) {
+        auto [start, end] = layer_ranges_per_chunk[i];
 
-        const auto &[start, end] = layer_chunks[local_chunk_idx];
-        int chunk_layer_count = end - start;
-
-        std::vector<std::shared_ptr<nn::Module>> chunk_blocks;
-        int current_index = 0;
-        for (auto it = h_layers->begin(); it != h_layers->end(); ++it, ++current_index) {
-            if (current_index >= layer_offset && current_index < layer_offset + chunk_layer_count) {
-                chunk_blocks.push_back(*it);
-            }
-        }
-        layer_offset += chunk_layer_count;
-
-        chunk.blocks_ = std::make_shared<nn::ModuleList>(std::move(chunk_blocks));
-
-        if (local_chunk_idx == layer_chunks.size() - 1 && is_last_stage) {
-            chunk.norm_ = transformer->mutable_module(kLnFLayerName);
-            chunk.head_ = modules_[kLMHeadLayerName];
-        }
-
-        chunks_.push_back(std::move(chunk));
+        int chunk_layers = end - start;
+        chunks.emplace_back(std::make_shared<LLaMA3Chunk>(
+            this,
+            stage_layer_off,                                           // Starting offset for layer indexing
+            chunk_layers,                                              // Number of layers in this chunk
+            (i == 0 && is_first_stage),                                // Whether to include embedding
+            (i == layer_ranges_per_chunk.size() - 1 && is_last_stage), // Whether to include lm_head
+            config_));
+        stage_layer_off += chunk_layers;
     }
+
+    return chunks;
 }
 
-std::vector<std::shared_ptr<Tensor>> LLaMA3::ForwardChunk(int local_chunk_idx,
-                                                          const std::vector<std::shared_ptr<Tensor>> &input) {
-    // printf("[stage %d] LLaMA3::ForwardChunk entry\n", nn::parallel::pp_rank);
-    if (chunks_.size() <= local_chunk_idx) {
-        LOG(FATAL) << "chunk must be built!";
-    }
-    auto &chunk = chunks_[local_chunk_idx];
+std::vector<std::shared_ptr<Tensor>> LLaMA3Chunk::Forward(const std::vector<std::shared_ptr<Tensor>> &input) {
+    auto transformer = parent_->mutable_module(LLaMA3::kTransformerLayerName);
     auto x1 = input[0];
     const auto device = x1->GetDevice();
 
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
     int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
-    auto [is_first_stage, is_last_stage, layer_chunks]
-        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, vpp_size);
+    auto pp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
+        nn::parallel::GetPipelineParallelProcessGroupName(device->rank().GlobalRank()));
+    auto pp_rank = pp_group->GetGroupRank(device->rank().GlobalRank());
 
-    const auto t
-        = x1->Dims()[1] * (is_first_stage ? 1 : nn::parallel::global::GetSequenceParallelSize()); // full_seq_len
+    auto [is_first_stage, is_last_stage, layer_ranges_per_chunk]
+        = nn::parallel::PipelineParallel::GetStageInfo(config_.n_layer, pp_size, pp_rank, vpp_size);
 
-    if (chunk.has_embedding()) {
-        x1 = chunk.embedding_->Forward({x1})[0];
+    bool is_pipeline_first_chunk = is_first_stage && (layer_ranges_per_chunk[0].first == 0);
+    const auto t = x1->Dims()[1]
+                 * (is_pipeline_first_chunk ? 1 : nn::parallel::global::GetSequenceParallelSize()); // full_seq_len
+
+    if (has_embedding_) {
+        x1 = transformer->mutable_module(LLaMA3::kWTELayerName)->Forward({x1})[0];
     }
 
     // Init freqs_cis on device only once
     // TODO(zbl): consider moving this to model construction
-    if (buffers_[kFreqsCisName] == nullptr) {
-        buffers_[kFreqsCisName] = PrecomputeFreqsCis(config_.n_embd / config_.n_head, config_.block_size * 2,
-                                                     config_.rope_theta, config_.use_scaled_rope, device);
+    if (buffers_[LLaMA3::kFreqsCisName] == nullptr) {
+        buffers_[LLaMA3::kFreqsCisName] = PrecomputeFreqsCis(config_.n_embd / config_.n_head, config_.block_size * 2,
+                                                             config_.rope_theta, config_.use_scaled_rope, device);
     }
 
     // TODO(zbl): dynamic start_pos
     int64_t start_pos = 0;
-    auto freqs_view = buffers_[kFreqsCisName]->Slice(0, start_pos, start_pos + t, 1);
+    auto freqs_view = buffers_[LLaMA3::kFreqsCisName]->Slice(0, start_pos, start_pos + t, 1);
 
     // TODO(lzm): add dtype support for nn::function::Ones later
     std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(x1->GetDevice()));
@@ -440,15 +426,21 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3::ForwardChunk(int local_chunk_idx,
 
     std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 
-    for (auto &block : *chunk.blocks_) { x1 = block->Forward({x1, freqs_view, start_pos_ptr, mask})[0]; }
+    auto h_modules = transformer->mutable_module(LLaMA3::kHLayerName);
+    CHECK_EQ(h_modules->type(), nn::ModuleList::kType) << "Failed to get ModuleList from transformer";
+    auto blocks = std::dynamic_pointer_cast<nn::ModuleList>(h_modules);
+    // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)
+    for (int i = 0; i < chunk_layers_; ++i) {
+        x1 = (*blocks)[layer_begin_ + i]->Forward({x1, freqs_view, start_pos_ptr, mask})[0];
+    }
 
-    if (chunk.has_norm() && chunk.has_head()) {
+    if (has_lm_head_) {
         // (bs, seq_len, n_embd) -> RMSNorm -> (bs, seq_len, n_embd)
-        auto x2 = chunk.norm_->Forward({x1});
+        auto x2 = transformer->mutable_module(LLaMA3::kLnFLayerName)->Forward({x1});
 
         // TODO(zbl): add inference-time mini-optimization
         // (bs, seq_len, n_embd) -> Linear(n_embd, vocab_size) -> (bs, seq_len, vocab_size)
-        auto logits = chunk.head_->Forward(x2);
+        auto logits = parent_->mutable_module(LLaMA3::kLMHeadLayerName)->Forward(x2);
 
         return logits;
     }
@@ -559,11 +551,12 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
     int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
-    auto [is_first_stage, is_last_stage, layer_chunks]
-        = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size, vpp_size);
+    auto pp_rank = nn::parallel::pp_rank;
+    auto [is_first_stage, is_last_stage, layer_ranges_per_chunk]
+        = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size, pp_rank, vpp_size);
     // ========== layer to chunk ==========
-    std::unordered_map<int, bool> owned_layers;
-    for (const auto &[start, end] : layer_chunks) {
+    std::vector<bool> owned_layers(n_layer, false);
+    for (const auto &[start, end] : layer_ranges_per_chunk) {
         for (int i = start; i < end; ++i) { owned_layers[i] = true; }
     }
 
@@ -593,8 +586,9 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
         LOG(INFO) << "  version_minor      = " << version_minor;
 
         LOG(INFO) << "Pipeline Parallel Chunks:";
-        for (size_t i = 0; i < layer_chunks.size(); ++i) {
-            LOG(INFO) << "  Chunk " << i << ": layers " << layer_chunks[i].first << " to " << layer_chunks[i].second;
+        for (size_t i = 0; i < layer_ranges_per_chunk.size(); ++i) {
+            LOG(INFO) << "  Chunk " << i << ": layers " << layer_ranges_per_chunk[i].first << " to "
+                      << layer_ranges_per_chunk[i].second;
         }
     }
 
@@ -653,7 +647,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     // transformer.h.{i}.ln_1.weight : Full version RMSNorm
     int local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
-        if (owned_layers.find(i) != owned_layers.end()) {
+        if (owned_layers[i]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
                                                   std::to_string(local_layer_index), Block::kLn1LayerName,
                                                   RMSNorm::kParamWeightName)];
@@ -669,7 +663,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     // W-qkv should be [Q(=n_embd) | K(=n_kv_head*head_dim) | V(=n_kv_head*head_dim)] × n_embd
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
-        if (owned_layers.find(i) != owned_layers.end()) {
+        if (owned_layers[i]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
                                                   std::to_string(local_layer_index), Block::kAttnLayerName,
                                                   CausalSelfAttention::kCAttnLayerName,
@@ -709,7 +703,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     // transformer.h.{i}.attn.c_proj.weight : RowParallelLinear, but actually applies on "columns"
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
-        if (owned_layers.find(i) != owned_layers.end()) {
+        if (owned_layers[i]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
                                                   std::to_string(local_layer_index), Block::kAttnLayerName,
                                                   CausalSelfAttention::kCProjLayerName,
@@ -728,7 +722,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
 
-        if (owned_layers.find(i) != owned_layers.end()) {
+        if (owned_layers[i]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName,
                                                   std::to_string(local_layer_index), Block::kLn2LayerName,
                                                   RMSNorm::kParamWeightName)];
@@ -744,7 +738,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
 
-        if (owned_layers.find(i) != owned_layers.end()) {
+        if (owned_layers[i]) {
             auto &tensor = state_dict[std::format(
                 "{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName, std::to_string(local_layer_index),
                 Block::kMlpLayerName, MLP::kCFcLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
@@ -762,7 +756,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
 
-        if (owned_layers.find(i) != owned_layers.end()) {
+        if (owned_layers[i]) {
             auto &tensor = state_dict[std::format(
                 "{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName, std::to_string(local_layer_index),
                 Block::kMlpLayerName, MLP::kCFc2LayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
@@ -780,7 +774,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
 
-        if (owned_layers.find(i) != owned_layers.end()) {
+        if (owned_layers[i]) {
             auto &tensor = state_dict[std::format(
                 "{}.{}.{}.{}.{}.{}", kTransformerLayerName, kHLayerName, std::to_string(local_layer_index),
                 Block::kMlpLayerName, MLP::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];

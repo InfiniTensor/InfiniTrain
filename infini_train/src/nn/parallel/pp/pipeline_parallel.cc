@@ -39,12 +39,11 @@ float PipelineParallel::TrainStep(const std::vector<std::shared_ptr<Tensor>> &in
     return schedule_->Step(stage_input, stage_target, loss_fn, dtype);
 }
 
-StageInfo PipelineParallel::GetStageInfo(int total_layers, int pp_size, int chunks_per_stage) {
-    int rank = pp_rank;
-    bool is_first_stage = (pp_rank == 0);
-    bool is_last_stage = (pp_rank == pp_size - 1);
+StageInfo PipelineParallel::GetStageInfo(int total_layers, int pp_size, int rank, int chunks_per_stage) {
+    bool is_first_stage = (rank == 0);
+    bool is_last_stage = (rank == pp_size - 1);
 
-    std::vector<std::pair<int, int>> layer_chunks;
+    std::vector<std::pair<int, int>> layer_ranges_per_chunk;
 
     int layers_per_chunk = total_layers / (pp_size * chunks_per_stage);
     int remainder = total_layers % (pp_size * chunks_per_stage);
@@ -70,11 +69,11 @@ StageInfo PipelineParallel::GetStageInfo(int total_layers, int pp_size, int chun
 
         chunk_end = std::min(chunk_end, total_layers);
         if (chunk_start < chunk_end) {
-            layer_chunks.push_back({chunk_start, chunk_end});
+            layer_ranges_per_chunk.push_back({chunk_start, chunk_end});
         }
     }
 
-    return {is_first_stage, is_last_stage, layer_chunks};
+    return {is_first_stage, is_last_stage, layer_ranges_per_chunk};
 }
 
 PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num_stages, int num_micro_batches,

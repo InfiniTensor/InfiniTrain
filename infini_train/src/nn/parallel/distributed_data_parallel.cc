@@ -57,4 +57,7 @@ DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &inp
     return outputs;
 }
 
+std::vector<std::shared_ptr<nn::Module>> DistributedDataParallel::BuildChunks(int pp_rank) {
+    return modules_[kModuleName]->BuildChunks(pp_rank);
+}
 } // namespace infini_train::nn::parallel

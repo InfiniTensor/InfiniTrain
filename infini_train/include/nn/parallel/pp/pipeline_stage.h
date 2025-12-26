@@ -40,6 +40,7 @@ private:
     int next_rank_ = -1;
     const Device *device_ = nullptr;
     std::shared_ptr<nn::Module> model_ = nullptr;
+    std::vector<std::shared_ptr<Module>> chunks_;
     std::shared_ptr<Optimizer> optimizer_ = nullptr;
     std::vector<std::vector<int64_t>> recv_shape_;
 };

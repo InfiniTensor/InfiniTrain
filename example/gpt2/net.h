@@ -11,10 +11,6 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
 
-namespace infini_train::nn {
-class ModuleList;
-}
-
 struct GPT2Config {
     int64_t block_size = 1024;
     int64_t vocab_size = 50304;
@@ -75,20 +71,6 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
-class GPT2Chunk {
-public:
-    bool has_wte() const { return wte_ != nullptr; }
-    bool has_wpe() const { return wpe_ != nullptr; }
-    bool has_norm() const { return norm_ != nullptr; }
-    bool has_head() const { return head_ != nullptr; }
-
-    std::shared_ptr<infini_train::nn::Module> wte_ = nullptr;
-    std::shared_ptr<infini_train::nn::Module> wpe_ = nullptr;
-    std::shared_ptr<infini_train::nn::ModuleList> blocks_ = nullptr;
-    std::shared_ptr<infini_train::nn::Module> norm_ = nullptr;
-    std::shared_ptr<infini_train::nn::Module> head_ = nullptr;
-};
-
 class GPT2 : public infini_train::nn::CloneableModule<GPT2> {
 public:
     static constexpr char kWTELayerName[] = "wte";
@@ -110,14 +92,31 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    void BuildChunks();
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    ForwardChunk(int local_chunk_idx, const std::vector<std::shared_ptr<infini_train::Tensor>> &input) override;
+    std::vector<std::shared_ptr<infini_train::nn::Module>> BuildChunks(int pp_rank) override;
 
     static std::shared_ptr<GPT2> FromPretrained(ModelType model_type);
     static std::shared_ptr<GPT2> FromLLMC(const std::string &filepath);
 
 private:
     GPT2Config config_;
-    std::vector<GPT2Chunk> chunks_;
+};
+
+class GPT2Chunk : public infini_train::nn::CloneableModule<GPT2Chunk> {
+public:
+    GPT2Chunk(GPT2 *parent, int layer_begin, int chunk_layers, bool has_embedding, bool has_lm_head,
+              const GPT2Config &config)
+        : parent_(parent), layer_begin_(layer_begin), chunk_layers_(chunk_layers), has_embedding_(has_embedding),
+          has_lm_head_(has_lm_head), config_(config) {}
+
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+private:
+    GPT2 *parent_ = nullptr;
+    int layer_begin_ = 0;
+    int chunk_layers_ = 0;
+    bool has_embedding_ = false;
+    bool has_lm_head_ = false;
+
+    GPT2Config config_;
 };
