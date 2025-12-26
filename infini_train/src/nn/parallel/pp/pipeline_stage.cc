@@ -17,11 +17,18 @@ PipelineStage::PipelineStage(const std::shared_ptr<Module> &model, int stage_ind
       prev_rank_(stage_index > 0 ? stage_index - 1 : -1),
       next_rank_(stage_index < num_stages - 1 ? stage_index + 1 : -1), recv_shape_(recv_shape),
       optimizer_(std::move(optimizer)),
-      device_(DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA).at(device_id)) {}
+      device_(DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA).at(device_id)) {
+
+    chunks_ = model->BuildChunks(stage_index);
+}
 
 std::vector<std::shared_ptr<Tensor>> PipelineStage::ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &inputs,
                                                                     int local_chunk_idx) {
-    return model_->ForwardChunk(local_chunk_idx, inputs);
+    if (local_chunk_idx < 0 || local_chunk_idx >= static_cast<int>(chunks_.size())) {
+        LOG(FATAL) << "PipelineStage::ForwardOneChunk: local_chunk_idx=" << local_chunk_idx << " out of range [0, "
+                   << chunks_.size() << ")";
+    }
+    return chunks_[local_chunk_idx]->Forward(inputs);
 }
 
 } // namespace infini_train::nn::parallel

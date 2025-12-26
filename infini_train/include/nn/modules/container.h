@@ -40,6 +40,8 @@ public:
     auto begin() const { return module_list_.begin(); }
     auto end() const { return module_list_.end(); }
 
+    std::shared_ptr<Module> &operator[](std::size_t idx) { return module_list_.at(idx); }
+
 private:
     std::vector<std::shared_ptr<Module>> module_list_;
 };

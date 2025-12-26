@@ -110,9 +110,8 @@ std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shar
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>> Module::ForwardChunk(int local_chunk_idx,
-                                                          const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    LOG(FATAL) << "ForwardChunk function not implemented for this module";
+std::vector<std::shared_ptr<Module>> Module::BuildChunks(int pp_rank) {
+    LOG(FATAL) << "BuildChunks function not implemented for this module";
     return {};
 }
 

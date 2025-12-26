@@ -21,7 +21,10 @@ extern thread_local int pp_rank;
 struct StageInfo {
     bool is_first_stage;
     bool is_last_stage;
-    std::vector<std::pair<int, int>> layer_chunks;
+
+    // Layer index ranges for chunks assigned to this pipeline stage.
+    // Each element is a pair: (inclusive_start_layer, exclusive_end_layer)
+    std::vector<std::pair<int, int>> layer_ranges_per_chunk;
 };
 
 class PipelineParallel : public Module {
@@ -34,7 +37,7 @@ public:
                     const std::vector<std::shared_ptr<Tensor>> &target, const std::shared_ptr<nn::Module> &loss_fn,
                     DataType dtype);
 
-    static StageInfo GetStageInfo(int total_layers, int pp_size, int chunks_per_stage = 1);
+    static StageInfo GetStageInfo(int total_layers, int pp_size, int pp_rank, int chunks_per_stage = 1);
 
 private:
     int num_stages_ = -1;

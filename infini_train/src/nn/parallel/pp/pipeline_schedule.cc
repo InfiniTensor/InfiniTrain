@@ -24,9 +24,9 @@ void PrintScheduleTable(const std::vector<PipelineParallelScheduler::Task> &sche
                         int vpp_size) {
     int total_global_chunks = num_stages * vpp_size;
 
-    LOG(INFO) << "=== Schedule Table ===";
-    LOG(INFO) << "n=" << n << ", stages=" << num_stages << ", vpp=" << vpp_size
-              << ", total_chunks=" << total_global_chunks;
+    LOG(INFO) << std::format("=== Schedule Table ===\n"
+                             "n: {}, stages: {}, vpp: {}, total_chunks: {}",
+                             n, num_stages, vpp_size, total_global_chunks);
     LOG(INFO) << "";
     LOG(INFO) << "Step |    Type   | Microbatch | Global Chunk | Local Chunk | Stage";
     LOG(INFO) << "-----|-----------|------------|--------------|-------------|-------";
@@ -36,11 +36,10 @@ void PrintScheduleTable(const std::vector<PipelineParallelScheduler::Task> &sche
         int local_chunk = task.global_chunk_id / num_stages;
 
         std::string type_str = task.is_forward ? "Forward" : "Backward";
-        std::stringstream ss;
-        ss << std::setw(4) << task.step << " | " << std::setw(9) << std::left << type_str << std::right << "| "
-           << std::setw(11) << task.microbatch_id << "| " << std::setw(13) << task.global_chunk_id << "| "
-           << std::setw(12) << local_chunk << "| " << owning_stage;
-        LOG(INFO) << ss.str();
+
+        auto s_info = std::format("{:4} | {:<9} | {:>10} | {:>12} | {:>11} | {:>5}", task.step, type_str,
+                                  task.microbatch_id, task.global_chunk_id, local_chunk, owning_stage);
+        LOG(INFO) << s_info;
     }
 }
 
@@ -108,7 +107,7 @@ std::vector<PipelineParallelScheduler::Task> PipelineParallelScheduler::Generate
         }
     }
 
-    // sorted according to step、local_chunk_idx
+    // sorted according to step, local_chunk_idx
     std::sort(schedule.begin(), schedule.end(), [](const Task &a, const Task &b) {
         if (a.step != b.step) {
             return a.step < b.step;
@@ -193,7 +192,7 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
     int stage_idx = stage_->stage_index();
     int vpp_size = global::GetVirtualPipelineParallelSize();
 
-    auto schedule = PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(n, num_stages, vpp_size);
+    auto schedule = PipelineParallelScheduler::GenerateGPipeSchedule(n, num_stages, vpp_size);
 
     if (stage_idx == 0) {
         PrintScheduleTable(schedule, n, num_stages, vpp_size);

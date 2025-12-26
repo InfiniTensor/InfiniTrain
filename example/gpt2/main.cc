@@ -294,6 +294,7 @@ void Train(const nn::parallel::Rank &rank) {
                 auto logits = model->Forward({x, y})[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish model forward, start loss forward";
                 auto loss = loss_fn->Forward({logits, y})[0];
+                // FIXME(jym): verify gradient accumulation precision
                 loss = loss / grad_accum_steps;
 
                 // disable autocast for the current step (backward is not under autocast)
