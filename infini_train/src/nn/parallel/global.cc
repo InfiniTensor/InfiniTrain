@@ -90,7 +90,7 @@ GlobalEnv &GlobalEnv::Instance() {
 }
 
 void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                     int pipeline_parallel_size) {
+                     int pipeline_parallel_size, int virtual_pipeline_parallel_size) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
@@ -106,6 +106,7 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     tensor_parallel_size_ = tensor_parallel_size;
     sequence_parallel_enabled_ = sequence_parallel_enabled;
     pipeline_parallel_size_ = pipeline_parallel_size;
+    virtual_pipeline_parallel_size_ = virtual_pipeline_parallel_size;
     data_parallel_size_ = world_size_ / tensor_parallel_size_ / pipeline_parallel_size_;
 
     layout_.sizes[DP] = data_parallel_size_;
@@ -169,6 +170,11 @@ int GlobalEnv::data_parallel_size() const {
 int GlobalEnv::pipeline_parallel_size() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return pipeline_parallel_size_;
+}
+
+int GlobalEnv::virtual_pipeline_parallel_size() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return virtual_pipeline_parallel_size_;
 }
 
 Layout GlobalEnv::layout() const {

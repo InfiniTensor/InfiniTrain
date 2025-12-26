@@ -132,9 +132,31 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
+    std::vector<std::shared_ptr<infini_train::nn::Module>> BuildChunks(int pp_rank) override;
+
     static std::shared_ptr<LLaMA3> FromPretrained(ModelType model_type);
     static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath);
 
 private:
+    LLaMA3Config config_;
+};
+
+class LLaMA3Chunk : public infini_train::nn::CloneableModule<LLaMA3Chunk> {
+public:
+    LLaMA3Chunk(LLaMA3 *parent, int layer_begin, int chunk_layers, bool has_embedding, bool has_lm_head,
+                const LLaMA3Config &config)
+        : parent_(parent), layer_begin_(layer_begin), chunk_layers_(chunk_layers), has_embedding_(has_embedding),
+          has_lm_head_(has_lm_head), config_(config){};
+
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+private:
+    LLaMA3 *parent_ = nullptr;
+    int layer_begin_ = 0;
+    int chunk_layers_ = 0;
+    bool has_embedding_ = false;
+    bool has_lm_head_ = false;
+
     LLaMA3Config config_;
 };
