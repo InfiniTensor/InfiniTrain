@@ -21,7 +21,10 @@ const std::string &Module::type() const { return type_; }
 std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
     std::vector<std::shared_ptr<Tensor>> params;
     for (auto &[_, param] : parameters_) { params.push_back(param); }
-    for (auto &[_, module] : modules_) {
+    for (auto &[name, module] : modules_) {
+        if (name.starts_with("__pp")) {
+            continue;
+        }
         for (auto &param : module->Parameters()) { params.push_back(param); }
     }
     return params;
@@ -100,6 +103,9 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() con
     for (auto &[name, param] : parameters_) { state.emplace(name, param); }
     for (auto &[name, buffer] : buffers_) { state.emplace(name, buffer); }
     for (auto &[name, module] : modules_) {
+        if (name.starts_with("__pp")) {
+            continue;
+        }
         for (auto &[sub_name, param] : module->StateDict()) { state.emplace(name + "." + sub_name, param); }
     }
     return state;
@@ -107,11 +113,6 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() con
 
 std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     LOG(FATAL) << "Forward function not implemented for this module";
-    return {};
-}
-
-std::vector<std::shared_ptr<Module>> Module::BuildChunks(int pp_rank) {
-    LOG(FATAL) << "BuildChunks function not implemented for this module";
     return {};
 }
 

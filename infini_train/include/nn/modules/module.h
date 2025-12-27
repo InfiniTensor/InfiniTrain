@@ -54,8 +54,6 @@ public:
         return 0.0f;
     };
 
-    virtual std::vector<std::shared_ptr<Module>> BuildChunks(int pp_rank);
-
     virtual void To(const Device *device);
 
     virtual void To(DataType dtype);
