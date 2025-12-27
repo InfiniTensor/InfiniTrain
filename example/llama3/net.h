@@ -10,6 +10,7 @@
 
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/tensor.h"
 
 struct LLaMA3Config {
@@ -108,15 +109,50 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
-class LLaMA3 : public infini_train::nn::CloneableModule<LLaMA3> {
+class LLaMA3FirstStage : public infini_train::nn::CloneableModule<LLaMA3FirstStage> {
 public:
     static constexpr char kWTELayerName[] = "wte";
+
+    explicit LLaMA3FirstStage(const LLaMA3Config &config);
+
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+private:
+    const LLaMA3Config config_;
+};
+
+class LLaMA3Chunk : public infini_train::nn::CloneableModule<LLaMA3Chunk> {
+public:
     static constexpr char kHLayerName[] = "h";
+    static constexpr char kFreqsCisName[] = "freqs_cis";
+
+    LLaMA3Chunk(const LLaMA3Config &config, int start_layer, int end_layer);
+
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+private:
+    const LLaMA3Config config_;
+};
+
+class LLaMA3LastStage : public infini_train::nn::CloneableModule<LLaMA3LastStage> {
+public:
     static constexpr char kLnFLayerName[] = "ln_f";
-    static constexpr char kTransformerLayerName[] = "transformer";
     static constexpr char kLMHeadLayerName[] = "lm_head";
 
-    static constexpr char kFreqsCisName[] = "freqs_cis";
+    explicit LLaMA3LastStage(const LLaMA3Config &config);
+
+    std::vector<std::shared_ptr<infini_train::Tensor>>
+    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+private:
+    const LLaMA3Config config_;
+};
+
+class LLaMA3 : public infini_train::nn::CloneableModule<LLaMA3> {
+public:
+    static constexpr char kTransformerLayerName[] = "transformer";
 
     enum class ModelType : int8_t {
         // TODO(zbl): more model type from huggingface
@@ -132,31 +168,12 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    std::vector<std::shared_ptr<infini_train::nn::Module>> BuildChunks(int pp_rank) override;
-
     static std::shared_ptr<LLaMA3> FromPretrained(ModelType model_type);
     static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath);
 
-private:
-    LLaMA3Config config_;
-};
-
-class LLaMA3Chunk : public infini_train::nn::CloneableModule<LLaMA3Chunk> {
-public:
-    LLaMA3Chunk(LLaMA3 *parent, int layer_begin, int chunk_layers, bool has_embedding, bool has_lm_head,
-                const LLaMA3Config &config)
-        : parent_(parent), layer_begin_(layer_begin), chunk_layers_(chunk_layers), has_embedding_(has_embedding),
-          has_lm_head_(has_lm_head), config_(config){};
-
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+    int GetChunkSize() const { return stage_info_.layer_ranges_per_chunk.size(); }
 
 private:
-    LLaMA3 *parent_ = nullptr;
-    int layer_begin_ = 0;
-    int chunk_layers_ = 0;
-    bool has_embedding_ = false;
-    bool has_lm_head_ = false;
-
-    LLaMA3Config config_;
+    const LLaMA3Config config_;
+    const infini_train::nn::parallel::StageInfo stage_info_;
 };

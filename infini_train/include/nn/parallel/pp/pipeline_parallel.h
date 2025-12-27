@@ -31,7 +31,7 @@ class PipelineParallel : public Module {
 public:
     PipelineParallel(const std::shared_ptr<nn::Module> module, int num_stages, int num_micro_batches,
                      const std::vector<std::vector<int64_t>> &recv_shape, int rank,
-                     const std::shared_ptr<Optimizer> &optimizer, int device_id);
+                     const std::shared_ptr<Optimizer> &optimizer, int device_id, int vpp);
 
     float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input,
                     const std::vector<std::shared_ptr<Tensor>> &target, const std::shared_ptr<nn::Module> &loss_fn,
@@ -39,16 +39,18 @@ public:
 
     static StageInfo GetStageInfo(int total_layers, int pp_size, int pp_rank, int chunks_per_stage = 1);
 
-private:
-    int num_stages_ = -1;
-    int rank_ = -1;
-    std::shared_ptr<PipelineStage> pipeline_stage_ = nullptr;
-    std::shared_ptr<PipelineSchedule> schedule_ = nullptr;
+    std::vector<std::shared_ptr<Module>> *mutable_chunks();
 
-    void BuildPipelineStage(const std::shared_ptr<nn::Module> &model, const std::shared_ptr<Optimizer> &optimizer,
-                            const std::vector<std::vector<int64_t>> &recv_shape, int device_id);
+private:
+    void BuildPipelineStage(const std::shared_ptr<Optimizer> &optimizer,
+                            const std::vector<std::vector<int64_t>> &recv_shape, int device_id,
+                            std::vector<std::shared_ptr<Module>> &&chunks);
 
     void SetupSchedule(int num_micro_batches);
-};
 
+    int num_stages_ = -1;
+    int rank_ = -1;
+    std::shared_ptr<PipelineSchedule> schedule_ = nullptr;
+    std::shared_ptr<PipelineStage> pipeline_stage_ = nullptr;
+};
 } // namespace infini_train::nn::parallel
