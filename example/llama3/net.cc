@@ -440,7 +440,7 @@ LLaMA3::LLaMA3(const LLaMA3Config &config)
 }
 
 std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    auto x1 = modules_["__pp_first_stage"]->Forward(x);
+    auto x1 = modules_["__pp_first_stage"]->Forward({x[0]});
     for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
         x1 = modules_["__pp_chunk_" + std::to_string(chunk_idx)]->Forward(x1);
     }
