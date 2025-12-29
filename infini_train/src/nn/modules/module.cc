@@ -20,13 +20,22 @@ const std::string &Module::type() const { return type_; }
 
 std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
     std::vector<std::shared_ptr<Tensor>> params;
-    for (auto &[_, param] : parameters_) { params.push_back(param); }
-    for (auto &[name, module] : modules_) {
-        if (name.starts_with("__pp")) {
-            continue;
+    std::unordered_set<const Tensor *> visited;
+
+    auto AddIfUnvisited = [&](const std::shared_ptr<Tensor> &param) {
+        if (visited.insert(param.get()).second) {
+            params.push_back(param);
         }
-        for (auto &param : module->Parameters()) { params.push_back(param); }
+    };
+
+    // Add parameters of this module
+    for (const auto &[_, param] : parameters_) { AddIfUnvisited(param); }
+
+    // Recursively add parameters of submodules
+    for (const auto &[_, module] : modules_) {
+        for (const auto &param : module->Parameters()) { AddIfUnvisited(param); }
     }
+
     return params;
 }
 
