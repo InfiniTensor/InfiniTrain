@@ -59,11 +59,10 @@ Build Options:
 | Model Support             | GPT-2                           | Decoder-only Transformer language model              | ✔ Supported    |
 |                           | LLaMA 3                         | Modern LLaMA-family Transformer architecture         | ✔ Supported    |
 |                           | DeepSeek-V3                     | Large-scale MoE-based language model                 | 🗓 Planned     |
-| Precision                 | FP32                            | Single precision training                            | ✔ Supported    |
-|                           | FP16                            | Reduced precision training                           | ✔ Supported    |
+| Precision                 | Multiple Data Type              | FP32, BF16                                           | ✔ Supported    |
 |                           | Mixed Precision                 | Autocast-based BF16 compute with FP32 accumulation   | ✔ Supported    |
-| Distributed Training      | DP                              | Parameter-server-style data parallelism              | ✔ Supported    |
-|                           | DDP                             | Collective-based data parallelism                    | ✔ Supported    |
+| Distributed Training      | Data Parallel (DP)              | Parameter-server-style data parallelism              | ✔ Supported    |
+|                           | Distributed Data Parallel (DDP) | Collective-based data parallelism                    | ✔ Supported    |
 |                           | Tensor Parallelism (TP)         | Intra-layer tensor sharding                          | ✔ Supported    |
 |                           | Sequence Parallelism (SP)       | Sequence dimension sharding                          | ✔ Supported    |
 |                           | Pipeline Parallelism (PP)       | GPipe, 1F1B scheduling, Virtual Pipeline (vPP)       | ✔ Supported    |
@@ -139,7 +138,7 @@ The following examples demonstrate **LLaMA 3 supervised fine-tuning (SFT)** usin
 
 ```bash
 --tensor_parallel 4        # 4-way tensor parallelism
---sequence_parallel        # Enable sequence parallelism (recommended with TP)
+--sequence_parallel        # Enable sequence parallelism (requires TP > 1)
 ```
 
 #### Pipeline Parallelism (PP)
@@ -167,7 +166,7 @@ Multiple parallelism strategies (DDP, TP, SP, PP) can be freely combined to scal
 
   Introduced kernel registration, LLaMA training on CPU/CUDA, BF16 precision, and Data Parallelism.
 
-- **2025/12/xx** — InfiniTrain **v0.5.0**
+- **2025/12/31** — InfiniTrain **v0.5.0**
 
   Added Autocast, multi-dimensional distributed parallelism
    (DDP, TP, SP, PP with GPipe / 1F1B / vPP),
