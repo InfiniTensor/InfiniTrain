@@ -19,6 +19,8 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
+    std::vector<std::shared_ptr<nn::Module>> BuildChunks(int pp_rank) override;
+
 private:
     std::shared_ptr<Reducer> reducer_ = nullptr;
 };

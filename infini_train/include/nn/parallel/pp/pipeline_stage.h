@@ -20,7 +20,8 @@ public:
                   const std::vector<std::vector<int64_t>> &recv_shape, std::shared_ptr<Optimizer> optimizer,
                   int device_id);
 
-    std::vector<std::shared_ptr<Tensor>> ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &inputs);
+    std::vector<std::shared_ptr<Tensor>> ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &inputs,
+                                                         int local_chunk_idx = 0);
 
     bool IsFirstStage() const { return stage_index_ == 0; }
     bool IsLastStage() const { return stage_index_ == num_stages_ - 1; }
@@ -39,6 +40,7 @@ private:
     int next_rank_ = -1;
     const Device *device_ = nullptr;
     std::shared_ptr<nn::Module> model_ = nullptr;
+    std::vector<std::shared_ptr<Module>> chunks_;
     std::shared_ptr<Optimizer> optimizer_ = nullptr;
     std::vector<std::vector<int64_t>> recv_shape_;
 };
