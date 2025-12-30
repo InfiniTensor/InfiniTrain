@@ -368,7 +368,7 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3Chunk::Forward(const std::vector<std:
     std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 
     // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)
-    for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName])) {
+    for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[LLaMA3Chunk::kHLayerName])) {
         x1 = h->Forward({x1, freqs_view, start_pos_ptr, mask})[0];
     }
     return {x1};
@@ -398,7 +398,7 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3LastStage::Forward(const std::vector<
 
 LLaMA3::LLaMA3(const LLaMA3Config &config)
     : config_(config), stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
-                           config_.n_layer, nn::parallel::global::GetPipelineParallelSize(),
+                           config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
                            nn::parallel::global::GetVirtualPipelineParallelSize())) {
     std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
     if (stage_info_.is_first_stage) {
