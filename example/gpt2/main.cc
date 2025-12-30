@@ -188,15 +188,35 @@ void Train(const nn::parallel::Rank &rank) {
         LOG(FATAL) << "Rank " << rank.GlobalRank() << ": Datatype " << FLAGS_dtype << " not supported.";
     }
 
-    // NOTE(dcj): Complete all device (.to(device)) and dtype (.to(dtype)) conversions
-    // before wrapping the model with DistributedDataParallel (DDP).
-    // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
-    // are created during the conversion.
-    if (ddp_world_size > 1) {
+    auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
+
+    // TODO(dcj): support more complex optimizer later
+    auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
+
+    if (pp_world_size > 1) {
+        // NOTE(dcj): To ensure that the tensor shapes at the pipeline stage boundaries remain correct
+        // when sequence parallelism (SP) is enabled, we need to divide by sp_world_size.
+        auto shapes = std::vector<std::vector<int64_t>>{
+            {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
+
+        model = std::make_shared<nn::parallel::PipelineParallel>(
+            model, pp_world_size, num_micro_batches, shapes, pp_rank, std::make_shared<optimizers::SGD>(optimizer),
+            rank.thread_rank(), std::dynamic_pointer_cast<GPT2>(model)->GetChunkSize());
+        if (ddp_world_size > 1) {
+            auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
+            for (int chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
+                (*mutable_chunks)[chunk_id]
+                    = std::make_shared<DistributedDataParallel>(mutable_chunks->at(chunk_id), rank.thread_rank());
+            }
+        }
+    } else if (ddp_world_size > 1) {
+        // NOTE(dcj): Complete all device (.to(device)) and dtype (.to(dtype)) conversions
+        // before wrapping the model with DistributedDataParallel (DDP).
+        // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
+        // are created during the conversion.
         model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank());
     }
 
-    auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
     DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
                                        pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size,
                                        ddp_rank, ddp_world_size);
@@ -217,9 +237,6 @@ void Train(const nn::parallel::Rank &rank) {
         tokenizer = std::make_unique<Tokenizer>(FLAGS_tokenizer_bin);
     }
 
-    // TODO(dcj): support more complex optimizer later
-    auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
-
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(
@@ -227,17 +244,6 @@ void Train(const nn::parallel::Rank &rank) {
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": start training";
-
-    if (pp_world_size > 1) {
-        // NOTE(dcj): To ensure that the tensor shapes at the pipeline stage boundaries remain correct
-        // when sequence parallelism (SP) is enabled, we need to divide by sp_world_size.
-        auto shapes = std::vector<std::vector<int64_t>>{
-            {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
-
-        model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
-                                                                 pp_rank, std::make_shared<optimizers::SGD>(optimizer),
-                                                                 rank.thread_rank());
-    }
 
     LOG(INFO) << "start training";
 

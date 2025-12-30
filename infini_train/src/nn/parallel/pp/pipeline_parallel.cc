@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/module.h"
@@ -17,10 +18,11 @@ constexpr char kModuleName[] = "module";
 
 thread_local int pp_rank = 0;
 
-void PipelineParallel::BuildPipelineStage(const std::shared_ptr<Module> &module,
-                                          const std::shared_ptr<Optimizer> &optimizer,
-                                          const std::vector<std::vector<int64_t>> &recv_shape, int device_id) {
-    pipeline_stage_ = std::make_shared<PipelineStage>(module, rank_, num_stages_, recv_shape, optimizer, device_id);
+void PipelineParallel::BuildPipelineStage(const std::shared_ptr<Optimizer> &optimizer,
+                                          const std::vector<std::vector<int64_t>> &recv_shape, int device_id,
+                                          std::vector<std::shared_ptr<Module>> &&chunks) {
+    pipeline_stage_
+        = std::make_shared<PipelineStage>(rank_, num_stages_, recv_shape, optimizer, device_id, std::move(chunks));
 }
 
 void PipelineParallel::SetupSchedule(int num_micro_batches) {
@@ -78,13 +80,30 @@ StageInfo PipelineParallel::GetStageInfo(int total_layers, int pp_size, int rank
 
 PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num_stages, int num_micro_batches,
                                    const std::vector<std::vector<int64_t>> &recv_shape, int pp_rank,
-                                   const std::shared_ptr<Optimizer> &optimizer, int device_id)
+                                   const std::shared_ptr<Optimizer> &optimizer, int device_id, int chunk_size)
     : num_stages_(num_stages), rank_(pp_rank) {
     modules_[kModuleName] = std::move(module);
 
-    BuildPipelineStage(module, optimizer, recv_shape, device_id);
+    int stage_id = pp_rank;
+    int stage_size = num_stages;
+
+    std::vector<std::shared_ptr<Module>> chunks;
+    for (int chunk_id = 0; chunk_id < chunk_size; ++chunk_id) {
+        std::vector<std::shared_ptr<Module>> chunk_parts;
+        if (chunk_id == 0 && stage_id == 0) {
+            chunk_parts.push_back(module->mutable_module("__pp_first_stage"));
+        }
+        chunk_parts.push_back(module->mutable_module("__pp_chunk_" + std::to_string(chunk_id)));
+        if (chunk_id == chunk_size - 1 && stage_id == stage_size - 1) {
+            chunk_parts.push_back(module->mutable_module("__pp_last_stage"));
+        }
+        chunks.push_back(std::make_shared<Sequential>(std::move(chunk_parts)));
+    }
+
+    BuildPipelineStage(optimizer, recv_shape, device_id, std::move(chunks));
 
     SetupSchedule(num_micro_batches);
 }
 
+std::vector<std::shared_ptr<Module>> *PipelineParallel::mutable_chunks() { return pipeline_stage_->mutable_chunks(); }
 } // namespace infini_train::nn::parallel
