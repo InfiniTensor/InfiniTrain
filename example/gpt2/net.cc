@@ -489,13 +489,13 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(lm_head_weight->DataPtr()), model_vocab_size, n_embd, v_start,
                                 vpp);
     } else {
-        size_t wte_bytes = vocab_size * n_embd * sizeof(float);
+        size_t wte_bytes = model_vocab_size * n_embd * sizeof(float);
         ifs.seekg(wte_bytes, std::ios::cur);
     }
 
     if (tp_size == 1) {
         // Skip padded vocab part when TP is not enabled
-        ifs.ignore((padded_vocab_size - vocab_size) * n_embd * sizeof(float));
+        ifs.ignore((padded_vocab_size - model_vocab_size) * n_embd * sizeof(float));
     }
 
     if (is_first_stage) {
