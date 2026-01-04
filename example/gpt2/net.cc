@@ -257,7 +257,7 @@ GPT2LastStage::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> 
 
 GPT2::GPT2(const GPT2Config &config)
     : config_(config), stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
-                           config_.n_layer, nn::parallel::global::GetPipelineParallelSize(),
+                           config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
                            nn::parallel::global::GetVirtualPipelineParallelSize())) {
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
 
