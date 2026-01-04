@@ -194,8 +194,10 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
 
     auto schedule = PipelineParallelScheduler::GenerateGPipeSchedule(n, num_stages, vpp_size);
 
-    if (stage_idx == 0) {
+    static bool has_printed = false;
+    if (!has_printed && stage_idx == 0) {
         PrintScheduleTable(schedule, n, num_stages, vpp_size);
+        has_printed = true;
     }
 
     float total_loss = 0.0f;
