@@ -25,6 +25,8 @@ class DeviceManager;
 
 class Device {
 public:
+    virtual ~Device() = default;
+
     DeviceType Type() const;
     int8_t Index() const;
 
@@ -57,7 +59,7 @@ private:
 #ifdef USE_CUDA
 class CudaDevice : public Device {
 public:
-    ~CudaDevice();
+    ~CudaDevice() override;
 
     void SetDevice() const override;
     void Synchronize() const override;

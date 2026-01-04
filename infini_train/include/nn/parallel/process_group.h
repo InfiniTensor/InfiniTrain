@@ -30,6 +30,8 @@ namespace infini_train::nn::parallel {
 
 class ProcessGroup {
 public:
+    virtual ~ProcessGroup() = default;
+
     virtual int GetGroupRank(int global_rank) const;
 
     // Asynchronous communication APIs (Compute / Communication stream decoupled)
@@ -90,7 +92,7 @@ class ProcessGroupNCCL final : public ProcessGroup {
 public:
     explicit ProcessGroupNCCL(const std::string &process_group_name, const std::vector<int> &device_indices);
 
-    ~ProcessGroupNCCL();
+    ~ProcessGroupNCCL() override;
 
     // Asynchronous communication APIs (Compute / Communication stream decoupled)
     std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op,
