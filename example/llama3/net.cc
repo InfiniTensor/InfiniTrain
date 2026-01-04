@@ -25,7 +25,6 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
-#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
 using namespace infini_train;
@@ -402,9 +401,9 @@ LLaMA3::LLaMA3(const LLaMA3Config &config)
                            nn::parallel::global::GetVirtualPipelineParallelSize())) {
     std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
     if (stage_info_.is_first_stage) {
-        modules_["__pp_first_stage"] = std::make_shared<LLaMA3FirstStage>(config_);
+        modules_[kPPFirstStageName] = std::make_shared<LLaMA3FirstStage>(config_);
         transformer[LLaMA3FirstStage::LLaMA3FirstStage::kWTELayerName]
-            = modules_["__pp_first_stage"]->mutable_module(LLaMA3FirstStage::LLaMA3FirstStage::kWTELayerName);
+            = modules_[kPPFirstStageName]->mutable_module(LLaMA3FirstStage::LLaMA3FirstStage::kWTELayerName);
     }
 
     {
@@ -422,29 +421,29 @@ LLaMA3::LLaMA3(const LLaMA3Config &config)
                 h.push_back(
                     chunk->mutable_module(LLaMA3Chunk::LLaMA3Chunk::kHLayerName)->mutable_module(std::to_string(idx)));
             }
-            modules_["__pp_chunk_" + std::to_string(chunk_idx)] = std::move(chunk);
+            modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)] = std::move(chunk);
             ++chunk_idx;
         }
         transformer[LLaMA3Chunk::LLaMA3Chunk::kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
     }
 
     if (stage_info_.is_last_stage) {
-        modules_["__pp_last_stage"] = std::make_shared<LLaMA3LastStage>(config_);
+        modules_[kPPLastStageName] = std::make_shared<LLaMA3LastStage>(config_);
         transformer[LLaMA3LastStage::kLnFLayerName]
-            = modules_["__pp_last_stage"]->mutable_module(LLaMA3LastStage::kLnFLayerName);
+            = modules_[kPPLastStageName]->mutable_module(LLaMA3LastStage::kLnFLayerName);
         // NOTE(zbl): weight-tying is possible but torch script did not do so
         modules_[LLaMA3LastStage::kLMHeadLayerName]
-            = modules_["__pp_last_stage"]->mutable_module(LLaMA3LastStage::kLMHeadLayerName);
+            = modules_[kPPLastStageName]->mutable_module(LLaMA3LastStage::kLMHeadLayerName);
     }
     modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
 }
 
 std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    auto x1 = modules_["__pp_first_stage"]->Forward({x[0]});
+    auto x1 = modules_[kPPFirstStageName]->Forward({x[0]});
     for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
-        x1 = modules_["__pp_chunk_" + std::to_string(chunk_idx)]->Forward(x1);
+        x1 = modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)]->Forward(x1);
     }
-    return modules_["__pp_last_stage"]->Forward(x1);
+    return modules_[kPPLastStageName]->Forward(x1);
 }
 
 std::shared_ptr<LLaMA3> LLaMA3::FromPretrained(ModelType model_type) {

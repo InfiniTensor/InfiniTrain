@@ -268,11 +268,11 @@ GPT2::GPT2(const GPT2Config &config)
 
     std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
     if (stage_info_.is_first_stage) {
-        modules_["__pp_first_stage"] = std::make_shared<GPT2FirstStage>(config_);
+        modules_[kPPFirstStageName] = std::make_shared<GPT2FirstStage>(config_);
         transformer[GPT2FirstStage::kWTELayerName]
-            = modules_["__pp_first_stage"]->mutable_module(GPT2FirstStage::kWTELayerName);
+            = modules_[kPPFirstStageName]->mutable_module(GPT2FirstStage::kWTELayerName);
         transformer[GPT2FirstStage::kWPELayerName]
-            = modules_["__pp_first_stage"]->mutable_module(GPT2FirstStage::kWPELayerName);
+            = modules_[kPPFirstStageName]->mutable_module(GPT2FirstStage::kWPELayerName);
     }
 
     {
@@ -289,18 +289,18 @@ GPT2::GPT2(const GPT2Config &config)
             for (int idx = 0; idx < layer_size; ++idx) {
                 h.push_back(chunk->mutable_module(GPT2Chunk::kHLayerName)->mutable_module(std::to_string(idx)));
             }
-            modules_["__pp_chunk_" + std::to_string(chunk_idx)] = std::move(chunk);
+            modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)] = std::move(chunk);
             ++chunk_idx;
         }
         transformer[GPT2Chunk::kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
     }
 
     if (stage_info_.is_last_stage) {
-        modules_["__pp_last_stage"] = std::make_shared<GPT2LastStage>(config_);
+        modules_[kPPLastStageName] = std::make_shared<GPT2LastStage>(config_);
         transformer[GPT2LastStage::kLnFLayerName]
-            = modules_["__pp_last_stage"]->mutable_module(GPT2LastStage::kLnFLayerName);
+            = modules_[kPPLastStageName]->mutable_module(GPT2LastStage::kLnFLayerName);
         modules_[GPT2LastStage::kLMHeadLayerName]
-            = modules_["__pp_last_stage"]->mutable_module(GPT2LastStage::kLMHeadLayerName);
+            = modules_[kPPLastStageName]->mutable_module(GPT2LastStage::kLMHeadLayerName);
     }
     modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
 
@@ -316,11 +316,11 @@ GPT2::GPT2(const GPT2Config &config)
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
 GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
-    auto x1 = modules_["__pp_first_stage"]->Forward(x);
+    auto x1 = modules_[kPPFirstStageName]->Forward(x);
     for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
-        x1 = modules_["__pp_chunk_" + std::to_string(chunk_idx)]->Forward(x1);
+        x1 = modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)]->Forward(x1);
     }
-    return modules_["__pp_last_stage"]->Forward(x1);
+    return modules_[kPPLastStageName]->Forward(x1);
 }
 
 std::shared_ptr<GPT2> GPT2::FromPretrained(ModelType model_type) {
