@@ -7,7 +7,6 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"

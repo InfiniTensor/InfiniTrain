@@ -91,11 +91,11 @@ PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num
     for (int chunk_id = 0; chunk_id < chunk_size; ++chunk_id) {
         std::vector<std::shared_ptr<Module>> chunk_parts;
         if (chunk_id == 0 && stage_id == 0) {
-            chunk_parts.push_back(module->mutable_module("__pp_first_stage"));
+            chunk_parts.push_back(module->mutable_module(kPPFirstStageName));
         }
-        chunk_parts.push_back(module->mutable_module("__pp_chunk_" + std::to_string(chunk_id)));
+        chunk_parts.push_back(module->mutable_module(kPPChunkNamePrefix + std::to_string(chunk_id)));
         if (chunk_id == chunk_size - 1 && stage_id == stage_size - 1) {
-            chunk_parts.push_back(module->mutable_module("__pp_last_stage"));
+            chunk_parts.push_back(module->mutable_module(kPPLastStageName));
         }
         chunks.push_back(std::make_shared<Sequential>(std::move(chunk_parts)));
     }

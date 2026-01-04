@@ -25,6 +25,10 @@ class Module : public std::enable_shared_from_this<Module> {
 public:
     static constexpr char kUndefinedType[] = "Undefined";
 
+    static constexpr char kPPFirstStageName[] = "__pp_first_stage";
+    static constexpr char kPPLastStageName[] = "__pp_last_stage";
+    static constexpr char kPPChunkNamePrefix[] = "__pp_chunk_";
+
     explicit Module();
     explicit Module(const std::string &type);
     Module(const Module &) = default;
