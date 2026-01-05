@@ -41,4 +41,12 @@ ModuleList::ModuleList(std::vector<std::shared_ptr<Module>> &&layers)
 std::vector<std::shared_ptr<Tensor>> ModuleList::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     LOG(FATAL) << "Not implemented";
 }
+
+std::vector<std::shared_ptr<Module>>::iterator ModuleList::begin() { return module_list_.begin(); }
+std::vector<std::shared_ptr<Module>>::iterator ModuleList::end() { return module_list_.end(); }
+std::vector<std::shared_ptr<Module>>::const_iterator ModuleList::begin() const { return module_list_.begin(); }
+std::vector<std::shared_ptr<Module>>::const_iterator ModuleList::end() const { return module_list_.end(); }
+
+std::shared_ptr<Module> &ModuleList::operator[](std::size_t idx) { return module_list_.at(idx); }
+
 } // namespace infini_train::nn

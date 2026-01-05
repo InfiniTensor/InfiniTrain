@@ -35,12 +35,12 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
-    auto begin() { return module_list_.begin(); }
-    auto end() { return module_list_.end(); }
-    auto begin() const { return module_list_.begin(); }
-    auto end() const { return module_list_.end(); }
+    std::vector<std::shared_ptr<Module>>::iterator begin();
+    std::vector<std::shared_ptr<Module>>::iterator end();
+    std::vector<std::shared_ptr<Module>>::const_iterator begin() const;
+    std::vector<std::shared_ptr<Module>>::const_iterator end() const;
 
-    std::shared_ptr<Module> &operator[](std::size_t idx) { return module_list_.at(idx); }
+    std::shared_ptr<Module> &operator[](std::size_t idx);
 
 private:
     std::vector<std::shared_ptr<Module>> module_list_;
