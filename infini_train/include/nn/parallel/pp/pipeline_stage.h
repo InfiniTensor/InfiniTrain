@@ -22,19 +22,19 @@ public:
     std::vector<std::shared_ptr<Tensor>> ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &inputs,
                                                          int local_chunk_idx = 0);
 
-    bool IsFirstStage() const { return stage_index_ == 0; }
-    bool IsLastStage() const { return stage_index_ == num_stages_ - 1; }
+    bool IsFirstStage() const;
+    bool IsLastStage() const;
 
-    int stage_index() const { return stage_index_; }
-    int prev_rank() const { return prev_rank_; }
-    int next_rank() const { return next_rank_; }
-    int num_stages() const { return num_stages_; }
+    int stage_index() const;
+    int prev_rank() const;
+    int next_rank() const;
+    int num_stages() const;
 
-    const Device *device() const { return device_; }
-    const std::vector<std::vector<int64_t>> &recv_shape() const { return recv_shape_; }
-    std::shared_ptr<Optimizer> optimizer() { return optimizer_; }
-    const auto &chunks() { return chunks_; }
-    auto *mutable_chunks() { return &chunks_; }
+    const Device *device() const;
+    const std::vector<std::vector<int64_t>> &recv_shape() const;
+    std::shared_ptr<Optimizer> optimizer();
+    const std::vector<std::shared_ptr<Module>> &chunks();
+    std::vector<std::shared_ptr<Module>> *mutable_chunks();
 
 private:
     int stage_index_ = -1;
