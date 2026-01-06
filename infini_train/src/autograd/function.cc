@@ -3,10 +3,12 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/accumulate.h"
+#include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/include/utils/precision_checker.h"
 
 namespace infini_train::autograd {
 
@@ -16,12 +18,26 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     // TODO(dcj): Cache context information to reduce setDevice overhead.
     device->SetDevice();
 
+    // Call forward pre-hooks
+    for (const auto& hook : forward_pre_hooks_) {
+        if (hook) {
+            hook(this, input_tensors);
+        }
+    }
+
     std::vector<std::shared_ptr<Tensor>> output_tensors;
     {
         autograd::NoGradGuard no_grad;
         // no_grad in autograd.Function.Forward()
         output_tensors = Forward(input_tensors);
         SetupContext(input_tensors, output_tensors);
+    }
+
+    // Call forward post-hooks
+    for (const auto& hook : forward_post_hooks_) {
+        if (hook) {
+            hook(this, input_tensors, output_tensors);
+        }
     }
 
     if (!autograd::GradMode::IsEnabled()) {
@@ -54,6 +70,15 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         output_tensor->set_is_leaf(!output_requires_grad
                                    || ((output_tensor->grad_fn() == nullptr) && output_requires_grad));
         output_tensor->set_output_idx(output_idx);
+
+        // Register precision check hooks if enabled
+        if (output_tensor->grad_fn()) {
+            if (const char* env = std::getenv("INFINI_PRECISION_CHECK")) {
+                if (std::atoi(env) != 0) {
+                    utils::PrecisionChecker::RegisterForFunction(output_tensor->grad_fn().get());
+                }
+            }
+        }
     }
 
     return output_tensors;
@@ -78,12 +103,28 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
     ++dependencies_reached_;
     if (grad_outputs_reached_ == grad_outputs_.size()
         && (dependencies_reached_ == dependencies_number_ || dependencies_number_ == 0)) {
+
+        // Call backward pre-hooks
+        for (const auto& hook : backward_pre_hooks_) {
+            if (hook) {
+                hook(this, grad_outputs_);
+            }
+        }
+
         std::vector<std::shared_ptr<Tensor>> grad_inputs;
         {
             autograd::NoGradGuard no_grad;
             // no_grad in autograd.Function.Backward()
             grad_inputs = Backward(grad_outputs_);
         }
+
+        // Call backward post-hooks
+        for (const auto& hook : backward_post_hooks_) {
+            if (hook) {
+                hook(this, grad_inputs, grad_outputs_);
+            }
+        }
+
         saved_tensors_.clear();
         grad_outputs_.clear();
         grad_outputs_reached_ = 0;
@@ -94,6 +135,23 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
             auto &grad_input = grad_inputs[idx];
             auto &[next_function, output_idx] = next_functions_[idx];
             if (grad_input && next_function) {
+                // // Apply tensor backward hooks only for leaf tensors
+                // // Only AccumulateGrad corresponds to a leaf tensor that user can register hooks on
+                // auto accumulate_grad = std::dynamic_pointer_cast<AccumulateGrad>(next_function);
+                // if (accumulate_grad) {
+                //     auto tensor = accumulate_grad->tensor();
+                //     if (tensor) {
+                //         const auto& hooks = tensor->backward_post_hooks_();
+                //         for (const auto& hook : hooks) {
+                //             if (hook) {
+                //                 auto modified_grad = hook(grad_input);
+                //                 if (modified_grad) {
+                //                     grad_input = modified_grad;
+                //                 }
+                //             }
+                //         }
+                //     }
+                // }
                 next_function->BackwardPartial(grad_input, output_idx);
             }
         }
@@ -101,4 +159,24 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
 }
 
 void Function::IncreaseDependenciesNumber() { ++dependencies_number_; }
+
+std::shared_ptr<HookHandle> Function::RegisterForwardPreHook(FunctionForwardPreHook hook) {
+    forward_pre_hooks_.push_back(std::move(hook));
+    return std::make_shared<FunctionHookHandleImpl<FunctionForwardPreHook>>(&forward_pre_hooks_, forward_pre_hooks_.size() - 1);
+}
+
+std::shared_ptr<HookHandle> Function::RegisterForwardPostHook(FunctionForwardPostHook hook) {
+    forward_post_hooks_.push_back(std::move(hook));
+    return std::make_shared<FunctionHookHandleImpl<FunctionForwardPostHook>>(&forward_post_hooks_, forward_post_hooks_.size() - 1);
+}
+
+std::shared_ptr<HookHandle> Function::RegisterBackwardPreHook(FunctionBackwardPreHook hook) {
+    backward_pre_hooks_.push_back(std::move(hook));
+    return std::make_shared<FunctionHookHandleImpl<FunctionBackwardPreHook>>(&backward_pre_hooks_, backward_pre_hooks_.size() - 1);
+}
+
+std::shared_ptr<HookHandle> Function::RegisterBackwardPostHook(FunctionBackwardPostHook hook) {
+    backward_post_hooks_.push_back(std::move(hook));
+    return std::make_shared<FunctionHookHandleImpl<FunctionBackwardPostHook>>(&backward_post_hooks_, backward_post_hooks_.size() - 1);
+}
 } // namespace infini_train::autograd

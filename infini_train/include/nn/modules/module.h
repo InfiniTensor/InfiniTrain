@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "infini_train/include/datatype.h"
+#include "infini_train/include/nn/module_hook.h"
 
 namespace infini_train {
 class Tensor;
@@ -50,6 +51,10 @@ public:
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
 
+    // operator() calls hooks and Forward
+    std::vector<std::shared_ptr<Tensor>> operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
+
+    // Forward to be overridden by subclasses
     virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
 
     virtual float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -66,12 +71,23 @@ public:
 
     virtual std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const;
 
+    // Hook registration methods
+    std::shared_ptr<ModuleHookHandle> RegisterForwardPreHook(ForwardPreHook hook);
+    std::shared_ptr<ModuleHookHandle> RegisterForwardPostHook(ForwardPostHook hook);
+    std::shared_ptr<ModuleHookHandle> RegisterBackwardPreHook(BackwardPreHook hook);
+    std::shared_ptr<ModuleHookHandle> RegisterBackwardPostHook(BackwardPostHook hook);
+
 protected:
     const Device *device_ = nullptr;
     const std::string type_ = kUndefinedType;
     std::unordered_map<std::string, std::shared_ptr<Module>> modules_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> buffers_;
+
+    std::vector<ForwardPreHook> forward_pre_hooks_;
+    std::vector<ForwardPostHook> forward_post_hooks_;
+    std::vector<BackwardPreHook> backward_pre_hooks_;
+    std::vector<BackwardPostHook> backward_post_hooks_;
 
 private:
     std::unordered_map<std::string, std::shared_ptr<Module>>
