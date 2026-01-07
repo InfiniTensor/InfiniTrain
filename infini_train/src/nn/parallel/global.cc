@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/parallel/global.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <format>
 #include <string>
@@ -114,6 +115,17 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     layout_.sizes[PP] = pipeline_parallel_size_;
     layout_.InitStrides();
 
+    // Initialize precision check level from environment variable
+    std::string precision_check = GetEnvAsStr("INFINI_PRECISION_CHECK", "");
+    std::transform(precision_check.begin(), precision_check.end(), precision_check.begin(), ::tolower);
+    if (precision_check == "1" || precision_check == "module") {
+        precision_check_level_ = PrecisionCheckLevel::MODULE;
+    } else if (precision_check == "2" || precision_check == "function") {
+        precision_check_level_ = PrecisionCheckLevel::FUNCTION;
+    } else {
+        precision_check_level_ = PrecisionCheckLevel::NONE;
+    }
+
     initialized_ = true;
 }
 
@@ -180,6 +192,14 @@ int GlobalEnv::virtual_pipeline_parallel_size() const {
 Layout GlobalEnv::layout() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return layout_;
+}
+
+void GlobalEnv::SetPrecisionCheckLevel(PrecisionCheckLevel level) {
+    precision_check_level_ = level;
+}
+
+GlobalEnv::PrecisionCheckLevel GlobalEnv::GetPrecisionCheckLevel() const {
+    return precision_check_level_;
 }
 
 namespace {

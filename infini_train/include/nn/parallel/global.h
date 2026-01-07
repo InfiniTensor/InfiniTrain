@@ -29,6 +29,10 @@ public:
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
               int pipeline_parallel_size, int virtual_pipeline_parallel_size);
 
+    enum class PrecisionCheckLevel { NONE, FUNCTION, MODULE };
+    void SetPrecisionCheckLevel(PrecisionCheckLevel level);
+    PrecisionCheckLevel GetPrecisionCheckLevel() const;
+
     int nnodes() const;
 
     int nproc_per_node() const;
@@ -83,6 +87,7 @@ private:
     bool initialized_ = false;
 
     Layout layout_;
+    PrecisionCheckLevel precision_check_level_ = PrecisionCheckLevel::NONE;
 };
 
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,

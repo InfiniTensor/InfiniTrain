@@ -9,6 +9,7 @@
 
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/precision_checker.h"
 
@@ -125,16 +126,15 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() con
 std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     LOG(FATAL) << "Forward function not implemented for this module";
     return {};
+}
 
 std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     // Register precision check hooks if enabled and not already registered
-    static bool precision_check_registered = false;
-    if (!precision_check_registered) {
-        if (const char* env = std::getenv("INFINI_PRECISION_CHECK")) {
-            if (std::atoi(env) != 0) {
-                utils::PrecisionChecker::RegisterForModule(this);
-                precision_check_registered = true;
-            }
+    if (!precision_check_registered_) {
+        auto precision_level = parallel::global::GlobalEnv::Instance().GetPrecisionCheckLevel();
+        if (precision_level == parallel::global::GlobalEnv::PrecisionCheckLevel::MODULE) {
+            utils::PrecisionChecker::RegisterForModule(this);
+            precision_check_registered_ = true;
         }
     }
 

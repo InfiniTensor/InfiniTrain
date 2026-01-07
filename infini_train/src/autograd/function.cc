@@ -7,6 +7,7 @@
 #include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/precision_checker.h"
 
@@ -17,6 +18,15 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     const auto *device = input_tensors[0]->GetDevice();
     // TODO(dcj): Cache context information to reduce setDevice overhead.
     device->SetDevice();
+
+    // Register precision check hooks if enabled (before forward)
+    if (!precision_check_registered_) {
+        auto precision_level = nn::parallel::global::GlobalEnv::Instance().GetPrecisionCheckLevel();
+        if (precision_level == nn::parallel::global::GlobalEnv::PrecisionCheckLevel::FUNCTION) {
+            utils::PrecisionChecker::RegisterForFunction(this, type_);
+            precision_check_registered_ = true;
+        }
+    }
 
     // Call forward pre-hooks
     for (const auto& hook : forward_pre_hooks_) {
@@ -70,15 +80,6 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         output_tensor->set_is_leaf(!output_requires_grad
                                    || ((output_tensor->grad_fn() == nullptr) && output_requires_grad));
         output_tensor->set_output_idx(output_idx);
-
-        // Register precision check hooks if enabled
-        if (output_tensor->grad_fn()) {
-            if (const char* env = std::getenv("INFINI_PRECISION_CHECK")) {
-                if (std::atoi(env) != 0) {
-                    utils::PrecisionChecker::RegisterForFunction(output_tensor->grad_fn().get());
-                }
-            }
-        }
     }
 
     return output_tensors;

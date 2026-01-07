@@ -88,6 +88,7 @@ protected:
     std::vector<ForwardPostHook> forward_post_hooks_;
     std::vector<BackwardPreHook> backward_pre_hooks_;
     std::vector<BackwardPostHook> backward_post_hooks_;
+    bool precision_check_registered_ = false;
 
 private:
     std::unordered_map<std::string, std::shared_ptr<Module>>

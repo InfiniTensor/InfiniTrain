@@ -42,6 +42,8 @@ public:
     std::shared_ptr<HookHandle> RegisterBackwardPreHook(FunctionBackwardPreHook hook);
     std::shared_ptr<HookHandle> RegisterBackwardPostHook(FunctionBackwardPostHook hook);
 
+    const std::string& type() const { return type_; }
+
 protected:
     std::vector<std::shared_ptr<Tensor>> saved_tensors_;
 
@@ -56,5 +58,6 @@ private:
     std::vector<FunctionForwardPostHook> forward_post_hooks_;
     std::vector<FunctionBackwardPreHook> backward_pre_hooks_;
     std::vector<FunctionBackwardPostHook> backward_post_hooks_;
+    bool precision_check_registered_ = false;
 };
 } // namespace infini_train::autograd

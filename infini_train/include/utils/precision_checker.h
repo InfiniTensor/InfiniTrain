@@ -27,15 +27,17 @@ public:
         bool abort_on_error = false;
     };
 
-    static void RegisterForFunction(autograd::Function* func, const std::string& name = "",
-                                    const Config& config = Config());
+    static const Config& DefaultConfig() {
+        static Config default_config;
+        return default_config;
+    }
 
-    static void RegisterForAllFunctions(const std::vector<std::shared_ptr<autograd::Function>>& functions,
-                                       const Config& config = Config());
+    static void RegisterForFunction(autograd::Function* func, const std::string& name = "",
+                                    const Config& config = DefaultConfig());
 
     // Register hooks for a Module (checks forward inputs/outputs)
     static void RegisterForModule(nn::Module* module, const std::string& name = "",
-                                 const Config& config = Config());
+                                 const Config& config = DefaultConfig());
 
 private:
     static void CheckTensors(const std::string& stage, const std::string& name,

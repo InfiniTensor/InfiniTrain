@@ -17,41 +17,45 @@ void PrecisionChecker::CheckTensors(const std::string& stage, const std::string&
         if (!tensors[i]) continue;
 
         auto& tensor = tensors[i];
-        const float* data = static_cast<const float*>(tensor->DataPtr());
-        size_t size = tensor->NumElements();
+
+        // Copy tensor to CPU if it's on GPU
+        std::shared_ptr<Tensor> cpu_tensor;
+        if (tensor->GetDevice()->Type() == DeviceType::kCUDA) {
+            auto cpu_device = DeviceManager::Instance()->GetDevice(DeviceType::kCPU);
+            cpu_tensor = std::make_shared<Tensor>(tensor->To(cpu_device));
+        } else {
+            cpu_tensor = tensor;
+        }
+
+        const float* data = static_cast<const float*>(cpu_tensor->DataPtr());
+        size_t size = cpu_tensor->NumElements();
 
         bool has_nan = false;
         bool has_inf = false;
-        float min_val = std::numeric_limits<float>::max();
-        float max_val = std::numeric_limits<float>::lowest();
-        double sum = 0.0;
 
         for (size_t j = 0; j < size; ++j) {
             float val = data[j];
             if (std::isnan(val)) has_nan = true;
             if (std::isinf(val)) has_inf = true;
-            if (!std::isnan(val) && !std::isinf(val)) {
-                min_val = std::min(min_val, val);
-                max_val = std::max(max_val, val);
-                sum += val;
-            }
         }
 
         bool has_error = (config.check_nan && has_nan) || (config.check_inf && has_inf);
 
         if (has_error || config.print_stats) {
-            std::cout << "[PrecisionCheck] " << stage << " " << name
-                     << " tensor[" << i << "]";
+            std::cout << "[PrecisionCheck] " << stage << " " << name << " tensor[" << i << "]: [";
 
             if (has_nan) std::cout << " NaN detected!";
             if (has_inf) std::cout << " Inf detected!";
 
             if (config.print_stats) {
-                std::cout << " min=" << min_val
-                         << " max=" << max_val
-                         << " mean=" << (sum / size);
+                constexpr size_t max_print = 10;
+                for (size_t j = 0; j < std::min(size, max_print); ++j) {
+                    if (j > 0) std::cout << ", ";
+                    std::cout << data[j];
+                }
+                if (size > max_print) std::cout << ", ...";
             }
-            std::cout << std::endl;
+            std::cout << "]" << std::endl;
         }
 
         if (has_error && config.abort_on_error) {
@@ -86,13 +90,6 @@ void PrecisionChecker::RegisterForFunction(autograd::Function* func, const std::
                                                         const std::vector<std::shared_ptr<Tensor>>&) {
         CheckTensors("Backward Output", func_name, grad_inputs, config);
     });
-}
-
-void PrecisionChecker::RegisterForAllFunctions(const std::vector<std::shared_ptr<autograd::Function>>& functions,
-                                              const Config& config) {
-    for (size_t i = 0; i < functions.size(); ++i) {
-        RegisterForFunction(functions[i].get(), "Function_" + std::to_string(i), config);
-    }
 }
 
 void PrecisionChecker::RegisterForModule(nn::Module* module, const std::string& name,

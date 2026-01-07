@@ -16,7 +16,13 @@ class ProcessGroup;
 
 namespace infini_train::autograd {
 class Function;
-class HookHandle;
+
+class HookHandle {
+public:
+    virtual ~HookHandle() = default;
+    virtual void Remove() = 0;
+};
+
 class PostAccumulateGradHook {
 public:
     virtual void operator()(const std::shared_ptr<Tensor> &tensor) = 0;
