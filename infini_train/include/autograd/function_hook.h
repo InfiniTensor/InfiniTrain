@@ -41,20 +41,6 @@ private:
     const infini_train::nn::parallel::ProcessGroup *pg_ = nullptr;
 };
 
-// Forward pre-hook: called before forward pass
-using FunctionForwardPreHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&)>;
-
-// Forward post-hook: called after forward pass
-using FunctionForwardPostHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&,
-                                                    const std::vector<std::shared_ptr<Tensor>>&)>;
-
-// Backward pre-hook: called before backward pass
-using FunctionBackwardPreHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&)>;
-
-// Backward post-hook: called after backward pass
-using FunctionBackwardPostHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&,
-                                                     const std::vector<std::shared_ptr<Tensor>>&)>;
-
 template <typename HookType>
 class FunctionHookHandleImpl : public HookHandle {
 public:

@@ -25,7 +25,7 @@ std::vector<std::shared_ptr<Tensor>> PipelineStage::ForwardOneChunk(const std::v
         LOG(FATAL) << "PipelineStage::ForwardOneChunk: local_chunk_idx=" << local_chunk_idx << " out of range [0, "
                    << chunks_.size() << ")";
     }
-    return chunks_[local_chunk_idx]->Forward(inputs);
+    return (*chunks_[local_chunk_idx])(inputs);
 }
 
 bool PipelineStage::IsFirstStage() const { return stage_index_ == 0; }

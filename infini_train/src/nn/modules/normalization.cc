@@ -9,7 +9,8 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-LayerNorm::LayerNorm(const std::vector<int64_t> &normalized_shape, float eps, const Device *device) : eps_(eps) {
+LayerNorm::LayerNorm(const std::vector<int64_t> &normalized_shape, float eps, const Device *device)
+    : CloneableModule(kType), eps_(eps) {
     device_ = device ? device : DeviceManager::Instance()->GetDefaultDevice();
 
     parameters_[kParamWeightName]

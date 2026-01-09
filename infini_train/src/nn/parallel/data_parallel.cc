@@ -31,7 +31,7 @@ ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
     auto worker = [&](const std::shared_ptr<Module> &module, const std::vector<std::shared_ptr<Tensor>> &inputs,
                       const Device *device, int idx) {
         device->SetDevice();
-        auto output = module->Forward(inputs);
+        auto output = (*module)(inputs);
         results[idx] = output;
     };
 
@@ -86,7 +86,7 @@ std::vector<std::shared_ptr<Tensor>> DataParallel::Forward(const std::vector<std
     auto scattered_inputs = function::Scatter(input_tensors, devices_, dim_);
 
     if (devices_.size() == 1) {
-        return module->Forward(scattered_inputs[0]);
+        return (*module)(scattered_inputs[0]);
     }
 
     auto replicas = function::Replicate(module, devices_);

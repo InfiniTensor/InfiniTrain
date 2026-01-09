@@ -25,7 +25,7 @@ MNIST::MNIST() {
 std::vector<std::shared_ptr<infini_train::Tensor>>
 MNIST::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     CHECK_EQ(x.size(), 1);
-    auto x1 = modules_["sequential"]->Forward(x);
-    auto x2 = modules_["linear2"]->Forward(x1);
+    auto x1 = (*modules_["sequential"])(x);
+    auto x2 = (*modules_["linear2"])(x1);
     return x2;
 }

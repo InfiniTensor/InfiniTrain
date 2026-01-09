@@ -7,7 +7,7 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-Sequential::Sequential(std::vector<std::shared_ptr<Module>> &&layers) {
+Sequential::Sequential(std::vector<std::shared_ptr<Module>> &&layers) : CloneableModule(kType) {
     int idx = 0;
     for (auto &layer : layers) {
         modules_[std::to_string(idx)] = std::move(layer);
@@ -17,11 +17,11 @@ Sequential::Sequential(std::vector<std::shared_ptr<Module>> &&layers) {
 
 std::vector<std::shared_ptr<Tensor>> Sequential::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     auto &x = const_cast<std::vector<std::shared_ptr<Tensor>> &>(input_tensors);
-    for (int idx = 0; idx < modules_.size(); ++idx) { x = modules_[std::to_string(idx)]->Forward(x); }
+    for (int idx = 0; idx < modules_.size(); ++idx) { x = (*modules_[std::to_string(idx)])(x); }
     return x;
 }
 
-ModuleDict::ModuleDict(std::unordered_map<std::string, std::shared_ptr<Module>> modules) {
+ModuleDict::ModuleDict(std::unordered_map<std::string, std::shared_ptr<Module>> modules) : CloneableModule(kType) {
     for (auto &[name, layer] : modules) { modules_[name] = std::move(layer); }
 }
 

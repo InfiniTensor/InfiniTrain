@@ -11,15 +11,16 @@ class Tensor;
 
 namespace infini_train::autograd {
 class HookHandle;
-using FunctionForwardPreHook = std::function<void(class Function*, const std::vector<std::shared_ptr<Tensor>>&)>;
-using FunctionForwardPostHook = std::function<void(class Function*, const std::vector<std::shared_ptr<Tensor>>&,
-                                                    const std::vector<std::shared_ptr<Tensor>>&)>;
-using FunctionBackwardPreHook = std::function<void(class Function*, const std::vector<std::shared_ptr<Tensor>>&)>;
-using FunctionBackwardPostHook = std::function<void(class Function*, const std::vector<std::shared_ptr<Tensor>>&,
-                                                     const std::vector<std::shared_ptr<Tensor>>&)>;
 
 class Function : public std::enable_shared_from_this<Function> {
 public:
+    using FunctionForwardPreHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&)>;
+    using FunctionForwardPostHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&,
+                                                        const std::vector<std::shared_ptr<Tensor>>&)>;
+    using FunctionBackwardPreHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&)>;
+    using FunctionBackwardPostHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&,
+                                                         const std::vector<std::shared_ptr<Tensor>>&)>;
+
     static constexpr char kUndefinedType[] = "Undefined";
 
     Function() : type_(kUndefinedType) {}

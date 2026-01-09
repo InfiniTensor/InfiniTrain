@@ -1,18 +1,76 @@
 #include "infini_train/include/utils/precision_checker.h"
 
+#include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
+#include <mutex>
+#include <sstream>
 
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::utils {
 
+namespace {
+std::ofstream& GetLogStream() {
+    static std::ofstream log_file;
+    static std::mutex init_mutex;
+    static bool initialized = false;
+
+    if (!initialized) {
+        std::lock_guard<std::mutex> lock(init_mutex);
+        if (!initialized) {
+            int rank = nn::parallel::global::GlobalEnv::Instance().global_proc_rank();
+            std::string filename = "precision_check_rank_" + std::to_string(rank) + ".log";
+            log_file.open(filename, std::ios::out | std::ios::trunc);
+            initialized = true;
+        }
+    }
+    return log_file;
+}
+
+bool ShouldPrint() {
+    if (nn::parallel::global::GlobalEnv::Instance().GetPrecisionCheckAllRanks()) {
+        return true;
+    }
+    return nn::parallel::global::GlobalEnv::Instance().global_proc_rank() == 0;
+}
+
+std::string GetTimestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+
+    std::tm tm;
+    localtime_r(&time_t, &tm);
+
+    std::ostringstream oss;
+    oss << std::setfill('0')
+        << std::setw(2) << (tm.tm_mon + 1)
+        << std::setw(2) << tm.tm_mday << ' '
+        << std::setw(2) << tm.tm_hour << ':'
+        << std::setw(2) << tm.tm_min << ':'
+        << std::setw(2) << tm.tm_sec << '.'
+        << std::setw(3) << ms.count();
+    return oss.str();
+}
+} // namespace
+
 void PrecisionChecker::CheckTensors(const std::string& stage, const std::string& name,
                                    const std::vector<std::shared_ptr<Tensor>>& tensors,
                                    const Config& config) {
+    if (!ShouldPrint()) {
+        return;
+    }
+
+    int rank = nn::parallel::global::GlobalEnv::Instance().global_proc_rank();
+
     for (size_t i = 0; i < tensors.size(); ++i) {
         if (!tensors[i]) continue;
 
@@ -42,20 +100,24 @@ void PrecisionChecker::CheckTensors(const std::string& stage, const std::string&
         bool has_error = (config.check_nan && has_nan) || (config.check_inf && has_inf);
 
         if (has_error || config.print_stats) {
-            std::cout << "[PrecisionCheck] " << stage << " " << name << " tensor[" << i << "]: [";
+            auto& log_stream = GetLogStream();
+            std::string level = has_error ? "E" : "I";
 
-            if (has_nan) std::cout << " NaN detected!";
-            if (has_inf) std::cout << " Inf detected!";
+            log_stream << level << GetTimestamp() << " [Rank " << rank << "][PrecisionCheck] "
+                      << stage << " " << name << " tensor[" << i << "]: [";
+
+            if (has_nan) log_stream << " NaN detected!";
+            if (has_inf) log_stream << " Inf detected!";
 
             if (config.print_stats) {
                 constexpr size_t max_print = 10;
                 for (size_t j = 0; j < std::min(size, max_print); ++j) {
-                    if (j > 0) std::cout << ", ";
-                    std::cout << data[j];
+                    if (j > 0) log_stream << ", ";
+                    log_stream << data[j];
                 }
-                if (size > max_print) std::cout << ", ...";
+                if (size > max_print) log_stream << ", ...";
             }
-            std::cout << "]" << std::endl;
+            log_stream << "]" << std::endl;
         }
 
         if (has_error && config.abort_on_error) {

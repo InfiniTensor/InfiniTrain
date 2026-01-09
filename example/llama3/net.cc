@@ -127,7 +127,7 @@ std::vector<std::shared_ptr<Tensor>> SwiGLU::Forward(const std::vector<std::shar
     return {x[0] * nn::function::Sigmoid(x[0])};
 }
 
-RMSNorm::RMSNorm(int64_t dim, float eps, const infini_train::Device *device) : eps_(eps) {
+RMSNorm::RMSNorm(int64_t dim, float eps, const infini_train::Device *device) : CloneableModule(kType), eps_(eps) {
     parameters_[kParamWeightName]
         = std::make_shared<Tensor>(std::vector<int64_t>{dim}, DataType::kFLOAT32, device)->RequiresGrad();
     nn::init::Ones(parameters_[kParamWeightName]);
@@ -140,7 +140,7 @@ std::vector<std::shared_ptr<Tensor>> RMSNorm::Forward(const std::vector<std::sha
 }
 
 CausalSelfAttention::CausalSelfAttention(const LLaMA3Config &config)
-    : config_(config), n_head_(config.n_head), n_embd_(config.n_embd), n_kv_head_(config.n_kv_head),
+    : CloneableModule(kType), config_(config), n_head_(config.n_head), n_embd_(config.n_embd), n_kv_head_(config.n_kv_head),
       n_rep_(config.n_head / config.n_kv_head), head_dim_(config.n_embd / config.n_head) {
     CHECK_LE(config.n_kv_head, config.n_head);
     CHECK_EQ(config.n_head % config.n_kv_head, 0);
@@ -245,7 +245,7 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
     return {y};
 }
 
-MLP::MLP(const LLaMA3Config &config) {
+MLP::MLP(const LLaMA3Config &config) : CloneableModule(kType) {
     hidden_dim_ = 4 * config.n_embd;
     hidden_dim_ = int(2 * hidden_dim_ / 3);
     // use custom dim factor multiplier
@@ -299,7 +299,7 @@ std::vector<std::shared_ptr<Tensor>> MLP::Forward(const std::vector<std::shared_
     return x4;
 }
 
-Block::Block(const LLaMA3Config &config) {
+Block::Block(const LLaMA3Config &config) : CloneableModule(kType) {
     modules_[kLn1LayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
     modules_[kAttnLayerName] = std::make_shared<CausalSelfAttention>(config);
     modules_[kLn2LayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
@@ -325,7 +325,7 @@ std::vector<std::shared_ptr<Tensor>> Block::Forward(const std::vector<std::share
     return {x2};
 }
 
-LLaMA3FirstStage::LLaMA3FirstStage(const LLaMA3Config &config) : config_(config) {
+LLaMA3FirstStage::LLaMA3FirstStage(const LLaMA3Config &config) : CloneableModule(kType), config_(config) {
     modules_[LLaMA3FirstStage::kWTELayerName] = std::make_shared<nn::parallel::VocabParallelEmbedding>(
         config.vocab_size, config.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
 }
@@ -334,7 +334,7 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3FirstStage::Forward(const std::vector
     return (*modules_[LLaMA3FirstStage::kWTELayerName])(x);
 }
 
-LLaMA3Chunk::LLaMA3Chunk(const LLaMA3Config &config, int start_layer, int end_layer) : config_(config) {
+LLaMA3Chunk::LLaMA3Chunk(const LLaMA3Config &config, int start_layer, int end_layer) : CloneableModule(kType), config_(config) {
     std::vector<std::shared_ptr<nn::Module>> h;
     for (int64_t i = start_layer; i < end_layer; ++i) {
         auto layer = std::make_shared<Block>(config);
@@ -373,7 +373,7 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3Chunk::Forward(const std::vector<std:
     return {x1};
 }
 
-LLaMA3LastStage::LLaMA3LastStage(const LLaMA3Config &config) : config_(config) {
+LLaMA3LastStage::LLaMA3LastStage(const LLaMA3Config &config) : CloneableModule(kType), config_(config) {
     modules_[kLnFLayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
     // NOTE(zbl): weight-tying is possible but torch script did not do so
     modules_[kLMHeadLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
@@ -396,7 +396,7 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3LastStage::Forward(const std::vector<
 }
 
 LLaMA3::LLaMA3(const LLaMA3Config &config)
-    : config_(config), stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
+    : CloneableModule(kType), config_(config), stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
                            config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
                            nn::parallel::global::GetVirtualPipelineParallelSize())) {
     std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;

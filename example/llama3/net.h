@@ -42,6 +42,9 @@ struct LLaMA3Config {
 
 class SwiGLU : public infini_train::nn::CloneableModule<SwiGLU> {
 public:
+    static constexpr char kType[] = "SwiGLU";
+    SwiGLU() : CloneableModule(kType) {}
+
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
@@ -49,6 +52,7 @@ public:
 // TODO(zbl): implement fused kernel
 class RMSNorm : public infini_train::nn::CloneableModule<RMSNorm> {
 public:
+    static constexpr char kType[] = "RMSNorm";
     static constexpr char kParamWeightName[] = "weight";
 
     explicit RMSNorm(int64_t dim, float eps = 1e-6f,
@@ -63,6 +67,7 @@ private:
 
 class CausalSelfAttention : public infini_train::nn::CloneableModule<CausalSelfAttention> {
 public:
+    static constexpr char kType[] = "CausalSelfAttention";
     static constexpr char kCAttnLayerName[] = "c_attn";
     static constexpr char kCProjLayerName[] = "c_proj";
 
@@ -82,6 +87,7 @@ private:
 
 class MLP : public infini_train::nn::CloneableModule<MLP> {
 public:
+    static constexpr char kType[] = "MLP";
     static constexpr char kCFcLayerName[] = "c_fc";
     static constexpr char kCFc2LayerName[] = "c_fc2";
     static constexpr char kSiluLayerName[] = "silu";
@@ -98,6 +104,7 @@ private:
 
 class Block : public infini_train::nn::CloneableModule<Block> {
 public:
+    static constexpr char kType[] = "Block";
     static constexpr char kLn1LayerName[] = "ln_1";
     static constexpr char kAttnLayerName[] = "attn";
     static constexpr char kLn2LayerName[] = "ln_2";
@@ -111,6 +118,7 @@ public:
 
 class LLaMA3FirstStage : public infini_train::nn::CloneableModule<LLaMA3FirstStage> {
 public:
+    static constexpr char kType[] = "LLaMA3FirstStage";
     static constexpr char kWTELayerName[] = "wte";
 
     explicit LLaMA3FirstStage(const LLaMA3Config &config);
@@ -124,6 +132,7 @@ private:
 
 class LLaMA3Chunk : public infini_train::nn::CloneableModule<LLaMA3Chunk> {
 public:
+    static constexpr char kType[] = "LLaMA3Chunk";
     static constexpr char kHLayerName[] = "h";
     static constexpr char kFreqsCisName[] = "freqs_cis";
 
@@ -138,6 +147,7 @@ private:
 
 class LLaMA3LastStage : public infini_train::nn::CloneableModule<LLaMA3LastStage> {
 public:
+    static constexpr char kType[] = "LLaMA3LastStage";
     static constexpr char kLnFLayerName[] = "ln_f";
     static constexpr char kLMHeadLayerName[] = "lm_head";
 
@@ -152,6 +162,7 @@ private:
 
 class LLaMA3 : public infini_train::nn::CloneableModule<LLaMA3> {
 public:
+    static constexpr char kType[] = "LLaMA3";
     static constexpr char kTransformerLayerName[] = "transformer";
 
     enum class ModelType : int8_t {
