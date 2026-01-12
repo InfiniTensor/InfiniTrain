@@ -71,8 +71,6 @@ void DistributedDataParallel::BuildParamAndGradBuffers() {
     param_grad_buffers_.clear();
     param_grad_buffers_.reserve(dtype_to_params.size());
 
-    total_params_ = 0;
-
     for (auto &kv : dtype_to_params) {
         auto [param_dtype, grad_dtype] = kv.first;
         auto param_list = kv.second;
@@ -80,8 +78,6 @@ void DistributedDataParallel::BuildParamAndGradBuffers() {
         if (param_list.empty()) {
             continue;
         }
-
-        total_params_ += param_list.size();
 
         auto buffer = std::make_shared<ParamAndGradBuffer>(param_list, param_dtype, grad_dtype, ddp_pg_, ddp_config_);
 
@@ -110,11 +106,9 @@ void DistributedDataParallel::BuildParamAndGradBuffers() {
         }
     }
 
-    num_params_ready_.store(0, std::memory_order_relaxed);
-
     LOG(INFO) << "DDP BuildParamAndGradBuffers: "
               << "dtype_groups=" << dtype_to_params.size() << ", param_grad_buffers=" << param_grad_buffers_.size()
-              << ", bucket_groups=" << bucket_groups_.size() << ", total_params=" << total_params_;
+              << ", bucket_groups=" << bucket_groups_.size();
 }
 
 void DistributedDataParallel::RegisterBackwardHooks() {
@@ -159,25 +153,12 @@ void DistributedDataParallel::OnGradReady(const std::shared_ptr<Tensor> &param) 
             kernel.Call<void>(param->grad(), 1.f, param->main_grad());
         }
         // Can safely set grad to null because grad has already been added to main_grad(buffer)
-        // param->set_grad(nullptr);
+        param->set_grad(nullptr);
 
         if (ddp_config_.overlap_grad_reduce) {
             it->second->RegisterGradReady(param);
         }
     }
-
-    // if (!ddp_config_.overlap_grad_reduce && !ddp_config_.use_distributed_optimizer) {
-    //     // Timing of FinishhGradSync: when all params are set ready
-    //     size_t old = num_params_ready_.fetch_add(1, std::memory_order_relaxed) + 1;
-    //     if (old == total_params_) {
-    //         for (auto &group : bucket_groups_) {
-    //             group->FinishGradSync();
-    //             group->Reset();
-    //         }
-
-    //         num_params_ready_.store(0, std::memory_order_relaxed);
-    //     }
-    // }
 }
 
 std::vector<std::shared_ptr<Tensor>>
