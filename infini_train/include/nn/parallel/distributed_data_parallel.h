@@ -41,9 +41,6 @@ private:
     std::vector<std::shared_ptr<ParamAndGradBuffer>> param_grad_buffers_;
     std::vector<std::shared_ptr<ParamAndGradBucketGroup>> bucket_groups_;
     std::unordered_map<Tensor *, std::shared_ptr<ParamAndGradBucketGroup>> param_to_bucket_group_;
-
-    std::atomic<size_t> num_params_ready_{0};
-    size_t total_params_{0};
 };
 
 } // namespace infini_train::nn::parallel
