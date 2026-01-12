@@ -7,6 +7,7 @@
 
 namespace infini_train {
 class Tensor;
+class Optimizer;
 namespace nn {
 class Module;
 }
@@ -24,7 +25,7 @@ public:
     virtual ~PipelineSchedule() = default;
 
     float Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tensor> target,
-               const std::shared_ptr<nn::Module> &loss_fn, DataType dtype);
+               const std::shared_ptr<Optimizer> &optimizer, const std::shared_ptr<nn::Module> &loss_fn, DataType dtype);
 
     virtual float StepMicroBatches(const std::vector<std::shared_ptr<Tensor>> &arg_mbs,
                                    const std::vector<std::shared_ptr<Tensor>> &target_mbs,
