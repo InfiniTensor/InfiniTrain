@@ -15,6 +15,7 @@
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/distributed_data_parallel.h"
+#include "infini_train/include/nn/parallel/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
@@ -50,6 +51,7 @@ DEFINE_uint32(freq_generate_txt, 10, "frequency of text generation");
 DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
 DEFINE_double(learning_rate, 1e-4, "learning rate warmup iterations");
+DEFINE_bool(use_distributed_optimizer, false, "Whether to enable DistributedOptimizer(only take effects when DP>1)");
 // evaluation
 DEFINE_uint32(val_loss_every, 0, "every how many steps to evaluate val loss?");
 DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
@@ -199,9 +201,6 @@ void Train(const nn::parallel::Rank &rank) {
 
     auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
 
-    // TODO(dcj): support more complex optimizer later
-    auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
-
     if (pp_world_size > 1) {
         // NOTE(dcj): To ensure that the tensor shapes at the pipeline stage boundaries remain correct
         // when sequence parallelism (SP) is enabled, we need to divide by sp_world_size.
@@ -209,13 +208,15 @@ void Train(const nn::parallel::Rank &rank) {
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
         model = std::make_shared<nn::parallel::PipelineParallel>(
-            model, pp_world_size, num_micro_batches, shapes, pp_rank, std::make_shared<optimizers::SGD>(optimizer),
-            rank.thread_rank(), std::dynamic_pointer_cast<GPT2>(model)->GetChunkSize());
+            model, pp_world_size, num_micro_batches, shapes, pp_rank, rank.thread_rank(),
+            std::dynamic_pointer_cast<GPT2>(model)->GetChunkSize());
         if (ddp_world_size > 1) {
+            auto ddp_config
+                = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
             auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
             for (int chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
-                (*mutable_chunks)[chunk_id]
-                    = std::make_shared<DistributedDataParallel>(mutable_chunks->at(chunk_id), rank.thread_rank());
+                (*mutable_chunks)[chunk_id] = std::make_shared<DistributedDataParallel>(mutable_chunks->at(chunk_id),
+                                                                                        rank.thread_rank(), ddp_config);
             }
         }
     } else if (ddp_world_size > 1) {
@@ -223,7 +224,8 @@ void Train(const nn::parallel::Rank &rank) {
         // before wrapping the model with DistributedDataParallel (DDP).
         // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
         // are created during the conversion.
-        model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank());
+        auto ddp_config = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
+        model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank(), ddp_config);
     }
 
     DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
@@ -246,6 +248,37 @@ void Train(const nn::parallel::Rank &rank) {
         tokenizer = std::make_unique<Tokenizer>(FLAGS_tokenizer_bin);
     }
 
+    // TODO(dcj): support more complex optimizer later
+    // auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
+    auto optimizer_creator = optimizers::SGD::Create(FLAGS_learning_rate);
+    std::shared_ptr<Optimizer> optimizer = nullptr;
+
+    if (FLAGS_use_distributed_optimizer) {
+        std::vector<std::shared_ptr<ParamAndGradBuffer>> param_grad_buffers;
+        std::vector<std::shared_ptr<ParamAndGradBucketGroup>> bucket_groups;
+
+        if (pp_world_size > 1 && ddp_world_size > 1) {
+            auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
+            for (int chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
+                auto buffers
+                    = dynamic_cast<DistributedDataParallel *>(mutable_chunks->at(chunk_id).get())->param_grad_buffers();
+                auto groups
+                    = dynamic_cast<DistributedDataParallel *>(mutable_chunks->at(chunk_id).get())->bucket_groups();
+                param_grad_buffers.insert(param_grad_buffers.end(), buffers.begin(), buffers.end());
+                bucket_groups.insert(bucket_groups.end(), groups.begin(), groups.end());
+            }
+        } else if (ddp_world_size > 1) {
+            param_grad_buffers = dynamic_cast<DistributedDataParallel *>(model.get())->param_grad_buffers();
+            bucket_groups = dynamic_cast<DistributedDataParallel *>(model.get())->bucket_groups();
+        }
+
+        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, model->Parameters(),
+                                                                         param_grad_buffers, bucket_groups, ddp_pg,
+                                                                         ddp_world_size, ddp_rank);
+    } else {
+        optimizer = optimizer_creator(model->Parameters());
+    }
+
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(
@@ -254,10 +287,16 @@ void Train(const nn::parallel::Rank &rank) {
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": start training";
 
+    auto cuda_device = device->IsCUDA() ? dynamic_cast<const CudaDevice *>(device) : nullptr;
+
     LOG(INFO) << "start training";
 
     for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
         const bool last_step = step == FLAGS_num_iteration;
+
+        if (cuda_device) {
+            cuda_device->ResetMemPoolHighWatermarks();
+        }
 
         const auto iter_start = std::chrono::high_resolution_clock::now();
 
@@ -285,7 +324,7 @@ void Train(const nn::parallel::Rank &rank) {
         float lossf = 0.0f;
         // model->Train();
         if (pp_world_size == 1) {
-            optimizer.ZeroGrad();
+            optimizer->ZeroGrad();
 
             // if we are trying to overfit a single batch, we reset the loader here
             if (FLAGS_overfit_single_batch) {
@@ -324,7 +363,7 @@ void Train(const nn::parallel::Rank &rank) {
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
             }
 
-            optimizer.Step();
+            optimizer->Step();
         } else {
             auto [x, y] = *train_iter;
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
@@ -333,7 +372,7 @@ void Train(const nn::parallel::Rank &rank) {
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
-            lossf = model->TrainStep({x}, {y}, loss_fn, dtype);
+            lossf = model->TrainStep({x}, {y}, optimizer, loss_fn, dtype);
         }
 
         if (ddp_world_size > 1) {
@@ -348,10 +387,16 @@ void Train(const nn::parallel::Rank &rank) {
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
         if (rank.IsLastRank()) {
-            LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
-                                      "DP={}, TP={}, SP={}, PP={})",
+            size_t used_mb = 0, reserved_mb = 0;
+            if (cuda_device) {
+                std::tie(used_mb, reserved_mb) = cuda_device->GetMemPoolPeakMB();
+            }
+
+            LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
+                                      "peak used: {:5d} MB | peak reserved: {:5d} MB, DP={}, TP={}, SP={}, PP={})",
                                       step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
-                                      tps, ddp_world_size, tp_world_size, sp_world_size, pp_world_size);
+                                      tps, used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size,
+                                      pp_world_size);
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
                 if (tokenizer) {

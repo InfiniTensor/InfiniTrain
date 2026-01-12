@@ -11,6 +11,7 @@
 namespace infini_train {
 class Tensor;
 class Device;
+class Optimizer;
 class HookHandle;
 template <typename HookType> class HookHandleImpl;
 } // namespace infini_train
@@ -65,7 +66,8 @@ public:
     virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
 
     virtual float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                            const std::vector<std::shared_ptr<Tensor>> &targets, const std::shared_ptr<Module> &loss_fn,
+                            const std::vector<std::shared_ptr<Tensor>> &targets,
+                            const std::shared_ptr<Optimizer> &optimizer, const std::shared_ptr<Module> &loss_fn,
                             DataType dtype) {
         return 0.0f;
     };

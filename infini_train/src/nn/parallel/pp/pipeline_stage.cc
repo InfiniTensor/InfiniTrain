@@ -11,11 +11,10 @@
 namespace infini_train::nn::parallel {
 
 PipelineStage::PipelineStage(int stage_index /* pp_rank */, int num_stages /* pp_size */,
-                             const std::vector<std::vector<int64_t>> &recv_shape, std::shared_ptr<Optimizer> optimizer,
-                             int device_id, std::vector<std::shared_ptr<Module>> &&chunks)
+                             const std::vector<std::vector<int64_t>> &recv_shape, int device_id,
+                             std::vector<std::shared_ptr<Module>> &&chunks)
     : stage_index_(stage_index), num_stages_(num_stages), prev_rank_(stage_index > 0 ? stage_index - 1 : -1),
       next_rank_(stage_index < num_stages - 1 ? stage_index + 1 : -1), recv_shape_(recv_shape),
-      optimizer_(std::move(optimizer)),
       device_(DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA).at(device_id)),
       chunks_(std::move(chunks)) {}
 
@@ -38,7 +37,7 @@ int PipelineStage::num_stages() const { return num_stages_; }
 
 const Device *PipelineStage::device() const { return device_; }
 const std::vector<std::vector<int64_t>> &PipelineStage::recv_shape() const { return recv_shape_; }
-std::shared_ptr<Optimizer> PipelineStage::optimizer() { return optimizer_; }
+// std::shared_ptr<Optimizer> PipelineStage::optimizer() { return optimizer_; }
 const std::vector<std::shared_ptr<Module>> &PipelineStage::chunks() { return chunks_; }
 std::vector<std::shared_ptr<Module>> *PipelineStage::mutable_chunks() { return &chunks_; }
 } // namespace infini_train::nn::parallel

@@ -267,7 +267,8 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
 }
 
 float PipelineSchedule::Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tensor> target,
-                             const std::shared_ptr<Module> &loss_fn, DataType dtype) {
+                             const std::shared_ptr<Optimizer> &optimizer, const std::shared_ptr<Module> &loss_fn,
+                             DataType dtype) {
     std::vector<std::shared_ptr<Tensor>> micro_batches(num_micro_batches_);
     std::vector<std::shared_ptr<Tensor>> target_mbs(num_micro_batches_);
     if (stage_->IsFirstStage()) {
@@ -277,8 +278,6 @@ float PipelineSchedule::Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tens
     if (stage_->IsLastStage()) {
         target_mbs = target->Split(target->Dims()[0] / num_micro_batches_);
     }
-
-    const auto &optimizer = stage_->optimizer();
 
     optimizer->ZeroGrad();
 

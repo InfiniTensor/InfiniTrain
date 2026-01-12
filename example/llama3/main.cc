@@ -180,9 +180,6 @@ void Train(const nn::parallel::Rank &rank) {
 
     auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
 
-    // TODO(dcj): support more complex optimizer later
-    auto optimizer = optimizers::Adam(model->Parameters(), FLAGS_learning_rate);
-
     if (pp_world_size > 1) {
         // NOTE(dcj): To ensure that the tensor shapes at the pipeline stage boundaries remain correct
         // when sequence parallelism (SP) is enabled, we need to divide by sp_world_size.
@@ -190,13 +187,15 @@ void Train(const nn::parallel::Rank &rank) {
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
         model = std::make_shared<nn::parallel::PipelineParallel>(
-            model, pp_world_size, num_micro_batches, shapes, pp_rank, std::make_shared<optimizers::Adam>(optimizer),
-            rank.thread_rank(), std::dynamic_pointer_cast<LLaMA3>(model)->GetChunkSize());
+            model, pp_world_size, num_micro_batches, shapes, pp_rank, rank.thread_rank(),
+            std::dynamic_pointer_cast<LLaMA3>(model)->GetChunkSize());
         if (ddp_world_size > 1) {
+            auto ddp_config
+                = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
             auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
             for (int chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
-                (*mutable_chunks)[chunk_id]
-                    = std::make_shared<DistributedDataParallel>(mutable_chunks->at(chunk_id), rank.thread_rank());
+                (*mutable_chunks)[chunk_id] = std::make_shared<DistributedDataParallel>(mutable_chunks->at(chunk_id),
+                                                                                        rank.thread_rank(), ddp_config);
             }
         }
     } else if (ddp_world_size > 1) {
@@ -205,7 +204,6 @@ void Train(const nn::parallel::Rank &rank) {
         // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
         // are created during the conversion.
 
-        // FIXME(zbl): set as argument
         auto ddp_config = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
         model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank(), ddp_config);
     }
@@ -232,12 +230,33 @@ void Train(const nn::parallel::Rank &rank) {
     // TODO(dcj): support more complex optimizer later
     // auto optimizer = optimizers::Adam(model->Parameters(), FLAGS_learning_rate);
     auto optimizer_creator = optimizers::Adam::Create(FLAGS_learning_rate);
-    std::shared_ptr<Optimizer> optimizer
-        = FLAGS_use_distributed_optimizer ? std::make_unique<nn::parallel::DistributedOptimizer>(
-              optimizer_creator, model->Parameters(),
-              dynamic_cast<DistributedDataParallel *>(model.get())->param_grad_buffers(),
-              dynamic_cast<DistributedDataParallel *>(model.get())->bucket_groups(), ddp_pg, ddp_world_size, ddp_rank)
-                                          : optimizer_creator(model->Parameters());
+    std::shared_ptr<Optimizer> optimizer = nullptr;
+
+    if (FLAGS_use_distributed_optimizer) {
+        std::vector<std::shared_ptr<ParamAndGradBuffer>> param_grad_buffers;
+        std::vector<std::shared_ptr<ParamAndGradBucketGroup>> bucket_groups;
+
+        if (pp_world_size > 1 && ddp_world_size > 1) {
+            auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
+            for (int chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
+                auto buffers
+                    = dynamic_cast<DistributedDataParallel *>(mutable_chunks->at(chunk_id).get())->param_grad_buffers();
+                auto groups
+                    = dynamic_cast<DistributedDataParallel *>(mutable_chunks->at(chunk_id).get())->bucket_groups();
+                param_grad_buffers.insert(param_grad_buffers.end(), buffers.begin(), buffers.end());
+                bucket_groups.insert(bucket_groups.end(), groups.begin(), groups.end());
+            }
+        } else if (ddp_world_size > 1) {
+            param_grad_buffers = dynamic_cast<DistributedDataParallel *>(model.get())->param_grad_buffers();
+            bucket_groups = dynamic_cast<DistributedDataParallel *>(model.get())->bucket_groups();
+        }
+
+        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, model->Parameters(),
+                                                                         param_grad_buffers, bucket_groups, ddp_pg,
+                                                                         ddp_world_size, ddp_rank);
+    } else {
+        optimizer = optimizer_creator(model->Parameters());
+    }
 
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
@@ -245,16 +264,6 @@ void Train(const nn::parallel::Rank &rank) {
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": start training";
-
-    if (pp_world_size > 1) {
-        // NOTE(dcj): To ensure that the tensor shapes at the pipeline stage boundaries remain correct
-        // when sequence parallelism (SP) is enabled, we need to divide by sp_world_size.
-        auto shapes = std::vector<std::vector<int64_t>>{
-            {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
-
-        model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
-                                                                 pp_rank, optimizer, rank.thread_rank());
-    }
 
     auto cuda_device = device->IsCUDA() ? dynamic_cast<const CudaDevice *>(device) : nullptr;
 
@@ -339,7 +348,7 @@ void Train(const nn::parallel::Rank &rank) {
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
-            lossf = model->TrainStep({x}, {y}, loss_fn, dtype);
+            lossf = model->TrainStep({x}, {y}, optimizer, loss_fn, dtype);
         }
 
         if (ddp_world_size > 1) {

@@ -32,6 +32,7 @@ DistributedOptimizer::DistributedOptimizer(OptimizerCreator creator,
       dp_world_size_(dp_world_size), dp_rank_(dp_rank), creator_(std::move(creator)) {
 
     CHECK(dp_pg_);
+    CHECK(dp_world_size_ > 1) << "DistributedOptimizer: dp_world_size must be greater than 1.";
 
     BuildShardParamsAndBindGrads();
 
