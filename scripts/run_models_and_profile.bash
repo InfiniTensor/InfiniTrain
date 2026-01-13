@@ -156,13 +156,6 @@ for ((id=0; id<num_builds; ++id)); do
         test_id=$(jq -r ".tests[$ti].id" "$CONFIG_FILE")
         arg_str="$(args_string_for_test "$ti")"
 
-        # FIXME(zbl): Use GROUP launch mode to ensure grouped for TP
-        if [[ "$arg_str" == *"tensor_parallel"* ]]; then
-            prefix="NCCL_LAUNCH_MODE=GROUP "
-        else
-            prefix=""
-        fi
-
         # gpt2
         gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
         run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag"
