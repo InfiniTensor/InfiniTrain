@@ -3,11 +3,14 @@ import json
 import time
 import os
 import argparse
+import glob
 import re
 import pandas as pd
 from datetime import datetime, date
 import subprocess
 
+# date/branch/commit/avg_latency/avg_throughput/peak_used/peak_reserved
+META_COLS=7
 HEADER_ROWS=5
 HEADER_COLS="W"
 
@@ -116,12 +119,85 @@ class FeishuSheetHandler:
         return self._feishu_request("PUT", f"/sheets/v2/spreadsheets/{spreadsheet_token}/styles_batch_update", json=payload) is not None
 
     def merge_columns(self, spreadsheet_token, sheet_id):
-        """Merge columns A5:E9"""
+        """Merge columns A5:G9"""
         # API reference：https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/merge-cells
         start = HEADER_ROWS
         end = HEADER_ROWS + 4
-        payload = {"range": f"{sheet_id}!A{start}:E{end}", "mergeType": "MERGE_COLUMNS"}
+        payload = {"range": f"{sheet_id}!A{start}:G{end}", "mergeType": "MERGE_COLUMNS"}
         return self._feishu_request("POST", f"/sheets/v2/spreadsheets/{spreadsheet_token}/merge_cells", json=payload) is not None
+
+    def write_cmd_args_to_header(self, spreadsheet_token, cmd_args, sheet_id):
+        """Write command args to A1:W1"""
+        def col_letter_to_idx(letter: str) -> int:
+            """A->1, Z->26, AA->27 ..."""
+            letter = letter.strip().upper()
+            idx = 0
+            for ch in letter:
+                idx = idx * 26 + (ord(ch) - ord('A') + 1)
+            return idx
+
+        data = [cmd_args] + [""] * (col_letter_to_idx(HEADER_COLS) - 1)
+        payload = {"valueRange": {"range": f"{sheet_id}!A1:W1", "values": [data]}}
+        return self._feishu_request("PUT", f"/sheets/v2/spreadsheets/{spreadsheet_token}/values", json=payload) is not None
+
+    def create_sheet_for_testcase(self, spreadsheet_token, sheet_title, template_sheet_id):
+        """Create a sheet from template given a specific title"""
+        payload = {
+            "requests": [
+                {
+                    "copySheet": {
+                        "source": {"sheetId": template_sheet_id},
+                        "destination": {"title": sheet_title}
+                    }
+                }
+            ]
+        }
+        resp = self._feishu_request("POST", f"/sheets/v2/spreadsheets/{spreadsheet_token}/sheets_batch_update", json=payload)
+        if resp:
+            try:
+                new_sheet_id = resp["data"]["replies"][0]["copySheet"]["properties"]["sheetId"]
+                return new_sheet_id
+            except Exception:
+                print("Unexpected copySheet response:", resp)
+                return None
+        else:
+            return None
+
+    def sort_sheets_by_title(self, spreadsheet_token, template_title = "模板") -> bool:
+        sheets = self.get_all_sheet_ids(spreadsheet_token)
+
+        template = None
+        normal = []
+        for s in sheets:
+            if s["title"] == template_title:
+                template = s
+            else:
+                normal.append(s)
+
+        def natural_key(s: str):
+            return [int(x) if x.isdigit() else x.lower() for x in re.split(r'(\d+)', s)]
+
+        normal.sort(key=lambda x: natural_key(x["title"]))
+        ordered = normal + ([template] if template else [])
+
+        requests_ = []
+        for new_index, s in enumerate(ordered):
+            sheet_id = s["sheet_id"]
+            requests_.append({
+                "updateSheet": {
+                    "properties": {
+                        "sheetId": sheet_id,
+                        "index": new_index
+                    }
+                }
+            })
+
+        if not requests_:
+            return True 
+
+        payload = {"requests": requests_}
+        return self._feishu_request("POST", f"/sheets/v2/spreadsheets/{spreadsheet_token}/sheets_batch_update", json=payload) is not None
+
 
     def post_process(self, spreadsheet_token, sheet_id):
         """Post-processing: set styles and merge cells"""
@@ -175,11 +251,38 @@ def load_config(config_file):
 
     return config
 
+def parse_command_args(log_content: str, start_flag="--dtype"):
+    """Parse command-line arguments from [COMMAND] line"""
+    for line in log_content.splitlines():
+        if line.startswith("[COMMAND]"):
+            idx = line.find(start_flag)
+            if idx != -1:
+                return line[idx:].strip()
+            return None
+    return None
 
 def parse_training_log(log_content):
-    """Parse training log to extract avg latency and throughput from step >= 2"""
-    pattern = r"step\s+(\d+)/\d+\s+\|.*?\|\s+\(\s*(\d+\.\d+)\s+ms\s+\|\s+(\d+)\s+tok/s.*?\)"
-    matches = re.findall(pattern, log_content)
+    """Parse training log to extract avg latency and throughput from step >= 2 and peak mem usage during whole time"""
+    pattern_with_peak = (
+        r"step\s+(\d+)/\d+\s+\|.*?\|\s+\(\s*"
+        r"(\d+(?:\.\d+)?)\s*ms\s*\|\s*"
+        r"(\d+(?:\.\d+)?)\s*tok/s\s*\|\s*"
+        r"peak used:\s*(\d+)\s*MB\s*\|\s*"
+        r"peak reserved:\s*(\d+)\s*MB"
+    )
+
+    # NOTE(zbl): This is for compatibility reasons
+    pattern_no_peak = (
+        r"step\s+(\d+)/\d+\s+\|.*?\|\s+\(\s*"
+        r"(\d+(?:\.\d+)?)\s*ms\s*\|\s*"
+        r"(\d+(?:\.\d+)?)\s*tok/s"
+    )
+
+    matches = re.findall(pattern_with_peak, log_content)
+    has_peak = True
+    if not matches:
+        matches = re.findall(pattern_no_peak, log_content)
+        has_peak = False
 
     filtered = [m for m in matches if int(m[0]) > 1]
     if not filtered:
@@ -192,7 +295,15 @@ def parse_training_log(log_content):
     avg_latency = round(sum(latencies) / len(latencies), 2)
     avg_throughput = round(sum(throughputs) / len(throughputs), 2)
 
-    return [avg_latency, avg_throughput]
+    peak_used_max = None
+    peak_reserved_max = None
+    if has_peak:
+        peak_used = [int(m[3]) for m in filtered]
+        peak_reserved = [int(m[4]) for m in filtered]
+        peak_used_max = max(peak_used)
+        peak_reserved_max = max(peak_reserved)
+
+    return [avg_latency, avg_throughput, peak_used_max, peak_reserved_max]
 
 
 def parse_profile_report(profile_content):
@@ -265,6 +376,20 @@ def parse_profile_report(profile_content):
         return merged_df.head(5).iloc[:, :16]
     return None
 
+def discover_testcases(model_name: str, log_dir="logs"):
+    """Get all test case id from local log dir"""
+    pattern = os.path.join(log_dir, f"{model_name}_*.log")
+    files = glob.glob(pattern)
+    testcases = []
+    prefix = f"{model_name}_"
+    for path in files:
+        base = os.path.basename(path)
+        if not base.startswith(prefix) or base.endswith("_profile.log") or not base.endswith(".log"):
+            continue
+        testcase = base[len(prefix):-len(".log")]
+        if testcase:
+            testcases.append(testcase)
+    return sorted(set(testcases))
 
 def get_git_branch():
     """Get current git branch"""
@@ -289,14 +414,16 @@ def get_model_data(model_name, sheet_title):
     log_file_path = f"logs/{model_name}_{sheet_title}.log"
     profile_file_path = f"profile_logs/{model_name}_{sheet_title}_profile_{model_name}.report.rank0"
 
-    avg_latency, avg_throughput = None, None
+    avg_latency, avg_throughput, peak_used_max, peak_reserved_max = None, None, None, None
 
     # Read training log
     if os.path.exists(log_file_path):
         with open(log_file_path, 'r', encoding='utf-8') as f:
-            result = parse_training_log(f.read())
+            content = f.read()
+            result = parse_training_log(content)
             if result:
-                avg_latency, avg_throughput = result
+                avg_latency, avg_throughput, peak_used_max, peak_reserved_max = result
+            cmd_args = parse_command_args(content)
     else:
         print(f"Training log does not exist: {log_file_path}")
 
@@ -311,12 +438,12 @@ def get_model_data(model_name, sheet_title):
     if report_df is None:
         return []
 
-    # Insert 5 empty columns at the front
-    new_data = [["" for _ in range(5)] for _ in range(5)]
+    # Insert $META_COLS empty columns at the front
+    new_data = [["" for _ in range(META_COLS)] for _ in range(5)]
     new_df = pd.DataFrame(new_data, index=report_df.index)
     combined_df = pd.concat([new_df, report_df], axis=1)
 
-    # Fill first row's first 5 columns with info
+    # Fill first row's first $META_COLS columns with info
     combined_df.iloc[0, 0] = FeishuSheetHandler.convert_to_feishu_date(datetime.now().date())
     combined_df.iloc[0, 1] = get_git_branch()
     combined_df.iloc[0, 2] = get_git_commit_id()
@@ -324,8 +451,12 @@ def get_model_data(model_name, sheet_title):
         combined_df.iloc[0, 3] = avg_latency
     if avg_throughput is not None:
         combined_df.iloc[0, 4] = avg_throughput
+    if peak_used_max is not None:
+        combined_df.iloc[0, 5] = peak_used_max
+    if peak_reserved_max is not None:
+        combined_df.iloc[0, 6] = peak_reserved_max
 
-    return combined_df.values.tolist()
+    return cmd_args, combined_df.values.tolist()
 
 
 def main():
@@ -350,26 +481,54 @@ def main():
         print(f"\n=== Start processing {model_name} ===")
         model_name = model_name.lower()
 
-        model_sheets = handler.get_all_sheet_ids(spreadsheet_token)
-        if not model_sheets:
-            print(f"No sheets retrieved for {model_name}, skipping")
+        testcases = discover_testcases(model_name)
+        if not testcases:
+            print(f"No local testcases found under logs/ for model={model_name}, skipping")
             continue
+        print(f"Discovered {len(testcases)} local testcases: {testcases}")
 
-        print(f"Found {len(model_sheets)} sheets in {model_name}'s spreadsheet")
+        remote_sheets = handler.get_all_sheet_ids(spreadsheet_token)
+        remote_by_title = {s["title"]: s["sheet_id"] for s in remote_sheets}
 
-        for sheet in model_sheets:
-            if sheet["title"] == "模板":
-                continue
+        if "模板" not in remote_by_title:
+            print(f"No template sheets retrieved for {model_name}, skipping")
+            continue
+        template_sheet_id = remote_by_title["模板"]
 
-            print(f"\nProcessing sheet {sheet['index']}: {sheet['title']} (ID: {sheet['sheet_id']})")
+        sort_sheets = False
 
-            sheet_data = get_model_data(model_name=model_name, sheet_title=sheet['title'])
+        for testcase in testcases:
+            print("\n-------")
+            sheet_id = remote_by_title.get(testcase)
+            write_cmd = False
+
+            if not sheet_id:
+                print(f"Sheet for '{testcase}' not found, creating from template...")
+                sheet_id = handler.create_sheet_for_testcase(spreadsheet_token, sheet_title=testcase, template_sheet_id=template_sheet_id)
+                if not sheet_id:
+                    print(f"Failed to create sheet '{testcase}', skipping")
+                    continue
+                remote_by_title[testcase] = sheet_id
+                sort_sheets = True
+                write_cmd = True
+                print(f"Created sheet '{testcase}' with id={sheet_id}")
+            
+            print(f"Processing testcase '{testcase}' -> sheet_id={sheet_id}")
+
+            cmd_args, sheet_data = get_model_data(model_name=model_name, sheet_title=testcase)
+
             if not sheet_data:
                 print("No valid data generated, skipping")
                 continue
 
-            if handler.prepend_data(spreadsheet_token, sheet["sheet_id"], sheet_data):
-                handler.post_process(spreadsheet_token, sheet["sheet_id"])
+            if write_cmd and cmd_args:
+                handler.write_cmd_args_to_header(spreadsheet_token, cmd_args, sheet_id)
+
+            if handler.prepend_data(spreadsheet_token, sheet_id, sheet_data):
+                handler.post_process(spreadsheet_token, sheet_id)
+
+        if sort_sheets:
+            handler.sort_sheets_by_title(spreadsheet_token, "模板")
 
     print("\n=== All models and sheets processed ===")
 
