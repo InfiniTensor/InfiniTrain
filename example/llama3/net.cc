@@ -127,7 +127,7 @@ std::vector<std::shared_ptr<Tensor>> SwiGLU::Forward(const std::vector<std::shar
     return {x[0] * nn::function::Sigmoid(x[0])};
 }
 
-RMSNorm::RMSNorm(int64_t dim, float eps, const infini_train::Device *device) : eps_(eps) {
+RMSNorm::RMSNorm(int64_t dim, float eps, const infini_train::Device *device) : CloneableModule(kType), eps_(eps) {
     parameters_[kParamWeightName]
         = std::make_shared<Tensor>(std::vector<int64_t>{dim}, DataType::kFLOAT32, device)->RequiresGrad();
     nn::init::Ones(parameters_[kParamWeightName]);
@@ -140,7 +140,7 @@ std::vector<std::shared_ptr<Tensor>> RMSNorm::Forward(const std::vector<std::sha
 }
 
 CausalSelfAttention::CausalSelfAttention(const LLaMA3Config &config)
-    : config_(config), n_head_(config.n_head), n_embd_(config.n_embd), n_kv_head_(config.n_kv_head),
+    : CloneableModule(kType), config_(config), n_head_(config.n_head), n_embd_(config.n_embd), n_kv_head_(config.n_kv_head),
       n_rep_(config.n_head / config.n_kv_head), head_dim_(config.n_embd / config.n_head) {
     CHECK_LE(config.n_kv_head, config.n_head);
     CHECK_EQ(config.n_head % config.n_kv_head, 0);
@@ -185,7 +185,7 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
     CHECK(freqs_cis != nullptr) << "freqs_cis is null.";
 
     // (B, T, C) -> (B, T, (H + 2 * n_kv_head) * D)
-    auto qkv = modules_[kCAttnLayerName]->Forward({x[0]})[0];
+    auto qkv = (*modules_[kCAttnLayerName])({x[0]})[0];
     // NOTE(zbl): Acquire full T after AllGather is performed in ColumnParallelLinear
     const auto T = qkv->Dims()[1];
     // NOTE(zbl): torch script uses torch.split({...}, dim) to split tensors into sub-tensors in different sizes
@@ -240,12 +240,12 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
     y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
     // output projection
     // (B, T, C_local) -> RowParallelLinear(C, C) -> (B, T, C)
-    y = modules_[kCProjLayerName]->Forward({y})[0];
+    y = (*modules_[kCProjLayerName])({y})[0];
     // (B, H, C) == (bs, seq_len, n_embd)
     return {y};
 }
 
-MLP::MLP(const LLaMA3Config &config) {
+MLP::MLP(const LLaMA3Config &config) : CloneableModule(kType) {
     hidden_dim_ = 4 * config.n_embd;
     hidden_dim_ = int(2 * hidden_dim_ / 3);
     // use custom dim factor multiplier
@@ -286,20 +286,20 @@ MLP::MLP(const LLaMA3Config &config) {
 
 std::vector<std::shared_ptr<Tensor>> MLP::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     // (bs, seq_len, n_embd) -> Linear(n_embd, hidden_dim) -> (bs, seq_len, hidden_dim)
-    auto x1 = modules_[kCFcLayerName]->Forward(x)[0];
+    auto x1 = (*modules_[kCFcLayerName])(x)[0];
     // (bs, seq_len, n_embd) -> Linear(n_embd, hidden_dim) -> (bs, seq_len, hidden_dim)
-    auto x2 = modules_[kCFc2LayerName]->Forward(x)[0];
+    auto x2 = (*modules_[kCFc2LayerName])(x)[0];
     // (bs, seq_len, hidden_dim) -> SwiGLU -> (bs, seq_len, hidden_dim)
-    x2 = modules_[kSiluLayerName]->Forward({x2})[0];
+    x2 = (*modules_[kSiluLayerName])({x2})[0];
     // (bs, seq_len, hidden_dim)
     auto x3 = x1 * x2;
     // (bs, seq_len, hidden_dim) -> Linear(hidden_dim, n_embd) -> (bs, seq_len, n_embd)
-    auto x4 = modules_[kCProjLayerName]->Forward({x3});
+    auto x4 = (*modules_[kCProjLayerName])({x3});
     // (bs, seq_len, n_embd)
     return x4;
 }
 
-Block::Block(const LLaMA3Config &config) {
+Block::Block(const LLaMA3Config &config) : CloneableModule(kType) {
     modules_[kLn1LayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
     modules_[kAttnLayerName] = std::make_shared<CausalSelfAttention>(config);
     modules_[kLn2LayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
@@ -314,27 +314,27 @@ std::vector<std::shared_ptr<Tensor>> Block::Forward(const std::vector<std::share
     // (bs, seq_len, n_embd) -> RMSNorm -> (bs, seq_len, n_embd) -> attention -> (bs, seq_len, n_embd)
     // -> Add -> (bs, seq_len, n_embd)
     auto x1 = x[0]
-            + modules_[kAttnLayerName]->Forward(std::vector<std::shared_ptr<Tensor>>{
-                modules_[kLn1LayerName]->Forward({x[0]})[0], freqs_cis, start_pos, mask})[0];
+            + (*modules_[kAttnLayerName])(std::vector<std::shared_ptr<Tensor>>{
+                (*modules_[kLn1LayerName])({x[0]})[0], freqs_cis, start_pos, mask})[0];
     // (bs, seq_len, n_embd) -> RMSNorm -> (bs, seq_len, n_embd) -> MLP -> (bs, seq_len, n_embd)
     // -> Add -> (bs, seq_len, n_embd)
     auto x2 = x1
-            + modules_[kMlpLayerName]->Forward(
-                std::vector<std::shared_ptr<Tensor>>(modules_[kLn2LayerName]->Forward({x1})))[0];
+            + (*modules_[kMlpLayerName])(
+                std::vector<std::shared_ptr<Tensor>>((*modules_[kLn2LayerName])({x1})))[0];
     // (bs, seq_len, n_embd)
     return {x2};
 }
 
-LLaMA3FirstStage::LLaMA3FirstStage(const LLaMA3Config &config) : config_(config) {
+LLaMA3FirstStage::LLaMA3FirstStage(const LLaMA3Config &config) : CloneableModule(kType), config_(config) {
     modules_[LLaMA3FirstStage::kWTELayerName] = std::make_shared<nn::parallel::VocabParallelEmbedding>(
         config.vocab_size, config.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
 }
 
 std::vector<std::shared_ptr<Tensor>> LLaMA3FirstStage::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    return modules_[LLaMA3FirstStage::kWTELayerName]->Forward(x);
+    return (*modules_[LLaMA3FirstStage::kWTELayerName])(x);
 }
 
-LLaMA3Chunk::LLaMA3Chunk(const LLaMA3Config &config, int start_layer, int end_layer) : config_(config) {
+LLaMA3Chunk::LLaMA3Chunk(const LLaMA3Config &config, int start_layer, int end_layer) : CloneableModule(kType), config_(config) {
     std::vector<std::shared_ptr<nn::Module>> h;
     for (int64_t i = start_layer; i < end_layer; ++i) {
         auto layer = std::make_shared<Block>(config);
@@ -368,12 +368,12 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3Chunk::Forward(const std::vector<std:
 
     // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)
     for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[LLaMA3Chunk::kHLayerName])) {
-        x1 = h->Forward({x1, freqs_view, start_pos_ptr, mask})[0];
+        x1 = (*h)({x1, freqs_view, start_pos_ptr, mask})[0];
     }
     return {x1};
 }
 
-LLaMA3LastStage::LLaMA3LastStage(const LLaMA3Config &config) : config_(config) {
+LLaMA3LastStage::LLaMA3LastStage(const LLaMA3Config &config) : CloneableModule(kType), config_(config) {
     modules_[kLnFLayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
     // NOTE(zbl): weight-tying is possible but torch script did not do so
     modules_[kLMHeadLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
@@ -388,15 +388,15 @@ LLaMA3LastStage::LLaMA3LastStage(const LLaMA3Config &config) : config_(config) {
 
 std::vector<std::shared_ptr<Tensor>> LLaMA3LastStage::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     // (bs, seq_len, n_embd) -> RMSNorm -> (bs, seq_len, n_embd)
-    auto x1 = modules_[kLnFLayerName]->Forward(x);
+    auto x1 = (*modules_[kLnFLayerName])(x);
 
     // TODO(zbl): add inference-time mini-optimization
     // (bs, seq_len, n_embd) -> Linear(n_embd, vocab_size) -> (bs, seq_len, vocab_size)
-    return modules_[kLMHeadLayerName]->Forward(x1);
+    return (*modules_[kLMHeadLayerName])(x1);
 }
 
 LLaMA3::LLaMA3(const LLaMA3Config &config)
-    : config_(config), stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
+    : CloneableModule(kType), config_(config), stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
                            config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
                            nn::parallel::global::GetVirtualPipelineParallelSize())) {
     std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
@@ -439,11 +439,11 @@ LLaMA3::LLaMA3(const LLaMA3Config &config)
 }
 
 std::vector<std::shared_ptr<Tensor>> LLaMA3::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    auto x1 = modules_[kPPFirstStageName]->Forward({x[0]});
+    auto x1 = (*modules_[kPPFirstStageName])({x[0]});
     for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
-        x1 = modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)]->Forward(x1);
+        x1 = (*modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)])(x1);
     }
-    return modules_[kPPLastStageName]->Forward(x1);
+    return (*modules_[kPPLastStageName])(x1);
 }
 
 std::shared_ptr<LLaMA3> LLaMA3::FromPretrained(ModelType model_type) {

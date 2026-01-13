@@ -68,6 +68,9 @@ DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
+// precision check
+DEFINE_int32(precision_check, 0, "precision check level: 0=off, 1=module, 2=function");
+DEFINE_bool(precision_check_all_ranks, false, "enable precision check for all ranks (default: rank 0 only)");
 
 using namespace infini_train;
 
@@ -297,9 +300,9 @@ void Train(const nn::parallel::Rank &rank) {
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start forward";
                 // (bs, seq_len, vocab_size)
-                auto logits = model->Forward({x, y})[0];
+                auto logits = (*model)({x, y})[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish model forward, start loss forward";
-                auto loss = loss_fn->Forward({logits, y})[0];
+                auto loss = (*loss_fn)({logits, y})[0];
                 // FIXME(jym): verify gradient accumulation precision
                 loss = loss / grad_accum_steps;
 
@@ -364,7 +367,8 @@ int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
 
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
-                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
+                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel, FLAGS_precision_check,
+                                     FLAGS_precision_check_all_ranks);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 

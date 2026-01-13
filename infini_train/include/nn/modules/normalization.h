@@ -13,6 +13,7 @@ class Device;
 namespace infini_train::nn {
 class LayerNorm : public CloneableModule<LayerNorm> {
 public:
+    static constexpr char kType[] = "LayerNorm";
     static constexpr char kParamWeightName[] = "weight";
     static constexpr char kParamBiasName[] = "bias";
 

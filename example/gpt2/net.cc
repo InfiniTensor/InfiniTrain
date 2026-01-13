@@ -47,7 +47,7 @@ NewGELU::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
 }
 
 CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
-    : config_(config), n_head_(config.n_head), n_embd_(config.n_embd) {
+    : CloneableModule(kType), config_(config), n_head_(config.n_head), n_embd_(config.n_embd) {
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
     CHECK_EQ(config.n_embd % config.n_head, 0);
     CHECK_EQ(n_head_ % tp_world_size, 0) << "n_head must be divisible by TP world size";
@@ -89,7 +89,7 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
 
     // (B, T, C) -> ColumnParallelLinear(C, 3*C) -> (B, T, 3 * local_C)
     // -> Split -> (3, B, T, local_C)
-    auto qkv = modules_[kCAttnLayerName]->Forward(x)[0]->Split(local_C, 2);
+    auto qkv = (*modules_[kCAttnLayerName])(x)[0]->Split(local_C, 2);
 
     // (B, T, local_C)
     auto q = qkv[0];
@@ -120,12 +120,12 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
 
     // Get full tensor
     // (B, T, local_C) -> RowParallelLinear(n_embd, n_embd) -> (B, T, C)
-    y = modules_[kCProjLayerName]->Forward({y})[0];
+    y = (*modules_[kCProjLayerName])({y})[0];
     // (B, T, C) == (bs, seq_len, n_embd)
     return {y};
 }
 
-MLP::MLP(const GPT2Config &config) {
+MLP::MLP(const GPT2Config &config) : CloneableModule(kType) {
     // c_fc: ColumnParallel (input full, output parallel)
     modules_[kCFcLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
         /*in_features=*/config.n_embd, /*out_features=*/4 * config.n_embd,
@@ -150,16 +150,16 @@ MLP::MLP(const GPT2Config &config) {
 std::vector<std::shared_ptr<infini_train::Tensor>>
 MLP::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     // (B, T, C) -> ColumnParallelLinear(C, 4 * C) -> (B, T, 4 * C_local)
-    auto x1 = modules_[kCFcLayerName]->Forward(x);
+    auto x1 = (*modules_[kCFcLayerName])(x);
     // (B, T, 4 * C_local) -> GELU -> (B, T, 4 * C_local)
-    auto x2 = modules_[kGeluLayerName]->Forward(x1);
+    auto x2 = (*modules_[kGeluLayerName])(x1);
     // (B, T, 4 * C_local) -> RowParallelLinear(4 * C, C) -> (B, T, C)
-    auto x3 = modules_[kCProjLayerName]->Forward(x2);
+    auto x3 = (*modules_[kCProjLayerName])(x2);
     // (B, T, C)
     return x3;
 }
 
-Block::Block(const GPT2Config &config) {
+Block::Block(const GPT2Config &config) : CloneableModule(kType) {
     modules_[kLn1LayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
     modules_[kAttnLayerName] = std::make_shared<CausalSelfAttention>(config);
     modules_[kLn2LayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
@@ -170,15 +170,15 @@ std::vector<std::shared_ptr<infini_train::Tensor>>
 Block::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd) -> attention -> (bs, seq_len, n_embd)
     // -> Add -> (bs, seq_len, n_embd)
-    auto x1 = x[0] + modules_[kAttnLayerName]->Forward(modules_[kLn1LayerName]->Forward(x))[0];
+    auto x1 = x[0] + (*modules_[kAttnLayerName])((*modules_[kLn1LayerName])(x))[0];
     // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd) -> MLP -> (bs, seq_len, n_embd)
     // -> Add -> (bs, seq_len, n_embd)
-    auto x2 = x1 + modules_[kMlpLayerName]->Forward(modules_[kLn2LayerName]->Forward({x1}))[0];
+    auto x2 = x1 + (*modules_[kMlpLayerName])((*modules_[kLn2LayerName])({x1}))[0];
     // (bs, seq_len, n_embd)
     return {x2};
 }
 
-GPT2FirstStage::GPT2FirstStage(const GPT2Config &config) : config_(config) {
+GPT2FirstStage::GPT2FirstStage(const GPT2Config &config) : CloneableModule(kType), config_(config) {
     modules_[kWTELayerName] = std::make_shared<nn::parallel::VocabParallelEmbedding>(
         config_.vocab_size, config_.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
     modules_[kWPELayerName] = std::make_shared<nn::Embedding>(config_.block_size, config_.n_embd);
@@ -207,15 +207,15 @@ GPT2FirstStage::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>>
     auto pos = nn::init::Arange(start, start + t_local, infini_train::DataType::kINT64, device);
 
     // (B, T) -> Embedding(V_local, C) -> (B, T, C)
-    auto tok_emb = modules_[kWTELayerName]->Forward({x1})[0];
+    auto tok_emb = (*modules_[kWTELayerName])({x1})[0];
 
     // (T) -> Embedding(T_max, C) -> (T, C)
-    auto pos_emb = modules_[kWPELayerName]->Forward({pos})[0];
+    auto pos_emb = (*modules_[kWPELayerName])({pos})[0];
     // (B, T, C)
     return {tok_emb + pos_emb};
 }
 
-GPT2Chunk::GPT2Chunk(const GPT2Config &config, int start_layer, int end_layer) : config_(config) {
+GPT2Chunk::GPT2Chunk(const GPT2Config &config, int start_layer, int end_layer) : CloneableModule(kType), config_(config) {
     std::vector<std::shared_ptr<nn::Module>> h;
     for (int64_t i = start_layer; i < end_layer; ++i) {
         auto layer = std::make_shared<Block>(config);
@@ -228,11 +228,11 @@ std::vector<std::shared_ptr<infini_train::Tensor>>
 GPT2Chunk::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     auto x1 = x[0];
     // (bs, seq_len, n_embd) -> transformer -> (bs, seq_len, n_embd)
-    for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName])) { x1 = h->Forward({x1})[0]; }
+    for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName])) { x1 = (*h)({x1})[0]; }
     return {x1};
 }
 
-GPT2LastStage::GPT2LastStage(const GPT2Config &config) : config_(config) {
+GPT2LastStage::GPT2LastStage(const GPT2Config &config) : CloneableModule(kType), config_(config) {
     modules_[kLnFLayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd});
     // don't init this one, we will tie weights
     modules_[kLMHeadLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
@@ -248,15 +248,15 @@ GPT2LastStage::GPT2LastStage(const GPT2Config &config) : config_(config) {
 std::vector<std::shared_ptr<infini_train::Tensor>>
 GPT2LastStage::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     // (B, T, C) -> Layernorm -> (B, T, C)
-    auto x1 = modules_[kLnFLayerName]->Forward(x);
+    auto x1 = (*modules_[kLnFLayerName])(x);
 
     // TODO(dcj): add inference-time mini-optimization
     // (B, T, C) -> Linear(C, V) -> (B, T, V)
-    return modules_[kLMHeadLayerName]->Forward(x1);
+    return (*modules_[kLMHeadLayerName])(x1);
 }
 
 GPT2::GPT2(const GPT2Config &config)
-    : config_(config), stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
+    : CloneableModule(kType), config_(config), stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
                            config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
                            nn::parallel::global::GetVirtualPipelineParallelSize())) {
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
@@ -316,11 +316,11 @@ GPT2::GPT2(const GPT2Config &config)
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
 GPT2::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
-    auto x1 = modules_[kPPFirstStageName]->Forward(x);
+    auto x1 = (*modules_[kPPFirstStageName])(x);
     for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
-        x1 = modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)]->Forward(x1);
+        x1 = (*modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)])(x1);
     }
-    return modules_[kPPLastStageName]->Forward(x1);
+    return (*modules_[kPPLastStageName])(x1);
 }
 
 std::shared_ptr<GPT2> GPT2::FromPretrained(ModelType model_type) {
