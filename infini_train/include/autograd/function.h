@@ -14,12 +14,9 @@ class HookHandle;
 
 class Function : public std::enable_shared_from_this<Function> {
 public:
-    using FunctionForwardPreHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&)>;
-    using FunctionForwardPostHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&,
-                                                        const std::vector<std::shared_ptr<Tensor>>&)>;
-    using FunctionBackwardPreHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&)>;
-    using FunctionBackwardPostHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&,
-                                                         const std::vector<std::shared_ptr<Tensor>>&)>;
+    using FunctionPreHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&)>;
+    using FunctionPostHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&,
+                                                 const std::vector<std::shared_ptr<Tensor>>&)>;
 
     static constexpr char kUndefinedType[] = "Undefined";
 
@@ -38,10 +35,10 @@ public:
 
     void IncreaseDependenciesNumber();
 
-    std::shared_ptr<HookHandle> RegisterForwardPreHook(FunctionForwardPreHook hook);
-    std::shared_ptr<HookHandle> RegisterForwardPostHook(FunctionForwardPostHook hook);
-    std::shared_ptr<HookHandle> RegisterBackwardPreHook(FunctionBackwardPreHook hook);
-    std::shared_ptr<HookHandle> RegisterBackwardPostHook(FunctionBackwardPostHook hook);
+    std::shared_ptr<HookHandle> RegisterForwardPreHook(FunctionPreHook hook);
+    std::shared_ptr<HookHandle> RegisterForwardPostHook(FunctionPostHook hook);
+    std::shared_ptr<HookHandle> RegisterBackwardPreHook(FunctionPreHook hook);
+    std::shared_ptr<HookHandle> RegisterBackwardPostHook(FunctionPostHook hook);
 
     const std::string& type() const { return type_; }
 
@@ -55,10 +52,10 @@ private:
     int grad_outputs_reached_ = 0;
     std::vector<std::shared_ptr<Tensor>> grad_outputs_;
     const std::string type_ = kUndefinedType;
-    std::vector<FunctionForwardPreHook> forward_pre_hooks_;
-    std::vector<FunctionForwardPostHook> forward_post_hooks_;
-    std::vector<FunctionBackwardPreHook> backward_pre_hooks_;
-    std::vector<FunctionBackwardPostHook> backward_post_hooks_;
+    std::vector<FunctionPreHook> forward_pre_hooks_;
+    std::vector<FunctionPostHook> forward_post_hooks_;
+    std::vector<FunctionPreHook> backward_pre_hooks_;
+    std::vector<FunctionPostHook> backward_post_hooks_;
     bool precision_check_registered_ = false;
 };
 } // namespace infini_train::autograd

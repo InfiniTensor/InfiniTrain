@@ -4,17 +4,12 @@
 #include <memory>
 #include <vector>
 
+#include "infini_train/include/autograd/function_hook.h"
+
 namespace infini_train {
 class Tensor;
 
 namespace autograd {
-
-// Hook handle for removing hooks
-class HookHandle {
-public:
-    virtual ~HookHandle() = default;
-    virtual void Remove() = 0;
-};
 
 // Tensor backward hook: modifies gradient during backward pass
 // Returns modified gradient or nullptr to keep original

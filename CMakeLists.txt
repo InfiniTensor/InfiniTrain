@@ -88,6 +88,12 @@ target_link_libraries(gpt2 infini_train)
 add_executable(llama3 example/llama3/main.cc example/common/tiny_shakespeare_dataset.cc example/common/utils.cc example/llama3/net.cc example/common/tokenizer.cc)
 target_link_libraries(llama3 infini_train)
 
+add_executable(test_hook test/hook/test_hook.cc)
+target_link_libraries(test_hook infini_train)
+
+add_executable(test_precision_check test/hook/test_precision_check.cc)
+target_link_libraries(test_precision_check infini_train)
+
 add_subdirectory(tools/infini_run)
 
 set_target_properties(infini_run PROPERTIES

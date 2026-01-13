@@ -26,6 +26,7 @@
 #include "infini_train/include/profiler.h"
 #endif
 #include "infini_train/include/nn/parallel/utils.h"
+#include "infini_train/include/utils/precision_check_config.h"
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
@@ -69,8 +70,7 @@ DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 // precision check
-DEFINE_int32(precision_check, 0, "precision check level: 0=off, 1=module, 2=function");
-DEFINE_bool(precision_check_all_ranks, false, "enable precision check for all ranks (default: rank 0 only)");
+DEFINE_string(precision_check, "", "precision check config: level=N,format=simple|table,output_md5=true|false,output_path=PATH,baseline=PATH");
 
 using namespace infini_train;
 
@@ -366,9 +366,9 @@ int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
+    auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
-                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel, FLAGS_precision_check,
-                                     FLAGS_precision_check_all_ranks);
+                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel, precision_config);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 
