@@ -103,8 +103,9 @@ private:
 
 class VocabParallelCrossEntropyLoss : public nn::CloneableModule<VocabParallelCrossEntropyLoss> {
 public:
+    static constexpr char kType[] = "VocabParallelCrossEntropyLoss";
     VocabParallelCrossEntropyLoss(int64_t vocab_size_original = 0, float label_smoothing = 0.f)
-        : vocab_size_original_(vocab_size_original), label_smoothing_(label_smoothing){};
+        : CloneableModule(kType), vocab_size_original_(vocab_size_original), label_smoothing_(label_smoothing){};
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 

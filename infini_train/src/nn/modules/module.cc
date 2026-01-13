@@ -7,8 +7,11 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/autograd/function.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/include/utils/precision_checker.h"
 
 namespace infini_train::nn {
 
@@ -125,6 +128,61 @@ std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shar
     return {};
 }
 
+std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    // Register precision check hooks if enabled and not already registered
+    if (!precision_check_registered_) {
+        auto precision_level = parallel::global::GlobalEnv::Instance().GetPrecisionCheckLevel();
+        if (precision_level == parallel::global::GlobalEnv::PrecisionCheckLevel::MODULE) {
+            utils::PrecisionChecker::RegisterForModule(this);
+            precision_check_registered_ = true;
+        }
+    }
+
+    // Call forward pre-hooks
+    for (const auto& hook : forward_pre_hooks_) {
+        if (hook) {
+            hook(this, input_tensors);
+        }
+    }
+
+    // Call actual Forward implementation
+    auto output_tensors = Forward(input_tensors);
+
+    // Call forward post-hooks
+    for (const auto& hook : forward_post_hooks_) {
+        if (hook) {
+            hook(this, input_tensors, output_tensors);
+        }
+    }
+
+    // Register backward hooks on output tensors' grad_fn
+    if (!backward_pre_hooks_.empty() || !backward_post_hooks_.empty()) {
+        for (const auto& output : output_tensors) {
+            if (output && output->grad_fn()) {
+                if (!backward_pre_hooks_.empty()) {
+                    output->grad_fn()->RegisterBackwardPreHook(
+                        [this](autograd::Function*, const std::vector<std::shared_ptr<Tensor>>& grad_outputs) {
+                            for (const auto& hook : backward_pre_hooks_) {
+                                if (hook) hook(this, grad_outputs);
+                            }
+                        });
+                }
+                if (!backward_post_hooks_.empty()) {
+                    output->grad_fn()->RegisterBackwardPostHook(
+                        [this](autograd::Function*, const std::vector<std::shared_ptr<Tensor>>& grad_inputs,
+                               const std::vector<std::shared_ptr<Tensor>>& grad_outputs) {
+                            for (const auto& hook : backward_post_hooks_) {
+                                if (hook) hook(this, grad_inputs, grad_outputs);
+                            }
+                        });
+                }
+            }
+        }
+    }
+
+    return output_tensors;
+}
+
 void Module::To(const Device *device) {
     CHECK_NOTNULL(device);
     if (device == device_) {
@@ -165,5 +223,25 @@ void Module::Apply(std::function<void(Module *)> fn) {
 std::shared_ptr<Module> Module::ReplicateForDataParallel(int device_idx) const {
     // TODO(dcj): use device_idx later
     return std::make_shared<Module>(*this);
+}
+
+std::shared_ptr<ModuleHookHandle> Module::RegisterForwardPreHook(ForwardPreHook hook) {
+    forward_pre_hooks_.push_back(std::move(hook));
+    return std::make_shared<ModuleHookHandleImpl<ForwardPreHook>>(&forward_pre_hooks_, forward_pre_hooks_.size() - 1);
+}
+
+std::shared_ptr<ModuleHookHandle> Module::RegisterForwardPostHook(ForwardPostHook hook) {
+    forward_post_hooks_.push_back(std::move(hook));
+    return std::make_shared<ModuleHookHandleImpl<ForwardPostHook>>(&forward_post_hooks_, forward_post_hooks_.size() - 1);
+}
+
+std::shared_ptr<ModuleHookHandle> Module::RegisterBackwardPreHook(BackwardPreHook hook) {
+    backward_pre_hooks_.push_back(std::move(hook));
+    return std::make_shared<ModuleHookHandleImpl<BackwardPreHook>>(&backward_pre_hooks_, backward_pre_hooks_.size() - 1);
+}
+
+std::shared_ptr<ModuleHookHandle> Module::RegisterBackwardPostHook(BackwardPostHook hook) {
+    backward_post_hooks_.push_back(std::move(hook));
+    return std::make_shared<ModuleHookHandleImpl<BackwardPostHook>>(&backward_post_hooks_, backward_post_hooks_.size() - 1);
 }
 } // namespace infini_train::nn

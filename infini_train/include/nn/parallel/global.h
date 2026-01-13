@@ -27,7 +27,13 @@ public:
     static GlobalEnv &Instance();
 
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-              int pipeline_parallel_size, int virtual_pipeline_parallel_size);
+              int pipeline_parallel_size, int virtual_pipeline_parallel_size, int precision_check_level = 0,
+              bool precision_check_all_ranks = false);
+
+    enum class PrecisionCheckLevel { NONE, FUNCTION, MODULE };
+    void SetPrecisionCheckLevel(PrecisionCheckLevel level);
+    PrecisionCheckLevel GetPrecisionCheckLevel() const;
+    bool GetPrecisionCheckAllRanks() const;
 
     int nnodes() const;
 
@@ -83,14 +89,17 @@ private:
     bool initialized_ = false;
 
     Layout layout_;
+    PrecisionCheckLevel precision_check_level_ = PrecisionCheckLevel::NONE;
+    bool precision_check_all_ranks_ = false;
 };
 
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                       int pipeline_parallel_size, int virtual_pipeline_parallel) {
+                       int pipeline_parallel_size, int virtual_pipeline_parallel, int precision_check_level = 0,
+                       bool precision_check_all_ranks = false) {
     GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
-                               pipeline_parallel_size, virtual_pipeline_parallel);
+                               pipeline_parallel_size, virtual_pipeline_parallel, precision_check_level,
+                               precision_check_all_ranks);
 }
-
 inline int GetNnodes() { return GlobalEnv::Instance().nnodes(); }
 inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }
 inline int GetNprocPerNode() { return GlobalEnv::Instance().nproc_per_node(); }

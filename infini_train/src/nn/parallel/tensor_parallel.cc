@@ -269,8 +269,8 @@ std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_pt
 
 ColumnParallelLinear::ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool gather_output,
                                            bool input_is_parallel, bool skip_bias_add, bool sequence_parallel)
-    : bias_(bias), gather_output_(gather_output), input_is_parallel_(input_is_parallel), skip_bias_add_(skip_bias_add),
-      sequence_parallel_(sequence_parallel) {
+    : CloneableModule(kType), bias_(bias), gather_output_(gather_output), input_is_parallel_(input_is_parallel),
+      skip_bias_add_(skip_bias_add), sequence_parallel_(sequence_parallel) {
     auto tp_size = global::GetTensorParallelSize();
     CHECK_GT(tp_size, 0) << "No available devices found";
     CHECK_EQ(out_features % tp_size, 0) << "out_features must be divisible by TP world size for ColumnParallel";
@@ -315,8 +315,8 @@ ColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_
 
 RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool reduce_output,
                                      bool input_is_parallel, bool skip_bias_add, bool sequence_parallel)
-    : bias_(bias), reduce_output_(reduce_output), input_is_parallel_(input_is_parallel), skip_bias_add_(skip_bias_add),
-      sequence_parallel_(sequence_parallel) {
+    : CloneableModule(kType), bias_(bias), reduce_output_(reduce_output), input_is_parallel_(input_is_parallel),
+      skip_bias_add_(skip_bias_add), sequence_parallel_(sequence_parallel) {
     auto tp_size = global::GetTensorParallelSize();
     CHECK_GT(tp_size, 0) << "No available devices found";
     CHECK_EQ(in_features % tp_size, 0) << "in_features must be divisible by TP world size for RowParallel";
@@ -362,7 +362,7 @@ RowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_ten
 
 VocabParallelEmbedding::VocabParallelEmbedding(int64_t num_embeddings, int64_t embedding_dim,
                                                bool reduce_scatter_embeddings)
-    : vocab_size_global_(num_embeddings), embedding_dim_(embedding_dim),
+    : CloneableModule(kType), vocab_size_global_(num_embeddings), embedding_dim_(embedding_dim),
       reduce_scatter_embeddings_(reduce_scatter_embeddings) {
     auto tp_size = global::GetTensorParallelSize();
     CHECK_GT(tp_size, 0) << "No available devices found for VocabParallelEmbedding";

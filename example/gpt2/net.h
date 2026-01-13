@@ -23,12 +23,16 @@ struct GPT2Config {
 
 class NewGELU : public infini_train::nn::CloneableModule<NewGELU> {
 public:
+    static constexpr char kType[] = "NewGELU";
+    NewGELU() : CloneableModule(kType) {}
+
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
 class CausalSelfAttention : public infini_train::nn::CloneableModule<CausalSelfAttention> {
 public:
+    static constexpr char kType[] = "CausalSelfAttention";
     static constexpr char kCAttnLayerName[] = "c_attn";
     static constexpr char kCProjLayerName[] = "c_proj";
 
@@ -49,6 +53,7 @@ private:
 
 class MLP : public infini_train::nn::CloneableModule<MLP> {
 public:
+    static constexpr char kType[] = "MLP";
     static constexpr char kCFcLayerName[] = "c_fc";
     static constexpr char kGeluLayerName[] = "gelu";
     static constexpr char kCProjLayerName[] = "c_proj";
@@ -61,6 +66,7 @@ public:
 
 class Block : public infini_train::nn::CloneableModule<Block> {
 public:
+    static constexpr char kType[] = "Block";
     static constexpr char kLn1LayerName[] = "ln_1";
     static constexpr char kAttnLayerName[] = "attn";
     static constexpr char kLn2LayerName[] = "ln_2";
@@ -74,6 +80,7 @@ public:
 
 class GPT2FirstStage : public infini_train::nn::CloneableModule<GPT2FirstStage> {
 public:
+    static constexpr char kType[] = "GPT2FirstStage";
     static constexpr char kWTELayerName[] = "wte";
     static constexpr char kWPELayerName[] = "wpe";
 
@@ -88,6 +95,7 @@ private:
 
 class GPT2Chunk : public infini_train::nn::CloneableModule<GPT2Chunk> {
 public:
+    static constexpr char kType[] = "GPT2Chunk";
     static constexpr char kHLayerName[] = "h";
 
     GPT2Chunk(const GPT2Config &config, int start_layer, int end_layer);
@@ -101,6 +109,7 @@ private:
 
 class GPT2LastStage : public infini_train::nn::CloneableModule<GPT2LastStage> {
 public:
+    static constexpr char kType[] = "GPT2LastStage";
     static constexpr char kLnFLayerName[] = "ln_f";
     static constexpr char kLMHeadLayerName[] = "lm_head";
 
@@ -115,6 +124,7 @@ private:
 
 class GPT2 : public infini_train::nn::CloneableModule<GPT2> {
 public:
+    static constexpr char kType[] = "GPT2";
     static constexpr char kTransformerLayerName[] = "transformer";
 
     enum class ModelType : int8_t {

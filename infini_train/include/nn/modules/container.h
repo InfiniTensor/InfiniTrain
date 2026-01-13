@@ -13,6 +13,7 @@ class Tensor;
 namespace infini_train::nn {
 class Sequential : public CloneableModule<Sequential> {
 public:
+    static constexpr char kType[] = "Sequential";
     // TODO(dcj): Use better ctor signature later.
     explicit Sequential(std::vector<std::shared_ptr<Module>> &&layers);
 
@@ -21,6 +22,7 @@ public:
 
 class ModuleDict : public CloneableModule<ModuleDict> {
 public:
+    static constexpr char kType[] = "ModuleDict";
     // TODO(dcj): in torch, there is a dict with the order of insertion
     explicit ModuleDict(std::unordered_map<std::string, std::shared_ptr<Module>> modules);
 
