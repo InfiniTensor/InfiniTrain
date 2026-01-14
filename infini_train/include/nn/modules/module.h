@@ -7,11 +7,12 @@
 #include <vector>
 
 #include "infini_train/include/datatype.h"
-#include "infini_train/include/nn/module_hook.h"
 
 namespace infini_train {
 class Tensor;
 class Device;
+class HookHandle;
+template <typename HookType> class HookHandleImpl;
 } // namespace infini_train
 
 namespace infini_train::nn {
@@ -24,6 +25,12 @@ std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &ne
 
 class Module : public std::enable_shared_from_this<Module> {
 public:
+    template <typename HookType> using ModuleHookHandleImpl = infini_train::HookHandleImpl<HookType>;
+
+    using ModulePreHook = std::function<void(Module *, const std::vector<std::shared_ptr<Tensor>> &)>;
+    using ModulePostHook = std::function<void(Module *, const std::vector<std::shared_ptr<Tensor>> &,
+                                              const std::vector<std::shared_ptr<Tensor>> &)>;
+
     static constexpr char kUndefinedType[] = "Undefined";
 
     static constexpr char kPPFirstStageName[] = "__pp_first_stage";
@@ -72,10 +79,10 @@ public:
     virtual std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const;
 
     // Hook registration methods
-    std::shared_ptr<ModuleHookHandle> RegisterForwardPreHook(ForwardPreHook hook);
-    std::shared_ptr<ModuleHookHandle> RegisterForwardPostHook(ForwardPostHook hook);
-    std::shared_ptr<ModuleHookHandle> RegisterBackwardPreHook(BackwardPreHook hook);
-    std::shared_ptr<ModuleHookHandle> RegisterBackwardPostHook(BackwardPostHook hook);
+    std::shared_ptr<infini_train::HookHandle> RegisterForwardPreHook(ModulePreHook hook);
+    std::shared_ptr<infini_train::HookHandle> RegisterForwardPostHook(ModulePostHook hook);
+    std::shared_ptr<infini_train::HookHandle> RegisterBackwardPreHook(ModulePreHook hook);
+    std::shared_ptr<infini_train::HookHandle> RegisterBackwardPostHook(ModulePostHook hook);
 
 protected:
     const Device *device_ = nullptr;
@@ -84,10 +91,10 @@ protected:
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> buffers_;
 
-    std::vector<ForwardPreHook> forward_pre_hooks_;
-    std::vector<ForwardPostHook> forward_post_hooks_;
-    std::vector<BackwardPreHook> backward_pre_hooks_;
-    std::vector<BackwardPostHook> backward_post_hooks_;
+    std::vector<ModulePreHook> forward_pre_hooks_;
+    std::vector<ModulePostHook> forward_post_hooks_;
+    std::vector<ModulePreHook> backward_pre_hooks_;
+    std::vector<ModulePostHook> backward_post_hooks_;
     bool precision_check_registered_ = false;
 
 private:

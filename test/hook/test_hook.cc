@@ -6,7 +6,7 @@
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/function_hook.h"
-#include "infini_train/include/autograd/tensor_hook.h"
+#include "infini_train/include/common/hook.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"

@@ -8,6 +8,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/function.h"
+#include "infini_train/include/common/hook.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
@@ -229,26 +230,24 @@ std::shared_ptr<Module> Module::ReplicateForDataParallel(int device_idx) const {
     return std::make_shared<Module>(*this);
 }
 
-std::shared_ptr<ModuleHookHandle> Module::RegisterForwardPreHook(ForwardPreHook hook) {
+std::shared_ptr<infini_train::HookHandle> Module::RegisterForwardPreHook(ModulePreHook hook) {
     forward_pre_hooks_.push_back(std::move(hook));
-    return std::make_shared<ModuleHookHandleImpl<ForwardPreHook>>(&forward_pre_hooks_, forward_pre_hooks_.size() - 1);
+    return std::make_shared<ModuleHookHandleImpl<ModulePreHook>>(&forward_pre_hooks_, forward_pre_hooks_.size() - 1);
 }
 
-std::shared_ptr<ModuleHookHandle> Module::RegisterForwardPostHook(ForwardPostHook hook) {
+std::shared_ptr<infini_train::HookHandle> Module::RegisterForwardPostHook(ModulePostHook hook) {
     forward_post_hooks_.push_back(std::move(hook));
-    return std::make_shared<ModuleHookHandleImpl<ForwardPostHook>>(&forward_post_hooks_,
-                                                                   forward_post_hooks_.size() - 1);
+    return std::make_shared<ModuleHookHandleImpl<ModulePostHook>>(&forward_post_hooks_, forward_post_hooks_.size() - 1);
 }
 
-std::shared_ptr<ModuleHookHandle> Module::RegisterBackwardPreHook(BackwardPreHook hook) {
+std::shared_ptr<infini_train::HookHandle> Module::RegisterBackwardPreHook(ModulePreHook hook) {
     backward_pre_hooks_.push_back(std::move(hook));
-    return std::make_shared<ModuleHookHandleImpl<BackwardPreHook>>(&backward_pre_hooks_,
-                                                                   backward_pre_hooks_.size() - 1);
+    return std::make_shared<ModuleHookHandleImpl<ModulePreHook>>(&backward_pre_hooks_, backward_pre_hooks_.size() - 1);
 }
 
-std::shared_ptr<ModuleHookHandle> Module::RegisterBackwardPostHook(BackwardPostHook hook) {
+std::shared_ptr<infini_train::HookHandle> Module::RegisterBackwardPostHook(ModulePostHook hook) {
     backward_post_hooks_.push_back(std::move(hook));
-    return std::make_shared<ModuleHookHandleImpl<BackwardPostHook>>(&backward_post_hooks_,
-                                                                    backward_post_hooks_.size() - 1);
+    return std::make_shared<ModuleHookHandleImpl<ModulePostHook>>(&backward_post_hooks_,
+                                                                  backward_post_hooks_.size() - 1);
 }
 } // namespace infini_train::nn

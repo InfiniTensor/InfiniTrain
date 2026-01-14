@@ -18,8 +18,6 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &) override;
 
-    std::shared_ptr<Tensor> tensor() const { return tensor_; }
-
 private:
     std::shared_ptr<Tensor> tensor_ = nullptr;
     float learning_rate_ = 1.0f;

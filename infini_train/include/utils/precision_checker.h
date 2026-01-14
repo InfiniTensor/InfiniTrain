@@ -6,10 +6,10 @@
 
 namespace infini_train {
 class Tensor;
+class HookHandle;
 
 namespace autograd {
 class Function;
-class HookHandle;
 } // namespace autograd
 
 namespace nn {

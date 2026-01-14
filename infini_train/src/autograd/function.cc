@@ -5,6 +5,7 @@
 #include "infini_train/include/autograd/accumulate.h"
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/autograd/grad_mode.h"
+#include "infini_train/include/common/hook.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/parallel/global.h"
@@ -136,23 +137,6 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
             auto &grad_input = grad_inputs[idx];
             auto &[next_function, output_idx] = next_functions_[idx];
             if (grad_input && next_function) {
-                // // Apply tensor backward hooks only for leaf tensors
-                // // Only AccumulateGrad corresponds to a leaf tensor that user can register hooks on
-                // auto accumulate_grad = std::dynamic_pointer_cast<AccumulateGrad>(next_function);
-                // if (accumulate_grad) {
-                //     auto tensor = accumulate_grad->tensor();
-                //     if (tensor) {
-                //         const auto& hooks = tensor->backward_post_hooks_();
-                //         for (const auto& hook : hooks) {
-                //             if (hook) {
-                //                 auto modified_grad = hook(grad_input);
-                //                 if (modified_grad) {
-                //                     grad_input = modified_grad;
-                //                 }
-                //             }
-                //         }
-                //     }
-                // }
                 next_function->BackwardPartial(grad_input, output_idx);
             }
         }
@@ -161,25 +145,25 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
 
 void Function::IncreaseDependenciesNumber() { ++dependencies_number_; }
 
-std::shared_ptr<HookHandle> Function::RegisterForwardPreHook(FunctionPreHook hook) {
+std::shared_ptr<infini_train::HookHandle> Function::RegisterForwardPreHook(FunctionPreHook hook) {
     forward_pre_hooks_.push_back(std::move(hook));
     return std::make_shared<FunctionHookHandleImpl<FunctionPreHook>>(&forward_pre_hooks_,
                                                                      forward_pre_hooks_.size() - 1);
 }
 
-std::shared_ptr<HookHandle> Function::RegisterForwardPostHook(FunctionPostHook hook) {
+std::shared_ptr<infini_train::HookHandle> Function::RegisterForwardPostHook(FunctionPostHook hook) {
     forward_post_hooks_.push_back(std::move(hook));
     return std::make_shared<FunctionHookHandleImpl<FunctionPostHook>>(&forward_post_hooks_,
                                                                       forward_post_hooks_.size() - 1);
 }
 
-std::shared_ptr<HookHandle> Function::RegisterBackwardPreHook(FunctionPreHook hook) {
+std::shared_ptr<infini_train::HookHandle> Function::RegisterBackwardPreHook(FunctionPreHook hook) {
     backward_pre_hooks_.push_back(std::move(hook));
     return std::make_shared<FunctionHookHandleImpl<FunctionPreHook>>(&backward_pre_hooks_,
                                                                      backward_pre_hooks_.size() - 1);
 }
 
-std::shared_ptr<HookHandle> Function::RegisterBackwardPostHook(FunctionPostHook hook) {
+std::shared_ptr<infini_train::HookHandle> Function::RegisterBackwardPostHook(FunctionPostHook hook) {
     backward_post_hooks_.push_back(std::move(hook));
     return std::make_shared<FunctionHookHandleImpl<FunctionPostHook>>(&backward_post_hooks_,
                                                                       backward_post_hooks_.size() - 1);
