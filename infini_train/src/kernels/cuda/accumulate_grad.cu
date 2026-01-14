@@ -2,6 +2,7 @@
 #include <memory>
 
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
@@ -21,12 +22,15 @@ void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const s
     int threads_per_block = 256;
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+    const auto *device = tensor->GetDevice();
+
+    auto device_impl = GetDeviceGuardImpl(device->Type());
 
     DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
         gradient->Dtype(),
         [=]<typename T>() {
-            AccumulateGradKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            AccumulateGradKernel<<<num_blocks, threads_per_block, 0,
+                                   dynamic_cast<CudaStream *>(device_impl->GetStream(device))->cuda_stream()>>>(
                 static_cast<const T *>(gradient->DataPtr()), rate, static_cast<T *>(tensor->DataPtr()), num_elements);
         },
         "CUDA AccumulateGrad");
