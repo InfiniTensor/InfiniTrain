@@ -7,13 +7,16 @@
 
 namespace infini_train {
 class Tensor;
-}
+class HookHandle;
+template <typename HookType> class HookHandleImpl;
+} // namespace infini_train
 
 namespace infini_train::autograd {
-class HookHandle;
 
 class Function : public std::enable_shared_from_this<Function> {
 public:
+    template <typename HookType> using FunctionHookHandleImpl = infini_train::HookHandleImpl<HookType>;
+
     using FunctionPreHook = std::function<void(Function *, const std::vector<std::shared_ptr<Tensor>> &)>;
     using FunctionPostHook = std::function<void(Function *, const std::vector<std::shared_ptr<Tensor>> &,
                                                 const std::vector<std::shared_ptr<Tensor>> &)>;
@@ -35,10 +38,10 @@ public:
 
     void IncreaseDependenciesNumber();
 
-    std::shared_ptr<HookHandle> RegisterForwardPreHook(FunctionPreHook hook);
-    std::shared_ptr<HookHandle> RegisterForwardPostHook(FunctionPostHook hook);
-    std::shared_ptr<HookHandle> RegisterBackwardPreHook(FunctionPreHook hook);
-    std::shared_ptr<HookHandle> RegisterBackwardPostHook(FunctionPostHook hook);
+    std::shared_ptr<infini_train::HookHandle> RegisterForwardPreHook(FunctionPreHook hook);
+    std::shared_ptr<infini_train::HookHandle> RegisterForwardPostHook(FunctionPostHook hook);
+    std::shared_ptr<infini_train::HookHandle> RegisterBackwardPreHook(FunctionPreHook hook);
+    std::shared_ptr<infini_train::HookHandle> RegisterBackwardPostHook(FunctionPostHook hook);
 
     const std::string &type() const { return type_; }
 

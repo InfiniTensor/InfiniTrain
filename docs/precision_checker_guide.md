@@ -155,16 +155,10 @@ nn::parallel::global::InitAllEnv(8, 2, false, 2, 1, config);
 
 ```bash
 # 基本检查
-./llama3 --device cuda \
-  --input_bin /path/to/data.bin \
-  --llmc_filepath /path/to/model.bin \
-  --precision_check "level=2"
+./llama3 <other params> --precision_check "level=2"
 
 # 表格格式 + MD5
-./llama3 --device cuda \
-  --input_bin /path/to/data.bin \
-  --llmc_filepath /path/to/model.bin \
-  --precision_check "level=2,format=table,output_md5=true"
+./llama3 <other params> --precision_check "level=2,format=table,output_md5=true"
 ```
 
 ## 上下文追踪
@@ -273,10 +267,6 @@ Forward Pass:
   ├─> Pre-Hook: 检查输入
   ├─> Forward: 执行计算
   └─> Post-Hook: 检查输出
-        ├─> 检测 NaN/Inf
-        ├─> 计算 MD5（如果需要）
-        ├─> 与基准对比（如果有）
-        └─> 输出结果
 
 Backward Pass:
   ├─> Backward Pre-Hook: 检查梯度输入
