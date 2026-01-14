@@ -30,11 +30,11 @@ public:
 
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
               int pipeline_parallel_size, int virtual_pipeline_parallel_size,
-              const utils::PrecisionCheckConfig& precision_config = utils::PrecisionCheckConfig());
+              const utils::PrecisionCheckConfig &precision_config = utils::PrecisionCheckConfig());
 
     enum class PrecisionCheckLevel { NONE, MODULE, FUNCTION };
     PrecisionCheckLevel GetPrecisionCheckLevel() const;
-    const utils::PrecisionCheckConfig& GetPrecisionCheckConfig() const;
+    const utils::PrecisionCheckConfig &GetPrecisionCheckConfig() const;
 
     int nnodes() const;
 
@@ -96,7 +96,7 @@ private:
 
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
                        int pipeline_parallel_size, int virtual_pipeline_parallel,
-                       const utils::PrecisionCheckConfig& precision_config = utils::PrecisionCheckConfig()) {
+                       const utils::PrecisionCheckConfig &precision_config = utils::PrecisionCheckConfig()) {
     GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
                                pipeline_parallel_size, virtual_pipeline_parallel, precision_config);
 }

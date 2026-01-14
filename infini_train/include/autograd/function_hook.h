@@ -41,10 +41,9 @@ private:
     const infini_train::nn::parallel::ProcessGroup *pg_ = nullptr;
 };
 
-template <typename HookType>
-class FunctionHookHandleImpl : public HookHandle {
+template <typename HookType> class FunctionHookHandleImpl : public HookHandle {
 public:
-    FunctionHookHandleImpl(std::vector<HookType>* hooks, size_t id) : hooks_(hooks), id_(id) {}
+    FunctionHookHandleImpl(std::vector<HookType> *hooks, size_t id) : hooks_(hooks), id_(id) {}
 
     void Remove() override {
         if (!removed_ && hooks_ && id_ < hooks_->size()) {
@@ -54,7 +53,7 @@ public:
     }
 
 private:
-    std::vector<HookType>* hooks_;
+    std::vector<HookType> *hooks_;
     size_t id_;
     bool removed_ = false;
 };

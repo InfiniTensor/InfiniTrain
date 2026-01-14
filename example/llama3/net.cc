@@ -140,8 +140,8 @@ std::vector<std::shared_ptr<Tensor>> RMSNorm::Forward(const std::vector<std::sha
 }
 
 CausalSelfAttention::CausalSelfAttention(const LLaMA3Config &config)
-    : CloneableModule(kType), config_(config), n_head_(config.n_head), n_embd_(config.n_embd), n_kv_head_(config.n_kv_head),
-      n_rep_(config.n_head / config.n_kv_head), head_dim_(config.n_embd / config.n_head) {
+    : CloneableModule(kType), config_(config), n_head_(config.n_head), n_embd_(config.n_embd),
+      n_kv_head_(config.n_kv_head), n_rep_(config.n_head / config.n_kv_head), head_dim_(config.n_embd / config.n_head) {
     CHECK_LE(config.n_kv_head, config.n_head);
     CHECK_EQ(config.n_head % config.n_kv_head, 0);
     CHECK_EQ(config.n_embd % config.n_head, 0);
@@ -314,13 +314,12 @@ std::vector<std::shared_ptr<Tensor>> Block::Forward(const std::vector<std::share
     // (bs, seq_len, n_embd) -> RMSNorm -> (bs, seq_len, n_embd) -> attention -> (bs, seq_len, n_embd)
     // -> Add -> (bs, seq_len, n_embd)
     auto x1 = x[0]
-            + (*modules_[kAttnLayerName])(std::vector<std::shared_ptr<Tensor>>{
-                (*modules_[kLn1LayerName])({x[0]})[0], freqs_cis, start_pos, mask})[0];
+            + (*modules_[kAttnLayerName])(std::vector<std::shared_ptr<Tensor>>{(*modules_[kLn1LayerName])({x[0]})[0],
+                                                                               freqs_cis, start_pos, mask})[0];
     // (bs, seq_len, n_embd) -> RMSNorm -> (bs, seq_len, n_embd) -> MLP -> (bs, seq_len, n_embd)
     // -> Add -> (bs, seq_len, n_embd)
-    auto x2 = x1
-            + (*modules_[kMlpLayerName])(
-                std::vector<std::shared_ptr<Tensor>>((*modules_[kLn2LayerName])({x1})))[0];
+    auto x2
+        = x1 + (*modules_[kMlpLayerName])(std::vector<std::shared_ptr<Tensor>>((*modules_[kLn2LayerName])({x1})))[0];
     // (bs, seq_len, n_embd)
     return {x2};
 }
@@ -334,7 +333,8 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3FirstStage::Forward(const std::vector
     return (*modules_[LLaMA3FirstStage::kWTELayerName])(x);
 }
 
-LLaMA3Chunk::LLaMA3Chunk(const LLaMA3Config &config, int start_layer, int end_layer) : CloneableModule(kType), config_(config) {
+LLaMA3Chunk::LLaMA3Chunk(const LLaMA3Config &config, int start_layer, int end_layer)
+    : CloneableModule(kType), config_(config) {
     std::vector<std::shared_ptr<nn::Module>> h;
     for (int64_t i = start_layer; i < end_layer; ++i) {
         auto layer = std::make_shared<Block>(config);
@@ -396,9 +396,10 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3LastStage::Forward(const std::vector<
 }
 
 LLaMA3::LLaMA3(const LLaMA3Config &config)
-    : CloneableModule(kType), config_(config), stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
-                           config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
-                           nn::parallel::global::GetVirtualPipelineParallelSize())) {
+    : CloneableModule(kType), config_(config),
+      stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
+          config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
+          nn::parallel::global::GetVirtualPipelineParallelSize())) {
     std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
     if (stage_info_.is_first_stage) {
         modules_[kPPFirstStageName] = std::make_shared<LLaMA3FirstStage>(config_);

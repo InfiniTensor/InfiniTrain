@@ -139,7 +139,7 @@ std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::s
     }
 
     // Call forward pre-hooks
-    for (const auto& hook : forward_pre_hooks_) {
+    for (const auto &hook : forward_pre_hooks_) {
         if (hook) {
             hook(this, input_tensors);
         }
@@ -149,7 +149,7 @@ std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::s
     auto output_tensors = Forward(input_tensors);
 
     // Call forward post-hooks
-    for (const auto& hook : forward_post_hooks_) {
+    for (const auto &hook : forward_post_hooks_) {
         if (hook) {
             hook(this, input_tensors, output_tensors);
         }
@@ -157,22 +157,26 @@ std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::s
 
     // Register backward hooks on output tensors' grad_fn
     if (!backward_pre_hooks_.empty() || !backward_post_hooks_.empty()) {
-        for (const auto& output : output_tensors) {
+        for (const auto &output : output_tensors) {
             if (output && output->grad_fn()) {
                 if (!backward_pre_hooks_.empty()) {
                     output->grad_fn()->RegisterBackwardPreHook(
-                        [this](autograd::Function*, const std::vector<std::shared_ptr<Tensor>>& grad_outputs) {
-                            for (const auto& hook : backward_pre_hooks_) {
-                                if (hook) hook(this, grad_outputs);
+                        [this](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+                            for (const auto &hook : backward_pre_hooks_) {
+                                if (hook) {
+                                    hook(this, grad_outputs);
+                                }
                             }
                         });
                 }
                 if (!backward_post_hooks_.empty()) {
                     output->grad_fn()->RegisterBackwardPostHook(
-                        [this](autograd::Function*, const std::vector<std::shared_ptr<Tensor>>& grad_inputs,
-                               const std::vector<std::shared_ptr<Tensor>>& grad_outputs) {
-                            for (const auto& hook : backward_post_hooks_) {
-                                if (hook) hook(this, grad_inputs, grad_outputs);
+                        [this](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &grad_inputs,
+                               const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+                            for (const auto &hook : backward_post_hooks_) {
+                                if (hook) {
+                                    hook(this, grad_inputs, grad_outputs);
+                                }
                             }
                         });
                 }
@@ -232,16 +236,19 @@ std::shared_ptr<ModuleHookHandle> Module::RegisterForwardPreHook(ForwardPreHook 
 
 std::shared_ptr<ModuleHookHandle> Module::RegisterForwardPostHook(ForwardPostHook hook) {
     forward_post_hooks_.push_back(std::move(hook));
-    return std::make_shared<ModuleHookHandleImpl<ForwardPostHook>>(&forward_post_hooks_, forward_post_hooks_.size() - 1);
+    return std::make_shared<ModuleHookHandleImpl<ForwardPostHook>>(&forward_post_hooks_,
+                                                                   forward_post_hooks_.size() - 1);
 }
 
 std::shared_ptr<ModuleHookHandle> Module::RegisterBackwardPreHook(BackwardPreHook hook) {
     backward_pre_hooks_.push_back(std::move(hook));
-    return std::make_shared<ModuleHookHandleImpl<BackwardPreHook>>(&backward_pre_hooks_, backward_pre_hooks_.size() - 1);
+    return std::make_shared<ModuleHookHandleImpl<BackwardPreHook>>(&backward_pre_hooks_,
+                                                                   backward_pre_hooks_.size() - 1);
 }
 
 std::shared_ptr<ModuleHookHandle> Module::RegisterBackwardPostHook(BackwardPostHook hook) {
     backward_post_hooks_.push_back(std::move(hook));
-    return std::make_shared<ModuleHookHandleImpl<BackwardPostHook>>(&backward_post_hooks_, backward_post_hooks_.size() - 1);
+    return std::make_shared<ModuleHookHandleImpl<BackwardPostHook>>(&backward_post_hooks_,
+                                                                    backward_post_hooks_.size() - 1);
 }
 } // namespace infini_train::nn

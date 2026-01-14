@@ -29,7 +29,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     }
 
     // Call forward pre-hooks
-    for (const auto& hook : forward_pre_hooks_) {
+    for (const auto &hook : forward_pre_hooks_) {
         if (hook) {
             hook(this, input_tensors);
         }
@@ -44,7 +44,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     }
 
     // Call forward post-hooks
-    for (const auto& hook : forward_post_hooks_) {
+    for (const auto &hook : forward_post_hooks_) {
         if (hook) {
             hook(this, input_tensors, output_tensors);
         }
@@ -106,7 +106,7 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
         && (dependencies_reached_ == dependencies_number_ || dependencies_number_ == 0)) {
 
         // Call backward pre-hooks
-        for (const auto& hook : backward_pre_hooks_) {
+        for (const auto &hook : backward_pre_hooks_) {
             if (hook) {
                 hook(this, grad_outputs_);
             }
@@ -120,7 +120,7 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
         }
 
         // Call backward post-hooks
-        for (const auto& hook : backward_post_hooks_) {
+        for (const auto &hook : backward_post_hooks_) {
             if (hook) {
                 hook(this, grad_inputs, grad_outputs_);
             }
@@ -163,21 +163,25 @@ void Function::IncreaseDependenciesNumber() { ++dependencies_number_; }
 
 std::shared_ptr<HookHandle> Function::RegisterForwardPreHook(FunctionPreHook hook) {
     forward_pre_hooks_.push_back(std::move(hook));
-    return std::make_shared<FunctionHookHandleImpl<FunctionPreHook>>(&forward_pre_hooks_, forward_pre_hooks_.size() - 1);
+    return std::make_shared<FunctionHookHandleImpl<FunctionPreHook>>(&forward_pre_hooks_,
+                                                                     forward_pre_hooks_.size() - 1);
 }
 
 std::shared_ptr<HookHandle> Function::RegisterForwardPostHook(FunctionPostHook hook) {
     forward_post_hooks_.push_back(std::move(hook));
-    return std::make_shared<FunctionHookHandleImpl<FunctionPostHook>>(&forward_post_hooks_, forward_post_hooks_.size() - 1);
+    return std::make_shared<FunctionHookHandleImpl<FunctionPostHook>>(&forward_post_hooks_,
+                                                                      forward_post_hooks_.size() - 1);
 }
 
 std::shared_ptr<HookHandle> Function::RegisterBackwardPreHook(FunctionPreHook hook) {
     backward_pre_hooks_.push_back(std::move(hook));
-    return std::make_shared<FunctionHookHandleImpl<FunctionPreHook>>(&backward_pre_hooks_, backward_pre_hooks_.size() - 1);
+    return std::make_shared<FunctionHookHandleImpl<FunctionPreHook>>(&backward_pre_hooks_,
+                                                                     backward_pre_hooks_.size() - 1);
 }
 
 std::shared_ptr<HookHandle> Function::RegisterBackwardPostHook(FunctionPostHook hook) {
     backward_post_hooks_.push_back(std::move(hook));
-    return std::make_shared<FunctionHookHandleImpl<FunctionPostHook>>(&backward_post_hooks_, backward_post_hooks_.size() - 1);
+    return std::make_shared<FunctionHookHandleImpl<FunctionPostHook>>(&backward_post_hooks_,
+                                                                      backward_post_hooks_.size() - 1);
 }
 } // namespace infini_train::autograd

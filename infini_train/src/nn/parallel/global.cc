@@ -92,7 +92,7 @@ GlobalEnv &GlobalEnv::Instance() {
 
 void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
                      int pipeline_parallel_size, int virtual_pipeline_parallel_size,
-                     const utils::PrecisionCheckConfig& precision_config) {
+                     const utils::PrecisionCheckConfig &precision_config) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
@@ -194,11 +194,9 @@ Layout GlobalEnv::layout() const {
     return layout_;
 }
 
-GlobalEnv::PrecisionCheckLevel GlobalEnv::GetPrecisionCheckLevel() const {
-    return precision_check_level_;
-}
+GlobalEnv::PrecisionCheckLevel GlobalEnv::GetPrecisionCheckLevel() const { return precision_check_level_; }
 
-const utils::PrecisionCheckConfig& GlobalEnv::GetPrecisionCheckConfig() const {
+const utils::PrecisionCheckConfig &GlobalEnv::GetPrecisionCheckConfig() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return precision_check_config_;
 }

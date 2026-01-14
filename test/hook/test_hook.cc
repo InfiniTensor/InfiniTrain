@@ -27,8 +27,7 @@ void test_basic_hooks() {
     public:
         MyModule() : Module("MyModule") {}
 
-        std::vector<std::shared_ptr<Tensor>> Forward(
-            const std::vector<std::shared_ptr<Tensor>>& inputs) override {
+        std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) override {
             std::cout << "Forward pass executing..." << std::endl;
             return inputs;
         }
@@ -37,36 +36,30 @@ void test_basic_hooks() {
     auto module = std::make_shared<MyModule>();
 
     // Register forward pre-hook
-    auto pre_hook = module->RegisterForwardPreHook(
-        [](nn::Module* mod, const std::vector<std::shared_ptr<Tensor>>& inputs) {
-            std::cout << "Forward pre-hook: Module type = " << mod->type() << std::endl;
-        }
-    );
+    auto pre_hook
+        = module->RegisterForwardPreHook([](nn::Module *mod, const std::vector<std::shared_ptr<Tensor>> &inputs) {
+              std::cout << "Forward pre-hook: Module type = " << mod->type() << std::endl;
+          });
 
     // Register forward post-hook
-    auto fwd_hook = module->RegisterForwardPostHook(
-        [](nn::Module* mod,
-           const std::vector<std::shared_ptr<Tensor>>& inputs,
-           const std::vector<std::shared_ptr<Tensor>>& outputs) {
-            std::cout << "Forward post-hook: Got " << outputs.size() << " outputs" << std::endl;
-        }
-    );
+    auto fwd_hook
+        = module->RegisterForwardPostHook([](nn::Module *mod, const std::vector<std::shared_ptr<Tensor>> &inputs,
+                                             const std::vector<std::shared_ptr<Tensor>> &outputs) {
+              std::cout << "Forward post-hook: Got " << outputs.size() << " outputs" << std::endl;
+          });
 
     // Register backward pre-hook
     auto bwd_pre_hook = module->RegisterBackwardPreHook(
-        [](nn::Module* mod, const std::vector<std::shared_ptr<Tensor>>& grad_outputs) {
+        [](nn::Module *mod, const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
             std::cout << "Backward pre-hook called!" << std::endl;
-        }
-    );
+        });
 
     // Register backward post-hook
-    auto bwd_post_hook = module->RegisterBackwardPostHook(
-        [](nn::Module* mod,
-           const std::vector<std::shared_ptr<Tensor>>& grad_inputs,
-           const std::vector<std::shared_ptr<Tensor>>& grad_outputs) {
-            std::cout << "Backward post-hook called!" << std::endl;
-        }
-    );
+    auto bwd_post_hook
+        = module->RegisterBackwardPostHook([](nn::Module *mod, const std::vector<std::shared_ptr<Tensor>> &grad_inputs,
+                                              const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+              std::cout << "Backward post-hook called!" << std::endl;
+          });
 
     // Test forward pass
     std::vector<std::shared_ptr<Tensor>> inputs = {x};
@@ -94,25 +87,22 @@ void test_hook_remove() {
 
     // Register three forward pre-hooks
     auto handle1 = add_fn->RegisterForwardPreHook(
-        [&hook1_count](autograd::Function*, const std::vector<std::shared_ptr<Tensor>>&) {
+        [&hook1_count](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &) {
             hook1_count++;
             std::cout << "Hook 1 called (count: " << hook1_count << ")" << std::endl;
-        }
-    );
+        });
 
     auto handle2 = add_fn->RegisterForwardPreHook(
-        [&hook2_count](autograd::Function*, const std::vector<std::shared_ptr<Tensor>>&) {
+        [&hook2_count](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &) {
             hook2_count++;
             std::cout << "Hook 2 called (count: " << hook2_count << ")" << std::endl;
-        }
-    );
+        });
 
     auto handle3 = add_fn->RegisterForwardPreHook(
-        [&hook3_count](autograd::Function*, const std::vector<std::shared_ptr<Tensor>>&) {
+        [&hook3_count](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &) {
             hook3_count++;
             std::cout << "Hook 3 called (count: " << hook3_count << ")" << std::endl;
-        }
-    );
+        });
 
     // First call - all hooks should fire
     std::cout << "\n--- First Apply (all hooks active) ---" << std::endl;
@@ -170,7 +160,7 @@ void test_hook_remove() {
 // ============================================================================
 // Main
 // ============================================================================
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
     nn::parallel::global::GlobalEnv::Instance().Init(0, 1, 1, 1, 1);
 

@@ -9,18 +9,18 @@ namespace utils {
 // Thread-local to ensure thread safety in multi-threaded training
 class PrecisionCheckContext {
 public:
-    static PrecisionCheckContext& Instance() {
+    static PrecisionCheckContext &Instance() {
         static thread_local PrecisionCheckContext instance;
         return instance;
     }
 
     void SetGAS(int gas) { gas_ = gas; }
     void SetLayer(int layer) { layer_ = layer; }
-    void SetLayerName(const std::string& name) { layer_name_ = name; }
+    void SetLayerName(const std::string &name) { layer_name_ = name; }
 
     int GetGAS() const { return gas_; }
     int GetLayer() const { return layer_; }
-    const std::string& GetLayerName() const { return layer_name_; }
+    const std::string &GetLayerName() const { return layer_name_; }
 
     // Returns formatted key, e.g., "[GAS-0] [L-0] attn_out"
     std::string GetKey() const {
@@ -46,5 +46,5 @@ private:
     std::string layer_name_;
 };
 
-}  // namespace utils
-}  // namespace infini_train
+} // namespace utils
+} // namespace infini_train

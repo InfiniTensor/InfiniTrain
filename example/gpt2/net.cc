@@ -215,7 +215,8 @@ GPT2FirstStage::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>>
     return {tok_emb + pos_emb};
 }
 
-GPT2Chunk::GPT2Chunk(const GPT2Config &config, int start_layer, int end_layer) : CloneableModule(kType), config_(config) {
+GPT2Chunk::GPT2Chunk(const GPT2Config &config, int start_layer, int end_layer)
+    : CloneableModule(kType), config_(config) {
     std::vector<std::shared_ptr<nn::Module>> h;
     for (int64_t i = start_layer; i < end_layer; ++i) {
         auto layer = std::make_shared<Block>(config);
@@ -256,9 +257,10 @@ GPT2LastStage::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> 
 }
 
 GPT2::GPT2(const GPT2Config &config)
-    : CloneableModule(kType), config_(config), stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
-                           config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
-                           nn::parallel::global::GetVirtualPipelineParallelSize())) {
+    : CloneableModule(kType), config_(config),
+      stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
+          config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
+          nn::parallel::global::GetVirtualPipelineParallelSize())) {
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
 
     // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
