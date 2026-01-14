@@ -14,8 +14,7 @@ class MyModel : public nn::Module {
 public:
     MyModel() : Module("MyModel") {}
 
-    std::vector<std::shared_ptr<Tensor>> Forward(
-        const std::vector<std::shared_ptr<Tensor>>& inputs) override {
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) override {
         auto x = inputs[0];
         x->RequiresGrad();
         auto y = x->Mul(x);
@@ -23,7 +22,7 @@ public:
     }
 };
 
-void TestFunctionLevel(const std::string& config_str) {
+void TestFunctionLevel(const std::string &config_str) {
     std::cout << "\n========================================" << std::endl;
     std::cout << "  Function-Level Test: " << config_str << std::endl;
     std::cout << "========================================" << std::endl;
@@ -61,7 +60,7 @@ void TestModuleLevel() {
     std::cout << "Test completed." << std::endl;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
 
     std::string config_str = argc > 1 ? argv[1] : "level=2";

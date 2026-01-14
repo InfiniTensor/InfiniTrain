@@ -68,7 +68,9 @@ DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 // precision check
-DEFINE_string(precision_check, "", "precision check config: level=N,format=simple|table,output_md5=true|false,output_path=PATH,baseline=PATH");
+DEFINE_string(
+    precision_check, "",
+    "precision check config: level=N,format=simple|table,output_md5=true|false,output_path=PATH,baseline=PATH");
 
 using namespace infini_train;
 

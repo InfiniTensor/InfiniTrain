@@ -14,9 +14,9 @@ class HookHandle;
 
 class Function : public std::enable_shared_from_this<Function> {
 public:
-    using FunctionPreHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&)>;
-    using FunctionPostHook = std::function<void(Function*, const std::vector<std::shared_ptr<Tensor>>&,
-                                                 const std::vector<std::shared_ptr<Tensor>>&)>;
+    using FunctionPreHook = std::function<void(Function *, const std::vector<std::shared_ptr<Tensor>> &)>;
+    using FunctionPostHook = std::function<void(Function *, const std::vector<std::shared_ptr<Tensor>> &,
+                                                const std::vector<std::shared_ptr<Tensor>> &)>;
 
     static constexpr char kUndefinedType[] = "Undefined";
 
@@ -40,7 +40,7 @@ public:
     std::shared_ptr<HookHandle> RegisterBackwardPreHook(FunctionPreHook hook);
     std::shared_ptr<HookHandle> RegisterBackwardPostHook(FunctionPostHook hook);
 
-    const std::string& type() const { return type_; }
+    const std::string &type() const { return type_; }
 
 protected:
     std::vector<std::shared_ptr<Tensor>> saved_tensors_;
