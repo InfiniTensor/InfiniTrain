@@ -13,13 +13,15 @@ public:
     enum class DeviceType : int8_t {
         kCPU = 0,
         kCUDA = 1,
+        kCount = 2,
         kInvalid = -1,
     };
 
     Device();
-    Device &operator=(const Device &) = default;
 
     Device(DeviceType type, int8_t index);
+
+    Device &operator=(const Device &) = default;
 
     ~Device() = default;
 
@@ -34,6 +36,10 @@ public:
     virtual nn::parallel::Rank Rank() const;
 
     friend std::ostream &operator<<(std::ostream &os, const Device &device);
+
+    friend bool operator==(const Device &a, const Device &b);
+
+    friend bool operator!=(const Device &a, const Device &b);
 
 private:
     DeviceType type_ = DeviceType::kInvalid;

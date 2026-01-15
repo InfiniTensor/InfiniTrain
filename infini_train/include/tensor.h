@@ -38,17 +38,17 @@ struct PrintOptions {
 
 class TensorBuffer {
 public:
-    TensorBuffer(const Device *device, size_t size);
+    TensorBuffer(Device device, size_t size);
     ~TensorBuffer();
 
     void *DataPtr();
     const void *DataPtr() const;
 
-    const Device *GetDevice() const;
+    Device GetDevice() const;
     size_t Size() const;
 
 private:
-    const Device *device_ = nullptr;
+    Device device_ = Device();
     size_t size_ = 0;
     void *data_ = nullptr;
 };
@@ -57,19 +57,17 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
 public:
     Tensor() = default;
 
-    Tensor(const std::vector<int64_t> &dims, DataType dtype, const Device *device);
-    Tensor(const std::vector<int64_t> &dims, DataType dtype)
-        : Tensor(dims, dtype, DeviceManager::Instance()->GetDevice(DeviceType::kCPU, 0)) {}
+    Tensor(const std::vector<int64_t> &dims, DataType dtype, Device device);
+    Tensor(const std::vector<int64_t> &dims, DataType dtype) : Tensor(dims, dtype, Device()) {}
 
     Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &dims);
 
     void SetData(const Tensor &tensor, size_t offset, bool preserve_data = false);
 
-    Tensor(const float *data, const std::vector<int64_t> &dims, DataType dtype, const Device *device);
-    Tensor(const float *data, const std::vector<int64_t> &dims, DataType dtype)
-        : Tensor(data, dims, dtype, DeviceManager::Instance()->GetDevice(DeviceType::kCPU, 0)) {}
+    Tensor(const float *data, const std::vector<int64_t> &dims, DataType dtype, Device device);
+    Tensor(const float *data, const std::vector<int64_t> &dims, DataType dtype) : Tensor(data, dims, dtype, Device()) {}
 
-    const Device *GetDevice() const;
+    Device GetDevice() const;
 
     void *DataPtr();
     const void *DataPtr() const;
@@ -86,7 +84,7 @@ public:
     Eigen::Map<Eigen::Matrix<float, 1, Eigen::Dynamic, Eigen::RowMajor>> EigenVector();
 
     // TODO(dcj): return shared_ptr<Tensor> instead of Tensor later
-    Tensor To(const Device *device);
+    Tensor To(Device device);
     Tensor To(DataType dtype);
 
     void CopyFrom(const Tensor &src);

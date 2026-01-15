@@ -12,7 +12,7 @@
 namespace infini_train::nn {
 Linear::Linear(int64_t in_features, int64_t out_features, bool bias, const Device *device)
     : CloneableModule(kType), bias_(bias) {
-    device_ = device ? device : DeviceManager::Instance()->GetDefaultDevice();
+    device_ = device ? device : Device();
 
     parameters_[kParamWeightName]
         = std::make_shared<Tensor>(std::vector<int64_t>{out_features, in_features}, DataType::kFLOAT32, device_)

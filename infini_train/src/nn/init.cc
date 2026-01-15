@@ -49,12 +49,12 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
     device->SetDevice();
 
     switch (device->Type()) {
-    case DeviceType::kCPU: {
+    case Device::DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
     }
 #ifdef USE_CUDA
-    case DeviceType::kCUDA: {
+    case Device::DeviceType::kCUDA: {
         // TODO(dcj): maybe use async API later?
         cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice,
                         dynamic_cast<const CudaDevice *>(device)->Stream());
@@ -155,12 +155,12 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
     device->SetDevice();
 
     switch (device->Type()) {
-    case DeviceType::kCPU: {
+    case Device::DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
     }
 #ifdef USE_CUDA
-    case DeviceType::kCUDA: {
+    case Device::DeviceType::kCUDA: {
         // TODO(dcj): maybe use async API later?
         cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice,
                         dynamic_cast<const CudaDevice *>(device)->Stream());
@@ -185,12 +185,12 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {
     device->SetDevice();
 
     switch (device->Type()) {
-    case DeviceType::kCPU: {
+    case Device::DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
     }
 #ifdef USE_CUDA
-    case DeviceType::kCUDA: {
+    case Device::DeviceType::kCUDA: {
         // TODO(dcj): maybe use async API later?
         cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice,
                         dynamic_cast<const CudaDevice *>(device)->Stream());
@@ -215,12 +215,12 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
     device->SetDevice();
 
     switch (device->Type()) {
-    case DeviceType::kCPU: {
+    case Device::DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
     }
 #ifdef USE_CUDA
-    case DeviceType::kCUDA: {
+    case Device::DeviceType::kCUDA: {
         // TODO(dcj): maybe use async API later?
         cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice,
                         dynamic_cast<const CudaDevice *>(device)->Stream());

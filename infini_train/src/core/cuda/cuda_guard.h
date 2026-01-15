@@ -49,6 +49,10 @@ public:
     void Memcpy(void *dst, const void *src, size_t count, MemcpyKind kind) override;
 
     void MemcpyAsync(void *dst, const void *src, size_t count, MemcpyKind kind, Stream *stream) override;
+
+    void ResetMemPoolHighWatermarks(Device device) const override;
+
+    std::pair<size_t, size_t> GetMemPoolPeakMB(Device device) const override;
 };
 
 } // namespace infini_train::core::cuda

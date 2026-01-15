@@ -216,7 +216,7 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_GATHER_KERNEL(kernel_name)                                                                       \
-    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_GATHER_KERNEL(IndexGatherForward)
 REGISTER_CUDA_GATHER_KERNEL(IndexGatherBackward)

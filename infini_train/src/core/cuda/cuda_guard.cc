@@ -15,6 +15,7 @@
 namespace infini_train::core::cuda {
 namespace {
 constexpr int kMaxGpus = 8;
+constexpr size_t kBytesPerMB = 1024ULL * 1024ULL;
 
 static std::array<std::unique_ptr<CudaStream>, kMaxGpus> cuda_streams;
 static std::array<std::unique_ptr<CudaBlasHandle>, kMaxGpus> cuda_blas_handles;
@@ -124,6 +125,32 @@ void CudaGuardImpl::MemcpyAsync(void *dst, const void *src, size_t count, Memcpy
     } else {
         LOG(FATAL) << "Invalid MemcpyKind";
     }
+}
+
+void CudaGuardImpl::ResetMemPoolHighWatermarks(Device device) const {
+    SetDevice(device);
+    cudaMemPool_t pool;
+    CUDA_CHECK(cudaDeviceGetDefaultMemPool(&pool, device.index()));
+
+    cuuint64_t zero = 0;
+    // High watermark can only be reset to zero; non-zero is illegal.
+    CUDA_CHECK(cudaMemPoolSetAttribute(pool, cudaMemPoolAttrUsedMemHigh, &zero));
+    CUDA_CHECK(cudaMemPoolSetAttribute(pool, cudaMemPoolAttrReservedMemHigh, &zero));
+}
+
+std::pair<size_t, size_t> CudaGuardImpl::GetMemPoolPeakMB(Device device) const {
+    SetDevice(device);
+    cudaMemPool_t pool;
+    CUDA_CHECK(cudaDeviceGetDefaultMemPool(&pool, device.index()));
+
+    cuuint64_t used = 0;
+    CUDA_CHECK(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrUsedMemHigh, &used));
+
+    cuuint64_t reserved = 0;
+    CUDA_CHECK(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrReservedMemHigh, &reserved));
+
+    return std::make_pair<size_t, size_t>(static_cast<size_t>(used / kBytesPerMB),
+                                          static_cast<size_t>(reserved / kBytesPerMB));
 }
 
 INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL(Device::DeviceType::kCUDA, CudaGuardImpl)

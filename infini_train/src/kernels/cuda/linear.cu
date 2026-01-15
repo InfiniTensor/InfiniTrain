@@ -445,7 +445,7 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_LINEAR_KERNEL(kernel_name)                                                                       \
-    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_LINEAR_KERNEL(MatmulForward)
 REGISTER_CUDA_LINEAR_KERNEL(MatmulBackward)

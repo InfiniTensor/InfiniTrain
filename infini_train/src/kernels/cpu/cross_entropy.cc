@@ -99,7 +99,7 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_CROSS_ENTROPY_KERNEL(kernel_name)                                                                 \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_CROSS_ENTROPY_KERNEL(CrossEntropyForward)
 REGISTER_CPU_CROSS_ENTROPY_KERNEL(CrossEntropyBackward)

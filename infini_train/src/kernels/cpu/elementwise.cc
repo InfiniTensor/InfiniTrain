@@ -313,7 +313,7 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DivBackward(const st
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_ELEMENTWISE_KERNEL(kernel_name)                                                                   \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_ELEMENTWISE_KERNEL(NegForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(NegBackward)

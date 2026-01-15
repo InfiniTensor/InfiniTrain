@@ -112,7 +112,7 @@ VocabParallelCrossEntropyBackward(const std::shared_ptr<Tensor> &grad_output,   
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_VOCAB_PARALLEL_CROSS_ENTROPY_KERNEL(kernel_name)                                                 \
-    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_VOCAB_PARALLEL_CROSS_ENTROPY_KERNEL(VocabParallelCrossEntropyBackward)
 

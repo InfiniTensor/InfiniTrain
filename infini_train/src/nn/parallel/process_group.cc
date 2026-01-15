@@ -128,7 +128,7 @@ void ProcessGroupNCCL::InitSingleProcess(const std::vector<int> &ranks) {
     NCCL_CHECK(ncclCommInitAll(comms_.data(), world_size_, ranks.data()));
 
     for (int i = 0; i < ranks.size(); ++i) {
-        auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, ranks[i]);
+        auto device = Device(Device::DeviceType::kCUDA, ranks[i]);
         devices_.push_back(device);
         device_comm_map_[device] = comms_[i];
         global_group_rank_map_[device->rank().GlobalRank()] = i;
@@ -165,7 +165,7 @@ void ProcessGroupNCCL::InitMultiProcess(const std::vector<int> &ranks) {
             NCCL_CHECK(ncclCommInitRank(&comm, world_size_, nccl_id, group_rank));
             comms_.push_back(comm);
 
-            auto device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, i);
+            auto device = Device(Device::DeviceType::kCUDA, i);
             global_group_rank_map_[device->rank().GlobalRank()] = group_rank;
             devices_.push_back(device);
             device_comm_map_[device] = comm;

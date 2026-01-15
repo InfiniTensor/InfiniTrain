@@ -232,7 +232,7 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_CONCAT_KERNEL(kernel_name)                                                                       \
-    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_CONCAT_KERNEL(ConcatForward)
 REGISTER_CUDA_CONCAT_KERNEL(ConcatBackward)

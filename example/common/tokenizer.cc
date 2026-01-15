@@ -121,7 +121,7 @@ void Tokenizer::GenerateText(infini_train::nn::Module &model, uint32_t batch_siz
     uint64_t kRngState = kRngState;
     LOG(INFO) << "start generate text:";
 
-    const auto *cpu_device = DeviceManager::Instance()->GetDefaultDevice();
+    const auto *cpu_device = Device();
     for (int t = prompt_len; t < text_length; ++t) {
         x = std::make_shared<infini_train::Tensor>(x->To(device)); // CPU->calc device
         // TODO(jym): use no_grad forward later
