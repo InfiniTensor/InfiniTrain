@@ -413,7 +413,7 @@ private:
 
 class Dispatcher {
 public:
-    using KeyT = std::pair<DeviceType, std::string>;
+    using KeyT = std::pair<Device::DeviceType, std::string>;
 
     static Dispatcher &Instance() {
         static Dispatcher instance;

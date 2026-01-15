@@ -59,7 +59,7 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_OUTER_KERNEL(kernel_name)                                                                         \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_OUTER_KERNEL(OuterForward)
 REGISTER_CPU_OUTER_KERNEL(OuterBackward)

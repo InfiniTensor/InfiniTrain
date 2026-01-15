@@ -37,7 +37,7 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(kernel_name)                                                               \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(AccumulateGrad)
 REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(AdamAccumulateGrad)

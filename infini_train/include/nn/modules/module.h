@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 
 namespace infini_train {
 class Tensor;
@@ -72,7 +73,7 @@ public:
         return 0.0f;
     };
 
-    virtual void To(const Device *device);
+    virtual void To(Device device);
 
     virtual void To(DataType dtype);
 
@@ -91,7 +92,7 @@ public:
     std::shared_ptr<infini_train::HookHandle> RegisterBackwardPostHook(ModulePostHook hook);
 
 protected:
-    const Device *device_ = nullptr;
+    Device device_ = Device();
     const std::string type_ = kUndefinedType;
     std::unordered_map<std::string, std::shared_ptr<Module>> modules_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;

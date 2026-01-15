@@ -248,8 +248,7 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                         {activations[task.local_chunk_idx][mb][0], std::make_shared<Tensor>(target_on_device)})[0];
                     loss = loss / n;
                 }
-                total_loss
-                    += static_cast<const float *>(loss->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
+                total_loss += static_cast<const float *>(loss->To(Device()).DataPtr())[0];
 
                 loss->Backward();
             } else {

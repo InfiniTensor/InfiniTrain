@@ -11,6 +11,11 @@
 #include "infini_train/src/core/cpu/cpu_guard.h"
 
 namespace infini_train::core {
+namespace {
+inline DeviceGuardImpl *GetDeviceGuardImpl(Device::DeviceType type) {
+    return DeviceGuardImplRegistry::Instance().Get(type);
+}
+} // namespace
 
 // DeviceGuardImpl
 void DeviceGuardImpl::SetDevice(Device device) const {
@@ -54,14 +59,16 @@ void DeviceGuardImpl::MemcpyAsync(void *dst, const void *src, size_t count, Memc
     Memcpy(dst, src, count, kind);
 }
 
-void DeviceGuardImpl::ResetMemPoolHighWatermarks() const {
-    LOG(WARNING) << "ResetMemPoolHighWatermarks is not supported for this device. "
-                    "The call is ignored.";
+void DeviceGuardImpl::ResetMemPoolHighWatermarks(Device device) const {
+    LOG(WARNING) << std::format("ResetMemPoolHighWatermarks is not supported for device type {} (index {}). "
+                                "The call is ignored.",
+                                static_cast<int>(device.type()), device.index());
 }
 
-std::pair<size_t, size_t> DeviceGuardImpl::GetMemPoolPeakMB() const {
-    LOG(WARNING) << "GetMemPoolPeakMB is not supported for this device. "
-                    "Returning {0, 0}.";
+std::pair<size_t, size_t> DeviceGuardImpl::GetMemPoolPeakMB(Device device) const {
+    LOG(WARNING) << std::format("GetMemPoolPeakMB is not supported for device type {} (index {}). "
+                                "Returning {{0, 0}}.",
+                                static_cast<int>(device.type()), device.index());
     return {0, 0};
 }
 

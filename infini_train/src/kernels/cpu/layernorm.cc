@@ -139,7 +139,7 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_LAYERNORM_KERNEL(kernel_name)                                                                     \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_LAYERNORM_KERNEL(LayerNormForward)
 REGISTER_CPU_LAYERNORM_KERNEL(LayerNormBackward)

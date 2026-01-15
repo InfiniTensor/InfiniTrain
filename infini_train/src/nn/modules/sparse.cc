@@ -11,7 +11,7 @@
 namespace infini_train::nn {
 
 Embedding::Embedding(int num_embeddings, int embedding_dim, const Device *device) : CloneableModule(kType) {
-    device_ = device ? device : DeviceManager::Instance()->GetDefaultDevice();
+    device_ = device ? device : Device();
 
     parameters_[kParamWeightName]
         = std::make_shared<Tensor>(std::vector<int64_t>{num_embeddings, embedding_dim}, DataType::kFLOAT32, device_)

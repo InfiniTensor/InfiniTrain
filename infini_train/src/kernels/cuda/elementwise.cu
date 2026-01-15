@@ -1081,7 +1081,7 @@ std::shared_ptr<Tensor> SigmoidBackward(const std::shared_ptr<Tensor> &output,
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_ELEMENTWISE_KERNEL(kernel_name)                                                                  \
-    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_ELEMENTWISE_KERNEL(NegForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(NegBackward)

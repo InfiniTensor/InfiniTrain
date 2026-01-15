@@ -35,7 +35,7 @@ std::shared_ptr<Tensor> SigmoidBackward(const std::shared_ptr<Tensor> &output,
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_SIGMOID_KERNEL(kernel_name)                                                                       \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_SIGMOID_KERNEL(SigmoidForward)
 REGISTER_CPU_SIGMOID_KERNEL(SigmoidBackward)

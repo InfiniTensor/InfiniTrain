@@ -11,11 +11,10 @@
 namespace infini_train::nn::parallel {
 
 PipelineStage::PipelineStage(int stage_index /* pp_rank */, int num_stages /* pp_size */,
-                             const std::vector<std::vector<int64_t>> &recv_shape, int device_id,
+                             const std::vector<std::vector<int64_t>> &recv_shape, Device device,
                              std::vector<std::shared_ptr<Module>> &&chunks)
     : stage_index_(stage_index), num_stages_(num_stages), prev_rank_(stage_index > 0 ? stage_index - 1 : -1),
-      next_rank_(stage_index < num_stages - 1 ? stage_index + 1 : -1), recv_shape_(recv_shape),
-      device_(DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA).at(device_id)),
+      next_rank_(stage_index < num_stages - 1 ? stage_index + 1 : -1), recv_shape_(recv_shape), device_(device),
       chunks_(std::move(chunks)) {}
 
 std::vector<std::shared_ptr<Tensor>> PipelineStage::ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &inputs,

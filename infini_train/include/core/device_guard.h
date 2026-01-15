@@ -95,9 +95,9 @@ public:
 
     virtual void MemcpyAsync(void *dst, const void *src, size_t count, MemcpyKind kind, Stream *stream);
 
-    virtual void ResetMemPoolHighWatermarks() const;
+    virtual void ResetMemPoolHighWatermarks(Device device) const;
 
-    virtual std::pair<size_t, size_t> GetMemPoolPeakMB() const;
+    virtual std::pair<size_t, size_t> GetMemPoolPeakMB(Device device) const;
 };
 
 //
@@ -170,7 +170,7 @@ private:
 // INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL().
 //
 // Example:
-//   INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL(DeviceType::kCUDA, CudaGuardImpl)
+//   INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL(Device::DeviceType::kCUDA, CudaGuardImpl)
 //
 class DeviceGuardImplRegistry {
 public:
@@ -188,8 +188,6 @@ private:
     std::unordered_map<Device::DeviceType, std::unique_ptr<DeviceGuardImpl>> impls_;
 };
 
-DeviceGuardImpl *GetDeviceGuardImpl(Device::DeviceType type);
-
 } // namespace infini_train::core
 
 //
@@ -200,7 +198,7 @@ DeviceGuardImpl *GetDeviceGuardImpl(Device::DeviceType type);
 // at static initialization time.
 //
 // Example usage:
-//   INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL(DeviceType::kCUDA, CudaGuardImpl)
+//   INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL(Device::DeviceType::kCUDA, CudaGuardImpl)
 //
 #define INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL(device_type, class_impl)                                               \
     static const bool __infini_train_device_guard_registered##__COUNTER__ = []() {                                     \

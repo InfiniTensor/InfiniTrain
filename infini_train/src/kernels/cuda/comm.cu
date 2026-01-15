@@ -71,7 +71,8 @@ std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tenso
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_COMM_KERNEL(kernel_name)                                                                         \
-    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, Comm##kernel_name, infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, Comm##kernel_name,                                        \
+                    infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_COMM_KERNEL(Broadcast)
 REGISTER_CUDA_COMM_KERNEL(Scatter)
