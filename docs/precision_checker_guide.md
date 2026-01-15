@@ -23,7 +23,7 @@ struct PrecisionCheckConfig {
     std::string output_path = "";     // 空=控制台(仅rank0), 非空=文件(所有rank)
     bool output_md5 = false;          // 输出 MD5 还是 tensor 值
     std::string format = "simple";    // "simple" 或 "table"
-    std::string baseline_path = "";   // 基准文件路径（用于对比）
+    std::string baseline_path = "";   // 基准文件路径（用于对比），指定后默认开启 format=table
 };
 ```
 
