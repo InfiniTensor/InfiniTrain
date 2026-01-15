@@ -23,7 +23,7 @@ namespace infini_train::nn {
 
 Module::Module() : Module(kUndefinedType) {}
 
-Module::Module(const std::string &type) : type_(type), device_(DeviceManager::Instance()->GetDefaultDevice()) {}
+Module::Module(const std::string &type) : type_(type), device_(Device()) {}
 
 const std::string &Module::type() const { return type_; }
 
@@ -223,8 +223,7 @@ std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::s
     return output_tensors;
 }
 
-void Module::To(const Device *device) {
-    CHECK_NOTNULL(device);
+void Module::To(Device device) {
     if (device == device_) {
         return;
     }

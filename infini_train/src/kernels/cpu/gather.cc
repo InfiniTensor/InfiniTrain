@@ -197,7 +197,7 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_GATHER_KERNEL(kernel_name)                                                                        \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_GATHER_KERNEL(IndexGatherForward)
 REGISTER_CPU_GATHER_KERNEL(IndexGatherBackward)

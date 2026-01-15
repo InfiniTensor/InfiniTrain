@@ -145,7 +145,7 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_STACK_KERNEL(kernel_name)                                                                        \
-    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_STACK_KERNEL(StackForward)
 REGISTER_CUDA_STACK_KERNEL(StackBackward)

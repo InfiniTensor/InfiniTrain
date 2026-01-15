@@ -165,7 +165,7 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_SPLIT_KERNEL(kernel_name)                                                                        \
-    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_SPLIT_KERNEL(SplitForward)
 REGISTER_CUDA_SPLIT_KERNEL(SplitBackward)

@@ -32,7 +32,7 @@ void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_FILL_KERNEL(kernel_name)                                                                         \
-    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_FILL_KERNEL(Fill)
 

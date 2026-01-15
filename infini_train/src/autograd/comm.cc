@@ -38,7 +38,7 @@ Gather::Gather(const Device *target_device, int64_t dim, const infini_train::nn:
 
 std::vector<std::shared_ptr<Tensor>> Gather::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     for (const auto &tensor : input_tensors) {
-        CHECK_NE(static_cast<int>(tensor->GetDevice()->Type()), static_cast<int>(DeviceType::kCPU))
+        CHECK_NE(static_cast<int>(tensor->GetDevice()->Type()), static_cast<int>(Device::DeviceType::kCPU))
             << "Gather function not implemented for CPU tensors";
     }
     if (dim_ == 0 && input_tensors[0]->Dims().size() == 0) {

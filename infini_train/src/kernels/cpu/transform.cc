@@ -219,7 +219,7 @@ std::shared_ptr<Tensor> RepeatInterleaveBackward(const std::shared_ptr<Tensor> &
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_TRANSFORM_KERNEL(kernel_name)                                                                     \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_TRANSFORM_KERNEL(TrilForward)
 REGISTER_CPU_TRANSFORM_KERNEL(TrilBackward)

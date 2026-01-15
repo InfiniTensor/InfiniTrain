@@ -10,9 +10,7 @@
 #include "infini_train/include/nn/parallel/global.h"
 
 namespace infini_train {
-namespace {
-constexpr size_t kBytesPerMB = 1024ULL * 1024ULL;
-} // namespace
+Device::Device() : type_(DeviceType::kCPU), index_(0) {}
 
 Device::Device(DeviceType type, int8_t index) : type_(type), index_(index) {
     if (type_ == DeviceType::kCPU && index_ != 0) {
@@ -43,5 +41,9 @@ std::ostream &operator<<(std::ostream &os, const Device &device) {
     os << device.ToString();
     return os;
 }
+
+bool operator==(const Device &a, const Device &b) { return a.type_ == b.type_ && a.index_ == b.index_; }
+
+bool operator!=(const Device &a, const Device &b) { return !(a == b); }
 
 } // namespace infini_train

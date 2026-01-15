@@ -48,9 +48,8 @@ int main(int argc, char *argv[]) {
     DataLoader test_dataloader(test_dataset, FLAGS_bs);
 
     auto network = MNIST();
-    const Device *device = FLAGS_device == kDeviceCPU ? DeviceManager::Instance()->GetDevice(DeviceType::kCPU, 0)
-                                                      : DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, 0);
-    const Device *cpu_device = DeviceManager::Instance()->GetDefaultDevice();
+    Device device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
+    Device cpu_device = Device();
     network.To(device);
 
     auto loss_fn = nn::CrossEntropyLoss();

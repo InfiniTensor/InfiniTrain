@@ -27,12 +27,12 @@ void CopyGradToBucket(const std::shared_ptr<Tensor> &grad, const std::shared_ptr
     const void *src = grad->DataPtr();
 
     const auto dev_type = grad->GetDevice()->Type();
-    if (dev_type == DeviceType::kCPU) {
+    if (dev_type == Device::DeviceType::kCPU) {
         std::memcpy(dst, src, bytes);
         return;
     }
 #ifdef USE_CUDA
-    if (dev_type == DeviceType::kCUDA) {
+    if (dev_type == Device::DeviceType::kCUDA) {
         auto *cuda_dev = dynamic_cast<const CudaDevice *>(flat->GetDevice());
         CHECK(cuda_dev);
         cuda_dev->SetDevice();
@@ -53,12 +53,12 @@ void CopyBucketToGrad(const std::shared_ptr<Tensor> &flat, const std::shared_ptr
     void *dst = grad->DataPtr();
 
     const auto dev_type = grad->GetDevice()->Type();
-    if (dev_type == DeviceType::kCPU) {
+    if (dev_type == Device::DeviceType::kCPU) {
         std::memcpy(dst, src, bytes);
         return;
     }
 #ifdef USE_CUDA
-    if (dev_type == DeviceType::kCUDA) {
+    if (dev_type == Device::DeviceType::kCUDA) {
         auto *cuda_dev = dynamic_cast<const CudaDevice *>(flat->GetDevice());
         CHECK(cuda_dev);
         cuda_dev->SetDevice();

@@ -38,8 +38,8 @@ Profiler &Profiler::Instance() {
     return profiler;
 }
 
-int GetRank(DeviceType device) {
-    if (device == DeviceType::kCPU) {
+int GetRank(Device::DeviceType device) {
+    if (device == Device::DeviceType::kCPU) {
         return 0;
     }
 
@@ -53,25 +53,24 @@ int GetRank(DeviceType device) {
 
 #ifdef USE_CUDA
 cudaStream_t GetCudaStream() {
-    int device_id = GetRank(DeviceType::kCUDA);
+    int device_id = GetRank(Device::DeviceType::kCUDA);
     // TODO(zbl): support multi-stream on single device
-    return dynamic_cast<const CudaDevice *>(
-               DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, static_cast<int8_t>(device_id)))
+    return dynamic_cast<const CudaDevice *>(Device(Device::DeviceType::kCUDA, static_cast<int8_t>(device_id)))
         ->Stream();
 }
 #endif
 
-void Profiler::StartRecord(const std::string &name, DeviceType device) {
+void Profiler::StartRecord(const std::string &name, Device::DeviceType device) {
     if (g_profiling_depth++ > 0) {
         return;
     }
     cpu_timing_map_[name] = std::chrono::high_resolution_clock::now();
 
     switch (device) {
-    case DeviceType::kCPU:
+    case Device::DeviceType::kCPU:
         break;
 #ifdef USE_CUDA
-    case DeviceType::kCUDA: {
+    case Device::DeviceType::kCUDA: {
         auto it = cuda_timing_map_.find(name);
         if (it != cuda_timing_map_.end()) {
             // Make sure there are no conflicts
@@ -100,7 +99,7 @@ void Profiler::StartRecord(const std::string &name, DeviceType device) {
     }
 }
 
-void Profiler::EndRecord(const std::string &name, DeviceType device) {
+void Profiler::EndRecord(const std::string &name, Device::DeviceType device) {
     if (--g_profiling_depth > 0) {
         return;
     }
@@ -110,10 +109,10 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
     int rank = GetRank(device);
 
     switch (device) {
-    case DeviceType::kCPU:
+    case Device::DeviceType::kCPU:
         break;
 #ifdef USE_CUDA
-    case DeviceType::kCUDA: {
+    case Device::DeviceType::kCUDA: {
         auto it = cuda_timing_map_.find(name);
         if (it != cuda_timing_map_.end()) {
             auto event_pair = it->second;

@@ -95,7 +95,7 @@ void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
 
     // select the device
-    const Device *device;
+    Device device;
 
     int ddp_world_size = global::GetDataParallelSize();
     int tp_world_size = global::GetTensorParallelSize();
@@ -119,7 +119,7 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *pp_pg = nullptr;
 
     if (rank.IsParallel()) {
-        device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, rank.thread_rank());
+        device = Device(Device::DeviceType::kCUDA, rank.thread_rank());
 
         if (ddp_world_size > 1) {
             ddp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
@@ -143,8 +143,7 @@ void Train(const nn::parallel::Rank &rank) {
             nn::parallel::pp_rank = pp_rank;
         }
     } else {
-        device = FLAGS_device == kDeviceCPU ? DeviceManager::Instance()->GetDefaultDevice()
-                                            : DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, 0);
+        device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
     }
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
@@ -191,7 +190,7 @@ void Train(const nn::parallel::Rank &rank) {
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
         model = std::make_shared<nn::parallel::PipelineParallel>(
-            model, pp_world_size, num_micro_batches, shapes, pp_rank, rank.thread_rank(),
+            model, pp_world_size, num_micro_batches, shapes, pp_rank, device,
             std::dynamic_pointer_cast<LLaMA3>(model)->GetChunkSize());
         if (ddp_world_size > 1) {
             auto ddp_config
@@ -300,7 +299,7 @@ void Train(const nn::parallel::Rank &rank) {
 
             for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
                 // enable autocast for the current step
-                infini_train::AutocastGuard autocast_guard(device->Type(), dtype);
+                infini_train::AutocastGuard autocast_guard(device.type(), dtype);
 
                 // (bs, seq_len), (bs, seq_len)
                 auto [x, y] = *train_iter;
@@ -323,7 +322,7 @@ void Train(const nn::parallel::Rank &rank) {
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
 
-                auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
+                auto loss_cpu = loss->To(Device());
                 lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
                 loss->Backward();
@@ -345,8 +344,7 @@ void Train(const nn::parallel::Rank &rank) {
         if (ddp_world_size > 1) {
             auto lossf_tensor = std::make_shared<Tensor>(&lossf, std::vector<int64_t>{}, DataType::kFLOAT32, device);
             function::AllReduce(lossf_tensor, function::ReduceOpType::kAvg, ddp_pg);
-            lossf = static_cast<const float *>(
-                lossf_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
+            lossf = static_cast<const float *>(lossf_tensor->To(Device()).DataPtr())[0];
         }
 
         const auto iter_end = std::chrono::high_resolution_clock::now();

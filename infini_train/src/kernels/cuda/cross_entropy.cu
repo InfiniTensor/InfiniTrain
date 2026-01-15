@@ -95,9 +95,8 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
                 <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(input_ptr, target_ptr, batched_loss_ptr,
                                                                               bs, num_classes);
 
-            auto loss_cpu = batched_output->To(DeviceManager::Instance()->GetDefaultDevice());
-            auto loss = std::make_shared<Tensor>(std::vector<int64_t>{}, input->Dtype(),
-                                                 DeviceManager::Instance()->GetDefaultDevice());
+            auto loss_cpu = batched_output->To(Device());
+            auto loss = std::make_shared<Tensor>(std::vector<int64_t>{}, input->Dtype(), Device());
             auto loss_cpu_typed_ptr = static_cast<const Tinput *>(loss_cpu.DataPtr());
             static_cast<Tinput *>(loss->DataPtr())[0]
                 = std::accumulate(loss_cpu_typed_ptr, loss_cpu_typed_ptr + bs, 0.0f,
@@ -207,7 +206,7 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_CROSS_ENTROPY_KERNEL(kernel_name)                                                                \
-    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_CROSS_ENTROPY_KERNEL(CrossEntropyForward)
 REGISTER_CUDA_CROSS_ENTROPY_KERNEL(CrossEntropyBackward)

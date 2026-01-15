@@ -91,18 +91,18 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
 };
 
 // Default autocast data types for each device type
-inline constexpr std::array<DataType, static_cast<size_t>(DeviceType::kCount)> kDeviceDefaultDtype = {
+inline constexpr std::array<DataType, static_cast<size_t>(Device::DeviceType::kCount)> kDeviceDefaultDtype = {
     DataType::kBFLOAT16, // CPU
     DataType::kFLOAT16,  // CUDA.
 };
 
 // Thread-local context to track autocast state
 struct AutocastContext {
-    bool enabled = false;                          // Whether autocast is active in the current thread
-    DeviceType device_type = DeviceType::kCPU;     // Target device type (CPU/GPU)
-    DataType autocast_dtype = DataType::kBFLOAT16; // The data type used for autocasting
+    bool enabled = false;                                      // Whether autocast is active in the current thread
+    Device::DeviceType device_type = Device::DeviceType::kCPU; // Target device type (CPU/GPU)
+    DataType autocast_dtype = DataType::kBFLOAT16;             // The data type used for autocasting
 
-    template <typename... ArgsT> void Autocast(std::pair<DeviceType, std::string> key, ArgsT &...args) {
+    template <typename... ArgsT> void Autocast(std::pair<Device::DeviceType, std::string> key, ArgsT &...args) {
         if (!enabled) {
             return;
         }
@@ -172,14 +172,14 @@ inline thread_local AutocastContext tls_autocast_context;
 // RAII guard to enable/disable autocast in a scope
 class AutocastGuard {
 public:
-    AutocastGuard(DeviceType device_type, DataType autocast_dtype) {
+    AutocastGuard(Device::DeviceType device_type, DataType autocast_dtype) {
         saved_context_ = tls_autocast_context;
         tls_autocast_context.enabled = true;
         tls_autocast_context.device_type = device_type;
         tls_autocast_context.autocast_dtype = autocast_dtype;
     }
 
-    AutocastGuard(DeviceType device_type)
+    AutocastGuard(Device::DeviceType device_type)
         : AutocastGuard(device_type, kDeviceDefaultDtype[static_cast<size_t>(device_type)]) {}
 
     // Disable autocast (restore previous state)

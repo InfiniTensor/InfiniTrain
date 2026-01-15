@@ -128,7 +128,7 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_CONCAT_KERNEL(kernel_name)                                                                        \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_CONCAT_KERNEL(ConcatForward)
 REGISTER_CPU_CONCAT_KERNEL(ConcatBackward)

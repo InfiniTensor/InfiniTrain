@@ -22,7 +22,7 @@ std::shared_ptr<Tensor> NoOpBackward(const std::vector<int64_t> &dims, const std
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_NO_OP_KERNEL(kernel_name)                                                                        \
-    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_NO_OP_KERNEL(NoOpForward)
 REGISTER_CUDA_NO_OP_KERNEL(NoOpBackward)

@@ -74,7 +74,7 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_SPLIT_KERNEL(kernel_name)                                                                         \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_SPLIT_KERNEL(SplitForward)
 REGISTER_CPU_SPLIT_KERNEL(SplitBackward)
