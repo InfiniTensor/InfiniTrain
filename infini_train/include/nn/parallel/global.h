@@ -8,6 +8,8 @@
 
 namespace infini_train::nn::parallel::global {
 
+extern thread_local int thread_global_rank;
+
 enum Axis : uint8_t { DP = 0, TP = 1, PP = 2, AXIS_COUNT = 3 };
 
 struct Layout {

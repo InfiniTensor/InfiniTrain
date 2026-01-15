@@ -40,13 +40,15 @@ struct PrecisionCheckConfig {
         if (kv_map.count("output_md5")) {
             config.output_md5 = (kv_map["output_md5"] == "true" || kv_map["output_md5"] == "1");
         }
-        if (kv_map.count("format")) {
-            config.format = kv_map["format"];
-        }
         if (kv_map.count("baseline")) {
             config.baseline_path = kv_map["baseline"];
         }
-
+        if (kv_map.count("format")) {
+            config.format = kv_map["format"];
+        } else if (!config.baseline_path.empty()) {
+            // Default to table format when baseline is specified
+            config.format = "table";
+        }
         return config;
     }
 };

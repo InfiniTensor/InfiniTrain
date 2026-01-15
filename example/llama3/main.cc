@@ -107,6 +107,9 @@ void Train(const nn::parallel::Rank &rank) {
     int tp_rank = 0;
     int pp_rank = 0;
 
+    // Set thread-local global rank
+    nn::parallel::global::thread_global_rank = rank.GlobalRank();
+
     const ProcessGroup *ddp_pg = nullptr;
     const ProcessGroup *tp_pg = nullptr;
     const ProcessGroup *pp_pg = nullptr;

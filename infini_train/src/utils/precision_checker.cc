@@ -11,11 +11,14 @@
 #include <limits>
 #include <mutex>
 #include <sstream>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unordered_map>
 
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/precision_check_context.h"
 
@@ -161,18 +164,40 @@ std::unordered_map<std::string, std::string> &GetBaseline() {
             const auto &config = nn::parallel::global::GlobalEnv::Instance().GetPrecisionCheckConfig();
             if (!config.baseline_path.empty()) {
                 std::ifstream file(config.baseline_path);
-                std::string line;
-                while (std::getline(file, line)) {
-                    // Format: key|md5
-                    auto pos = line.rfind('|');
-                    if (pos != std::string::npos) {
-                        std::string key = line.substr(0, pos);
-                        std::string md5 = line.substr(pos + 1);
-                        baseline[key] = md5;
+                if (!file.is_open()) {
+                    std::cerr << "[PrecisionCheck] Failed to open baseline file: " << config.baseline_path << std::endl;
+                } else {
+                    std::string line;
+                    while (std::getline(file, line)) {
+                        // Try format 1: key|md5
+                        auto pipe_pos = line.rfind('|');
+                        if (pipe_pos != std::string::npos) {
+                            std::string key = line.substr(0, pipe_pos);
+                            std::string md5 = line.substr(pipe_pos + 1);
+                            baseline[key] = md5;
+                        } else {
+                            // Try format 2: simple log format with "md5="
+                            auto md5_pos = line.find("md5=");
+                            if (md5_pos != std::string::npos) {
+                                // Extract md5 value
+                                std::string md5 = line.substr(md5_pos + 4);
+
+                                // Extract key: find text between "][PrecisionCheck] " and ": md5="
+                                auto check_pos = line.find("][PrecisionCheck] ");
+                                if (check_pos != std::string::npos) {
+                                    size_t key_start = check_pos + 18; // length of "][PrecisionCheck] "
+                                    size_t key_end = line.find(": md5=", key_start);
+                                    if (key_end != std::string::npos) {
+                                        std::string key = line.substr(key_start, key_end - key_start);
+                                        baseline[key] = md5;
+                                    }
+                                }
+                            }
+                        }
                     }
+                    std::cout << "[PrecisionCheck] Loaded " << baseline.size() << " baseline entries from "
+                              << config.baseline_path << std::endl;
                 }
-                std::cout << "[PrecisionCheck] Loaded " << baseline.size() << " baseline entries from "
-                          << config.baseline_path << std::endl;
             }
             loaded = true;
         }
@@ -182,15 +207,15 @@ std::unordered_map<std::string, std::string> &GetBaseline() {
 
 // Table header printed flag
 bool &TableHeaderPrinted() {
-    static bool printed = false;
+    thread_local bool printed = false;
     return printed;
 }
 
 std::ostream &GetLogStream() {
-    static std::ofstream log_file;
-    static std::mutex init_mutex;
-    static bool initialized = false;
-    static bool use_console = false;
+    thread_local std::ofstream log_file;
+    thread_local std::mutex init_mutex;
+    thread_local bool initialized = false;
+    thread_local bool use_console = false;
 
     if (!initialized) {
         std::lock_guard<std::mutex> lock(init_mutex);
@@ -200,11 +225,19 @@ std::ostream &GetLogStream() {
             if (config.output_path.empty()) {
                 use_console = true;
             } else {
-                int rank = nn::parallel::global::GlobalEnv::Instance().global_proc_rank();
-                std::string filename = config.output_path + "/precision_check_rank_" + std::to_string(rank) + ".log";
+                // Create output directory if it doesn't exist
+                mkdir(config.output_path.c_str(), 0755);
+
+                int global_rank = nn::parallel::global::thread_global_rank;
+                std::string filename = config.output_path + "/precision_check_rank_" + std::to_string(global_rank) + ".log";
                 log_file.open(filename, std::ios::out | std::ios::trunc);
-                use_console = false;
-                std::cout << "[Rank " << rank << "] Precision check output: " << filename << std::endl;
+                if (!log_file.is_open()) {
+                    std::cerr << "[Rank " << global_rank << "] Failed to open precision check log file: " << filename << std::endl;
+                    use_console = true;
+                } else {
+                    use_console = false;
+                    std::cout << "[Rank " << global_rank << "] Precision check output: " << filename << std::endl;
+                }
             }
             initialized = true;
         }
@@ -273,23 +306,22 @@ void PrintTableHeader(std::ostream &os) {
     TableHeaderPrinted() = true;
 
     os << "+" << std::string(50, '-') << "+" << std::string(7, '-') << "+" << std::string(18, '-') << "+"
-       << std::string(15, '-') << "+" << std::string(10, '-') << "+" << std::string(10, '-') << "+\n";
+       << std::string(15, '-') << "+" << std::string(10, '-') << "+\n";
     os << "| " << std::left << std::setw(49) << "key"
        << "| " << std::setw(6) << "level"
        << "| " << std::setw(17) << "shape"
        << "| " << std::setw(14) << "dtype"
        << "| " << std::setw(9) << "same_hash"
-       << "| " << std::setw(9) << "diff_order"
        << "|\n";
     os << "+" << std::string(50, '-') << "+" << std::string(7, '-') << "+" << std::string(18, '-') << "+"
-       << std::string(15, '-') << "+" << std::string(10, '-') << "+" << std::string(10, '-') << "+\n";
+       << std::string(15, '-') << "+" << std::string(10, '-') << "+\n";
 }
 
 void PrintTableRow(std::ostream &os, const std::string &key, int level, const std::string &shape,
-                   const std::string &dtype, const std::string &same_hash, const std::string &diff_order) {
+                   const std::string &dtype, const std::string &same_hash) {
     os << "| " << std::left << std::setw(49) << key.substr(0, 49) << "| " << std::setw(6) << level << "| "
        << std::setw(17) << shape.substr(0, 17) << "| " << std::setw(14) << dtype << "| " << std::setw(9) << same_hash
-       << "| " << std::setw(9) << diff_order << "|\n";
+       << "|\n";
 }
 
 // Calculate diff order between two tensors (returns string like "1e-3" or "0")
@@ -321,7 +353,7 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
     }
 
     const auto &global_config = nn::parallel::global::GlobalEnv::Instance().GetPrecisionCheckConfig();
-    int rank = nn::parallel::global::GlobalEnv::Instance().global_proc_rank();
+    int rank = nn::parallel::global::thread_global_rank;
     int level = global_config.level;
     auto &baseline = GetBaseline();
 
@@ -360,26 +392,34 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
         // Check baseline
         bool has_baseline = !baseline.empty();
         bool same_hash = true;
-        std::string diff_order = "--";
         if (has_baseline) {
             auto it = baseline.find(full_key);
+            if (it == baseline.end() && !context_key.empty()) {
+                // Try without context: "stage name tensor[i]"
+                std::string key_without_context = stage + " " + name + " tensor[" + std::to_string(i) + "]";
+                it = baseline.find(key_without_context);
+            }
             if (it != baseline.end()) {
                 same_hash = (it->second == md5);
-                diff_order = same_hash ? "0" : "N/A";
             }
         }
 
         auto &log_stream = GetLogStream();
 
         if (global_config.format == "table") {
-            static bool header_printed = false;
+            thread_local bool header_printed = false;
             if (!header_printed) {
                 PrintTableHeader(log_stream);
                 header_printed = true;
             }
             std::string same_hash_str = has_baseline ? (same_hash ? "True" : "False") : "--";
             PrintTableRow(log_stream, full_key, level, FormatShape(cpu_tensor->Dims()),
-                          DataTypeToString(cpu_tensor->Dtype()), same_hash_str, diff_order);
+                          DataTypeToString(cpu_tensor->Dtype()), same_hash_str);
+
+            // Save to baseline file if output_path is set and output_md5 is true
+            if (!global_config.output_path.empty() && global_config.output_md5) {
+                log_stream << full_key << "|" << md5 << std::endl;
+            }
         } else {
             // Simple format
             const float *float_data = static_cast<const float *>(data);
@@ -398,7 +438,10 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
 
             bool has_error = (config.check_nan && has_nan) || (config.check_inf && has_inf);
 
-            if (has_error || config.print_stats) {
+            // When output_path is set, always write to file; otherwise only write on error or if print_stats is enabled
+            bool should_output = !global_config.output_path.empty() || has_error || config.print_stats;
+
+            if (should_output) {
                 std::string log_level = has_error ? "E" : "I";
 
                 log_stream << log_level << GetTimestamp() << " [Rank " << rank << "][PrecisionCheck] " << stage << " "
@@ -439,11 +482,6 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
                 std::cerr << "Precision check failed, aborting!" << std::endl;
                 std::abort();
             }
-        }
-
-        // Save to baseline file if output_path is set and output_md5 is true
-        if (!global_config.output_path.empty() && global_config.output_md5) {
-            log_stream << full_key << "|" << md5 << std::endl;
         }
     }
 }

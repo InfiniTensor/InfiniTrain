@@ -23,6 +23,8 @@ std::string GetEnvAsStr(const std::string &name, const std::string &default_valu
 
 namespace infini_train::nn::parallel::global {
 
+thread_local int thread_global_rank = 0;
+
 void Layout::InitStrides() {
     // Calculate strides
     int stride = 1;
