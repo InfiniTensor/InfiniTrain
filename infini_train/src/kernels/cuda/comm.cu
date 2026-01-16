@@ -12,7 +12,7 @@
 namespace infini_train::kernels::cuda {
 
 std::vector<std::shared_ptr<Tensor>> Broadcast(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                                               const std::vector<const Device *> &devices) {
+                                               const std::vector<Device> &devices) {
     std::vector<std::shared_ptr<Tensor>> outputs;
     for (int i = 0; i < devices.size(); ++i) {
         for (const auto &tensor : input_tensors) {
@@ -23,7 +23,7 @@ std::vector<std::shared_ptr<Tensor>> Broadcast(const std::vector<std::shared_ptr
 }
 
 std::vector<std::shared_ptr<Tensor>> ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads,
-                                                        const Device *destination) {
+                                                        Device destination) {
     std::vector<std::shared_ptr<Tensor>> outputs;
     auto kernel = Dispatcher::Instance().GetKernel({destination->Type(), "AccumulateGrad"});
     std::vector<std::vector<std::shared_ptr<Tensor>>> to_destination_grads;
@@ -45,7 +45,7 @@ std::vector<std::shared_ptr<Tensor>> ReduceAddCoalesced(const std::vector<std::v
     return outputs;
 }
 
-std::vector<std::shared_ptr<Tensor>> Scatter(const std::shared_ptr<Tensor> &tensor, std::vector<const Device *> devices,
+std::vector<std::shared_ptr<Tensor>> Scatter(const std::shared_ptr<Tensor> &tensor, std::vector<Device> devices,
                                              int64_t dim) {
     std::vector<std::shared_ptr<Tensor>> outputs;
     // FIXME(dcj): do split without autograd
@@ -56,8 +56,7 @@ std::vector<std::shared_ptr<Tensor>> Scatter(const std::shared_ptr<Tensor> &tens
     return outputs;
 }
 
-std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors, const Device *destination,
-                               int64_t dim) {
+std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors, Device destination, int64_t dim) {
     std::vector<std::shared_ptr<Tensor>> outputs;
     for (const auto &tensor : tensors) { outputs.push_back(std::make_shared<Tensor>(tensor->To(destination))); }
     auto kernel = Dispatcher::Instance().GetKernel({tensors[0]->GetDevice()->Type(), "StackForward"});

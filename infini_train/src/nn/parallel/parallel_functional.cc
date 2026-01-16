@@ -41,7 +41,7 @@ std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output, const
 }
 
 std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                                                          const std::vector<const Device *> &devices, int dim) {
+                                                          const std::vector<Device> &devices, int dim) {
     std::vector<std::vector<std::shared_ptr<Tensor>>> output_tensors;
     for (const auto &tensor : input_tensors) {
         output_tensors.emplace_back(std::make_shared<autograd::Scatter>(devices, dim)->Apply({tensor}));
@@ -56,15 +56,14 @@ std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std:
 }
 
 std::vector<std::shared_ptr<Tensor>> Gather(const std::vector<std::vector<std::shared_ptr<Tensor>>> &tensors,
-                                            const Device *target_device, int dim) {
+                                            Device target_device, int dim) {
     std::vector<std::shared_ptr<Tensor>> gather_tensors;
     for (const auto &tensor : tensors) { gather_tensors.push_back(tensor[0]); }
     return std::make_shared<autograd::Gather>(target_device, dim)->Apply(gather_tensors);
 }
 
 std::vector<std::vector<std::shared_ptr<Tensor>>>
-BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors,
-                          const std::vector<const Device *> &devices) {
+BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors, const std::vector<Device> &devices) {
     if (tensors.empty()) {
         return {};
     }
@@ -80,7 +79,7 @@ BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors,
 }
 
 std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &network,
-                                               const std::vector<const Device *> &devices) {
+                                               const std::vector<Device> &devices) {
     const int num_replicas = devices.size();
 
     // FIXME(dcj): Parameters function need deduplication

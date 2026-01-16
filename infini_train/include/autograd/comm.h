@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
+#include "infini_train/include/device.h"
 
 namespace infini_train {
 class Tensor;
@@ -19,7 +20,7 @@ class Scatter : public autograd::Function {
 public:
     static constexpr char kType[] = "ScatterFunction";
 
-    explicit Scatter(const std::vector<const Device *> &target_gpus, int64_t dim,
+    explicit Scatter(const std::vector<Device> &target_gpus, int64_t dim,
                      const infini_train::nn::parallel::ProcessGroup *pg = nullptr);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
@@ -31,8 +32,8 @@ public:
 
 private:
     const infini_train::nn::parallel::ProcessGroup *pg_ = nullptr;
-    std::vector<const Device *> target_gpus_;
-    const Device *input_device_ = nullptr;
+    std::vector<Device> target_gpus_;
+    Device input_device_ = Device();
     int64_t dim_ = 0;
 };
 
@@ -40,8 +41,7 @@ class Gather : public autograd::Function {
 public:
     static constexpr char kType[] = "GatherFunction";
 
-    explicit Gather(const Device *target_device, int64_t dim,
-                    const infini_train::nn::parallel::ProcessGroup *pg = nullptr);
+    explicit Gather(Device target_device, int64_t dim, const infini_train::nn::parallel::ProcessGroup *pg = nullptr);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
@@ -52,8 +52,8 @@ public:
 
 private:
     const infini_train::nn::parallel::ProcessGroup *pg_ = nullptr;
-    const Device *target_device_ = nullptr;
-    std::vector<const Device *> input_gpus_;
+    Device target_device_ = Device();
+    std::vector<Device> input_gpus_;
     int64_t dim_ = 0;
     bool unsqueezed_scalar_ = false;
 };
@@ -62,7 +62,7 @@ class Broadcast : public autograd::Function {
 public:
     static constexpr char kType[] = "BroadcastFunction";
 
-    explicit Broadcast(const std::vector<const Device *> &target_gpus,
+    explicit Broadcast(const std::vector<Device> &target_gpus,
                        const infini_train::nn::parallel::ProcessGroup *pg = nullptr);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
@@ -74,16 +74,16 @@ public:
 
 private:
     const infini_train::nn::parallel::ProcessGroup *pg_ = nullptr;
-    std::vector<const Device *> target_gpus_;
+    std::vector<Device> target_gpus_;
     int64_t num_inputs_ = 0;
-    const Device *input_device_ = nullptr;
+    Device input_device_ = Device();
 };
 
 class ReduceAddCoalesced : public autograd::Function {
 public:
     static constexpr char kType[] = "ReduceAddCoalescedFunction";
 
-    explicit ReduceAddCoalesced(const Device *destination, int64_t num_inputs,
+    explicit ReduceAddCoalesced(Device destination, int64_t num_inputs,
                                 const infini_train::nn::parallel::ProcessGroup *pg = nullptr);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
@@ -95,8 +95,8 @@ public:
 
 private:
     const infini_train::nn::parallel::ProcessGroup *pg_ = nullptr;
-    const Device *destination_ = nullptr;
-    std::vector<const Device *> target_gpus_;
+    Device destination_ = Device();
+    std::vector<Device> target_gpus_;
     int64_t num_inputs_ = 0;
 };
 } // namespace infini_train::autograd
