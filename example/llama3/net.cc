@@ -100,7 +100,7 @@ ApplyRotaryEmbedding(const std::shared_ptr<Tensor> &xq, const std::shared_ptr<Te
 }
 
 std::shared_ptr<Tensor> PrecomputeFreqsCis(int64_t dim, int64_t end, float theta = 10000.0f, bool use_scaled = false,
-                                           const infini_train::Device *device = Device()) {
+                                           infini_train::Device device = Device()) {
     DataType dtype = DataType::kFLOAT32;
     CHECK_GE(dim, 2) << "dim must be >= 2 for slicing";
     auto arange = nn::init::Arange(0, dim, dtype, device)->Slice(0, 0, dim, 2);
@@ -126,7 +126,7 @@ std::vector<std::shared_ptr<Tensor>> SwiGLU::Forward(const std::vector<std::shar
     return {x[0] * nn::function::Sigmoid(x[0])};
 }
 
-RMSNorm::RMSNorm(int64_t dim, float eps, const infini_train::Device *device) : CloneableModule(kType), eps_(eps) {
+RMSNorm::RMSNorm(int64_t dim, float eps, infini_train::Device device) : CloneableModule(kType), eps_(eps) {
     parameters_[kParamWeightName]
         = std::make_shared<Tensor>(std::vector<int64_t>{dim}, DataType::kFLOAT32, device)->RequiresGrad();
     nn::init::Ones(parameters_[kParamWeightName]);

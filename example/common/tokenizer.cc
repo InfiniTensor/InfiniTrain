@@ -10,6 +10,9 @@
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
+#include "infini_train/include/nn/functional.h"
+#include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train {
 
@@ -103,7 +106,7 @@ std::string Tokenizer::Decode(uint32_t token_id) const {
 }
 
 void Tokenizer::GenerateText(infini_train::nn::Module &model, uint32_t batch_size, uint32_t sequence_length,
-                             uint32_t text_length, const Device *device) const {
+                             uint32_t text_length, Device device) const {
     std::vector<int64_t> dims;
     dims.assign({batch_size, sequence_length});
     // x_tensor (FLAGS_batch_size, FLAGS_sequence_length) eq:(4, 64)
@@ -121,7 +124,7 @@ void Tokenizer::GenerateText(infini_train::nn::Module &model, uint32_t batch_siz
     uint64_t kRngState = kRngState;
     LOG(INFO) << "start generate text:";
 
-    const auto *cpu_device = Device();
+    auto cpu_device = Device();
     for (int t = prompt_len; t < text_length; ++t) {
         x = std::make_shared<infini_train::Tensor>(x->To(device)); // CPU->calc device
         // TODO(jym): use no_grad forward later

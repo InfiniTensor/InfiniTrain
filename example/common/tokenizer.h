@@ -1,15 +1,13 @@
 #include <cctype>
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/functional.h"
-#include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/tensor.h"
 
 namespace infini_train {
-
+namespace nn {
+class Module;
+}
 class Tokenizer {
 public:
     enum class Version : uint32_t {
@@ -22,7 +20,7 @@ public:
     std::string Decode(uint32_t token_id) const;
 
     void GenerateText(infini_train::nn::Module &model, uint32_t batch_size, uint32_t sequence_length,
-                      uint32_t text_length, const Device *device) const;
+                      uint32_t text_length, Device device) const;
 
     uint32_t GetEndToken() const { return eot_token_; };
 

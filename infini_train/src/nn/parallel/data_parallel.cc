@@ -20,8 +20,7 @@ constexpr char kModuleName[] = "module";
 
 std::vector<std::vector<std::shared_ptr<Tensor>>>
 ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
-              const std::vector<std::vector<std::shared_ptr<Tensor>>> &inputs,
-              const std::vector<const Device *> &devices) {
+              const std::vector<std::vector<std::shared_ptr<Tensor>>> &inputs, const std::vector<Device> &devices) {
     CHECK_EQ(modules.size(), inputs.size()) << std::format(
         "The number of modules {} is not equal to the number of inputs {}", modules.size(), inputs.size());
     CHECK_EQ(modules.size(), devices.size());
@@ -30,7 +29,7 @@ ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
     std::vector<std::optional<std::vector<std::shared_ptr<Tensor>>>> results(modules.size(), std::nullopt);
 
     auto worker = [&](const std::shared_ptr<Module> &module, const std::vector<std::shared_ptr<Tensor>> &inputs,
-                      const Device *device, int idx) {
+                      Device device, int idx) {
         device->SetDevice();
         auto output = (*module)(inputs);
         results[idx] = output;

@@ -15,7 +15,7 @@ std::exception_ptr makeCudaError(cudaError_t err) {
 }
 } // namespace
 
-WorkNccl::WorkNccl(const Device *device, ncclComm_t comm) : device_(device), comm_(comm) {
+WorkNccl::WorkNccl(Device device, ncclComm_t comm) : device_(device), comm_(comm) {
     CUDA_CHECK(cudaEventCreateWithFlags(&ready_event_, cudaEventDisableTiming));
     CUDA_CHECK(cudaEventCreateWithFlags(&done_event_, cudaEventDisableTiming));
 }

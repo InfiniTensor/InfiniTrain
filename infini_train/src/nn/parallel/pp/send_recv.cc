@@ -18,8 +18,7 @@ class ISend : public autograd::Function {
 public:
     static constexpr char kType[] = "ISendFunction";
 
-    explicit ISend(const Device *target_device, int cur_rank, int peer_rank,
-                   const std::vector<std::vector<int64_t>> &shape)
+    explicit ISend(Device target_device, int cur_rank, int peer_rank, const std::vector<std::vector<int64_t>> &shape)
         : autograd::Function(kType), target_device_(target_device), cur_rank_(cur_rank), peer_rank_(peer_rank),
           shapes_(shape) {}
 
@@ -28,8 +27,8 @@ public:
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
 private:
-    const Device *target_device_ = nullptr;
-    const Device *input_device_ = nullptr;
+    Device target_device_ = Device();
+    Device input_device_ = Device();
     int cur_rank_ = -1;
     int peer_rank_ = -1;
     const std::vector<std::vector<int64_t>> &shapes_;
@@ -39,7 +38,7 @@ class IRecv : public autograd::Function {
 public:
     static constexpr char kType[] = "IRecvFunction";
 
-    explicit IRecv(const Device *src_device, int cur_rank, int peer_rank)
+    explicit IRecv(Device src_device, int cur_rank, int peer_rank)
         : autograd::Function(kType), src_device_(src_device), cur_rank_(cur_rank), peer_rank_(peer_rank) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
@@ -50,8 +49,8 @@ public:
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
 private:
-    const Device *src_device_ = nullptr;
-    const Device *cur_device_ = nullptr;
+    Device src_device_ = Device();
+    Device cur_device_ = Device();
     int cur_rank_ = -1;
     int peer_rank_ = -1;
 };
@@ -112,14 +111,14 @@ std::vector<std::shared_ptr<Tensor>> IRecv::Backward(const std::vector<std::shar
 } // namespace functions
 
 std::vector<std::shared_ptr<Tensor>> ISend(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                                           const Device *target_device, int cur_rank, int peer_rank,
+                                           Device target_device, int cur_rank, int peer_rank,
                                            const std::vector<std::vector<int64_t>> &shape) {
     auto func = std::make_shared<functions::ISend>(target_device, cur_rank, peer_rank, shape);
     return func->Apply(input_tensors);
 }
 
-std::vector<std::shared_ptr<Tensor>> IRecv(const std::vector<std::shared_ptr<Tensor>> &outputs,
-                                           const Device *src_device, int cur_rank, int peer_rank) {
+std::vector<std::shared_ptr<Tensor>> IRecv(const std::vector<std::shared_ptr<Tensor>> &outputs, Device src_device,
+                                           int cur_rank, int peer_rank) {
     auto func = std::make_shared<functions::IRecv>(src_device, cur_rank, peer_rank);
     return func->Apply(outputs);
 }

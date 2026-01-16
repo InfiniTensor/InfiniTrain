@@ -10,7 +10,7 @@
 
 namespace infini_train::autograd {
 
-Scatter::Scatter(const std::vector<const Device *> &target_gpus, int64_t dim,
+Scatter::Scatter(const std::vector<Device> &target_gpus, int64_t dim,
                  const infini_train::nn::parallel::ProcessGroup *pg)
     : autograd::Function(kType), target_gpus_(target_gpus), dim_(dim),
       pg_(pg ? pg : infini_train::nn::parallel::ProcessGroupFactory::Instance()->GetDefaultProcessGroup()) {}
@@ -32,7 +32,7 @@ std::vector<std::shared_ptr<Tensor>> Scatter::Backward(const std::vector<std::sh
     return std::make_shared<Gather>(input_device_, dim_)->Apply(grad_outputs);
 }
 
-Gather::Gather(const Device *target_device, int64_t dim, const infini_train::nn::parallel::ProcessGroup *pg)
+Gather::Gather(Device target_device, int64_t dim, const infini_train::nn::parallel::ProcessGroup *pg)
     : autograd::Function(kType), target_device_(target_device), dim_(dim),
       pg_(pg ? pg : infini_train::nn::parallel::ProcessGroupFactory::Instance()->GetDefaultProcessGroup()) {}
 
@@ -62,10 +62,10 @@ void Gather::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
 
 std::vector<std::shared_ptr<Tensor>> Gather::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     // TODO(dcj): do squeeze here if unsqueezed_scalar_ is true
-    return std::make_shared<Scatter>(std::vector<const Device *>{input_gpus_}, dim_)->Apply(grad_outputs);
+    return std::make_shared<Scatter>(std::vector<Device>{input_gpus_}, dim_)->Apply(grad_outputs);
 }
 
-Broadcast::Broadcast(const std::vector<const Device *> &target_gpus, const infini_train::nn::parallel::ProcessGroup *pg)
+Broadcast::Broadcast(const std::vector<Device> &target_gpus, const infini_train::nn::parallel::ProcessGroup *pg)
     : autograd::Function(kType), target_gpus_(target_gpus),
       pg_(pg ? pg : infini_train::nn::parallel::ProcessGroupFactory::Instance()->GetDefaultProcessGroup()) {}
 
@@ -95,7 +95,7 @@ std::vector<std::shared_ptr<Tensor>> Broadcast::Backward(const std::vector<std::
     return std::make_shared<ReduceAddCoalesced>(input_device_, num_inputs_)->Apply(grad_outputs);
 }
 
-ReduceAddCoalesced::ReduceAddCoalesced(const Device *destination, int64_t num_inputs,
+ReduceAddCoalesced::ReduceAddCoalesced(Device destination, int64_t num_inputs,
                                        const infini_train::nn::parallel::ProcessGroup *pg)
     : autograd::Function(kType), destination_(destination), num_inputs_(num_inputs),
       pg_(pg ? pg : infini_train::nn::parallel::ProcessGroupFactory::Instance()->GetDefaultProcessGroup()) {}

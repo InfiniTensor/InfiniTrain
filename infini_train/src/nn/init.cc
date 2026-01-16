@@ -251,7 +251,7 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
         break;                                                                                                         \
     }
 
-std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, const Device *device) {
+std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, Device device) {
     int64_t num_elements = end - start;
     auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{num_elements}, dtype, device);
     device->SetDevice();

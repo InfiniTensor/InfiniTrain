@@ -55,7 +55,7 @@ public:
     static constexpr char kType[] = "RMSNorm";
     static constexpr char kParamWeightName[] = "weight";
 
-    explicit RMSNorm(int64_t dim, float eps = 1e-6f, const infini_train::Device *device = infini_train::Device());
+    explicit RMSNorm(int64_t dim, float eps = 1e-6f, infini_train::Device device = infini_train::Device());
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;

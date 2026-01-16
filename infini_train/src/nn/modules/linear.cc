@@ -10,7 +10,7 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-Linear::Linear(int64_t in_features, int64_t out_features, bool bias, const Device *device)
+Linear::Linear(int64_t in_features, int64_t out_features, bool bias, Device device)
     : CloneableModule(kType), bias_(bias) {
     device_ = device ? device : Device();
 

@@ -34,7 +34,7 @@ int PipelineStage::prev_rank() const { return prev_rank_; }
 int PipelineStage::next_rank() const { return next_rank_; }
 int PipelineStage::num_stages() const { return num_stages_; }
 
-const Device *PipelineStage::device() const { return device_; }
+Device PipelineStage::device() const { return device_; }
 const std::vector<std::vector<int64_t>> &PipelineStage::recv_shape() const { return recv_shape_; }
 const std::vector<std::shared_ptr<Module>> &PipelineStage::chunks() { return chunks_; }
 std::vector<std::shared_ptr<Module>> *PipelineStage::mutable_chunks() { return &chunks_; }

@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 
 namespace infini_train {
@@ -17,7 +18,7 @@ public:
 
     static constexpr char kParamWeightName[] = "weight";
 
-    Embedding(int num_embeddings, int embedding_dim, const Device *device = nullptr);
+    Embedding(int num_embeddings, int embedding_dim, Device device = Device());
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
 private:
