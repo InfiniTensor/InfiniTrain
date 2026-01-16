@@ -3,6 +3,8 @@
 #include <memory>
 #include <vector>
 
+#include "infini_train/include/device.h"
+
 namespace infini_train {
 class Tensor;
 class Device;
@@ -30,7 +32,7 @@ public:
     int next_rank() const;
     int num_stages() const;
 
-    const Device *device() const;
+    Device device() const;
     const std::vector<std::vector<int64_t>> &recv_shape() const;
     const std::vector<std::shared_ptr<Module>> &chunks();
     std::vector<std::shared_ptr<Module>> *mutable_chunks();
@@ -40,7 +42,7 @@ private:
     int num_stages_ = -1;
     int prev_rank_ = -1;
     int next_rank_ = -1;
-    const Device *device_ = nullptr;
+    Device device_ = Device();
     std::vector<std::shared_ptr<Module>> chunks_;
     std::vector<std::vector<int64_t>> recv_shape_;
 };

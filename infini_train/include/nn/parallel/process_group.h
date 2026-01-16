@@ -12,11 +12,11 @@
 #include <nccl.h>
 #endif
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 
 namespace infini_train {
 class Tensor;
-class Device;
 namespace nn {
 class Module;
 namespace parallel {
@@ -62,21 +62,20 @@ public:
     BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const = 0;
 
     virtual std::vector<std::shared_ptr<Tensor>>
-    ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads, const Device *destination) const
-        = 0;
+    ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads, Device destination) const = 0;
 
     virtual std::vector<std::shared_ptr<Tensor>> Scatter(const std::shared_ptr<Tensor> &tensor,
-                                                         std::vector<const Device *> devices, int64_t dim) const
+                                                         std::vector<Device> devices, int64_t dim) const
         = 0;
 
-    virtual std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors,
-                                           const Device *destination, int64_t dim) const
+    virtual std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors, Device destination,
+                                           int64_t dim) const
         = 0;
 
 protected:
     ProcessGroup(int world_size, const std::string &name);
 
-    std::vector<const Device *> devices_;
+    std::vector<Device> devices_;
 
     std::unordered_map<int, int> global_group_rank_map_; // global_rank : group_rank
 
@@ -116,12 +115,12 @@ public:
 
     std::vector<std::shared_ptr<Tensor>>
     ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads,
-                       const Device *destination) const override;
+                       Device destination) const override;
 
-    std::vector<std::shared_ptr<Tensor>> Scatter(const std::shared_ptr<Tensor> &tensor,
-                                                 std::vector<const Device *> devices, int64_t dim) const override;
+    std::vector<std::shared_ptr<Tensor>> Scatter(const std::shared_ptr<Tensor> &tensor, std::vector<Device> devices,
+                                                 int64_t dim) const override;
 
-    std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors, const Device *destination,
+    std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors, Device destination,
                                    int64_t dim) const override;
 
 private:
@@ -135,8 +134,8 @@ private:
     std::vector<ncclComm_t> comms_;
     std::vector<cudaStream_t> comm_streams_;
 
-    std::unordered_map<const Device *, ncclComm_t> device_comm_map_;
-    std::unordered_map<const Device *, cudaStream_t> device_stream_map_;
+    std::unordered_map<Device, ncclComm_t> device_comm_map_;
+    std::unordered_map<Device, cudaStream_t> device_stream_map_;
 };
 #endif
 

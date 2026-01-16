@@ -380,7 +380,7 @@ ProcessGroupNCCL::BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_te
     std::vector<std::shared_ptr<Tensor>> outputs;
     std::vector<cudaStream_t> streams;
     std::vector<ncclComm_t> comms;
-    std::vector<const Device *> devices;
+    std::vector<Device> devices;
 
     CHECK_EQ(world_size_, comms_.size());
 
@@ -423,12 +423,12 @@ ProcessGroupNCCL::BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_te
 
 std::vector<std::shared_ptr<Tensor>>
 ProcessGroupNCCL::ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads,
-                                     const Device *destination) const {
+                                     Device destination) const {
     // grads: [devices, tensors]
     std::vector<std::shared_ptr<Tensor>> outputs;
     std::vector<cudaStream_t> streams;
     std::vector<ncclComm_t> comms;
-    std::vector<const Device *> devices;
+    std::vector<Device> devices;
 
     for (size_t i = 0; i < grads[0].size(); ++i) {
         outputs.push_back(std::make_shared<Tensor>(grads[0][i]->Dims(), grads[0][i]->Dtype(), destination));
@@ -468,7 +468,7 @@ ProcessGroupNCCL::ReduceAddCoalesced(const std::vector<std::vector<std::shared_p
 }
 
 std::vector<std::shared_ptr<Tensor>> ProcessGroupNCCL::Scatter(const std::shared_ptr<Tensor> &tensor,
-                                                               std::vector<const Device *> devices, int64_t dim) const {
+                                                               std::vector<Device> devices, int64_t dim) const {
     std::vector<std::shared_ptr<Tensor>> outputs;
     std::vector<std::shared_ptr<Tensor>> split_tensors = tensor->Split(tensor->Dims()[dim] / devices.size(), dim);
     std::vector<cudaStream_t> streams;
@@ -503,7 +503,7 @@ std::vector<std::shared_ptr<Tensor>> ProcessGroupNCCL::Scatter(const std::shared
 }
 
 std::shared_ptr<Tensor> ProcessGroupNCCL::Gather(const std::vector<std::shared_ptr<Tensor>> &tensors,
-                                                 const Device *destination, int64_t dim) const {
+                                                 Device destination, int64_t dim) const {
     std::vector<std::shared_ptr<Tensor>> outouts;
     int64_t num_devices = tensors.size();
     auto dtype = tensors[0]->Dtype();
@@ -513,7 +513,7 @@ std::shared_ptr<Tensor> ProcessGroupNCCL::Gather(const std::vector<std::shared_p
 
     std::vector<cudaStream_t> streams;
     std::vector<ncclComm_t> comms;
-    std::vector<const Device *> devices;
+    std::vector<Device> devices;
 
     int dest_rank = -1;
     for (size_t i = 0; i < tensors.size(); ++i) {

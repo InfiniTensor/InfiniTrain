@@ -22,7 +22,7 @@ class Module;
 
 namespace parallel::function {
 std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &network,
-                                               const std::vector<const Device *> &devices);
+                                               const std::vector<Device> &devices);
 } // namespace parallel::function
 
 class Module : public std::enable_shared_from_this<Module> {
@@ -104,8 +104,8 @@ protected:
     std::vector<ModulePostHook> backward_post_hooks_;
 
 private:
-    friend std::vector<std::shared_ptr<Module>>
-    parallel::function::Replicate(const std::shared_ptr<Module> &network, const std::vector<const Device *> &devices);
+    friend std::vector<std::shared_ptr<Module>> parallel::function::Replicate(const std::shared_ptr<Module> &network,
+                                                                              const std::vector<Device> &devices);
 };
 
 template <typename Derived> class CloneableModule : public Module {
