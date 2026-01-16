@@ -229,10 +229,12 @@ std::ostream &GetLogStream() {
                 mkdir(config.output_path.c_str(), 0755);
 
                 int global_rank = nn::parallel::global::thread_global_rank;
-                std::string filename = config.output_path + "/precision_check_rank_" + std::to_string(global_rank) + ".log";
+                std::string filename
+                    = config.output_path + "/precision_check_rank_" + std::to_string(global_rank) + ".log";
                 log_file.open(filename, std::ios::out | std::ios::trunc);
                 if (!log_file.is_open()) {
-                    std::cerr << "[Rank " << global_rank << "] Failed to open precision check log file: " << filename << std::endl;
+                    std::cerr << "[Rank " << global_rank << "] Failed to open precision check log file: " << filename
+                              << std::endl;
                     use_console = true;
                 } else {
                     use_console = false;
