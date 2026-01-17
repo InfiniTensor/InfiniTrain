@@ -32,7 +32,7 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
                 // NOTE(zbl): must copy, cannot change grad buffer address
                 grad->CopyFrom(grad_output);
             } else {
-                auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
+                auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
                 kernel.Call<void>(grad_output, learning_rate_, grad);
             }
         } else {

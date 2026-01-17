@@ -11,7 +11,7 @@ std::vector<std::shared_ptr<Tensor>> CrossEntropy::Forward(const std::vector<std
     const auto &input = input_tensors[0];
     const auto &target = input_tensors[1];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "CrossEntropyForward"}, input, target)};
 }
 
@@ -29,7 +29,7 @@ std::vector<std::shared_ptr<Tensor>> CrossEntropy::Backward(const std::vector<st
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     auto grad_input = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "CrossEntropyBackward"}, input,
                                                                            target, grad_output);
     return {grad_input, nullptr};

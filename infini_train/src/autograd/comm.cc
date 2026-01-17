@@ -18,7 +18,7 @@ Scatter::Scatter(const std::vector<Device> &target_gpus, int64_t dim,
 std::vector<std::shared_ptr<Tensor>> Scatter::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     const auto &input = input_tensors[0];
     std::vector<std::shared_ptr<Tensor>> output_tensors;
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     output_tensors = pg_->Scatter(input, target_gpus_, dim_);
     return output_tensors;
 }
@@ -38,7 +38,7 @@ Gather::Gather(Device target_device, int64_t dim, const infini_train::nn::parall
 
 std::vector<std::shared_ptr<Tensor>> Gather::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     for (const auto &tensor : input_tensors) {
-        CHECK_NE(static_cast<int>(tensor->GetDevice()->Type()), static_cast<int>(Device::DeviceType::kCPU))
+        CHECK_NE(static_cast<int>(tensor->GetDevice().type()), static_cast<int>(Device::DeviceType::kCPU))
             << "Gather function not implemented for CPU tensors";
     }
     if (dim_ == 0 && input_tensors[0]->Dims().size() == 0) {
@@ -51,7 +51,7 @@ std::vector<std::shared_ptr<Tensor>> Gather::Forward(const std::vector<std::shar
     } else {
         unsqueezed_scalar_ = false;
     }
-    auto device = input_tensors[0]->GetDevice()->Type();
+    auto device = input_tensors[0]->GetDevice().type();
     return {pg_->Gather(input_tensors, target_device_, dim_)};
 }
 
@@ -78,7 +78,7 @@ std::vector<std::shared_ptr<Tensor>> Broadcast::Forward(const std::vector<std::s
 
     for (const auto &tensor : input_tensors) {
         CHECK(!tensor->GetDevice()->IsCPU()) << "Broadcast function not implemented for CPU tensors";
-        CHECK(tensor->GetDevice()->Type() == input_device_->Type())
+        CHECK(tensor->GetDevice().type() == input_device_.type())
             << "Broadcast function not implemented for tensors on different device type";
     }
 

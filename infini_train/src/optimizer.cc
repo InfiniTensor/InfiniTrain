@@ -26,7 +26,7 @@ void SGD::Step() {
         }
         auto device = param->GetDevice();
         device->SetDevice();
-        auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
+        auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
         kernel.Call<void>(param->grad(), -learning_rate_, param);
     }
 }
@@ -62,7 +62,7 @@ void Adam::Step() {
 
         auto device = param->GetDevice();
         device->SetDevice();
-        auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AdamAccumulateGrad"});
+        auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGrad"});
         kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
     }
 }

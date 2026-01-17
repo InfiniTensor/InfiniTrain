@@ -10,7 +10,7 @@ std::vector<std::shared_ptr<Tensor>> Softmax::Forward(const std::vector<std::sha
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SoftmaxForward"}, input, dim_)};
 }
 
@@ -26,7 +26,7 @@ std::vector<std::shared_ptr<Tensor>> Softmax::Backward(const std::vector<std::sh
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = output->GetDevice()->Type();
+    auto device = output->GetDevice().type();
     return {
         Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SoftmaxBackward"}, grad_output, output, dim_)};
 }

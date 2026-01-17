@@ -48,7 +48,7 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
     auto device = tensor->GetDevice();
     device->SetDevice();
 
-    switch (device->Type()) {
+    switch (device.type()) {
     case Device::DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
@@ -62,7 +62,7 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
     }
 #endif
     default: {
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice()->Type());
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice().type());
         break;
     }
     }
@@ -154,7 +154,7 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
     auto device = tensor->GetDevice();
     device->SetDevice();
 
-    switch (device->Type()) {
+    switch (device.type()) {
     case Device::DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
@@ -168,7 +168,7 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
     }
 #endif
     default: {
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice()->Type());
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice().type());
         break;
     }
     }
@@ -184,7 +184,7 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {
     auto device = tensor->GetDevice();
     device->SetDevice();
 
-    switch (device->Type()) {
+    switch (device.type()) {
     case Device::DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
@@ -198,7 +198,7 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {
     }
 #endif
     default: {
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice()->Type());
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice().type());
         break;
     }
     }
@@ -214,7 +214,7 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
     auto device = tensor->GetDevice();
     device->SetDevice();
 
-    switch (device->Type()) {
+    switch (device.type()) {
     case Device::DeviceType::kCPU: {
         memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float));
         break;
@@ -228,7 +228,7 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
     }
 #endif
     default: {
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice()->Type());
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice().type());
         break;
     }
     }
@@ -294,7 +294,7 @@ std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, Devic
             break;
         }
 #else
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device->Type());
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device.type());
 #endif
     }
     return tensor;
