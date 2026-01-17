@@ -15,7 +15,7 @@ namespace infini_train::nn::parallel::function {
 
 std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op, const ProcessGroup *pg,
                                 bool async_op) {
-    auto device = tensor->GetDevice()->Type();
+    auto device = tensor->GetDevice().type();
     if (pg == nullptr) {
         pg = ProcessGroupFactory::Instance()->GetDefaultProcessGroup();
     }
@@ -24,7 +24,7 @@ std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpT
 
 std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
                                 const ProcessGroup *pg, bool async_op) {
-    auto device = output->GetDevice()->Type();
+    auto device = output->GetDevice().type();
     if (pg == nullptr) {
         pg = ProcessGroupFactory::Instance()->GetDefaultProcessGroup();
     }
@@ -33,7 +33,7 @@ std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std
 
 std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
                                     ReduceOpType reduce_op, const ProcessGroup *pg, bool async_op) {
-    auto device = output->GetDevice()->Type();
+    auto device = output->GetDevice().type();
     if (pg == nullptr) {
         pg = ProcessGroupFactory::Instance()->GetDefaultProcessGroup();
     }

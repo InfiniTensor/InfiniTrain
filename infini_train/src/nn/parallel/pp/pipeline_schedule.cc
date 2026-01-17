@@ -213,7 +213,7 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
 
         int mb = task.microbatch_id;
         if (task.is_forward) {
-            infini_train::AutocastGuard autocast_guard(stage_->device()->Type(), dtype);
+            infini_train::AutocastGuard autocast_guard(stage_->device().type(), dtype);
 
             std::vector<std::shared_ptr<Tensor>> inputs;
 
@@ -241,7 +241,7 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 auto target = microbatch_targets[mb];
                 std::shared_ptr<Tensor> loss;
                 {
-                    infini_train::AutocastGuard autocast_guard(stage_->device()->Type(), dtype);
+                    infini_train::AutocastGuard autocast_guard(stage_->device().type(), dtype);
 
                     auto target_on_device = target->To(activations[task.local_chunk_idx][mb][0]->GetDevice());
                     loss = (*loss_fn)(

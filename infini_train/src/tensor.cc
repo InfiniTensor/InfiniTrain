@@ -290,7 +290,7 @@ void Tensor::CopyFrom(const Tensor &src) {
         }
 #endif
         default:
-            LOG(FATAL) << "Unsupported src device type: " << static_cast<int>(src_dev->Type());
+            LOG(FATAL) << "Unsupported src device type: " << static_cast<int>(src_dev.type());
         }
         break;
     }

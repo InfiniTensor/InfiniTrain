@@ -15,7 +15,6 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/utils.h"
-#include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
@@ -534,7 +533,7 @@ VocabParallelCrossEntropy::Backward(const std::vector<std::shared_ptr<Tensor>> &
     auto masked_target = saved_tensors_[2];
     auto valid_mask_local = saved_tensors_[3];
 
-    auto device = grad_output->GetDevice()->Type();
+    auto device = grad_output->GetDevice().type();
     auto grad_input = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
         {device, "VocabParallelCrossEntropyBackward"}, grad_output, softmax_local, target_mask, masked_target,
         valid_mask_local, vocab_size_local_, vocab_size_original_, label_smoothing_);

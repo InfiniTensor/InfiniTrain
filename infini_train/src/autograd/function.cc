@@ -17,7 +17,7 @@ namespace infini_train::autograd {
 
 std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_GE(input_tensors.size(), 1);
-    const auto *device = input_tensors[0]->GetDevice();
+    auto device = input_tensors[0]->GetDevice();
     // TODO(dcj): Cache context information to reduce setDevice overhead.
     device->SetDevice();
 
@@ -88,7 +88,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
 }
 
 void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int grad_output_idx) {
-    const auto *device = grad_output->GetDevice();
+    auto device = grad_output->GetDevice();
     device->SetDevice();
 
     // NOTE(dcj): The accumulate autograd function has no grad_outputs.
@@ -100,7 +100,7 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
         grad_outputs_[grad_output_idx] = grad_output;
         ++grad_outputs_reached_;
     } else {
-        auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
+        auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
         kernel.Call<void>(grad_output, 1.0f, grad_outputs_.at(grad_output_idx));
     }
     ++dependencies_reached_;

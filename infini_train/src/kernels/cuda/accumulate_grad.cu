@@ -24,7 +24,7 @@ void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const s
 
     const auto *device = tensor->GetDevice();
 
-    auto device_impl = GetDeviceGuardImpl(device->Type());
+    auto device_impl = GetDeviceGuardImpl(device.type());
 
     DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
         gradient->Dtype(),
