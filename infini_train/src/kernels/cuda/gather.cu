@@ -44,8 +44,8 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
     const auto &in_dims = input->Dims();
     const auto &idx_dims = index->Dims();
     CHECK_EQ(in_dims.size(), idx_dims.size());
-    CHECK(input->GetDevice()->Type() == index->GetDevice()->Type());
-    CHECK(input->GetDevice()->Index() == index->GetDevice()->Index());
+    CHECK(input->GetDevice().type() == index->GetDevice().type());
+    CHECK(input->GetDevice().index() == index->GetDevice().index());
 
     const int64_t num_dims = in_dims.size();
     if (dim < 0) {

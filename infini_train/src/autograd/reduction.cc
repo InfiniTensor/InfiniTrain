@@ -13,7 +13,7 @@ std::vector<std::shared_ptr<Tensor>> Mean::Forward(const std::vector<std::shared
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MeanForward"}, input, dim_, keep_dim_)};
 }
 
@@ -27,7 +27,7 @@ std::vector<std::shared_ptr<Tensor>> Mean::Backward(const std::vector<std::share
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice()->Type();
+    auto device = grad_output->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MeanBackward"}, grad_output, input_dims_,
                                                                  dim_, keep_dim_)};
 }
@@ -36,7 +36,7 @@ std::vector<std::shared_ptr<Tensor>> Sum::Forward(const std::vector<std::shared_
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SumForward"}, input, dim_, keep_dim_)};
 }
 
@@ -50,7 +50,7 @@ std::vector<std::shared_ptr<Tensor>> Sum::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice()->Type();
+    auto device = grad_output->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SumBackward"}, grad_output, input_dims_,
                                                                  dim_, keep_dim_)};
 }
@@ -59,7 +59,7 @@ std::vector<std::shared_ptr<Tensor>> Max::Forward(const std::vector<std::shared_
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MaxForward"}, input, dim_, keep_dim_)};
 }
 
@@ -77,7 +77,7 @@ std::vector<std::shared_ptr<Tensor>> Max::Backward(const std::vector<std::shared
     const auto &input = saved_tensors_[0];
     const auto &reduced = saved_tensors_[1];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MaxBackward"}, grad_output, input, reduced,
                                                                  dim_, keep_dim_)};
 }
@@ -86,7 +86,7 @@ std::vector<std::shared_ptr<Tensor>> Min::Forward(const std::vector<std::shared_
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MinForward"}, input, dim_, keep_dim_)};
 }
 
@@ -104,7 +104,7 @@ std::vector<std::shared_ptr<Tensor>> Min::Backward(const std::vector<std::shared
     const auto &input = saved_tensors_[0];
     const auto &reduced = saved_tensors_[1];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MinBackward"}, grad_output, input, reduced,
                                                                  dim_, keep_dim_)};
 }

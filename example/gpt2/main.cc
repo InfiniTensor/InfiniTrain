@@ -323,7 +323,7 @@ void Train(const nn::parallel::Rank &rank) {
 
             for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
                 // enable autocast for the current step
-                infini_train::AutocastGuard autocast_guard(device->Type(), dtype);
+                infini_train::AutocastGuard autocast_guard(device.type(), dtype);
 
                 // (bs, seq_len), (bs, seq_len)
                 auto [x, y] = *train_iter;

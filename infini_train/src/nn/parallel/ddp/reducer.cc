@@ -26,7 +26,7 @@ void CopyGradToBucket(const std::shared_ptr<Tensor> &grad, const std::shared_ptr
     char *dst = static_cast<char *>(flat->DataPtr()) + dst_elem_offset * element_size_in_bytes;
     const void *src = grad->DataPtr();
 
-    const auto dev_type = grad->GetDevice()->Type();
+    const auto dev_type = grad->GetDevice().type();
     if (dev_type == Device::DeviceType::kCPU) {
         std::memcpy(dst, src, bytes);
         return;
@@ -52,7 +52,7 @@ void CopyBucketToGrad(const std::shared_ptr<Tensor> &flat, const std::shared_ptr
     const char *src = static_cast<const char *>(flat->DataPtr()) + src_elem_offset * element_size_in_bytes;
     void *dst = grad->DataPtr();
 
-    const auto dev_type = grad->GetDevice()->Type();
+    const auto dev_type = grad->GetDevice().type();
     if (dev_type == Device::DeviceType::kCPU) {
         std::memcpy(dst, src, bytes);
         return;
@@ -135,7 +135,7 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
         const auto &tensor = tensors[idx_in_order];
         CHECK(tensor);
 
-        const Key k = Key{tensors[idx_in_order]->GetDevice()->Index(), tensors[idx_in_order]->Dtype()};
+        const Key k = Key{tensors[idx_in_order]->GetDevice().index(), tensors[idx_in_order]->Dtype()};
         auto it = states.find(k);
         if (it == states.end()) {
             it = states.emplace(k, State{}).first;

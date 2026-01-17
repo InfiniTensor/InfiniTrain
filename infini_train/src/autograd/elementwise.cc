@@ -10,7 +10,7 @@ std::vector<std::shared_ptr<Tensor>> Neg::Forward(const std::vector<std::shared_
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "NegForward"}, input)};
 }
 
@@ -18,7 +18,7 @@ std::vector<std::shared_ptr<Tensor>> Neg::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice()->Type();
+    auto device = grad_output->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "NegBackward"}, grad_output)};
 }
 
@@ -26,7 +26,7 @@ std::vector<std::shared_ptr<Tensor>> Reciprocal::Forward(const std::vector<std::
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "ReciprocalForward"}, input)};
 }
 
@@ -42,7 +42,7 @@ std::vector<std::shared_ptr<Tensor>> Reciprocal::Backward(const std::vector<std:
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "ReciprocalBackward"}, grad_output, input)};
 }
 
@@ -50,7 +50,7 @@ std::vector<std::shared_ptr<Tensor>> Sin::Forward(const std::vector<std::shared_
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SinForward"}, input)};
 }
 
@@ -66,7 +66,7 @@ std::vector<std::shared_ptr<Tensor>> Sin::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SinBackward"}, grad_output, input)};
 }
 
@@ -74,7 +74,7 @@ std::vector<std::shared_ptr<Tensor>> Cos::Forward(const std::vector<std::shared_
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "CosForward"}, input)};
 }
 
@@ -90,7 +90,7 @@ std::vector<std::shared_ptr<Tensor>> Cos::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "CosBackward"}, grad_output, input)};
 }
 
@@ -98,7 +98,7 @@ std::vector<std::shared_ptr<Tensor>> Tanh::Forward(const std::vector<std::shared
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "TanhForward"}, input)};
 }
 
@@ -114,7 +114,7 @@ std::vector<std::shared_ptr<Tensor>> Tanh::Backward(const std::vector<std::share
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = output->GetDevice()->Type();
+    auto device = output->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "TanhBackward"}, grad_output, output)};
 }
 
@@ -122,7 +122,7 @@ std::vector<std::shared_ptr<Tensor>> Pow::Forward(const std::vector<std::shared_
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "PowForward"}, input, exponent_,
                                                                  scalar_is_base_)};
 }
@@ -139,7 +139,7 @@ std::vector<std::shared_ptr<Tensor>> Pow::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "PowBackward"}, grad_output, input, exponent_,
                                                                  scalar_is_base_)};
 }
@@ -148,7 +148,7 @@ std::vector<std::shared_ptr<Tensor>> Rsqrt::Forward(const std::vector<std::share
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "RsqrtForward"}, input)};
 }
 
@@ -164,7 +164,7 @@ std::vector<std::shared_ptr<Tensor>> Rsqrt::Backward(const std::vector<std::shar
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "RsqrtBackward"}, grad_output, input)};
 }
 
@@ -172,7 +172,7 @@ std::vector<std::shared_ptr<Tensor>> Exp::Forward(const std::vector<std::shared_
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "ExpForward"}, input)};
 }
 
@@ -180,7 +180,7 @@ std::vector<std::shared_ptr<Tensor>> Exp::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice()->Type();
+    auto device = grad_output->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "ExpBackward"}, grad_output)};
 }
 
@@ -188,7 +188,7 @@ std::vector<std::shared_ptr<Tensor>> Log::Forward(const std::vector<std::shared_
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "LogForward"}, input)};
 }
 
@@ -204,7 +204,7 @@ std::vector<std::shared_ptr<Tensor>> Log::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "LogBackward"}, grad_output, input)};
 }
 
@@ -213,7 +213,7 @@ std::vector<std::shared_ptr<Tensor>> Equals::Forward(const std::vector<std::shar
     const auto &input = input_tensors[0];
     const auto &other = input_tensors[1];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "EqualsForward"}, input, other)};
 }
 
@@ -226,7 +226,7 @@ std::vector<std::shared_ptr<Tensor>> EqualsScalar::Forward(const std::vector<std
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "EqualsScalarForward"}, input, scalar_)};
 }
 
@@ -240,7 +240,7 @@ std::vector<std::shared_ptr<Tensor>> Lt::Forward(const std::vector<std::shared_p
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
 
-    auto device = a->GetDevice()->Type();
+    auto device = a->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "LtForward"}, a, b)};
 }
 
@@ -253,7 +253,7 @@ std::vector<std::shared_ptr<Tensor>> LtScalar::Forward(const std::vector<std::sh
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "LtScalarForward"}, input, scalar_)};
 }
 
@@ -267,7 +267,7 @@ std::vector<std::shared_ptr<Tensor>> Le::Forward(const std::vector<std::shared_p
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
 
-    auto device = a->GetDevice()->Type();
+    auto device = a->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "LeForward"}, a, b)};
 }
 
@@ -280,7 +280,7 @@ std::vector<std::shared_ptr<Tensor>> LeScalar::Forward(const std::vector<std::sh
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "LeScalarForward"}, input, scalar_)};
 }
 
@@ -294,7 +294,7 @@ std::vector<std::shared_ptr<Tensor>> Gt::Forward(const std::vector<std::shared_p
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
 
-    auto device = a->GetDevice()->Type();
+    auto device = a->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "GtForward"}, a, b)};
 }
 
@@ -307,7 +307,7 @@ std::vector<std::shared_ptr<Tensor>> GtScalar::Forward(const std::vector<std::sh
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "GtScalarForward"}, input, scalar_)};
 }
 
@@ -321,7 +321,7 @@ std::vector<std::shared_ptr<Tensor>> Ge::Forward(const std::vector<std::shared_p
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
 
-    auto device = a->GetDevice()->Type();
+    auto device = a->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "GeForward"}, a, b)};
 }
 
@@ -334,7 +334,7 @@ std::vector<std::shared_ptr<Tensor>> GeScalar::Forward(const std::vector<std::sh
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "GeScalarForward"}, input, scalar_)};
 }
 
@@ -348,7 +348,7 @@ std::vector<std::shared_ptr<Tensor>> Or::Forward(const std::vector<std::shared_p
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
 
-    auto device = a->GetDevice()->Type();
+    auto device = a->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "OrForward"}, a, b)};
 }
 
@@ -362,7 +362,7 @@ std::vector<std::shared_ptr<Tensor>> And::Forward(const std::vector<std::shared_
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
 
-    auto device = a->GetDevice()->Type();
+    auto device = a->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "AndForward"}, a, b)};
 }
 
@@ -376,7 +376,7 @@ std::vector<std::shared_ptr<Tensor>> Add::Forward(const std::vector<std::shared_
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
 
-    auto device = a->GetDevice()->Type();
+    auto device = a->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "AddForward"}, a, b)};
 }
 
@@ -390,7 +390,7 @@ std::vector<std::shared_ptr<Tensor>> Add::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice()->Type();
+    auto device = grad_output->GetDevice().type();
     auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
         {device, "AddBackward"}, grad_output, a_dims_, b_dims_);
     return {grad_a, grad_b};
@@ -400,7 +400,7 @@ std::vector<std::shared_ptr<Tensor>> AddScalar::Forward(const std::vector<std::s
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "AddScalarForward"}, input, scalar_)};
 }
 
@@ -408,7 +408,7 @@ std::vector<std::shared_ptr<Tensor>> AddScalar::Backward(const std::vector<std::
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice()->Type();
+    auto device = grad_output->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "AddScalarBackward"}, grad_output)};
 }
 
@@ -417,7 +417,7 @@ std::vector<std::shared_ptr<Tensor>> Sub::Forward(const std::vector<std::shared_
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
 
-    auto device = a->GetDevice()->Type();
+    auto device = a->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SubForward"}, a, b)};
 }
 
@@ -431,7 +431,7 @@ std::vector<std::shared_ptr<Tensor>> Sub::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice()->Type();
+    auto device = grad_output->GetDevice().type();
     auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
         {device, "SubBackward"}, grad_output, a_dims_, b_dims_);
     return {grad_a, grad_b};
@@ -442,7 +442,7 @@ std::vector<std::shared_ptr<Tensor>> Mul::Forward(const std::vector<std::shared_
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
 
-    auto device = a->GetDevice()->Type();
+    auto device = a->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MulForward"}, a, b)};
 }
 
@@ -460,7 +460,7 @@ std::vector<std::shared_ptr<Tensor>> Mul::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice()->Type();
+    auto device = grad_output->GetDevice().type();
     auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
         {device, "MulBackward"}, grad_output, a, b);
     return {grad_a, grad_b};
@@ -470,7 +470,7 @@ std::vector<std::shared_ptr<Tensor>> MulScalar::Forward(const std::vector<std::s
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MulScalarForward"}, input, scalar_)};
 }
 
@@ -478,7 +478,7 @@ std::vector<std::shared_ptr<Tensor>> MulScalar::Backward(const std::vector<std::
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice()->Type();
+    auto device = grad_output->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MulScalarBackward"}, grad_output, scalar_)};
 }
 
@@ -487,7 +487,7 @@ std::vector<std::shared_ptr<Tensor>> Div::Forward(const std::vector<std::shared_
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
 
-    auto device = a->GetDevice()->Type();
+    auto device = a->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "DivForward"}, a, b)};
 }
 
@@ -505,7 +505,7 @@ std::vector<std::shared_ptr<Tensor>> Div::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice()->Type();
+    auto device = grad_output->GetDevice().type();
     auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
         {device, "DivBackward"}, grad_output, a, b);
     return {grad_a, grad_b};
