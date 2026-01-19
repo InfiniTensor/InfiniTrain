@@ -8,8 +8,15 @@
 #ifdef USE_CUDA
 #include <cuda_runtime.h>
 #endif
+#ifdef USE_MACA
+#include <mcr/mc_runtime.h>
+#include <mcr/mc_runtime_api.h>
+#endif
 #ifdef USE_NCCL
 #include <nccl.h>
+#endif
+#ifdef USE_MCCL
+#include <mccl.h>
 #endif
 
 namespace infini_train {
@@ -64,6 +71,42 @@ private:
     cudaEvent_t ready_event_;
     cudaEvent_t done_event_;
     ncclComm_t comm_;
+
+    mutable std::mutex mutex_;
+    std::exception_ptr exception_;
+    std::atomic<bool> completed_{false};
+    std::atomic<bool> success_{false};
+};
+#endif
+
+#ifdef USE_MCCL
+class WorkMccl final : public Work {
+public:
+    WorkMccl(const Device *device, mcclComm_t comm);
+    ~WorkMccl() override;
+
+    bool WaitBlocking(std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) override;
+    bool WaitNonBlocking() override;
+
+    bool IsCompleted() const override;
+    bool IsSuccess() const override;
+
+    void Synchronize() const override;
+
+    std::exception_ptr exception() const override { return exception_; };
+
+    void *ready_event() const override { return reinterpret_cast<void *>(ready_event_); };
+    void *done_event() const override { return reinterpret_cast<void *>(done_event_); };
+
+private:
+    bool CheckMcclStatus();
+    void SetException(std::exception_ptr e);
+
+private:
+    const Device *device_ = nullptr;
+    mcEvent_t ready_event_;
+    mcEvent_t done_event_;
+    mcclComm_t comm_;
 
     mutable std::mutex mutex_;
     std::exception_ptr exception_;

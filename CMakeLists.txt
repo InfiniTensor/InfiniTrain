@@ -1,7 +1,11 @@
+# Platforms
 option(USE_CUDA "Support NVIDIA CUDA" OFF)
+option(USE_MACA "Support MetaX MACA" OFF)
+
 option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
-option(USE_NCCL "Build project for distributed running" ON)
+option(USE_NCCL "Build project for distributed running on CUDA using NCCL" ON)
+option(USE_MCCL "Build project for distributed running on MACA using MCCL" ON)
 cmake_minimum_required(VERSION 3.28)
 
 project(infini_train VERSION 0.3.0 LANGUAGES CXX)
@@ -27,6 +31,23 @@ include_directories(${glog_SOURCE_DIR}/src)
 # Add eigen
 if(USE_OMP)
     find_package(OpenMP REQUIRED)
+
+    set(INFINI_OMP_LIBS OpenMP::OpenMP_CXX)
+
+    # Under MACA/mxcc, use mxomp instead of original libgomp
+    if(USE_MACA)
+        set(MACA_PATH $ENV{MACA_PATH})
+        find_library(OMP_RUNTIME_LIB
+            NAMES omp iomp5
+            HINTS
+                "${MACA_PATH}/lib"
+                "${MACA_PATH}/mxgpu_llvm/lib"
+                "${MACA_PATH}/mxgpu_llvm/lib64"
+            REQUIRED
+        )
+
+        set(INFINI_OMP_LIBS OpenMP::OpenMP_CXX ${OMP_RUNTIME_LIB})
+    endif()
 endif()
 # find_package(OpenBLAS REQUIRED)
 # include_directories(${OpenBLAS_INCLUDE_DIR})
@@ -47,9 +68,12 @@ add_library(infini_train_cpu_kernels STATIC ${CPU_KERNELS})
 target_link_libraries(infini_train_cpu_kernels glog Eigen3::Eigen)
 if(USE_OMP)
     add_compile_definitions(USE_OMP=1)
-    target_link_libraries(infini_train_cpu_kernels OpenMP::OpenMP_CXX)
+    target_link_libraries(infini_train_cpu_kernels ${INFINI_OMP_LIBS})
 endif()
 
+# =========================
+# CUDA backend
+# =========================
 if(USE_CUDA)
     add_compile_definitions(USE_CUDA=1)
     enable_language(CUDA)
@@ -73,6 +97,48 @@ if(USE_CUDA)
         add_compile_definitions(USE_NCCL=1)
         target_link_libraries(infini_train nccl)
     endif()
+
+# =========================
+# MACA backend (MetaX)
+# =========================
+elseif(USE_MACA)
+    add_compile_definitions(USE_MACA=1)
+
+    # ---- configure MACA SDK paths ----
+    # Typical: /opt/maca (can be overridden by -DMACA_PATH=...)
+    set(MACA_PATH $ENV{MACA_PATH})
+    set(CMAKE_C_COMPILER ${MACA_PATH}/mxgpu_llvm/bin/mxcc)
+    set(CMAKE_CXX_COMPILER ${MACA_PATH}/mxgpu_llvm/bin/mxcc)
+
+    include_directories("${MACA_PATH}/include")
+    link_directories("${MACA_PATH}/lib")
+
+    # Libraries: mcruntime / mcdnn / mcblas
+    find_library(MACA_RUNTIME_LIB NAMES mcruntime HINTS "${MACA_PATH}/lib" REQUIRED)
+    find_library(MACA_DNN_LIB     NAMES mcdnn     HINTS "${MACA_PATH}/lib" REQUIRED)
+    find_library(MACA_BLAS_LIB    NAMES mcblas    HINTS "${MACA_PATH}/lib" REQUIRED)
+
+    file(GLOB_RECURSE MACA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/kernels/maca/*.maca)
+    set_source_files_properties(${MACA_KERNELS} PROPERTIES
+        LANGUAGE CXX
+        COMPILE_OPTIONS "-x;maca"
+    )
+    add_library(infini_train_maca_kernels STATIC ${MACA_KERNELS})
+    target_link_libraries(infini_train_maca_kernels glog ${MACA_RUNTIME_LIB} ${MACA_DNN_LIB} ${MACA_BLAS_LIB})
+
+    add_library(infini_train STATIC ${SRC})
+    target_link_libraries(infini_train glog gflags "-Wl,--whole-archive" infini_train_cpu_kernels infini_train_maca_kernels "-Wl,--no-whole-archive")
+
+    if (USE_MCCL)
+        message(STATUS "Add USE_MCCL under MACA backend, use MCCL (mccl)")
+        find_library(MACA_COMM_LIB NAMES mccl HINTS "${MACA_PATH}/lib" REQUIRED)
+        add_compile_definitions(USE_MCCL=1)
+        target_link_libraries(infini_train ${MACA_COMM_LIB})
+    endif()
+
+# =========================
+# CPU-only backend
+# =========================
 else()
     add_library(infini_train STATIC ${SRC})
     target_link_libraries(infini_train glog gflags "-Wl,--whole-archive" infini_train_cpu_kernels "-Wl,--no-whole-archive")

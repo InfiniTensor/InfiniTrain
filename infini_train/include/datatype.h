@@ -7,6 +7,10 @@
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #endif
+#ifdef USE_MACA
+#include <common/maca_bfloat16.h>
+#include <common/maca_fp16.h>
+#endif
 
 namespace infini_train {
 enum class DataType : int8_t {
@@ -79,9 +83,12 @@ DEFINE_DATA_TYPE_MAPPING(kINT64, int64_t)
 DEFINE_DATA_TYPE_MAPPING(kFLOAT32, float)
 DEFINE_DATA_TYPE_MAPPING(kFLOAT64, double)
 
-#ifdef USE_CUDA
+#if defined(USE_CUDA)
 DEFINE_DATA_TYPE_MAPPING(kBFLOAT16, nv_bfloat16)
 DEFINE_DATA_TYPE_MAPPING(kFLOAT16, half)
+#elif defined(USE_MACA)
+DEFINE_DATA_TYPE_MAPPING(kBFLOAT16, __maca_bfloat16)
+DEFINE_DATA_TYPE_MAPPING(kFLOAT16, __half)
 #else
 // Non-CUDA fallbacks
 template <> struct TypeMap<DataType::kBFLOAT16> {
@@ -96,6 +103,20 @@ template <> struct TypeMap<DataType::kFLOAT16> {
 #endif
 #undef DEFINE_DATA_TYPE_MAPPING
 
+template <typename T> struct is_bfloat16 : std::false_type {};
+#if defined(USE_CUDA)
+template <> struct is_bfloat16<nv_bfloat16> : std::true_type {};
+#elif defined(USE_MACA)
+template <> struct is_bfloat16<__maca_bfloat16> : std::true_type {};
+#endif
+
+template <typename T> struct is_fp16 : std::false_type {};
+#if defined(USE_CUDA)
+template <> struct is_fp16<half> : std::true_type {};
+#elif defined(USE_MACA)
+template <> struct is_fp16<__half> : std::true_type {};
+#endif
+
 // Extends std::is_floating_point to support CUDA floating-point types.
 template <typename T> struct is_floating_point_ext : std::is_floating_point<T> {};
 
@@ -106,6 +127,13 @@ template <typename T> struct is_arithmetic_ext : std::is_arithmetic<T> {};
 #ifdef USE_CUDA
 template <> struct is_floating_point_ext<__nv_bfloat16> : std::true_type {};
 template <> struct is_arithmetic_ext<__nv_bfloat16> : std::true_type {};
+template <> struct is_floating_point_ext<__half> : std::true_type {};
+template <> struct is_arithmetic_ext<__half> : std::true_type {};
+#endif
+
+#ifdef USE_MACA
+template <> struct is_floating_point_ext<__maca_bfloat16> : std::true_type {};
+template <> struct is_arithmetic_ext<__maca_bfloat16> : std::true_type {};
 template <> struct is_floating_point_ext<__half> : std::true_type {};
 template <> struct is_arithmetic_ext<__half> : std::true_type {};
 #endif
@@ -124,6 +152,16 @@ template <> struct LargerType<__nv_bfloat16, __half> {
 };
 
 template <> struct LargerType<__half, __nv_bfloat16> {
+    using type = float;
+};
+#endif
+
+#ifdef USE_MACA
+template <> struct LargerType<__maca_bfloat16, __half> {
+    using type = float;
+};
+
+template <> struct LargerType<__half, __maca_bfloat16> {
     using type = float;
 };
 #endif

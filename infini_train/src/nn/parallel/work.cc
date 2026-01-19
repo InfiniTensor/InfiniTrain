@@ -5,6 +5,9 @@
 #ifdef USE_CUDA
 #include "infini_train/include/common/cuda/common_cuda.h"
 #endif
+#ifdef USE_MACA
+#include "infini_train/include/common/maca/common_maca.h"
+#endif
 #include "infini_train/include/device.h"
 
 namespace infini_train::nn::parallel {
@@ -112,6 +115,119 @@ bool WorkNccl::CheckNcclStatus() {
 }
 
 void WorkNccl::SetException(std::exception_ptr e) {
+    std::lock_guard<std::mutex> g(mutex_);
+    if (!exception_) {
+        exception_ = std::move(e);
+    }
+    completed_.store(true, std::memory_order_release);
+    success_.store(false, std::memory_order_release);
+}
+#endif
+
+#ifdef USE_MCCL
+namespace {
+std::exception_ptr makeMacaError(mcError_t err) {
+    return std::make_exception_ptr(std::runtime_error(mcGetErrorString(err)));
+}
+} // namespace
+
+WorkMccl::WorkMccl(const Device *device, mcclComm_t comm) : device_(device), comm_(comm) {
+    MACA_CHECK(mcEventCreateWithFlags(&ready_event_, mcEventDisableTiming));
+    MACA_CHECK(mcEventCreateWithFlags(&done_event_, mcEventDisableTiming));
+}
+
+WorkMccl::~WorkMccl() {
+    if (ready_event_) {
+        MACA_CHECK(mcEventDestroy(ready_event_));
+    }
+    if (done_event_) {
+        MACA_CHECK(mcEventDestroy(done_event_));
+    }
+}
+
+bool WorkMccl::WaitBlocking(std::chrono::milliseconds timeout) {
+    // Block wait on host
+    device_->SetDevice();
+
+    // If timeout is not set, then wait till it finishes
+    if (timeout <= std::chrono::milliseconds::zero()) {
+        if (auto status = mcEventSynchronize(done_event_); status != mcSuccess) {
+            SetException(makeMacaError(status));
+            return false;
+        }
+        // Check MCCL status
+        return CheckMcclStatus();
+    }
+
+    // If timeout is set, keep querying till time's up
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        mcError_t query = mcEventQuery(done_event_);
+        if (query == mcSuccess) {
+            return CheckMcclStatus();
+        }
+        if (query != mcErrorNotReady) {
+            SetException(makeMacaError(query));
+            return false;
+        }
+        // NOTE(zbl): sleep for a while in case of busy waiting
+        std::this_thread::sleep_for(std::chrono::microseconds(50));
+    }
+
+    if (exception_) {
+        // NOTE(zbl): do not throw any c++ exception
+        LOG(FATAL) << "Error occurs while wait(). ";
+    }
+
+    return false;
+}
+
+bool WorkMccl::WaitNonBlocking() {
+    // Non-blocking wait on compute stream
+    device_->SetDevice();
+    MACA_CHECK(mcStreamWaitEvent(dynamic_cast<const MacaDevice *>(device_)->Stream(), done_event_, 0));
+    return true;
+}
+
+void WorkMccl::Synchronize() const { MACA_CHECK(mcEventSynchronize(done_event_)); }
+
+bool WorkMccl::IsCompleted() const {
+    if (completed_.load(std::memory_order_acquire)) {
+        return true;
+    }
+    mcError_t query = mcEventQuery(done_event_);
+    if (query == mcSuccess) {
+        const_cast<WorkMccl *>(this)->completed_.store(true, std::memory_order_release);
+        const_cast<WorkMccl *>(this)->success_.store(true, std::memory_order_release);
+        return true;
+    }
+    if (query != mcErrorNotReady) {
+        const_cast<WorkMccl *>(this)->SetException(makeMacaError(query));
+        return true;
+    }
+    return false;
+}
+
+bool WorkMccl::IsSuccess() const {
+    if (!IsCompleted()) {
+        return false;
+    }
+    return success_.load(std::memory_order_acquire) && !exception_;
+}
+
+bool WorkMccl::CheckMcclStatus() {
+    mcclResult_t async_error;
+    if (comm_ && mcclCommGetAsyncError(comm_, &async_error) == mcclSuccess && async_error != mcclSuccess) {
+        SetException(std::make_exception_ptr(
+            std::runtime_error(std::string("MCCL async error: ") + mcclGetErrorString(async_error))));
+        return false;
+    }
+    success_.store(true, std::memory_order_release);
+    completed_.store(true, std::memory_order_release);
+    return true;
+}
+
+void WorkMccl::SetException(std::exception_ptr e) {
     std::lock_guard<std::mutex> g(mutex_);
     if (!exception_) {
         exception_ = std::move(e);

@@ -10,6 +10,9 @@
 #ifdef USE_CUDA
 #include <cuda_runtime_api.h>
 #endif
+#ifdef USE_MACA
+#include <mcr/mc_runtime_api.h>
+#endif
 #ifdef USE_OMP
 #include <omp.h>
 #endif
@@ -61,13 +64,21 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
         break;
     }
 #endif
+#ifdef USE_MACA
+    case DeviceType::kMACA: {
+        // TODO(zbl): maybe use async API later?
+        mcMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), mcMemcpyHostToDevice,
+                      +dynamic_cast<const MacaDevice *>(device)->Stream());
+        break;
+    }
+#endif
     default: {
         LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice()->Type());
         break;
     }
     }
     return tensor;
-}
+} // namespace infini_train::nn::init
 
 std::pair<int64_t, int64_t> CalculateFanInAndFanOut(const std::shared_ptr<Tensor> &tensor) {
     if (tensor->Dims().size() < 2) {
@@ -167,6 +178,14 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
         break;
     }
 #endif
+#ifdef USE_MACA
+    case DeviceType::kMACA: {
+        // TODO(zbl): maybe use async API later?
+        mcMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), mcMemcpyHostToDevice,
+                      +dynamic_cast<const MacaDevice *>(device)->Stream());
+        break;
+    }
+#endif
     default: {
         LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice()->Type());
         break;
@@ -194,6 +213,14 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {
         // TODO(dcj): maybe use async API later?
         cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice,
                         dynamic_cast<const CudaDevice *>(device)->Stream());
+        break;
+    }
+#endif
+#ifdef USE_MACA
+    case DeviceType::kMACA: {
+        // TODO(zbl): maybe use async API later?
+        mcMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), mcMemcpyHostToDevice,
+                      +dynamic_cast<const MacaDevice *>(device)->Stream());
         break;
     }
 #endif
@@ -227,6 +254,14 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
         break;
     }
 #endif
+#ifdef USE_MACA
+    case DeviceType::kMACA: {
+        // TODO(zbl): maybe use async API later?
+        mcMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float), mcMemcpyHostToDevice,
+                      +dynamic_cast<const MacaDevice *>(device)->Stream());
+        break;
+    }
+#endif
     default: {
         LOG(FATAL) << "Unsupported device type: " << static_cast<int>(tensor->GetDevice()->Type());
         break;
@@ -248,6 +283,14 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
         std::iota(buffer.begin(), buffer.end(), static_cast<TYPE>(start));                                             \
         cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE), cudaMemcpyHostToDevice,         \
                         dynamic_cast<const CudaDevice *>(device)->Stream());                                           \
+        break;                                                                                                         \
+    }
+#define MACA_CASE(DATA_TYPE, TYPE)                                                                                     \
+    case DATA_TYPE: {                                                                                                  \
+        std::vector<TYPE> buffer(num_elements);                                                                        \
+        for (int64_t i = 0; i < num_elements; ++i) { buffer[i] = static_cast<TYPE>(static_cast<float>(start + i)); }   \
+        mcMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE), mcMemcpyHostToDevice,             \
+                      dynamic_cast<const MacaDevice *>(device)->Stream());                                             \
         break;                                                                                                         \
     }
 
@@ -289,6 +332,24 @@ std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, const
             CUDA_CASE(DataType::kFLOAT16, half)
             CUDA_CASE(DataType::kFLOAT32, float)
             CUDA_CASE(DataType::kFLOAT64, double)
+        default:
+            LOG(FATAL) << "Unsupported data type: " << static_cast<int>(dtype);
+            break;
+        }
+#elif defined(USE_MACA)
+        switch (dtype) {
+            MACA_CASE(DataType::kUINT8, uint8_t)
+            MACA_CASE(DataType::kINT8, int8_t)
+            MACA_CASE(DataType::kUINT16, uint16_t)
+            MACA_CASE(DataType::kINT16, int16_t)
+            MACA_CASE(DataType::kUINT32, uint32_t)
+            MACA_CASE(DataType::kINT32, int32_t)
+            MACA_CASE(DataType::kUINT64, uint64_t)
+            MACA_CASE(DataType::kINT64, int64_t)
+            MACA_CASE(DataType::kBFLOAT16, __maca_bfloat16)
+            MACA_CASE(DataType::kFLOAT16, __half)
+            MACA_CASE(DataType::kFLOAT32, float)
+            MACA_CASE(DataType::kFLOAT64, double)
         default:
             LOG(FATAL) << "Unsupported data type: " << static_cast<int>(dtype);
             break;

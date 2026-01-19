@@ -9,6 +9,9 @@
 #ifdef USE_CUDA
 #include "infini_train/include/common/cuda/common_cuda.h"
 #endif
+#ifdef USE_MACA
+#include "infini_train/include/common/maca/common_maca.h"
+#endif
 
 namespace infini_train {
 Device::Device(DeviceType type, int8_t index) : type_(type), index_(index) {
@@ -22,10 +25,15 @@ int8_t Device::Index() const { return index_; }
 
 bool Device::IsCPU() const { return type_ == DeviceType::kCPU; }
 bool Device::IsCUDA() const { return type_ == DeviceType::kCUDA; }
+bool Device::IsMACA() const { return type_ == DeviceType::kMACA; }
 
 std::string Device::ToString() const {
     std::ostringstream oss;
-    oss << "Device(" << (type_ == DeviceType::kCPU ? "CPU" : "CUDA") << ", " << static_cast<int>(index_) << ")";
+    oss << "Device("
+        << (type_ == DeviceType::kCPU    ? "CPU"
+            : type_ == DeviceType::kCUDA ? "CUDA"
+                                         : "MACA")
+        << ", " << static_cast<int>(index_) << ")";
     return oss.str();
 }
 
@@ -75,6 +83,38 @@ CudaDevice::CudaDevice(int8_t index)
 }
 #endif // USE_CUDA
 
+#ifdef USE_MACA
+MacaDevice::~MacaDevice() {
+    if (stream_ != nullptr) {
+        MACA_CHECK(mcStreamDestroy(stream_));
+    }
+    if (mcblas_handle_ != nullptr) {
+        MCBLAS_CHECK(mcblasDestroy(mcblas_handle_));
+    }
+}
+
+void MacaDevice::SetDevice() const { MACA_CHECK(mcSetDevice(index_)); }
+
+void MacaDevice::Synchronize() const { MACA_CHECK(mcDeviceSynchronize()); }
+
+mcStream_t MacaDevice::Stream() const { return stream_; }
+
+mcblasHandle_t MacaDevice::McblasHandle() const { return mcblas_handle_; }
+
+nn::parallel::Rank MacaDevice::rank() const { return rank_; }
+
+MacaDevice::MacaDevice(int8_t index)
+    : Device(DeviceType::kMACA, index),
+      rank_({nn::parallel::global::GetGlobalProcRank(), index, nn::parallel::global::GetNprocPerNode(),
+             nn::parallel::global::GetNthreadPerProc()}) {
+    SetDevice();
+    MACA_CHECK(mcStreamCreate(&stream_));
+
+    MCBLAS_CHECK(mcblasCreate(&mcblas_handle_));
+    MCBLAS_CHECK(mcblasSetStream(mcblas_handle_, stream_));
+}
+#endif // USE_MACA
+
 const DeviceManager *DeviceManager::Instance() {
     static auto instance = std::unique_ptr<DeviceManager>(new DeviceManager());
     return instance.get();
@@ -104,6 +144,17 @@ DeviceManager::DeviceManager() {
         devices_map_[DeviceType::kCUDA].push_back(std::unique_ptr<CudaDevice>(new CudaDevice(idx)));
     }
     CUDA_CHECK(cudaSetDevice(current_device));
+#endif
+#ifdef USE_MACA
+    MACA_CHECK(mcInit(0));
+    int device_count = 0;
+    MACA_CHECK(mcGetDeviceCount(&device_count));
+    int current_device = -1;
+    MACA_CHECK(mcGetDevice(&current_device));
+    for (int idx = 0; idx < device_count; ++idx) {
+        devices_map_[DeviceType::kMACA].push_back(std::unique_ptr<MacaDevice>(new MacaDevice(idx)));
+    }
+    MACA_CHECK(mcSetDevice(current_device));
 #endif
 }
 

@@ -11,6 +11,9 @@
 #ifdef USE_NCCL
 #include <nccl.h>
 #endif
+#ifdef USE_MCCL
+#include <mccl.h>
+#endif
 
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 
@@ -137,6 +140,57 @@ private:
 
     std::unordered_map<const Device *, ncclComm_t> device_comm_map_;
     std::unordered_map<const Device *, cudaStream_t> device_stream_map_;
+};
+#endif
+
+#ifdef USE_MCCL
+class ProcessGroupMCCL final : public ProcessGroup {
+public:
+    explicit ProcessGroupMCCL(const std::string &process_group_name, const std::vector<int> &device_indices);
+
+    ~ProcessGroupMCCL() override;
+
+    // Asynchronous communication APIs (Compute / Communication stream decoupled)
+    std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op,
+                                    bool async_op) const override;
+
+    std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                                    bool async_op) const override;
+
+    std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                                        function::ReduceOpType reduce_op, bool async_op) const override;
+
+    std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
+                               bool async_op) const override;
+
+    std::shared_ptr<Work> Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank,
+                               bool async_op) const override;
+
+    // Legacy communication APIs (Single-stream)
+    std::vector<std::shared_ptr<Tensor>>
+    BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const override;
+
+    std::vector<std::shared_ptr<Tensor>>
+    ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads,
+                       const Device *destination) const override;
+
+    std::vector<std::shared_ptr<Tensor>> Scatter(const std::shared_ptr<Tensor> &tensor,
+                                                 std::vector<const Device *> devices, int64_t dim) const override;
+
+    std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors, const Device *destination,
+                                   int64_t dim) const override;
+
+private:
+    void InitSingleProcess(const std::vector<int> &ranks);
+    void InitMultiProcess(const std::vector<int> &ranks);
+    void InitStreams();
+
+private:
+    std::vector<mcclComm_t> comms_;
+    std::vector<mcStream_t> comm_streams_;
+
+    std::unordered_map<const Device *, mcclComm_t> device_comm_map_;
+    std::unordered_map<const Device *, mcStream_t> device_stream_map_;
 };
 #endif
 

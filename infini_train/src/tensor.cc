@@ -17,6 +17,9 @@
 #ifdef USE_CUDA
 #include "infini_train/include/common/cuda/common_cuda.h"
 #endif
+#ifdef USE_MACA
+#include "infini_train/include/common/maca/common_maca.h"
+#endif
 #include "infini_train/include/autograd/accumulate.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/function.h"
@@ -49,6 +52,18 @@ TensorBuffer::TensorBuffer(const Device *device, size_t size) : device_(device),
         break;
     }
 #endif
+#ifdef USE_MACA
+    case DeviceType::kMACA: {
+        int current_device = -1;
+        MACA_CHECK(mcGetDevice(&current_device));
+        // TODO(zbl): Maybe pin memory later.
+        device->SetDevice();
+        const auto *maca_device = dynamic_cast<const MacaDevice *>(device);
+        MACA_CHECK(mcMallocAsync(&data_, size, maca_device->Stream()));
+        MACA_CHECK(mcSetDevice(current_device));
+        break;
+    }
+#endif
     default:
         LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device_->Type());
         break;
@@ -63,6 +78,11 @@ TensorBuffer::~TensorBuffer() {
 #ifdef USE_CUDA
     case DeviceType::kCUDA:
         CUDA_CHECK(cudaFreeAsync(data_, dynamic_cast<const CudaDevice *>(device_)->Stream()));
+        break;
+#endif
+#ifdef USE_MACA
+    case DeviceType::kMACA:
+        MACA_CHECK(mcFreeAsync(data_, dynamic_cast<const MacaDevice *>(device_)->Stream()));
         break;
 #endif
     default:
@@ -108,6 +128,12 @@ Tensor::Tensor(const float *data, const std::vector<int64_t> &dims, DataType dty
                                    dynamic_cast<const CudaDevice *>(device)->Stream()));
         break;
 #endif
+#ifdef USE_MACA
+    case DeviceType::kMACA:
+        MACA_CHECK(mcMemcpyAsync(buffer_->DataPtr(), data, buffer_->Size(), mcMemcpyHostToDevice,
+                                 dynamic_cast<const MacaDevice *>(device)->Stream()));
+        break;
+#endif
     default:
         LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device->Type());
     }
@@ -136,7 +162,14 @@ template <typename T> void Tensor::Fill(T value) {
     uint64_t storage = 0;
 
     DispatchFunc<INFINI_ALL_TYPES>(Dtype(), [&storage, value]<typename TargetT>() {
-        TargetT casted_value = static_cast<TargetT>(value);
+        TargetT casted_value = [&] {
+            using Dst = std::remove_cv_t<std::remove_reference_t<TargetT>>;
+            if constexpr (is_bfloat16<Dst>::value || is_fp16<Dst>::value) {
+                return static_cast<TargetT>(static_cast<float>(value));
+            } else {
+                return static_cast<TargetT>(value);
+            }
+        }();
         std::memcpy((void *)(&storage), &casted_value, sizeof(TargetT));
     });
 
@@ -157,6 +190,10 @@ template void Tensor::Fill<double>(double);
 #ifdef USE_CUDA
 template void Tensor::Fill<nv_bfloat16>(nv_bfloat16);
 template void Tensor::Fill<half>(half);
+#endif
+#ifdef USE_MACA
+template void Tensor::Fill<__maca_bfloat16>(__maca_bfloat16);
+template void Tensor::Fill<__half>(__half);
 #endif
 
 Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> Tensor::EigenMatrix() {
@@ -209,6 +246,37 @@ Tensor Tensor::To(const Device *device) {
                                        cudaMemcpyHostToDevice, dynamic_cast<const CudaDevice *>(device)->Stream()));
         }
         CUDA_CHECK(cudaSetDevice(current_device));
+        break;
+    }
+#endif
+#ifdef USE_MACA
+    case DeviceType::kCPU: {
+        // MACA -> CPU
+        GetDevice()->SetDevice();
+        new_tensor = Tensor(dims_, dtype_, DeviceManager::Instance()->GetDefaultDevice());
+        MACA_CHECK(mcMemcpy(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), mcMemcpyDeviceToHost));
+        break;
+    }
+    case DeviceType::kMACA: {
+        int current_device = -1;
+        MACA_CHECK(mcGetDevice(&current_device));
+        new_tensor = Tensor(dims_, dtype_, device);
+        if (GetDevice()->Type() == DeviceType::kCPU) {
+            device->SetDevice();
+            // CPU -> MACA
+            MACA_CHECK(mcMemcpyAsync(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), mcMemcpyHostToDevice,
+                                     dynamic_cast<const MacaDevice *>(device)->Stream()));
+
+        } else {
+            // MACA -> MACA
+            //  1. MACA -> CPU
+            //  2. CPU -> MACA
+            Tensor cpu_tensor = To(DeviceManager::Instance()->GetDefaultDevice());
+            device->SetDevice();
+            MACA_CHECK(mcMemcpyAsync(new_tensor.DataPtr(), cpu_tensor.DataPtr(), SizeInBytes(), mcMemcpyHostToDevice,
+                                     dynamic_cast<const MacaDevice *>(device)->Stream()));
+        }
+        MACA_CHECK(mcSetDevice(current_device));
         break;
     }
 #endif
@@ -273,6 +341,13 @@ void Tensor::CopyFrom(const Tensor &src) {
             break;
         }
 #endif
+#ifdef USE_MACA
+        case DeviceType::kMACA: {
+            // MACA -> CPU
+            MACA_CHECK(mcMemcpy(DataPtr(), src.DataPtr(), nbytes, mcMemcpyDeviceToHost));
+            break;
+        }
+#endif
         default:
             LOG(FATAL) << "Unsupported src device type: " << static_cast<int>(src_dev->Type());
         }
@@ -315,6 +390,37 @@ void Tensor::CopyFrom(const Tensor &src) {
         }
 
         CUDA_CHECK(cudaSetDevice(current_device));
+        break;
+    }
+#endif
+#ifdef USE_MACA
+    case DeviceType::kMACA: {
+        int current_device = -1;
+        MACA_CHECK(mcGetDevice(&current_device));
+        dst_dev->SetDevice();
+
+        const auto *dst_maca = dynamic_cast<const MacaDevice *>(dst_dev);
+        switch (src_dev->Type()) {
+        case DeviceType::kCPU: {
+            // CPU -> MACA
+            MACA_CHECK(mcMemcpyAsync(DataPtr(), src.DataPtr(), nbytes, mcMemcpyHostToDevice, dst_maca->Stream()));
+            break;
+        }
+        case DeviceType::kMACA: {
+            const auto *src_maca = dynamic_cast<const MacaDevice *>(src_dev);
+            if (src_maca->Index() == dst_maca->Index()) {
+                MACA_CHECK(mcMemcpyAsync(DataPtr(), src.DataPtr(), nbytes, mcMemcpyDeviceToDevice, dst_maca->Stream()));
+            } else {
+                LOG(FATAL) << "Check accessibility between Device " << src_maca->Index() << " and Device "
+                           << dst_maca->Index();
+            }
+            break;
+        }
+        default:
+            LOG(FATAL) << "Unsupported src device type: " << static_cast<int>(src_dev->Type());
+        }
+
+        MACA_CHECK(mcSetDevice(current_device));
         break;
     }
 #endif
@@ -769,6 +875,14 @@ void Tensor::SaveAsNpy(const std::string &path) const {
         CHECK_EQ(err, cudaSuccess) << "cudaMemcpy failed: " << cudaGetErrorString(err);
     }
 #endif
+#ifdef USE_MACA
+    else if (GetDevice()->Type() == DeviceType::kMACA) {
+        // If on MACA, copy back to host
+        MACA_CHECK(mcDeviceSynchronize());
+        mcError_t err = mcMemcpy(host_buffer.data(), DataPtr(), num_bytes, mcMemcpyDeviceToHost);
+        CHECK_EQ(err, mcSuccess) << "mcMemcpy failed: " << mcGetErrorString(err);
+    }
+#endif
     else {
         LOG(FATAL) << "Unsupported device type for SaveAsNpy.";
     }
@@ -816,7 +930,7 @@ void Tensor::SaveAsNpy(const std::string &path) const {
     file.write(reinterpret_cast<const char *>(host_buffer.data()), num_bytes);
 
     file.close();
-}
+} // namespace infini_train
 
 void Tensor::SetPrintOptions(std::optional<int64_t> precision, std::optional<int64_t> threshold,
                              std::optional<int64_t> edge_items, std::optional<int64_t> linewidth,
@@ -886,6 +1000,14 @@ void Tensor::Print(std::ostream &os) const {
         cudaDeviceSynchronize();
         cudaError_t err = cudaMemcpy(host_buffer.data(), DataPtr(), num_bytes, cudaMemcpyDeviceToHost);
         CHECK_EQ(err, cudaSuccess) << "cudaMemcpy failed: " << cudaGetErrorString(err);
+    }
+#endif
+#ifdef USE_MACA
+    else if (GetDevice()->Type() == DeviceType::kMACA) {
+        MACA_CHECK(mcDeviceSynchronize());
+        mcError_t err = mcMemcpy(host_buffer.data(), DataPtr(), num_bytes, mcMemcpyDeviceToHost);
+        CHECK_EQ(err, mcSuccess) << "mcMemcpy failed: " << mcGetErrorString(err);
+
     }
 #endif
     else {
