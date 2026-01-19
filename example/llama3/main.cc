@@ -10,8 +10,10 @@
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/models/llama3/llama3.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/modules/transformer/config.h"
 #include "infini_train/include/nn/parallel/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
@@ -28,7 +30,6 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
-#include "example/llama3/net.h"
 
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
@@ -147,7 +148,7 @@ void Train(const nn::parallel::Rank &rank) {
     // rng / reproducibility
     // ManualSeed(42);
 
-    LLaMA3Config model_config = LLaMA3Config();
+    nn::TransformerConfig model_config = nn::TransformerConfig();
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
         model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);

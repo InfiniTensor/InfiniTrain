@@ -8,18 +8,11 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/modules/transformer/config.h"
+#include "infini_train/include/nn/modules/transformer/transformer_kernel.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
 #include "infini_train/include/tensor.h"
-
-struct GPT2Config {
-    int64_t block_size = 1024;
-    int64_t vocab_size = 50304;
-    int64_t original_vocab_size = 50257;
-    int64_t n_layer = 12;
-    int64_t n_head = 12;
-    int64_t n_embd = 768;
-};
 
 class NewGELU : public infini_train::nn::CloneableModule<NewGELU> {
 public:
@@ -34,13 +27,13 @@ public:
 
     static constexpr char kParamBiasName[] = "bias";
 
-    explicit CausalSelfAttention(const GPT2Config &config);
+    explicit CausalSelfAttention(const infini_train::nn::TransformerConfig &config);
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
 private:
-    GPT2Config config_;
+    infini_train::nn::TransformerConfig config_;
     int64_t n_head_ = 0;
     int64_t n_embd_ = 0;
 
@@ -53,7 +46,7 @@ public:
     static constexpr char kGeluLayerName[] = "gelu";
     static constexpr char kCProjLayerName[] = "c_proj";
 
-    explicit MLP(const GPT2Config &config);
+    explicit MLP(const infini_train::nn::TransformerConfig &config);
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
@@ -66,51 +59,19 @@ public:
     static constexpr char kLn2LayerName[] = "ln_2";
     static constexpr char kMlpLayerName[] = "mlp";
 
-    explicit Block(const GPT2Config &config);
+    explicit Block(const infini_train::nn::TransformerConfig &config);
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
-class GPT2FirstStage : public infini_train::nn::CloneableModule<GPT2FirstStage> {
+class GPT2Kernel : public infini_train::nn::TransformerKernel {
 public:
-    static constexpr char kWTELayerName[] = "wte";
-    static constexpr char kWPELayerName[] = "wpe";
+    bool UseAbsolutePositionEmbedding() const override { return true; }
 
-    explicit GPT2FirstStage(const GPT2Config &config);
+    std::shared_ptr<infini_train::nn::Module> MakeBlock(const infini_train::nn::TransformerConfig &config) override;
 
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
-
-private:
-    const GPT2Config config_;
-};
-
-class GPT2Chunk : public infini_train::nn::CloneableModule<GPT2Chunk> {
-public:
-    static constexpr char kHLayerName[] = "h";
-
-    GPT2Chunk(const GPT2Config &config, int start_layer, int end_layer);
-
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
-
-private:
-    const GPT2Config config_;
-};
-
-class GPT2LastStage : public infini_train::nn::CloneableModule<GPT2LastStage> {
-public:
-    static constexpr char kLnFLayerName[] = "ln_f";
-    static constexpr char kLMHeadLayerName[] = "lm_head";
-
-    explicit GPT2LastStage(const GPT2Config &config);
-
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
-
-private:
-    const GPT2Config config_;
+    std::shared_ptr<infini_train::nn::Module> MakeFinalNorm(const infini_train::nn::TransformerConfig &config) override;
 };
 
 class GPT2 : public infini_train::nn::CloneableModule<GPT2> {
@@ -124,7 +85,7 @@ public:
         kGPT2XL,
     };
 
-    explicit GPT2(const GPT2Config &config);
+    explicit GPT2(const infini_train::nn::TransformerConfig &config);
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
@@ -135,6 +96,6 @@ public:
     int GetChunkSize() const;
 
 private:
-    const GPT2Config config_;
+    const infini_train::nn::TransformerConfig config_;
     const infini_train::nn::parallel::StageInfo stage_info_;
 };
