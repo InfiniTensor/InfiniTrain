@@ -27,7 +27,7 @@ public:
     static GlobalEnv &Instance();
 
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-              int pipeline_parallel_size, int virtual_pipeline_parallel_size);
+              int pipeline_parallel_size, int virtual_pipeline_parallel_size, bool heterogeneous);
 
     int nnodes() const;
 
@@ -52,6 +52,8 @@ public:
     int pipeline_parallel_size() const;
 
     int virtual_pipeline_parallel_size() const;
+
+    bool heterogeneous() const;
 
     Layout layout() const;
 
@@ -83,12 +85,14 @@ private:
     bool initialized_ = false;
 
     Layout layout_;
+
+    bool heterogeneous_ = false;
 };
 
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                       int pipeline_parallel_size, int virtual_pipeline_parallel) {
+                       int pipeline_parallel_size, int virtual_pipeline_parallel, bool heterogeneous = false) {
     GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
-                               pipeline_parallel_size, virtual_pipeline_parallel);
+                               pipeline_parallel_size, virtual_pipeline_parallel, heterogeneous);
 }
 
 inline int GetNnodes() { return GlobalEnv::Instance().nnodes(); }
@@ -104,6 +108,8 @@ inline bool GetSequenceParallelEnabled() { return GlobalEnv::Instance().sequence
 inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
 inline int GetPipelineParallelSize() { return GlobalEnv::Instance().pipeline_parallel_size(); }
 inline int GetVirtualPipelineParallelSize() { return GlobalEnv::Instance().virtual_pipeline_parallel_size(); }
+
+inline bool IsHeterogeneous() { return GlobalEnv::Instance().heterogeneous(); }
 
 // =========================
 // Layout Helper Functions

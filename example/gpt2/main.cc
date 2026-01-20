@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
 #include <format>
 #include <memory>
 #include <optional>
@@ -65,6 +66,7 @@ DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
+DEFINE_bool(heterogeneous, false, "heterogeneous training");
 
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
@@ -220,12 +222,31 @@ void Train(const nn::parallel::Rank &rank) {
         // before wrapping the model with DistributedDataParallel (DDP).
         // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
         // are created during the conversion.
-        model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank());
+        model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank(),
+                                                          ReducerOptions{
+                                                              .first_bucket_cap_mb = 0,
+                                                              .normal_bucket_cap_mb = 0,
+                                                              .gradient_as_bucket_view = false,
+                                                              .gradient_bucketing_enabled = false,
+                                                          });
     }
 
+    // DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin,
+    // FLAGS_sequence_length),
+    //                                    pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size,
+    //                                    ddp_rank, ddp_world_size);
+
+#ifdef USE_CUDA
     DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
                                        pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size,
-                                       ddp_rank, ddp_world_size);
+                                       ddp_rank, FLAGS_heterogeneous ? ddp_world_size * 2 : ddp_world_size);
+#endif
+#ifdef USE_MACA
+    DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
+                                       pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size,
+                                       FLAGS_heterogeneous ? ddp_rank + global::GetNthreadPerProc() : ddp_rank,
+                                       FLAGS_heterogeneous ? ddp_world_size * 2 : ddp_world_size);
+#endif
 
     std::optional<DistributedDataLoader> val_loader = std::nullopt;
     if (!FLAGS_input_val_bin.empty()) {
@@ -336,8 +357,29 @@ void Train(const nn::parallel::Rank &rank) {
         if (ddp_world_size > 1) {
             auto lossf_tensor = std::make_shared<Tensor>(&lossf, std::vector<int64_t>{}, DataType::kFLOAT32, device);
             function::AllReduce(lossf_tensor, function::ReduceOpType::kAvg, ddp_pg);
-            lossf = static_cast<const float *>(
-                lossf_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
+            if (rank.IsLastRank()) {
+                std::shared_ptr<Tensor> comm_tensor = nullptr;
+                if (FLAGS_heterogeneous) {
+#ifdef USE_MACA
+                    WriteTensor(lossf_tensor, std::format("{}/muxi/step{}_loss_tensor", kSharedPathPrefix, step));
+                    comm_tensor = ReadTensor(std::format("{}/nv/step{}_loss_tensor", kSharedPathPrefix, step),
+                                             lossf_tensor->GetDevice());
+#endif
+#ifdef USE_CUDA
+                    WriteTensor(lossf_tensor, std::format("{}/nv/step{}_loss_tensor", kSharedPathPrefix, step));
+                    comm_tensor = ReadTensor(std::format("{}/muxi/step{}_loss_tensor", kSharedPathPrefix, step),
+                                             lossf_tensor->GetDevice());
+#endif
+                    lossf = (static_cast<const float *>(
+                                 lossf_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0]
+                             + static_cast<const float *>(
+                                 comm_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0])
+                          / 2;
+                } else {
+                    lossf = static_cast<const float *>(
+                        lossf_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
+                }
+            }
         }
 
         const auto iter_end = std::chrono::high_resolution_clock::now();
@@ -348,7 +390,8 @@ void Train(const nn::parallel::Rank &rank) {
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
                                       "DP={}, TP={}, SP={}, PP={})",
                                       step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
-                                      tps, ddp_world_size, tp_world_size, sp_world_size, pp_world_size);
+                                      tps, FLAGS_heterogeneous ? ddp_world_size * 2 : ddp_world_size, tp_world_size,
+                                      sp_world_size, pp_world_size);
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
                 if (tokenizer) {
@@ -370,7 +413,7 @@ int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
 
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
-                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
+                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel, FLAGS_heterogeneous);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 

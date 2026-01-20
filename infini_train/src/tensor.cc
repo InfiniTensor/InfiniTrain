@@ -930,7 +930,128 @@ void Tensor::SaveAsNpy(const std::string &path) const {
     file.write(reinterpret_cast<const char *>(host_buffer.data()), num_bytes);
 
     file.close();
-} // namespace infini_train
+}
+
+std::shared_ptr<Tensor> Tensor::FromNpy(
+    const std::string& path,
+    const Device* device) {
+
+    std::ifstream file(path, std::ios::binary);
+    CHECK(file.is_open()) << "Failed to open npy file: " << path;
+
+    // ------------------------------------------------------------
+    // 1. magic string
+    // ------------------------------------------------------------
+    char magic[6];
+    file.read(magic, 6);
+    CHECK(std::string(magic, 6) == "\x93NUMPY") << "Invalid npy file";
+
+    // ------------------------------------------------------------
+    // 2. version
+    // ------------------------------------------------------------
+    uint8_t major, minor;
+    file.read(reinterpret_cast<char*>(&major), 1);
+    file.read(reinterpret_cast<char*>(&minor), 1);
+    CHECK(major == 1 && minor == 0)
+        << "Only npy version 1.0 is supported";
+
+    // ------------------------------------------------------------
+    // 3. header length
+    // ------------------------------------------------------------
+    uint16_t header_len;
+    file.read(reinterpret_cast<char*>(&header_len), sizeof(header_len));
+
+    // ------------------------------------------------------------
+    // 4. header
+    // ------------------------------------------------------------
+    std::string header(header_len, ' ');
+    file.read(header.data(), header_len);
+
+    // ------------------------------------------------------------
+    // 5. parse header
+    // ------------------------------------------------------------
+    // example:
+    // {'descr': '<f4', 'fortran_order': False, 'shape': (2, 3, 4) }
+
+    CHECK(header.find("'descr': '<f4'") != std::string::npos)
+        << "Only float32 npy is supported";
+
+    CHECK(header.find("fortran_order': False") != std::string::npos)
+        << "Fortran order not supported";
+
+    // parse shape
+    auto shape_pos = header.find("shape': (");
+    CHECK(shape_pos != std::string::npos);
+
+    shape_pos += strlen("shape': (");
+    auto end_pos = header.find(")", shape_pos);
+    CHECK(end_pos != std::string::npos);
+
+    std::string shape_str = header.substr(shape_pos, end_pos - shape_pos);
+
+    std::vector<int64_t> dims;
+    std::stringstream ss(shape_str);
+    std::string token;
+
+    while (std::getline(ss, token, ',')) {
+        if (token.empty()) continue;
+        dims.push_back(std::stoll(token));
+    }
+
+    // ------------------------------------------------------------
+    // 6. allocate tensor
+    // ------------------------------------------------------------
+    auto tensor = std::make_shared<Tensor>(
+        dims,
+        DataType::kFLOAT32,
+        device);
+
+    const size_t num_elements = tensor->NumElements();
+    const size_t num_bytes = num_elements * sizeof(float);
+
+    // ------------------------------------------------------------
+    // 7. read raw data to host
+    // ------------------------------------------------------------
+    std::vector<float> host_buffer(num_elements);
+    file.read(reinterpret_cast<char*>(host_buffer.data()), num_bytes);
+
+    CHECK(file.good()) << "Failed to read tensor data from npy";
+
+    // ------------------------------------------------------------
+    // 8. copy to device
+    // ------------------------------------------------------------
+    if (device->Type() == DeviceType::kCPU) {
+        std::memcpy(tensor->DataPtr(), host_buffer.data(), num_bytes);
+    }
+#ifdef USE_CUDA
+    else if (device->Type() == DeviceType::kCUDA) {
+        cudaError_t err = cudaMemcpy(
+            tensor->DataPtr(),
+            host_buffer.data(),
+            num_bytes,
+            cudaMemcpyHostToDevice);
+        CHECK_EQ(err, cudaSuccess)
+            << "cudaMemcpy failed: " << cudaGetErrorString(err);
+    }
+#endif
+#ifdef USE_MACA
+    else if (device->Type() == DeviceType::kMACA) {
+        mcError_t err = mcMemcpy(
+            tensor->DataPtr(),
+            host_buffer.data(),
+            num_bytes,
+            mcMemcpyHostToDevice);
+        CHECK_EQ(err, mcSuccess)
+            << "mcMemcpy failed: " << mcGetErrorString(err);
+    }
+#endif
+    else {
+        LOG(FATAL) << "Unsupported device type in FromNpy";
+    }
+
+    return tensor;
+}
+
 
 void Tensor::SetPrintOptions(std::optional<int64_t> precision, std::optional<int64_t> threshold,
                              std::optional<int64_t> edge_items, std::optional<int64_t> linewidth,

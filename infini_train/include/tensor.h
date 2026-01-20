@@ -183,6 +183,7 @@ public:
     friend std::ostream &operator<<(std::ostream &os, const Tensor &tensor);
 
     void SaveAsNpy(const std::string &path) const;
+    static std::shared_ptr<Tensor> FromNpy(const std::string& path, const Device *device);
     void Print(std::ostream &os = std::cout) const;
     static void
     SetPrintOptions(std::optional<int64_t> precision = std::nullopt, std::optional<int64_t> threshold = std::nullopt,
