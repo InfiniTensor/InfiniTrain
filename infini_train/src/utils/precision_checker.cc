@@ -20,6 +20,7 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_check_context.h"
 
 namespace infini_train::utils {
@@ -161,7 +162,7 @@ std::unordered_map<std::string, std::string> &GetBaseline() {
     if (!loaded) {
         std::lock_guard<std::mutex> lock(load_mutex);
         if (!loaded) {
-            const auto &config = nn::parallel::global::GlobalEnv::Instance().GetPrecisionCheckConfig();
+            const auto &config = PrecisionCheckEnv::Instance().GetConfig();
             if (!config.baseline_path.empty()) {
                 std::ifstream file(config.baseline_path);
                 if (!file.is_open()) {
@@ -220,7 +221,7 @@ std::ostream &GetLogStream() {
     if (!initialized) {
         std::lock_guard<std::mutex> lock(init_mutex);
         if (!initialized) {
-            const auto &config = nn::parallel::global::GlobalEnv::Instance().GetPrecisionCheckConfig();
+            const auto &config = PrecisionCheckEnv::Instance().GetConfig();
 
             if (config.output_path.empty()) {
                 use_console = true;
@@ -249,7 +250,7 @@ std::ostream &GetLogStream() {
 }
 
 bool ShouldPrint() {
-    const auto &config = nn::parallel::global::GlobalEnv::Instance().GetPrecisionCheckConfig();
+    const auto &config = PrecisionCheckEnv::Instance().GetConfig();
     if (!config.output_path.empty()) {
         return true;
     }
@@ -354,9 +355,9 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
         return;
     }
 
-    const auto &global_config = nn::parallel::global::GlobalEnv::Instance().GetPrecisionCheckConfig();
-    int rank = nn::parallel::global::thread_global_rank;
-    int level = global_config.level;
+    const auto &global_config = PrecisionCheckEnv::Instance().GetConfig();
+    const int rank = nn::parallel::global::thread_global_rank;
+    const auto level = global_config.level;
     auto &baseline = GetBaseline();
 
     for (size_t i = 0; i < tensors.size(); ++i) {
@@ -376,23 +377,23 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
         }
 
         const void *data = cpu_tensor->DataPtr();
-        size_t byte_size = cpu_tensor->SizeInBytes();
-        size_t num_elements = cpu_tensor->NumElements();
+        const size_t byte_size = cpu_tensor->SizeInBytes();
+        const size_t num_elements = cpu_tensor->NumElements();
 
         // Build key
-        std::string context_key = PrecisionCheckContext::Instance().GetKey();
-        std::string full_key = context_key.empty() ? (stage + " " + name + " tensor[" + std::to_string(i) + "]")
-                                                   : (context_key + " " + stage + " " + name);
+        const std::string context_key = PrecisionCheckContext::Instance().GetKey();
+        const std::string full_key = context_key.empty() ? (stage + " " + name + " tensor[" + std::to_string(i) + "]")
+                                                         : (context_key + " " + stage + " " + name);
 
         // Only compute MD5 if needed (for output or baseline comparison)
-        bool need_md5 = global_config.output_md5 || !baseline.empty();
+        const bool need_md5 = global_config.output_md5 || !baseline.empty();
         std::string md5;
         if (need_md5) {
             md5 = ComputeMD5(data, byte_size);
         }
 
         // Check baseline
-        bool has_baseline = !baseline.empty();
+        const bool has_baseline = !baseline.empty();
         bool same_hash = true;
         if (has_baseline) {
             auto it = baseline.find(full_key);
@@ -415,7 +416,7 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
                 header_printed = true;
             }
             std::string same_hash_str = has_baseline ? (same_hash ? "True" : "False") : "--";
-            PrintTableRow(log_stream, full_key, level, FormatShape(cpu_tensor->Dims()),
+            PrintTableRow(log_stream, full_key, static_cast<int>(level), FormatShape(cpu_tensor->Dims()),
                           DataTypeToString(cpu_tensor->Dtype()), same_hash_str);
 
             // Save to baseline file if output_path is set and output_md5 is true
@@ -438,13 +439,13 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
                 }
             }
 
-            bool has_error = (config.check_nan && has_nan) || (config.check_inf && has_inf);
+            const bool has_error = (config.check_nan && has_nan) || (config.check_inf && has_inf);
 
             // When output_path is set, always write to file; otherwise only write on error or if print_stats is enabled
-            bool should_output = !global_config.output_path.empty() || has_error || config.print_stats;
+            const bool should_output = !global_config.output_path.empty() || has_error || config.print_stats;
 
             if (should_output) {
-                std::string log_level = has_error ? "E" : "I";
+                const std::string log_level = has_error ? "E" : "I";
 
                 log_stream << log_level << GetTimestamp() << " [Rank " << rank << "][PrecisionCheck] " << stage << " "
                            << name << " tensor[" << i << "]: ";
@@ -489,7 +490,7 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
 }
 
 void PrecisionChecker::RegisterForFunction(autograd::Function *func, const std::string &name, const Config &config) {
-    std::string func_name = name.empty() ? "Function" : name;
+    const std::string func_name = name.empty() ? "Function" : name;
 
     func->RegisterForwardPreHook(
         [func_name, config](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &inputs) {
@@ -515,7 +516,7 @@ void PrecisionChecker::RegisterForFunction(autograd::Function *func, const std::
 }
 
 void PrecisionChecker::RegisterForModule(nn::Module *module, const std::string &name, const Config &config) {
-    std::string module_name = name.empty() ? module->type() : name;
+    const std::string module_name = name.empty() ? module->type() : name;
 
     module->RegisterForwardPostHook([module_name, config](nn::Module *, const std::vector<std::shared_ptr<Tensor>> &,
                                                           const std::vector<std::shared_ptr<Tensor>> &outputs) {

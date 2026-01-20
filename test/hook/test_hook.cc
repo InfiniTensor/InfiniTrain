@@ -162,7 +162,7 @@ void test_hook_remove() {
 // ============================================================================
 int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
-    nn::parallel::global::GlobalEnv::Instance().Init(0, 1, 1, 1, 1);
+    nn::parallel::global::GlobalEnv::Instance().Init(1, 1, false, 1, 1);
 
     std::cout << "========================================" << std::endl;
     std::cout << "    Hook Mechanism Tests" << std::endl;

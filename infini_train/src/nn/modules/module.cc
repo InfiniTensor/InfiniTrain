@@ -12,7 +12,12 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
+
+#ifndef UNLIKELY
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
+#endif
 
 namespace infini_train::nn {
 
@@ -131,9 +136,10 @@ std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shar
 
 std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     // Register precision check hooks if enabled and not already registered
+    // TODO(cx): move RegisterForModule to PrecisionChecker and avoid duplicate registration
     if (!precision_check_registered_) {
-        auto precision_level = parallel::global::GlobalEnv::Instance().GetPrecisionCheckLevel();
-        if (precision_level == parallel::global::GlobalEnv::PrecisionCheckLevel::MODULE) {
+        auto precision_level = utils::PrecisionCheckEnv::Instance().GetConfig().level;
+        if (precision_level == utils::PrecisionCheckLevel::MODULE) {
             utils::PrecisionChecker::RegisterForModule(this);
             precision_check_registered_ = true;
         }
@@ -157,7 +163,7 @@ std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::s
     }
 
     // Register backward hooks on output tensors' grad_fn
-    if (!backward_pre_hooks_.empty() || !backward_post_hooks_.empty()) {
+    if (UNLIKELY(!backward_pre_hooks_.empty() || !backward_post_hooks_.empty())) {
         for (const auto &output : output_tensors) {
             if (output && output->grad_fn()) {
                 if (!backward_pre_hooks_.empty()) {

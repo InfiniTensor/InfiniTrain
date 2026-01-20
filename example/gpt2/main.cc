@@ -126,6 +126,7 @@ void Train(const nn::parallel::Rank &rank) {
     int pp_rank = 0;
 
     // Set thread-local global rank
+    // TODO(dcj): Use DeviceGuardImpl to get GlobalRank later.
     nn::parallel::global::thread_global_rank = rank.GlobalRank();
 
     const ProcessGroup *ddp_pg = nullptr;
@@ -373,7 +374,8 @@ int main(int argc, char *argv[]) {
 
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
-                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel, precision_config);
+                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
+    utils::PrecisionCheckEnv::Instance().Init(precision_config);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 
