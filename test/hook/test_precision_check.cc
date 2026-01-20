@@ -71,11 +71,12 @@ int main(int argc, char *argv[]) {
     std::cout << "Config: " << config_str << std::endl;
 
     auto config = utils::PrecisionCheckConfig::Parse(config_str);
-    nn::parallel::global::InitAllEnv(1, 1, false, 1, 1, config);
+    nn::parallel::global::InitAllEnv(1, 1, false, 1, 1);
+    utils::PrecisionCheckEnv::Instance().Init(config);
 
-    if (config.level == 1) {
+    if (config.level == utils::PrecisionCheckLevel::MODULE) {
         TestModuleLevel();
-    } else if (config.level == 2) {
+    } else if (config.level == utils::PrecisionCheckLevel::FUNCTION) {
         TestFunctionLevel(config_str);
     } else {
         std::cout << "No tests to run (level=0)" << std::endl;

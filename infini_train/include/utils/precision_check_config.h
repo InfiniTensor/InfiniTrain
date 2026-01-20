@@ -1,56 +1,32 @@
 #pragma once
 
-#include <sstream>
 #include <string>
-#include <unordered_map>
 
 namespace infini_train {
 namespace utils {
 
+enum class PrecisionCheckLevel { OFF = 0, MODULE = 1, FUNCTION = 2 };
+
 struct PrecisionCheckConfig {
-    int level = 0;                  // 0=off, 1=module, 2=function
+    PrecisionCheckLevel level = PrecisionCheckLevel::OFF;
     std::string output_path = "";   // empty=console(rank0), non-empty=file(all ranks)
     bool output_md5 = false;        // output MD5 hash or tensor values
     std::string format = "simple";  // "simple" or "table"
     std::string baseline_path = ""; // baseline file path for comparison
 
     // Parse from "key=value,key=value" string
-    static PrecisionCheckConfig Parse(const std::string &config_str) {
-        PrecisionCheckConfig config;
-        if (config_str.empty()) {
-            return config;
-        }
+    static PrecisionCheckConfig Parse(const std::string &config_str);
+};
 
-        std::unordered_map<std::string, std::string> kv_map;
-        std::istringstream ss(config_str);
-        std::string item;
-        while (std::getline(ss, item, ',')) {
-            auto pos = item.find('=');
-            if (pos != std::string::npos) {
-                kv_map[item.substr(0, pos)] = item.substr(pos + 1);
-            }
-        }
+class PrecisionCheckEnv {
+public:
+    static PrecisionCheckEnv &Instance();
+    void Init(const PrecisionCheckConfig &config);
+    const PrecisionCheckConfig &GetConfig() const { return config_; }
 
-        if (kv_map.count("level")) {
-            config.level = std::stoi(kv_map["level"]);
-        }
-        if (kv_map.count("output_path")) {
-            config.output_path = kv_map["output_path"];
-        }
-        if (kv_map.count("output_md5")) {
-            config.output_md5 = (kv_map["output_md5"] == "true" || kv_map["output_md5"] == "1");
-        }
-        if (kv_map.count("baseline")) {
-            config.baseline_path = kv_map["baseline"];
-        }
-        if (kv_map.count("format")) {
-            config.format = kv_map["format"];
-        } else if (!config.baseline_path.empty()) {
-            // Default to table format when baseline is specified
-            config.format = "table";
-        }
-        return config;
-    }
+private:
+    PrecisionCheckEnv() = default;
+    PrecisionCheckConfig config_;
 };
 
 } // namespace utils

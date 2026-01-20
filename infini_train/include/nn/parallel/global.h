@@ -4,8 +4,6 @@
 #include <string>
 #include <vector>
 
-#include "infini_train/include/utils/precision_check_config.h"
-
 namespace infini_train::nn::parallel::global {
 
 extern thread_local int thread_global_rank;
@@ -31,12 +29,7 @@ public:
     static GlobalEnv &Instance();
 
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-              int pipeline_parallel_size, int virtual_pipeline_parallel_size,
-              const utils::PrecisionCheckConfig &precision_config = utils::PrecisionCheckConfig());
-
-    enum class PrecisionCheckLevel { NONE, MODULE, FUNCTION };
-    PrecisionCheckLevel GetPrecisionCheckLevel() const;
-    const utils::PrecisionCheckConfig &GetPrecisionCheckConfig() const;
+              int pipeline_parallel_size, int virtual_pipeline_parallel_size);
 
     int nnodes() const;
 
@@ -92,15 +85,12 @@ private:
     bool initialized_ = false;
 
     Layout layout_;
-    PrecisionCheckLevel precision_check_level_ = PrecisionCheckLevel::NONE;
-    utils::PrecisionCheckConfig precision_check_config_;
 };
 
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                       int pipeline_parallel_size, int virtual_pipeline_parallel,
-                       const utils::PrecisionCheckConfig &precision_config = utils::PrecisionCheckConfig()) {
+                       int pipeline_parallel_size, int virtual_pipeline_parallel) {
     GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
-                               pipeline_parallel_size, virtual_pipeline_parallel, precision_config);
+                               pipeline_parallel_size, virtual_pipeline_parallel);
 }
 inline int GetNnodes() { return GlobalEnv::Instance().nnodes(); }
 inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }

@@ -10,6 +10,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
 
 namespace infini_train::autograd {
@@ -22,8 +23,8 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
 
     // Register precision check hooks if enabled (before forward)
     if (!precision_check_registered_) {
-        auto precision_level = nn::parallel::global::GlobalEnv::Instance().GetPrecisionCheckLevel();
-        if (precision_level == nn::parallel::global::GlobalEnv::PrecisionCheckLevel::FUNCTION) {
+        auto precision_level = utils::PrecisionCheckEnv::Instance().GetConfig().level;
+        if (precision_level == utils::PrecisionCheckLevel::FUNCTION) {
             utils::PrecisionChecker::RegisterForFunction(this, type_);
             precision_check_registered_ = true;
         }

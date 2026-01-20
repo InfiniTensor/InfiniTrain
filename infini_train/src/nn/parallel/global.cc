@@ -93,8 +93,7 @@ GlobalEnv &GlobalEnv::Instance() {
 }
 
 void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                     int pipeline_parallel_size, int virtual_pipeline_parallel_size,
-                     const utils::PrecisionCheckConfig &precision_config) {
+                     int pipeline_parallel_size, int virtual_pipeline_parallel_size) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
@@ -117,16 +116,6 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     layout_.sizes[TP] = tensor_parallel_size_;
     layout_.sizes[PP] = pipeline_parallel_size_;
     layout_.InitStrides();
-
-    // Store precision check config
-    precision_check_config_ = precision_config;
-    if (precision_config.level == 1) {
-        precision_check_level_ = PrecisionCheckLevel::MODULE;
-    } else if (precision_config.level == 2) {
-        precision_check_level_ = PrecisionCheckLevel::FUNCTION;
-    } else {
-        precision_check_level_ = PrecisionCheckLevel::NONE;
-    }
 
     initialized_ = true;
 }
@@ -194,13 +183,6 @@ int GlobalEnv::virtual_pipeline_parallel_size() const {
 Layout GlobalEnv::layout() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return layout_;
-}
-
-GlobalEnv::PrecisionCheckLevel GlobalEnv::GetPrecisionCheckLevel() const { return precision_check_level_; }
-
-const utils::PrecisionCheckConfig &GlobalEnv::GetPrecisionCheckConfig() const {
-    CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return precision_check_config_;
 }
 
 namespace {
