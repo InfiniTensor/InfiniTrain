@@ -22,7 +22,7 @@ class PrecisionCheckEnv {
 public:
     static PrecisionCheckEnv &Instance();
     void Init(const PrecisionCheckConfig &config);
-    const PrecisionCheckConfig &GetConfig() const { return config_; }
+    const PrecisionCheckConfig &GetConfig() const;
 
 private:
     PrecisionCheckEnv() = default;

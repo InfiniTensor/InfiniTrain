@@ -50,4 +50,6 @@ PrecisionCheckEnv &PrecisionCheckEnv::Instance() {
 
 void PrecisionCheckEnv::Init(const PrecisionCheckConfig &config) { config_ = config; }
 
+const PrecisionCheckConfig &PrecisionCheckEnv::GetConfig() const { return config_; }
+
 } // namespace infini_train::utils
