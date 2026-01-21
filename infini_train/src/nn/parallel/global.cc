@@ -1,6 +1,5 @@
 #include "infini_train/include/nn/parallel/global.h"
 
-#include <algorithm>
 #include <cstdlib>
 #include <format>
 #include <string>
