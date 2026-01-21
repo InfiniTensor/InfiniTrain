@@ -3,12 +3,16 @@
 # python tools/compare_loss.py \
 #   /data/shared/InfiniTrain-dev/logs/202511_a800/20260105/feature/add_1F1B_f2a383a/logs \
 #   /data/shared/InfiniTrain-dev/logs/202511_a800/20251223/feature/tp-pp-split-stream/logs \
-#   --threshold 1e-5
+#   --threshold-fp32 1e-5 --threshold-bf16 1e-2
 
 import re
 import sys
 from pathlib import Path
 from argparse import ArgumentParser
+
+def get_dtype_from_filename(filename):
+    """Determine dtype from filename. Returns 'bfloat16' or 'fp32'."""
+    return 'bfloat16' if '_bfloat16' in filename else 'fp32'
 
 def parse_log(file_path):
     """Extract step -> loss mapping from log file."""
@@ -47,8 +51,15 @@ def main():
     parser = ArgumentParser(description='Compare training loss between two log directories')
     parser.add_argument('dir1', type=Path, help='First log directory')
     parser.add_argument('dir2', type=Path, help='Second log directory')
-    parser.add_argument('--threshold', type=float, default=1e-6, help='Loss difference threshold (default: 1e-6)')
+    parser.add_argument('--threshold', type=float, help='Loss difference threshold (deprecated, use --threshold-fp32 and --threshold-bf16)')
+    parser.add_argument('--threshold-fp32', type=float, default=1e-5, help='Loss difference threshold for fp32 (default: 1e-5)')
+    parser.add_argument('--threshold-bf16', type=float, default=1e-2, help='Loss difference threshold for bfloat16 (default: 1e-2)')
     args = parser.parse_args()
+
+    # Support legacy --threshold argument
+    if args.threshold is not None:
+        args.threshold_fp32 = args.threshold
+        args.threshold_bf16 = args.threshold
 
     files1 = {f.name: f for f in args.dir1.glob('*.log')}
     files2 = {f.name: f for f in args.dir2.glob('*.log')}
@@ -65,20 +76,46 @@ def main():
         print()
 
     total_mismatches = 0
+    fp32_total = 0
+    fp32_passed = 0
+    bf16_total = 0
+    bf16_passed = 0
+
     for name in sorted(common):
-        print(f"Comparing {name}:")
-        total_steps, num_mismatches, mismatches = compare_files(files1[name], files2[name], args.threshold)
+        dtype = get_dtype_from_filename(name)
+        threshold = args.threshold_bf16 if dtype == 'bfloat16' else args.threshold_fp32
+
+        if dtype == 'bfloat16':
+            bf16_total += 1
+        else:
+            fp32_total += 1
+
+        print(f"Comparing {name} ({dtype}, threshold: {threshold:.0e}):")
+        total_steps, num_mismatches, mismatches = compare_files(files1[name], files2[name], threshold)
 
         if mismatches:
             for msg in mismatches:
                 print(msg)
             total_mismatches += num_mismatches
+        else:
+            if dtype == 'bfloat16':
+                bf16_passed += 1
+            else:
+                fp32_passed += 1
 
         matched = total_steps - num_mismatches
-        print(f"  Summary: {matched}/{total_steps} steps matched (threshold: {args.threshold:.0e})")
+        print(f"  Summary: {matched}/{total_steps} steps matched")
         print()
+
+    print("=" * 50)
+    print(f"Overall Summary:")
+    print(f"  fp32:    {fp32_passed}/{fp32_total} test cases passed (threshold: {args.threshold_fp32:.0e})")
+    print(f"  bfloat16: {bf16_passed}/{bf16_total} test cases passed (threshold: {args.threshold_bf16:.0e})")
+    print(f"  Total:   {fp32_passed + bf16_passed}/{fp32_total + bf16_total} test cases passed")
+    print("=" * 50)
 
     sys.exit(1 if total_mismatches > 0 else 0)
 
 if __name__ == '__main__':
     main()
+
