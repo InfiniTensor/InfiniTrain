@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <unordered_map>
 
 namespace infini_train {
 namespace utils {
@@ -9,10 +10,9 @@ enum class PrecisionCheckLevel { OFF = 0, MODULE = 1, FUNCTION = 2 };
 
 struct PrecisionCheckConfig {
     PrecisionCheckLevel level = PrecisionCheckLevel::OFF;
-    std::string output_path = "";   // empty=console(rank0), non-empty=file(all ranks)
-    bool output_md5 = false;        // output MD5 hash or tensor values
-    std::string format = "simple";  // "simple" or "table"
-    std::string baseline_path = ""; // baseline file path for comparison
+    std::string output_path = "./precision_check"; // Output path (default)
+    std::string format = "simple";                 // "simple" or "md5"
+    bool save_tensors = false;                     // Whether to output .npy file
 
     // Parse from "key=value,key=value" string
     static PrecisionCheckConfig Parse(const std::string &config_str);
@@ -23,10 +23,16 @@ public:
     static PrecisionCheckEnv &Instance();
     void Init(const PrecisionCheckConfig &config);
     const PrecisionCheckConfig &GetConfig() const;
+    const std::string &GetOutputPath() const;
+
+    // Tensor counter management for file overwrite across iterations (thread-local)
+    static int GetAndIncrementCounter(const std::string &key);
+    static void ResetCounters();
 
 private:
     PrecisionCheckEnv() = default;
     PrecisionCheckConfig config_;
+    std::string timestamped_path_; // Actual output path (with timestamp)
 };
 
 } // namespace utils

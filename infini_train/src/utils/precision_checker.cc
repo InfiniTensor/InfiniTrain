@@ -5,14 +5,13 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <mutex>
 #include <sstream>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <unordered_map>
 
 #include "infini_train/include/autograd/function.h"
@@ -153,123 +152,29 @@ std::string ComputeMD5(const void *data, size_t size) {
     return md5.Finalize();
 }
 
-// Baseline storage
-std::unordered_map<std::string, std::string> &GetBaseline() {
-    static std::unordered_map<std::string, std::string> baseline;
-    static bool loaded = false;
-    static std::mutex load_mutex;
-
-    if (!loaded) {
-        std::lock_guard<std::mutex> lock(load_mutex);
-        if (!loaded) {
-            const auto &config = PrecisionCheckEnv::Instance().GetConfig();
-            if (!config.baseline_path.empty()) {
-                std::ifstream file(config.baseline_path);
-                if (!file.is_open()) {
-                    std::cerr << "[PrecisionCheck] Failed to open baseline file: " << config.baseline_path << std::endl;
-                } else {
-                    std::string line;
-                    while (std::getline(file, line)) {
-                        // Try format 1: key|md5
-                        auto pipe_pos = line.rfind('|');
-                        if (pipe_pos != std::string::npos) {
-                            std::string key = line.substr(0, pipe_pos);
-                            std::string md5 = line.substr(pipe_pos + 1);
-                            baseline[key] = md5;
-                        } else {
-                            // Try format 2: simple log format with "md5="
-                            auto md5_pos = line.find("md5=");
-                            if (md5_pos != std::string::npos) {
-                                // Extract md5 value
-                                std::string md5 = line.substr(md5_pos + 4);
-
-                                // Extract key: find text between "][PrecisionCheck] " and ": md5="
-                                auto check_pos = line.find("][PrecisionCheck] ");
-                                if (check_pos != std::string::npos) {
-                                    size_t key_start = check_pos + 18; // length of "][PrecisionCheck] "
-                                    size_t key_end = line.find(": md5=", key_start);
-                                    if (key_end != std::string::npos) {
-                                        std::string key = line.substr(key_start, key_end - key_start);
-                                        baseline[key] = md5;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    std::cout << "[PrecisionCheck] Loaded " << baseline.size() << " baseline entries from "
-                              << config.baseline_path << std::endl;
-                }
-            }
-            loaded = true;
-        }
-    }
-    return baseline;
-}
-
-// Table header printed flag
-bool &TableHeaderPrinted() {
-    thread_local bool printed = false;
-    return printed;
-}
-
 std::ostream &GetLogStream() {
     thread_local std::ofstream log_file;
     thread_local std::mutex init_mutex;
     thread_local bool initialized = false;
-    thread_local bool use_console = false;
 
     if (!initialized) {
         std::lock_guard<std::mutex> lock(init_mutex);
         if (!initialized) {
-            const auto &config = PrecisionCheckEnv::Instance().GetConfig();
-
-            if (config.output_path.empty()) {
-                use_console = true;
+            const auto &output_path = PrecisionCheckEnv::Instance().GetOutputPath();
+            int global_rank = nn::parallel::global::thread_global_rank;
+            std::string filename = output_path + "/precision_check_rank_" + std::to_string(global_rank) + ".log";
+            log_file.open(filename, std::ios::out | std::ios::trunc);
+            if (!log_file.is_open()) {
+                std::cerr << "[Rank " << global_rank << "] Failed to open precision check log file: " << filename
+                          << std::endl;
             } else {
-                // Create output directory if it doesn't exist
-                mkdir(config.output_path.c_str(), 0755);
-
-                int global_rank = nn::parallel::global::thread_global_rank;
-                std::string filename
-                    = config.output_path + "/precision_check_rank_" + std::to_string(global_rank) + ".log";
-                log_file.open(filename, std::ios::out | std::ios::trunc);
-                if (!log_file.is_open()) {
-                    std::cerr << "[Rank " << global_rank << "] Failed to open precision check log file: " << filename
-                              << std::endl;
-                    use_console = true;
-                } else {
-                    use_console = false;
-                    std::cout << "[Rank " << global_rank << "] Precision check output: " << filename << std::endl;
-                }
+                std::cout << "[Rank " << global_rank << "] Precision check output: " << filename << std::endl;
             }
             initialized = true;
         }
     }
 
-    return use_console ? std::cout : log_file;
-}
-
-bool ShouldPrint() {
-    const auto &config = PrecisionCheckEnv::Instance().GetConfig();
-    if (!config.output_path.empty()) {
-        return true;
-    }
-    return nn::parallel::global::GlobalEnv::Instance().global_proc_rank() == 0;
-}
-
-std::string GetTimestamp() {
-    auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-
-    std::tm tm;
-    localtime_r(&time_t, &tm);
-
-    std::ostringstream oss;
-    oss << std::setfill('0') << std::setw(2) << (tm.tm_mon + 1) << std::setw(2) << tm.tm_mday << ' ' << std::setw(2)
-        << tm.tm_hour << ':' << std::setw(2) << tm.tm_min << ':' << std::setw(2) << tm.tm_sec << '.' << std::setw(3)
-        << ms.count();
-    return oss.str();
+    return log_file.is_open() ? log_file : std::cout;
 }
 
 std::string FormatShape(const std::vector<int64_t> &shape) {
@@ -277,7 +182,7 @@ std::string FormatShape(const std::vector<int64_t> &shape) {
     oss << "(";
     for (size_t i = 0; i < shape.size(); ++i) {
         if (i > 0) {
-            oss << ", ";
+            oss << ",";
         }
         oss << shape[i];
     }
@@ -302,63 +207,70 @@ std::string DataTypeToString(DataType dtype) {
     }
 }
 
-void PrintTableHeader(std::ostream &os) {
-    if (TableHeaderPrinted()) {
-        return;
-    }
-    TableHeaderPrinted() = true;
+struct TensorStats {
+    float min_val = 0;
+    float max_val = 0;
+    float mean_val = 0;
+    int nan_count = 0;
+    int inf_count = 0;
+};
 
-    os << "+" << std::string(50, '-') << "+" << std::string(7, '-') << "+" << std::string(18, '-') << "+"
-       << std::string(15, '-') << "+" << std::string(10, '-') << "+\n";
-    os << "| " << std::left << std::setw(49) << "key"
-       << "| " << std::setw(6) << "level"
-       << "| " << std::setw(17) << "shape"
-       << "| " << std::setw(14) << "dtype"
-       << "| " << std::setw(9) << "same_hash"
-       << "|\n";
-    os << "+" << std::string(50, '-') << "+" << std::string(7, '-') << "+" << std::string(18, '-') << "+"
-       << std::string(15, '-') << "+" << std::string(10, '-') << "+\n";
+TensorStats ComputeStats(const float *data, size_t num_elements) {
+    TensorStats stats;
+    if (num_elements == 0) {
+        return stats;
+    }
+
+    stats.min_val = std::numeric_limits<float>::max();
+    stats.max_val = std::numeric_limits<float>::lowest();
+    double sum = 0;
+
+    for (size_t i = 0; i < num_elements; ++i) {
+        float val = data[i];
+        if (std::isnan(val)) {
+            stats.nan_count++;
+            continue;
+        }
+        if (std::isinf(val)) {
+            stats.inf_count++;
+            continue;
+        }
+        stats.min_val = std::min(stats.min_val, val);
+        stats.max_val = std::max(stats.max_val, val);
+        sum += val;
+    }
+
+    size_t valid_count = num_elements - stats.nan_count - stats.inf_count;
+    stats.mean_val = valid_count > 0 ? static_cast<float>(sum / valid_count) : 0;
+
+    return stats;
 }
 
-void PrintTableRow(std::ostream &os, const std::string &key, int level, const std::string &shape,
-                   const std::string &dtype, const std::string &same_hash) {
-    os << "| " << std::left << std::setw(49) << key.substr(0, 49) << "| " << std::setw(6) << level << "| "
-       << std::setw(17) << shape.substr(0, 17) << "| " << std::setw(14) << dtype << "| " << std::setw(9) << same_hash
-       << "|\n";
-}
+void SaveNpy(const std::shared_ptr<Tensor> &tensor, const std::string &name, int idx, const std::string &stage,
+             int rank) {
+    const auto &output_path = PrecisionCheckEnv::Instance().GetOutputPath();
+    std::string dir = output_path + "/rank_" + std::to_string(rank);
+    std::filesystem::create_directories(dir);
+    std::string filename = dir + "/" + name + "_" + std::to_string(idx) + "_" + stage + ".npy";
 
-// Calculate diff order between two tensors (returns string like "1e-3" or "0")
-std::string CalculateDiffOrder(const float *data1, const float *data2, size_t size) {
-    if (!data1 || !data2 || size == 0) {
-        return "N/A";
+    if (tensor->Dtype() == DataType::kFLOAT32) {
+        tensor->SaveAsNpy(filename);
+    } else {
+        auto float_tensor = tensor->To(DataType::kFLOAT32);
+        float_tensor.SaveAsNpy(filename);
     }
-
-    double max_diff = 0.0;
-    for (size_t i = 0; i < size; ++i) {
-        double diff = std::abs(static_cast<double>(data1[i]) - static_cast<double>(data2[i]));
-        max_diff = std::max(max_diff, diff);
-    }
-
-    if (max_diff == 0.0) {
-        return "0";
-    }
-
-    int order = static_cast<int>(std::floor(std::log10(max_diff)));
-    return "1e" + std::to_string(order);
 }
 
 } // namespace
 
 void PrecisionChecker::CheckTensors(const std::string &stage, const std::string &name,
                                     const std::vector<std::shared_ptr<Tensor>> &tensors, const Config &config) {
-    if (!ShouldPrint()) {
+    const auto &global_config = PrecisionCheckEnv::Instance().GetConfig();
+    if (global_config.level == PrecisionCheckLevel::OFF) {
         return;
     }
 
-    const auto &global_config = PrecisionCheckEnv::Instance().GetConfig();
     const int rank = nn::parallel::global::thread_global_rank;
-    const auto level = global_config.level;
-    auto &baseline = GetBaseline();
 
     for (size_t i = 0; i < tensors.size(); ++i) {
         if (!tensors[i]) {
@@ -376,110 +288,61 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
             cpu_tensor = tensor;
         }
 
-        const void *data = cpu_tensor->DataPtr();
+        const float *float_data = static_cast<const float *>(cpu_tensor->DataPtr());
         const size_t byte_size = cpu_tensor->SizeInBytes();
         const size_t num_elements = cpu_tensor->NumElements();
 
-        // Build key
+        // Build context key
         const std::string context_key = PrecisionCheckContext::Instance().GetKey();
-        const std::string full_key = context_key.empty() ? (stage + " " + name + " tensor[" + std::to_string(i) + "]")
-                                                         : (context_key + " " + stage + " " + name);
+        const std::string stage_short = (stage.find("Forward") != std::string::npos) ? "forward" : "backward";
 
-        // Only compute MD5 if needed (for output or baseline comparison)
-        const bool need_md5 = global_config.output_md5 || !baseline.empty();
-        std::string md5;
-        if (need_md5) {
-            md5 = ComputeMD5(data, byte_size);
+        // Get tensor index for this (name, stage) combination
+        std::string counter_key = name + "_" + stage_short;
+        int idx = PrecisionCheckEnv::GetAndIncrementCounter(counter_key);
+
+        // Save NPY if enabled
+        if (global_config.save_tensors) {
+            SaveNpy(cpu_tensor, name, idx, stage_short, rank);
         }
 
-        // Check baseline
-        const bool has_baseline = !baseline.empty();
-        bool same_hash = true;
-        if (has_baseline) {
-            auto it = baseline.find(full_key);
-            if (it == baseline.end() && !context_key.empty()) {
-                // Try without context: "stage name tensor[i]"
-                std::string key_without_context = stage + " " + name + " tensor[" + std::to_string(i) + "]";
-                it = baseline.find(key_without_context);
-            }
-            if (it != baseline.end()) {
-                same_hash = (it->second == md5);
-            }
-        }
-
+        // Output to log
         auto &log_stream = GetLogStream();
 
-        if (global_config.format == "table") {
-            thread_local bool header_printed = false;
-            if (!header_printed) {
-                PrintTableHeader(log_stream);
-                header_printed = true;
-            }
-            std::string same_hash_str = has_baseline ? (same_hash ? "True" : "False") : "--";
-            PrintTableRow(log_stream, full_key, static_cast<int>(level), FormatShape(cpu_tensor->Dims()),
-                          DataTypeToString(cpu_tensor->Dtype()), same_hash_str);
-
-            // Save to baseline file if output_path is set and output_md5 is true
-            if (!global_config.output_path.empty() && global_config.output_md5) {
-                log_stream << full_key << "|" << md5 << std::endl;
-            }
+        if (global_config.format == "md5") {
+            // MD5 format
+            std::string md5 = ComputeMD5(float_data, byte_size);
+            log_stream << context_key << " " << name << "_" << idx << "_" << stage << " tensor[" << i << "]: "
+                       << "dtype=" << DataTypeToString(cpu_tensor->Dtype()) << " "
+                       << "shape=" << FormatShape(cpu_tensor->Dims()) << " "
+                       << "md5=" << md5 << std::endl;
         } else {
-            // Simple format
-            const float *float_data = static_cast<const float *>(data);
+            // Simple format (default)
+            TensorStats stats = ComputeStats(float_data, num_elements);
 
-            bool has_nan = false;
-            bool has_inf = false;
-            for (size_t j = 0; j < num_elements; ++j) {
-                float val = float_data[j];
-                if (std::isnan(val)) {
-                    has_nan = true;
+            const bool has_error
+                = (config.check_nan && stats.nan_count > 0) || (config.check_inf && stats.inf_count > 0);
+            const std::string error_marker = has_error ? " <- ERROR" : "";
+
+            log_stream << context_key << " " << name << "_" << idx << "_" << stage << " tensor[" << i << "]: "
+                       << "dtype=" << DataTypeToString(cpu_tensor->Dtype()) << " "
+                       << "shape=" << FormatShape(cpu_tensor->Dims()) << " "
+                       << "min=" << stats.min_val << " "
+                       << "max=" << stats.max_val << " "
+                       << "mean=" << stats.mean_val << " [";
+
+            // Print first 6 values
+            constexpr size_t max_print = 6;
+            for (size_t j = 0; j < std::min(num_elements, max_print); ++j) {
+                if (j > 0) {
+                    log_stream << ", ";
                 }
-                if (std::isinf(val)) {
-                    has_inf = true;
-                }
+                log_stream << float_data[j];
             }
-
-            const bool has_error = (config.check_nan && has_nan) || (config.check_inf && has_inf);
-
-            // When output_path is set, always write to file; otherwise only write on error or if print_stats is enabled
-            const bool should_output = !global_config.output_path.empty() || has_error || config.print_stats;
-
-            if (should_output) {
-                const std::string log_level = has_error ? "E" : "I";
-
-                log_stream << log_level << GetTimestamp() << " [Rank " << rank << "][PrecisionCheck] " << stage << " "
-                           << name << " tensor[" << i << "]: ";
-
-                if (global_config.output_md5) {
-                    log_stream << "md5=" << md5;
-                    if (!same_hash) {
-                        log_stream << " (MISMATCH)";
-                    }
-                } else {
-                    log_stream << "[";
-                    if (has_nan) {
-                        log_stream << " NaN detected!";
-                    }
-                    if (has_inf) {
-                        log_stream << " Inf detected!";
-                    }
-
-                    if (config.print_stats) {
-                        constexpr size_t max_print = 6;
-                        for (size_t j = 0; j < std::min(num_elements, max_print); ++j) {
-                            if (j > 0) {
-                                log_stream << ", ";
-                            }
-                            log_stream << float_data[j];
-                        }
-                        if (num_elements > max_print) {
-                            log_stream << ", ...";
-                        }
-                    }
-                    log_stream << "]";
-                }
-                log_stream << std::endl;
+            if (num_elements > max_print) {
+                log_stream << ", ...";
             }
+            log_stream << "] [NaN:" << stats.nan_count << " Inf:" << stats.inf_count << "]" << error_marker
+                       << std::endl;
 
             if (has_error && config.abort_on_error) {
                 std::cerr << "Precision check failed, aborting!" << std::endl;
@@ -520,14 +383,16 @@ void PrecisionChecker::RegisterForModule(nn::Module *module, const std::string &
 
     module->RegisterForwardPostHook([module_name, config](nn::Module *, const std::vector<std::shared_ptr<Tensor>> &,
                                                           const std::vector<std::shared_ptr<Tensor>> &outputs) {
-        CheckTensors("Module Forward Output", module_name, outputs, config);
+        CheckTensors("Forward Output", module_name, outputs, config);
     });
 
     module->RegisterBackwardPostHook([module_name, config](nn::Module *,
                                                            const std::vector<std::shared_ptr<Tensor>> &grad_inputs,
                                                            const std::vector<std::shared_ptr<Tensor>> &) {
-        CheckTensors("Module Backward Output", module_name, grad_inputs, config);
+        CheckTensors("Backward Output", module_name, grad_inputs, config);
     });
 }
+
+void PrecisionChecker::ResetCounters() { PrecisionCheckEnv::ResetCounters(); }
 
 } // namespace infini_train::utils
