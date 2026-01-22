@@ -27,6 +27,7 @@
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/utils/precision_check_config.h"
+#include "infini_train/include/utils/precision_checker.h"
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
@@ -252,6 +253,9 @@ void Train(const nn::parallel::Rank &rank) {
     auto cuda_device = device->IsCUDA() ? dynamic_cast<const CudaDevice *>(device) : nullptr;
 
     for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
+        // Reset precision check counters at start of each iteration for file overwrite
+        utils::PrecisionChecker::ResetCounters();
+
         const bool last_step = step == FLAGS_num_iteration;
 
         if (cuda_device) {

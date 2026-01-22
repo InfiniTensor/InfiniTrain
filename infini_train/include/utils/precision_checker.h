@@ -39,6 +39,9 @@ public:
     static void RegisterForModule(nn::Module *module, const std::string &name = "",
                                   const Config &config = DefaultConfig());
 
+    // Reset tensor counters (call at start of each iteration for file overwrite)
+    static void ResetCounters();
+
 private:
     static void CheckTensors(const std::string &stage, const std::string &name,
                              const std::vector<std::shared_ptr<Tensor>> &tensors, const Config &config);
