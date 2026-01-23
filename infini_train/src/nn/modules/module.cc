@@ -136,7 +136,11 @@ void Module::To(const Device *device) {
     for (auto &[name, param] : parameters_) {
         new_parameters.emplace(name, std::make_shared<Tensor>(param->To(device)));
     }
-    for (auto &[name, buffer] : buffers_) { new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(device))); }
+    for (auto &[name, buffer] : buffers_) {
+        if (buffer) {
+            new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(device)));
+        }
+    }
     parameters_ = std::move(new_parameters);
     buffers_ = std::move(new_buffers);
     device_ = device;

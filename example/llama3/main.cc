@@ -163,6 +163,8 @@ void Train(const nn::parallel::Rank &rank) {
 
     model->To(device);
 
+    // ddp_pg->Barrier(device);
+
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": Model loaded to device.";
 
     DataType dtype;
@@ -339,6 +341,8 @@ void Train(const nn::parallel::Rank &rank) {
     Profiler::Instance().Report("llama3.report", Profiler::SortBy::DeviceTimePercentage);
     Profiler::Instance().PrintRecords("llama3.records.log");
 #endif
+
+    device->Synchronize();
 }
 
 int main(int argc, char *argv[]) {

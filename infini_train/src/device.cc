@@ -97,7 +97,10 @@ void MacaDevice::SetDevice() const { MACA_CHECK(mcSetDevice(index_)); }
 
 void MacaDevice::Synchronize() const { MACA_CHECK(mcDeviceSynchronize()); }
 
-mcStream_t MacaDevice::Stream() const { return stream_; }
+mcStream_t MacaDevice::Stream() const {
+    SetDevice();
+    return stream_;
+}
 
 mcblasHandle_t MacaDevice::McblasHandle() const { return mcblas_handle_; }
 

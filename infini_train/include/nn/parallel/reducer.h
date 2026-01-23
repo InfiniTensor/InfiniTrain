@@ -59,7 +59,7 @@ struct ReducerOptions {
 
     // Whether to enable gradient bucketing
     // FIXME(zbl): should enable gradient bucketing by default
-    bool gradient_bucketing_enabled = true;
+    bool gradient_bucketing_enabled = false;
 };
 
 // DDP Reducer that handles gradient bucketing in backward

@@ -121,6 +121,7 @@ std::shared_ptr<Tensor> TriuForward(const std::shared_ptr<Tensor> &input, int64_
     int num_blocks = (rows * cols + threads_per_block - 1) / threads_per_block;
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input->GetDevice());
+    maca_device->SetDevice();
 
     DispatchFunc<INFINI_ALL_TYPES>(
         input->Dtype(),
@@ -160,7 +161,7 @@ std::shared_ptr<Tensor> TriuBackward(const std::shared_ptr<Tensor> &grad_output,
     int threads_per_block = 256;
     int num_blocks = (rows * cols + threads_per_block - 1) / threads_per_block;
     const auto *maca_device = dynamic_cast<const MacaDevice *>(grad_output->GetDevice());
-
+    maca_device->SetDevice();
     DispatchFunc<INFINI_ALL_TYPES>(
         dtype,
         [=]<typename T>() {
@@ -230,6 +231,7 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
     }
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input->GetDevice());
+    maca_device->SetDevice();
     const auto &stream = maca_device->Stream();
 
     // Allocate device memory for dims and strides
@@ -342,6 +344,7 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
 
     auto output = std::make_shared<Tensor>(input_shape, dtype, input->GetDevice());
     const auto *maca_device = dynamic_cast<const MacaDevice *>(output->GetDevice());
+    maca_device->SetDevice();
     int threads_per_block = 256;
 
     if (mode == MaskMode::kLead) {
@@ -402,6 +405,7 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
 
     auto grad_input = std::make_shared<Tensor>(output_shape, dtype, grad_output->GetDevice());
     const auto *maca_device = dynamic_cast<const MacaDevice *>(grad_output->GetDevice());
+    maca_device->SetDevice();
     int threads_per_block = 256;
 
     if (mode == MaskMode::kLead) {
@@ -474,6 +478,7 @@ std::shared_ptr<Tensor> RepeatInterleaveForward(const std::shared_ptr<Tensor> &i
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input->GetDevice());
+    maca_device->SetDevice();
 
     DispatchFunc<INFINI_ALL_TYPES>(
         input->Dtype(),
@@ -529,7 +534,7 @@ std::shared_ptr<Tensor> RepeatInterleaveBackward(const std::shared_ptr<Tensor> &
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
     const auto *maca_device = dynamic_cast<const MacaDevice *>(grad_output->GetDevice());
-
+    maca_device->SetDevice();
     DispatchFunc<INFINI_ALL_TYPES>(
         grad_output->Dtype(),
         [=]<typename T>() {

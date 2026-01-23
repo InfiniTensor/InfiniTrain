@@ -348,7 +348,8 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3Chunk::Forward(const std::vector<std:
     const auto device = x1->GetDevice();
     // Init freqs_cis on device only once
     // TODO(zbl): consider moving this to model construction
-    if (buffers_[kFreqsCisName] == nullptr) {
+    auto it = buffers_.find(kFreqsCisName);
+    if (it == buffers_.end() || it->second == nullptr) {
         buffers_[kFreqsCisName] = PrecomputeFreqsCis(config_.n_embd / config_.n_head, config_.block_size * 2,
                                                      config_.rope_theta, config_.use_scaled_rope, device);
     }

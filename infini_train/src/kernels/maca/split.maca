@@ -51,7 +51,7 @@ std::vector<std::shared_ptr<Tensor>> SplitForward(const std::shared_ptr<Tensor> 
         int num_blocks = (total + threads_per_block - 1) / threads_per_block;
 
         const auto *maca_device = dynamic_cast<const MacaDevice *>(input->GetDevice());
-
+        maca_device->SetDevice();
         DispatchFunc<INFINI_ALL_TYPES>(
             dtype,
             [=]<typename T>() {
@@ -115,6 +115,7 @@ std::shared_ptr<Tensor> LaunchSplitBackward(const std::vector<int64_t> &input_di
     int64_t num_splits = grad_outputs.size();
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(grad->GetDevice());
+    maca_device->SetDevice();
     const auto &stream = maca_device->Stream();
     // init the array of grad_output ptrs
     std::vector<const T *> host_grad_output_ptrs;

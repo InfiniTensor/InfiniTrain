@@ -22,6 +22,7 @@ void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const s
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(tensor->GetDevice());
+    maca_device->SetDevice();
 
     DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
         gradient->Dtype(),
@@ -62,6 +63,7 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
     int threads_per_block = 256;
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
     const auto *maca_device = dynamic_cast<const MacaDevice *>(grad->GetDevice());
+    maca_device->SetDevice();
 
     DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
         grad->Dtype(),

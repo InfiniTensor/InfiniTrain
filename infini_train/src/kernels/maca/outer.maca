@@ -29,6 +29,7 @@ std::shared_ptr<Tensor> OuterForward(const std::shared_ptr<Tensor> &input, const
     auto output = std::make_shared<Tensor>(std::vector<int64_t>{M, N}, input->Dtype(), input->GetDevice());
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input->GetDevice());
+    maca_device->SetDevice();
     // reinterpret input: [M] as column vector [M, 1]
     // reinterpret other: [N] as row vector [1, N]
     // output[M, N] = input[M, 1] * other.T[1, N]
@@ -98,6 +99,7 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
         "MACA OuterBackward");
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input->GetDevice());
+    maca_device->SetDevice();
     float alpha = 1.0f;
     float beta = 0.0f;
     mcblasHandle_t handle = maca_device->McblasHandle();

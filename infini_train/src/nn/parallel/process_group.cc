@@ -15,7 +15,7 @@
 #include <nccl.h>
 #endif
 #ifdef USE_MCCL
-#include<mccl.h>
+#include <mccl.h>
 #endif
 
 #ifdef USE_CUDA
@@ -30,7 +30,7 @@
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
 
-    namespace infini_train {
+namespace infini_train {
 
 namespace {
 using nn::parallel::function::ReduceOpType;
@@ -241,6 +241,17 @@ void ProcessGroupNCCL::InitStreams() {
         CUDA_CHECK(cudaStreamCreateWithPriority(&comm_streams_[i], cudaStreamNonBlocking, high));
         device_stream_map_[devices_[i]] = comm_streams_[i];
     }
+}
+
+void ProcessGroupNCCL::Barrier(const Device *device) const {
+    int one = 1;
+    const auto *cuda_device = dynamic_cast<const CudaDevice *>(device);
+    cuda_device->SetDevice();
+
+    auto comm = device_comm_map_.at(cuda_device);
+    cudaStream_t stream = cuda_device->Stream();
+
+    NCCL_CHECK(ncclAllReduce(&one, &one, 1, ncclInt, ncclSum, comm, stream));
 }
 
 std::shared_ptr<Work> ProcessGroupNCCL::AllReduce(const std::shared_ptr<Tensor> &tensor,
@@ -707,6 +718,22 @@ void ProcessGroupMCCL::InitStreams() {
         MACA_CHECK(mcStreamCreateWithPriority(&comm_streams_[i], mcStreamNonBlocking, high));
         device_stream_map_[devices_[i]] = comm_streams_[i];
     }
+}
+
+void ProcessGroupMCCL::Barrier(const Device *device) const {
+    const auto *maca_device = dynamic_cast<const MacaDevice *>(device);
+    maca_device->SetDevice();
+    auto comm = device_comm_map_.at(maca_device);
+    mcStream_t stream = maca_device->Stream();
+
+    int32_t h_one = 1;
+    int32_t *d_one = nullptr;
+    MACA_CHECK(mcMallocAsync((void **)&d_one, sizeof(int32_t), stream));
+    MACA_CHECK(mcMemcpyAsync(d_one, &h_one, sizeof(int32_t), mcMemcpyHostToDevice, stream));
+
+    MCCL_CHECK(mcclAllReduce(d_one, d_one, 1, mcclInt, mcclSum, comm, stream));
+
+    MACA_CHECK(mcFreeAsync(d_one, stream));
 }
 
 std::shared_ptr<Work> ProcessGroupMCCL::AllReduce(const std::shared_ptr<Tensor> &tensor,

@@ -60,6 +60,7 @@ TensorBuffer::TensorBuffer(const Device *device, size_t size) : device_(device),
         device->SetDevice();
         const auto *maca_device = dynamic_cast<const MacaDevice *>(device);
         MACA_CHECK(mcMallocAsync(&data_, size, maca_device->Stream()));
+        MACA_CHECK(mcStreamSynchronize(maca_device->Stream()));
         MACA_CHECK(mcSetDevice(current_device));
         break;
     }
@@ -82,6 +83,8 @@ TensorBuffer::~TensorBuffer() {
 #endif
 #ifdef USE_MACA
     case DeviceType::kMACA:
+        dynamic_cast<const MacaDevice *>(device_)->SetDevice();
+        MACA_CHECK(mcStreamSynchronize(dynamic_cast<const MacaDevice *>(device_)->Stream()));
         MACA_CHECK(mcFreeAsync(data_, dynamic_cast<const MacaDevice *>(device_)->Stream()));
         break;
 #endif
@@ -212,7 +215,7 @@ Tensor Tensor::To(const Device *device) {
     if (device == buffer_->GetDevice()) {
         auto new_tensor = Tensor(*this, offset_, dims_);
         if (grad_) {
-            new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), grad_->offset_, grad_->dims_);
+            new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), 0, grad_->dims_);
         }
         return new_tensor;
     }
@@ -264,8 +267,21 @@ Tensor Tensor::To(const Device *device) {
         if (GetDevice()->Type() == DeviceType::kCPU) {
             device->SetDevice();
             // CPU -> MACA
-            MACA_CHECK(mcMemcpyAsync(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), mcMemcpyHostToDevice,
-                                     dynamic_cast<const MacaDevice *>(device)->Stream()));
+            const auto *dst_maca = dynamic_cast<const MacaDevice *>(device);
+            void *dst_ptr = new_tensor.DataPtr();
+            const void *src_ptr = DataPtr();
+            size_t nbytes = SizeInBytes();
+            mcStream_t stream = dst_maca->Stream();
+
+            // 关键：参数合法性检查（失败会给出详细日志）
+            MACA_CHECK(common::maca::CheckMcMemcpyAsyncArgs(dst_ptr, src_ptr, nbytes, mcMemcpyHostToDevice, stream,
+                                                            dst_maca->Index()));
+
+            // 真正的拷贝
+            MACA_CHECK(mcMemcpyAsync(dst_ptr, src_ptr, nbytes, mcMemcpyHostToDevice, stream));
+
+            // 你原本就加了同步，这里保持不变
+            MACA_CHECK(mcStreamSynchronize(stream));
 
         } else {
             // MACA -> MACA

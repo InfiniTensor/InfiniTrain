@@ -37,6 +37,8 @@ public:
 
     virtual int GetGroupRank(int global_rank) const;
 
+    virtual void Barrier(const Device* device) const = 0;
+
     // Asynchronous communication APIs (Compute / Communication stream decoupled)
     virtual std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor,
                                             function::ReduceOpType reduce_op = function::ReduceOpType::kSum,
@@ -97,6 +99,8 @@ public:
 
     ~ProcessGroupNCCL() override;
 
+    void Barrier(const Device* device) const override;
+
     // Asynchronous communication APIs (Compute / Communication stream decoupled)
     std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op,
                                     bool async_op) const override;
@@ -149,6 +153,8 @@ public:
     explicit ProcessGroupMCCL(const std::string &process_group_name, const std::vector<int> &device_indices);
 
     ~ProcessGroupMCCL() override;
+
+    void Barrier(const Device* device) const override;
 
     // Asynchronous communication APIs (Compute / Communication stream decoupled)
     std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op,

@@ -133,6 +133,7 @@ std::shared_ptr<Tensor> ReduceOpForward(const std::shared_ptr<Tensor> &input, co
     int num_blocks = N * W;
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input->GetDevice());
+    maca_device->SetDevice();
     DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
@@ -165,6 +166,7 @@ std::shared_ptr<Tensor> ReduceOpBackward(const std::shared_ptr<Tensor> &grad_out
     int num_blocks = (N * H * W + threads_per_block - 1) / threads_per_block;
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(grad_output->GetDevice());
+    maca_device->SetDevice();
     DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {

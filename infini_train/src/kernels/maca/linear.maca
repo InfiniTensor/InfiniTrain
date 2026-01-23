@@ -40,6 +40,7 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
     auto output = std::make_shared<Tensor>(output_dims, dtype, input->GetDevice());
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input->GetDevice());
+    maca_device->SetDevice();
     const float alpha = 1.0f, beta = 0.0f;
     mcblasHandle_t handle = maca_device->McblasHandle();
 
@@ -130,6 +131,7 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
         "MACA MatmulBackward");
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input_promoted->GetDevice());
+    maca_device->SetDevice();
     const float alpha = 1.0f, beta = 0.0f;
     mcblasHandle_t handle = maca_device->McblasHandle();
 
@@ -231,6 +233,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     auto output = std::make_shared<Tensor>(output_dims, dtype, input->GetDevice());
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input->GetDevice());
+    maca_device->SetDevice();
 
     if (bias) {
         CHECK_EQ(bias->Dims().size(), 1);
@@ -354,6 +357,7 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
         promoted_type, [=]<typename T>() { initialize_gradients(T(0), promoted_type); }, "MACA LinearBackward");
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input_promoted->GetDevice());
+    maca_device->SetDevice();
     float alpha = 1.0f;
     float beta = 0.0f;
     auto trans_a1 = transpose ? MCBLAS_OP_N : MCBLAS_OP_T;

@@ -66,6 +66,8 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     int64_t *new_dims_dev, *starts_dev, *steps_dev, *input_strides_dev, *output_strides_dev;
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input->GetDevice());
+    maca_device->SetDevice();
+
     const auto &stream = maca_device->Stream();
     mcMallocAsync(reinterpret_cast<void **>(&new_dims_dev),
                     (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
@@ -158,6 +160,8 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     int64_t *new_dims_dev, *starts_dev, *steps_dev, *input_strides_dev, *output_strides_dev;
 
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input->GetDevice());
+    maca_device->SetDevice();
+
     const auto &stream = maca_device->Stream();
     mcMallocAsync(reinterpret_cast<void **>(&new_dims_dev),
                     (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),

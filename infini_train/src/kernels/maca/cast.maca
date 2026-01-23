@@ -21,6 +21,7 @@ __global__ void CastKernel(Tdst *dst, const Tsrc *src, size_t num_elements, size
 std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
     auto dst_tensor = std::make_shared<Tensor>(input->Dims(), dtype, input->GetDevice());
     const auto *maca_device = dynamic_cast<const MacaDevice *>(input->GetDevice());
+    maca_device->SetDevice();
 
     const size_t num_elements = input->NumElements();
     dim3 block_dims(256);
