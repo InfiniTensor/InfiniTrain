@@ -41,6 +41,9 @@ PrecisionCheckConfig PrecisionCheckConfig::Parse(const std::string &config_str) 
     if (kv_map.count("save_tensors")) {
         config.save_tensors = (kv_map["save_tensors"] == "true" || kv_map["save_tensors"] == "1");
     }
+    if (kv_map.count("md5_tolerance")) {
+        config.md5_tolerance = std::stod(kv_map["md5_tolerance"]);
+    }
     return config;
 }
 
