@@ -12,18 +12,18 @@ class Module;
 
 namespace utils {
 
-// 全局 Module Hook 注册器
-// 管理需要应用到所有 module 的 hooks
+// Global Module Hook Registry
+// Manages hooks that need to be applied to all modules
 class GlobalModuleHookRegistry {
 public:
     using ModuleHookRegistrar = std::function<void(nn::Module *)>;
 
     static GlobalModuleHookRegistry &Instance();
 
-    // 注册一个 hook registrar，之后所有 module 在首次 forward 时会调用它
+    // Register a hook registrar, which will be called for all modules on their first forward pass
     void RegisterHook(ModuleHookRegistrar registrar);
 
-    // 为指定 module 应用所有已注册的 hooks（由 Module::operator() 调用）
+    // Apply all registered hooks to the specified module (called by Module::operator())
     void ApplyHooks(nn::Module *module);
 
 private:
