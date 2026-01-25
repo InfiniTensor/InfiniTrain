@@ -246,6 +246,17 @@ TensorStats ComputeStats(const float *data, size_t num_elements) {
     return stats;
 }
 
+// Quantize float data to specified tolerance for MD5 calculation
+// e.g., tolerance=1e-3: 4.0003 and 4.0004 both become 4.000
+std::vector<float> QuantizeData(const float *data, size_t num_elements, double tolerance) {
+    std::vector<float> quantized(num_elements);
+    double inv_tolerance = 1.0 / tolerance;
+    for (size_t i = 0; i < num_elements; ++i) {
+        quantized[i] = static_cast<float>(std::round(data[i] * inv_tolerance) * tolerance);
+    }
+    return quantized;
+}
+
 void SaveNpy(const std::shared_ptr<Tensor> &tensor, const std::string &name, int idx, const std::string &stage,
              int rank) {
     const auto &output_path = PrecisionCheckEnv::Instance().GetOutputPath();
@@ -310,7 +321,22 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
 
         if (global_config.format == "md5") {
             // MD5 format
-            std::string md5 = ComputeMD5(float_data, byte_size);
+            std::string md5;
+            if (global_config.md5_tolerance > 0.0) {
+                // Quantize data before computing MD5
+                // Convert to float32 if needed for quantization
+                std::shared_ptr<Tensor> float32_tensor = cpu_tensor;
+                if (cpu_tensor->Dtype() != DataType::kFLOAT32) {
+                    float32_tensor = std::make_shared<Tensor>(cpu_tensor->To(DataType::kFLOAT32));
+                }
+                const float *data_ptr = static_cast<const float *>(float32_tensor->DataPtr());
+                size_t num_elems = float32_tensor->NumElements();
+                auto quantized = QuantizeData(data_ptr, num_elems, global_config.md5_tolerance);
+                md5 = ComputeMD5(quantized.data(), quantized.size() * sizeof(float));
+            } else {
+                // Original precision MD5
+                md5 = ComputeMD5(cpu_tensor->DataPtr(), byte_size);
+            }
             log_stream << context_key << " " << name << "_" << idx << "_" << stage << " tensor[" << i << "]: "
                        << "dtype=" << DataTypeToString(cpu_tensor->Dtype()) << " "
                        << "shape=" << FormatShape(cpu_tensor->Dims()) << " "

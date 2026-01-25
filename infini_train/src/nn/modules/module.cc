@@ -12,8 +12,7 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
-#include "infini_train/include/utils/precision_check_config.h"
-#include "infini_train/include/utils/precision_checker.h"
+#include "infini_train/include/utils/global_module_hook_registry.h"
 
 #ifndef UNLIKELY
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
@@ -135,15 +134,8 @@ std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shar
 }
 
 std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    // Register precision check hooks if enabled and not already registered
-    // TODO(cx): move RegisterForModule to PrecisionChecker and avoid duplicate registration
-    if (!precision_check_registered_) {
-        auto precision_level = utils::PrecisionCheckEnv::Instance().GetConfig().level;
-        if (precision_level == utils::PrecisionCheckLevel::MODULE) {
-            utils::PrecisionChecker::RegisterForModule(this);
-            precision_check_registered_ = true;
-        }
-    }
+    // Apply globally registered hooks (on first call for this module)
+    utils::GlobalModuleHookRegistry::Instance().ApplyHooks(this);
 
     // Call forward pre-hooks
     for (const auto &hook : forward_pre_hooks_) {

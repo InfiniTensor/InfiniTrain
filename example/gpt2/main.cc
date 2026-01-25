@@ -26,6 +26,7 @@
 #include "infini_train/include/profiler.h"
 #endif
 #include "infini_train/include/nn/parallel/utils.h"
+#include "infini_train/include/utils/global_module_hook_registry.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
 
@@ -380,6 +381,12 @@ int main(int argc, char *argv[]) {
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
                                      FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
     utils::PrecisionCheckEnv::Instance().Init(precision_config);
+
+    // Register PrecisionChecker hook for all modules
+    if (precision_config.level == utils::PrecisionCheckLevel::MODULE) {
+        utils::GlobalModuleHookRegistry::Instance().RegisterHook(
+            [](nn::Module *m) { utils::PrecisionChecker::RegisterForModule(m); });
+    }
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 
