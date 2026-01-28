@@ -1,43 +1,33 @@
-#include "infini_train/include/nn/parallel/distributed_optimizer.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 
 #include "glog/logging.h"
 
-#include "infini_train/include/device.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
-
-namespace {
-std::shared_ptr<Tensor> GetShardView(const std::shared_ptr<Tensor> &buffer, size_t world_size, size_t rank) {
-
-    CHECK(buffer);
-    CHECK_GT(world_size, 0);
-    CHECK_LT(rank, world_size);
-    CHECK_EQ(buffer->NumElements() % world_size, 0);
-
-    const size_t shard_numel = buffer->NumElements() / world_size;
-    const size_t offset_bytes = shard_numel * rank * kDataTypeToSize.at(buffer->Dtype());
-
-    return std::make_shared<Tensor>(*buffer, offset_bytes, std::vector<int64_t>{static_cast<int64_t>(shard_numel)});
-}
-
-} // namespace
-
 DistributedOptimizer::DistributedOptimizer(OptimizerCreator creator,
                                            const std::vector<std::shared_ptr<Tensor>> &full_params,
-                                           const std::vector<std::shared_ptr<ParamAndGradBuffer>> &buffers,
-                                           const std::vector<std::shared_ptr<ParamAndGradBucketGroup>> &bucket_groups,
-                                           const ProcessGroup *dp_pg, size_t dp_world_size, size_t dp_rank)
-    : Optimizer(full_params), param_grad_buffers_(buffers), bucket_groups_(bucket_groups), dp_pg_(dp_pg),
-      dp_world_size_(dp_world_size), dp_rank_(dp_rank), creator_(std::move(creator)) {
+                                           const std::vector<std::shared_ptr<Module>> &model_chunks,
+                                           size_t dp_world_size, size_t dp_rank)
+    : Optimizer(full_params), dp_world_size_(dp_world_size), dp_rank_(dp_rank) {
 
-    CHECK(dp_pg_);
     CHECK(dp_world_size_ > 1) << "DistributedOptimizer: dp_world_size must be greater than 1.";
+
+    for (size_t i = 0; i < model_chunks.size(); ++i) {
+        auto ddp_chunk = std::dynamic_pointer_cast<DistributedDataParallel>(model_chunks[i]);
+        CHECK(ddp_chunk) << "DistributedOptimizer: model_chunks[" << i << "] is not a DDP model.";
+
+        param_grad_buffers_.insert(param_grad_buffers_.end(), ddp_chunk->param_grad_buffers().begin(),
+                                   ddp_chunk->param_grad_buffers().end());
+        bucket_groups_.insert(bucket_groups_.end(), ddp_chunk->bucket_groups().begin(),
+                              ddp_chunk->bucket_groups().end());
+    }
 
     BuildShardParamsAndBindGrads();
 
     // Build base optimizer
-    base_optimizer_ = creator_(shard_params_);
+    base_optimizer_ = creator(shard_params_);
     CHECK(base_optimizer_) << "DistributedOptimizer: failed to create base optimizer.";
 }
 
@@ -110,11 +100,18 @@ void DistributedOptimizer::FinishParamSync(bool skip_next_bucket_dispatch) {
 }
 
 void DistributedOptimizer::ZeroGrad(bool set_to_none) {
-    // Zero main_grad buffer and clear BucketGroup state
-    for (auto &buffer : param_grad_buffers_) { buffer->Reset(); }
+    // Clear BucketGroup state and reset buffer:
+    // If set_to_none is true:
+    //   1) buffers will not be zeroed,
+    //   2) each of full_params's tensor->grad() will be set to nullptr
+    // If set_to_none is false:
+    //   1) buffers will be zeroed,
+    //   2) do not perform Fill(0) for each param
+    for (auto &buffer : param_grad_buffers_) { buffer->Reset(set_to_none); }
     for (auto &group : bucket_groups_) { group->Reset(); }
-    // Call base class's method: Zero each param's grad to guarantee consistency
-    infini_train::Optimizer::ZeroGrad(set_to_none);
+    if (set_to_none) {
+        for (auto param : params_) { param->ZeroGrad(set_to_none); }
+    }
 }
 
 void DistributedOptimizer::Step() {

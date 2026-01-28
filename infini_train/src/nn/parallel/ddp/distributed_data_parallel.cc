@@ -1,4 +1,4 @@
-#include "infini_train/include/nn/parallel/distributed_data_parallel.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 
 #include <map>
 #include <memory>
@@ -147,14 +147,6 @@ void DistributedDataParallel::OnGradReady(const std::shared_ptr<Tensor> &param) 
             CHECK(param->grad()) << "param.grad being None is not safe when overlap_grad_reduce is True";
         }
 
-        if (param->grad()) {
-            // Add to main_grad(buffer)
-            auto kernel = Dispatcher::Instance().GetKernel({param->GetDevice()->Type(), "AccumulateGrad"});
-            kernel.Call<void>(param->grad(), 1.f, param->main_grad());
-        }
-        // Can safely set grad to null because grad has already been added to main_grad(buffer)
-        param->set_grad(nullptr);
-
         if (ddp_config_.overlap_grad_reduce) {
             it->second->RegisterGradReady(param);
         }
@@ -166,6 +158,9 @@ DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &inp
     auto outputs = (*modules_[kModuleName])(input_tensors);
     if (reducer_) {
         reducer_->PrepareForBackward();
+    }
+    if (ddp_config_.use_distributed_optimizer) {
+        for (auto buffer : param_grad_buffers_) { buffer->RebindGradViews(); }
     }
     return outputs;
 }

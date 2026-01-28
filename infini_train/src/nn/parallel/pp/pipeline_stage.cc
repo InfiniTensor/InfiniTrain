@@ -37,7 +37,6 @@ int PipelineStage::num_stages() const { return num_stages_; }
 
 const Device *PipelineStage::device() const { return device_; }
 const std::vector<std::vector<int64_t>> &PipelineStage::recv_shape() const { return recv_shape_; }
-// std::shared_ptr<Optimizer> PipelineStage::optimizer() { return optimizer_; }
 const std::vector<std::shared_ptr<Module>> &PipelineStage::chunks() { return chunks_; }
 std::vector<std::shared_ptr<Module>> *PipelineStage::mutable_chunks() { return &chunks_; }
 } // namespace infini_train::nn::parallel

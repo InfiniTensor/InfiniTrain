@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "infini_train/include/datatype.h"
-#include "infini_train/include/nn/parallel/distributed_data_parallel_config.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 
 namespace infini_train {
@@ -55,7 +55,7 @@ public:
      * @param ddp_config DDP related options, see definition of DistributedDataParallelConfig
      */
     explicit Reducer(std::vector<std::shared_ptr<Tensor>> parameters, std::vector<std::vector<size_t>> bucket_indices,
-                     const DistributedDataParallelConfig ddp_config = DistributedDataParallelConfig());
+                     const DistributedDataParallelConfig ddp_config);
 
     // Attach PostAllReduceHooks to params
     void AttachHooksToParameters();

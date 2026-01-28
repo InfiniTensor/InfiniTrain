@@ -14,8 +14,8 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/distributed_data_parallel.h"
-#include "infini_train/include/nn/parallel/distributed_optimizer.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
@@ -254,27 +254,11 @@ void Train(const nn::parallel::Rank &rank) {
     std::shared_ptr<Optimizer> optimizer = nullptr;
 
     if (FLAGS_use_distributed_optimizer) {
-        std::vector<std::shared_ptr<ParamAndGradBuffer>> param_grad_buffers;
-        std::vector<std::shared_ptr<ParamAndGradBucketGroup>> bucket_groups;
-
-        if (pp_world_size > 1 && ddp_world_size > 1) {
-            auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
-            for (int chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
-                auto buffers
-                    = dynamic_cast<DistributedDataParallel *>(mutable_chunks->at(chunk_id).get())->param_grad_buffers();
-                auto groups
-                    = dynamic_cast<DistributedDataParallel *>(mutable_chunks->at(chunk_id).get())->bucket_groups();
-                param_grad_buffers.insert(param_grad_buffers.end(), buffers.begin(), buffers.end());
-                bucket_groups.insert(bucket_groups.end(), groups.begin(), groups.end());
-            }
-        } else if (ddp_world_size > 1) {
-            param_grad_buffers = dynamic_cast<DistributedDataParallel *>(model.get())->param_grad_buffers();
-            bucket_groups = dynamic_cast<DistributedDataParallel *>(model.get())->bucket_groups();
-        }
-
+        auto model_chunks = (pp_world_size > 1)
+                              ? *(dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks())
+                              : std::vector<std::shared_ptr<nn::Module>>{model};
         optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, model->Parameters(),
-                                                                         param_grad_buffers, bucket_groups, ddp_pg,
-                                                                         ddp_world_size, ddp_rank);
+                                                                         model_chunks, ddp_world_size, ddp_rank);
     } else {
         optimizer = optimizer_creator(model->Parameters());
     }
