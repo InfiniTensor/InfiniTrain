@@ -545,8 +545,6 @@ PartitionBuckets(const std::vector<std::shared_ptr<ParamAndGradBuffer>> &buffers
         auto ddp_world_size = buffers.front()->ddp_world_size();
 
         for (const auto &buffer : buffers) {
-            // TODO(zbl): override == for ddp config
-            // CHECK(buffer->ddp_config() == ddp_config) << "PartitionBuckets: buffers have different ddp_config.";
             CHECK(buffer->ddp_pg() == ddp_pg) << "PartitionBuckets: buffers have different ddp_pg.";
             CHECK(buffer->ddp_world_size() == ddp_world_size)
                 << "PartitionBuckets: buffers have different ddp_world_size.";

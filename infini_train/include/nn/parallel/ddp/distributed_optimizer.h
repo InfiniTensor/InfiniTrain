@@ -21,8 +21,8 @@ class DistributedOptimizer final : public infini_train::Optimizer {
 public:
     DistributedOptimizer(OptimizerCreator base_optimizer_creator,
                          const std::vector<std::shared_ptr<Tensor>> &full_params,
-                         const std::vector<std::shared_ptr<Module>> &model_chunks, size_t dp_world_size,
-                         size_t dp_rank);
+                         const std::vector<std::shared_ptr<Module>> &model_chunks, size_t ddp_world_size,
+                         size_t ddp_rank);
 
     void Step() override;
 
@@ -43,8 +43,8 @@ private:
     std::vector<std::shared_ptr<ParamAndGradBucketGroup>> bucket_groups_;
 
     // DP info
-    size_t dp_world_size_;
-    size_t dp_rank_;
+    size_t ddp_world_size_;
+    size_t ddp_rank_;
 
     // shard params
     std::vector<std::shared_ptr<Tensor>> shard_params_;
