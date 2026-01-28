@@ -8,8 +8,7 @@
 #include <vector>
 
 #include "infini_train/include/datatype.h"
-#include "infini_train/include/device.h"
-#include "infini_train/include/nn/parallel/distributed_data_parallel_config.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
 
 namespace infini_train {
 class Tensor;
@@ -135,7 +134,9 @@ public:
 
     void ScaleGradients(float scaling_factor);
 
-    void Reset();
+    void Reset(bool need_rebind = true);
+
+    void RebindGradViews();
 
 private:
     void BuildBuckets(DataType param_dtype, DataType grad_dtype);
@@ -143,6 +144,7 @@ private:
 private:
     DistributedDataParallelConfig ddp_config_;
     std::vector<std::shared_ptr<Tensor>> params_;
+    std::vector<std::shared_ptr<Tensor>> grads_;
     std::shared_ptr<Tensor> param_buffer_;
     std::shared_ptr<Tensor> grad_buffer_;
 
@@ -152,6 +154,8 @@ private:
     const ProcessGroup *ddp_pg_ = nullptr;
     size_t ddp_world_size_ = 1;
     std::vector<std::shared_ptr<ParamAndGradBucket>> buckets_;
+
+    bool need_rebind_grad_views_ = true;
 
     std::vector<std::pair<size_t, size_t>> bucket_indices_;
     // Param to (start, end, bucket_id)

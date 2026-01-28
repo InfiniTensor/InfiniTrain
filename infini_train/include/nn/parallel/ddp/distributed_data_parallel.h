@@ -3,13 +3,15 @@
 #include <memory>
 
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/distributed_data_parallel_config.h"
-#include "infini_train/include/nn/parallel/param_and_grad_buffer.h"
-#include "infini_train/include/nn/parallel/reducer.h"
+#include "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h"
+#include "infini_train/include/nn/parallel/ddp/reducer.h"
 
 namespace infini_train {
 class Tensor;
 class Device;
+namespace nn::parallel {
+class DistributedDataParallelConfig;
+} // namespace nn::parallel
 } // namespace infini_train
 
 namespace infini_train::nn::parallel {
@@ -17,7 +19,7 @@ namespace infini_train::nn::parallel {
 class DistributedDataParallel : public nn::Module {
 public:
     DistributedDataParallel(std::shared_ptr<nn::Module> module, int thread_rank,
-                            DistributedDataParallelConfig ddp_config = DistributedDataParallelConfig());
+                            DistributedDataParallelConfig ddp_config);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 

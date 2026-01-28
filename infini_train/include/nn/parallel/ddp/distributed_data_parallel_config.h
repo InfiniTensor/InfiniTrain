@@ -47,16 +47,19 @@ public:
     bool average_in_collective = true;
 
     // Whether to check NaNs/Infs/unusually large in gradients before collectives.
+    // TODO(zbl): Unused by now, to be implemented in ParamAndGradBucketGroup::StartGradSync()
     bool check_for_nan_in_grad = false;
     bool check_for_large_grads = false;
 
     // Number of DistributedOptimizer instances.
     // Multiple DistOpt is used for building hierarchical collective groups for param/grad.
+    // TODO(zbl): Unused by now, to be implemented in ParamAndGradBucketGroup
     int num_distributed_optimizer_instances = 1;
 
     // Maximum number of parameters in each ParamAndGradBucket.
-    // This is distinct from DDP Reducer's MB-based bucket caps.
-    size_t bucket_size_in_elements = std::numeric_limits<size_t>::max();
+    // NOTE(zbl): This is distinct from DDP Reducer's MB-based bucket caps.
+    // TODO(zbl): To unify the definition of bucket_size argument for users
+    size_t bucket_size_in_elements = 40000000;
 
     // Whether to pad bucket sizes to improve NCCL bus bandwidth utilization.
     bool pad_buckets_for_high_nccl_busbw = false;

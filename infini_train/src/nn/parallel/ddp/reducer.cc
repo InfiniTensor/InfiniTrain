@@ -1,4 +1,4 @@
-#include "infini_train/include/nn/parallel/reducer.h"
+#include "infini_train/include/nn/parallel/ddp/reducer.h"
 
 #include <algorithm>
 #include <cstring>

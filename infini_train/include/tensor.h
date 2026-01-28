@@ -63,7 +63,7 @@ public:
 
     Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &dims);
 
-    void SetData(const Tensor &tensor, size_t offset, bool overwrite = false);
+    void SetData(const Tensor &tensor, size_t offset, bool preserve_data = false);
 
     Tensor(const float *data, const std::vector<int64_t> &dims, DataType dtype, const Device *device);
     Tensor(const float *data, const std::vector<int64_t> &dims, DataType dtype)
@@ -205,9 +205,6 @@ public:
     std::shared_ptr<Tensor> grad() const;
     void set_grad(const std::shared_ptr<Tensor> &grad);
 
-    std::shared_ptr<Tensor> main_grad() const;
-    void set_main_grad(const std::shared_ptr<Tensor> &grad);
-
     bool requires_grad() const;
     void set_requires_grad(bool requires_grad);
 
@@ -236,8 +233,6 @@ public:
 
 private:
     std::shared_ptr<Tensor> grad_ = nullptr;
-    // Points to a view in flat buffer constantly
-    std::shared_ptr<Tensor> main_grad_ = nullptr;
     bool requires_grad_ = false;
     bool is_leaf_ = true;
     std::shared_ptr<autograd::Function> grad_fn_ = nullptr;

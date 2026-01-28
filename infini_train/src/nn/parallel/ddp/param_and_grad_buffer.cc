@@ -1,4 +1,4 @@
-#include "infini_train/include/nn/parallel/param_and_grad_buffer.h"
+#include "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -7,7 +7,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/distributed_data_parallel_config.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
@@ -292,6 +292,9 @@ ParamAndGradBuffer::ParamAndGradBuffer(const std::vector<std::shared_ptr<Tensor>
         ddp_world_size_ = global::GetDataParallelSize();
     }
 
+    grads_.clear();
+    grads_.resize(params_.size());
+
     BuildBuckets(param_dtype, grad_dtype);
 }
 
@@ -440,6 +443,7 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
         return std::move(bucket);
     };
 
+    size_t i = params_.size();
     // Iterate params in backprop order, build ParamAndGradBucket object
     for (auto it = params_.rbegin(); it != params_.rend(); ++it) {
         const auto &param = *it;
@@ -452,7 +456,10 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
         }
 
         auto grad_view = GetBufferView(grad_buffer_, param_start_index, param->Dims());
-        param->set_main_grad(grad_view);
+        param->set_grad(grad_view);
+        // Save grad view for each params
+        --i;
+        grads_[i] = grad_view;
 
         if (current_bucket_id != bucket_id) {
             const auto &range = bucket_indices_.at(current_bucket_id);
@@ -476,6 +483,8 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
     if (!bucket_params.empty()) {
         const auto &range = bucket_indices_.at(current_bucket_id);
         CHECK_EQ(range.first, bucket_start_index) << "Last bucket start mismatch.";
+
+        bucket_end_index = range.second;
         buckets_.push_back(NewBucket(bucket_params, bucket_start_index, bucket_end_index,
                                      per_bucket_numel_unpadded[current_bucket_id], current_bucket_id));
     }
@@ -491,47 +500,35 @@ void ParamAndGradBuffer::ScaleGradients(float scaling_factor) {
     LOG(FATAL) << "Should not arrive here";
 }
 
-void ParamAndGradBuffer::Reset() {
+void ParamAndGradBuffer::Reset(bool need_rebind) {
     if (!grad_buffer_) {
         return;
     }
-    grad_buffer_->Fill(0.f);
+    if (!need_rebind) {
+        grad_buffer_->Fill(0.f);
+    }
+    need_rebind_grad_views_ = need_rebind;
 }
 
-/***
-    Automatically regroup the buckets of input buffers and return a list of bucket groups.
+void ParamAndGradBuffer::RebindGradViews() {
+    if (!need_rebind_grad_views_) {
+        return;
+    }
 
-    In some scenarios, we need to put buckets from different buffers into a group so that their
-    communication can be aggregated.
+    CHECK_EQ(params_.size(), grads_.size());
+    for (size_t i = 0; i < params_.size(); ++i) {
+        params_[i]->set_grad(grads_[i]);
+        params_[i]->MarkGradOverwriteOnNextAccum();
+    }
 
-    For example, when there are both fp8 weights and bf16 biases in the model and virtual
-    pipeline parallelism is enabled, each model chunk will have an fp8 bucket and a bf16 bucket,
-    which doubles the number of communication kernels, and because of the use of
-    CUDA_DEVICE_MAX_CONNECTIONS=1, having multiple back-to-back communications will prevent the
-    overlap of communication kernels with computation kernels.
+    need_rebind_grad_views_ = false;
+}
 
-    The grouping strategy is:
-    1. If force_single_bucket_group is True, put all buckets across all buffers into a single
-       bucket group.
-    2. If force_single_bucket_group is False, when there is no fp8 buffer in the input buffers,
-       let each bucket group have only one bucket.
-    3. If force_single_bucket_group is False, when using fp8 params, merge all non-fp8 buckets
-       into the last fp8 bucket group.
-       - Since the non-fp8 parameters (typically the biases of various layers) are relatively
-         small, they are likely to be grouped into a single non-fp8 bucket.
-       - The fp8 buckets start from the end of the model, i.e., the first bucket corresponds to
-         the end of the model, while the last bucket corresponds to the beginning.
-       - If we combine the non-fp8 bucket with the first fp8 bucket, we cannot initiate the
-         reduce-scatter to synchronize gradients after the backward pass at the end of the model
-         has completed. This is because we need to wait for the non-fp8 params from the beginning
-         layers to obtain their gradients.
-       - Combining the non-fp8 bucket with the last fp8 bucket can help avoid this issue.
-
-    Args:
-        buffers (list): list of input buffers.
-        single_bucket_group_per_buffer (bool, optional): force group all buckets in each buffer
-            into a single bucket group.
-***/
+// Partition ParamAndGradBuckets into DDP ParamAndGradBucketGroups.
+// - force_single_bucket_group: all buckets across all buffers -> one group.
+// - otherwise: each bucket -> its own group (no merging).
+// TODO(zbl): support cross-buffer merging for mixed fp8/non-fp8 scenarios.
+// Ref: https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/core/distributed/param_and_grad_buffer.py
 std::vector<std::shared_ptr<ParamAndGradBucketGroup>>
 PartitionBuckets(const std::vector<std::shared_ptr<ParamAndGradBuffer>> &buffers, bool force_single_bucket_group) {
     std::vector<std::shared_ptr<ParamAndGradBucketGroup>> bucket_groups;

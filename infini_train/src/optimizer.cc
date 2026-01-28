@@ -1,6 +1,5 @@
 #include "infini_train/include/optimizer.h"
 
-#include <utility>
 #include <vector>
 
 #include "infini_train/include/device.h"
