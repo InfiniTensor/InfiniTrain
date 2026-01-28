@@ -9,10 +9,10 @@ namespace infini_train::nn::parallel {
 DistributedOptimizer::DistributedOptimizer(OptimizerCreator creator,
                                            const std::vector<std::shared_ptr<Tensor>> &full_params,
                                            const std::vector<std::shared_ptr<Module>> &model_chunks,
-                                           size_t dp_world_size, size_t dp_rank)
-    : Optimizer(full_params), dp_world_size_(dp_world_size), dp_rank_(dp_rank) {
+                                           size_t ddp_world_size, size_t ddp_rank)
+    : Optimizer(full_params), ddp_world_size_(ddp_world_size), ddp_rank_(ddp_rank) {
 
-    CHECK(dp_world_size_ > 1) << "DistributedOptimizer: dp_world_size must be greater than 1.";
+    CHECK(ddp_world_size_ > 1) << "DistributedOptimizer: ddp_world_size must be greater than 1.";
 
     for (size_t i = 0; i < model_chunks.size(); ++i) {
         auto ddp_chunk = std::dynamic_pointer_cast<DistributedDataParallel>(model_chunks[i]);
@@ -43,9 +43,9 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads() {
             CHECK(bucket_param) << "DistributedOptimizer requires param buffer.";
             CHECK(bucket_grad) << "DistributedOptimizer requires grad buffer.";
 
-            CHECK_EQ(bucket_param->NumElements() % dp_world_size_, 0);
-            const size_t bucket_shard_numel = bucket_param->NumElements() / dp_world_size_;
-            const size_t bucket_shard_start = dp_rank_ * bucket_shard_numel;
+            CHECK_EQ(bucket_param->NumElements() % ddp_world_size_, 0);
+            const size_t bucket_shard_numel = bucket_param->NumElements() / ddp_world_size_;
+            const size_t bucket_shard_start = ddp_rank_ * bucket_shard_numel;
             const size_t bucket_shard_end = bucket_shard_start + bucket_shard_numel;
 
             // Iterate param in bucket, build each param(or param_shard) seperately
