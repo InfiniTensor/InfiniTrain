@@ -6,6 +6,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/common/cuda/cub_compat.cuh"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
@@ -31,7 +32,7 @@ __global__ void SoftmaxForwardKernel(T *output, const T *input, int64_t outer_si
         int64_t idx = (group * axis_size + axis) * inner_size + inner_idx;
         thread_max = max(thread_max, common::cuda::Cast<float>(input[idx]));
     }
-    float block_max = BlockReduce(temp_storage_max).Reduce(thread_max, ::cuda::maximum<>());
+    float block_max = BlockReduce(temp_storage_max).Reduce(thread_max, CubMaxOp());
 
     if (tid == 0) {
         row_max = block_max;
