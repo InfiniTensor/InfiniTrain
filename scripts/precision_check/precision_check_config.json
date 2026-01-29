@@ -1,0 +1,21 @@
+{
+    "variables": {
+        "BUILD_DIR": "./build",
+        "PRECISION_CHECK_OUTPUT_DIR": "./log_precision_check",
+        "COMPARE_SCRIPT": "scripts/precision_check/precision_compare.py"
+    },
+    "models": [
+        {
+            "name": "gpt2",
+            "input_bin": "/data/shared/InfiniTrain-dev/data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin",
+            "llmc_filepath": "/data/shared/InfiniTrain-dev/data/llmc/gpt2/gpt2_124M.bin",
+            "pytorch_tensors_dir": "../pytorch_tensors_gpt2"
+        },
+        {
+            "name": "llama3",
+            "input_bin": "/data/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
+            "llmc_filepath": "/data/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_fp32.bin",
+            "pytorch_tensors_dir": "../pytorch_tensors_llama"
+        }
+    ]
+}

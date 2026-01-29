@@ -153,28 +153,28 @@ std::string ComputeMD5(const void *data, size_t size) {
 }
 
 std::ostream &GetLogStream() {
-    thread_local std::ofstream log_file;
-    thread_local std::mutex init_mutex;
-    thread_local bool initialized = false;
+    thread_local std::ofstream tls_log_file;
+    thread_local std::mutex tls_init_mutex;
+    thread_local bool tls_initialized = false;
 
-    if (!initialized) {
-        std::lock_guard<std::mutex> lock(init_mutex);
-        if (!initialized) {
+    if (!tls_initialized) {
+        std::lock_guard<std::mutex> lock(tls_init_mutex);
+        if (!tls_initialized) {
             const auto &output_path = PrecisionCheckEnv::Instance().GetOutputPath();
             int global_rank = nn::parallel::global::thread_global_rank;
             std::string filename = output_path + "/precision_check_rank_" + std::to_string(global_rank) + ".log";
-            log_file.open(filename, std::ios::out | std::ios::trunc);
-            if (!log_file.is_open()) {
+            tls_log_file.open(filename, std::ios::out | std::ios::trunc);
+            if (!tls_log_file.is_open()) {
                 std::cerr << "[Rank " << global_rank << "] Failed to open precision check log file: " << filename
                           << std::endl;
             } else {
                 std::cout << "[Rank " << global_rank << "] Precision check output: " << filename << std::endl;
             }
-            initialized = true;
+            tls_initialized = true;
         }
     }
 
-    return log_file.is_open() ? log_file : std::cout;
+    return tls_log_file.is_open() ? tls_log_file : std::cout;
 }
 
 std::string FormatShape(const std::vector<int64_t> &shape) {
