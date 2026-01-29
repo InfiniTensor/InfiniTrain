@@ -1,6 +1,8 @@
 #pragma once
 
+#include "infini_train/include/common/hook.h"
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <unordered_set>
 #include <vector>
@@ -21,7 +23,8 @@ public:
     static GlobalModuleHookRegistry &Instance();
 
     // Register a hook registrar, which will be called for all modules on their first forward pass
-    void RegisterHook(ModuleHookRegistrar registrar);
+    // Returns a HookHandle that can be used to remove the hook
+    std::unique_ptr<HookHandle> RegisterHook(ModuleHookRegistrar registrar);
 
     // Apply all registered hooks to the specified module (called by Module::operator())
     void ApplyHooks(nn::Module *module);

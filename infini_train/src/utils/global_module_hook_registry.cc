@@ -7,9 +7,10 @@ GlobalModuleHookRegistry &GlobalModuleHookRegistry::Instance() {
     return instance;
 }
 
-void GlobalModuleHookRegistry::RegisterHook(ModuleHookRegistrar registrar) {
+std::unique_ptr<HookHandle> GlobalModuleHookRegistry::RegisterHook(ModuleHookRegistrar registrar) {
     std::lock_guard<std::mutex> lock(mutex_);
     registrars_.push_back(std::move(registrar));
+    return std::make_unique<HookHandleImpl<ModuleHookRegistrar>>(&registrars_, registrars_.size() - 1);
 }
 
 void GlobalModuleHookRegistry::ApplyHooks(nn::Module *module) {
@@ -17,7 +18,11 @@ void GlobalModuleHookRegistry::ApplyHooks(nn::Module *module) {
     if (applied_modules_.contains(module)) {
         return;
     }
-    for (const auto &registrar : registrars_) { registrar(module); }
+    for (const auto &registrar : registrars_) {
+        if (registrar) {
+            registrar(module);
+        }
+    }
     applied_modules_.insert(module);
 }
 
