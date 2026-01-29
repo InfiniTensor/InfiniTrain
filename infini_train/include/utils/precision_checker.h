@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "infini_train/include/utils/precision_check_config.h"
+
 namespace infini_train {
 class Tensor;
 class HookHandle;
@@ -31,6 +33,10 @@ public:
         static Config default_config;
         return default_config;
     }
+
+    // Initialize global module-level precision checking
+    // Called automatically by PrecisionCheckEnv::Init when level >= MODULE
+    static void Init(const PrecisionCheckConfig &global_config, const Config &config = DefaultConfig());
 
     static void RegisterForFunction(autograd::Function *func, const std::string &name = "",
                                     const Config &config = DefaultConfig());

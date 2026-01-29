@@ -387,12 +387,6 @@ int main(int argc, char *argv[]) {
                                      FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
     utils::PrecisionCheckEnv::Instance().Init(precision_config);
 
-    // Register PrecisionChecker hook for all modules
-    if (precision_config.level == utils::PrecisionCheckLevel::MODULE) {
-        utils::GlobalModuleHookRegistry::Instance().RegisterHook(
-            [](nn::Module *m) { utils::PrecisionChecker::RegisterForModule(m); });
-    }
-
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 
     // NOTE(dcj): currently we only support single process
