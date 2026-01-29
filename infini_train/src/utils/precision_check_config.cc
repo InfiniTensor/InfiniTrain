@@ -2,8 +2,11 @@
 
 #include <chrono>
 #include <filesystem>
+#include <iostream>
 #include <sstream>
 #include <unordered_map>
+
+#include "infini_train/include/utils/precision_checker.h"
 
 namespace infini_train::utils {
 
@@ -65,6 +68,12 @@ void PrecisionCheckEnv::Init(const PrecisionCheckConfig &config) {
 
         timestamped_path_ = config_.output_path + "/" + buf;
         std::filesystem::create_directories(timestamped_path_);
+
+        // Initialize PrecisionChecker (registers global module hooks)
+        PrecisionChecker::Init(config_);
+
+        // Output precision check output path
+        std::cout << "[PrecisionCheck] Output: " << timestamped_path_ << std::endl;
     }
 }
 

@@ -19,6 +19,7 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/include/utils/global_module_hook_registry.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_check_context.h"
 
@@ -376,6 +377,17 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
             }
         }
     }
+}
+
+void PrecisionChecker::Init(const PrecisionCheckConfig &global_config, const Config &config) {
+    if (global_config.level == PrecisionCheckLevel::OFF) {
+        return;
+    }
+
+    // Register auto-hook for all modules via GlobalModuleHookRegistry
+    GlobalModuleHookRegistry::Instance().RegisterHook([config](nn::Module *module) {
+        RegisterForModule(module, module->type(), config);
+    });
 }
 
 void PrecisionChecker::RegisterForFunction(autograd::Function *func, const std::string &name, const Config &config) {

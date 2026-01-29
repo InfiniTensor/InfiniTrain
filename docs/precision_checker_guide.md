@@ -21,9 +21,10 @@
 ```cpp
 struct PrecisionCheckConfig {
     PrecisionCheckLevel level = PrecisionCheckLevel::OFF;  // 0=关闭, 1=MODULE, 2=FUNCTION
-    std::string output_path = "./precision_check";         // 输出目录
+    std::string output_path = "./log_precision_check";     // 输出目录
     std::string format = "simple";                         // "simple" 或 "md5"
     bool save_tensors = false;                             // 是否保存 .npy 文件
+    double md5_tolerance = 0.0;                            // MD5 量化容差（0=不量化）
 };
 ```
 
@@ -32,9 +33,10 @@ struct PrecisionCheckConfig {
 | 选项 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `level` | int | 0 | 0=关闭, 1=MODULE级别, 2=FUNCTION级别 |
-| `path` | string | `./precision_check` | 输出目录（自动创建时间戳子目录） |
+| `path` | string | `./log_precision_check` | 输出目录（自动创建时间戳子目录） |
 | `format` | string | `simple` | `simple`=统计信息+前6个值, `md5`=MD5哈希 |
 | `save_tensors` | bool | false | 是否保存 tensor 为 .npy 文件 |
+| `md5_tolerance` | double | 0.0 | MD5 量化容差（如 1e-3），0=不量化 |
 
 ### 配置字符串格式
 
@@ -49,7 +51,7 @@ struct PrecisionCheckConfig {
 ### 目录结构
 
 ```
-precision_check/
+log_precision_check/
 └── 20260122_143052/              # 时间戳子目录 (YYYYMMDD_HHMMSS)
     ├── precision_check_rank_0.log  # 文本日志
     ├── rank_0/                     # NPY 文件目录 (save_tensors=true)
@@ -58,7 +60,7 @@ precision_check/
     │   ├── Block_0_backward.npy
     │   └── ...
     └── rank_1/                     # 多卡时每个 rank 独立目录
-        └── ...
+        ...
 ```
 
 ### Simple 格式 (format=simple)
@@ -153,24 +155,23 @@ Comparing Block_0_forward.npy:
 Summary: 433/433 files passed
 ```
 
-### 验证脚本
+## 测试验证
 
-提供了完整的验证脚本：
+使用 `test_precision_check` 二进制进行功能验证：
 
 ```bash
-# GPT2 验证
-bash scripts/precision_check/run_precision_check_gpt2.sh
+# 运行全部测试（Simple/MD5格式、NPY保存、多iter覆盖）
+./build/test_precision_check
 
-# LLaMA3 验证
-bash scripts/precision_check/run_precision_check_llama3.sh
+# 运行特定级别测试
+./build/test_precision_check "level=1"    # Module 级别
+./build/test_precision_check "level=2"    # Function 级别
+
+# 测试不同配置选项
+./build/test_precision_check "level=1,format=simple"   # Simple 格式
+./build/test_precision_check "level=1,format=md5"      # MD5 格式
+./build/test_precision_check "level=1,save_tensors=true"  # 保存 NPY 文件
 ```
-
-验证内容：
-1. 单卡测试 - Simple 格式
-2. 单卡测试 - MD5 格式
-3. 多 iter 覆盖测试
-4. 两次运行对比测试
-5. 多卡测试（如果环境支持）
 
 ## 上下文追踪
 
@@ -244,6 +245,7 @@ int idx = PrecisionCheckEnv::GetAndIncrementCounter(counter_key);
 | 快速调试 | `level=1` |
 | 详细分析 | `level=1,save_tensors=true` |
 | 快速对比 | `level=1,format=md5` |
+| MD5 容差对比 | `level=1,format=md5,md5_tolerance=1e-3` |
 | 生产环境 | `level=0`（关闭） |
 
 ## 相关文件
@@ -251,6 +253,6 @@ int idx = PrecisionCheckEnv::GetAndIncrementCounter(counter_key);
 - `infini_train/include/utils/precision_checker.h` - API 定义
 - `infini_train/include/utils/precision_check_config.h` - 配置结构
 - `infini_train/include/utils/precision_check_context.h` - 上下文追踪
+- `infini_train/include/utils/global_module_hook_registry.h` - 全局模块 Hook 注册
 - `scripts/precision_check/precision_compare.py` - 离线对比工具
-- `scripts/precision_check/run_precision_check_gpt2.sh` - GPT2 验证脚本
-- `scripts/precision_check/run_precision_check_llama3.sh` - LLaMA3 验证脚本
+- `test/hook/test_precision_check.cc` - 精度检查测试
