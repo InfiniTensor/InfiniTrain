@@ -54,6 +54,7 @@ def main():
     parser.add_argument('--threshold', type=float, help='Loss difference threshold (deprecated, use --threshold-fp32 and --threshold-bf16)')
     parser.add_argument('--threshold-fp32', type=float, default=1e-5, help='Loss difference threshold for fp32 (default: 1e-5)')
     parser.add_argument('--threshold-bf16', type=float, default=1e-2, help='Loss difference threshold for bfloat16 (default: 1e-2)')
+    parser.add_argument('--verbose', action='store_true', help='Print detailed output for all files, including passed ones')
     args = parser.parse_args()
 
     # Support legacy --threshold argument
@@ -69,9 +70,9 @@ def main():
     common = set(files1.keys()) & set(files2.keys())
 
     if only_in_1:
-        print(f"Files only in {args.dir1}: {', '.join(sorted(only_in_1))}")
+        print(f"Files only in {args.dir1.resolve()}: {', '.join(sorted(only_in_1))}")
     if only_in_2:
-        print(f"Files only in {args.dir2}: {', '.join(sorted(only_in_2))}")
+        print(f"Files only in {args.dir2.resolve()}: {', '.join(sorted(only_in_2))}")
     if only_in_1 or only_in_2:
         print()
 
@@ -90,10 +91,10 @@ def main():
         else:
             fp32_total += 1
 
-        print(f"Comparing {name} ({dtype}, threshold: {threshold:.0e}):")
         total_steps, num_mismatches, mismatches = compare_files(files1[name], files2[name], threshold)
 
         if mismatches:
+            print(f"Comparing {name} ({dtype}, threshold: {threshold:.0e}):")
             for msg in mismatches:
                 print(msg)
             total_mismatches += num_mismatches
@@ -103,9 +104,12 @@ def main():
             else:
                 fp32_passed += 1
 
-        matched = total_steps - num_mismatches
-        print(f"  Summary: {matched}/{total_steps} steps matched")
-        print()
+        # Only print details when there are mismatches or verbose mode
+        if mismatches or args.verbose:
+            if mismatches:
+                matched = total_steps - num_mismatches
+                print(f"  Summary: {matched}/{total_steps} steps matched")
+            print()
 
     print("=" * 50)
     print(f"Overall Summary:")

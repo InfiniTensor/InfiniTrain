@@ -3,8 +3,8 @@
 namespace infini_train::utils {
 
 PrecisionCheckContext &PrecisionCheckContext::Instance() {
-    static thread_local PrecisionCheckContext instance;
-    return instance;
+    static thread_local PrecisionCheckContext tls_instance;
+    return tls_instance;
 }
 
 void PrecisionCheckContext::SetGAS(int gas) { gas_ = gas; }

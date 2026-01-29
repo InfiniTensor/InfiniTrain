@@ -34,7 +34,7 @@ public:
 private:
     PrecisionCheckEnv() = default;
     PrecisionCheckConfig config_;
-    std::string timestamped_path_; // Actual output path (with timestamp)
+    std::string timestamped_path_ = ""; // Actual output path (with timestamp)
 };
 
 } // namespace utils

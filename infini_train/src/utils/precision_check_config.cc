@@ -9,7 +9,7 @@ namespace infini_train::utils {
 
 namespace {
 // Thread-local tensor counter for precision check file indexing
-thread_local std::unordered_map<std::string, int> g_tensor_counter;
+thread_local std::unordered_map<std::string, int> tls_g_tensor_counter;
 } // namespace
 
 PrecisionCheckConfig PrecisionCheckConfig::Parse(const std::string &config_str) {
@@ -72,8 +72,8 @@ const PrecisionCheckConfig &PrecisionCheckEnv::GetConfig() const { return config
 
 const std::string &PrecisionCheckEnv::GetOutputPath() const { return timestamped_path_; }
 
-int PrecisionCheckEnv::GetAndIncrementCounter(const std::string &key) { return g_tensor_counter[key]++; }
+int PrecisionCheckEnv::GetAndIncrementCounter(const std::string &key) { return tls_g_tensor_counter[key]++; }
 
-void PrecisionCheckEnv::ResetCounters() { g_tensor_counter.clear(); }
+void PrecisionCheckEnv::ResetCounters() { tls_g_tensor_counter.clear(); }
 
 } // namespace infini_train::utils

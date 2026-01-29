@@ -20,6 +20,7 @@ read_var() {
 BUILD_DIR="$(read_var BUILD_DIR)";              : "${BUILD_DIR:=../build}"
 LOG_DIR="$(read_var LOG_DIR)";                  : "${LOG_DIR:=logs}"
 PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_logs}"
+COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
 
 mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
 
@@ -83,7 +84,16 @@ run_and_log() {
     echo "[COMMAND] $cmd" >> "$log_path"
 
     # Run the command and append both stdout and stderr to the log file
-    eval "$cmd" >> "$log_path" 2>&1
+    if ! eval "$cmd" >> "$log_path" 2>&1; then
+        echo -e "\033[1;31m============================================================\033[0m"
+        echo -e "\033[1;31m[ERROR] Command failed: ${cmd}\033[0m"
+        echo -e "\033[1;31m[ERROR] See log file for details: ${log_path}\033[0m"
+        echo -e "\033[1;31m============================================================\033[0m"
+        echo ""
+        echo "[ERROR] Last 20 lines of log:"
+        tail -20 "$log_path"
+        exit 1
+    fi
 
     popd > /dev/null
 
@@ -174,3 +184,28 @@ for ((id=0; id<num_builds; ++id)); do
 done
 
 echo -e "\n\033[1;32mAll done.\033[0m"
+
+# Run comparison scripts if COMPARE_LOG_DIR is set
+if [[ -n "$COMPARE_LOG_DIR" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    echo -e "\n\033[1;36m============================================================\033[0m"
+    echo -e "\033[1;36m[Comparison] Comparing logs with: ${COMPARE_LOG_DIR}\033[0m"
+    echo -e "\033[1;36m============================================================\033[0m"
+
+    # Run compare_loss.py
+    echo -e "\n\033[1;33m[Running] compare_loss.py\033[0m"
+    python3 "${SCRIPT_DIR}/compare_loss.py" "$COMPARE_LOG_DIR" "$LOG_DIR" || true
+
+    # Run compare_tps.py
+    echo -e "\n\033[1;33m[Running] compare_tps.py\033[0m"
+    python3 "${SCRIPT_DIR}/compare_tps.py" "$COMPARE_LOG_DIR" "$LOG_DIR" || true
+
+    echo -e "\n\033[1;32mComparison completed.\033[0m"
+else
+    echo -e "\n\033[1;33m============================================================\033[0m"
+    echo -e "\033[1;33m[WARNING] COMPARE_LOG_DIR is not set. Skipping comparison.\033[0m"
+    echo -e "\033[1;33m         To enable comparison, set 'variables.COMPARE_LOG_DIR' in ${CONFIG_FILE}\033[0m"
+    echo -e "\033[1;33m         or export COMPARE_LOG_DIR=/path/to/baseline_logs before running.\033[0m"
+    echo -e "\033[1;33m============================================================\033[0m"
+fi
