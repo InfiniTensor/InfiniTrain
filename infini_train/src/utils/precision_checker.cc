@@ -385,9 +385,8 @@ void PrecisionChecker::Init(const PrecisionCheckConfig &global_config, const Con
     }
 
     // Register auto-hook for all modules via GlobalModuleHookRegistry
-    GlobalModuleHookRegistry::Instance().RegisterHook([config](nn::Module *module) {
-        RegisterForModule(module, module->type(), config);
-    });
+    GlobalModuleHookRegistry::Instance().RegisterHook(
+        [config](nn::Module *module) { RegisterForModule(module, module->type(), config); });
 }
 
 void PrecisionChecker::RegisterForFunction(autograd::Function *func, const std::string &name, const Config &config) {

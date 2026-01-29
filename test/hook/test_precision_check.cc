@@ -33,7 +33,7 @@ public:
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) override {
         auto x = inputs[0];
         x->RequiresGrad();
-        auto y = x->Mul(x)->Mul(x);  // x^3
+        auto y = x->Mul(x)->Mul(x); // x^3
         return {y};
     }
 };
@@ -91,7 +91,7 @@ void TestSimpleFormat() {
     x->RequiresGrad();
 
     auto y = x->Mul(x);
-    auto loss = y->Sum(0, false)->Sum(0, false);  // Two Sum ops to produce scalar
+    auto loss = y->Sum(0, false)->Sum(0, false); // Two Sum ops to produce scalar
     loss->Backward();
 
     std::cout << "Simple format test completed - check output for min/max/mean values." << std::endl;
@@ -108,7 +108,7 @@ void TestMd5Format() {
     x->RequiresGrad();
 
     auto y = x->Mul(x);
-    auto loss = y->Sum(0, false)->Sum(0, false);  // Two Sum ops to produce scalar
+    auto loss = y->Sum(0, false)->Sum(0, false); // Two Sum ops to produce scalar
     loss->Backward();
 
     std::cout << "MD5 format test completed - check output for md5 hashes." << std::endl;
@@ -158,7 +158,7 @@ void TestMultiIterOverwrite() {
     // Run multiple iterations - files should be overwritten
     for (int i = 0; i < num_iters; ++i) {
         std::cout << "Iteration " << (i + 1) << "/" << num_iters << std::endl;
-        utils::PrecisionCheckEnv::ResetCounters();  // Reset counters each iteration
+        utils::PrecisionCheckEnv::ResetCounters(); // Reset counters each iteration
         RunModelForwardBackward(model);
     }
 
@@ -172,8 +172,8 @@ void TestMultiIterOverwrite() {
         }
     }
 
-    std::cout << "Multi-iteration test completed - found " << npy_count << " NPY files after "
-              << num_iters << " iterations." << std::endl;
+    std::cout << "Multi-iteration test completed - found " << npy_count << " NPY files after " << num_iters
+              << " iterations." << std::endl;
     std::cout << "(Files should be overwritten each iteration, count should be consistent with 1 iter)" << std::endl;
 }
 

@@ -11,10 +11,10 @@ enum class PrecisionCheckLevel { OFF = 0, MODULE = 1, FUNCTION = 2 };
 struct PrecisionCheckConfig {
     PrecisionCheckLevel level = PrecisionCheckLevel::OFF;
     std::string output_path = "./log_precision_check"; // Output path (default)
-    std::string format = "simple";                 // "simple" or "md5"
-    bool save_tensors = false;                     // Whether to output .npy file
-    double md5_tolerance = 0.0;                    // MD5 tolerance for quantization (e.g., 1e-3)
-                                                   // 0 means no quantization (original precision)
+    std::string format = "simple";                     // "simple" or "md5"
+    bool save_tensors = false;                         // Whether to output .npy file
+    double md5_tolerance = 0.0;                        // MD5 tolerance for quantization (e.g., 1e-3)
+                                                       // 0 means no quantization (original precision)
 
     // Parse from "key=value,key=value" string
     static PrecisionCheckConfig Parse(const std::string &config_str);
