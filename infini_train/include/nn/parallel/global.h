@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "infini_train/include/infiniccl.h"
+
 namespace infini_train::nn::parallel::global {
 
 enum Axis : uint8_t { DP = 0, TP = 1, PP = 2, AXIS_COUNT = 3 };
@@ -27,7 +29,8 @@ public:
     static GlobalEnv &Instance();
 
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-              int pipeline_parallel_size, int virtual_pipeline_parallel_size, bool heterogeneous);
+              int pipeline_parallel_size, int virtual_pipeline_parallel_size, bool heterogeneous,
+              infiniComm_t infiniccl_comm);
 
     int nnodes() const;
 
@@ -54,6 +57,8 @@ public:
     int virtual_pipeline_parallel_size() const;
 
     bool heterogeneous() const;
+
+    infiniComm_t infiniccl_comm() const;
 
     Layout layout() const;
 
@@ -87,12 +92,15 @@ private:
     Layout layout_;
 
     bool heterogeneous_ = false;
+
+    infiniComm_t infiniccl_comm_;
 };
 
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                       int pipeline_parallel_size, int virtual_pipeline_parallel, bool heterogeneous = false) {
+                       int pipeline_parallel_size, int virtual_pipeline_parallel, bool heterogeneous,
+                       infiniComm_t infiniccl_comm) {
     GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
-                               pipeline_parallel_size, virtual_pipeline_parallel, heterogeneous);
+                               pipeline_parallel_size, virtual_pipeline_parallel, heterogeneous, infiniccl_comm);
 }
 
 inline int GetNnodes() { return GlobalEnv::Instance().nnodes(); }
@@ -110,6 +118,7 @@ inline int GetPipelineParallelSize() { return GlobalEnv::Instance().pipeline_par
 inline int GetVirtualPipelineParallelSize() { return GlobalEnv::Instance().virtual_pipeline_parallel_size(); }
 
 inline bool IsHeterogeneous() { return GlobalEnv::Instance().heterogeneous(); }
+inline infiniComm_t GetInfinicclComm() { return GlobalEnv::Instance().infiniccl_comm(); }
 
 // =========================
 // Layout Helper Functions

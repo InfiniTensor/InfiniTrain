@@ -7,6 +7,7 @@
 
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/dispatcher.h"
+#include "infini_train/include/infiniccl.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/process_group.h"
@@ -65,32 +66,42 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
                     //                           std::to_string(tensor_->output_idx()));
                     // auto dims = tensor_->Dims();
                     // for (int i = 0; i < dims.size(); ++i) { LOG(ERROR) << dims[i]; }
-#ifdef USE_MACA
-                    // 1. write tensor_->grad() as npy, grad_tensor_functionid_outputid
-                    infini_train::nn::parallel::WriteTensor(
-                        tensor_->grad(),
-                        std::format("{}/muxi/tensor_{}_{}", infini_train::nn::parallel::kSharedPathPrefix,
-                                    std::to_string(id_), std::to_string(tensor_->output_idx())));
-                    // 2. read another node's tensor_->grad() from npy
-                    comm_grad = infini_train::nn::parallel::ReadTensor(
-                        std::format("{}/nv/tensor_{}_{}", infini_train::nn::parallel::kSharedPathPrefix,
-                                    std::to_string(id_), std::to_string(tensor_->output_idx())),
-                        tensor_->GetDevice());
-#endif
-#ifdef USE_CUDA
-                    // 1. write tensor_->grad() as npy, grad_tensor_functionid_outputid
-                    infini_train::nn::parallel::WriteTensor(
-                        tensor_->grad(),
-                        std::format("{}/nv/tensor_{}_{}", infini_train::nn::parallel::kSharedPathPrefix,
-                                    std::to_string(id_), std::to_string(tensor_->output_idx())));
-                    // 2. read another node's tensor_->grad() from npy
-                    comm_grad = infini_train::nn::parallel::ReadTensor(
-                        std::format("{}/muxi/tensor_{}_{}", infini_train::nn::parallel::kSharedPathPrefix,
-                                    std::to_string(id_), std::to_string(tensor_->output_idx())),
-                        tensor_->GetDevice());
-#endif
-                    // 3. do inter-node allreduce
-                    tensor_->set_grad((tensor_->grad() + comm_grad) / 2);
+                    // #ifdef USE_MACA
+                    //                     // 1. write tensor_->grad() as npy, grad_tensor_functionid_outputid
+                    //                     infini_train::nn::parallel::WriteTensor(
+                    //                         tensor_->grad(),
+                    //                         std::format("{}/muxi/tensor_{}_{}",
+                    //                         infini_train::nn::parallel::kSharedPathPrefix,
+                    //                                     std::to_string(id_), std::to_string(tensor_->output_idx())));
+                    //                     // 2. read another node's tensor_->grad() from npy
+                    //                     comm_grad = infini_train::nn::parallel::ReadTensor(
+                    //                         std::format("{}/nv/tensor_{}_{}",
+                    //                         infini_train::nn::parallel::kSharedPathPrefix,
+                    //                                     std::to_string(id_), std::to_string(tensor_->output_idx())),
+                    //                         tensor_->GetDevice());
+                    // #endif
+                    // #ifdef USE_CUDA
+                    //                     // 1. write tensor_->grad() as npy, grad_tensor_functionid_outputid
+                    //                     infini_train::nn::parallel::WriteTensor(
+                    //                         tensor_->grad(),
+                    //                         std::format("{}/nv/tensor_{}_{}",
+                    //                         infini_train::nn::parallel::kSharedPathPrefix,
+                    //                                     std::to_string(id_), std::to_string(tensor_->output_idx())));
+                    //                     // 2. read another node's tensor_->grad() from npy
+                    //                     comm_grad = infini_train::nn::parallel::ReadTensor(
+                    //                         std::format("{}/muxi/tensor_{}_{}",
+                    //                         infini_train::nn::parallel::kSharedPathPrefix,
+                    //                                     std::to_string(id_), std::to_string(tensor_->output_idx())),
+                    //                         tensor_->GetDevice());
+                    // #endif
+
+                    // // 3. do inter-node allreduce
+                    // tensor_->set_grad((tensor_->grad() + comm_grad) / 2);
+
+                    infiniAllReduce(tensor_->grad()->DataPtr(), tensor_->grad()->DataPtr(),
+                                    tensor_->grad()->NumElements(), infiniFloat32, infiniSum,
+                                    nn::parallel::global::GetInfinicclComm(), nullptr);
+                    tensor_->set_grad(tensor_->grad() / 2);
                 } else {
                     tensor_->ZeroGrad(false);
                 }

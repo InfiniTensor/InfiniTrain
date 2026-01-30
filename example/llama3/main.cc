@@ -346,7 +346,7 @@ int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
 
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
-                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
+                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel, false, nullptr);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 

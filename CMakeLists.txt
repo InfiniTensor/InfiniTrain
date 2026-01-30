@@ -6,6 +6,7 @@ option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
 option(USE_NCCL "Build project for distributed running on CUDA using NCCL" ON)
 option(USE_MCCL "Build project for distributed running on MACA using MCCL" ON)
+option(USE_MPI "Enable MPI for inter-node CPU communication" ON)
 cmake_minimum_required(VERSION 3.28)
 
 project(infini_train VERSION 0.3.0 LANGUAGES CXX)
@@ -72,6 +73,30 @@ if(USE_OMP)
 endif()
 
 # =========================
+# MPI (optional)
+# =========================
+if (USE_MPI)
+    add_compile_definitions(USE_MPI=1)
+    set(OPENMPI_ROOT /opt/openmpi-4.1.6 CACHE PATH "OpenMPI root directory")
+
+    # ---- MPI include & lib (explicit OpenMPI path) ----
+    set(MPI_INCLUDE_DIR ${OPENMPI_ROOT}/include)
+    set(MPI_LIB_DIR     ${OPENMPI_ROOT}/lib)
+
+    include_directories(${MPI_INCLUDE_DIR})
+    link_directories(${MPI_LIB_DIR})
+
+    # OpenMPI core libs (C++ bindings are deprecated; MPI is C ABI)
+    set(MPI_LIBS mpi)
+
+    # mxcc 不支持 -pthread，用 Threads::Threads（-lpthread）
+    if (USE_MACA)
+        set(THREADS_PREFER_PTHREAD_FLAG OFF)
+        find_package(Threads REQUIRED)
+    endif()
+endif()
+
+# =========================
 # CUDA backend
 # =========================
 if(USE_CUDA)
@@ -96,6 +121,10 @@ if(USE_CUDA)
         find_package(NCCL REQUIRED)
         add_compile_definitions(USE_NCCL=1)
         target_link_libraries(infini_train nccl)
+    endif()
+
+    if (USE_MPI)
+        target_link_libraries(infini_train ${MPI_LIBS})
     endif()
 
 # =========================
@@ -136,6 +165,17 @@ elseif(USE_MACA)
         target_link_libraries(infini_train ${MACA_COMM_LIB})
     endif()
 
+    if (USE_MPI)
+        target_link_libraries(infini_train ${MPI_LIBS} Threads::Threads)
+
+        # 有些 MPI 还需要额外 link flags（比如 -Wl,...），也一并带上
+        if (MPI_CXX_LINK_FLAGS)
+            set_target_properties(infini_train PROPERTIES
+                LINK_FLAGS "${MPI_CXX_LINK_FLAGS}"
+            )
+        endif()
+    endif()
+
 # =========================
 # CPU-only backend
 # =========================
@@ -159,4 +199,3 @@ add_subdirectory(tools/infini_run)
 set_target_properties(infini_run PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )
-

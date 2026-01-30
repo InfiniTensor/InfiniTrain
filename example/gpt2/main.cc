@@ -26,6 +26,7 @@
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
 #endif
+#include "infini_train/include/infiniccl.h"
 #include "infini_train/include/nn/parallel/utils.h"
 
 #include "example/common/tiny_shakespeare_dataset.h"
@@ -97,6 +98,43 @@ const std::unordered_map<std::string, GPT2::ModelType> kStrToModelType = {
     {"gpt2-xl", GPT2::ModelType::kGPT2XL},
 };
 
+#define INFINI_CHECK(cmd)                                                                                              \
+    do {                                                                                                               \
+        infiniResult_t r = cmd;                                                                                        \
+        if (r != infiniSuccess) {                                                                                      \
+            std::cerr << "InfiniCCL error at " << __FILE__ << ":" << __LINE__ << " - " << infiniGetErrorString(r)      \
+                      << std::endl;                                                                                    \
+            std::exit(EXIT_FAILURE);                                                                                   \
+        }                                                                                                              \
+    } while (0)
+
+#if defined(USE_CUDA)
+#include <cuda_runtime.h>
+#define GPU_MALLOC(ptr, sz) cudaMalloc((void **)&(ptr), (sz))
+#define GPU_FREE(ptr) cudaFree(ptr)
+#define GPU_MEMCPY_H2D(d, s, n) cudaMemcpy(d, s, n, cudaMemcpyHostToDevice)
+#define GPU_MEMCPY_D2H(d, s, n) cudaMemcpy(d, s, n, cudaMemcpyDeviceToHost)
+#define GPU_SYNC() cudaDeviceSynchronize()
+#define GPU_SET_DEVICE(id) cudaSetDevice(id)
+#define GPU_GET_DEVICE_PROPS(p, id) cudaGetDeviceProperties(p, id)
+#define GPU_MALLOC_HOST(ptr, sz) cudaMallocHost((void **)&(ptr), (sz))
+#define GPU_FREE_HOST(ptr) cudaFreeHost(ptr)
+typedef cudaDeviceProp gpuProp_t;
+#define GPU_PLATFORM "NVIDIA"
+#elif defined(USE_MACA)
+#include <mcr/mc_runtime_api.h>
+#define GPU_MALLOC(ptr, sz) mcMalloc((void **)&(ptr), (sz))
+#define GPU_FREE(ptr) mcFree(ptr)
+#define GPU_MEMCPY_H2D(d, s, n) mcMemcpy(d, s, n, mcMemcpyHostToDevice)
+#define GPU_MEMCPY_D2H(d, s, n) mcMemcpy(d, s, n, mcMemcpyDeviceToHost)
+#define GPU_SYNC() mcDeviceSynchronize()
+#define GPU_SET_DEVICE(id) mcSetDevice(id)
+#define GPU_GET_DEVICE_PROPS(p, id) mcGetDeviceProperties(p, id)
+#define GPU_MALLOC_HOST(ptr, sz) malloc(sz)
+#define GPU_FREE_HOST(ptr) free(ptr)
+typedef mcDeviceProp_t gpuProp_t;
+#define GPU_PLATFORM "MetaX"
+#endif
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
@@ -236,12 +274,12 @@ void Train(const nn::parallel::Rank &rank) {
     //                                    pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size,
     //                                    ddp_rank, ddp_world_size);
 
-#ifdef USE_CUDA
+#ifdef USE_MACA
     DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
                                        pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size,
                                        ddp_rank, FLAGS_heterogeneous ? ddp_world_size * 2 : ddp_world_size);
 #endif
-#ifdef USE_MACA
+#ifdef USE_CUDA
     DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
                                        pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size,
                                        FLAGS_heterogeneous ? ddp_rank + global::GetNthreadPerProc() : ddp_rank,
@@ -358,22 +396,12 @@ void Train(const nn::parallel::Rank &rank) {
             auto lossf_tensor = std::make_shared<Tensor>(&lossf, std::vector<int64_t>{}, DataType::kFLOAT32, device);
             function::AllReduce(lossf_tensor, function::ReduceOpType::kAvg, ddp_pg);
             if (rank.IsLastRank()) {
-                std::shared_ptr<Tensor> comm_tensor = nullptr;
                 if (FLAGS_heterogeneous) {
-#ifdef USE_MACA
-                    WriteTensor(lossf_tensor, std::format("{}/muxi/step{}_loss_tensor", kSharedPathPrefix, step));
-                    comm_tensor = ReadTensor(std::format("{}/nv/step{}_loss_tensor", kSharedPathPrefix, step),
-                                             lossf_tensor->GetDevice());
-#endif
-#ifdef USE_CUDA
-                    WriteTensor(lossf_tensor, std::format("{}/nv/step{}_loss_tensor", kSharedPathPrefix, step));
-                    comm_tensor = ReadTensor(std::format("{}/muxi/step{}_loss_tensor", kSharedPathPrefix, step),
-                                             lossf_tensor->GetDevice());
-#endif
-                    lossf = (static_cast<const float *>(
-                                 lossf_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0]
-                             + static_cast<const float *>(
-                                 comm_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0])
+                    infiniAllReduce(lossf_tensor->DataPtr(), lossf_tensor->DataPtr(), lossf_tensor->NumElements(),
+                                    infiniFloat32, infiniSum, global::GetInfinicclComm(), nullptr);
+
+                    lossf = static_cast<const float *>(
+                                lossf_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0]
                           / 2;
                 } else {
                     lossf = static_cast<const float *>(
@@ -387,11 +415,21 @@ void Train(const nn::parallel::Rank &rank) {
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
         if (rank.IsLastRank()) {
-            LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
-                                      "DP={}, TP={}, SP={}, PP={})",
-                                      step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
-                                      tps, FLAGS_heterogeneous ? ddp_world_size * 2 : ddp_world_size, tp_world_size,
-                                      sp_world_size, pp_world_size);
+            if (FLAGS_heterogeneous) {
+#ifdef USE_MACA
+                LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
+                                          "DP={}, TP={}, SP={}, PP={})",
+                                          step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
+                                          tps, FLAGS_heterogeneous ? ddp_world_size * 2 : ddp_world_size, tp_world_size,
+                                          sp_world_size, pp_world_size);
+#endif
+            } else {
+                LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s, "
+                                          "DP={}, TP={}, SP={}, PP={})",
+                                          step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
+                                          tps, FLAGS_heterogeneous ? ddp_world_size * 2 : ddp_world_size, tp_world_size,
+                                          sp_world_size, pp_world_size);
+            }
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
                 if (tokenizer) {
@@ -412,9 +450,68 @@ int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
-    nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
-                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel, FLAGS_heterogeneous);
+    infiniComm_t comm;
 
+    if (FLAGS_heterogeneous) {
+        // ========================================================================
+        // INITIALIZE INFINICCL (replaces MPI_Init)
+        // ========================================================================
+
+        INFINI_CHECK(infiniInit(&argc, &argv));
+
+        // ========================================================================
+        // GET RANK AND SIZE (replaces MPI_Comm_rank/size)
+        // ========================================================================
+
+        int infiniccl_rank, size;
+        INFINI_CHECK(infiniGetRank(&infiniccl_rank));
+        INFINI_CHECK(infiniGetSize(&size));
+
+        // ========================================================================
+        // SET GPU DEVICE
+        // ========================================================================
+
+        char hostname[256];
+        gethostname(hostname, sizeof(hostname));
+
+        // Map local rank to GPU device
+        const char *local_rank_str = std::getenv("OMPI_COMM_WORLD_LOCAL_RANK");
+        int local_rank = 0;
+        if (local_rank_str != nullptr) {
+            local_rank = std::atoi(local_rank_str);
+        }
+
+        GPU_SET_DEVICE(local_rank);
+
+        // Get GPU info
+        gpuProp_t prop;
+        GPU_GET_DEVICE_PROPS(&prop, local_rank);
+
+        std::cout << "[Rank " << infiniccl_rank << "] Host: " << hostname << " | GPU: " << GPU_PLATFORM << " "
+                  << prop.name << " | Device " << local_rank << std::endl;
+
+        // ========================================================================
+        // INITIALIZE INFINICCL COMMUNICATOR
+        // ========================================================================
+
+        int *devlist = new int[size];
+        for (int i = 0; i < size; i++) {
+            int local_rank = i % 2;
+            devlist[i] = local_rank;
+        }
+
+        INFINI_CHECK(infiniCommInitAll(&comm, size, devlist));
+        delete[] devlist;
+
+        if (infiniccl_rank == 0) {
+            std::cout << "\n=== InfiniCCL Initialized Successfully ===" << std::endl;
+            std::cout << "Total Ranks: " << size << std::endl;
+        }
+    }
+
+    nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
+                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel, FLAGS_heterogeneous,
+                                     comm);
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 
     // NOTE(dcj): currently we only support single process

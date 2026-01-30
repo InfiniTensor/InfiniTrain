@@ -90,7 +90,8 @@ GlobalEnv &GlobalEnv::Instance() {
 }
 
 void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                     int pipeline_parallel_size, int virtual_pipeline_parallel_size, bool heterogeneous) {
+                     int pipeline_parallel_size, int virtual_pipeline_parallel_size, bool heterogeneous,
+                     infiniComm_t infiniccl_comm) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
@@ -109,6 +110,7 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     virtual_pipeline_parallel_size_ = virtual_pipeline_parallel_size;
     data_parallel_size_ = world_size_ / tensor_parallel_size_ / pipeline_parallel_size_;
     heterogeneous_ = heterogeneous;
+    infiniccl_comm_ = infiniccl_comm;
 
     layout_.sizes[DP] = data_parallel_size_;
     layout_.sizes[TP] = tensor_parallel_size_;
@@ -186,6 +188,11 @@ Layout GlobalEnv::layout() const {
 bool GlobalEnv::heterogeneous() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return heterogeneous_;
+}
+
+infiniComm_t GlobalEnv::infiniccl_comm() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return infiniccl_comm_;
 }
 
 namespace {
