@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -45,6 +46,12 @@ public:
 
     const std::string &type() const { return type_; }
 
+    // Atomic CAS: try to mark backward hook as registered, returns true if this is the first registration
+    bool TryMarkModuleBackwardHookRegistered() {
+        bool expected = false;
+        return module_backward_hook_registered_.compare_exchange_strong(expected, true);
+    }
+
 protected:
     std::vector<std::shared_ptr<Tensor>> saved_tensors_;
 
@@ -60,5 +67,6 @@ private:
     std::vector<FunctionPreHook> backward_pre_hooks_;
     std::vector<FunctionPostHook> backward_post_hooks_;
     bool precision_check_registered_ = false;
+    std::atomic<bool> module_backward_hook_registered_{false};
 };
 } // namespace infini_train::autograd

@@ -1,10 +1,10 @@
 #pragma once
 
 #include "infini_train/include/common/hook.h"
+#include "infini_train/include/tensor.h"
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <unordered_set>
 #include <vector>
 
 namespace infini_train {
@@ -15,25 +15,42 @@ class Module;
 namespace utils {
 
 // Global Module Hook Registry
-// Manages hooks that need to be applied to all modules
+// Global hooks that are executed on every forward/backward pass
 class GlobalModuleHookRegistry {
 public:
-    using ModuleHookRegistrar = std::function<void(nn::Module *)>;
+    using ModuleForwardPreHook = std::function<void(nn::Module *, const std::vector<std::shared_ptr<Tensor>> &inputs)>;
+
+    using ModuleForwardHook = std::function<void(nn::Module *, const std::vector<std::shared_ptr<Tensor>> &inputs,
+                                                 const std::vector<std::shared_ptr<Tensor>> &outputs)>;
+
+    using ModuleFullBackwardHook
+        = std::function<void(nn::Module *, const std::vector<std::shared_ptr<Tensor>> &grad_outputs,
+                             const std::vector<std::shared_ptr<Tensor>> &grad_inputs)>;
 
     static GlobalModuleHookRegistry &Instance();
 
-    // Register a hook registrar, which will be called for all modules on their first forward pass
-    // Returns a HookHandle that can be used to remove the hook
-    std::unique_ptr<HookHandle> RegisterHook(ModuleHookRegistrar registrar);
+    // PyTorch-style registration: RegisterModule* prefix
+    std::unique_ptr<HookHandle> RegisterModuleForwardPreHook(ModuleForwardPreHook hook);
+    std::unique_ptr<HookHandle> RegisterModuleForwardHook(ModuleForwardHook hook);
+    std::unique_ptr<HookHandle> RegisterModuleFullBackwardHook(ModuleFullBackwardHook hook);
 
-    // Apply all registered hooks to the specified module (called by Module::operator())
-    void ApplyHooks(nn::Module *module);
+    // Call hooks (called by Module::operator())
+    void CallModuleForwardPreHooks(nn::Module *module, const std::vector<std::shared_ptr<Tensor>> &inputs);
+    void CallModuleForwardHooks(nn::Module *module, const std::vector<std::shared_ptr<Tensor>> &inputs,
+                                const std::vector<std::shared_ptr<Tensor>> &outputs);
+    void CallModuleFullBackwardHooks(nn::Module *module, const std::vector<std::shared_ptr<Tensor>> &grad_outputs,
+                                     const std::vector<std::shared_ptr<Tensor>> &grad_inputs);
+    bool HasModuleBackwardHooks() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return !module_full_backward_hooks_.empty();
+    }
 
 private:
     GlobalModuleHookRegistry() = default;
 
-    std::vector<ModuleHookRegistrar> registrars_;
-    std::unordered_set<nn::Module *> applied_modules_;
+    std::vector<ModuleForwardPreHook> module_forward_pre_hooks_;
+    std::vector<ModuleForwardHook> module_forward_hooks_;
+    std::vector<ModuleFullBackwardHook> module_full_backward_hooks_;
     mutable std::mutex mutex_;
 };
 
