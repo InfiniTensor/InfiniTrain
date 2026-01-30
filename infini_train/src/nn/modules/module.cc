@@ -134,30 +134,37 @@ std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shar
 }
 
 std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    // Apply globally registered hooks (on first call for this module)
-    utils::GlobalModuleHookRegistry::Instance().ApplyHooks(this);
+    // 1. Call global module forward pre-hooks
+    utils::GlobalModuleHookRegistry::Instance().CallModuleForwardPreHooks(this, input_tensors);
 
-    // Call forward pre-hooks
+    // 2. Call local forward pre-hooks
     for (const auto &hook : forward_pre_hooks_) {
         if (hook) {
             hook(this, input_tensors);
         }
     }
 
-    // Call actual Forward implementation
+    // 3. Call actual Forward implementation
     auto output_tensors = Forward(input_tensors);
 
-    // Call forward post-hooks
+    // 4. Call local forward post-hooks
     for (const auto &hook : forward_post_hooks_) {
         if (hook) {
             hook(this, input_tensors, output_tensors);
         }
     }
 
-    // Register backward hooks on output tensors' grad_fn
-    if (UNLIKELY(!backward_pre_hooks_.empty() || !backward_post_hooks_.empty())) {
+    // 5. Call global module forward hooks
+    utils::GlobalModuleHookRegistry::Instance().CallModuleForwardHooks(this, input_tensors, output_tensors);
+
+    // 6. Register backward hooks on output tensors' grad_fn
+    const bool has_local_backward_hooks = !backward_pre_hooks_.empty() || !backward_post_hooks_.empty();
+    const bool has_global_backward_hooks = utils::GlobalModuleHookRegistry::Instance().HasModuleBackwardHooks();
+
+    if (UNLIKELY(has_local_backward_hooks || has_global_backward_hooks)) {
         for (const auto &output : output_tensors) {
             if (output && output->grad_fn()) {
+                // Local backward prehooks
                 if (!backward_pre_hooks_.empty()) {
                     output->grad_fn()->RegisterBackwardPreHook(
                         [this](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
@@ -168,6 +175,7 @@ std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::s
                             }
                         });
                 }
+                // Local backward post-hooks
                 if (!backward_post_hooks_.empty()) {
                     output->grad_fn()->RegisterBackwardPostHook(
                         [this](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &grad_inputs,
@@ -177,6 +185,16 @@ std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::s
                                     hook(this, grad_inputs, grad_outputs);
                                 }
                             }
+                        });
+                }
+                // Global backward hooks (only register once per grad_fn using atomic CAS)
+                if (has_global_backward_hooks && output->grad_fn()->TryMarkModuleBackwardHookRegistered()) {
+                    output->grad_fn()->RegisterBackwardPostHook(
+                        [this](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &grad_inputs,
+                               const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+                            // Registry convention: (grad_outputs, grad_inputs) - PyTorch style
+                            utils::GlobalModuleHookRegistry::Instance().CallModuleFullBackwardHooks(this, grad_outputs,
+                                                                                                    grad_inputs);
                         });
                 }
             }

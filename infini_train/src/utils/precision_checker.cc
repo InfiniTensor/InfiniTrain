@@ -384,9 +384,19 @@ void PrecisionChecker::Init(const PrecisionCheckConfig &global_config, const Con
         return;
     }
 
-    // Register auto-hook for all modules via GlobalModuleHookRegistry
-    GlobalModuleHookRegistry::Instance().RegisterHook(
-        [config](nn::Module *module) { RegisterForModule(module, module->type(), config); });
+    // Register global module forward hook (checks outputs on every forward)
+    GlobalModuleHookRegistry::Instance().RegisterModuleForwardHook(
+        [config](nn::Module *module, const std::vector<std::shared_ptr<Tensor>> &inputs,
+                 const std::vector<std::shared_ptr<Tensor>> &outputs) {
+            CheckTensors("Forward Output", module->type(), outputs, config);
+        });
+
+    // Register global module full backward hook (checks gradients on every backward)
+    GlobalModuleHookRegistry::Instance().RegisterModuleFullBackwardHook(
+        [config](nn::Module *module, const std::vector<std::shared_ptr<Tensor>> &grad_outputs,
+                 const std::vector<std::shared_ptr<Tensor>> &grad_inputs) {
+            CheckTensors("GradOutputs", module->type(), grad_outputs, config);
+        });
 }
 
 void PrecisionChecker::RegisterForFunction(autograd::Function *func, const std::string &name, const Config &config) {

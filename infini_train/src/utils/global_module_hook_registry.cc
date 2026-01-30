@@ -7,23 +7,69 @@ GlobalModuleHookRegistry &GlobalModuleHookRegistry::Instance() {
     return instance;
 }
 
-std::unique_ptr<HookHandle> GlobalModuleHookRegistry::RegisterHook(ModuleHookRegistrar registrar) {
+std::unique_ptr<HookHandle> GlobalModuleHookRegistry::RegisterModuleForwardPreHook(ModuleForwardPreHook hook) {
     std::lock_guard<std::mutex> lock(mutex_);
-    registrars_.push_back(std::move(registrar));
-    return std::make_unique<HookHandleImpl<ModuleHookRegistrar>>(&registrars_, registrars_.size() - 1);
+    module_forward_pre_hooks_.push_back(std::move(hook));
+    return std::make_unique<HookHandleImpl<ModuleForwardPreHook>>(&module_forward_pre_hooks_,
+                                                                  module_forward_pre_hooks_.size() - 1);
 }
 
-void GlobalModuleHookRegistry::ApplyHooks(nn::Module *module) {
+std::unique_ptr<HookHandle> GlobalModuleHookRegistry::RegisterModuleForwardHook(ModuleForwardHook hook) {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (applied_modules_.contains(module)) {
-        return;
+    module_forward_hooks_.push_back(std::move(hook));
+    return std::make_unique<HookHandleImpl<ModuleForwardHook>>(&module_forward_hooks_,
+                                                               module_forward_hooks_.size() - 1);
+}
+
+std::unique_ptr<HookHandle> GlobalModuleHookRegistry::RegisterModuleFullBackwardHook(ModuleFullBackwardHook hook) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    module_full_backward_hooks_.push_back(std::move(hook));
+    return std::make_unique<HookHandleImpl<ModuleFullBackwardHook>>(&module_full_backward_hooks_,
+                                                                    module_full_backward_hooks_.size() - 1);
+}
+
+void GlobalModuleHookRegistry::CallModuleForwardPreHooks(nn::Module *module,
+                                                         const std::vector<std::shared_ptr<Tensor>> &inputs) {
+    std::vector<ModuleForwardPreHook> snapshot;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        snapshot = module_forward_pre_hooks_;
     }
-    for (const auto &registrar : registrars_) {
-        if (registrar) {
-            registrar(module);
+    for (const auto &hook : snapshot) {
+        if (hook) {
+            hook(module, inputs);
         }
     }
-    applied_modules_.insert(module);
+}
+
+void GlobalModuleHookRegistry::CallModuleForwardHooks(nn::Module *module,
+                                                      const std::vector<std::shared_ptr<Tensor>> &inputs,
+                                                      const std::vector<std::shared_ptr<Tensor>> &outputs) {
+    std::vector<ModuleForwardHook> snapshot;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        snapshot = module_forward_hooks_;
+    }
+    for (const auto &hook : snapshot) {
+        if (hook) {
+            hook(module, inputs, outputs);
+        }
+    }
+}
+
+void GlobalModuleHookRegistry::CallModuleFullBackwardHooks(nn::Module *module,
+                                                           const std::vector<std::shared_ptr<Tensor>> &grad_outputs,
+                                                           const std::vector<std::shared_ptr<Tensor>> &grad_inputs) {
+    std::vector<ModuleFullBackwardHook> snapshot;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        snapshot = module_full_backward_hooks_;
+    }
+    for (const auto &hook : snapshot) {
+        if (hook) {
+            hook(module, grad_outputs, grad_inputs);
+        }
+    }
 }
 
 } // namespace infini_train::utils
