@@ -46,12 +46,6 @@ public:
 
     const std::string &type() const { return type_; }
 
-    // Atomic CAS: try to mark backward hook as registered, returns true if this is the first registration
-    bool TryMarkModuleBackwardHookRegistered() {
-        bool expected = false;
-        return module_backward_hook_registered_.compare_exchange_strong(expected, true);
-    }
-
 protected:
     std::vector<std::shared_ptr<Tensor>> saved_tensors_;
 
