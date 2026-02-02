@@ -40,10 +40,7 @@ public:
                                 const std::vector<std::shared_ptr<Tensor>> &outputs);
     void CallModuleFullBackwardHooks(nn::Module *module, const std::vector<std::shared_ptr<Tensor>> &grad_outputs,
                                      const std::vector<std::shared_ptr<Tensor>> &grad_inputs);
-    bool HasModuleBackwardHooks() const {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return !module_full_backward_hooks_.empty();
-    }
+    bool HasModuleBackwardHooks() const;
 
 private:
     GlobalModuleHookRegistry() = default;

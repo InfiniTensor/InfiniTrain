@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -61,6 +60,5 @@ private:
     std::vector<FunctionPreHook> backward_pre_hooks_;
     std::vector<FunctionPostHook> backward_post_hooks_;
     bool precision_check_registered_ = false;
-    std::atomic<bool> module_backward_hook_registered_{false};
 };
 } // namespace infini_train::autograd

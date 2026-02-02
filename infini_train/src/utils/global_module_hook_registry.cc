@@ -72,4 +72,9 @@ void GlobalModuleHookRegistry::CallModuleFullBackwardHooks(nn::Module *module,
     }
 }
 
+bool GlobalModuleHookRegistry::HasModuleBackwardHooks() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return !module_full_backward_hooks_.empty();
+}
+
 } // namespace infini_train::utils
