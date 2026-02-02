@@ -163,7 +163,7 @@ std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::s
 
     if (UNLIKELY(has_local_backward_hooks || has_global_backward_hooks)) {
         for (const auto &output : output_tensors) {
-            if (output && output->grad_fn()) {
+            if (output && output->output_idx() == 0 && output->grad_fn()) {
                 // Local backward prehooks
                 if (!backward_pre_hooks_.empty()) {
                     output->grad_fn()->RegisterBackwardPreHook(
@@ -187,8 +187,8 @@ std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::s
                             }
                         });
                 }
-                // Global backward hooks (only register once per grad_fn using atomic CAS)
-                if (has_global_backward_hooks && output->grad_fn()->TryMarkModuleBackwardHookRegistered()) {
+                // Global backward hooks
+                if (has_global_backward_hooks) {
                     output->grad_fn()->RegisterBackwardPostHook(
                         [this](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &grad_inputs,
                                const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
