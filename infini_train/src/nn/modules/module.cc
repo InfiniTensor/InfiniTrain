@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/modules/module.h"
 
+#include <algorithm>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -71,40 +72,58 @@ std::vector<std::shared_ptr<Tensor>> Module::Buffers() const {
 std::vector<std::shared_ptr<Module>> Module::modules() {
     std::vector<std::shared_ptr<Module>> modules;
     auto named_modules = NamedModules();
-    for (auto &[_, module] : named_modules) {
-        if (_ != "") {
+
+    std::shared_ptr<Module> root;
+    for (auto &[name, module] : named_modules) {
+        if (name != "") {
             modules.push_back(module);
+        } else {
+            root = module;
         }
     }
-    modules.insert(modules.begin(), named_modules[""]);
+
+    modules.insert(modules.begin(), root);
     return modules;
 }
 
-// FIXME(dcj): can not call this function in constructor
-std::unordered_map<std::string, std::shared_ptr<Module>>
-Module::NamedModules(const std::string &prefix, bool remove_duplicate, std::unordered_set<Module *> *memory) {
+std::vector<std::pair<std::string, std::shared_ptr<Module>>>
+Module::NamedModules(std::unordered_set<Module *> *memory, const std::string &prefix, bool remove_duplicate) {
     std::unordered_set<Module *> local_memory;
     if (memory == nullptr) {
         memory = &local_memory;
     }
-    std::unordered_map<std::string, std::shared_ptr<Module>> named_modules;
-    if (!memory->contains(this)) {
-        if (remove_duplicate) {
-            memory->insert(this);
+
+    std::vector<std::pair<std::string, std::shared_ptr<Module>>> named_modules;
+
+    // Only dedup when remove_duplicate=true
+    if (remove_duplicate) {
+        if (memory->contains(this)) {
+            return named_modules; // already visited: don't emit, don't recurse
         }
-        CHECK(!named_modules.contains(prefix));
-        named_modules.emplace(prefix, shared_from_this());
-        for (auto &[name, module] : modules_) {
-            if (!module) {
-                continue;
-            }
-            auto submodule_prefix = (prefix.empty() ? "" : prefix + ".") + name;
-            for (auto &[sub_name, sub_module] : module->NamedModules(submodule_prefix, remove_duplicate, memory)) {
-                CHECK(!named_modules.contains(sub_name));
-                named_modules.emplace(sub_name, sub_module);
-            }
-        }
+        memory->insert(this);
     }
+
+    // Emit self first (pre-order)
+    named_modules.emplace_back(prefix, shared_from_this());
+
+    // Collect children then sort by key for stable order
+    std::vector<std::pair<std::string, std::shared_ptr<Module>>> children;
+    children.reserve(modules_.size());
+    for (const auto &[name, module] : modules_) {
+        if (!module) {
+            continue;
+        }
+        children.emplace_back(name, module);
+    }
+    std::sort(children.begin(), children.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+
+    // Recurse in sorted order
+    for (const auto &[name, module] : children) {
+        const auto submodule_prefix = (prefix.empty() ? "" : prefix + ".") + name;
+        auto sub = module->NamedModules(memory, submodule_prefix, remove_duplicate);
+        named_modules.insert(named_modules.end(), sub.begin(), sub.end());
+    }
+
     return named_modules;
 }
 
@@ -192,7 +211,7 @@ std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::s
                     output->grad_fn()->RegisterBackwardPostHook(
                         [this](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &grad_inputs,
                                const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-                            // Registry convention: (grad_outputs, grad_inputs) - PyTorch style
+                            // Registry convention: (grad_outputs, grad_inputs)
                             utils::GlobalModuleHookRegistry::Instance().CallModuleFullBackwardHooks(this, grad_outputs,
                                                                                                     grad_inputs);
                         });

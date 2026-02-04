@@ -80,6 +80,10 @@ public:
 
     virtual std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const;
 
+    std::vector<std::pair<std::string, std::shared_ptr<Module>>>
+    NamedModules(std::unordered_set<Module *> *memory = nullptr, const std::string &prefix = "",
+                 bool remove_duplicate = true);
+
     // Hook registration methods
     std::shared_ptr<infini_train::HookHandle> RegisterForwardPreHook(ModulePreHook hook);
     std::shared_ptr<infini_train::HookHandle> RegisterForwardPostHook(ModulePostHook hook);
@@ -99,10 +103,6 @@ protected:
     std::vector<ModulePostHook> backward_post_hooks_;
 
 private:
-    std::unordered_map<std::string, std::shared_ptr<Module>>
-    NamedModules(const std::string &prefix = "", bool remove_duplicate = true,
-                 std::unordered_set<Module *> *memory = nullptr);
-
     friend std::vector<std::shared_ptr<Module>>
     parallel::function::Replicate(const std::shared_ptr<Module> &network, const std::vector<const Device *> &devices);
 };

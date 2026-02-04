@@ -25,6 +25,8 @@
 
 namespace infini_train::utils {
 
+static std::unordered_map<const nn::Module *, std::string> g_module_name_map;
+
 namespace {
 
 // Simple MD5 implementation
@@ -263,7 +265,7 @@ void SaveNpy(const std::shared_ptr<Tensor> &tensor, const std::string &name, int
     const auto &output_path = PrecisionCheckEnv::Instance().GetOutputPath();
     std::string dir = output_path + "/rank_" + std::to_string(rank);
     std::filesystem::create_directories(dir);
-    std::string filename = dir + "/" + name + "_" + std::to_string(idx) + "_" + stage + ".npy";
+    std::string filename = dir + "/" + name + (idx > 0 ? "_" + std::to_string(idx) : "") + "_" + stage + ".npy";
 
     if (tensor->Dtype() == DataType::kFLOAT32) {
         tensor->SaveAsNpy(filename);
@@ -320,6 +322,9 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
         // Output to log
         auto &log_stream = GetLogStream();
 
+        // Format: name[_idx]_forward/backward (match .npy filename format)
+        std::string log_name = name + (idx > 0 ? "_" + std::to_string(idx) : "") + "_" + stage_short;
+
         if (global_config.format == "md5") {
             // MD5 format
             std::string md5;
@@ -338,7 +343,7 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
                 // Original precision MD5
                 md5 = ComputeMD5(cpu_tensor->DataPtr(), byte_size);
             }
-            log_stream << context_key << " " << name << "_" << idx << "_" << stage << " tensor[" << i << "]: "
+            log_stream << context_key << " " << log_name << " tensor[" << i << "]: "
                        << "dtype=" << DataTypeToString(cpu_tensor->Dtype()) << " "
                        << "shape=" << FormatShape(cpu_tensor->Dims()) << " "
                        << "md5=" << md5 << std::endl;
@@ -350,7 +355,7 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
                 = (config.check_nan && stats.nan_count > 0) || (config.check_inf && stats.inf_count > 0);
             const std::string error_marker = has_error ? " <- ERROR" : "";
 
-            log_stream << context_key << " " << name << "_" << idx << "_" << stage << " tensor[" << i << "]: "
+            log_stream << context_key << " " << log_name << " tensor[" << i << "]: "
                        << "dtype=" << DataTypeToString(cpu_tensor->Dtype()) << " "
                        << "shape=" << FormatShape(cpu_tensor->Dims()) << " "
                        << "min=" << stats.min_val << " "
@@ -388,15 +393,44 @@ void PrecisionChecker::Init(const PrecisionCheckConfig &global_config, const Con
     GlobalModuleHookRegistry::Instance().RegisterModuleForwardHook(
         [config](nn::Module *module, const std::vector<std::shared_ptr<Tensor>> &inputs,
                  const std::vector<std::shared_ptr<Tensor>> &outputs) {
-            CheckTensors("Forward Output", module->type(), outputs, config);
+            auto it = g_module_name_map.find(module);
+            const std::string &name = (it != g_module_name_map.end()) ? it->second : module->type();
+            CheckTensors("Forward Output", name, outputs, config);
         });
 
     // Register global module full backward hook (checks gradients on every backward)
     GlobalModuleHookRegistry::Instance().RegisterModuleFullBackwardHook(
         [config](nn::Module *module, const std::vector<std::shared_ptr<Tensor>> &grad_outputs,
                  const std::vector<std::shared_ptr<Tensor>> &grad_inputs) {
-            CheckTensors("GradOutputs", module->type(), grad_outputs, config);
+            auto it = g_module_name_map.find(module);
+            const std::string &name = (it != g_module_name_map.end()) ? it->second : module->type();
+            CheckTensors("GradOutputs", name, grad_outputs, config);
         });
+}
+
+static inline bool ShouldSkipNameMap(std::string_view name) {
+    return name.rfind("__pp", 0) == 0; // starts_with("__pp")
+}
+
+void PrecisionChecker::BuildNameMap(nn::Module *root_model) {
+    const auto &global_config = PrecisionCheckEnv::Instance().GetConfig();
+    if (global_config.level == PrecisionCheckLevel::OFF || root_model == nullptr) {
+        return;
+    }
+
+    auto named = root_model->NamedModules(/*memory=*/nullptr, /*prefix=*/"", /*remove_duplicate=*/false);
+    g_module_name_map.clear();
+    g_module_name_map.reserve(named.size());
+
+    for (const auto &[name, module] : named) {
+        if (name.empty()) {
+            continue; // skip root
+        }
+        if (ShouldSkipNameMap(name)) {
+            continue; // skip PP internal tree
+        }
+        g_module_name_map[module.get()] = name; // keep InfiniTrain path directly
+    }
 }
 
 void PrecisionChecker::RegisterForFunction(autograd::Function *func, const std::string &name, const Config &config) {
