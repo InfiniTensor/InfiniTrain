@@ -35,10 +35,13 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads() {
     shard_params_.clear();
 
     for (const auto &group : bucket_groups_) {
-        for (const auto &bucket : group->buckets()) {
+        const bool use_grad_shard = group->config().zero_stage >= 2;
+        const auto &buckets = group->buckets();
+        for (size_t bucket_idx = 0; bucket_idx < buckets.size(); ++bucket_idx) {
+            const auto &bucket = buckets[bucket_idx];
 
             auto bucket_param = bucket->param_data();
-            auto bucket_grad = bucket->grad_data();
+            auto bucket_grad = use_grad_shard ? group->GetLocalGradShardBuffer(bucket_idx) : bucket->grad_data();
 
             CHECK(bucket_param) << "DistributedOptimizer requires param buffer.";
             CHECK(bucket_grad) << "DistributedOptimizer requires grad buffer.";
@@ -65,7 +68,9 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads() {
                 CHECK_GT(piece_numel, 0);
 
                 const size_t param_piece_offset_bytes = local_start * kDataTypeToSize.at(bucket_param->Dtype());
-                const size_t grad_piece_offset_bytes = local_start * kDataTypeToSize.at(bucket_grad->Dtype());
+                // Adjust the offset since bucket_grad is already the shard of grad under ZeRO-2.
+                auto offset = use_grad_shard ? (local_start - bucket_shard_start) : local_start;
+                size_t grad_piece_offset_bytes = offset * kDataTypeToSize.at(bucket_grad->Dtype());
 
                 auto param_piece = std::make_shared<Tensor>(*bucket_param, param_piece_offset_bytes,
                                                             std::vector<int64_t>{static_cast<int64_t>(piece_numel)});
@@ -74,6 +79,12 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads() {
                                                            std::vector<int64_t>{static_cast<int64_t>(piece_numel)});
 
                 param_piece->set_grad(grad_piece);
+                // if (use_grad_shard) {
+                //     // NOTE(zbl): Under ZeRO-2, param->grad() is the shard of grad, not the full grad.
+                //     //            The binding is done in the construnctor of DistributedOptimizer.
+                //     //            Not until backward is finished, the value of param->grad() will be updated.
+                //     param->set_grad(grad_piece);
+                // }
                 shard_params_.push_back(param_piece);
             }
         }
