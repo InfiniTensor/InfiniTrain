@@ -40,6 +40,12 @@ public:
     // In this case, grad reduce is triggered immediately when a grad is ready or till all grads are ready.
     bool overlap_grad_reduce = true;
 
+    // ZeRO-DP Stage for memory optimization (Only take effects when use_distributed_optimizer=true)
+    //   ZeRO-1: Optimizer states partitioning, by default
+    //   ZeRO-2: Gradients partitioning
+    //   ZeRO-3: Parameters partitioning
+    int zero_stage = 1;
+
     // Whether to overlap parameter all-gather with forward compute.
     bool overlap_param_gather = true;
 
@@ -59,7 +65,7 @@ public:
     // Maximum number of parameters in each ParamAndGradBucket.
     // NOTE(zbl): This is distinct from DDP Reducer's MB-based bucket caps.
     // TODO(zbl): To unify the definition of bucket_size argument for users
-    size_t bucket_size_in_elements = 40000000;
+    size_t bucket_size_in_elements = 1000000;
 
     // Whether to pad bucket sizes to improve NCCL bus bandwidth utilization.
     bool pad_buckets_for_high_nccl_busbw = false;
