@@ -190,6 +190,8 @@ void Train(const nn::parallel::Rank &rank) {
 
     model->To(device);
 
+    utils::PrecisionChecker::BuildNameMap(model.get());
+
     // select the data type
     // TODO(lzm): change to solely rely on the weight file info for determining the dtype when autocast is supported
     DataType dtype;

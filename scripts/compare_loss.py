@@ -62,8 +62,8 @@ def main():
         args.threshold_fp32 = args.threshold
         args.threshold_bf16 = args.threshold
 
-    files1 = {f.name: f for f in args.dir1.glob('*.log')}
-    files2 = {f.name: f for f in args.dir2.glob('*.log')}
+    files1 = {f.name: f for f in args.dir1.glob('*.log') if not f.name.startswith('build')}
+    files2 = {f.name: f for f in args.dir2.glob('*.log') if not f.name.startswith('build')}
 
     only_in_1 = set(files1.keys()) - set(files2.keys())
     only_in_2 = set(files2.keys()) - set(files1.keys())

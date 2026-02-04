@@ -55,8 +55,8 @@ def main():
     parser.add_argument('--verbose', action='store_true', help='Print detailed output for all files, including passed ones')
     args = parser.parse_args()
 
-    files1 = {f.name: f for f in args.dir1.glob('*.log')}
-    files2 = {f.name: f for f in args.dir2.glob('*.log')}
+    files1 = {f.name: f for f in args.dir1.glob('*.log') if not f.name.startswith('build')}
+    files2 = {f.name: f for f in args.dir2.glob('*.log') if not f.name.startswith('build')}
 
     only_in_1 = set(files1.keys()) - set(files2.keys())
     only_in_2 = set(files2.keys()) - set(files1.keys())
