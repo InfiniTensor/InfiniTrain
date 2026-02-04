@@ -6,6 +6,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
 #include "infini_train/include/nn/parallel/global.h"
@@ -53,12 +54,12 @@ std::vector<std::shared_ptr<Tensor>> ShardBuffer(const std::shared_ptr<Tensor> b
 } // namespace
 
 ParamAndGradBucket::ParamAndGradBucket(const std::vector<std::shared_ptr<Tensor>> &params,
-                                       const std::shared_ptr<Tensor> &param_data,
-                                       const std::shared_ptr<Tensor> &grad_data, size_t offset,
+                                       const std::shared_ptr<Tensor> &param_data, DataType param_dtype,
+                                       const std::shared_ptr<Tensor> &grad_data, DataType grad_dtype, size_t offset,
                                        size_t num_elements_unpadded, float gradient_scaling_factor, size_t bucket_id)
-    : bucket_id_(bucket_id), params_(std::move(params)), param_data_(std::move(param_data)),
-      grad_data_(std::move(grad_data)), offset_(offset), num_elements_unpadded_(num_elements_unpadded),
-      gradient_scaling_factor_(gradient_scaling_factor) {
+    : bucket_id_(bucket_id), params_(std::move(params)), param_data_(std::move(param_data)), param_dtype_(param_dtype),
+      grad_data_(std::move(grad_data)), grad_dtype_(grad_dtype), offset_(offset),
+      num_elements_unpadded_(num_elements_unpadded), gradient_scaling_factor_(gradient_scaling_factor) {
     size_t current_offset = 0;
     for (const auto &param : params_) {
         auto numel = param->NumElements();
@@ -97,8 +98,12 @@ ParamAndGradBucketGroup::ParamAndGradBucketGroup(const std::vector<std::shared_p
     CHECK(ddp_config.num_distributed_optimizer_instances == 1)
         << "ParamAndGradBucketGroup: Multi-instance DistributedOptimizer is not supported yet.";
 
-    for (const auto &bucket : buckets_) {
-        for (const auto &param : bucket->params()) { params_.insert(param.get()); }
+    for (size_t bucket_idx = 0; bucket_idx < buckets_.size(); ++bucket_idx) {
+        const auto &bucket = buckets_[bucket_idx];
+        for (const auto &param : bucket->params()) {
+            params_.insert(param.get());
+            param_to_bucket_[param.get()] = {bucket, bucket_idx};
+        }
     }
     if (rank_in_collective_pg_ == -1) {
         auto param = *params_.begin();
@@ -109,15 +114,40 @@ ParamAndGradBucketGroup::ParamAndGradBucketGroup(const std::vector<std::shared_p
 
     param_buffer_shard_list_.resize(buckets_.size());
     grad_buffer_shard_list_.resize(buckets_.size());
+
+    grad_shard_buffer_list_.resize(buckets_.size());
+    temp_full_grad_buffer_list_.resize(buckets_.size());
+    temp_full_grad_initialized_.resize(buckets_.size(), false);
+
+    if (ddp_config_.zero_stage >= 2) {
+        for (size_t i = 0; i < buckets_.size(); ++i) {
+            auto bucket = buckets_[i];
+            CHECK(bucket->param_data()) << "ParamAndGradBucketGroup: param buffer required for ZeRO-2.";
+            const size_t bucket_numel = bucket->param_data()->NumElements();
+            if (bucket_numel == 0) {
+                continue;
+            }
+            CHECK_EQ(bucket_numel % collective_pg_size_, 0);
+            const size_t shard_numel = bucket_numel / collective_pg_size_;
+            auto param = bucket->params().front();
+            grad_shard_buffer_list_[i] = AllocateFlatBuffer(shard_numel, bucket->grad_dtype(), param->GetDevice());
+        }
+    }
 }
 
 void ParamAndGradBucketGroup::Reset() {
     params_with_grad_.clear();
     grad_reduce_work_list_.clear();
+    grad_reduce_bucket_indices_.clear();
     param_gather_work_list_.clear();
     is_last_microbatch_ = true;
     grad_reduce_dispatched_ = false;
     param_gather_dispatched_ = false;
+
+    if (ddp_config_.zero_stage >= 2) {
+        std::fill(temp_full_grad_buffer_list_.begin(), temp_full_grad_buffer_list_.end(), nullptr);
+        std::fill(temp_full_grad_initialized_.begin(), temp_full_grad_initialized_.end(), false);
+    }
 }
 
 void ParamAndGradBucketGroup::RegisterGradReady(const std::shared_ptr<Tensor> &parameter) {
@@ -148,6 +178,69 @@ void ParamAndGradBucketGroup::RegisterGradReady(const std::shared_ptr<Tensor> &p
     }
 }
 
+void ParamAndGradBucketGroup::AccumulateParamGrad(const std::shared_ptr<Tensor> &parameter,
+                                                  const std::shared_ptr<Tensor> &grad, bool overwrite,
+                                                  float learning_rate) {
+    if (ddp_config_.zero_stage < 2) {
+        LOG(FATAL) << "ParamAndGradBucketGroup: AccumulateParamGrad called when ZeRO-2 is disabled.";
+        return;
+    }
+    if (!grad || !parameter) {
+        return;
+    }
+
+    auto it = param_to_bucket_.find(parameter.get());
+    if (it == param_to_bucket_.end()) {
+        return;
+    }
+    auto bucket = it->second.first;
+    const size_t bucket_idx = it->second.second;
+
+    size_t param_start_in_bucket = 0, param_end_in_bucket = 0;
+    auto found = bucket->GetTensorLocInBucket(parameter, param_start_in_bucket, param_end_in_bucket);
+    if (!found) {
+        return;
+    }
+
+    if (!temp_full_grad_buffer_list_[bucket_idx]) {
+        CHECK(bucket->param_data()) << "ParamAndGradBucketGroup: param buffer required for ZeRO-2.";
+        const size_t bucket_numel = bucket->param_data()->NumElements();
+        if (bucket_numel == 0) {
+            return;
+        }
+        temp_full_grad_buffer_list_[bucket_idx]
+            = AllocateFlatBuffer(bucket_numel, bucket->grad_dtype(), parameter->GetDevice());
+        temp_full_grad_initialized_[bucket_idx] = false;
+    }
+
+    if (!temp_full_grad_initialized_[bucket_idx]) {
+        temp_full_grad_buffer_list_[bucket_idx]->Fill(0.0f);
+        temp_full_grad_initialized_[bucket_idx] = true;
+    }
+
+    const size_t offset_bytes = param_start_in_bucket * kDataTypeToSize.at(bucket->grad_dtype());
+    auto bucket_grad_view
+        = std::make_shared<Tensor>(*temp_full_grad_buffer_list_[bucket_idx], offset_bytes, parameter->Dims());
+
+    if (overwrite) {
+        bucket_grad_view->CopyFrom(*grad);
+    } else {
+        auto kernel = Dispatcher::Instance().GetKernel({parameter->GetDevice()->Type(), "AccumulateGrad"});
+        kernel.Call<void>(grad, learning_rate, bucket_grad_view);
+    }
+}
+
+std::shared_ptr<Tensor> ParamAndGradBucketGroup::GetLocalGradShardBuffer(size_t bucket_idx) const {
+    if (ddp_config_.zero_stage < 2) {
+        LOG(WARNING) << "ParamAndGradBucketGroup: GetLocalGradShardBuffer called when ZeRO-2 is disabled.";
+        return nullptr;
+    }
+    if (bucket_idx >= grad_shard_buffer_list_.size()) {
+        return nullptr;
+    }
+    return grad_shard_buffer_list_[bucket_idx];
+}
+
 void ParamAndGradBucketGroup::StartGradSync() {
     if (!collective_pg_) {
         LOG(FATAL) << "ParamAndGradBucketGroup: StartGradSync() called with null collective_pg_.";
@@ -175,6 +268,20 @@ void ParamAndGradBucketGroup::StartGradSync() {
 
     for (auto i = 0; i < buckets_.size(); ++i) {
         auto bucket = buckets_[i];
+
+        if (ddp_config_.zero_stage >= 2) {
+            auto full_grad_buffer = temp_full_grad_buffer_list_[i];
+            if (!full_grad_buffer) {
+                continue;
+            }
+            CHECK(grad_shard_buffer_list_[i]) << "ParamAndGradBucketGroup: grad shard buffer missing.";
+            auto local_data_view = grad_shard_buffer_list_[i];
+            grad_reduce_work_list_.push_back(
+                collective_pg_->ReduceScatter(local_data_view, full_grad_buffer, reduce_op, async_op));
+            grad_reduce_bucket_indices_.push_back(i);
+            continue;
+        }
+
         std::shared_ptr<Tensor> grad_buffer = bucket->grad_data();
         if (!grad_buffer) {
             continue;
@@ -201,6 +308,10 @@ void ParamAndGradBucketGroup::FinishGradSync() {
         StartGradSync();
     }
 
+    if (params_with_grad_.empty()) {
+        return;
+    }
+
     if (!ddp_config_.overlap_grad_reduce) {
         // Assume reduce ops are synced and no work needs to be resolved
         grad_reduce_work_list_.clear();
@@ -211,6 +322,20 @@ void ParamAndGradBucketGroup::FinishGradSync() {
     CHECK(!grad_reduce_work_list_.empty())
         << "ParamAndGradBucketGroup: Communication call has not been issued for this bucket("
         << params_with_grad_.size() << "/" << params_.size() << " params have grad available)";
+
+    if (ddp_config_.zero_stage >= 2) {
+        for (size_t idx = 0; idx < grad_reduce_work_list_.size(); ++idx) {
+            auto &work = grad_reduce_work_list_[idx];
+            work->WaitNonBlocking();
+            const size_t bucket_idx = grad_reduce_bucket_indices_[idx];
+            temp_full_grad_buffer_list_[bucket_idx].reset();
+            temp_full_grad_initialized_[bucket_idx] = false;
+        }
+        grad_reduce_work_list_.clear();
+        grad_reduce_bucket_indices_.clear();
+        grad_reduce_dispatched_ = false;
+        return;
+    }
 
     for (auto work : grad_reduce_work_list_) { work->WaitNonBlocking(); }
     grad_reduce_work_list_.clear();
@@ -400,7 +525,11 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
         // No param buffer needed if optimzer is not distributed
         param_buffer_.reset();
     }
-    grad_buffer_ = AllocateFlatBuffer(numel_, grad_dtype, device);
+    if (ddp_config_.zero_stage >= 2) {
+        grad_buffer_.reset();
+    } else {
+        grad_buffer_ = AllocateFlatBuffer(numel_, grad_dtype, device);
+    }
 
     LOG(INFO) << "ParamAndGradBuffer: numel_unpadded=" << numel_unpadded_ << ", numel (padded)=" << numel_;
 
@@ -425,14 +554,17 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
             bucket_param_view = GetBufferView(param_buffer_, start_index,
                                               std::vector<int64_t>{static_cast<int64_t>(end_index - start_index)});
         }
-        std::shared_ptr<Tensor> bucket_grad_view = GetBufferView(
-            grad_buffer_, start_index, std::vector<int64_t>{static_cast<int64_t>(end_index - start_index)});
+        std::shared_ptr<Tensor> bucket_grad_view;
+        if (grad_buffer_) {
+            bucket_grad_view = GetBufferView(grad_buffer_, start_index,
+                                             std::vector<int64_t>{static_cast<int64_t>(end_index - start_index)});
+        }
 
         // FIXME(zbl): Use default for now
         float gradient_scaling_factor = 1.0f;
-        auto bucket
-            = std::make_shared<ParamAndGradBucket>(bucket_params, bucket_param_view, bucket_grad_view, start_index,
-                                                   num_elements_unpadded, gradient_scaling_factor, bucket_id);
+        auto bucket = std::make_shared<ParamAndGradBucket>(bucket_params, bucket_param_view, param_dtype,
+                                                           bucket_grad_view, grad_dtype, start_index,
+                                                           num_elements_unpadded, gradient_scaling_factor, bucket_id);
 
         for (auto param : bucket_params) {
             CHECK(param_bucket_map_.find(param.get()) == param_bucket_map_.end())
@@ -455,8 +587,11 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
             param->SetData(*param_buffer_, param_start_index * kDataTypeToSize.at(param_buffer_->Dtype()), true);
         }
 
-        auto grad_view = GetBufferView(grad_buffer_, param_start_index, param->Dims());
-        param->set_grad(grad_view);
+        std::shared_ptr<Tensor> grad_view;
+        if (grad_buffer_) {
+            grad_view = GetBufferView(grad_buffer_, param_start_index, param->Dims());
+            param->set_grad(grad_view);
+        }
         // Save grad view for each params
         --i;
         grads_[i] = grad_view;
@@ -507,7 +642,9 @@ void ParamAndGradBuffer::Reset(bool need_rebind) {
     if (!need_rebind) {
         grad_buffer_->Fill(0.f);
     }
-    need_rebind_grad_views_ = need_rebind;
+    // NOTE(zbl): Under ZeRO-2, param->grad() is the shard of grad, not the full grad.
+    //            It is constantly pointed to the shard of grad, so no need to rebind.
+    need_rebind_grad_views_ = need_rebind && (ddp_config_.zero_stage < 2);
 }
 
 void ParamAndGradBuffer::RebindGradViews() {
@@ -515,10 +652,16 @@ void ParamAndGradBuffer::RebindGradViews() {
         return;
     }
 
+    if (!grad_buffer_) {
+        return;
+    }
+
     CHECK_EQ(params_.size(), grads_.size());
     for (size_t i = 0; i < params_.size(); ++i) {
-        params_[i]->set_grad(grads_[i]);
-        params_[i]->MarkGradOverwriteOnNextAccum();
+        if (grads_[i]) {
+            params_[i]->set_grad(grads_[i]);
+            params_[i]->MarkGradOverwriteOnNextAccum();
+        }
     }
 
     need_rebind_grad_views_ = false;

@@ -227,6 +227,12 @@ public:
     std::shared_ptr<autograd::AccumulateGrad> grad_accumulator();
     void ResetAccumulator();
 
+    // ZeRO-2: Use this function to take over AccumulateGrad::Backward
+    using GradAccumulateBypass
+        = std::function<bool(const std::shared_ptr<Tensor> &grad_output, bool overwrite, float learning_rate)>;
+    GradAccumulateBypass grad_accumulate_bypass();
+    void SetGradAccumulateBypass(GradAccumulateBypass);
+
     void RegisterPostAccumulateGradHook(std::shared_ptr<autograd::PostAccumulateGradHook> hook);
 
     autograd::PostAccumulateGradHook *post_accumulate_grad_hook() const;
@@ -241,6 +247,8 @@ private:
     // a strong reference to the accumulator to manage its lifetime.
     std::shared_ptr<autograd::AccumulateGrad> grad_accumulator_ = nullptr;
     std::shared_ptr<autograd::PostAccumulateGradHook> post_accumulate_grad_hook_ = nullptr;
+    // ZeRO-2: Use this function to take over AccumulateGrad::Backward
+    GradAccumulateBypass grad_accumulate_bypass_ = nullptr;
 
     bool grad_overwrite_once_ = false;
 };

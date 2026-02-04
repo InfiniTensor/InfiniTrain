@@ -22,8 +22,8 @@ namespace infini_train::nn::parallel {
 class ParamAndGradBucket {
 public:
     ParamAndGradBucket(const std::vector<std::shared_ptr<Tensor>> &params, const std::shared_ptr<Tensor> &param_data,
-                       const std::shared_ptr<Tensor> &grad_data, size_t offset, size_t num_elements_unpadded,
-                       float gradient_scaling_factor, size_t bucket_id);
+                       DataType param_dtype, const std::shared_ptr<Tensor> &grad_data, DataType grad_dtype,
+                       size_t offset, size_t num_elements_unpadded, float gradient_scaling_factor, size_t bucket_id);
 
     size_t bucket_id() const { return bucket_id_; }
 
@@ -32,6 +32,10 @@ public:
     const std::shared_ptr<Tensor> &param_data() const { return param_data_; }
 
     const std::shared_ptr<Tensor> &grad_data() const { return grad_data_; }
+
+    DataType param_dtype() const { return param_dtype_; }
+
+    DataType grad_dtype() const { return grad_dtype_; }
 
     size_t offset() const { return offset_; }
 
@@ -49,6 +53,8 @@ private:
     std::vector<std::shared_ptr<Tensor>> params_;
     std::shared_ptr<Tensor> param_data_;
     std::shared_ptr<Tensor> grad_data_;
+    DataType param_dtype_;
+    DataType grad_dtype_;
 
     size_t offset_ = 0;
     size_t num_elements_unpadded_ = 0;
@@ -73,6 +79,11 @@ public:
     // Start grad reduce
     void StartGradSync();
 
+    // Accumulate a parameter grad into bucket buffer
+    // ZeRO-2: Use this funtion to take over autograd::AccumulateGrad::Backward
+    void AccumulateParamGrad(const std::shared_ptr<Tensor> &parameter, const std::shared_ptr<Tensor> &grad,
+                             bool overwrite, float learning_rate);
+
     // Wait for gradient reduce to complete
     void FinishGradSync();
 
@@ -87,6 +98,9 @@ public:
 
     const std::vector<std::shared_ptr<ParamAndGradBucket>> &buckets() const { return buckets_; }
 
+    // ZeRO-2: Get a bucket's local grad shard buffer
+    std::shared_ptr<Tensor> GetLocalGradShardBuffer(size_t bucket_idx) const;
+
     const DistributedDataParallelConfig &config() const { return ddp_config_; }
 
 private:
@@ -98,11 +112,19 @@ private:
 
     std::unordered_set<Tensor *> params_;
     std::unordered_set<Tensor *> params_with_grad_;
+    // Tensor -> (Bucket, Bucket Index)
+    std::unordered_map<Tensor *, std::pair<std::shared_ptr<ParamAndGradBucket>, size_t>> param_to_bucket_;
 
     // TODO(zbl): Implement CoalescedWork for aggregate works
     //            According to Megatron-LM's _coalescing_manager
     std::vector<std::shared_ptr<Work>> grad_reduce_work_list_;
+    std::vector<size_t> grad_reduce_bucket_indices_;
     std::vector<std::shared_ptr<Work>> param_gather_work_list_;
+
+    // ZeRO-2: persistent grad shard buffers and temporary full grad buffers
+    std::vector<std::shared_ptr<Tensor>> grad_shard_buffer_list_;
+    std::vector<std::shared_ptr<Tensor>> temp_full_grad_buffer_list_;
+    std::vector<bool> temp_full_grad_initialized_;
 
     std::shared_ptr<ParamAndGradBucketGroup> next_param_gather_bucket_group_ = nullptr;
 

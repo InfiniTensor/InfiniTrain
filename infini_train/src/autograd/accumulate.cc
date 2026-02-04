@@ -25,8 +25,16 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
     device->SetDevice();
 
     if (grad_output) {
+        const bool overwrite = tensor_->ConsumeGradOverwriteFlag();
+        // ZeRO-2: Use a bypass function to perform grad accumulation in temp full grad buffer
+        auto bypass = tensor_->grad_accumulate_bypass();
+        if (bypass && bypass(grad_output, overwrite, learning_rate_)) {
+            tensor_->ResetAccumulator();
+            return {};
+        }
+
         if (grad) {
-            if (tensor_->ConsumeGradOverwriteFlag()) {
+            if (overwrite) {
                 // If the tensor is marked to overrite its current grad on next grad update
                 // See notes in `infini_train::nn::parallel::Reducer::PrepareForBackward()`
                 // NOTE(zbl): must copy, cannot change grad buffer address

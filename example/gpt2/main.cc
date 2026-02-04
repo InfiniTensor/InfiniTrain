@@ -52,6 +52,7 @@ DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
 DEFINE_double(learning_rate, 1e-4, "learning rate warmup iterations");
 DEFINE_bool(use_distributed_optimizer, false, "Whether to enable DistributedOptimizer(only take effects when DP>1)");
+DEFINE_int32(zero_stage, 1, "ZeRO stage (1/2/3), default 1 (only take effects when use_distributed_optimizer=true)");
 // evaluation
 DEFINE_uint32(val_loss_every, 0, "every how many steps to evaluate val loss?");
 DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
@@ -106,6 +107,7 @@ const std::unordered_map<std::string, GPT2::ModelType> kStrToModelType = {
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_validator(zero_stage, [](const char *, int32_t value) { return value >= 1 && value <= 3; });
 
 void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
@@ -211,8 +213,8 @@ void Train(const nn::parallel::Rank &rank) {
             model, pp_world_size, num_micro_batches, shapes, pp_rank, rank.thread_rank(),
             std::dynamic_pointer_cast<GPT2>(model)->GetChunkSize());
         if (ddp_world_size > 1) {
-            auto ddp_config
-                = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
+            auto ddp_config = DistributedDataParallelConfig{
+                .use_distributed_optimizer = FLAGS_use_distributed_optimizer, .zero_stage = FLAGS_zero_stage};
             auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
             for (int chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
                 (*mutable_chunks)[chunk_id] = std::make_shared<DistributedDataParallel>(mutable_chunks->at(chunk_id),
@@ -224,7 +226,8 @@ void Train(const nn::parallel::Rank &rank) {
         // before wrapping the model with DistributedDataParallel (DDP).
         // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
         // are created during the conversion.
-        auto ddp_config = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
+        auto ddp_config = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer,
+                                                        .zero_stage = FLAGS_zero_stage};
         model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank(), ddp_config);
     }
 

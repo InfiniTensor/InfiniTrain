@@ -664,6 +664,13 @@ void Tensor::ResetAccumulator() {
     }
 }
 
+Tensor::GradAccumulateBypass Tensor::grad_accumulate_bypass() {
+    CHECK(grad_accumulator_) << "grad_accumulate_bypass() should only be called on leaf tensors";
+    return grad_accumulate_bypass_;
+}
+
+void Tensor::SetGradAccumulateBypass(GradAccumulateBypass bypass) { grad_accumulate_bypass_ = std::move(bypass); }
+
 void Tensor::RegisterPostAccumulateGradHook(std::shared_ptr<autograd::PostAccumulateGradHook> hook) {
     CHECK(requires_grad_) << "cannot register a hook on a tensor that doesn't require gradient";
 
