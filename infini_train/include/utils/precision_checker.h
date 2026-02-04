@@ -38,6 +38,10 @@ public:
     // Called automatically by PrecisionCheckEnv::Init when level >= MODULE
     static void Init(const PrecisionCheckConfig &global_config, const Config &config = DefaultConfig());
 
+    // Build name map from root_model without registering hooks
+    // Called by PrecisionCheckEnv::RegisterWithRootModel
+    static void BuildNameMap(nn::Module *root_model);
+
     static void RegisterForFunction(autograd::Function *func, const std::string &name = "",
                                     const Config &config = DefaultConfig());
 

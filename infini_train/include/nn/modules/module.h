@@ -54,6 +54,8 @@ public:
     virtual std::vector<std::shared_ptr<Tensor>> Buffers() const;
 
     std::vector<std::shared_ptr<Module>> modules();
+    std::vector<std::pair<std::string, std::shared_ptr<Module>>> named_modules(bool recurse = true,
+                                                                               bool remove_duplicate = true) const;
     std::shared_ptr<Module> mutable_module(const std::string &name);
     const Module &module(const std::string &name) const;
 
@@ -99,7 +101,7 @@ protected:
     std::vector<ModulePostHook> backward_post_hooks_;
 
 private:
-    std::unordered_map<std::string, std::shared_ptr<Module>>
+    std::vector<std::pair<std::string, std::shared_ptr<Module>>>
     NamedModules(const std::string &prefix = "", bool remove_duplicate = true,
                  std::unordered_set<Module *> *memory = nullptr);
 

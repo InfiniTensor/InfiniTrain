@@ -169,6 +169,8 @@ void Train(const nn::parallel::Rank &rank) {
 
     model->To(device);
 
+    utils::PrecisionChecker::BuildNameMap(model.get());
+
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": Model loaded to device.";
 
     DataType dtype;
