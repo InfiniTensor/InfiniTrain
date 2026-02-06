@@ -10,7 +10,7 @@ class CudaStream : public Stream {
 public:
     CudaStream();
 
-    cudaStream_t cuda_stream();
+    cudaStream_t cuda_stream() const;
 
 private:
     cudaStream_t stream_;

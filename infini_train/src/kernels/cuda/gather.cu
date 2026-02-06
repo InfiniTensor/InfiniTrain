@@ -1,8 +1,10 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 // FIXME(zbl): This kernel aligns with torch.gather
@@ -66,11 +68,13 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
             << "index.size(" << d << ") must be <= input.size(" << d << ") on non-gather dims";
     }
 
-    const auto *cuda_dev = dynamic_cast<const CudaDevice *>(input->GetDevice());
-    const auto &stream = cuda_dev->Stream();
+    const auto device = input->GetDevice();
+    const auto &stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                             infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                             ->cuda_stream();
 
     auto dtype = input->Dtype();
-    auto out = std::make_shared<Tensor>(idx_dims, dtype, cuda_dev);
+    auto out = std::make_shared<Tensor>(idx_dims, dtype, device);
 
     auto in_strides = ComputeStrides(in_dims);
     auto out_strides = ComputeStrides(idx_dims);
@@ -183,8 +187,11 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
     const size_t n_out_strides = idx_dims.size();
     const size_t total_i64 = n_out + n_in_strides + n_out_strides;
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
-    const auto &stream = cuda_device->Stream();
+    auto device = grad_output->GetDevice();
+    const auto &stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                             infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                             ->cuda_stream();
+
     CUDA_CHECK(cudaMallocAsync(&dev_buf, total_i64 * sizeof(int64_t), stream));
     int64_t *out_dims_dev = dev_buf;
     int64_t *in_strides_dev = out_dims_dev + n_out;

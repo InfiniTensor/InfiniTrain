@@ -92,7 +92,7 @@ public:
     std::shared_ptr<infini_train::HookHandle> RegisterBackwardPostHook(ModulePostHook hook);
 
 protected:
-    Device device_ = Device();
+    Device device_;
     const std::string type_ = kUndefinedType;
     std::unordered_map<std::string, std::shared_ptr<Module>> modules_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;

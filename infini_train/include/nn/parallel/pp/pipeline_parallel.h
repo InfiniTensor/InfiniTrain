@@ -30,7 +30,7 @@ struct StageInfo {
 class PipelineParallel : public Module {
 public:
     PipelineParallel(const std::shared_ptr<nn::Module> module, int num_stages, int num_micro_batches,
-                     const std::vector<std::vector<int64_t>> &recv_shape, int rank, int device_id, int vpp);
+                     const std::vector<std::vector<int64_t>> &recv_shape, int rank, Device device, int vpp);
 
     float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input,
                     const std::vector<std::shared_ptr<Tensor>> &target, const std::shared_ptr<Optimizer> &optimizer,
@@ -41,7 +41,7 @@ public:
     std::vector<std::shared_ptr<Module>> *mutable_chunks();
 
 private:
-    void BuildPipelineStage(const std::vector<std::vector<int64_t>> &recv_shape, int device_id,
+    void BuildPipelineStage(const std::vector<std::vector<int64_t>> &recv_shape, Device device,
                             std::vector<std::shared_ptr<Module>> &&chunks);
 
     void SetupSchedule(int num_micro_batches);

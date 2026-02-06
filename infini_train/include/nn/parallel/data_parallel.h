@@ -13,7 +13,7 @@ class Tensor;
 namespace infini_train::nn::parallel {
 class DataParallel : public Module {
 public:
-    DataParallel(const std::shared_ptr<Module> &module, int dim = 0);
+    DataParallel(const std::shared_ptr<Module> &module, int dim, Device::DeviceType device_type);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 

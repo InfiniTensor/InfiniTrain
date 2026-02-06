@@ -8,27 +8,28 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
+#include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
-#include "infini_train/include/optimizer.h"
-#ifdef PROFILE_MODE
-#include "infini_train/include/profiler.h"
-#endif
-#include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/utils.h"
+#include "infini_train/include/optimizer.h"
 #include "infini_train/include/utils/global_module_hook_registry.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
+#ifdef PROFILE_MODE
+#include "infini_train/include/profiler.h"
+#endif
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
@@ -252,7 +253,7 @@ void Train(const nn::parallel::Rank &rank) {
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": start training";
 
-    auto cuda_device = device->IsCUDA() ? dynamic_cast<const CudaDevice *>(device) : nullptr;
+    auto impl = core::GetDeviceGuardImpl(device.type());
 
     for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
         // Reset precision check counters at start of each iteration for file overwrite
@@ -260,8 +261,8 @@ void Train(const nn::parallel::Rank &rank) {
 
         const bool last_step = step == FLAGS_num_iteration;
 
-        if (cuda_device) {
-            cuda_device->ResetMemPoolHighWatermarks();
+        if (device.IsCUDA()) {
+            impl->ResetMemPoolHighWatermarks(device);
         }
 
         const auto iter_start = std::chrono::high_resolution_clock::now();
@@ -353,8 +354,8 @@ void Train(const nn::parallel::Rank &rank) {
 
         if (rank.IsLastRank()) {
             size_t used_mb = 0, reserved_mb = 0;
-            if (cuda_device) {
-                std::tie(used_mb, reserved_mb) = cuda_device->GetMemPoolPeakMB();
+            if (device.IsCUDA()) {
+                std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
             }
 
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "

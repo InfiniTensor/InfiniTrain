@@ -84,17 +84,15 @@ private:
     std::vector<KernelCallRecord> call_records_;
     std::string current_tag_ = "Untagged";
 
+    // thread-local tracking
+    thread_local static inline std::map<std::string, std::chrono::high_resolution_clock::time_point> cpu_timing_map_;
+
 #ifdef USE_CUDA
     struct EventPair {
         void *start;
         void *stop;
     };
-#endif
 
-    // thread-local tracking
-    thread_local static inline std::map<std::string, std::chrono::high_resolution_clock::time_point> cpu_timing_map_;
-
-#ifdef USE_CUDA
     thread_local static inline std::map<std::string, EventPair> cuda_timing_map_;
 #endif
 };

@@ -14,6 +14,8 @@ class CudaBlasHandle : public BlasHandle {
 public:
     explicit CudaBlasHandle(Stream *stream);
 
+    cublasHandle_t cublas_handle() const;
+
 private:
     cublasHandle_t cublas_handle_;
 };

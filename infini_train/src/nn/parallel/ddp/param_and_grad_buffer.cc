@@ -28,7 +28,7 @@ inline size_t PadTo(size_t value, size_t alignment) {
     return remainder == 0 ? value : value + (alignment - remainder);
 }
 
-std::shared_ptr<Tensor> AllocateFlatBuffer(size_t num_elements, DataType data_type, const Device *device) {
+std::shared_ptr<Tensor> AllocateFlatBuffer(size_t num_elements, DataType data_type, Device device) {
     std::vector<int64_t> dims = {static_cast<int64_t>(num_elements)};
     // TODO(zbl): replace with united allocation when memory pool is available
     return std::make_shared<Tensor>(dims, data_type, device);
@@ -103,8 +103,7 @@ ParamAndGradBucketGroup::ParamAndGradBucketGroup(const std::vector<std::shared_p
     if (rank_in_collective_pg_ == -1) {
         auto param = *params_.begin();
         // FIXME(zbl): get correct rank in multi-node settings
-        rank_in_collective_pg_
-            = collective_pg_->GetGroupRank(dynamic_cast<const CudaDevice *>(param->GetDevice())->rank().thread_rank());
+        rank_in_collective_pg_ = collective_pg_->GetGroupRank(param->GetDevice().Rank().thread_rank());
     }
 
     param_buffer_shard_list_.resize(buckets_.size());

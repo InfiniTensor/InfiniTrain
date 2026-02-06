@@ -4,8 +4,10 @@
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 namespace {
@@ -69,16 +71,18 @@ void LaunchKernel(Kernel &&kernel, const std::shared_ptr<Tensor> &output, const 
 // Note: currently only support unary and binary operations
 template <size_t BLOCK_SIZE, typename T, typename Func, typename... Inputs>
 void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Inputs &...inputs) {
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
-    const auto &stream = cuda_device->Stream();
+    auto device = output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
     T *output_ptr = static_cast<T *>(output->DataPtr());
 
     if constexpr (sizeof...(inputs) == 1) {
         // Unary case
         LaunchKernel<BLOCK_SIZE, T>(
             [&](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
-                UnaryForwardKernel<<<grid, block, 0, stream>>>(output_ptr, func, output->NumElements(), offset,
-                                                               ptrs...);
+                UnaryForwardKernel<<<grid, block, 0, cuda_stream>>>(output_ptr, func, output->NumElements(), offset,
+                                                                    ptrs...);
             },
             output, inputs...);
     } else if constexpr (sizeof...(inputs) == 2) {
@@ -102,7 +106,7 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
         auto out_stride_host = ComputeStrides(out_shape);
 
         int64_t *device_buffer;
-        cudaMallocAsync(&device_buffer, 5 * ndim * sizeof(int64_t), stream);
+        cudaMallocAsync(&device_buffer, 5 * ndim * sizeof(int64_t), cuda_stream);
 
         int64_t *device_a_strides, *device_b_strides, *device_out_strides, *device_a_shape, *device_b_shape;
         device_a_strides = device_buffer + ndim * 0;
@@ -118,17 +122,18 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
         host_buffer.insert(host_buffer.end(), a_shape.begin(), a_shape.end());
         host_buffer.insert(host_buffer.end(), b_shape.begin(), b_shape.end());
 
-        cudaMemcpyAsync(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
+        cudaMemcpyAsync(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice,
+                        cuda_stream);
 
         LaunchKernel<BLOCK_SIZE, T>(
             [&](dim3 grid, dim3 block, size_t offset, const T *a_ptr, const T *b_ptr) {
-                BinaryForwardKernel<<<grid, block, 0, stream>>>(
+                BinaryForwardKernel<<<grid, block, 0, cuda_stream>>>(
                     output_ptr, func, ndim, device_a_strides, device_a_shape, device_b_strides, device_b_shape,
                     device_out_strides, a_ptr, b_ptr, output->NumElements());
             },
             output, inputs...);
 
-        cudaFreeAsync(device_buffer, stream);
+        cudaFreeAsync(device_buffer, cuda_stream);
     } else {
         static_assert(sizeof...(inputs) == 1 || sizeof...(inputs) == 2,
                       "LaunchForward currently only supports unary and binary operations.");
@@ -488,14 +493,18 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
 template <size_t BLOCK_SIZE, typename T, typename Func, typename... Inputs>
 void LaunchBackward(Func func, const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &grad_output,
                     const Inputs &...inputs) {
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
+    auto device = output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+
     T *output_ptr = static_cast<T *>(output->DataPtr());
     const T *grad_ptr = static_cast<const T *>(grad_output->DataPtr());
 
     LaunchKernel<BLOCK_SIZE, T>(
         [=](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
-            UnaryBackwardKernel<<<grid, block, 0, cuda_device->Stream()>>>(output_ptr, func, output->NumElements(),
-                                                                           offset, grad_ptr, ptrs...);
+            UnaryBackwardKernel<<<grid, block, 0, cuda_stream>>>(output_ptr, func, output->NumElements(), offset,
+                                                                 grad_ptr, ptrs...);
         },
         output, inputs...);
 }
@@ -506,8 +515,11 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
                     const std::shared_ptr<Tensor> &output_b, const std::vector<int64_t> &a_dims,
                     const std::vector<int64_t> &b_dims, const std::shared_ptr<Tensor> &grad_output,
                     const Inputs &...inputs) {
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output_a->GetDevice());
-    const auto &stream = cuda_device->Stream();
+    auto device = output_a->GetDevice();
+    const auto &stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                             infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                             ->cuda_stream();
+
     T *output_a_ptr = static_cast<T *>(output_a->DataPtr());
     T *output_b_ptr = static_cast<T *>(output_b->DataPtr());
     const T *grad_output_ptr = static_cast<const T *>(grad_output->DataPtr());

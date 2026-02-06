@@ -5,69 +5,44 @@
 #include <mutex>
 #include <numeric>
 
-#ifdef USE_CUDA
-#include <cuda_runtime.h>
-#endif
-
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/function_hook.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
 namespace {
-void CopyGradToBucket(const std::shared_ptr<Tensor> &grad, const std::shared_ptr<Tensor> &flat, size_t dst_elem_offset,
-                      void *stream = nullptr) {
+void CopyGradToBucket(const std::shared_ptr<Tensor> &grad, const std::shared_ptr<Tensor> &flat,
+                      size_t dst_elem_offset) {
     CHECK(grad && flat);
     const size_t element_size_in_bytes = kDataTypeToSize.at(grad->Dtype());
     const size_t bytes = grad->NumElements() * element_size_in_bytes;
     char *dst = static_cast<char *>(flat->DataPtr()) + dst_elem_offset * element_size_in_bytes;
     const void *src = grad->DataPtr();
 
-    const auto dev_type = grad->GetDevice().type();
-    if (dev_type == Device::DeviceType::kCPU) {
-        std::memcpy(dst, src, bytes);
-        return;
-    }
-#ifdef USE_CUDA
-    if (dev_type == Device::DeviceType::kCUDA) {
-        auto *cuda_dev = dynamic_cast<const CudaDevice *>(flat->GetDevice());
-        CHECK(cuda_dev);
-        cuda_dev->SetDevice();
-        auto comm_stream = stream ? reinterpret_cast<cudaStream_t>(stream) : cuda_dev->Stream();
-        cudaMemcpyAsync(dst, src, bytes, cudaMemcpyDeviceToDevice, comm_stream);
-        return;
-    }
-#endif
-    LOG(FATAL) << "Unsupported device type in CopyGradToBucket";
+    auto dev = grad->GetDevice();
+
+    core::DeviceGuard guard(dev);
+    auto impl = core::GetDeviceGuardImpl(dev.type());
+    impl->MemcpyAsync(dst, src, bytes, core::MemcpyKind::kD2D, impl->GetStream(dev));
 }
 
-void CopyBucketToGrad(const std::shared_ptr<Tensor> &flat, const std::shared_ptr<Tensor> &grad, size_t src_elem_offset,
-                      void *stream = nullptr) {
+void CopyBucketToGrad(const std::shared_ptr<Tensor> &flat, const std::shared_ptr<Tensor> &grad,
+                      size_t src_elem_offset) {
     CHECK(grad && flat);
     const size_t element_size_in_bytes = kDataTypeToSize.at(grad->Dtype());
     const size_t bytes = grad->NumElements() * element_size_in_bytes;
     const char *src = static_cast<const char *>(flat->DataPtr()) + src_elem_offset * element_size_in_bytes;
     void *dst = grad->DataPtr();
 
-    const auto dev_type = grad->GetDevice().type();
-    if (dev_type == Device::DeviceType::kCPU) {
-        std::memcpy(dst, src, bytes);
-        return;
-    }
-#ifdef USE_CUDA
-    if (dev_type == Device::DeviceType::kCUDA) {
-        auto *cuda_dev = dynamic_cast<const CudaDevice *>(flat->GetDevice());
-        CHECK(cuda_dev);
-        cuda_dev->SetDevice();
-        auto comm_stream = stream ? reinterpret_cast<cudaStream_t>(stream) : cuda_dev->Stream();
-        cudaMemcpyAsync(dst, src, bytes, cudaMemcpyDeviceToDevice, comm_stream);
-        return;
-    }
-#endif
-    LOG(FATAL) << "Unsupported device type in CopyBucketToGrad";
+    auto dev = grad->GetDevice();
+
+    core::DeviceGuard guard(dev);
+    auto impl = core::GetDeviceGuardImpl(dev.type());
+    impl->MemcpyAsync(dst, src, bytes, core::MemcpyKind::kD2D, impl->GetStream(dev));
 }
 
 std::shared_ptr<Tensor> MakeGradView(const std::shared_ptr<Tensor> &contents, size_t offset_elems,
@@ -204,7 +179,7 @@ void Reducer::BuildBuckets(const std::vector<std::vector<size_t>> &bucket_indice
         CHECK(!bucket_indices[bucket_idx].empty());
         const auto &first_param = params_[bucket_indices[bucket_idx][0]];
         bucket.dtype = first_param->Dtype();
-        bucket.device_rank = first_param->GetDevice()->rank().GlobalRank();
+        bucket.device_rank = first_param->GetDevice().Rank().GlobalRank();
 
         size_t total_elems = 0;
 
