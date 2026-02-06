@@ -39,7 +39,7 @@ enum class MemcpyKind : int8_t {
 // DeviceGuard (the public RAII wrapper) forwards calls to the DeviceGuardImpl
 // instance registered for the device type.
 //
-// TODO(zbl): add event managemnt
+// TODO(dcj): add event management
 //
 class DeviceGuardImpl {
 public:
@@ -111,8 +111,8 @@ public:
 //   • Switches to the target device
 //   • Restores the previous device on destruction
 //
-// All runtime operations (memory, streams, BLAS, sync) are forwarded to the
-// backend-specific DeviceGuardImpl registered for that device type.
+// All runtime operations are forwarded to the backend-specific DeviceGuardImpl
+// instance registered for that device type.
 //
 class DeviceGuard {
 public:
@@ -120,45 +120,25 @@ public:
 
     ~DeviceGuard();
 
+    // Copy is disallowed
     DeviceGuard(const DeviceGuard &) = delete;
     DeviceGuard &operator=(const DeviceGuard &) = delete;
 
-    // Device operations
-    Device GetDevice() const;
+    // Move is disallowed, as DeviceGuard does not have an uninitialized state,
+    // which is required for moves on types with nontrival destructors.
+    DeviceGuard(DeviceGuard &&other) = delete;
+    DeviceGuard &operator=(DeviceGuard &&other) = delete;
 
-    void SetDevice(Device device) const;
+    void SetDevice(Device device);
 
-    int8_t DeviceCount() const;
+    Device current_device() const;
 
-    Device::DeviceType Type() const;
-
-    // Stream operations
-    Stream *GetStream(Device) const;
-
-    // Synchronization
-    void SynchronizeDevice(Device) const;
-
-    void SynchronizeStream(Stream *) const;
-
-    // BLAS
-    BlasHandle *GetBlasHandle(Device) const;
-
-    // Memory operations
-    void Malloc(void **dev_ptr, size_t size);
-
-    void MallocAsync(void **dev_ptr, size_t size, Stream *stream);
-
-    void Free(void *dev_ptr);
-
-    void FreeAsync(void *dev_ptr, Stream *stream);
-
-    void Memcpy(void *dst, const void *src, size_t count, MemcpyKind kind);
-
-    void MemcpyAsync(void *dst, const void *src, size_t count, MemcpyKind kind, Stream *stream);
+    Device original_device() const;
 
 private:
     DeviceGuardImpl *impl_ = nullptr;
     Device original_device_;
+    Device current_device_;
 };
 
 //
@@ -181,12 +161,14 @@ public:
     DeviceGuardImpl *Get(Device::DeviceType type) const;
 
 private:
-    DeviceGuardImplRegistry() = default;
+    DeviceGuardImplRegistry();
     DeviceGuardImplRegistry(const DeviceGuardImplRegistry &) = delete;
     DeviceGuardImplRegistry &operator=(const DeviceGuardImplRegistry &) = delete;
 
     std::unordered_map<Device::DeviceType, std::unique_ptr<DeviceGuardImpl>> impls_;
 };
+
+DeviceGuardImpl *GetDeviceGuardImpl(Device::DeviceType type);
 
 } // namespace infini_train::core
 

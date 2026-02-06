@@ -6,9 +6,9 @@
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/common/hook.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
@@ -18,8 +18,7 @@ namespace infini_train::autograd {
 std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_GE(input_tensors.size(), 1);
     auto device = input_tensors[0]->GetDevice();
-    // TODO(dcj): Cache context information to reduce setDevice overhead.
-    device->SetDevice();
+    core::DeviceGuard guard(device);
 
     // Register precision check hooks if enabled (before forward)
     if (!precision_check_registered_) {
@@ -89,7 +88,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
 
 void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int grad_output_idx) {
     auto device = grad_output->GetDevice();
-    device->SetDevice();
+    core::DeviceGuard guard(device);
 
     // NOTE(dcj): The accumulate autograd function has no grad_outputs.
     // Temporarily resize the vector to hold one nullptr as a buffer.

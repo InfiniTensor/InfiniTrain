@@ -11,7 +11,7 @@
 namespace infini_train::nn {
 LayerNorm::LayerNorm(const std::vector<int64_t> &normalized_shape, float eps, Device device)
     : CloneableModule(kType), eps_(eps) {
-    device_ = device ? device : Device();
+    device_ = device;
 
     parameters_[kParamWeightName]
         = std::make_shared<Tensor>(normalized_shape, DataType::kFLOAT32, device_)->RequiresGrad();

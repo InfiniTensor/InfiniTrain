@@ -4,8 +4,10 @@
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 
@@ -74,10 +76,13 @@ VocabParallelCrossEntropyBackward(const std::shared_ptr<Tensor> &grad_output,   
         dloss_is_scalar = (grad_output->NumElements() == 1);
     }
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
+    auto device = grad_output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
 
     // logits should be [rows, V_local]
-    auto grad_input = std::make_shared<Tensor>(softmax_local->Dims(), softmax_local->Dtype(), cuda_device);
+    auto grad_input = std::make_shared<Tensor>(softmax_local->Dims(), softmax_local->Dtype(), device);
 
     const float one_minus_label_smoothing = 1.0f - label_smoothing;
     const float smoothing_term = (label_smoothing > 0.f && vocab_size_original > 0)
@@ -100,10 +105,10 @@ VocabParallelCrossEntropyBackward(const std::shared_ptr<Tensor> &grad_output,   
             Tinput *grad_input_ptr = static_cast<Tinput *>(grad_input->DataPtr());
 
             VocabParallelCrossEntropyBackwardKernel<threads_per_block, Tinput, Tmask, Tindex>
-                <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
-                    softmax_ptr, grad_input_ptr, mtarget_ptr, tmask_ptr, vml_ptr, grad_output_ptr,
-                    static_cast<int>(rows), static_cast<int>(vocab_size_local), dloss_is_scalar,
-                    one_minus_label_smoothing, smoothing_term);
+                <<<num_blocks, threads_per_block, 0, cuda_stream>>>(softmax_ptr, grad_input_ptr, mtarget_ptr, tmask_ptr,
+                                                                    vml_ptr, grad_output_ptr, static_cast<int>(rows),
+                                                                    static_cast<int>(vocab_size_local), dloss_is_scalar,
+                                                                    one_minus_label_smoothing, smoothing_term);
         },
         "CUDA VocabParallelCrossEntropyBackward");
 

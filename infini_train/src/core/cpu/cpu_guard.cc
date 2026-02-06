@@ -5,6 +5,8 @@
 
 namespace infini_train::core::cpu {
 
+CpuGuardImpl::CpuGuardImpl() {}
+
 Device CpuGuardImpl::GetDevice() const { return Device(Device::DeviceType::kCPU, 0); }
 
 Device::DeviceType CpuGuardImpl::Type() const { return Device::DeviceType::kCPU; }

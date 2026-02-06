@@ -3,8 +3,10 @@
 #include <vector>
 
 #include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 template <typename T>
@@ -50,12 +52,15 @@ std::vector<std::shared_ptr<Tensor>> SplitForward(const std::shared_ptr<Tensor> 
         int threads_per_block = 256;
         int num_blocks = (total + threads_per_block - 1) / threads_per_block;
 
-        const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+        auto device = input->GetDevice();
+        const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                      infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                      ->cuda_stream();
 
         DispatchFunc<INFINI_ALL_TYPES>(
             dtype,
             [=]<typename T>() {
-                SplitForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                SplitForwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                     static_cast<const T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), N, H_in, H_out, W,
                     start);
             },
@@ -114,8 +119,10 @@ std::shared_ptr<Tensor> LaunchSplitBackward(const std::vector<int64_t> &input_di
     int64_t H_in = input_dims[dim];
     int64_t num_splits = grad_outputs.size();
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad->GetDevice());
-    const auto &stream = cuda_device->Stream();
+    auto device = grad->GetDevice();
+    const auto &stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                             infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                             ->cuda_stream();
     // init the array of grad_output ptrs
     std::vector<const T *> host_grad_output_ptrs;
     for (const auto &grad_output : grad_outputs) {

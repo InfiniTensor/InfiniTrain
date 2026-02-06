@@ -5,7 +5,9 @@
 #ifdef USE_CUDA
 #include "infini_train/include/common/cuda/common_cuda.h"
 #endif
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::nn::parallel {
 #ifdef USE_NCCL
@@ -31,7 +33,7 @@ WorkNccl::~WorkNccl() {
 
 bool WorkNccl::WaitBlocking(std::chrono::milliseconds timeout) {
     // Block wait on host
-    device_->SetDevice();
+    core::DeviceGuard guard(device_);
 
     // If timeout is not set, then wait till it finishes
     if (timeout <= std::chrono::milliseconds::zero()) {
@@ -68,8 +70,11 @@ bool WorkNccl::WaitBlocking(std::chrono::milliseconds timeout) {
 
 bool WorkNccl::WaitNonBlocking() {
     // Non-blocking wait on compute stream
-    device_->SetDevice();
-    CUDA_CHECK(cudaStreamWaitEvent(dynamic_cast<const CudaDevice *>(device_)->Stream(), done_event_, 0));
+    core::DeviceGuard guard(device_);
+    CUDA_CHECK(cudaStreamWaitEvent(dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                       core::GetDeviceGuardImpl(device_.type())->GetStream(device_))
+                                       ->cuda_stream(),
+                                   done_event_, 0));
     return true;
 }
 

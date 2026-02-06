@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <vector>
+
 #include "glog/logging.h"
 
 #include "infini_train/include/datatype.h"

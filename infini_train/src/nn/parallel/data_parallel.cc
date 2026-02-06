@@ -8,6 +8,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
@@ -30,7 +31,7 @@ ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
 
     auto worker = [&](const std::shared_ptr<Module> &module, const std::vector<std::shared_ptr<Tensor>> &inputs,
                       Device device, int idx) {
-        device->SetDevice();
+        core::DeviceGuard guard(device);
         auto output = (*module)(inputs);
         results[idx] = output;
     };
@@ -81,7 +82,7 @@ std::vector<std::shared_ptr<Tensor>> DataParallel::Forward(const std::vector<std
         if (tensor->GetDevice() != src_device_) {
             LOG(FATAL) << std::format("module must have its Parameters on device {} (device_ids[0]) but found "
                                       "one of them on device: {}",
-                                      src_device_->ToString(), tensor->GetDevice()->ToString());
+                                      src_device_.ToString(), tensor->GetDevice().ToString());
         }
     }
 

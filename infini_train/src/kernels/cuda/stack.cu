@@ -7,8 +7,10 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 template <typename T>
@@ -48,8 +50,10 @@ std::shared_ptr<Tensor> StackForward(const std::vector<std::shared_ptr<Tensor>> 
     const int64_t D = std::accumulate(base_dims.begin() + dim, base_dims.end(), 1, std::multiplies<int64_t>());
     const int64_t num_inputs = inputs.size();
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
-    const auto &stream = cuda_device->Stream();
+    auto device = output->GetDevice();
+    const auto &stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                             infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                             ->cuda_stream();
 
     int64_t total = N * num_inputs * D;
     int threads_per_block = 256;
@@ -115,8 +119,10 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
     int64_t N = std::accumulate(input_dims.begin(), input_dims.begin() + dim, 1, std::multiplies<int64_t>());
     int64_t D = std::accumulate(input_dims.begin() + dim, input_dims.end(), 1, std::multiplies<int64_t>());
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
-    const auto &stream = cuda_device->Stream();
+    auto device = grad_output->GetDevice();
+    const auto &stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                             infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                             ->cuda_stream();
 
     int64_t total = N * num_inputs * D;
     int threads_per_block = 256;

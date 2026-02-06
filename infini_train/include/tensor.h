@@ -78,6 +78,7 @@ public:
     size_t NumElements() const;
     DataType Dtype() const;
 
+    // TODO(dcj): use scalar class later
     template <typename T> void Fill(T value);
 
     Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> EigenMatrix();

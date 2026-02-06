@@ -7,8 +7,10 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 __device__ __forceinline__ int64_t UpperBoundI64(const int64_t *offsets, int64_t n_plus_1, int64_t x) {
@@ -91,8 +93,9 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
     std::vector<int64_t> host_offsets(num_inputs + 1, 0);
     for (int64_t i = 0; i < num_inputs; ++i) { host_offsets[i + 1] = host_offsets[i] + Ks[i]; }
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
-    const auto &stream = cuda_device->Stream();
+    const auto &stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                             infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                             ->cuda_stream();
 
     int64_t total = N * K_total * D;
     int threads_per_block = 256;
@@ -175,10 +178,12 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
         Ks.push_back(dvec[dim]);
     }
 
+    auto device = grad_output->GetDevice();
+
     std::vector<std::shared_ptr<Tensor>> grads;
     grads.reserve(input_dims_list.size());
     for (const auto &dvec : input_dims_list) {
-        auto t = std::make_shared<Tensor>(dvec, dtype, grad_output->GetDevice());
+        auto t = std::make_shared<Tensor>(dvec, dtype, device);
         DispatchFunc<INFINI_ALL_TYPES>(
             dtype, [=]<typename T>() { t->Fill<T>(0); }, "CUDA ConcatBackward");
         grads.push_back(t);
@@ -194,8 +199,9 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
     std::vector<int64_t> host_offsets(num_inputs + 1, 0);
     for (int64_t i = 0; i < num_inputs; ++i) { host_offsets[i + 1] = host_offsets[i] + Ks[i]; }
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
-    const auto &stream = cuda_device->Stream();
+    const auto &stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                             infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                             ->cuda_stream();
 
     int64_t total = N * K_total * D;
     int threads_per_block = 256;

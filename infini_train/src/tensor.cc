@@ -1,5 +1,4 @@
 #include "infini_train/include/tensor.h"
-#include "infini_train/include/datatype.h"
 
 #include <cstring>
 #include <fstream>
@@ -7,16 +6,9 @@
 #include <memory>
 #include <numeric>
 
-#ifdef USE_CUDA
-#include <cuda_runtime_api.h>
-#endif
-
 #include "Eigen/Dense"
 #include "glog/logging.h"
 
-#ifdef USE_CUDA
-#include "infini_train/include/common/cuda/common_cuda.h"
-#endif
 #include "infini_train/include/autograd/accumulate.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/function.h"
@@ -26,49 +18,23 @@
 #include "infini_train/include/autograd/outer.h"
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/transform.h"
+#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/init.h"
 
 namespace infini_train {
 TensorBuffer::TensorBuffer(Device device, size_t size) : device_(device), size_(size) {
-    CHECK_NOTNULL(device);
-    switch (device.type()) {
-    case Device::DeviceType::kCPU:
-        data_ = malloc(size);
-        break;
-#ifdef USE_CUDA
-    case Device::DeviceType::kCUDA: {
-        int current_device = -1;
-        CUDA_CHECK(cudaGetDevice(&current_device));
-        // TODO(dcj): Maybe pin memory later.
-        device->SetDevice();
-        const auto *cuda_device = dynamic_cast<const CudaDevice *>(device);
-        CUDA_CHECK(cudaMallocAsync(&data_, size, cuda_device->Stream()));
-        CUDA_CHECK(cudaSetDevice(current_device));
-        break;
-    }
-#endif
-    default:
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device_.type());
-        break;
-    }
+    core::DeviceGuard guard(device);
+    auto *impl = core::GetDeviceGuardImpl(device.type());
+    impl->MallocAsync(&data_, size, impl->GetStream(device));
 }
 
 TensorBuffer::~TensorBuffer() {
-    switch (device_.type()) {
-    case Device::DeviceType::kCPU:
-        free(data_);
-        break;
-#ifdef USE_CUDA
-    case Device::DeviceType::kCUDA:
-        CUDA_CHECK(cudaFreeAsync(data_, dynamic_cast<const CudaDevice *>(device_)->Stream()));
-        break;
-#endif
-    default:
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device_.type());
-        break;
-    }
+    core::DeviceGuard guard(device_);
+    auto *impl = core::GetDeviceGuardImpl(device_.type());
+    impl->FreeAsync(data_, impl->GetStream(device_));
 }
 
 void *TensorBuffer::DataPtr() { return data_; }
@@ -98,19 +64,12 @@ Tensor::Tensor(const float *data, const std::vector<int64_t> &dims, DataType dty
     CHECK(dtype == DataType::kFLOAT32);
 
     buffer_ = std::make_shared<TensorBuffer>(device, kDataTypeToSize.at(dtype) * num_elements_);
-    switch (device.type()) {
-    case Device::DeviceType::kCPU:
-        memcpy(buffer_->DataPtr(), data, buffer_->Size());
-        break;
-#ifdef USE_CUDA
-    case Device::DeviceType::kCUDA:
-        CUDA_CHECK(cudaMemcpyAsync(buffer_->DataPtr(), data, buffer_->Size(), cudaMemcpyHostToDevice,
-                                   dynamic_cast<const CudaDevice *>(device)->Stream()));
-        break;
-#endif
-    default:
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device.type());
-    }
+
+    core::DeviceGuard guard(device);
+    auto *impl = core::GetDeviceGuardImpl(device.type());
+    impl->MemcpyAsync(buffer_->DataPtr(), data, buffer_->Size(),
+                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
+                      impl->GetStream(device));
 }
 
 void Tensor::SetData(const Tensor &tensor, size_t offset, bool preserve_data) {
@@ -145,7 +104,7 @@ DataType Tensor::Dtype() const { return dtype_; }
 
 template <typename T> void Tensor::Fill(T value) {
     auto device = GetDevice();
-    device->SetDevice();
+    core::DeviceGuard guard(device);
 
     DataType dtype = Dtype();
 
@@ -188,7 +147,8 @@ Eigen::Map<Eigen::Matrix<float, 1, Eigen::Dynamic, Eigen::RowMajor>> Tensor::Eig
 }
 
 Tensor Tensor::To(Device device) {
-    if (device == buffer_->GetDevice()) {
+    const auto buffer_device = buffer_->GetDevice();
+    if (device == buffer_device) {
         auto new_tensor = Tensor(*this, offset_, dims_);
         if (grad_) {
             new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), grad_->offset_, grad_->dims_);
@@ -197,39 +157,31 @@ Tensor Tensor::To(Device device) {
     }
 
     Tensor new_tensor;
-    switch (device.type()) {
-#ifdef USE_CUDA
-    case Device::DeviceType::kCPU: {
-        // CUDA -> CPU
-        GetDevice()->SetDevice();
+    if (device.type() == Device::DeviceType::kCPU) {
+        // D2H
         new_tensor = Tensor(dims_, dtype_, Device());
-        CUDA_CHECK(cudaMemcpy(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), cudaMemcpyDeviceToHost));
-        break;
-    }
-    case Device::DeviceType::kCUDA: {
-        int current_device = -1;
-        CUDA_CHECK(cudaGetDevice(&current_device));
+        core::DeviceGuard guard(buffer_device);
+        auto impl = core::GetDeviceGuardImpl(buffer_device.type());
+        impl->MemcpyAsync(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), core::MemcpyKind::kD2H,
+                          impl->GetStream(buffer_device));
+
+    } else if (buffer_device.type() == Device::DeviceType::kCPU) {
         new_tensor = Tensor(dims_, dtype_, device);
-        if (GetDevice().type() == Device::DeviceType::kCPU) {
-            device->SetDevice();
-            // CPU -> CUDA
-            CUDA_CHECK(cudaMemcpyAsync(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), cudaMemcpyHostToDevice,
-                                       dynamic_cast<const CudaDevice *>(device)->Stream()));
-        } else {
-            // p2p
-            //  1. CUDA -> CPU
-            //  2. CPU -> CUDA
-            Tensor cpu_tensor = To(Device());
-            device->SetDevice();
-            CUDA_CHECK(cudaMemcpyAsync(new_tensor.DataPtr(), cpu_tensor.DataPtr(), SizeInBytes(),
-                                       cudaMemcpyHostToDevice, dynamic_cast<const CudaDevice *>(device)->Stream()));
-        }
-        CUDA_CHECK(cudaSetDevice(current_device));
-        break;
-    }
-#endif
-    default:
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device.type());
+        // H2D
+        core::DeviceGuard guard(device);
+        auto *impl = core::GetDeviceGuardImpl(device.type());
+        impl->MemcpyAsync(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), core::MemcpyKind::kH2D,
+                          impl->GetStream(device));
+    } else {
+        new_tensor = Tensor(dims_, dtype_, device);
+        // P2P
+        //  1. D2H
+        Tensor cpu_tensor = To(Device());
+        //  2. H2D
+        core::DeviceGuard guard(buffer_device);
+        auto *impl = core::GetDeviceGuardImpl(buffer_device.type());
+        impl->MemcpyAsync(new_tensor.DataPtr(), cpu_tensor.DataPtr(), SizeInBytes(), core::MemcpyKind::kH2D,
+                          impl->GetStream(buffer_device));
     }
 
     if (grad_) {
@@ -251,7 +203,7 @@ Tensor Tensor::To(DataType dtype) {
     }
 
     auto device = GetDevice();
-    device->SetDevice();
+    core::DeviceGuard guard(device);
 
     auto kernel = Dispatcher::Instance().GetKernel({device.type(), "Cast"});
     auto new_tensor = *kernel.Call<std::shared_ptr<Tensor>>(shared_from_this(), dtype);
@@ -275,68 +227,30 @@ void Tensor::CopyFrom(const Tensor &src) {
     const Device dst_dev = GetDevice();
     const Device src_dev = src.GetDevice();
 
-    switch (dst_dev.type()) {
-    case Device::DeviceType::kCPU: {
-        switch (src_dev.type()) {
-        case Device::DeviceType::kCPU: {
-            std::memcpy(DataPtr(), src.DataPtr(), nbytes);
-            break;
-        }
-#ifdef USE_CUDA
-        case Device::DeviceType::kCUDA: {
-            // CUDA -> CPU
-            CUDA_CHECK(cudaMemcpy(DataPtr(), src.DataPtr(), nbytes, cudaMemcpyDeviceToHost));
-            break;
-        }
-#endif
-        default:
-            LOG(FATAL) << "Unsupported src device type: " << static_cast<int>(src_dev.type());
-        }
-        break;
-    }
-
-#ifdef USE_CUDA
-    case Device::DeviceType::kCUDA: {
-        int current_device = -1;
-        CUDA_CHECK(cudaGetDevice(&current_device));
-        dst_dev->SetDevice();
-
-        const auto *dst_cuda = dynamic_cast<const CudaDevice *>(dst_dev);
-        switch (src_dev.type()) {
-        case Device::DeviceType::kCPU: {
-            // CPU -> CUDA
-            CUDA_CHECK(cudaMemcpyAsync(DataPtr(), src.DataPtr(), nbytes, cudaMemcpyHostToDevice, dst_cuda->Stream()));
-            break;
-        }
-        case Device::DeviceType::kCUDA: {
-            const auto *src_cuda = dynamic_cast<const CudaDevice *>(src_dev);
-            if (src_cuda.index() == dst_cuda.index()) {
-                CUDA_CHECK(
-                    cudaMemcpyAsync(DataPtr(), src.DataPtr(), nbytes, cudaMemcpyDeviceToDevice, dst_cuda->Stream()));
-            } else {
-                int canAccessPeer = 0;
-                CUDA_CHECK(cudaDeviceCanAccessPeer(&canAccessPeer, dst_cuda.index(), src_cuda.index()));
-                if (canAccessPeer) {
-                    CUDA_CHECK(cudaMemcpyPeerAsync(DataPtr(), dst_cuda.index(), src.DataPtr(), src_cuda.index(), nbytes,
-                                                   dst_cuda->Stream()));
-                } else {
-                    LOG(FATAL) << "Check accessibility between Device " << src_cuda.index() << " and Device "
-                               << dst_cuda.index();
-                }
-            }
-            break;
-        }
-        default:
-            LOG(FATAL) << "Unsupported src device type: " << static_cast<int>(src_dev.type());
-        }
-
-        CUDA_CHECK(cudaSetDevice(current_device));
-        break;
-    }
-#endif
-
-    default:
-        LOG(FATAL) << "Unsupported dst device type: " << static_cast<int>(dst_dev.type());
+    if (dst_dev == src_dev) {
+        core::DeviceGuard guard(dst_dev);
+        auto *impl = core::GetDeviceGuardImpl(dst_dev.type());
+        impl->MemcpyAsync(DataPtr(), src.DataPtr(), nbytes, core::MemcpyKind::kD2D, impl->GetStream(dst_dev));
+    } else if (dst_dev.type() == Device::DeviceType::kCPU) {
+        // D2H
+        core::DeviceGuard guard(src_dev);
+        auto *impl = core::GetDeviceGuardImpl(src_dev.type());
+        impl->MemcpyAsync(DataPtr(), src.DataPtr(), nbytes, core::MemcpyKind::kD2H, impl->GetStream(src_dev));
+    } else if (src_dev.type() == Device::DeviceType::kCPU) {
+        // H2D
+        core::DeviceGuard guard(dst_dev);
+        auto *impl = core::GetDeviceGuardImpl(dst_dev.type());
+        impl->MemcpyAsync(DataPtr(), src.DataPtr(), nbytes, core::MemcpyKind::kH2D, impl->GetStream(dst_dev));
+    } else {
+        // TODO(dcj): maybe support p2p api later
+        // P2P
+        //  1. D2H
+        Tensor cpu_tensor(dims_, dtype_, Device());
+        cpu_tensor.CopyFrom(src);
+        //  2. H2D
+        core::DeviceGuard guard(dst_dev);
+        auto *impl = core::GetDeviceGuardImpl(dst_dev.type());
+        impl->MemcpyAsync(DataPtr(), cpu_tensor.DataPtr(), nbytes, core::MemcpyKind::kH2D, impl->GetStream(dst_dev));
     }
 }
 
@@ -771,23 +685,14 @@ void Tensor::SaveAsNpy(const std::string &path) const {
     const size_t num_bytes = num_elements * sizeof(float);
 
     // Prepare host buffer
-    std::vector<float> host_buffer(num_elements);
+    auto impl = core::GetDeviceGuardImpl(GetDevice().type());
 
-    if (GetDevice().type() == Device::DeviceType::kCPU) {
-        // If on CPU, direct copy
-        std::memcpy(host_buffer.data(), DataPtr(), num_bytes);
-    }
-#ifdef USE_CUDA
-    else if (GetDevice().type() == Device::DeviceType::kCUDA) {
-        // If on CUDA, copy back to host
-        cudaDeviceSynchronize();
-        cudaError_t err = cudaMemcpy(host_buffer.data(), DataPtr(), num_bytes, cudaMemcpyDeviceToHost);
-        CHECK_EQ(err, cudaSuccess) << "cudaMemcpy failed: " << cudaGetErrorString(err);
-    }
-#endif
-    else {
-        LOG(FATAL) << "Unsupported device type for SaveAsNpy.";
-    }
+    impl->SynchronizeDevice(GetDevice());
+
+    Tensor cpu_tensor(dims_, dtype_, Device());
+    cpu_tensor.CopyFrom(*this);
+
+    impl->SynchronizeDevice(GetDevice());
 
     // Write .npy file
     std::ofstream file(path, std::ios::binary);
@@ -829,7 +734,7 @@ void Tensor::SaveAsNpy(const std::string &path) const {
     file.write(header.c_str(), header.size());
 
     // Write data
-    file.write(reinterpret_cast<const char *>(host_buffer.data()), num_bytes);
+    file.write(reinterpret_cast<const char *>(cpu_tensor.DataPtr()), num_bytes);
 
     file.close();
 }
@@ -892,21 +797,16 @@ void Tensor::Print(std::ostream &os) const {
     const size_t num_elements = NumElements();
     const size_t num_bytes = num_elements * sizeof(float);
 
-    std::vector<float> host_buffer(num_elements);
+    auto impl = core::GetDeviceGuardImpl(GetDevice().type());
 
-    if (GetDevice().type() == Device::DeviceType::kCPU) {
-        std::memcpy(host_buffer.data(), DataPtr(), num_bytes);
-    }
-#ifdef USE_CUDA
-    else if (GetDevice().type() == Device::DeviceType::kCUDA) {
-        cudaDeviceSynchronize();
-        cudaError_t err = cudaMemcpy(host_buffer.data(), DataPtr(), num_bytes, cudaMemcpyDeviceToHost);
-        CHECK_EQ(err, cudaSuccess) << "cudaMemcpy failed: " << cudaGetErrorString(err);
-    }
-#endif
-    else {
-        LOG(FATAL) << "Unsupported device type for Print.";
-    }
+    impl->SynchronizeDevice(GetDevice());
+
+    Tensor cpu_tensor(dims_, dtype_, Device());
+    cpu_tensor.CopyFrom(*this);
+
+    impl->SynchronizeDevice(GetDevice());
+
+    const float *buffer = static_cast<float *>(cpu_tensor.DataPtr());
 
     const PrintOptions &opts = PrintOptions::Get();
     const int64_t precision = opts.precision;
@@ -917,7 +817,8 @@ void Tensor::Print(std::ostream &os) const {
 
     bool use_sci = opts.sci_mode.value_or(false);
     if (!opts.sci_mode.has_value()) {
-        for (float v : host_buffer) {
+        for (int idx = 0; idx < NumElements(); ++idx) {
+            const auto v = buffer[idx];
             float abs_v = std::fabs(v);
             if ((abs_v > 0.0f && abs_v < 1e-4f) || abs_v >= 1e+4f) {
                 use_sci = true;
@@ -940,7 +841,7 @@ void Tensor::Print(std::ostream &os) const {
     std::vector<std::string> str_vals(num_elements);
     size_t max_width = 0;
     for (size_t i = 0; i < num_elements; ++i) {
-        str_vals[i] = format_float(host_buffer[i]);
+        str_vals[i] = format_float(buffer[i]);
         max_width = std::max(max_width, str_vals[i].length());
     }
 

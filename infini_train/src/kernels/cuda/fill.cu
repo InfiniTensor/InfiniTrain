@@ -1,9 +1,11 @@
 #include <cstddef>
 #include <memory>
 
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 
@@ -19,12 +21,15 @@ void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
     const int num_tokens = tensor->NumElements();
     const int threads_per_block = 256;
     const int num_blocks = (num_tokens + threads_per_block - 1) / threads_per_block;
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
+    auto device = tensor->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
 
     DispatchFunc<INFINI_ALL_TYPES>(
         tensor->Dtype(),
         [=]<typename T>() {
-            FillKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            FillKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<T *>(tensor->DataPtr()), *(static_cast<T *>(value_ptr)), tensor->NumElements());
         },
         "CUDA Fill");

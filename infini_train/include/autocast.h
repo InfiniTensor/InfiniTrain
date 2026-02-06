@@ -3,15 +3,10 @@
 #include <string_view>
 #include <unordered_map>
 
-#include "common/common.h"
-#include "datatype.h"
-#include "device.h"
-#include "tensor.h"
-
-#ifdef USE_CUDA
-#include <cuda_bf16.h>
-#include <cuda_fp16.h>
-#endif
+#include "infini_train/include/common/common.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train {
 namespace {

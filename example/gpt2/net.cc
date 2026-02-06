@@ -199,8 +199,8 @@ GPT2FirstStage::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>>
     int tp_rank = 0;
     if (tp_world_size > 1) {
         auto tp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
-            nn::parallel::GetTensorParallelProcessGroupName(device->rank().GlobalRank()));
-        tp_rank = tp_group->GetGroupRank(device->rank().GlobalRank());
+            nn::parallel::GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+        tp_rank = tp_group->GetGroupRank(device.Rank().GlobalRank());
     }
     int64_t t_local = sequence_parallel_enabled ? x1->Dims()[1] / tp_world_size : x1->Dims()[1];
     int64_t start = sequence_parallel_enabled ? tp_rank * t_local : 0;

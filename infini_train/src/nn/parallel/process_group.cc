@@ -18,11 +18,13 @@
 #ifdef USE_CUDA
 #include "infini_train/include/common/cuda/common_cuda.h"
 #endif
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train {
 
@@ -130,8 +132,8 @@ void ProcessGroupNCCL::InitSingleProcess(const std::vector<int> &ranks) {
     for (int i = 0; i < ranks.size(); ++i) {
         auto device = Device(Device::DeviceType::kCUDA, ranks[i]);
         devices_.push_back(device);
-        device_comm_map_[device] = comms_[i];
-        global_group_rank_map_[device->rank().GlobalRank()] = i;
+        device_comm_map_[device.index()] = comms_[i];
+        global_group_rank_map_[device.Rank().GlobalRank()] = i;
     }
 }
 
@@ -166,9 +168,9 @@ void ProcessGroupNCCL::InitMultiProcess(const std::vector<int> &ranks) {
             comms_.push_back(comm);
 
             auto device = Device(Device::DeviceType::kCUDA, i);
-            global_group_rank_map_[device->rank().GlobalRank()] = group_rank;
+            global_group_rank_map_[device.Rank().GlobalRank()] = group_rank;
             devices_.push_back(device);
-            device_comm_map_[device] = comm;
+            device_comm_map_[device.index()] = comm;
         }
     }
     NCCL_CHECK(ncclGroupEnd());
@@ -179,24 +181,27 @@ void ProcessGroupNCCL::InitStreams() {
     comm_streams_.resize(device_size);
 
     for (int i = 0; i < device_size; ++i) {
-        devices_[i]->SetDevice();
+        core::DeviceGuard guard(devices_[i]);
+
         int low, high;
         CUDA_CHECK(cudaDeviceGetStreamPriorityRange(&low, &high));
         CUDA_CHECK(cudaStreamCreateWithPriority(&comm_streams_[i], cudaStreamNonBlocking, high));
-        device_stream_map_[devices_[i]] = comm_streams_[i];
+        device_stream_map_[devices_[i].index()] = comm_streams_[i];
     }
 }
 
 std::shared_ptr<Work> ProcessGroupNCCL::AllReduce(const std::shared_ptr<Tensor> &tensor,
                                                   function::ReduceOpType reduce_op, bool async_op) const {
     void *buffer = tensor->DataPtr();
-    const auto *device = dynamic_cast<const CudaDevice *>(tensor->GetDevice());
-    device->SetDevice();
+    auto device = tensor->GetDevice();
+    core::DeviceGuard guard(device);
 
-    auto comm = device_comm_map_.at(device);
+    auto comm = device_comm_map_.at(device.index());
 
-    cudaStream_t compute_stream = device->Stream();
-    cudaStream_t comm_stream = device_stream_map_.at(device);
+    cudaStream_t compute_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                      core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                      ->cuda_stream();
+    cudaStream_t comm_stream = device_stream_map_.at(device.index());
 
     auto work = std::make_shared<WorkNccl>(device, comm);
 
@@ -222,13 +227,15 @@ std::shared_ptr<Work> ProcessGroupNCCL::AllReduce(const std::shared_ptr<Tensor> 
 
 std::shared_ptr<Work> ProcessGroupNCCL::AllGather(const std::shared_ptr<Tensor> &output,
                                                   const std::shared_ptr<Tensor> &input, bool async_op) const {
-    const auto *device = dynamic_cast<const CudaDevice *>(input->GetDevice());
-    auto comm = device_comm_map_.at(device);
+    auto device = input->GetDevice();
+    auto comm = device_comm_map_.at(device.index());
 
-    device->SetDevice();
+    core::DeviceGuard guard(device);
 
-    cudaStream_t compute_stream = device->Stream();
-    cudaStream_t comm_stream = device_stream_map_.at(device);
+    cudaStream_t compute_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                      core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                      ->cuda_stream();
+    cudaStream_t comm_stream = device_stream_map_.at(device.index());
 
     auto work = std::make_shared<WorkNccl>(device, comm);
 
@@ -254,13 +261,15 @@ std::shared_ptr<Work> ProcessGroupNCCL::AllGather(const std::shared_ptr<Tensor> 
 std::shared_ptr<Work> ProcessGroupNCCL::ReduceScatter(const std::shared_ptr<Tensor> &output,
                                                       const std::shared_ptr<Tensor> &input,
                                                       function::ReduceOpType reduce_op, bool async_op) const {
-    const auto *device = dynamic_cast<const CudaDevice *>(input->GetDevice());
-    auto comm = device_comm_map_.at(device);
+    auto device = input->GetDevice();
+    auto comm = device_comm_map_.at(device.index());
 
-    device->SetDevice();
+    core::DeviceGuard guard(device);
 
-    cudaStream_t compute_stream = device->Stream();
-    cudaStream_t comm_stream = device_stream_map_.at(device);
+    cudaStream_t compute_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                      core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                      ->cuda_stream();
+    cudaStream_t comm_stream = device_stream_map_.at(device.index());
 
     auto work = std::make_shared<WorkNccl>(device, comm);
 
@@ -286,13 +295,15 @@ std::shared_ptr<Work> ProcessGroupNCCL::ReduceScatter(const std::shared_ptr<Tens
 std::shared_ptr<Work> ProcessGroupNCCL::Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
                                              bool async_op) const {
     CHECK_GT(tensors.size(), 0);
-    const auto *device = dynamic_cast<const CudaDevice *>(tensors[0]->GetDevice());
-    auto comm = device_comm_map_.at(device);
+    auto device = tensors[0]->GetDevice();
+    auto comm = device_comm_map_.at(device.index());
 
-    device->SetDevice();
+    core::DeviceGuard guard(device);
 
-    cudaStream_t compute_stream = device->Stream();
-    cudaStream_t comm_stream = device_stream_map_.at(device);
+    cudaStream_t compute_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                      core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                      ->cuda_stream();
+    cudaStream_t comm_stream = device_stream_map_.at(device.index());
 
     auto work = std::make_shared<WorkNccl>(device, comm);
 
@@ -332,13 +343,15 @@ std::shared_ptr<Work> ProcessGroupNCCL::Send(std::vector<std::shared_ptr<Tensor>
 std::shared_ptr<Work> ProcessGroupNCCL::Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank,
                                              bool async_op) const {
     CHECK_GT(tensors.size(), 0);
-    const auto *device = dynamic_cast<const CudaDevice *>(tensors[0]->GetDevice());
-    auto comm = device_comm_map_.at(device);
+    auto device = tensors[0]->GetDevice();
+    auto comm = device_comm_map_.at(device.index());
 
-    device->SetDevice();
+    core::DeviceGuard guard(device);
 
-    cudaStream_t compute_stream = device->Stream();
-    cudaStream_t comm_stream = device_stream_map_.at(device);
+    cudaStream_t compute_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                      core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                      ->cuda_stream();
+    cudaStream_t comm_stream = device_stream_map_.at(device.index());
 
     auto work = std::make_shared<WorkNccl>(device, comm);
 
@@ -390,8 +403,10 @@ ProcessGroupNCCL::BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_te
             outputs.push_back(std::make_shared<Tensor>(input_tensor->Dims(), input_tensor->Dtype(), device));
         }
         devices.push_back(device);
-        streams.push_back(dynamic_cast<const CudaDevice *>(device)->Stream());
-        comms.push_back(device_comm_map_.at(device));
+        streams.push_back(dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                              core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                              ->cuda_stream());
+        comms.push_back(device_comm_map_.at(device.index()));
     }
 
     int root = -1;
@@ -405,7 +420,8 @@ ProcessGroupNCCL::BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_te
 
     NCCL_CHECK(ncclGroupStart());
     for (size_t i = 0; i < devices.size(); ++i) {
-        devices[i]->SetDevice();
+        core::DeviceGuard guard(devices[i]);
+
         for (size_t j = 0; j < input_tensors.size(); ++j) {
             const auto &input_tensor = input_tensors[j];
             const auto dtype = input_tensor->Dtype();
@@ -436,8 +452,10 @@ ProcessGroupNCCL::ReduceAddCoalesced(const std::vector<std::vector<std::shared_p
     }
     for (size_t i = 0; i < grads.size(); ++i) {
         devices.push_back(grads[i][0]->GetDevice());
-        streams.push_back(dynamic_cast<const CudaDevice *>(devices[i])->Stream());
-        comms.push_back(device_comm_map_.at(devices[i]));
+        streams.push_back(dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                              core::GetDeviceGuardImpl(devices[i].type())->GetStream(devices[i]))
+                              ->cuda_stream());
+        comms.push_back(device_comm_map_.at(devices[i].index()));
     }
 
     int root = -1;
@@ -451,7 +469,8 @@ ProcessGroupNCCL::ReduceAddCoalesced(const std::vector<std::vector<std::shared_p
 
     NCCL_CHECK(ncclGroupStart());
     for (size_t i = 0; i < grads.size(); ++i) {
-        devices[i]->SetDevice();
+        core::DeviceGuard guard(devices[i]);
+
         for (size_t j = 0; j < grads[i].size(); ++j) {
             const auto &grad = grads[i][j];
             const auto dtype = grad->Dtype();
@@ -479,8 +498,10 @@ std::vector<std::shared_ptr<Tensor>> ProcessGroupNCCL::Scatter(const std::shared
             src_rank = i;
         }
         outputs.push_back(std::make_shared<Tensor>(split_tensors[i]->Dims(), split_tensors[i]->Dtype(), devices[i]));
-        streams.push_back(dynamic_cast<const CudaDevice *>(devices[i])->Stream());
-        comms.push_back(device_comm_map_.at(devices[i]));
+        streams.push_back(dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                              core::GetDeviceGuardImpl(devices[i].type())->GetStream(devices[i]))
+                              ->cuda_stream());
+        comms.push_back(device_comm_map_.at(devices[i].index()));
     }
 
     CHECK_NE(src_rank, -1) << "Source device not found in input devices";
@@ -490,7 +511,8 @@ std::vector<std::shared_ptr<Tensor>> ProcessGroupNCCL::Scatter(const std::shared
     auto nccl_dtype = kNcclDtypeMap.at(dtype);
 
     for (size_t i = 0; i < devices.size(); ++i) {
-        devices[i]->SetDevice();
+        core::DeviceGuard guard(devices[i]);
+
         const auto dtype = tensor->Dtype();
         auto nccl_dtype = kNcclDtypeMap.at(dtype);
         NCCL_CHECK(ncclSend(split_tensors[i]->DataPtr(), split_tensors[i]->NumElements(), nccl_dtype, i,
@@ -521,8 +543,10 @@ std::shared_ptr<Tensor> ProcessGroupNCCL::Gather(const std::vector<std::shared_p
         if (device == destination) {
             dest_rank = i;
         }
-        streams.push_back(dynamic_cast<const CudaDevice *>(device)->Stream());
-        comms.push_back(device_comm_map_.at(device));
+        streams.push_back(dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                              core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                              ->cuda_stream());
+        comms.push_back(device_comm_map_.at(device.index()));
         devices.push_back(device);
 
         total_dim += tensors[i]->Dims()[dim];
@@ -538,7 +562,8 @@ std::shared_ptr<Tensor> ProcessGroupNCCL::Gather(const std::vector<std::shared_p
     int64_t offset = 0;
 
     for (size_t i = 0; i < num_devices; ++i) {
-        devices[i]->SetDevice();
+        core::DeviceGuard guard(devices[i]);
+
         auto &tensor = tensors[i];
         size_t num_elements = tensor->NumElements();
         void *send_ptr = tensor->DataPtr();

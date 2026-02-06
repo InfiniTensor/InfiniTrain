@@ -11,11 +11,6 @@
 #include "infini_train/src/core/cpu/cpu_guard.h"
 
 namespace infini_train::core {
-namespace {
-inline DeviceGuardImpl *GetDeviceGuardImpl(Device::DeviceType type) {
-    return DeviceGuardImplRegistry::Instance().Get(type);
-}
-} // namespace
 
 // DeviceGuardImpl
 void DeviceGuardImpl::SetDevice(Device device) const {
@@ -78,46 +73,27 @@ DeviceGuard::DeviceGuard(Device device) : impl_(GetDeviceGuardImpl(device.type()
     impl_->SetDevice(device);
 }
 
+void DeviceGuard::SetDevice(Device device) {
+    if (current_device_ == device) {
+        return;
+    }
+    impl_->SetDevice(device);
+    current_device_ = device;
+}
+
+Device DeviceGuard::current_device() const { return current_device_; }
+
+Device DeviceGuard::original_device() const { return original_device_; }
+
 DeviceGuard::~DeviceGuard() { impl_->SetDevice(original_device_); }
 
-Device DeviceGuard::GetDevice() const { return impl_->GetDevice(); }
-
-void DeviceGuard::SetDevice(Device device) const { return impl_->SetDevice(device); }
-
-int8_t DeviceGuard::DeviceCount() const { return impl_->DeviceCount(); }
-
-Device::DeviceType DeviceGuard::Type() const { return impl_->Type(); }
-
-Stream *DeviceGuard::GetStream(Device device) const { return impl_->GetStream(device); }
-
-void DeviceGuard::SynchronizeDevice(Device device) const { return impl_->SynchronizeDevice(device); }
-
-void DeviceGuard::SynchronizeStream(Stream *stream) const { return impl_->SynchronizeStream(stream); }
-
-BlasHandle *DeviceGuard::GetBlasHandle(Device device) const { return impl_->GetBlasHandle(device); }
-
-void DeviceGuard::Malloc(void **dev_ptr, size_t size) { impl_->Malloc(dev_ptr, size); }
-
-void DeviceGuard::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
-    impl_->MallocAsync(dev_ptr, size, stream);
-}
-
-void DeviceGuard::Free(void *dev_ptr) { impl_->Free(dev_ptr); }
-
-void DeviceGuard::FreeAsync(void *dev_ptr, Stream *stream) { impl_->FreeAsync(dev_ptr, stream); }
-
-void DeviceGuard::Memcpy(void *dst, const void *src, size_t count, MemcpyKind kind) {
-    impl_->Memcpy(dst, src, count, kind);
-}
-
-void DeviceGuard::MemcpyAsync(void *dst, const void *src, size_t count, MemcpyKind kind, Stream *stream) {
-    impl_->MemcpyAsync(dst, src, count, kind, stream);
-}
-
 // DeviceGuardImplRegistry
+DeviceGuardImplRegistry::DeviceGuardImplRegistry() {
+    Register(Device::DeviceType::kCPU, std::make_unique<infini_train::core::cpu::CpuGuardImpl>());
+}
+
 DeviceGuardImplRegistry &DeviceGuardImplRegistry::Instance() {
     static DeviceGuardImplRegistry instance;
-    instance.Register(Device::DeviceType::kCPU, std::make_unique<infini_train::core::cpu::CpuGuardImpl>());
     return instance;
 }
 
@@ -151,6 +127,6 @@ DeviceGuardImpl *DeviceGuardImplRegistry::Get(Device::DeviceType type) const {
     return it->second.get();
 }
 
-DeviceGuardImpl *GetDeviceGuard(Device::DeviceType type) { return DeviceGuardImplRegistry::Instance().Get(type); }
+DeviceGuardImpl *GetDeviceGuardImpl(Device::DeviceType type) { return DeviceGuardImplRegistry::Instance().Get(type); }
 
 } // namespace infini_train::core

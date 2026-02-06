@@ -8,8 +8,10 @@
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/cub_compat.cuh"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 template <size_t BLOCK_SIZE, typename T>
@@ -87,9 +89,12 @@ void LaunchForward(const std::shared_ptr<Tensor> &output, const std::shared_ptr<
     dim3 block_dims(BLOCK_SIZE);
     dim3 grid_dims(outer_size, inner_size);
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
+    auto device = output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
     SoftmaxForwardKernel<BLOCK_SIZE, T>
-        <<<grid_dims, block_dims, 0, cuda_device->Stream()>>>(output_ptr, input_ptr, outer_size, axis_size, inner_size);
+        <<<grid_dims, block_dims, 0, cuda_stream>>>(output_ptr, input_ptr, outer_size, axis_size, inner_size);
 }
 
 std::shared_ptr<Tensor> SoftmaxForward(const std::shared_ptr<Tensor> &input, int64_t dim) {
@@ -168,9 +173,12 @@ void LaunchBackward(const std::shared_ptr<Tensor> &grad_input, const std::shared
     dim3 block(BLOCK_SIZE);
     dim3 grid(outer_size, inner_size);
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
-    SoftmaxBackwardKernel<BLOCK_SIZE, T><<<grid, block, 0, cuda_device->Stream()>>>(
-        grad_input_ptr, grad_output_ptr, output_ptr, outer_size, axis_size, inner_size);
+    auto device = output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+    SoftmaxBackwardKernel<BLOCK_SIZE, T><<<grid, block, 0, cuda_stream>>>(grad_input_ptr, grad_output_ptr, output_ptr,
+                                                                          outer_size, axis_size, inner_size);
 }
 
 std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_output,
