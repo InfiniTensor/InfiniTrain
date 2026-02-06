@@ -2,9 +2,11 @@
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 
@@ -77,13 +79,17 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
     int threads_per_block = BLOCK_SIZE;
     int num_blocks = batch_size * max_seqlen;
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto device = input->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+
     DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
             mean->Fill<float>(0);
             rstd->Fill<float>(0);
-            LayerNormForwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            LayerNormForwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(input->DataPtr()), static_cast<const T *>(weight->DataPtr()),
                 static_cast<const T *>(bias->DataPtr()), static_cast<float *>(mean->DataPtr()),
                 static_cast<float *>(rstd->DataPtr()), static_cast<T *>(output->DataPtr()), eps, embed_dim);
@@ -168,14 +174,17 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     int threads_per_block = BLOCK_SIZE;
     int num_blocks = batch_size * max_seqlen;
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto device = input->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
     DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
             grad_input->Fill<T>(0);
             grad_weight->Fill<T>(0);
             grad_bias->Fill<T>(0);
-            LayerNormBackwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            LayerNormBackwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
                 static_cast<const float *>(mean->DataPtr()), static_cast<const float *>(rstd->DataPtr()),
                 static_cast<const T *>(weight->DataPtr()), static_cast<T *>(grad_input->DataPtr()),

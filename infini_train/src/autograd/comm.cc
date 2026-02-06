@@ -77,7 +77,7 @@ std::vector<std::shared_ptr<Tensor>> Broadcast::Forward(const std::vector<std::s
     input_device_ = input_tensors[0]->GetDevice();
 
     for (const auto &tensor : input_tensors) {
-        CHECK(!tensor->GetDevice()->IsCPU()) << "Broadcast function not implemented for CPU tensors";
+        CHECK(!tensor->GetDevice().IsCPU()) << "Broadcast function not implemented for CPU tensors";
         CHECK(tensor->GetDevice().type() == input_device_.type())
             << "Broadcast function not implemented for tensors on different device type";
     }

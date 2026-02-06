@@ -2,10 +2,12 @@
 
 #include "infini_train/include/common/common.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 
@@ -20,7 +22,10 @@ __global__ void CastKernel(Tdst *dst, const Tsrc *src, size_t num_elements, size
 
 std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
     auto dst_tensor = std::make_shared<Tensor>(input->Dims(), dtype, input->GetDevice());
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto device = input->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
 
     const size_t num_elements = input->NumElements();
     dim3 block_dims(256);
@@ -33,7 +38,7 @@ std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
             auto dst = static_cast<Tdst *>(dst_tensor->DataPtr());
             auto src = static_cast<const Tsrc *>(input->DataPtr());
             for (size_t offset = 0; offset < num_elements; offset += step) {
-                CastKernel<<<grid_dims, block_dims, 0, cuda_device->Stream()>>>(dst, src, num_elements, offset);
+                CastKernel<<<grid_dims, block_dims, 0, cuda_stream>>>(dst, src, num_elements, offset);
             }
         },
         "CUDA Cast");

@@ -1,8 +1,10 @@
 #include <memory>
 
 #include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 
@@ -30,7 +32,11 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     CHECK(input->Dtype() == DataType::kINT64);
     CHECK_EQ(weight->Dims().size(), 2);
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto device = input->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+
     const int batch_size = input->Dims().size() == 2 ? input->Dims()[0] : 1;
     const int max_seqlen = input->Dims().size() == 2 ? input->Dims()[1] : input->Dims()[0];
     const int vocab_size = weight->Dims()[0];
@@ -46,7 +52,7 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            EmbeddingForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            EmbeddingForwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const int64_t *>(input->DataPtr()), static_cast<T *>(output->DataPtr()),
                 static_cast<const T *>(weight->DataPtr()), batch_size, max_seqlen, embed_dim, vocab_size);
         },
@@ -77,7 +83,11 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
                                           const std::shared_ptr<Tensor> &grad_output) {
     CHECK(input->Dtype() == DataType::kINT64);
     CHECK_EQ(weight_dims.size(), 2);
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto device = input->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+
     const int vocab_size = weight_dims[0];
     const int embedding_dim = weight_dims[1];
     CHECK_EQ(input->Dims().size() + 1, grad_output->Dims().size());
@@ -94,7 +104,7 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
         dtype,
         [=]<typename T>() {
             grad_weight->Fill<T>(0);
-            EmbeddingBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            EmbeddingBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const int64_t *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
                 static_cast<T *>(grad_weight->DataPtr()), num_tokens, embedding_dim, vocab_size);
         },

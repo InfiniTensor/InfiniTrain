@@ -1,6 +1,5 @@
 #include "infini_train/include/utils/precision_checker.h"
 
-#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -12,7 +11,6 @@
 #include <limits>
 #include <mutex>
 #include <sstream>
-#include <unordered_map>
 
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/nn/modules/module.h"
@@ -295,9 +293,8 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
 
         // Copy tensor to CPU if it's on GPU
         std::shared_ptr<Tensor> cpu_tensor;
-        if (tensor->GetDevice()->Type() == DeviceType::kCUDA) {
-            auto cpu_device = DeviceManager::Instance()->GetDevice(DeviceType::kCPU);
-            cpu_tensor = std::make_shared<Tensor>(tensor->To(cpu_device));
+        if (tensor->GetDevice().IsCUDA()) {
+            cpu_tensor = std::make_shared<Tensor>(tensor->To(Device()));
         } else {
             cpu_tensor = tensor;
         }

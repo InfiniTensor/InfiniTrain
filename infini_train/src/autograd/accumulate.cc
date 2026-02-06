@@ -3,6 +3,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/function_hook.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
@@ -22,7 +23,7 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
 
     auto grad = tensor_->grad();
     auto device = tensor_->GetDevice();
-    device->SetDevice();
+    core::DeviceGuard guard(device);
 
     if (grad_output) {
         if (grad) {

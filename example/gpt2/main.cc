@@ -10,6 +10,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
@@ -274,7 +275,7 @@ void Train(const nn::parallel::Rank &rank) {
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": start training";
 
-    auto cuda_device = device->IsCUDA() ? dynamic_cast<const CudaDevice *>(device) : nullptr;
+    auto impl = core::GetDeviceGuardImpl(device.type());
 
     LOG(INFO) << "start training";
 
@@ -284,8 +285,8 @@ void Train(const nn::parallel::Rank &rank) {
 
         const bool last_step = step == FLAGS_num_iteration;
 
-        if (cuda_device) {
-            cuda_device->ResetMemPoolHighWatermarks();
+        if (device.IsCUDA()) {
+            impl->ResetMemPoolHighWatermarks(device);
         }
 
         const auto iter_start = std::chrono::high_resolution_clock::now();
@@ -377,8 +378,8 @@ void Train(const nn::parallel::Rank &rank) {
 
         if (rank.IsLastRank()) {
             size_t used_mb = 0, reserved_mb = 0;
-            if (cuda_device) {
-                std::tie(used_mb, reserved_mb) = cuda_device->GetMemPoolPeakMB();
+            if (device.IsCUDA()) {
+                std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
             }
 
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "

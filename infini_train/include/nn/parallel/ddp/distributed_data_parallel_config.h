@@ -1,6 +1,6 @@
 #pragma once
 
-#include <limits>
+#include <cstddef>
 
 namespace infini_train::nn::parallel {
 namespace {

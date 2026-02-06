@@ -39,7 +39,7 @@ void CudaGuardImpl::InitSingleHandle(Device device) {
     CUDA_CHECK(cudaGetDevice(&current_device));
     CUDA_CHECK(cudaSetDevice(device.index()));
 
-    std::call_once(device_stream_flags.at(device.index()), InitSingleStream, device.index());
+    std::call_once(device_stream_flags.at(device.index()), InitSingleStream, device);
 
     cuda_blas_handles[device.index()] = std::make_unique<CudaBlasHandle>(cuda_streams[device.index()].get());
 
@@ -85,7 +85,7 @@ void CudaGuardImpl::SynchronizeDevice(Device device) const {
 
 // blas
 BlasHandle *CudaGuardImpl::GetBlasHandle(Device device) const {
-    std::call_once(device_handle_flags.at(device.index()), InitSingleStream, device);
+    std::call_once(device_handle_flags.at(device.index()), InitSingleHandle, device);
     return cuda_blas_handles.at(device.index()).get();
 }
 

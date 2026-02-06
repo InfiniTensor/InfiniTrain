@@ -6,8 +6,10 @@
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 
@@ -38,12 +40,15 @@ std::shared_ptr<Tensor> TrilForward(const std::shared_ptr<Tensor> &input, int64_
     int threads_per_block = 256;
     int num_blocks = (rows * cols + threads_per_block - 1) / threads_per_block;
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto device = input->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
 
     DispatchFunc<INFINI_ALL_TYPES>(
         input->Dtype(),
         [=]<typename T>() {
-            TrilForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            TrilForwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), rows, cols, diagonal);
         },
         "CUDA TrilForward");
@@ -78,13 +83,16 @@ std::shared_ptr<Tensor> TrilBackward(const std::shared_ptr<Tensor> &grad_output,
     int threads_per_block = 256;
     int num_blocks = (rows * cols + threads_per_block - 1) / threads_per_block;
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
+    auto device = grad_output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
 
     DispatchFunc<INFINI_ALL_TYPES>(
         dtype,
         [=]<typename T>() {
             grad_input->Fill<T>(0);
-            TrilBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            TrilBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), rows, cols,
                 diagonal);
         },
@@ -120,12 +128,15 @@ std::shared_ptr<Tensor> TriuForward(const std::shared_ptr<Tensor> &input, int64_
     int threads_per_block = 256;
     int num_blocks = (rows * cols + threads_per_block - 1) / threads_per_block;
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto device = input->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
 
     DispatchFunc<INFINI_ALL_TYPES>(
         input->Dtype(),
         [=]<typename T>() {
-            TriuForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            TriuForwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), rows, cols, diagonal);
         },
         "CUDA TriuForward");
@@ -159,13 +170,16 @@ std::shared_ptr<Tensor> TriuBackward(const std::shared_ptr<Tensor> &grad_output,
 
     int threads_per_block = 256;
     int num_blocks = (rows * cols + threads_per_block - 1) / threads_per_block;
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
+    auto device = grad_output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
 
     DispatchFunc<INFINI_ALL_TYPES>(
         dtype,
         [=]<typename T>() {
             grad_input->Fill<T>(0);
-            TriuBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            TriuBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), rows, cols,
                 diagonal);
         },
@@ -229,8 +243,10 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
         out_strides[i] = out_strides[i + 1] * out_dims[i + 1];
     }
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
-    const auto &stream = cuda_device->Stream();
+    auto device = input->GetDevice();
+    const auto &stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                             infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                             ->cuda_stream();
 
     // Allocate device memory for dims and strides
     // TODO(zbl): avoid using cudaMalloc?
@@ -341,7 +357,11 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
     MaskMode mode = DecideMaskMode(input_shape, mask_shape);
 
     auto output = std::make_shared<Tensor>(input_shape, dtype, input->GetDevice());
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(output->GetDevice());
+    auto device = output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+
     int threads_per_block = 256;
 
     if (mode == MaskMode::kLead) {
@@ -352,7 +372,7 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
         DispatchFunc<INFINI_ALL_TYPES>(
             dtype,
             [=]<typename T>() {
-                MaskLeadsForwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                MaskLeadsForwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                     static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask->DataPtr()),
                     static_cast<T *>(output->DataPtr()), common::cuda::Cast<T>(value), rows, inner);
             },
@@ -365,7 +385,7 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
         DispatchFunc<INFINI_ALL_TYPES>(
             dtype,
             [=]<typename T>() {
-                MaskForwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                MaskForwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                     static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask_casted->DataPtr()),
                     static_cast<T *>(output->DataPtr()), common::cuda::Cast<T>(value), static_cast<int>(batch_size),
                     static_cast<int>(mask_size));
@@ -401,7 +421,11 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
     MaskMode mode = DecideMaskMode(output_shape, mask_shape);
 
     auto grad_input = std::make_shared<Tensor>(output_shape, dtype, grad_output->GetDevice());
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
+    auto device = grad_output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+
     int threads_per_block = 256;
 
     if (mode == MaskMode::kLead) {
@@ -413,7 +437,7 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
             dtype,
             [=]<typename T>() {
                 grad_input->Fill<T>(0);
-                MaskLeadsBackwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                MaskLeadsBackwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                     static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask_casted->DataPtr()),
                     static_cast<T *>(grad_input->DataPtr()), rows, inner);
             },
@@ -427,7 +451,7 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
             dtype,
             [=]<typename T>() {
                 grad_input->Fill<T>(0);
-                MaskBackwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+                MaskBackwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                     static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask_casted->DataPtr()),
                     static_cast<T *>(grad_input->DataPtr()), static_cast<int>(batch_size), static_cast<int>(mask_size));
             },
@@ -473,12 +497,15 @@ std::shared_ptr<Tensor> RepeatInterleaveForward(const std::shared_ptr<Tensor> &i
     int64_t total_elements = outer * dim_size * repeat * inner;
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto device = input->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
 
     DispatchFunc<INFINI_ALL_TYPES>(
         input->Dtype(),
         [=]<typename T>() {
-            RepeatInterleaveForwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            RepeatInterleaveForwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), outer, dim_size, inner,
                 repeat);
         },
@@ -528,13 +555,16 @@ std::shared_ptr<Tensor> RepeatInterleaveBackward(const std::shared_ptr<Tensor> &
     int64_t total_elements = outer * dim_size * inner;
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
+    auto device = grad_output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
 
     DispatchFunc<INFINI_ALL_TYPES>(
         grad_output->Dtype(),
         [=]<typename T>() {
             grad_input->Fill<T>(0);
-            RepeatInterleaveBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            RepeatInterleaveBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), outer,
                 dim_size, inner, repeat);
         },

@@ -3,8 +3,10 @@
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/cub_compat.cuh"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 namespace {
@@ -133,14 +135,18 @@ std::shared_ptr<Tensor> ReduceOpForward(const std::shared_ptr<Tensor> &input, co
     int threads_per_block = BLOCK_SIZE;
     int num_blocks = N * W;
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto device = input->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+
     DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
             GenericReduceKernel<T, ReduceFunc, FinalizeOp<T>, BLOCK_SIZE>
-                <<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(static_cast<const T *>(input->DataPtr()),
-                                                                              static_cast<T *>(output->DataPtr()), N, H,
-                                                                              W, FinalizeOp<T>{});
+                <<<num_blocks, threads_per_block, 0, cuda_stream>>>(static_cast<const T *>(input->DataPtr()),
+                                                                    static_cast<T *>(output->DataPtr()), N, H, W,
+                                                                    FinalizeOp<T>{});
         },
         "CUDA ReductionForward");
     return output;
@@ -165,12 +171,16 @@ std::shared_ptr<Tensor> ReduceOpBackward(const std::shared_ptr<Tensor> &grad_out
     int threads_per_block = 256;
     int num_blocks = (N * H * W + threads_per_block - 1) / threads_per_block;
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(grad_output->GetDevice());
+    auto device = grad_output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+
     DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
             grad_input->Fill<T>(0);
-            GenericReduceBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_device->Stream()>>>(
+            GenericReduceBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<T *>(grad_input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
                 input ? static_cast<const T *>(input->DataPtr()) : nullptr,
                 reduced ? static_cast<const T *>(reduced->DataPtr()) : nullptr, N, H, W, is_mean, is_masked);

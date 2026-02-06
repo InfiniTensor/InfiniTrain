@@ -134,8 +134,8 @@ private:
     std::vector<ncclComm_t> comms_;
     std::vector<cudaStream_t> comm_streams_;
 
-    std::unordered_map<Device, ncclComm_t> device_comm_map_;
-    std::unordered_map<Device, cudaStream_t> device_stream_map_;
+    std::unordered_map<int8_t, ncclComm_t> device_comm_map_;     // device_index : comm
+    std::unordered_map<int8_t, cudaStream_t> device_stream_map_; // device_index : comm_stream
 };
 #endif
 
