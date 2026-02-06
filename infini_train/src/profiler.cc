@@ -14,7 +14,9 @@
 #ifdef USE_CUDA
 #include "infini_train/include/common/cuda/common_cuda.h"
 #endif
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train {
 namespace {
@@ -38,40 +40,33 @@ Profiler &Profiler::Instance() {
     return profiler;
 }
 
-int GetRank(DeviceType device) {
-    if (device == DeviceType::kCPU) {
-        return 0;
-    }
-
-    // Assume single-node setting, rank == device_id
-    int device_id = 0;
-#ifdef USE_CUDA
-    CUDA_CHECK(cudaGetDevice(&device_id));
-#endif
-    return device_id;
+int GetRank(Device::DeviceType device) {
+    auto impl = core::GetDeviceGuardImpl(device);
+    return impl->GetDevice().index();
 }
 
 #ifdef USE_CUDA
 cudaStream_t GetCudaStream() {
-    int device_id = GetRank(DeviceType::kCUDA);
+    int device_id = GetRank(Device::DeviceType::kCUDA);
     // TODO(zbl): support multi-stream on single device
-    return dynamic_cast<const CudaDevice *>(
-               DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, static_cast<int8_t>(device_id)))
-        ->Stream();
+    auto device = Device(Device::DeviceType::kCUDA, static_cast<int8_t>(device_id));
+    return dynamic_cast<infini_train::core::cuda::CudaStream *>(
+               core::GetDeviceGuardImpl(device.type())->GetStream(device))
+        ->cuda_stream();
 }
 #endif
 
-void Profiler::StartRecord(const std::string &name, DeviceType device) {
+void Profiler::StartRecord(const std::string &name, Device::DeviceType device) {
     if (g_profiling_depth++ > 0) {
         return;
     }
     cpu_timing_map_[name] = std::chrono::high_resolution_clock::now();
 
     switch (device) {
-    case DeviceType::kCPU:
+    case Device::DeviceType::kCPU:
         break;
 #ifdef USE_CUDA
-    case DeviceType::kCUDA: {
+    case Device::DeviceType::kCUDA: {
         auto it = cuda_timing_map_.find(name);
         if (it != cuda_timing_map_.end()) {
             // Make sure there are no conflicts
@@ -100,7 +95,7 @@ void Profiler::StartRecord(const std::string &name, DeviceType device) {
     }
 }
 
-void Profiler::EndRecord(const std::string &name, DeviceType device) {
+void Profiler::EndRecord(const std::string &name, Device::DeviceType device) {
     if (--g_profiling_depth > 0) {
         return;
     }
@@ -110,10 +105,10 @@ void Profiler::EndRecord(const std::string &name, DeviceType device) {
     int rank = GetRank(device);
 
     switch (device) {
-    case DeviceType::kCPU:
+    case Device::DeviceType::kCPU:
         break;
 #ifdef USE_CUDA
-    case DeviceType::kCUDA: {
+    case Device::DeviceType::kCUDA: {
         auto it = cuda_timing_map_.find(name);
         if (it != cuda_timing_map_.end()) {
             auto event_pair = it->second;

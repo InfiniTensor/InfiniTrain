@@ -10,6 +10,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
@@ -113,7 +114,7 @@ void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
 
     // select the device
-    const Device *device;
+    Device device;
 
     int ddp_world_size = global::GetDataParallelSize();
     int tp_world_size = global::GetTensorParallelSize();
@@ -138,7 +139,7 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *pp_pg = nullptr;
 
     if (rank.IsParallel()) {
-        device = DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, rank.thread_rank());
+        device = Device(Device::DeviceType::kCUDA, rank.thread_rank());
 
         if (ddp_world_size > 1) {
             ddp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
@@ -162,8 +163,7 @@ void Train(const nn::parallel::Rank &rank) {
             nn::parallel::pp_rank = pp_rank;
         }
     } else {
-        device = FLAGS_device == kDeviceCPU ? DeviceManager::Instance()->GetDefaultDevice()
-                                            : DeviceManager::Instance()->GetDevice(DeviceType::kCUDA, 0);
+        device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
     }
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
@@ -210,7 +210,7 @@ void Train(const nn::parallel::Rank &rank) {
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
         model = std::make_shared<nn::parallel::PipelineParallel>(
-            model, pp_world_size, num_micro_batches, shapes, pp_rank, rank.thread_rank(),
+            model, pp_world_size, num_micro_batches, shapes, pp_rank, device,
             std::dynamic_pointer_cast<GPT2>(model)->GetChunkSize());
         if (ddp_world_size > 1) {
             auto ddp_config
@@ -273,7 +273,7 @@ void Train(const nn::parallel::Rank &rank) {
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": start training";
 
-    auto cuda_device = device->IsCUDA() ? dynamic_cast<const CudaDevice *>(device) : nullptr;
+    auto impl = core::GetDeviceGuardImpl(device.type());
 
     LOG(INFO) << "start training";
 
@@ -283,8 +283,8 @@ void Train(const nn::parallel::Rank &rank) {
 
         const bool last_step = step == FLAGS_num_iteration;
 
-        if (cuda_device) {
-            cuda_device->ResetMemPoolHighWatermarks();
+        if (device.IsCUDA()) {
+            impl->ResetMemPoolHighWatermarks(device);
         }
 
         const auto iter_start = std::chrono::high_resolution_clock::now();
@@ -322,7 +322,7 @@ void Train(const nn::parallel::Rank &rank) {
 
             for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
                 // enable autocast for the current step
-                infini_train::AutocastGuard autocast_guard(device->Type(), dtype);
+                infini_train::AutocastGuard autocast_guard(device.type(), dtype);
 
                 // (bs, seq_len), (bs, seq_len)
                 auto [x, y] = *train_iter;
@@ -345,7 +345,7 @@ void Train(const nn::parallel::Rank &rank) {
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
 
-                auto loss_cpu = loss->To(DeviceManager::Instance()->GetDefaultDevice());
+                auto loss_cpu = loss->To(Device());
                 lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
                 loss->Backward();
@@ -367,8 +367,7 @@ void Train(const nn::parallel::Rank &rank) {
         if (ddp_world_size > 1) {
             auto lossf_tensor = std::make_shared<Tensor>(&lossf, std::vector<int64_t>{}, DataType::kFLOAT32, device);
             function::AllReduce(lossf_tensor, function::ReduceOpType::kAvg, ddp_pg);
-            lossf = static_cast<const float *>(
-                lossf_tensor->To(DeviceManager::Instance()->GetDefaultDevice()).DataPtr())[0];
+            lossf = static_cast<const float *>(lossf_tensor->To(Device()).DataPtr())[0];
         }
 
         const auto iter_end = std::chrono::high_resolution_clock::now();
@@ -377,8 +376,8 @@ void Train(const nn::parallel::Rank &rank) {
 
         if (rank.IsLastRank()) {
             size_t used_mb = 0, reserved_mb = 0;
-            if (cuda_device) {
-                std::tie(used_mb, reserved_mb) = cuda_device->GetMemPoolPeakMB();
+            if (device.IsCUDA()) {
+                std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
             }
 
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "

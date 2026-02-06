@@ -8,8 +8,10 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/tensor.h"
 
@@ -19,8 +21,7 @@ constexpr char kModuleName[] = "module";
 
 std::vector<std::vector<std::shared_ptr<Tensor>>>
 ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
-              const std::vector<std::vector<std::shared_ptr<Tensor>>> &inputs,
-              const std::vector<const Device *> &devices) {
+              const std::vector<std::vector<std::shared_ptr<Tensor>>> &inputs, const std::vector<Device> &devices) {
     CHECK_EQ(modules.size(), inputs.size()) << std::format(
         "The number of modules {} is not equal to the number of inputs {}", modules.size(), inputs.size());
     CHECK_EQ(modules.size(), devices.size());
@@ -29,8 +30,8 @@ ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
     std::vector<std::optional<std::vector<std::shared_ptr<Tensor>>>> results(modules.size(), std::nullopt);
 
     auto worker = [&](const std::shared_ptr<Module> &module, const std::vector<std::shared_ptr<Tensor>> &inputs,
-                      const Device *device, int idx) {
-        device->SetDevice();
+                      Device device, int idx) {
+        core::DeviceGuard guard(device);
         auto output = (*module)(inputs);
         results[idx] = output;
     };
@@ -57,8 +58,10 @@ ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
 }
 } // namespace
 
-DataParallel::DataParallel(const std::shared_ptr<Module> &module, int dim)
-    : dim_(dim), devices_(DeviceManager::Instance()->GetAllAvailableDevices(DeviceType::kCUDA)) {
+DataParallel::DataParallel(const std::shared_ptr<Module> &module, int dim, Device::DeviceType device_type) : dim_(dim) {
+    devices_.reserve(global::GetNthreadPerProc());
+    for (int index = 0; index < global::GetNthreadPerProc(); ++index) { devices_.emplace_back(device_type, index); }
+
     CHECK_GT(devices_.size(), 0) << "No available devices found";
     output_device_ = devices_.at(0);
     src_device_ = devices_.at(0);
@@ -79,7 +82,7 @@ std::vector<std::shared_ptr<Tensor>> DataParallel::Forward(const std::vector<std
         if (tensor->GetDevice() != src_device_) {
             LOG(FATAL) << std::format("module must have its Parameters on device {} (device_ids[0]) but found "
                                       "one of them on device: {}",
-                                      src_device_->ToString(), tensor->GetDevice()->ToString());
+                                      src_device_.ToString(), tensor->GetDevice().ToString());
         }
     }
 

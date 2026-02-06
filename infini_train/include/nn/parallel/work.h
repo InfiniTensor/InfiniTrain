@@ -12,9 +12,7 @@
 #include <nccl.h>
 #endif
 
-namespace infini_train {
-class Device;
-} // namespace infini_train
+#include "infini_train/include/device.h"
 
 namespace infini_train::nn::parallel {
 
@@ -39,7 +37,7 @@ public:
 #ifdef USE_NCCL
 class WorkNccl final : public Work {
 public:
-    WorkNccl(const Device *device, ncclComm_t comm);
+    WorkNccl(Device device, ncclComm_t comm);
     ~WorkNccl() override;
 
     bool WaitBlocking(std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) override;
@@ -60,7 +58,7 @@ private:
     void SetException(std::exception_ptr e);
 
 private:
-    const Device *device_ = nullptr;
+    Device device_ = Device();
     cudaEvent_t ready_event_;
     cudaEvent_t done_event_;
     ncclComm_t comm_;

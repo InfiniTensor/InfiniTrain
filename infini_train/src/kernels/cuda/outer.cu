@@ -7,8 +7,10 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/cuda/cuda_blas_handle.h"
 
 namespace infini_train::kernels::cuda {
 std::shared_ptr<Tensor> OuterForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &other) {
@@ -28,14 +30,16 @@ std::shared_ptr<Tensor> OuterForward(const std::shared_ptr<Tensor> &input, const
 
     auto output = std::make_shared<Tensor>(std::vector<int64_t>{M, N}, input->Dtype(), input->GetDevice());
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto device = input->GetDevice();
     // reinterpret input: [M] as column vector [M, 1]
     // reinterpret other: [N] as row vector [1, N]
     // output[M, N] = input[M, 1] * other.T[1, N]
     // output.T[N, M] = other[N, 1] * input.T[1, M]
     float alpha = 1.0f;
     float beta = 0.0f;
-    cublasHandle_t handle = cuda_device->CublasHandle();
+    cublasHandle_t handle = dynamic_cast<infini_train::core::cuda::CudaBlasHandle *>(
+                                infini_train::core::GetDeviceGuardImpl(device.type())->GetBlasHandle(device))
+                                ->cublas_handle();
 
     switch (input->Dtype()) {
         DISPATCH_CASE(WRAP({
@@ -97,10 +101,12 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
         },
         "CUDA OuterBackward");
 
-    const auto *cuda_device = dynamic_cast<const CudaDevice *>(input->GetDevice());
+    auto device = input->GetDevice();
     float alpha = 1.0f;
     float beta = 0.0f;
-    cublasHandle_t handle = cuda_device->CublasHandle();
+    cublasHandle_t handle = dynamic_cast<infini_train::core::cuda::CudaBlasHandle *>(
+                                infini_train::core::GetDeviceGuardImpl(device.type())->GetBlasHandle(device))
+                                ->cublas_handle();
 
     switch (promoted_type) {
         DISPATCH_CASE(WRAP({
@@ -152,7 +158,7 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_OUTER_KERNEL(kernel_name)                                                                        \
-    REGISTER_KERNEL(infini_train::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_OUTER_KERNEL(OuterForward)
 REGISTER_CUDA_OUTER_KERNEL(OuterBackward)

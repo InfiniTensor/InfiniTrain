@@ -17,12 +17,12 @@ inline thread_local int g_profiling_depth = 0;
 
 struct ProfileContext {
     std::string name;
-    DeviceType device;
+    Device::DeviceType device;
 };
 
 inline thread_local ProfileContext g_profile_context;
 
-inline void SetProfileContext(const std::string &name, DeviceType device) {
+inline void SetProfileContext(const std::string &name, Device::DeviceType device) {
     if (g_profiling_depth == 0) {
         g_profile_context.name = name;
         g_profile_context.device = device;
@@ -63,8 +63,8 @@ public:
 
     static Profiler &Instance();
 
-    void StartRecord(const std::string &name, DeviceType device);
-    void EndRecord(const std::string &name, DeviceType device);
+    void StartRecord(const std::string &name, Device::DeviceType device);
+    void EndRecord(const std::string &name, Device::DeviceType device);
 
     void Report(std::ostream &os = std::cout, SortBy sort_by = SortBy::NotSorted) const;
     void Report(const std::string &file_path, SortBy sort_by = SortBy::NotSorted) const;
@@ -84,17 +84,15 @@ private:
     std::vector<KernelCallRecord> call_records_;
     std::string current_tag_ = "Untagged";
 
+    // thread-local tracking
+    thread_local static inline std::map<std::string, std::chrono::high_resolution_clock::time_point> cpu_timing_map_;
+
 #ifdef USE_CUDA
     struct EventPair {
         void *start;
         void *stop;
     };
-#endif
 
-    // thread-local tracking
-    thread_local static inline std::map<std::string, std::chrono::high_resolution_clock::time_point> cpu_timing_map_;
-
-#ifdef USE_CUDA
     thread_local static inline std::map<std::string, EventPair> cuda_timing_map_;
 #endif
 };

@@ -10,7 +10,7 @@
 
 namespace infini_train::autograd {
 
-Scatter::Scatter(const std::vector<const Device *> &target_gpus, int64_t dim,
+Scatter::Scatter(const std::vector<Device> &target_gpus, int64_t dim,
                  const infini_train::nn::parallel::ProcessGroup *pg)
     : autograd::Function(kType), target_gpus_(target_gpus), dim_(dim),
       pg_(pg ? pg : infini_train::nn::parallel::ProcessGroupFactory::Instance()->GetDefaultProcessGroup()) {}
@@ -18,7 +18,7 @@ Scatter::Scatter(const std::vector<const Device *> &target_gpus, int64_t dim,
 std::vector<std::shared_ptr<Tensor>> Scatter::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     const auto &input = input_tensors[0];
     std::vector<std::shared_ptr<Tensor>> output_tensors;
-    auto device = input->GetDevice()->Type();
+    auto device = input->GetDevice().type();
     output_tensors = pg_->Scatter(input, target_gpus_, dim_);
     return output_tensors;
 }
@@ -32,13 +32,13 @@ std::vector<std::shared_ptr<Tensor>> Scatter::Backward(const std::vector<std::sh
     return std::make_shared<Gather>(input_device_, dim_)->Apply(grad_outputs);
 }
 
-Gather::Gather(const Device *target_device, int64_t dim, const infini_train::nn::parallel::ProcessGroup *pg)
+Gather::Gather(Device target_device, int64_t dim, const infini_train::nn::parallel::ProcessGroup *pg)
     : autograd::Function(kType), target_device_(target_device), dim_(dim),
       pg_(pg ? pg : infini_train::nn::parallel::ProcessGroupFactory::Instance()->GetDefaultProcessGroup()) {}
 
 std::vector<std::shared_ptr<Tensor>> Gather::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     for (const auto &tensor : input_tensors) {
-        CHECK_NE(static_cast<int>(tensor->GetDevice()->Type()), static_cast<int>(DeviceType::kCPU))
+        CHECK_NE(static_cast<int>(tensor->GetDevice().type()), static_cast<int>(Device::DeviceType::kCPU))
             << "Gather function not implemented for CPU tensors";
     }
     if (dim_ == 0 && input_tensors[0]->Dims().size() == 0) {
@@ -51,7 +51,7 @@ std::vector<std::shared_ptr<Tensor>> Gather::Forward(const std::vector<std::shar
     } else {
         unsqueezed_scalar_ = false;
     }
-    auto device = input_tensors[0]->GetDevice()->Type();
+    auto device = input_tensors[0]->GetDevice().type();
     return {pg_->Gather(input_tensors, target_device_, dim_)};
 }
 
@@ -62,10 +62,10 @@ void Gather::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
 
 std::vector<std::shared_ptr<Tensor>> Gather::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     // TODO(dcj): do squeeze here if unsqueezed_scalar_ is true
-    return std::make_shared<Scatter>(std::vector<const Device *>{input_gpus_}, dim_)->Apply(grad_outputs);
+    return std::make_shared<Scatter>(std::vector<Device>{input_gpus_}, dim_)->Apply(grad_outputs);
 }
 
-Broadcast::Broadcast(const std::vector<const Device *> &target_gpus, const infini_train::nn::parallel::ProcessGroup *pg)
+Broadcast::Broadcast(const std::vector<Device> &target_gpus, const infini_train::nn::parallel::ProcessGroup *pg)
     : autograd::Function(kType), target_gpus_(target_gpus),
       pg_(pg ? pg : infini_train::nn::parallel::ProcessGroupFactory::Instance()->GetDefaultProcessGroup()) {}
 
@@ -77,8 +77,8 @@ std::vector<std::shared_ptr<Tensor>> Broadcast::Forward(const std::vector<std::s
     input_device_ = input_tensors[0]->GetDevice();
 
     for (const auto &tensor : input_tensors) {
-        CHECK(!tensor->GetDevice()->IsCPU()) << "Broadcast function not implemented for CPU tensors";
-        CHECK(tensor->GetDevice()->Type() == input_device_->Type())
+        CHECK(!tensor->GetDevice().IsCPU()) << "Broadcast function not implemented for CPU tensors";
+        CHECK(tensor->GetDevice().type() == input_device_.type())
             << "Broadcast function not implemented for tensors on different device type";
     }
 
@@ -95,7 +95,7 @@ std::vector<std::shared_ptr<Tensor>> Broadcast::Backward(const std::vector<std::
     return std::make_shared<ReduceAddCoalesced>(input_device_, num_inputs_)->Apply(grad_outputs);
 }
 
-ReduceAddCoalesced::ReduceAddCoalesced(const Device *destination, int64_t num_inputs,
+ReduceAddCoalesced::ReduceAddCoalesced(Device destination, int64_t num_inputs,
                                        const infini_train::nn::parallel::ProcessGroup *pg)
     : autograd::Function(kType), destination_(destination), num_inputs_(num_inputs),
       pg_(pg ? pg : infini_train::nn::parallel::ProcessGroupFactory::Instance()->GetDefaultProcessGroup()) {}

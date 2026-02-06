@@ -81,7 +81,7 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_STACK_KERNEL(kernel_name)                                                                         \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_STACK_KERNEL(StackForward)
 REGISTER_CPU_STACK_KERNEL(StackBackward)

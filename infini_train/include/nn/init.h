@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 
 namespace infini_train {
 class Tensor;
@@ -50,5 +51,5 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor);
 
 std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor);
 
-std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, const Device *device = nullptr);
+std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, Device device = Device());
 } // namespace infini_train::nn::init

@@ -260,10 +260,8 @@ auto DispatchFunc(DataType dtype, Functor &&func, std::string_view context_ident
         CASE_FOR_TYPE(DataType::kINT64)
         CASE_FOR_TYPE(DataType::kFLOAT32)
         CASE_FOR_TYPE(DataType::kFLOAT64)
-#ifdef USE_CUDA
         CASE_FOR_TYPE(DataType::kBFLOAT16)
         CASE_FOR_TYPE(DataType::kFLOAT16)
-#endif
 #undef CASE_FOR_TYPE
     }
     LOG_UNSUPPORTED_DTYPE(dtype, context_identifier);
@@ -328,10 +326,8 @@ template <size_t index, typename AllowedListTuple, typename... ResolvedTypes> st
                 CASE_FOR_TYPE(DataType::kINT64)
                 CASE_FOR_TYPE(DataType::kFLOAT32)
                 CASE_FOR_TYPE(DataType::kFLOAT64)
-#ifdef USE_CUDA
                 CASE_FOR_TYPE(DataType::kBFLOAT16)
                 CASE_FOR_TYPE(DataType::kFLOAT16)
-#endif
 #undef CASE_FOR_TYPE
             }
             LOG_UNSUPPORTED_DTYPE(dtype, context_identifier);
@@ -413,7 +409,7 @@ private:
 
 class Dispatcher {
 public:
-    using KeyT = std::pair<DeviceType, std::string>;
+    using KeyT = std::pair<Device::DeviceType, std::string>;
 
     static Dispatcher &Instance() {
         static Dispatcher instance;

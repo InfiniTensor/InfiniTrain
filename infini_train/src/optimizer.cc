@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
@@ -25,8 +26,8 @@ void SGD::Step() {
             continue;
         }
         auto device = param->GetDevice();
-        device->SetDevice();
-        auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AccumulateGrad"});
+        core::DeviceGuard guard(device);
+        auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
         kernel.Call<void>(param->grad(), -learning_rate_, param);
     }
 }
@@ -61,8 +62,8 @@ void Adam::Step() {
         auto &v = v_[i];
 
         auto device = param->GetDevice();
-        device->SetDevice();
-        auto kernel = Dispatcher::Instance().GetKernel({device->Type(), "AdamAccumulateGrad"});
+        core::DeviceGuard guard(device);
+        auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGrad"});
         kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
     }
 }

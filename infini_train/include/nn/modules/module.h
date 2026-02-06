@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 
 namespace infini_train {
 class Tensor;
@@ -21,7 +22,7 @@ class Module;
 
 namespace parallel::function {
 std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &network,
-                                               const std::vector<const Device *> &devices);
+                                               const std::vector<Device> &devices);
 } // namespace parallel::function
 
 class Module : public std::enable_shared_from_this<Module> {
@@ -72,7 +73,7 @@ public:
         return 0.0f;
     };
 
-    virtual void To(const Device *device);
+    virtual void To(Device device);
 
     virtual void To(DataType dtype);
 
@@ -87,7 +88,7 @@ public:
     std::shared_ptr<infini_train::HookHandle> RegisterBackwardPostHook(ModulePostHook hook);
 
 protected:
-    const Device *device_ = nullptr;
+    Device device_;
     const std::string type_ = kUndefinedType;
     std::unordered_map<std::string, std::shared_ptr<Module>> modules_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;
@@ -103,8 +104,8 @@ private:
     NamedModules(const std::string &prefix = "", bool remove_duplicate = true,
                  std::unordered_set<Module *> *memory = nullptr);
 
-    friend std::vector<std::shared_ptr<Module>>
-    parallel::function::Replicate(const std::shared_ptr<Module> &network, const std::vector<const Device *> &devices);
+    friend std::vector<std::shared_ptr<Module>> parallel::function::Replicate(const std::shared_ptr<Module> &network,
+                                                                              const std::vector<Device> &devices);
 };
 
 template <typename Derived> class CloneableModule : public Module {

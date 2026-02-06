@@ -169,7 +169,7 @@ std::shared_ptr<Tensor> MinBackward(const std::shared_ptr<Tensor> &grad_output, 
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_REDUCTION_KERNEL(kernel_name)                                                                     \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_REDUCTION_KERNEL(MeanForward)
 REGISTER_CPU_REDUCTION_KERNEL(MeanBackward)

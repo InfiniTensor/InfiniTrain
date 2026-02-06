@@ -56,7 +56,7 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_EMBEDDING_KERNEL(kernel_name)                                                                     \
-    REGISTER_KERNEL(infini_train::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_EMBEDDING_KERNEL(EmbeddingForward)
 REGISTER_CPU_EMBEDDING_KERNEL(EmbeddingBackward)

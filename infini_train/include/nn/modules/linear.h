@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 
 namespace infini_train {
@@ -18,7 +19,7 @@ public:
     static constexpr char kParamWeightName[] = "weight";
     static constexpr char kParamBiasName[] = "bias";
 
-    Linear(int64_t in_features, int64_t out_features, bool bias = true, const Device *device = nullptr);
+    Linear(int64_t in_features, int64_t out_features, bool bias = true, Device device = Device());
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
 private:
