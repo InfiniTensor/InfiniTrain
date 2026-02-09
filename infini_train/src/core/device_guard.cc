@@ -8,7 +8,6 @@
 
 #include "infini_train/include/core/blas_handle.h"
 #include "infini_train/include/core/stream.h"
-#include "infini_train/src/core/cpu/cpu_guard.h"
 
 namespace infini_train::core {
 
@@ -71,6 +70,7 @@ std::pair<size_t, size_t> DeviceGuardImpl::GetMemPoolPeakMB(Device device) const
 DeviceGuard::DeviceGuard(Device device) : impl_(GetDeviceGuardImpl(device.type())) {
     original_device_ = impl_->GetDevice();
     impl_->SetDevice(device);
+    current_device_ = device;
 }
 
 void DeviceGuard::SetDevice(Device device) {
@@ -88,10 +88,6 @@ Device DeviceGuard::original_device() const { return original_device_; }
 DeviceGuard::~DeviceGuard() { impl_->SetDevice(original_device_); }
 
 // DeviceGuardImplRegistry
-DeviceGuardImplRegistry::DeviceGuardImplRegistry() {
-    Register(Device::DeviceType::kCPU, std::make_unique<infini_train::core::cpu::CpuGuardImpl>());
-}
-
 DeviceGuardImplRegistry &DeviceGuardImplRegistry::Instance() {
     static DeviceGuardImplRegistry instance;
     return instance;

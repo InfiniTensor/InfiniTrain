@@ -1,4 +1,4 @@
-#include "infini_train/src/core/cuda/cuda_guard.h"
+#include "infini_train/src/core/cuda/cuda_guard_impl.h"
 
 #include <array>
 #include <cstdint>

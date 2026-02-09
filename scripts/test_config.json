@@ -6,7 +6,8 @@
         "LLAMA3_INPUT_BIN": "../../data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
         "LLAMA3_LLMC_FILEPATH": "../../data/llmc/llama3/llama3.2_1B_fp32.bin",
         "PROFILE_LOG_DIR": "./profile_logs",
-        "LOG_DIR": "logs"
+        "LOG_DIR": "./logs",
+        "COMPARE_LOG_DIR": ""
     },
     "builds": [
         {

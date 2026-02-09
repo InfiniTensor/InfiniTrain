@@ -58,7 +58,7 @@ private:
     void SetException(std::exception_ptr e);
 
 private:
-    Device device_ = Device();
+    Device device_;
     cudaEvent_t ready_event_;
     cudaEvent_t done_event_;
     ncclComm_t comm_;

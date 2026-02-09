@@ -20,7 +20,7 @@ public:
 private:
     int dim_ = 0;
     std::vector<Device> devices_;
-    Device output_device_ = Device();
-    Device src_device_ = Device();
+    Device output_device_;
+    Device src_device_;
 };
 } // namespace infini_train::nn::parallel

@@ -11,6 +11,7 @@ namespace infini_train::core {
 class Stream;
 class BlasHandle;
 
+// Note(dcj): In the CPU backend, kD2D corresponds to a regular memcpy.
 enum class MemcpyKind : int8_t {
     kH2D = 0,
     kD2H = 1,
@@ -161,7 +162,7 @@ public:
     DeviceGuardImpl *Get(Device::DeviceType type) const;
 
 private:
-    DeviceGuardImplRegistry();
+    DeviceGuardImplRegistry() = default;
     DeviceGuardImplRegistry(const DeviceGuardImplRegistry &) = delete;
     DeviceGuardImplRegistry &operator=(const DeviceGuardImplRegistry &) = delete;
 
