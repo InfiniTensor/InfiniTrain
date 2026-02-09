@@ -33,7 +33,7 @@ public:
 private:
     const infini_train::nn::parallel::ProcessGroup *pg_ = nullptr;
     std::vector<Device> target_gpus_;
-    Device input_device_ = Device();
+    Device input_device_;
     int64_t dim_ = 0;
 };
 
@@ -52,7 +52,7 @@ public:
 
 private:
     const infini_train::nn::parallel::ProcessGroup *pg_ = nullptr;
-    Device target_device_ = Device();
+    Device target_device_;
     std::vector<Device> input_gpus_;
     int64_t dim_ = 0;
     bool unsqueezed_scalar_ = false;
@@ -76,7 +76,7 @@ private:
     const infini_train::nn::parallel::ProcessGroup *pg_ = nullptr;
     std::vector<Device> target_gpus_;
     int64_t num_inputs_ = 0;
-    Device input_device_ = Device();
+    Device input_device_;
 };
 
 class ReduceAddCoalesced : public autograd::Function {
@@ -95,7 +95,7 @@ public:
 
 private:
     const infini_train::nn::parallel::ProcessGroup *pg_ = nullptr;
-    Device destination_ = Device();
+    Device destination_;
     std::vector<Device> target_gpus_;
     int64_t num_inputs_ = 0;
 };

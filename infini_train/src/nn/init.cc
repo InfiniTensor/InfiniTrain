@@ -19,7 +19,6 @@
 #include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
-#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::nn::init {
 namespace {
@@ -187,73 +186,49 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
     return tensor;
 }
 
-#define CASE(DATA_TYPE, TYPE)                                                                                          \
+#define ARANGE_CASE(DATA_TYPE, TYPE)                                                                                   \
     case DATA_TYPE: {                                                                                                  \
         std::vector<TYPE> buffer(num_elements);                                                                        \
         std::iota(buffer.begin(), buffer.end(), static_cast<TYPE>(start));                                             \
-        memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE));                                         \
-        break;                                                                                                         \
-    }
-#define CUDA_CASE(DATA_TYPE, TYPE)                                                                                     \
-    case DATA_TYPE: {                                                                                                  \
-        std::vector<TYPE> buffer(num_elements);                                                                        \
-        std::iota(buffer.begin(), buffer.end(), static_cast<TYPE>(start));                                             \
-        cudaMemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE), cudaMemcpyHostToDevice,         \
-                        dynamic_cast<infini_train::core::cuda::CudaStream *>(                                          \
-                            core::GetDeviceGuardImpl(device.type())->GetStream(device))                                \
-                            ->cuda_stream());                                                                          \
+        impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE), kind, stream);                \
         break;                                                                                                         \
     }
 
 std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, Device device) {
-    int64_t num_elements = end - start;
+    const int64_t num_elements = end - start;
     auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{num_elements}, dtype, device);
-    core::DeviceGuard guard(device);
 
-    if (device.IsCPU()) {
-        switch (dtype) {
-            CASE(DataType::kUINT8, uint8_t)
-            CASE(DataType::kINT8, int8_t)
-            CASE(DataType::kUINT16, uint16_t)
-            CASE(DataType::kINT16, int16_t)
-            CASE(DataType::kUINT32, uint32_t)
-            CASE(DataType::kINT32, int32_t)
-            CASE(DataType::kUINT64, uint64_t)
-            CASE(DataType::kINT64, int64_t)
-            // CASE(DataType::kBFLOAT16, bf16)
-            // CASE(DataType::kFLOAT16, fp16)
-            CASE(DataType::kFLOAT32, float)
-            CASE(DataType::kFLOAT64, double)
-        default:
-            LOG(FATAL) << "Unsupported data type: " << static_cast<int>(dtype);
-            break;
-        }
-    } else {
+    core::DeviceGuard guard(device);
+    auto *impl = core::GetDeviceGuardImpl(device.type());
+
+    const core::MemcpyKind kind = device.IsCPU() ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D;
+    core::Stream *stream = impl->GetStream(device);
+
+    switch (dtype) {
+        ARANGE_CASE(DataType::kUINT8, uint8_t)
+        ARANGE_CASE(DataType::kINT8, int8_t)
+        ARANGE_CASE(DataType::kUINT16, uint16_t)
+        ARANGE_CASE(DataType::kINT16, int16_t)
+        ARANGE_CASE(DataType::kUINT32, uint32_t)
+        ARANGE_CASE(DataType::kINT32, int32_t)
+        ARANGE_CASE(DataType::kUINT64, uint64_t)
+        ARANGE_CASE(DataType::kINT64, int64_t)
+
 #ifdef USE_CUDA
-        switch (dtype) {
-            CUDA_CASE(DataType::kUINT8, uint8_t)
-            CUDA_CASE(DataType::kINT8, int8_t)
-            CUDA_CASE(DataType::kUINT16, uint16_t)
-            CUDA_CASE(DataType::kINT16, int16_t)
-            CUDA_CASE(DataType::kUINT32, uint32_t)
-            CUDA_CASE(DataType::kINT32, int32_t)
-            CUDA_CASE(DataType::kUINT64, uint64_t)
-            CUDA_CASE(DataType::kINT64, int64_t)
-            CUDA_CASE(DataType::kBFLOAT16, nv_bfloat16)
-            CUDA_CASE(DataType::kFLOAT16, half)
-            CUDA_CASE(DataType::kFLOAT32, float)
-            CUDA_CASE(DataType::kFLOAT64, double)
-        default:
-            LOG(FATAL) << "Unsupported data type: " << static_cast<int>(dtype);
-            break;
-        }
-#else
-        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device.type());
+        ARANGE_CASE(DataType::kBFLOAT16, nv_bfloat16)
+        ARANGE_CASE(DataType::kFLOAT16, half)
 #endif
+
+        ARANGE_CASE(DataType::kFLOAT32, float)
+        ARANGE_CASE(DataType::kFLOAT64, double)
+
+    default:
+        LOG(FATAL) << "Unsupported data type: " << static_cast<int>(dtype);
+        break;
     }
+
     return tensor;
 }
 
-#undef CASE
-#undef CUDA_CASE
+#undef ARANGE_CASE
 } // namespace infini_train::nn::init

@@ -42,7 +42,7 @@ private:
     int num_stages_ = -1;
     int prev_rank_ = -1;
     int next_rank_ = -1;
-    Device device_ = Device();
+    Device device_;
     std::vector<std::shared_ptr<Module>> chunks_;
     std::vector<std::vector<int64_t>> recv_shape_;
 };

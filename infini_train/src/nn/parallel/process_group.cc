@@ -24,6 +24,7 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
+
 #include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train {

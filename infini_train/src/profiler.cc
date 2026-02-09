@@ -16,6 +16,7 @@
 #endif
 #include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
+
 #include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train {

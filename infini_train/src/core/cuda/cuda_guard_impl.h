@@ -2,10 +2,13 @@
 
 #include <cstdint>
 
-#include "infini_train/include/core/blas_handle.h"
 #include "infini_train/include/core/device_guard.h"
-#include "infini_train/include/core/stream.h"
 #include "infini_train/include/device.h"
+
+namespace infini_train::core {
+class Stream;
+class BlasHandle;
+} // namespace infini_train::core
 
 namespace infini_train::core::cuda {
 

@@ -27,8 +27,8 @@ public:
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
 private:
-    Device target_device_ = Device();
-    Device input_device_ = Device();
+    Device target_device_;
+    Device input_device_;
     int cur_rank_ = -1;
     int peer_rank_ = -1;
     const std::vector<std::vector<int64_t>> &shapes_;
@@ -49,8 +49,8 @@ public:
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
 private:
-    Device src_device_ = Device();
-    Device cur_device_ = Device();
+    Device src_device_;
+    Device cur_device_;
     int cur_rank_ = -1;
     int peer_rank_ = -1;
 };

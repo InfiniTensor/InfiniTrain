@@ -48,7 +48,7 @@ public:
     size_t Size() const;
 
 private:
-    Device device_ = Device();
+    Device device_;
     size_t size_ = 0;
     void *data_ = nullptr;
 };
