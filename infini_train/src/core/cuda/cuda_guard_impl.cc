@@ -1,7 +1,6 @@
 #include "infini_train/src/core/cuda/cuda_guard_impl.h"
 
 #include <array>
-#include <cstdint>
 #include <memory>
 #include <mutex>
 
@@ -22,9 +21,18 @@ static std::array<std::unique_ptr<CudaBlasHandle>, kMaxGpus> cuda_blas_handles;
 
 static std::array<std::once_flag, kMaxGpus> device_stream_flags;
 static std::array<std::once_flag, kMaxGpus> device_handle_flags;
+
+inline void CheckCudaDevice(Device device) {
+    CHECK(device.type() == Device::DeviceType::kCUDA) << std::format(
+        "CudaGuardImpl expects CUDA device, but got type={} index={}", static_cast<int>(device.type()), device.index());
+    const int idx = device.index();
+    CHECK(idx >= 0 && idx < kMaxGpus) << std::format("CUDA device index {} out of cache range [0, {}).", idx, kMaxGpus);
+}
 } // namespace
 
 void CudaGuardImpl::InitSingleStream(Device device) {
+    CheckCudaDevice(device);
+
     int current_device = -1;
     CUDA_CHECK(cudaGetDevice(&current_device));
     CUDA_CHECK(cudaSetDevice(device.index()));
@@ -35,6 +43,8 @@ void CudaGuardImpl::InitSingleStream(Device device) {
 }
 
 void CudaGuardImpl::InitSingleHandle(Device device) {
+    CheckCudaDevice(device);
+
     int current_device = -1;
     CUDA_CHECK(cudaGetDevice(&current_device));
     CUDA_CHECK(cudaSetDevice(device.index()));
@@ -55,9 +65,12 @@ Device CudaGuardImpl::GetDevice() const {
     return Device(Device::DeviceType::kCUDA, current_device);
 }
 
-void CudaGuardImpl::SetDevice(Device device) const { CUDA_CHECK(cudaSetDevice(device.index())); }
+void CudaGuardImpl::SetDevice(Device device) const {
+    CheckCudaDevice(device);
+    CUDA_CHECK(cudaSetDevice(device.index()));
+}
 
-int8_t CudaGuardImpl::DeviceCount() const {
+int CudaGuardImpl::DeviceCount() const {
     int device_count = 0;
     CUDA_DRIVER_CHECK(cuDeviceGetCount(&device_count));
     return device_count;
@@ -67,6 +80,10 @@ Device::DeviceType CudaGuardImpl::Type() const { return Device::DeviceType::kCUD
 
 // stream
 Stream *CudaGuardImpl::GetStream(Device device) const {
+    CheckCudaDevice(device);
+    // FIXME(dcj): call_once is process-scoped and assumes single initialization.
+    // This can be problematic if the CUDA backend is initialized multiple
+    // times within the same process (e.g. in unit tests).
     std::call_once(device_stream_flags.at(device.index()), InitSingleStream, device);
     return cuda_streams.at(device.index()).get();
 }
@@ -85,6 +102,7 @@ void CudaGuardImpl::SynchronizeDevice(Device device) const {
 
 // blas
 BlasHandle *CudaGuardImpl::GetBlasHandle(Device device) const {
+    CheckCudaDevice(device);
     std::call_once(device_handle_flags.at(device.index()), InitSingleHandle, device);
     return cuda_blas_handles.at(device.index()).get();
 }
@@ -110,24 +128,32 @@ void CudaGuardImpl::Memcpy(void *dst, const void *src, size_t count, MemcpyKind 
     } else if (kind == MemcpyKind::kD2D) {
         CUDA_CHECK(cudaMemcpy(dst, src, count, cudaMemcpyDeviceToDevice));
     } else {
-        LOG(FATAL) << "Invalid MemcpyKind";
+        LOG(FATAL) << std::format("CudaGuardImpl::Memcpy got invalid MemcpyKind={}", MemcpyKindToString(kind));
     }
 }
 
 void CudaGuardImpl::MemcpyAsync(void *dst, const void *src, size_t count, MemcpyKind kind, Stream *stream) {
     cudaStream_t cuda_stream = dynamic_cast<CudaStream *>(stream)->cuda_stream();
-    if (kind == MemcpyKind::kH2D) {
+
+    switch (kind) {
+    case MemcpyKind::kH2D:
         CUDA_CHECK(cudaMemcpyAsync(dst, src, count, cudaMemcpyHostToDevice, cuda_stream));
-    } else if (kind == MemcpyKind::kD2H) {
+        break;
+    case MemcpyKind::kD2H:
         CUDA_CHECK(cudaMemcpyAsync(dst, src, count, cudaMemcpyDeviceToHost, cuda_stream));
-    } else if (kind == MemcpyKind::kD2D) {
+        break;
+    case MemcpyKind::kD2D:
         CUDA_CHECK(cudaMemcpyAsync(dst, src, count, cudaMemcpyDeviceToDevice, cuda_stream));
-    } else {
-        LOG(FATAL) << "Invalid MemcpyKind";
+        break;
+    default:
+        LOG(FATAL) << std::format("CudaGuardImpl::MemcpyAsync got invalid MemcpyKind={}", MemcpyKindToString(kind));
     }
 }
 
 void CudaGuardImpl::ResetMemPoolHighWatermarks(Device device) const {
+    int current_device = -1;
+    CUDA_CHECK(cudaGetDevice(&current_device));
+
     SetDevice(device);
     cudaMemPool_t pool;
     CUDA_CHECK(cudaDeviceGetDefaultMemPool(&pool, device.index()));
@@ -136,9 +162,14 @@ void CudaGuardImpl::ResetMemPoolHighWatermarks(Device device) const {
     // High watermark can only be reset to zero; non-zero is illegal.
     CUDA_CHECK(cudaMemPoolSetAttribute(pool, cudaMemPoolAttrUsedMemHigh, &zero));
     CUDA_CHECK(cudaMemPoolSetAttribute(pool, cudaMemPoolAttrReservedMemHigh, &zero));
+
+    CUDA_CHECK(cudaSetDevice(current_device));
 }
 
 std::pair<size_t, size_t> CudaGuardImpl::GetMemPoolPeakMB(Device device) const {
+    int current_device = -1;
+    CUDA_CHECK(cudaGetDevice(&current_device));
+
     SetDevice(device);
     cudaMemPool_t pool;
     CUDA_CHECK(cudaDeviceGetDefaultMemPool(&pool, device.index()));
@@ -148,6 +179,8 @@ std::pair<size_t, size_t> CudaGuardImpl::GetMemPoolPeakMB(Device device) const {
 
     cuuint64_t reserved = 0;
     CUDA_CHECK(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrReservedMemHigh, &reserved));
+
+    CUDA_CHECK(cudaSetDevice(current_device));
 
     return std::make_pair<size_t, size_t>(static_cast<size_t>(used / kBytesPerMB),
                                           static_cast<size_t>(reserved / kBytesPerMB));

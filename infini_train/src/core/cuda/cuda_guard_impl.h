@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdint>
-
 #include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
 
@@ -12,7 +10,7 @@ class BlasHandle;
 
 namespace infini_train::core::cuda {
 
-class CudaGuardImpl : public DeviceGuardImpl {
+class CudaGuardImpl final : public DeviceGuardImpl {
 public:
     static void InitSingleStream(Device device);
 
@@ -25,7 +23,7 @@ public:
 
     void SetDevice(Device device) const override;
 
-    int8_t DeviceCount() const override;
+    int DeviceCount() const override;
 
     Device::DeviceType Type() const override;
 

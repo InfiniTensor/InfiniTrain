@@ -4,7 +4,7 @@ namespace infini_train::core {
 
 class BlasHandle {
 public:
-    BlasHandle(){};
+    BlasHandle() = default;
     virtual ~BlasHandle() = default;
 };
 

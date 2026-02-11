@@ -4,6 +4,7 @@ namespace infini_train::core {
 
 class Stream {
 public:
+    Stream() = default;
     virtual ~Stream() = default;
 };
 

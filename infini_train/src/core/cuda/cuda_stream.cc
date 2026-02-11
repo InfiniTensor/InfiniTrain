@@ -5,7 +5,12 @@
 #include "infini_train/include/common/cuda/common_cuda.h"
 
 namespace infini_train::core::cuda {
+
 CudaStream::CudaStream() { CUDA_CHECK(cudaStreamCreate(&stream_)); }
+
+CudaStream::~CudaStream() {
+    // Do nothing.
+}
 
 cudaStream_t CudaStream::cuda_stream() const { return stream_; }
 

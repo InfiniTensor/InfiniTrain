@@ -285,9 +285,7 @@ void Train(const nn::parallel::Rank &rank) {
 
         const bool last_step = step == FLAGS_num_iteration;
 
-        if (device.IsCUDA()) {
-            impl->ResetMemPoolHighWatermarks(device);
-        }
+        impl->ResetMemPoolHighWatermarks(device);
 
         const auto iter_start = std::chrono::high_resolution_clock::now();
 
@@ -378,9 +376,7 @@ void Train(const nn::parallel::Rank &rank) {
 
         if (rank.IsLastRank()) {
             size_t used_mb = 0, reserved_mb = 0;
-            if (device.IsCUDA()) {
-                std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
-            }
+            std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
 
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
                                       "peak used: {:5d} MB | peak reserved: {:5d} MB, DP={}, TP={}, SP={}, PP={})",

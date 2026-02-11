@@ -19,6 +19,21 @@ enum class MemcpyKind : int8_t {
     kInvalid = -1,
 };
 
+inline const char *MemcpyKindToString(MemcpyKind k) {
+    switch (k) {
+    case MemcpyKind::kH2D:
+        return "kH2D";
+    case MemcpyKind::kD2H:
+        return "kD2H";
+    case MemcpyKind::kD2D:
+        return "kD2D";
+    case MemcpyKind::kInvalid:
+        return "kInvalid";
+    default:
+        return "Unknown";
+    }
+}
+
 //
 // ----------------------------------------------------------------------------
 // DeviceGuardImpl: Backend-specific device/stream/memory/BLAS implementation
@@ -56,7 +71,7 @@ public:
 
     virtual void SetDevice(Device device) const;
 
-    virtual int8_t DeviceCount() const;
+    virtual int DeviceCount() const;
 
     virtual Device::DeviceType Type() const = 0;
 
