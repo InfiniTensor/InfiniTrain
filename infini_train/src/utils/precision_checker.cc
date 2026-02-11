@@ -292,12 +292,7 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
         auto &tensor = tensors[i];
 
         // Copy tensor to CPU if it's on GPU
-        std::shared_ptr<Tensor> cpu_tensor;
-        if (tensor->GetDevice().IsCUDA()) {
-            cpu_tensor = std::make_shared<Tensor>(tensor->To(Device()));
-        } else {
-            cpu_tensor = tensor;
-        }
+        std::shared_ptr<Tensor> cpu_tensor = std::make_shared<Tensor>(tensor->To(Device()));
 
         const float *float_data = static_cast<const float *>(cpu_tensor->DataPtr());
         const size_t byte_size = cpu_tensor->SizeInBytes();

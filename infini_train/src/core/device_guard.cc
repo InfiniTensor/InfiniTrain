@@ -11,59 +11,51 @@
 
 namespace infini_train::core {
 
-// DeviceGuardImpl
-void DeviceGuardImpl::SetDevice(Device device) const {
-    LOG(WARNING) << std::format("SetDevice is not supported for device type {} (index {}). "
-                                "The call is ignored.",
-                                static_cast<int>(device.type()), device.index());
+// DeviceGuardImpl (base fallback: FATAL only)
+void DeviceGuardImpl::SetDevice(Device) const { LOG(FATAL) << "DeviceGuardImpl::SetDevice is not implemented."; }
+
+int DeviceGuardImpl::DeviceCount() const {
+    LOG(FATAL) << "DeviceGuardImpl::DeviceCount is not implemented.";
+    return -1; // unreachable
 }
 
-int8_t DeviceGuardImpl::DeviceCount() const { return -1; }
+Stream *DeviceGuardImpl::GetStream(Device) const {
+    LOG(FATAL) << "DeviceGuardImpl::GetStream is not implemented.";
+    return nullptr; // unreachable
+}
 
-Stream *DeviceGuardImpl::GetStream(Device) const { return nullptr; }
-
-void DeviceGuardImpl::SynchronizeDevice(Device device) const {
-    LOG(WARNING) << std::format("SynchronizeDevice is not supported for this device. "
-                                "The call is ignored.",
-                                static_cast<int>(device.type()), device.index());
+void DeviceGuardImpl::SynchronizeDevice(Device) const {
+    LOG(FATAL) << "DeviceGuardImpl::SynchronizeDevice is not implemented.";
 }
 
 void DeviceGuardImpl::SynchronizeStream(Stream *) const {
-    LOG(WARNING) << "SynchronizeStream is not supported for this device. "
-                    "The call is ignored.";
+    LOG(FATAL) << "DeviceGuardImpl::SynchronizeStream is not implemented.";
 }
 
 BlasHandle *DeviceGuardImpl::GetBlasHandle(Device device) const {
-    LOG(FATAL) << std::format("GetBlasHandle is not supported for device type {} (index {}). ",
-                              static_cast<int>(device.type()), device.index());
+    LOG(FATAL) << "DeviceGuardImpl::GetBlasHandle is not implemented.";
+    return nullptr; // unreachable
 }
 
 void DeviceGuardImpl::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
-    LOG(WARNING) << "MallocAsync is not supported on this device. Falling back to blocking Malloc()";
-    Malloc(dev_ptr, size);
+    LOG(FATAL) << "DeviceGuardImpl::MallocAsync is not implemented.";
 }
 
 void DeviceGuardImpl::FreeAsync(void *dev_ptr, Stream *stream) {
-    LOG(WARNING) << "FreeAsync is not supported on this device. Falling back to blocking Free()";
-    Free(dev_ptr);
+    LOG(FATAL) << "DeviceGuardImpl::FreeAsync is not implemented";
 }
 
 void DeviceGuardImpl::MemcpyAsync(void *dst, const void *src, size_t count, MemcpyKind kind, Stream *stream) {
-    LOG(WARNING) << "MemcpyAsync is not supported on this device. Falling back to blocking Memcpy()";
-    Memcpy(dst, src, count, kind);
+    LOG(FATAL) << "DeviceGuardImpl::MemcpyAsync is not implemented";
 }
 
 void DeviceGuardImpl::ResetMemPoolHighWatermarks(Device device) const {
-    LOG(WARNING) << std::format("ResetMemPoolHighWatermarks is not supported for device type {} (index {}). "
-                                "The call is ignored.",
-                                static_cast<int>(device.type()), device.index());
+    LOG(FATAL) << "DeviceGuardImpl::ResetMemPoolHighWatermarks is not implemented.";
 }
 
 std::pair<size_t, size_t> DeviceGuardImpl::GetMemPoolPeakMB(Device device) const {
-    LOG(WARNING) << std::format("GetMemPoolPeakMB is not supported for device type {} (index {}). "
-                                "Returning {{0, 0}}.",
-                                static_cast<int>(device.type()), device.index());
-    return {0, 0};
+    LOG(FATAL) << "DeviceGuardImpl::GetMemPoolPeakMB is not implemented for device type {} (index {}).";
+    return {0, 0}; // unreachable
 }
 
 // DeviceGuard
