@@ -197,3 +197,7 @@ target_link_libraries(test_hook infini_train)
 
 add_executable(test_precision_check test/hook/test_precision_check.cc)
 target_link_libraries(test_precision_check infini_train)
+
+add_executable(test_lora test/lora/test_lora.cc)
+target_link_libraries(test_lora infini_train)
+
