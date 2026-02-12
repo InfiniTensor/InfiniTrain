@@ -9,6 +9,7 @@
 #include "infini_train/include/device.h"
 
 #include "infini_train/src/core/cuda/cuda_blas_handle.h"
+#include "infini_train/src/core/cuda/cuda_event.h"
 #include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::core::cuda {
@@ -27,6 +28,18 @@ inline void CheckCudaDevice(Device device) {
         "CudaGuardImpl expects CUDA device, but got type={} index={}", static_cast<int>(device.type()), device.index());
     const int idx = device.index();
     CHECK(idx >= 0 && idx < kMaxGpus) << std::format("CUDA device index {} out of cache range [0, {}).", idx, kMaxGpus);
+}
+
+inline cudaEvent_t GetCudaEvent(Event *event) {
+    auto *cuda_event = dynamic_cast<CudaEvent *>(event);
+    CHECK_NOTNULL(cuda_event);
+    return cuda_event->cuda_event();
+}
+
+inline cudaStream_t GetCudaStream(Stream *stream) {
+    auto *cuda_stream = dynamic_cast<CudaStream *>(stream);
+    CHECK_NOTNULL(cuda_stream);
+    return cuda_stream->cuda_stream();
 }
 } // namespace
 
@@ -88,7 +101,96 @@ Stream *CudaGuardImpl::GetStream(Device device) const {
     return cuda_streams.at(device.index()).get();
 }
 
+Stream *CudaGuardImpl::CreateStream(Device device) const {
+    CheckCudaDevice(device);
+    int current_device = -1;
+    CUDA_CHECK(cudaGetDevice(&current_device));
+    CUDA_CHECK(cudaSetDevice(device.index()));
+
+    Stream *stream = new CudaStream();
+
+    CUDA_CHECK(cudaSetDevice(current_device));
+    return stream;
+}
+
+Stream *CudaGuardImpl::CreateStreamWithPriority(Device device, int priority) const {
+    CheckCudaDevice(device);
+    int current_device = -1;
+    CUDA_CHECK(cudaGetDevice(&current_device));
+    CUDA_CHECK(cudaSetDevice(device.index()));
+
+    Stream *stream = new CudaStream();
+
+    CUDA_CHECK(cudaSetDevice(current_device));
+    return stream;
+}
+
+void CudaGuardImpl::DestroyStream(Stream *stream) const {
+    if (stream == nullptr) {
+        return;
+    }
+    auto *cuda_stream = dynamic_cast<CudaStream *>(stream);
+    CHECK_NOTNULL(cuda_stream);
+    delete cuda_stream;
+}
+
 // event
+void CudaGuardImpl::EventCreate(Event **event) const { *event = new CudaEvent(); }
+
+void CudaGuardImpl::EventCreateWithFlags(Event **event, uint32_t flags) const { *event = new CudaEvent(flags); }
+
+void CudaGuardImpl::EventDestroy(Event *event) const {
+    if (event == nullptr) {
+        return;
+    }
+    delete event;
+}
+
+void CudaGuardImpl::EventRecord(Event *event, Stream *stream) const {
+    auto cuda_event = GetCudaEvent(event);
+    auto cuda_stream = GetCudaStream(stream);
+    CUDA_CHECK(cudaEventRecord(cuda_event, cuda_stream));
+}
+
+void CudaGuardImpl::StreamWaitEvent(Stream *stream, Event *event, uint32_t flags) const {
+    auto cuda_event = GetCudaEvent(event);
+    auto cuda_stream = GetCudaStream(stream);
+    CUDA_CHECK(cudaStreamWaitEvent(cuda_stream, cuda_event, flags));
+}
+
+RuntimeStatus CudaGuardImpl::EventSynchronize(Event *event) const {
+    auto cuda_event = GetCudaEvent(event);
+    cudaError_t status = cudaEventSynchronize(cuda_event);
+    if (status == cudaSuccess) {
+        return RuntimeStatus::kSuccess;
+    }
+    if (status == cudaErrorNotReady) {
+        return RuntimeStatus::kNotReady;
+    }
+    LOG(ERROR) << "CudaGuardImpl::EventSynchronize failed: " << cudaGetErrorString(status);
+    return RuntimeStatus::kError;
+}
+
+RuntimeStatus CudaGuardImpl::EventQuery(Event *event) const {
+    auto cuda_event = GetCudaEvent(event);
+    cudaError_t status = cudaEventQuery(cuda_event);
+    if (status == cudaSuccess) {
+        return RuntimeStatus::kSuccess;
+    }
+    if (status == cudaErrorNotReady) {
+        return RuntimeStatus::kNotReady;
+    }
+    LOG(ERROR) << "CudaGuardImpl::EventQuery failed: " << cudaGetErrorString(status);
+    return RuntimeStatus::kError;
+}
+
+float CudaGuardImpl::EventElapsedTime(Event *start_event, Event *stop_event) const {
+    auto start_cuda_event = GetCudaEvent(start_event);
+    auto stop_cuda_event = GetCudaEvent(stop_event);
+    float elapsed_ms = 0.0f;
+    CUDA_CHECK(cudaEventElapsedTime(&elapsed_ms, start_cuda_event, stop_cuda_event));
+    return elapsed_ms;
+}
 
 // sync
 void CudaGuardImpl::SynchronizeDevice(Device device) const {
@@ -111,13 +213,15 @@ BlasHandle *CudaGuardImpl::GetBlasHandle(Device device) const {
 void CudaGuardImpl::Malloc(void **dev_ptr, size_t size) { CUDA_CHECK(cudaMalloc(dev_ptr, size)); }
 
 void CudaGuardImpl::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
-    CUDA_CHECK(cudaMallocAsync(dev_ptr, size, dynamic_cast<CudaStream *>(stream)->cuda_stream()));
+    auto cuda_stream = GetCudaStream(stream);
+    CUDA_CHECK(cudaMallocAsync(dev_ptr, size, cuda_stream));
 }
 
 void CudaGuardImpl::Free(void *dev_ptr) { CUDA_CHECK(cudaFree(dev_ptr)); }
 
 void CudaGuardImpl::FreeAsync(void *dev_ptr, Stream *stream) {
-    CUDA_CHECK(cudaFreeAsync(dev_ptr, dynamic_cast<CudaStream *>(stream)->cuda_stream()));
+    auto cuda_stream = GetCudaStream(stream);
+    CUDA_CHECK(cudaFreeAsync(dev_ptr, cuda_stream));
 }
 
 void CudaGuardImpl::Memcpy(void *dst, const void *src, size_t count, MemcpyKind kind) {
@@ -133,7 +237,7 @@ void CudaGuardImpl::Memcpy(void *dst, const void *src, size_t count, MemcpyKind 
 }
 
 void CudaGuardImpl::MemcpyAsync(void *dst, const void *src, size_t count, MemcpyKind kind, Stream *stream) {
-    cudaStream_t cuda_stream = dynamic_cast<CudaStream *>(stream)->cuda_stream();
+    auto cuda_stream = GetCudaStream(stream);
 
     switch (kind) {
     case MemcpyKind::kH2D:
