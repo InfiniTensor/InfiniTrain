@@ -1,123 +1,126 @@
 #include "infini_train/include/nn/parallel/work.h"
 
+#include <stdexcept>
+#include <string>
+#include <thread>
+
 #include "glog/logging.h"
 
-#ifdef USE_CUDA
-#include "infini_train/include/common/cuda/common_cuda.h"
-#endif
+#include "infini_train/include/core/ccl/ccl.h"
 #include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
 
-#include "infini_train/src/core/cuda/cuda_stream.h"
-
 namespace infini_train::nn::parallel {
-#ifdef USE_NCCL
 namespace {
-std::exception_ptr makeCudaError(cudaError_t err) {
-    return std::make_exception_ptr(std::runtime_error(cudaGetErrorString(err)));
+std::exception_ptr makeRuntimeError(const char *api, core::RuntimeStatus status) {
+    return std::make_exception_ptr(
+        std::runtime_error(std::string(api) + " failed with status " + core::RuntimeStatusToString(status)));
 }
 } // namespace
 
-WorkNccl::WorkNccl(Device device, ncclComm_t comm) : device_(device), comm_(comm) {
-    CUDA_CHECK(cudaEventCreateWithFlags(&ready_event_, cudaEventDisableTiming));
-    CUDA_CHECK(cudaEventCreateWithFlags(&done_event_, cudaEventDisableTiming));
+Work::Work(Device device, core::CclComm *comm) : device_(device), comm_(comm) {
+    auto *impl = core::GetDeviceGuardImpl(device_.type());
+    impl->EventCreate(&ready_event_);
+    impl->EventCreate(&done_event_);
 }
 
-WorkNccl::~WorkNccl() {
+Work::~Work() {
+    auto *impl = core::GetDeviceGuardImpl(device_.type());
     if (ready_event_) {
-        CUDA_CHECK(cudaEventDestroy(ready_event_));
+        impl->EventDestroy(ready_event_);
     }
     if (done_event_) {
-        CUDA_CHECK(cudaEventDestroy(done_event_));
+        impl->EventDestroy(done_event_);
     }
 }
 
-bool WorkNccl::WaitBlocking(std::chrono::milliseconds timeout) {
-    // Block wait on host
+bool Work::WaitBlocking(std::chrono::milliseconds timeout) {
     core::DeviceGuard guard(device_);
+    auto *impl = core::GetDeviceGuardImpl(device_.type());
 
-    // If timeout is not set, then wait till it finishes
     if (timeout <= std::chrono::milliseconds::zero()) {
-        if (auto status = cudaEventSynchronize(done_event_); status != cudaSuccess) {
-            SetException(makeCudaError(status));
+        if (const auto status = impl->EventSynchronize(done_event_); status != core::RuntimeStatus::kSuccess) {
+            SetException(makeRuntimeError("EventSynchronize", status));
             return false;
         }
-        // Check NCCL status
-        return CheckNcclStatus();
+        return CheckCclStatus();
     }
 
-    // If timeout is set, keep querying till time's up
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
-        cudaError_t query = cudaEventQuery(done_event_);
-        if (query == cudaSuccess) {
-            return CheckNcclStatus();
+        const auto query = impl->EventQuery(done_event_);
+        if (query == core::RuntimeStatus::kSuccess) {
+            return CheckCclStatus();
         }
-        if (query != cudaErrorNotReady) {
-            SetException(makeCudaError(query));
+        if (query != core::RuntimeStatus::kNotReady) {
+            SetException(makeRuntimeError("EventQuery", query));
             return false;
         }
-        // NOTE(zbl): sleep for a while in case of busy waiting
         std::this_thread::sleep_for(std::chrono::microseconds(50));
     }
 
-    if (exception_) {
-        // NOTE(zbl): do not throw any c++ exception
-        LOG(FATAL) << "Error occurs while wait(). ";
-    }
-
     return false;
 }
 
-bool WorkNccl::WaitNonBlocking() {
-    // Non-blocking wait on compute stream
+bool Work::WaitNonBlocking() {
     core::DeviceGuard guard(device_);
-    CUDA_CHECK(cudaStreamWaitEvent(dynamic_cast<infini_train::core::cuda::CudaStream *>(
-                                       core::GetDeviceGuardImpl(device_.type())->GetStream(device_))
-                                       ->cuda_stream(),
-                                   done_event_, 0));
+    auto *impl = core::GetDeviceGuardImpl(device_.type());
+    auto *stream = impl->GetStream(device_);
+    impl->StreamWaitEvent(stream, done_event_, 0);
     return true;
 }
 
-void WorkNccl::Synchronize() const { CUDA_CHECK(cudaEventSynchronize(done_event_)); }
+void Work::Synchronize() const {
+    core::DeviceGuard guard(device_);
+    auto *impl = core::GetDeviceGuardImpl(device_.type());
+    const auto status = impl->EventSynchronize(done_event_);
+    CHECK(status == core::RuntimeStatus::kSuccess)
+        << "Work::Synchronize failed, status=" << core::RuntimeStatusToString(status);
+}
 
-bool WorkNccl::IsCompleted() const {
+bool Work::IsCompleted() const {
     if (completed_.load(std::memory_order_acquire)) {
         return true;
     }
-    cudaError_t query = cudaEventQuery(done_event_);
-    if (query == cudaSuccess) {
-        const_cast<WorkNccl *>(this)->completed_.store(true, std::memory_order_release);
-        const_cast<WorkNccl *>(this)->success_.store(true, std::memory_order_release);
+
+    core::DeviceGuard guard(device_);
+    auto *impl = core::GetDeviceGuardImpl(device_.type());
+    const auto query = impl->EventQuery(done_event_);
+    if (query == core::RuntimeStatus::kSuccess) {
+        const_cast<Work *>(this)->CheckCclStatus();
         return true;
     }
-    if (query != cudaErrorNotReady) {
-        const_cast<WorkNccl *>(this)->SetException(makeCudaError(query));
+    if (query != core::RuntimeStatus::kNotReady) {
+        const_cast<Work *>(this)->SetException(makeRuntimeError("EventQuery", query));
         return true;
     }
     return false;
 }
 
-bool WorkNccl::IsSuccess() const {
+bool Work::IsSuccess() const {
     if (!IsCompleted()) {
         return false;
     }
     return success_.load(std::memory_order_acquire) && !exception_;
 }
 
-bool WorkNccl::CheckNcclStatus() {
-    ncclResult_t async_error;
-    if (comm_ && ncclCommGetAsyncError(comm_, &async_error) == ncclSuccess && async_error != ncclSuccess) {
-        SetException(std::make_exception_ptr(
-            std::runtime_error(std::string("NCCL async error: ") + ncclGetErrorString(async_error))));
-        return false;
+bool Work::CheckCclStatus() {
+    if (comm_ != nullptr) {
+        auto *impl = core::GetCclImpl(device_.type());
+        core::CclStatus async_error = core::CclStatus::kSuccess;
+        impl->CommGetAsyncError(comm_, &async_error);
+        if (async_error != core::CclStatus::kSuccess) {
+            SetException(std::make_exception_ptr(
+                std::runtime_error(std::string("CCL async error: ") + core::CclStatusToString(async_error))));
+            return false;
+        }
     }
     success_.store(true, std::memory_order_release);
     completed_.store(true, std::memory_order_release);
     return true;
 }
 
-void WorkNccl::SetException(std::exception_ptr e) {
+void Work::SetException(std::exception_ptr e) {
     std::lock_guard<std::mutex> g(mutex_);
     if (!exception_) {
         exception_ = std::move(e);
@@ -125,6 +128,5 @@ void WorkNccl::SetException(std::exception_ptr e) {
     completed_.store(true, std::memory_order_release);
     success_.store(false, std::memory_order_release);
 }
-#endif
 
 } // namespace infini_train::nn::parallel

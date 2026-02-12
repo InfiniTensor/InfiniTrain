@@ -4,6 +4,8 @@
 #include <memory>
 #include <unordered_map>
 
+#include "infini_train/include/core/event.h"
+#include "infini_train/include/core/runtime_status.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train::core {
@@ -55,8 +57,6 @@ inline const char *MemcpyKindToString(MemcpyKind k) {
 // DeviceGuard (the public RAII wrapper) forwards calls to the DeviceGuardImpl
 // instance registered for the device type.
 //
-// TODO(dcj): add event management
-//
 class DeviceGuardImpl {
 public:
     DeviceGuardImpl() {}
@@ -80,6 +80,32 @@ public:
     // ----------------------------------------------------------------------
 
     virtual Stream *GetStream(Device) const;
+
+    virtual Stream *CreateStream(Device) const;
+
+    virtual Stream *CreateStreamWithPriority(Device, int priority) const;
+
+    virtual void DestroyStream(Stream *) const;
+
+    // ----------------------------------------------------------------------
+    // Event management
+    // ----------------------------------------------------------------------
+
+    virtual void EventCreate(Event **event) const;
+
+    virtual void EventCreateWithFlags(Event **event, uint32_t flags) const;
+
+    virtual void EventDestroy(Event *event) const;
+
+    virtual void EventRecord(Event *event, Stream *stream) const;
+
+    virtual void StreamWaitEvent(Stream *stream, Event *event, uint32_t flags) const;
+
+    virtual RuntimeStatus EventSynchronize(Event *event) const;
+
+    virtual RuntimeStatus EventQuery(Event *event) const;
+
+    virtual float EventElapsedTime(Event *start_event, Event *stop_event) const;
 
     // ----------------------------------------------------------------------
     // Synchronization

@@ -30,7 +30,28 @@ public:
     // stream
     Stream *GetStream(Device device) const override;
 
+    Stream *CreateStream(Device device) const override;
+
+    Stream *CreateStreamWithPriority(Device device, int priority) const override;
+
+    void DestroyStream(Stream *stream) const override;
+
     // event
+    void EventCreate(Event **event) const override;
+
+    void EventCreateWithFlags(Event **event, uint32_t flags) const override;
+
+    void EventDestroy(Event *event) const override;
+
+    void EventRecord(Event *event, Stream *stream) const override;
+
+    void StreamWaitEvent(Stream *stream, Event *event, uint32_t flags) const override;
+
+    RuntimeStatus EventSynchronize(Event *event) const override;
+
+    RuntimeStatus EventQuery(Event *event) const override;
+
+    float EventElapsedTime(Event *start_event, Event *stop_event) const override;
 
     // sync
     void SynchronizeDevice(Device device) const override;

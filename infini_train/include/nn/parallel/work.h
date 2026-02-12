@@ -5,69 +5,44 @@
 #include <exception>
 #include <mutex>
 
-#ifdef USE_CUDA
-#include <cuda_runtime.h>
-#endif
-#ifdef USE_NCCL
-#include <nccl.h>
-#endif
-
+#include "infini_train/include/core/ccl/ccl_common.h"
+#include "infini_train/include/core/event.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train::nn::parallel {
 
 class Work {
 public:
-    virtual ~Work() = default;
+    explicit Work(Device device, core::CclComm *comm = nullptr);
+    ~Work();
 
-    virtual bool WaitBlocking(std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) = 0;
-    virtual bool WaitNonBlocking() = 0;
+    bool WaitBlocking(std::chrono::milliseconds timeout = std::chrono::milliseconds::zero());
+    bool WaitNonBlocking();
 
-    virtual bool IsCompleted() const = 0;
-    virtual bool IsSuccess() const = 0;
+    bool IsCompleted() const;
+    bool IsSuccess() const;
 
-    virtual void Synchronize() const = 0;
+    void Synchronize() const;
 
-    virtual std::exception_ptr exception() const = 0;
+    std::exception_ptr exception() const { return exception_; }
 
-    virtual void *ready_event() const = 0;
-    virtual void *done_event() const = 0;
-};
-
-#ifdef USE_NCCL
-class WorkNccl final : public Work {
-public:
-    WorkNccl(Device device, ncclComm_t comm);
-    ~WorkNccl() override;
-
-    bool WaitBlocking(std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) override;
-    bool WaitNonBlocking() override;
-
-    bool IsCompleted() const override;
-    bool IsSuccess() const override;
-
-    void Synchronize() const override;
-
-    std::exception_ptr exception() const override { return exception_; };
-
-    void *ready_event() const override { return reinterpret_cast<void *>(ready_event_); };
-    void *done_event() const override { return reinterpret_cast<void *>(done_event_); };
+    core::Event *ready_event() const { return ready_event_; }
+    core::Event *done_event() const { return done_event_; }
 
 private:
-    bool CheckNcclStatus();
+    bool CheckCclStatus();
     void SetException(std::exception_ptr e);
 
 private:
     Device device_;
-    cudaEvent_t ready_event_;
-    cudaEvent_t done_event_;
-    ncclComm_t comm_;
+    core::Event *ready_event_ = nullptr;
+    core::Event *done_event_ = nullptr;
+    core::CclComm *comm_ = nullptr;
 
     mutable std::mutex mutex_;
     std::exception_ptr exception_;
     std::atomic<bool> completed_{false};
     std::atomic<bool> success_{false};
 };
-#endif
 
 } // namespace infini_train::nn::parallel
