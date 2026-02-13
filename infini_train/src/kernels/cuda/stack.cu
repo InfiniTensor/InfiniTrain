@@ -67,14 +67,14 @@ std::shared_ptr<Tensor> StackForward(const std::vector<std::shared_ptr<Tensor>> 
             for (const auto &t : inputs) { host_input_ptrs.push_back(static_cast<const T *>(t->DataPtr())); }
 
             const T **device_input_ptrs;
-            cudaMallocAsync(&device_input_ptrs, sizeof(T *) * num_inputs, stream);
-            cudaMemcpyAsync(device_input_ptrs, host_input_ptrs.data(), sizeof(T *) * num_inputs, cudaMemcpyHostToDevice,
-                            stream);
+            CUDA_CHECK(cudaMallocAsync(&device_input_ptrs, sizeof(T *) * num_inputs, stream));
+            CUDA_CHECK(cudaMemcpy(device_input_ptrs, host_input_ptrs.data(), sizeof(T *) * num_inputs,
+                                  cudaMemcpyHostToDevice));
 
             StackForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
                 device_input_ptrs, static_cast<T *>(output->DataPtr()), N, D, num_inputs);
 
-            cudaFreeAsync(device_input_ptrs, stream);
+            CUDA_CHECK(cudaFreeAsync(device_input_ptrs, stream));
         },
         "CUDA StackForward");
 
@@ -136,13 +136,13 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
             for (auto &t : grads) { host_ptrs.push_back(static_cast<T *>(t->DataPtr())); }
 
             T **device_ptrs;
-            cudaMallocAsync(&device_ptrs, sizeof(T *) * num_inputs, stream);
-            cudaMemcpyAsync(device_ptrs, host_ptrs.data(), sizeof(T *) * num_inputs, cudaMemcpyHostToDevice, stream);
+            CUDA_CHECK(cudaMallocAsync(&device_ptrs, sizeof(T *) * num_inputs, stream));
+            CUDA_CHECK(cudaMemcpy(device_ptrs, host_ptrs.data(), sizeof(T *) * num_inputs, cudaMemcpyHostToDevice));
 
             StackBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), device_ptrs, N, D, num_inputs);
 
-            cudaFreeAsync(device_ptrs, stream);
+            CUDA_CHECK(cudaFreeAsync(device_ptrs, stream));
         },
         "CUDA StackBackward");
 

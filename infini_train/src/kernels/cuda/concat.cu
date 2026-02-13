@@ -113,12 +113,12 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
             int64_t *device_offsets = nullptr;
 
             CUDA_CHECK(cudaMallocAsync(&device_input_ptrs, sizeof(T *) * num_inputs, stream));
-            CUDA_CHECK(cudaMemcpyAsync(device_input_ptrs, host_input_ptrs.data(), sizeof(T *) * num_inputs,
-                                       cudaMemcpyHostToDevice, stream));
+            CUDA_CHECK(cudaMemcpy(device_input_ptrs, host_input_ptrs.data(), sizeof(T *) * num_inputs,
+                                  cudaMemcpyHostToDevice));
 
             CUDA_CHECK(cudaMallocAsync(&device_offsets, sizeof(int64_t) * (num_inputs + 1), stream));
-            CUDA_CHECK(cudaMemcpyAsync(device_offsets, host_offsets.data(), sizeof(int64_t) * (num_inputs + 1),
-                                       cudaMemcpyHostToDevice, stream));
+            CUDA_CHECK(cudaMemcpy(device_offsets, host_offsets.data(), sizeof(int64_t) * (num_inputs + 1),
+                                  cudaMemcpyHostToDevice));
 
             ConcatForwardKernel<T><<<num_blocks, threads_per_block, 0, stream>>>(
                 device_input_ptrs, static_cast<T *>(output->DataPtr()), device_offsets, N, D, num_inputs, K_total);
@@ -219,12 +219,11 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
             int64_t *device_offsets = nullptr;
 
             CUDA_CHECK(cudaMallocAsync(&device_ptrs, sizeof(T *) * num_inputs, stream));
-            CUDA_CHECK(cudaMemcpyAsync(device_ptrs, host_ptrs.data(), sizeof(T *) * num_inputs, cudaMemcpyHostToDevice,
-                                       stream));
+            CUDA_CHECK(cudaMemcpy(device_ptrs, host_ptrs.data(), sizeof(T *) * num_inputs, cudaMemcpyHostToDevice));
 
             CUDA_CHECK(cudaMallocAsync(&device_offsets, sizeof(int64_t) * (num_inputs + 1), stream));
-            CUDA_CHECK(cudaMemcpyAsync(device_offsets, host_offsets.data(), sizeof(int64_t) * (num_inputs + 1),
-                                       cudaMemcpyHostToDevice, stream));
+            CUDA_CHECK(cudaMemcpy(device_offsets, host_offsets.data(), sizeof(int64_t) * (num_inputs + 1),
+                                  cudaMemcpyHostToDevice));
 
             ConcatBackwardKernel<T><<<num_blocks, threads_per_block, 0, stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), device_ptrs, device_offsets, N, D, num_inputs, K_total);

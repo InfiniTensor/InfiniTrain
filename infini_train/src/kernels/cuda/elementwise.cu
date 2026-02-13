@@ -107,7 +107,7 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
         auto out_stride_host = ComputeStrides(out_shape);
 
         int64_t *device_buffer;
-        cudaMallocAsync(&device_buffer, 5 * ndim * sizeof(int64_t), cuda_stream);
+        CUDA_CHECK(cudaMallocAsync(&device_buffer, 5 * ndim * sizeof(int64_t), cuda_stream));
 
         int64_t *device_a_strides, *device_b_strides, *device_out_strides, *device_a_shape, *device_b_shape;
         device_a_strides = device_buffer + ndim * 0;
@@ -123,8 +123,7 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
         host_buffer.insert(host_buffer.end(), a_shape.begin(), a_shape.end());
         host_buffer.insert(host_buffer.end(), b_shape.begin(), b_shape.end());
 
-        cudaMemcpyAsync(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice,
-                        cuda_stream);
+        CUDA_CHECK(cudaMemcpy(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice));
 
         LaunchKernel<BLOCK_SIZE, T>(
             [&](dim3 grid, dim3 block, size_t offset, const T *a_ptr, const T *b_ptr) {
@@ -134,7 +133,7 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
             },
             output, inputs...);
 
-        cudaFreeAsync(device_buffer, cuda_stream);
+        CUDA_CHECK(cudaFreeAsync(device_buffer, cuda_stream));
     } else {
         static_assert(sizeof...(inputs) == 1 || sizeof...(inputs) == 2,
                       "LaunchForward currently only supports unary and binary operations.");
@@ -538,7 +537,7 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     auto out_stride_host = ComputeStrides(out_shape);
 
     int64_t *device_buffer;
-    cudaMallocAsync(&device_buffer, 5 * ndim * sizeof(int64_t), stream);
+    CUDA_CHECK(cudaMallocAsync(&device_buffer, 5 * ndim * sizeof(int64_t), stream));
 
     int64_t *device_a_strides, *device_b_strides, *device_out_strides, *device_a_shape, *device_b_shape;
     device_a_strides = device_buffer + ndim * 0;
@@ -554,7 +553,7 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     host_buffer.insert(host_buffer.end(), a_shape.begin(), a_shape.end());
     host_buffer.insert(host_buffer.end(), b_shape.begin(), b_shape.end());
 
-    cudaMemcpyAsync(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
+    CUDA_CHECK(cudaMemcpy(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice));
 
     const size_t num_elements = grad_output->NumElements();
 
@@ -616,7 +615,7 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
             },
             output_a, inputs...);
     }
-    cudaFreeAsync(device_buffer, stream);
+    CUDA_CHECK(cudaFreeAsync(device_buffer, stream));
 }
 
 template <typename Func> std::shared_ptr<Tensor> UnaryForward(const std::shared_ptr<Tensor> &input, Func unary_fn) {
