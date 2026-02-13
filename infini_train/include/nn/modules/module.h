@@ -57,6 +57,7 @@ public:
     std::vector<std::shared_ptr<Module>> modules();
     std::shared_ptr<Module> mutable_module(const std::string &name);
     const Module &module(const std::string &name) const;
+    void replace_module(const std::string &name, std::shared_ptr<Module> new_module);
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
 
