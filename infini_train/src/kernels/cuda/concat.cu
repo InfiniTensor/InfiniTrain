@@ -125,6 +125,10 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
 
             CUDA_CHECK(cudaFreeAsync(device_input_ptrs, stream));
             CUDA_CHECK(cudaFreeAsync(device_offsets, stream));
+            // NOTE(dcj):
+            // Synchronize the stream here to ensure all preceding H2D/D2H memcpy
+            // operations have completed before the host buffers go out of scope.
+            CUDA_CHECK(cudaStreamSynchronize(stream));
         },
         "CUDA ConcatForward");
 
@@ -230,6 +234,10 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
 
             CUDA_CHECK(cudaFreeAsync(device_ptrs, stream));
             CUDA_CHECK(cudaFreeAsync(device_offsets, stream));
+            // NOTE(dcj):
+            // Synchronize the stream here to ensure all preceding H2D/D2H memcpy
+            // operations have completed before the host buffers go out of scope.
+            CUDA_CHECK(cudaStreamSynchronize(stream));
         },
         "CUDA ConcatBackward");
 

@@ -50,8 +50,10 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
     core::DeviceGuard guard(device);
     auto impl = core::GetDeviceGuardImpl(device.type());
 
-    impl->Memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                 device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D);
+    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
+                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
+                      impl->GetStream(device));
+    impl->SynchronizeStream(impl->GetStream(device));
     return tensor;
 }
 
@@ -142,8 +144,10 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
     core::DeviceGuard guard(device);
     auto impl = core::GetDeviceGuardImpl(device.type());
 
-    impl->Memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                 device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D);
+    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
+                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
+                      impl->GetStream(device));
+    impl->SynchronizeStream(impl->GetStream(device));
 
     return tensor;
 }
@@ -159,8 +163,10 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {
 
     auto impl = core::GetDeviceGuardImpl(device.type());
 
-    impl->Memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                 device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D);
+    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
+                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
+                      impl->GetStream(device));
+    impl->SynchronizeStream(impl->GetStream(device));
 
     return tensor;
 }
@@ -176,8 +182,10 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
 
     auto impl = core::GetDeviceGuardImpl(device.type());
 
-    impl->Memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                 device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D);
+    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
+                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
+                      impl->GetStream(device));
+    impl->SynchronizeStream(impl->GetStream(device));
 
     return tensor;
 }
@@ -186,7 +194,8 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
     case DATA_TYPE: {                                                                                                  \
         std::vector<TYPE> buffer(num_elements);                                                                        \
         std::iota(buffer.begin(), buffer.end(), static_cast<TYPE>(start));                                             \
-        impl->Memcpy(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE), kind);                             \
+        impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE), kind, stream);                \
+        impl->SynchronizeStream(stream);                                                                               \
         break;                                                                                                         \
     }
 
@@ -198,6 +207,7 @@ std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, Devic
     auto *impl = core::GetDeviceGuardImpl(device.type());
 
     const core::MemcpyKind kind = device.IsCPU() ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D;
+    core::Stream *stream = impl->GetStream(device);
 
     switch (dtype) {
         ARANGE_CASE(DataType::kUINT8, uint8_t)

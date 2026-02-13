@@ -123,7 +123,8 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
         host_buffer.insert(host_buffer.end(), a_shape.begin(), a_shape.end());
         host_buffer.insert(host_buffer.end(), b_shape.begin(), b_shape.end());
 
-        CUDA_CHECK(cudaMemcpy(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpyAsync(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t),
+                                   cudaMemcpyHostToDevice, cuda_stream));
 
         LaunchKernel<BLOCK_SIZE, T>(
             [&](dim3 grid, dim3 block, size_t offset, const T *a_ptr, const T *b_ptr) {
@@ -134,6 +135,11 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
             output, inputs...);
 
         CUDA_CHECK(cudaFreeAsync(device_buffer, cuda_stream));
+
+        // NOTE(dcj):
+        // Synchronize the stream here to ensure all preceding H2D/D2H memcpy
+        // operations have completed before the host buffers go out of scope.
+        CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
     } else {
         static_assert(sizeof...(inputs) == 1 || sizeof...(inputs) == 2,
                       "LaunchForward currently only supports unary and binary operations.");
@@ -553,7 +559,8 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     host_buffer.insert(host_buffer.end(), a_shape.begin(), a_shape.end());
     host_buffer.insert(host_buffer.end(), b_shape.begin(), b_shape.end());
 
-    CUDA_CHECK(cudaMemcpy(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice));
+    CUDA_CHECK(
+        cudaMemcpyAsync(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice, stream));
 
     const size_t num_elements = grad_output->NumElements();
 
@@ -616,6 +623,10 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
             output_a, inputs...);
     }
     CUDA_CHECK(cudaFreeAsync(device_buffer, stream));
+    // NOTE(dcj):
+    // Synchronize the stream here to ensure all preceding H2D/D2H memcpy
+    // operations have completed before the host buffers go out of scope.
+    CUDA_CHECK(cudaStreamSynchronize(stream));
 }
 
 template <typename Func> std::shared_ptr<Tensor> UnaryForward(const std::shared_ptr<Tensor> &input, Func unary_fn) {

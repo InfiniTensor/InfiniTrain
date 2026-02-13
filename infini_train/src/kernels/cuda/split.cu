@@ -137,14 +137,15 @@ std::shared_ptr<Tensor> LaunchSplitBackward(const std::vector<int64_t> &input_di
     device_grad_output_ptrs = (const T **)(device_ptr);
     device_H_outs = reinterpret_cast<int64_t *>(device_grad_output_ptrs + num_splits);
 
-    CUDA_CHECK(cudaMemcpy(device_grad_output_ptrs, host_grad_output_ptrs.data(), sizeof(T *) * num_splits,
-                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpyAsync(device_grad_output_ptrs, host_grad_output_ptrs.data(), sizeof(T *) * num_splits,
+                               cudaMemcpyHostToDevice, stream));
 
     // init H_out for each split
     std::vector<int64_t> H_outs(num_splits);
     for (int i = 0; i < num_splits; ++i) { H_outs[i] = std::min(split_size, H_in - i * split_size); }
 
-    CUDA_CHECK(cudaMemcpy(device_H_outs, H_outs.data(), sizeof(int64_t) * num_splits, cudaMemcpyHostToDevice));
+    CUDA_CHECK(
+        cudaMemcpyAsync(device_H_outs, H_outs.data(), sizeof(int64_t) * num_splits, cudaMemcpyHostToDevice, stream));
 
     int64_t total_elements = N * H_in * W;
     int threads_per_block = 256;
@@ -155,6 +156,11 @@ std::shared_ptr<Tensor> LaunchSplitBackward(const std::vector<int64_t> &input_di
                                                                       W, split_size, num_splits, device_H_outs);
 
     CUDA_CHECK(cudaFreeAsync(device_ptr, stream));
+
+    // NOTE(dcj):
+    // Synchronize the stream here to ensure all preceding H2D/D2H memcpy
+    // operations have completed before the host buffers go out of scope.
+    CUDA_CHECK(cudaStreamSynchronize(stream));
 
     return grad_input;
 }

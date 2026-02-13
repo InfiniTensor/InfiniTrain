@@ -107,6 +107,12 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
         "CUDA IndexGatherForward");
 
     CUDA_CHECK(cudaFreeAsync(dev_buf, stream));
+
+    // NOTE(dcj):
+    // Synchronize the stream here to ensure all preceding H2D/D2H memcpy
+    // operations have completed before the host buffers go out of scope.
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+
     return out;
 }
 
@@ -214,6 +220,10 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
         "CUDA IndexGatherBackward");
 
     CUDA_CHECK(cudaFreeAsync(dev_buf, stream));
+    // NOTE(dcj):
+    // Synchronize the stream here to ensure all preceding H2D/D2H memcpy
+    // operations have completed before the host buffers go out of scope.
+    CUDA_CHECK(cudaStreamSynchronize(stream));
     return grad_input;
 }
 

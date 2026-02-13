@@ -68,13 +68,18 @@ std::shared_ptr<Tensor> StackForward(const std::vector<std::shared_ptr<Tensor>> 
 
             const T **device_input_ptrs;
             CUDA_CHECK(cudaMallocAsync(&device_input_ptrs, sizeof(T *) * num_inputs, stream));
-            CUDA_CHECK(cudaMemcpy(device_input_ptrs, host_input_ptrs.data(), sizeof(T *) * num_inputs,
-                                  cudaMemcpyHostToDevice));
+            CUDA_CHECK(cudaMemcpyAsync(device_input_ptrs, host_input_ptrs.data(), sizeof(T *) * num_inputs,
+                                       cudaMemcpyHostToDevice, stream));
 
             StackForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
                 device_input_ptrs, static_cast<T *>(output->DataPtr()), N, D, num_inputs);
 
             CUDA_CHECK(cudaFreeAsync(device_input_ptrs, stream));
+
+            // NOTE(dcj):
+            // Synchronize the stream here to ensure all preceding H2D/D2H memcpy
+            // operations have completed before the host buffers go out of scope.
+            CUDA_CHECK(cudaStreamSynchronize(stream));
         },
         "CUDA StackForward");
 
@@ -137,12 +142,18 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
 
             T **device_ptrs;
             CUDA_CHECK(cudaMallocAsync(&device_ptrs, sizeof(T *) * num_inputs, stream));
-            CUDA_CHECK(cudaMemcpy(device_ptrs, host_ptrs.data(), sizeof(T *) * num_inputs, cudaMemcpyHostToDevice));
+            CUDA_CHECK(cudaMemcpyAsync(device_ptrs, host_ptrs.data(), sizeof(T *) * num_inputs, cudaMemcpyHostToDevice,
+                                       stream));
 
             StackBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), device_ptrs, N, D, num_inputs);
 
             CUDA_CHECK(cudaFreeAsync(device_ptrs, stream));
+
+            // NOTE(dcj):
+            // Synchronize the stream here to ensure all preceding H2D/D2H memcpy
+            // operations have completed before the host buffers go out of scope.
+            CUDA_CHECK(cudaStreamSynchronize(stream));
         },
         "CUDA StackBackward");
 
