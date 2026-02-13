@@ -100,6 +100,10 @@ void CudaGuardImpl::SynchronizeDevice(Device device) const {
     SetDevice(original_device);
 }
 
+void CudaGuardImpl::SynchronizeStream(Stream *stream) const {
+    CUDA_CHECK(cudaStreamSynchronize(dynamic_cast<CudaStream *>(stream)->cuda_stream()));
+}
+
 // blas
 BlasHandle *CudaGuardImpl::GetBlasHandle(Device device) const {
     CheckCudaDevice(device);

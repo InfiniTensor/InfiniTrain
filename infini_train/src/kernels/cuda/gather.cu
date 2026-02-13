@@ -89,12 +89,9 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
     int64_t *in_strides_dev = dev_buf + 1 * num_dims;
     int64_t *out_strides_dev = dev_buf + 2 * num_dims;
 
-    CUDA_CHECK(
-        cudaMemcpyAsync(out_dims_dev, idx_dims.data(), num_dims * sizeof(int64_t), cudaMemcpyHostToDevice, stream));
-    CUDA_CHECK(
-        cudaMemcpyAsync(in_strides_dev, in_strides.data(), num_dims * sizeof(int64_t), cudaMemcpyHostToDevice, stream));
-    CUDA_CHECK(cudaMemcpyAsync(out_strides_dev, out_strides.data(), num_dims * sizeof(int64_t), cudaMemcpyHostToDevice,
-                               stream));
+    CUDA_CHECK(cudaMemcpy(out_dims_dev, idx_dims.data(), num_dims * sizeof(int64_t), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(in_strides_dev, in_strides.data(), num_dims * sizeof(int64_t), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(out_strides_dev, out_strides.data(), num_dims * sizeof(int64_t), cudaMemcpyHostToDevice));
 
     const int threads = 256;
     const int blocks = (total_elements + threads - 1) / threads;
@@ -110,6 +107,12 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
         "CUDA IndexGatherForward");
 
     CUDA_CHECK(cudaFreeAsync(dev_buf, stream));
+
+    // NOTE(dcj):
+    // Synchronize the stream here to ensure all preceding H2D/D2H memcpy
+    // operations have completed before the host buffers go out of scope.
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+
     return out;
 }
 
@@ -198,11 +201,10 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
     int64_t *in_strides_dev = out_dims_dev + n_out;
     int64_t *out_strides_dev = in_strides_dev + n_in_strides;
 
-    CUDA_CHECK(cudaMemcpyAsync(out_dims_dev, idx_dims.data(), n_out * sizeof(int64_t), cudaMemcpyHostToDevice, stream));
-    CUDA_CHECK(cudaMemcpyAsync(in_strides_dev, in_strides.data(), n_in_strides * sizeof(int64_t),
-                               cudaMemcpyHostToDevice, stream));
-    CUDA_CHECK(cudaMemcpyAsync(out_strides_dev, out_strides.data(), n_out_strides * sizeof(int64_t),
-                               cudaMemcpyHostToDevice, stream));
+    CUDA_CHECK(cudaMemcpy(out_dims_dev, idx_dims.data(), n_out * sizeof(int64_t), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(in_strides_dev, in_strides.data(), n_in_strides * sizeof(int64_t), cudaMemcpyHostToDevice));
+    CUDA_CHECK(
+        cudaMemcpy(out_strides_dev, out_strides.data(), n_out_strides * sizeof(int64_t), cudaMemcpyHostToDevice));
 
     const int threads = 256;
     const int blocks = (int)((total_elements + threads - 1) / threads);
@@ -218,6 +220,10 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
         "CUDA IndexGatherBackward");
 
     CUDA_CHECK(cudaFreeAsync(dev_buf, stream));
+    // NOTE(dcj):
+    // Synchronize the stream here to ensure all preceding H2D/D2H memcpy
+    // operations have completed before the host buffers go out of scope.
+    CUDA_CHECK(cudaStreamSynchronize(stream));
     return grad_input;
 }
 

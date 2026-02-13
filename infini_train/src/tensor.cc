@@ -70,6 +70,7 @@ Tensor::Tensor(const float *data, const std::vector<int64_t> &dims, DataType dty
     impl->MemcpyAsync(buffer_->DataPtr(), data, buffer_->Size(),
                       device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
                       impl->GetStream(device));
+    impl->SynchronizeStream(impl->GetStream(device));
 }
 
 void Tensor::SetData(const Tensor &tensor, size_t offset, bool preserve_data) {
@@ -164,6 +165,7 @@ Tensor Tensor::To(Device device) {
         auto impl = core::GetDeviceGuardImpl(buffer_device.type());
         impl->MemcpyAsync(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), core::MemcpyKind::kD2H,
                           impl->GetStream(buffer_device));
+        impl->SynchronizeStream(impl->GetStream(buffer_device));
 
     } else if (buffer_device.type() == Device::DeviceType::kCPU) {
         new_tensor = Tensor(dims_, dtype_, device);
@@ -172,6 +174,7 @@ Tensor Tensor::To(Device device) {
         auto *impl = core::GetDeviceGuardImpl(device.type());
         impl->MemcpyAsync(new_tensor.DataPtr(), DataPtr(), SizeInBytes(), core::MemcpyKind::kH2D,
                           impl->GetStream(device));
+        impl->SynchronizeStream(impl->GetStream(device));
     } else {
         new_tensor = Tensor(dims_, dtype_, device);
         // P2P
@@ -182,6 +185,7 @@ Tensor Tensor::To(Device device) {
         auto *impl = core::GetDeviceGuardImpl(buffer_device.type());
         impl->MemcpyAsync(new_tensor.DataPtr(), cpu_tensor.DataPtr(), SizeInBytes(), core::MemcpyKind::kH2D,
                           impl->GetStream(buffer_device));
+        impl->SynchronizeStream(impl->GetStream(buffer_device));
     }
 
     if (grad_) {
@@ -231,16 +235,19 @@ void Tensor::CopyFrom(const Tensor &src) {
         core::DeviceGuard guard(dst_dev);
         auto *impl = core::GetDeviceGuardImpl(dst_dev.type());
         impl->MemcpyAsync(DataPtr(), src.DataPtr(), nbytes, core::MemcpyKind::kD2D, impl->GetStream(dst_dev));
+        impl->SynchronizeStream(impl->GetStream(dst_dev));
     } else if (dst_dev.type() == Device::DeviceType::kCPU) {
         // D2H
         core::DeviceGuard guard(src_dev);
         auto *impl = core::GetDeviceGuardImpl(src_dev.type());
         impl->MemcpyAsync(DataPtr(), src.DataPtr(), nbytes, core::MemcpyKind::kD2H, impl->GetStream(src_dev));
+        impl->SynchronizeStream(impl->GetStream(src_dev));
     } else if (src_dev.type() == Device::DeviceType::kCPU) {
         // H2D
         core::DeviceGuard guard(dst_dev);
         auto *impl = core::GetDeviceGuardImpl(dst_dev.type());
         impl->MemcpyAsync(DataPtr(), src.DataPtr(), nbytes, core::MemcpyKind::kH2D, impl->GetStream(dst_dev));
+        impl->SynchronizeStream(impl->GetStream(dst_dev));
     } else {
         // TODO(dcj): maybe support p2p api later
         // P2P
@@ -251,6 +258,7 @@ void Tensor::CopyFrom(const Tensor &src) {
         core::DeviceGuard guard(dst_dev);
         auto *impl = core::GetDeviceGuardImpl(dst_dev.type());
         impl->MemcpyAsync(DataPtr(), cpu_tensor.DataPtr(), nbytes, core::MemcpyKind::kH2D, impl->GetStream(dst_dev));
+        impl->SynchronizeStream(impl->GetStream(dst_dev));
     }
 }
 

@@ -53,6 +53,7 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
     impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
                       device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
                       impl->GetStream(device));
+    impl->SynchronizeStream(impl->GetStream(device));
     return tensor;
 }
 
@@ -146,6 +147,7 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
     impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
                       device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
                       impl->GetStream(device));
+    impl->SynchronizeStream(impl->GetStream(device));
 
     return tensor;
 }
@@ -164,6 +166,7 @@ std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {
     impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
                       device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
                       impl->GetStream(device));
+    impl->SynchronizeStream(impl->GetStream(device));
 
     return tensor;
 }
@@ -182,6 +185,7 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
     impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
                       device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
                       impl->GetStream(device));
+    impl->SynchronizeStream(impl->GetStream(device));
 
     return tensor;
 }
@@ -191,6 +195,7 @@ std::shared_ptr<Tensor> Zeros(const std::shared_ptr<Tensor> &tensor) {
         std::vector<TYPE> buffer(num_elements);                                                                        \
         std::iota(buffer.begin(), buffer.end(), static_cast<TYPE>(start));                                             \
         impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(TYPE), kind, stream);                \
+        impl->SynchronizeStream(stream);                                                                               \
         break;                                                                                                         \
     }
 
