@@ -189,20 +189,12 @@ std::vector<std::shared_ptr<Tensor>> LoRALinear::AllParameters() const {
     return all_params;
 }
 
-int64_t LoRALinear::in_features() const {
-    return in_features_;
-}
+int64_t LoRALinear::in_features() const { return in_features_; }
 
-int64_t LoRALinear::out_features() const {
-    return out_features_;
-}
+int64_t LoRALinear::out_features() const { return out_features_; }
 
-int64_t LoRALinear::rank() const {
-    return config_.rank;
-}
+int64_t LoRALinear::rank() const { return config_.rank; }
 
-float LoRALinear::scaling() const {
-    return config_.Scaling();
-}
+float LoRALinear::scaling() const { return config_.Scaling(); }
 
 } // namespace infini_train::nn::lora

@@ -9,9 +9,9 @@ namespace infini_train::nn::lora {
 // LoRA (Low-Rank Adaptation) configuration
 struct LoRAConfig {
     // Core LoRA parameters
-    int64_t rank = 8;      // Low-rank dimension (r)
-    float alpha = 16.0f;   // Scaling factor (alpha)
-    float dropout = 0.0f;  // Dropout probability (optional, not implemented yet)
+    int64_t rank = 8;     // Low-rank dimension (r)
+    float alpha = 16.0f;  // Scaling factor (alpha)
+    float dropout = 0.0f; // Dropout probability (optional, not implemented yet)
 
     // Target modules specification (default: attention layers only)
     std::unordered_set<std::string> target_modules = {"c_attn", "c_proj"};
@@ -24,11 +24,10 @@ struct LoRAConfig {
     LoRAConfig() = default;
 
     // Constructor with rank and alpha (PEFT-style aggregate initialization)
-    LoRAConfig(int64_t r, float a, float d = 0.0f)
-        : rank(r), alpha(a), dropout(d) {}
+    LoRAConfig(int64_t r, float a, float d = 0.0f) : rank(r), alpha(a), dropout(d) {}
 
     // Set target modules from comma-separated string (PEFT-compatible)
-    void SetTargetModules(const std::string& targets);
+    void SetTargetModules(const std::string &targets);
 
     // Compute scaling factor: output = base_output + scaling * lora_output
     float Scaling() const;

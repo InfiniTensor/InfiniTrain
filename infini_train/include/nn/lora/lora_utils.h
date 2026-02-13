@@ -33,7 +33,9 @@ std::shared_ptr<LoRAModel> GetLoRAModel(std::shared_ptr<Module> model, const LoR
 // Parameters:
 //   - model: The model to inject LoRA into
 //   - config: LoRA configuration (rank, alpha, target_modules)
-void InjectLoRALayers(std::shared_ptr<Module> model, const LoRAConfig &config);
+// Inject LoRA layers into the model
+// Returns the model (possibly replaced if root module was wrapped with LoRA)
+std::shared_ptr<Module> InjectLoRALayers(std::shared_ptr<Module> model, const LoRAConfig &config);
 
 // Replace a module at the given path with a new module
 // Parameters:

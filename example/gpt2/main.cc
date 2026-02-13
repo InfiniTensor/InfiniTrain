@@ -84,7 +84,8 @@ DEFINE_string(
 // LoRA parameters
 DEFINE_int32(lora_rank, 0, "LoRA rank (0 = disabled)");
 DEFINE_double(lora_alpha, 16.0, "LoRA alpha scaling factor");
-DEFINE_string(lora_target_modules, "c_attn,c_proj", "LoRA target modules (comma-separated: c_attn,c_proj,c_fc,c_fc2,mlp.c_proj)");
+DEFINE_string(lora_target_modules, "c_attn,c_proj",
+              "LoRA target modules (comma-separated: c_attn,c_proj,c_fc,c_fc2,mlp.c_proj)");
 DEFINE_string(lora_save_path, "", "Path to save LoRA weights after training");
 DEFINE_string(lora_load_path, "", "Path to load LoRA weights from");
 
