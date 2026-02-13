@@ -4,7 +4,7 @@
 
 namespace infini_train::nn::lora {
 
-void LoRAConfig::SetTargetModules(const std::string& targets) {
+void LoRAConfig::SetTargetModules(const std::string &targets) {
     target_modules.clear();
     std::stringstream ss(targets);
     std::string module;
@@ -18,9 +18,7 @@ void LoRAConfig::SetTargetModules(const std::string& targets) {
     }
 }
 
-float LoRAConfig::Scaling() const {
-    return alpha / static_cast<float>(rank);
-}
+float LoRAConfig::Scaling() const { return alpha / static_cast<float>(rank); }
 
 bool LoRAConfig::ShouldApplyLoRA(const std::string &module_name) const {
     // Check if the module name ends with any of the target module names

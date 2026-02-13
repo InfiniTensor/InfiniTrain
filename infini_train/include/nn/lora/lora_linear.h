@@ -21,10 +21,10 @@ public:
     static constexpr char kType[] = "LoRALinear";
 
     // Parameter names
-    static constexpr char kParamWeightName[] = "weight";   // Frozen base weight
-    static constexpr char kParamBiasName[] = "bias";       // Frozen base bias
-    static constexpr char kParamLoraAName[] = "lora_A";    // Trainable A matrix [rank, in_features]
-    static constexpr char kParamLoraBName[] = "lora_B";    // Trainable B matrix [out_features, rank]
+    static constexpr char kParamWeightName[] = "weight"; // Frozen base weight
+    static constexpr char kParamBiasName[] = "bias";     // Frozen base bias
+    static constexpr char kParamLoraAName[] = "lora_A";  // Trainable A matrix [rank, in_features]
+    static constexpr char kParamLoraBName[] = "lora_B";  // Trainable B matrix [out_features, rank]
 
     // Constructor from scratch
     LoRALinear(int64_t in_features, int64_t out_features, const LoRAConfig &config, bool bias = true,

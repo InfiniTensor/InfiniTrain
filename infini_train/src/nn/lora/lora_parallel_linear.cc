@@ -138,9 +138,9 @@ LoRAColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &in
         base_output = base_output->Add(scaled_lora);
     }
 
-    return skip_bias_add_ ? std::vector<std::shared_ptr<Tensor>>{base_output,
-                                                                  bias_ ? parameters_.at(kParamBiasName) : nullptr}
-                          : std::vector<std::shared_ptr<Tensor>>{base_output};
+    return skip_bias_add_
+             ? std::vector<std::shared_ptr<Tensor>>{base_output, bias_ ? parameters_.at(kParamBiasName) : nullptr}
+             : std::vector<std::shared_ptr<Tensor>>{base_output};
 }
 
 void LoRAColumnParallelLinear::MergeWeights() {
@@ -176,21 +176,13 @@ std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::LoRAParameters() 
 
 std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::Parameters() const { return LoRAParameters(); }
 
-bool LoRAColumnParallelLinear::IsMerged() const {
-    return merged_;
-}
+bool LoRAColumnParallelLinear::IsMerged() const { return merged_; }
 
-int64_t LoRAColumnParallelLinear::in_features() const {
-    return in_features_;
-}
+int64_t LoRAColumnParallelLinear::in_features() const { return in_features_; }
 
-int64_t LoRAColumnParallelLinear::out_features() const {
-    return out_features_;
-}
+int64_t LoRAColumnParallelLinear::out_features() const { return out_features_; }
 
-int64_t LoRAColumnParallelLinear::rank() const {
-    return config_.rank;
-}
+int64_t LoRAColumnParallelLinear::rank() const { return config_.rank; }
 
 // ============================================================================
 // LoRARowParallelLinear Implementation
@@ -295,8 +287,7 @@ LoRARowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input
     const auto &input = input_tensors[0];
 
     // Base linear computation (local matmul)
-    auto base_output
-        = std::make_shared<autograd::Linear>()->Apply({input, parameters_[kParamWeightName]})[0];
+    auto base_output = std::make_shared<autograd::Linear>()->Apply({input, parameters_[kParamWeightName]})[0];
 
     if (!merged_) {
         // LoRA computation for RowParallel:
@@ -320,9 +311,9 @@ LoRARowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input
         base_output = base_output->Add(parameters_[kParamBiasName]);
     }
 
-    return skip_bias_add_ ? std::vector<std::shared_ptr<Tensor>>{base_output,
-                                                                  bias_ ? parameters_.at(kParamBiasName) : nullptr}
-                          : std::vector<std::shared_ptr<Tensor>>{base_output};
+    return skip_bias_add_
+             ? std::vector<std::shared_ptr<Tensor>>{base_output, bias_ ? parameters_.at(kParamBiasName) : nullptr}
+             : std::vector<std::shared_ptr<Tensor>>{base_output};
 }
 
 void LoRARowParallelLinear::MergeWeights() {
@@ -358,20 +349,12 @@ std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::LoRAParameters() con
 
 std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::Parameters() const { return LoRAParameters(); }
 
-bool LoRARowParallelLinear::IsMerged() const {
-    return merged_;
-}
+bool LoRARowParallelLinear::IsMerged() const { return merged_; }
 
-int64_t LoRARowParallelLinear::in_features() const {
-    return in_features_;
-}
+int64_t LoRARowParallelLinear::in_features() const { return in_features_; }
 
-int64_t LoRARowParallelLinear::out_features() const {
-    return out_features_;
-}
+int64_t LoRARowParallelLinear::out_features() const { return out_features_; }
 
-int64_t LoRARowParallelLinear::rank() const {
-    return config_.rank;
-}
+int64_t LoRARowParallelLinear::rank() const { return config_.rank; }
 
 } // namespace infini_train::nn::lora

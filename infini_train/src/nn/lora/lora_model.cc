@@ -9,10 +9,10 @@
 
 namespace infini_train::nn::lora {
 
-LoRAModel::LoRAModel(std::shared_ptr<Module> base_model, const LoRAConfig &config)
-    : base_model_(base_model), config_(config) {
+LoRAModel::LoRAModel(std::shared_ptr<Module> base_model, const LoRAConfig &config) : config_(config) {
     // Inject LoRA layers into the base model using NamedModules
-    InjectLoRALayers(base_model_, config_);
+    // Returns potentially new module if root was replaced
+    base_model_ = InjectLoRALayers(base_model, config_);
 
     // Freeze base model parameters
     FreezeBaseModel(base_model_);
@@ -24,21 +24,13 @@ std::vector<std::shared_ptr<Tensor>> LoRAModel::Forward(const std::vector<std::s
     return (*base_model_)(inputs);
 }
 
-std::vector<std::shared_ptr<Tensor>> LoRAModel::TrainableParameters() const {
-    return GetLoRAParameters(base_model_);
-}
+std::vector<std::shared_ptr<Tensor>> LoRAModel::TrainableParameters() const { return GetLoRAParameters(base_model_); }
 
-std::vector<std::shared_ptr<Tensor>> LoRAModel::Parameters() const {
-    return base_model_->Parameters();
-}
+std::vector<std::shared_ptr<Tensor>> LoRAModel::Parameters() const { return base_model_->Parameters(); }
 
-void LoRAModel::SaveLoRA(const std::string &filepath) const {
-    SaveLoRAWeights(base_model_, filepath);
-}
+void LoRAModel::SaveLoRA(const std::string &filepath) const { SaveLoRAWeights(base_model_, filepath); }
 
-void LoRAModel::LoadLoRA(const std::string &filepath) {
-    LoadLoRAWeights(base_model_, filepath);
-}
+void LoRAModel::LoadLoRA(const std::string &filepath) { LoadLoRAWeights(base_model_, filepath); }
 
 void LoRAModel::Merge() {
     if (!merged_) {
@@ -54,20 +46,12 @@ void LoRAModel::Unmerge() {
     }
 }
 
-void LoRAModel::PrintSummary() const {
-    PrintLoRASummary(base_model_);
-}
+void LoRAModel::PrintSummary() const { PrintLoRASummary(base_model_); }
 
-bool LoRAModel::IsMerged() const {
-    return merged_;
-}
+bool LoRAModel::IsMerged() const { return merged_; }
 
-std::shared_ptr<Module> LoRAModel::base_model() const {
-    return base_model_;
-}
+std::shared_ptr<Module> LoRAModel::base_model() const { return base_model_; }
 
-const LoRAConfig &LoRAModel::config() const {
-    return config_;
-}
+const LoRAConfig &LoRAModel::config() const { return config_; }
 
 } // namespace infini_train::nn::lora

@@ -193,11 +193,11 @@ set_target_properties(infini_run PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BIN
 
 # Tests
 add_executable(test_hook test/hook/test_hook.cc)
-target_link_libraries(test_hook infini_train)
+link_infini_train_exe(test_hook)
 
 add_executable(test_precision_check test/hook/test_precision_check.cc)
-target_link_libraries(test_precision_check infini_train)
+link_infini_train_exe(test_precision_check)
 
 add_executable(test_lora test/lora/test_lora.cc)
-target_link_libraries(test_lora infini_train)
+link_infini_train_exe(test_lora)
 

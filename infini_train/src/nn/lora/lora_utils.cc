@@ -54,38 +54,55 @@ void ReplaceModuleByPath(std::shared_ptr<Module> model, const std::string &path,
     current->replace_module(module_name, new_module);
 }
 
-void InjectLoRALayers(std::shared_ptr<Module> model, const LoRAConfig &config) {
+std::shared_ptr<Module> InjectLoRALayers(std::shared_ptr<Module> model, const LoRAConfig &config) {
     // Use NamedModules() to automatically traverse the entire model hierarchy
     auto named_modules = model->NamedModules();
 
     int lora_layers_applied = 0;
+    std::shared_ptr<Module> result = model;
 
     for (const auto &[name, module] : named_modules) {
-        if (name.empty()) continue; // skip root module
-
-        // Check if this module should have LoRA applied
-        if (!config.ShouldApplyLoRA(name)) continue;
-
-        // Get module type and wrap if it's Linear/ColumnParallelLinear/RowParallelLinear
+        // Get module type
         auto type = module->type();
 
+        // Check if this module should have LoRA applied
+        // For root module (name.empty()), check if its type matches target_modules
+        bool should_apply = name.empty() ? config.ShouldApplyLoRA(type) : config.ShouldApplyLoRA(name);
+        if (!should_apply) {
+            continue;
+        }
+
         if (type == Linear::kType) {
-            auto lora_module = std::make_shared<LoRALinear>(module, config);
-            ReplaceModuleByPath(model, name, lora_module);
+            if (name.empty()) {
+                // Root module is Linear - create new LoRA module and return it
+                result = std::make_shared<LoRALinear>(module, config);
+            } else {
+                auto lora_module = std::make_shared<LoRALinear>(module, config);
+                ReplaceModuleByPath(model, name, lora_module);
+            }
             lora_layers_applied++;
         } else if (type == parallel::ColumnParallelLinear::kType) {
-            auto lora_module = std::make_shared<LoRAColumnParallelLinear>(module, config);
-            ReplaceModuleByPath(model, name, lora_module);
+            if (name.empty()) {
+                result = std::make_shared<LoRAColumnParallelLinear>(module, config);
+            } else {
+                auto lora_module = std::make_shared<LoRAColumnParallelLinear>(module, config);
+                ReplaceModuleByPath(model, name, lora_module);
+            }
             lora_layers_applied++;
         } else if (type == parallel::RowParallelLinear::kType) {
-            auto lora_module = std::make_shared<LoRARowParallelLinear>(module, config);
-            ReplaceModuleByPath(model, name, lora_module);
+            if (name.empty()) {
+                result = std::make_shared<LoRARowParallelLinear>(module, config);
+            } else {
+                auto lora_module = std::make_shared<LoRARowParallelLinear>(module, config);
+                ReplaceModuleByPath(model, name, lora_module);
+            }
             lora_layers_applied++;
         }
     }
 
     LOG(INFO) << "InjectLoRALayers: Applied LoRA to " << lora_layers_applied << " layers "
               << "(rank=" << config.rank << ", alpha=" << config.alpha << ")";
+    return result;
 }
 
 void FreezeBaseModel(std::shared_ptr<Module> model) {
@@ -102,9 +119,7 @@ void FreezeBaseModel(std::shared_ptr<Module> model) {
 
 void UnfreezeModel(std::shared_ptr<Module> model) {
     model->Apply([](Module *m) {
-        for (auto &[name, param] : m->StateDict()) {
-            param->set_requires_grad(true);
-        }
+        for (auto &[name, param] : m->StateDict()) { param->set_requires_grad(true); }
     });
 }
 
@@ -277,19 +292,14 @@ void LoadLoRAWeights(std::shared_ptr<Module> model, const std::string &filepath)
         uint32_t num_dims;
         file.read(reinterpret_cast<char *>(&num_dims), sizeof(num_dims));
         std::vector<int64_t> dims(num_dims);
-        for (uint32_t j = 0; j < num_dims; ++j) {
-            file.read(reinterpret_cast<char *>(&dims[j]), sizeof(int64_t));
-        }
+        for (uint32_t j = 0; j < num_dims; ++j) { file.read(reinterpret_cast<char *>(&dims[j]), sizeof(int64_t)); }
 
         // Calculate number of elements
         int64_t num_elements = 1;
-        for (auto dim : dims) {
-            num_elements *= dim;
-        }
+        for (auto dim : dims) { num_elements *= dim; }
 
         // Read tensor data into a temporary CPU tensor
-        auto cpu_tensor = std::make_shared<Tensor>(dims, DataType::kFLOAT32,
-                                                    Device(Device::DeviceType::kCPU, 0));
+        auto cpu_tensor = std::make_shared<Tensor>(dims, DataType::kFLOAT32, Device(Device::DeviceType::kCPU, 0));
         file.read(reinterpret_cast<char *>(cpu_tensor->DataPtr()), num_elements * sizeof(float));
 
         // Load into model
@@ -317,9 +327,7 @@ int64_t CountTrainableParameters(const std::shared_ptr<Module> &model) {
 
 int64_t CountTotalParameters(const std::shared_ptr<Module> &model) {
     int64_t count = 0;
-    for (auto &[name, param] : model->StateDict()) {
-        count += param->NumElements();
-    }
+    for (auto &[name, param] : model->StateDict()) { count += param->NumElements(); }
     return count;
 }
 
