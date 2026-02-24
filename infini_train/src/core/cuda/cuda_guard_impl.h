@@ -35,6 +35,8 @@ public:
     // sync
     void SynchronizeDevice(Device device) const override;
 
+    void SynchronizeStream(Stream *) const override;
+
     // blas
     BlasHandle *GetBlasHandle(Device device) const override;
 
