@@ -11,7 +11,6 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/lora/lora_model.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
@@ -170,7 +169,6 @@ void Train(const nn::parallel::Rank &rank) {
 
     LLaMA3Config model_config = LLaMA3Config();
     std::shared_ptr<nn::Module> model = nullptr;
-    std::shared_ptr<nn::lora::LoRAModel> lora_model = nullptr; // LoRA wrapper (if enabled)
     if (!FLAGS_llmc_filepath.empty()) {
         model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
     } else {
@@ -181,26 +179,23 @@ void Train(const nn::parallel::Rank &rank) {
 
     utils::PrecisionChecker::BuildNameMap(model.get());
 
-    // Apply LoRA using GetLoRAModel (PEFT-style Runtime Wrapper)
+    // Apply LoRA using GetLoRAModel (in-place injection)
     bool lora_enabled = FLAGS_lora_rank > 0;
     if (lora_enabled) {
-        nn::lora::LoRAConfig lora_config{FLAGS_lora_rank, static_cast<float>(FLAGS_lora_alpha)};
-        lora_config.SetTargetModules(FLAGS_lora_target_modules);
+        nn::lora::LoRAConfig lora_config{FLAGS_lora_rank, static_cast<float>(FLAGS_lora_alpha), 0.0f,
+                                         nn::lora::ParseLoRATargetModules(FLAGS_lora_target_modules)};
 
-        // GetLoRAModel handles InjectLoRALayers + FreezeBase automatically
-        lora_model = nn::lora::GetLoRAModel(model, lora_config);
+        // GetLoRAModel: in-place injection, modifies module tree directly
+        model = nn::lora::GetLoRAModel(model, lora_config);
 
         // Load LoRA weights if specified
         if (!FLAGS_lora_load_path.empty()) {
             LOG(INFO) << "Loading LoRA weights from: " << FLAGS_lora_load_path;
-            lora_model->LoadLoRA(FLAGS_lora_load_path);
+            nn::lora::LoadLoRAWeights(model, FLAGS_lora_load_path);
         }
 
         // Print LoRA summary
-        lora_model->PrintSummary();
-
-        // Use LoRAModel as the training model
-        model = lora_model;
+        nn::lora::PrintLoRASummary(model, rank.GlobalRank());
     }
 
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": Model loaded to device.";
@@ -268,10 +263,10 @@ void Train(const nn::parallel::Rank &rank) {
     auto optimizer_creator = optimizers::Adam::Create(FLAGS_learning_rate);
     std::shared_ptr<Optimizer> optimizer = nullptr;
 
-    // Create optimizer - use LoRAModel's TrainableParameters() if LoRA is enabled
+    // Create optimizer - use GetLoRAParameters() if LoRA is enabled
     std::vector<std::shared_ptr<Tensor>> params_to_optimize;
-    if (lora_model) {
-        params_to_optimize = lora_model->TrainableParameters();
+    if (lora_enabled) {
+        params_to_optimize = nn::lora::GetLoRAParameters(model);
         LOG(INFO) << "Optimizing " << params_to_optimize.size() << " LoRA parameters";
     } else {
         params_to_optimize = model->Parameters();
@@ -413,9 +408,9 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     // Save LoRA weights if enabled and path specified
-    if (lora_model && !FLAGS_lora_save_path.empty()) {
+    if (lora_enabled && !FLAGS_lora_save_path.empty()) {
         LOG(INFO) << "Saving LoRA weights to: " << FLAGS_lora_save_path;
-        lora_model->SaveLoRA(FLAGS_lora_save_path);
+        nn::lora::SaveLoRAWeights(model, FLAGS_lora_save_path);
     }
 
 #ifdef PROFILE_MODE
