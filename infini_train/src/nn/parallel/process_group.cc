@@ -38,20 +38,6 @@ ProcessGroup::~ProcessGroup() {
     if (is_main_process_) {
         core::GetCclImpl(backend_)->CleanupUniqueIdFile(name_);
     }
-
-    auto *impl = core::GetDeviceGuardImpl(backend_);
-    for (auto &s : comm_streams_) {
-        if (s) {
-            impl->DestroyStream(s.get());
-        }
-    }
-
-    auto *ccl_impl = core::GetCclImpl(backend_);
-    for (auto &c : comms_) {
-        if (c) {
-            ccl_impl->CommDestroy(c.get());
-        }
-    }
 }
 
 void ProcessGroup::InitSingleProcess(const std::vector<int> &ranks) {
