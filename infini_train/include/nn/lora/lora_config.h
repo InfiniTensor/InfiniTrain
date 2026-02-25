@@ -20,14 +20,12 @@ struct LoRAConfig {
     bool use_kaiming_a = true;    // Use Kaiming init for A matrix
     float kaiming_a_param = 1.0f; // Parameter 'a' for Kaiming init
 
-    // Default constructor
+    // Default constructor (uses default target_modules = {"c_attn", "c_proj"})
     LoRAConfig() = default;
 
-    // Constructor with rank and alpha (PEFT-style aggregate initialization)
-    LoRAConfig(int64_t r, float a, float d = 0.0f) : rank(r), alpha(a), dropout(d) {}
-
-    // Set target modules from comma-separated string (PEFT-compatible)
-    void SetTargetModules(const std::string &targets);
+    // Constructor with all parameters including target modules
+    LoRAConfig(int64_t r, float a, float d, const std::unordered_set<std::string> &targets)
+        : rank(r), alpha(a), dropout(d), target_modules(targets) {}
 
     // Compute scaling factor: output = base_output + scaling * lora_output
     float Scaling() const;

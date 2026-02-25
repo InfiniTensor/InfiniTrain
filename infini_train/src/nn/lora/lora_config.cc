@@ -1,22 +1,6 @@
 #include "infini_train/include/nn/lora/lora_config.h"
 
-#include <sstream>
-
 namespace infini_train::nn::lora {
-
-void LoRAConfig::SetTargetModules(const std::string &targets) {
-    target_modules.clear();
-    std::stringstream ss(targets);
-    std::string module;
-    while (std::getline(ss, module, ',')) {
-        // Trim whitespace
-        module.erase(module.find_last_not_of(" \t\r\n") + 1);
-        module.erase(0, module.find_first_not_of(" \t\r\n"));
-        if (!module.empty()) {
-            target_modules.insert(module);
-        }
-    }
-}
 
 float LoRAConfig::Scaling() const { return alpha / static_cast<float>(rank); }
 

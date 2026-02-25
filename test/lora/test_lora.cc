@@ -358,38 +358,36 @@ void test_lora_model_wrapper() {
 }
 
 // ============================================================================
-// Test 8: SetTargetModules parsing
+// Test 8: ParseLoRATargetModules parsing
 // ============================================================================
 void test_set_target_modules() {
-    std::cout << "\n=== Test 8: SetTargetModules Parsing ===" << std::endl;
-
-    LoRAConfig config;
+    std::cout << "\n=== Test 8: ParseLoRATargetModules Parsing ===" << std::endl;
 
     // Test single target
-    config.SetTargetModules("c_attn");
-    CHECK_EQ(config.target_modules.size(), 1);
-    CHECK(config.target_modules.count("c_attn"));
+    auto modules = ParseLoRATargetModules("c_attn");
+    CHECK_EQ(modules.size(), 1);
+    CHECK(modules.count("c_attn"));
     std::cout << "Single target: OK" << std::endl;
 
     // Test multiple targets
-    config.SetTargetModules("c_attn,c_proj,c_fc");
-    CHECK_EQ(config.target_modules.size(), 3);
-    CHECK(config.target_modules.count("c_attn"));
-    CHECK(config.target_modules.count("c_proj"));
-    CHECK(config.target_modules.count("c_fc"));
+    modules = ParseLoRATargetModules("c_attn,c_proj,c_fc");
+    CHECK_EQ(modules.size(), 3);
+    CHECK(modules.count("c_attn"));
+    CHECK(modules.count("c_proj"));
+    CHECK(modules.count("c_fc"));
     std::cout << "Multiple targets: OK" << std::endl;
 
     // Test with spaces
-    config.SetTargetModules("c_attn, c_proj , c_fc");
-    CHECK_EQ(config.target_modules.size(), 3);
+    modules = ParseLoRATargetModules("c_attn, c_proj , c_fc");
+    CHECK_EQ(modules.size(), 3);
     std::cout << "Targets with spaces: OK" << std::endl;
 
     // Test empty/whitespace
-    config.SetTargetModules("c_attn,,c_proj");
-    CHECK_EQ(config.target_modules.size(), 2);
+    modules = ParseLoRATargetModules("c_attn,,c_proj");
+    CHECK_EQ(modules.size(), 2);
     std::cout << "Empty entries ignored: OK" << std::endl;
 
-    std::cout << "SetTargetModules tests passed!" << std::endl;
+    std::cout << "ParseLoRATargetModules tests passed!" << std::endl;
 }
 
 // ============================================================================
@@ -400,8 +398,7 @@ void test_should_apply_lora_edge_cases() {
 
     // Test: Only attn.c_proj in target_modules
     {
-        LoRAConfig config;
-        config.SetTargetModules("c_attn,attn.c_proj");
+        LoRAConfig config{8, 16.0f, 0.0f, ParseLoRATargetModules("c_attn,attn.c_proj")};
 
         // Should match attention paths
         CHECK(config.ShouldApplyLoRA("attn.c_proj"));
@@ -416,8 +413,7 @@ void test_should_apply_lora_edge_cases() {
 
     // Test: Only mlp.c_proj in target_modules
     {
-        LoRAConfig config;
-        config.SetTargetModules("c_attn,mlp.c_proj");
+        LoRAConfig config{8, 16.0f, 0.0f, ParseLoRATargetModules("c_attn,mlp.c_proj")};
 
         // Should NOT match attention paths
         CHECK(!config.ShouldApplyLoRA("attn.c_proj"));
@@ -431,8 +427,7 @@ void test_should_apply_lora_edge_cases() {
 
     // Test: Generic c_proj in target_modules (matches both)
     {
-        LoRAConfig config;
-        config.SetTargetModules("c_attn,c_proj");
+        LoRAConfig config{8, 16.0f, 0.0f, ParseLoRATargetModules("c_attn,c_proj")};
 
         // Should match both attention and mlp
         CHECK(config.ShouldApplyLoRA("transformer.h.0.attn.c_proj"));
@@ -442,8 +437,7 @@ void test_should_apply_lora_edge_cases() {
 
     // Test: All targets
     {
-        LoRAConfig config;
-        config.SetTargetModules("c_attn,attn.c_proj,c_fc,c_fc2,mlp.c_proj");
+        LoRAConfig config{8, 16.0f, 0.0f, ParseLoRATargetModules("c_attn,attn.c_proj,c_fc,c_fc2,mlp.c_proj")};
 
         CHECK(config.ShouldApplyLoRA("transformer.h.0.attn.c_attn"));
         CHECK(config.ShouldApplyLoRA("transformer.h.0.attn.c_proj"));
@@ -619,22 +613,18 @@ void test_get_lora_model() {
     auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true);
 
     // Configure LoRA
-    LoRAConfig config;
-    config.rank = 4;
-    config.alpha = 8.0f;
-    config.SetTargetModules("Linear"); // Target the Linear module by type name
+    LoRAConfig config{4, 8.0f, 0.0f, ParseLoRATargetModules("Linear")};
 
     // Use GetLoRAModel with the linear as the "model"
-    // Note: GetLoRAModel expects a Module, so we pass the Linear directly
-    // (Linear is a Module subclass)
-    auto lora_model = GetLoRAModel(base_linear, config);
+    // Note: GetLoRAModel returns the modified model (in-place injection)
+    auto model = GetLoRAModel(base_linear, config);
 
-    CHECK(lora_model != nullptr);
+    CHECK(model != nullptr);
     std::cout << "GetLoRAModel returned valid pointer" << std::endl;
 
     // Test that LoRA was applied - check trainable parameters
-    auto lora_params = lora_model->TrainableParameters();
-    // TrainableParameters() returns vector<shared_ptr<Tensor>>, size() is the count of tensors
+    auto lora_params = GetLoRAParameters(model);
+    // GetLoRAParameters returns vector<shared_ptr<Tensor>>, size() is the count of tensors
     // LoRALinear has 2 trainable tensors: lora_A (rank x in) and lora_B (out x rank)
     CHECK_EQ(lora_params.size(), 2);
     std::cout << "Trainable parameter tensors: " << lora_params.size() << " (expected: 2)" << std::endl;
@@ -649,29 +639,16 @@ void test_get_lora_model() {
 
     // Test PrintSummary
     std::cout << "\nLoRA Model Summary:" << std::endl;
-    lora_model->PrintSummary();
+    PrintLoRASummary(model);
 
-    // Test base_model access
-    auto base = lora_model->base_model();
-    CHECK(base != nullptr);
-    std::cout << "base_model() returns valid pointer" << std::endl;
+    // Test Merge/Unmerge using utility functions
+    MergeLoRAWeights(model);
+    std::cout << "Merge: OK" << std::endl;
 
-    // Test config access
-    auto cfg = lora_model->config();
-    CHECK_EQ(cfg.rank, 4);
-    CHECK_EQ(cfg.alpha, 8.0f);
-    std::cout << "config() returns correct values" << std::endl;
+    UnmergeLoRAWeights(model);
+    std::cout << "Unmerge: OK" << std::endl;
 
-    // Test Merge/Unmerge
-    CHECK(!lora_model->IsMerged());
-    lora_model->Merge();
-    CHECK(lora_model->IsMerged());
-    std::cout << "Merge/Unmerge: OK" << std::endl;
-
-    lora_model->Unmerge();
-    CHECK(!lora_model->IsMerged());
-
-    std::cout << "GetLoRAModel simplified API tests passed!" << std::endl;
+    std::cout << "GetLoRAModel in-place injection tests passed!" << std::endl;
 }
 
 int main(int argc, char **argv) {

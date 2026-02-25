@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -20,12 +21,18 @@
 
 namespace infini_train::nn::lora {
 
-std::shared_ptr<LoRAModel> GetLoRAModel(std::shared_ptr<Module> model, const LoRAConfig &config) {
-    // PEFT-style: Create LoRAModel wrapper which handles everything automatically
-    // Uses NamedModules() to traverse the entire model hierarchy
-    auto lora_model = std::make_shared<LoRAModel>(model, config);
-    LOG(INFO) << "GetLoRAModel: Created LoRA model with rank=" << config.rank << ", alpha=" << config.alpha;
-    return lora_model;
+std::shared_ptr<Module> GetLoRAModel(std::shared_ptr<Module> model, const LoRAConfig &config) {
+    // In-place injection: modify the module tree directly
+    // No wrapper, no base_model_, no extra layer
+    model = InjectLoRALayers(model, config);
+
+    // Freeze all non-LoRA parameters in the model
+    // This is needed to freeze modules that are NOT LoRA targets (e.g., embedding, LayerNorm)
+    // Uses StateDict() to get ALL parameters (not just trainable ones like Parameters())
+    FreezeBaseModel(model);
+
+    LOG(INFO) << "GetLoRAModel: Applied LoRA in-place, rank=" << config.rank << ", alpha=" << config.alpha;
+    return model;
 }
 
 void ReplaceModuleByPath(std::shared_ptr<Module> model, const std::string &path, std::shared_ptr<Module> new_module) {
@@ -106,15 +113,15 @@ std::shared_ptr<Module> InjectLoRALayers(std::shared_ptr<Module> model, const Lo
 }
 
 void FreezeBaseModel(std::shared_ptr<Module> model) {
+    // Freeze all parameters by setting requires_grad to false
     model->Apply([](Module *m) {
-        for (auto &[name, param] : m->StateDict()) {
-            // Skip LoRA parameters
-            if (name.find("lora_A") != std::string::npos || name.find("lora_B") != std::string::npos) {
-                continue;
-            }
-            param->set_requires_grad(false);
-        }
+        for (auto &[name, param] : m->StateDict()) { param->set_requires_grad(false); }
     });
+
+    // Re-enable training for LoRA parameters (lora_A and lora_B)
+    // This ensures LoRA weights remain trainable after freezing all parameters
+    auto lora_params = GetLoRAParameters(model);
+    for (auto &param : lora_params) { param->set_requires_grad(true); }
 }
 
 void UnfreezeModel(std::shared_ptr<Module> model) {
@@ -331,18 +338,40 @@ int64_t CountTotalParameters(const std::shared_ptr<Module> &model) {
     return count;
 }
 
-void PrintLoRASummary(const std::shared_ptr<Module> &model) {
+void PrintLoRASummary(const std::shared_ptr<Module> &model, int global_rank) {
     int64_t trainable = CountTrainableParameters(model);
     int64_t total = CountTotalParameters(model);
     int64_t frozen = total - trainable;
 
     double trainable_pct = 100.0 * trainable / total;
 
-    std::cout << "========== LoRA Model Summary ==========" << std::endl;
+    std::string title
+        = global_rank >= 0 ? " LoRA Model Summary (Rank " + std::to_string(global_rank) + ") " : " LoRA Model Summary ";
+    size_t pad_left = (40 - title.size()) / 2;
+    size_t pad_right = 40 - title.size() - pad_left;
+    std::string header = std::string(pad_left, '=') + title + std::string(pad_right, '=');
+    std::string separator(header.size(), '=');
+
+    std::cout << header << std::endl;
     std::cout << "Total parameters:     " << total << std::endl;
     std::cout << "Trainable parameters: " << trainable << " (" << trainable_pct << "%)" << std::endl;
     std::cout << "Frozen parameters:    " << frozen << std::endl;
-    std::cout << "=========================================" << std::endl;
+    std::cout << separator << std::endl;
+}
+
+std::unordered_set<std::string> ParseLoRATargetModules(const std::string &targets) {
+    std::unordered_set<std::string> result;
+    std::stringstream ss(targets);
+    std::string module;
+    while (std::getline(ss, module, ',')) {
+        // Trim whitespace
+        module.erase(module.find_last_not_of(" \t\r\n") + 1);
+        module.erase(0, module.find_first_not_of(" \t\r\n"));
+        if (!module.empty()) {
+            result.insert(module);
+        }
+    }
+    return result;
 }
 
 } // namespace infini_train::nn::lora
