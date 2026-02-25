@@ -1,6 +1,8 @@
-#include "infini_train/include/nn/modules/transformer/spec.h"
+#include "infini_train/include/core/models/decode_only_transformer/layer_specs.h"
 
 #include "example/common/utils.h"
+#include "infini_train/include/core/transformer/spec_utils.h"
+#include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
@@ -9,7 +11,6 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
-#include "infini_train/include/nn/modules/transformer/config.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/process_group.h"
@@ -29,8 +30,6 @@ TransformerFirstStageABI::TransformerFirstStageABI(const TransformerConfig &conf
     if (kernel_->UseAbsolutePositionEmbedding()) {
         modules_[kWPELayerName] = std::make_shared<nn::Embedding>(config_.block_size, config_.n_embd);
     }
-
-    // RoPE / ALiBi etc live in kernel, not ABI
 }
 
 std::vector<std::shared_ptr<Tensor>> TransformerFirstStageABI::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
@@ -46,7 +45,6 @@ std::vector<std::shared_ptr<Tensor>> TransformerFirstStageABI::Forward(const std
         h = h + pos_emb;
     }
 
-    // Let kernel add RoPE / ALiBi later inside attention
     return {h};
 }
 
@@ -85,5 +83,8 @@ std::vector<std::shared_ptr<Tensor>> TransformerLastStageABI::Forward(const std:
     auto h = modules_[kLnFLayerName]->Forward(x);
     return modules_[kLMHeadLayerName]->Forward(h);
 }
+
+/* Transformer:  spec_utils.cc */
+std::shared_ptr<Module> build_module(const ModuleSpec &spec, const BuildContext &ctx) { return spec.builder(ctx); }
 
 } // namespace infini_train::nn

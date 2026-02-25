@@ -32,4 +32,9 @@ struct TransformerConfig {
     int64_t max_gen_batch_size = 4; // max batch size during inference
 };
 
+struct BuildContext {
+    TransformerConfig config;
+    int layer_index = -1;
+};
+
 } // namespace infini_train::nn

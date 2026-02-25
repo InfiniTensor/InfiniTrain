@@ -12,6 +12,7 @@
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
+#include "infini_train/include/core/transformer/spec_utils.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/models/llama3/llama3.h"
 #include "infini_train/include/nn/functional.h"
@@ -21,7 +22,6 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
-#include "infini_train/include/nn/modules/transformer/spec.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"

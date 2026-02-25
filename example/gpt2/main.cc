@@ -11,9 +11,9 @@
 
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/transformer/module_kernel.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/models/gpt2/gpt2.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"

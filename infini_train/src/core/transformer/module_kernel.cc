@@ -1,4 +1,4 @@
-#include "infini_train/include/models/gpt2/gpt2.h"
+#include "infini_train/include/core/transformer/module_kernel.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -14,6 +14,8 @@
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
+#include "infini_train/include/core/transformer/spec_utils.h"
+#include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
@@ -22,8 +24,6 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
-#include "infini_train/include/nn/modules/transformer/config.h"
-#include "infini_train/include/nn/modules/transformer/spec.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/process_group.h"
@@ -33,13 +33,6 @@
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
-
-namespace {
-constexpr int kRandomSeed = 42;
-
-// TODO(dcj): make this rng generator compatible with torch later
-static std::mt19937 gen{kRandomSeed};
-} // namespace
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
 NewGELU::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
@@ -179,6 +172,13 @@ Block::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     // (bs, seq_len, n_embd)
     return {x2};
 }
+
+namespace {
+constexpr int kRandomSeed = 42;
+
+// TODO(dcj): make this rng generator compatible with torch later
+static std::mt19937 gen{kRandomSeed};
+} // namespace
 
 std::shared_ptr<nn::Module> GPT2Kernel::MakeBlock(const nn::TransformerConfig &config) {
     return std::make_shared<Block>(config);

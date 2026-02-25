@@ -3,13 +3,24 @@
 #include <functional>
 #include <memory>
 
+#include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/modules/transformer/config.h"
-#include "infini_train/include/nn/modules/transformer/transformer_kernel.h"
 
 namespace infini_train::nn {
 
-class TransformerKernel;
+class TransformerKernel {
+public:
+    virtual ~TransformerKernel() = default;
+
+    // === Embedding / Position ===
+    virtual bool UseAbsolutePositionEmbedding() const = 0;
+
+    // === Block ===
+    virtual std::shared_ptr<Module> MakeBlock(const TransformerConfig &config) = 0;
+
+    // === Norm ===
+    virtual std::shared_ptr<Module> MakeFinalNorm(const TransformerConfig &config) = 0;
+};
 
 class TransformerFirstStageABI : public nn::CloneableModule<TransformerFirstStageABI> {
 public:
@@ -51,18 +62,18 @@ private:
     const TransformerConfig config_;
 };
 
-// struct TransformerSpec {
-//     // embedding
-//     std::function<std::shared_ptr<Module>(const TransformerConfig &)> make_token_embedding;
-//     std::function<std::shared_ptr<Module>(const TransformerConfig &)> make_position_embedding;
+/* Transformer:  spec_utils.h */
+class Module;
+struct BuildContext;
 
-//     // per-layer
-//     std::function<std::shared_ptr<Module>(const TransformerConfig &)> make_norm;
-//     std::function<std::shared_ptr<Module>(const TransformerConfig &)> make_attention;
-//     std::function<std::shared_ptr<Module>(const TransformerConfig &)> make_mlp;
+using ModuleBuilderFn = std::function<std::shared_ptr<Module>(const BuildContext &)>;
 
-//     // output
-//     std::function<std::shared_ptr<Module>(const TransformerConfig &)> make_final_norm;
-//     std::function<std::shared_ptr<Module>(const TransformerConfig &)> make_lm_head;
-// };
+struct ModuleSpec {
+    std::string name;
+    ModuleBuilderFn builder;
+    std::unordered_map<std::string, ModuleSpec> submodules;
+};
+
+std::shared_ptr<Module> build_module(const ModuleSpec &spec, const BuildContext &ctx);
+
 } // namespace infini_train::nn
