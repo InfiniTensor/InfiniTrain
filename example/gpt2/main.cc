@@ -13,7 +13,6 @@
 #include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/lora/lora_model.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
@@ -189,7 +188,6 @@ void Train(const nn::parallel::Rank &rank) {
     // init the model, either from scratch or from OpenAI pretrained checkpoint
     GPT2Config model_config;
     std::shared_ptr<nn::Module> model = nullptr;
-    std::shared_ptr<nn::lora::LoRAModel> lora_model = nullptr; // LoRA wrapper (if enabled)
 
     if (!FLAGS_llmc_filepath.empty()) {
         model = GPT2::FromLLMC(FLAGS_llmc_filepath);
@@ -203,26 +201,28 @@ void Train(const nn::parallel::Rank &rank) {
     model->To(device);
 
     utils::PrecisionChecker::BuildNameMap(model.get());
-    // Apply LoRA using GetLoRAModel (PEFT-style Runtime Wrapper)
+
+    // Get chunk size before wrapping with LoRA (needed for PipelineParallel)
+    auto gpt2_model = std::dynamic_pointer_cast<GPT2>(model);
+    CHECK(gpt2_model) << "GPT2 example expects GPT2 model.";
+
+    // Apply LoRA using GetLoRAModel (in-place injection)
     bool lora_enabled = FLAGS_lora_rank > 0;
     if (lora_enabled) {
-        nn::lora::LoRAConfig lora_config{FLAGS_lora_rank, static_cast<float>(FLAGS_lora_alpha)};
-        lora_config.SetTargetModules(FLAGS_lora_target_modules);
+        nn::lora::LoRAConfig lora_config{FLAGS_lora_rank, static_cast<float>(FLAGS_lora_alpha), 0.0f,
+                                         nn::lora::ParseLoRATargetModules(FLAGS_lora_target_modules)};
 
-        // GetLoRAModel handles InjectLoRALayers + FreezeBase automatically
-        lora_model = nn::lora::GetLoRAModel(model, lora_config);
+        // GetLoRAModel: in-place injection, modifies module tree directly
+        model = nn::lora::GetLoRAModel(model, lora_config);
 
         // Load LoRA weights if specified
         if (!FLAGS_lora_load_path.empty()) {
             LOG(INFO) << "Loading LoRA weights from: " << FLAGS_lora_load_path;
-            lora_model->LoadLoRA(FLAGS_lora_load_path);
+            nn::lora::LoadLoRAWeights(model, FLAGS_lora_load_path);
         }
 
         // Print LoRA summary
-        lora_model->PrintSummary();
-
-        // Use LoRAModel as the training model
-        model = lora_model;
+        nn::lora::PrintLoRASummary(model);
     }
 
     // select the data type
@@ -240,8 +240,8 @@ void Train(const nn::parallel::Rank &rank) {
 
     // Create optimizer - use LoRAModel's TrainableParameters() if LoRA is enabled
     std::vector<std::shared_ptr<Tensor>> params_to_optimize;
-    if (lora_model) {
-        params_to_optimize = lora_model->TrainableParameters();
+    if (lora_enabled) {
+        params_to_optimize = nn::lora::GetLoRAParameters(model);
         LOG(INFO) << "Optimizing " << params_to_optimize.size() << " LoRA parameters";
     } else {
         params_to_optimize = model->Parameters();
@@ -254,9 +254,8 @@ void Train(const nn::parallel::Rank &rank) {
         auto shapes = std::vector<std::vector<int64_t>>{
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
-        model = std::make_shared<nn::parallel::PipelineParallel>(
-            model, pp_world_size, num_micro_batches, shapes, pp_rank, device,
-            std::dynamic_pointer_cast<GPT2>(model)->GetChunkSize());
+        model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
+                                                                 pp_rank, device, gpt2_model->GetChunkSize());
         if (ddp_world_size > 1) {
             auto ddp_config
                 = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
@@ -438,9 +437,9 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     // Save LoRA weights if enabled and path specified
-    if (lora_model && !FLAGS_lora_save_path.empty()) {
+    if (lora_enabled && !FLAGS_lora_save_path.empty()) {
         LOG(INFO) << "Saving LoRA weights to: " << FLAGS_lora_save_path;
-        lora_model->SaveLoRA(FLAGS_lora_save_path);
+        nn::lora::SaveLoRAWeights(model, FLAGS_lora_save_path);
     }
 
 #ifdef PROFILE_MODE

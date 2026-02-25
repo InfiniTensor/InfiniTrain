@@ -317,6 +317,9 @@ void Reducer::AttachHooksToParameters() {
             size_t var_index_;
         };
 
+        if (!params_[param_idx]->requires_grad()) {
+            continue;
+        }
         auto hook = std::make_unique<BucketHook>(weak_from_this(), param_idx);
         params_[param_idx]->RegisterPostAccumulateGradHook(std::move(hook));
     }

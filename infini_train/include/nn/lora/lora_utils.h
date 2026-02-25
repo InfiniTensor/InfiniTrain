@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "infini_train/include/nn/lora/lora_config.h"
@@ -17,72 +18,106 @@ class Module;
 
 namespace infini_train::nn::lora {
 
-// Forward declaration
-class LoRAModel;
+/**
+ * Apply LoRA to a model (PEFT-style injection).
+ *
+ * - Replaces target modules with LoRA modules (in-place).
+ * - Freezes all non-LoRA parameters.
+ * - Only LoRA parameters remain trainable.
+ *
+ * The root module may be replaced if it matches the target.
+ */
+std::shared_ptr<Module> GetLoRAModel(std::shared_ptr<Module> model, const LoRAConfig &config);
 
-// PEFT-style get_peft_model equivalent (Runtime Wrapper)
-// Creates a LoRA-wrapped model with automatic module detection using NamedModules
-// Parameters:
-//   - model: The model to wrap
-//   - config: LoRA configuration (rank, alpha, target_modules)
-// Returns: The LoRA-wrapped model as shared_ptr
-std::shared_ptr<LoRAModel> GetLoRAModel(std::shared_ptr<Module> model, const LoRAConfig &config);
-
-// Internal transform: inject LoRA layers into all matching modules
-// Uses NamedModules() to automatically traverse the entire model hierarchy
-// Parameters:
-//   - model: The model to inject LoRA into
-//   - config: LoRA configuration (rank, alpha, target_modules)
-// Inject LoRA layers into the model
-// Returns the model (possibly replaced if root module was wrapped with LoRA)
+/**
+ * Inject LoRA modules into all matching submodules.
+ *
+ * Performs structural replacement only (no freezing).
+ * Root module may be replaced.
+ */
 std::shared_ptr<Module> InjectLoRALayers(std::shared_ptr<Module> model, const LoRAConfig &config);
 
-// Replace a module at the given path with a new module
-// Parameters:
-//   - model: Root model containing the module
-//   - path: Full path to the module (e.g., "transformer.h.0.attn.c_attn")
-//   - new_module: The new module to replace with
+/**
+ * Replace a submodule by its full path (e.g. "a.b.0.c").
+ */
 void ReplaceModuleByPath(std::shared_ptr<Module> model, const std::string &path, std::shared_ptr<Module> new_module);
 
-// Freeze all base model parameters (set requires_grad = false)
+/**
+ * Freeze all parameters, then re-enable LoRA parameters.
+ * After this call, only LoRA params are trainable.
+ */
 void FreezeBaseModel(std::shared_ptr<Module> model);
 
-// Unfreeze all parameters (set requires_grad = true)
+/**
+ * Set requires_grad = true for all parameters.
+ */
 void UnfreezeModel(std::shared_ptr<Module> model);
 
-// Get only LoRA parameters from a model (for optimizer)
-// Returns parameters from LoRALinear, LoRAColumnParallelLinear, LoRARowParallelLinear modules
+/**
+ * Return all LoRA parameters.
+ */
 std::vector<std::shared_ptr<Tensor>> GetLoRAParameters(const std::shared_ptr<Module> &model);
 
-// Get only base (frozen) parameters
+/**
+ * Return all non-LoRA parameters.
+ */
 std::vector<std::shared_ptr<Tensor>> GetBaseParameters(const std::shared_ptr<Module> &model);
 
-// Merge all LoRA weights in the model
+/**
+ * Merge LoRA into base weights:
+ *   W = W + (B @ A) * scale
+ */
 void MergeLoRAWeights(std::shared_ptr<Module> model);
 
-// Unmerge all LoRA weights in the model
+/**
+ * Undo previously merged LoRA weights.
+ */
 void UnmergeLoRAWeights(std::shared_ptr<Module> model);
 
-// Save only LoRA weights to file
-void SaveLoRAWeights(const std::shared_ptr<Module> &model, const std::string &filepath);
-
-// Load LoRA weights from file
-void LoadLoRAWeights(std::shared_ptr<Module> model, const std::string &filepath);
-
-// Get LoRA state dict (only LoRA parameters with their names)
+/**
+ * Return a state dict containing only LoRA parameters.
+ */
 std::unordered_map<std::string, std::shared_ptr<Tensor>> LoRAStateDict(const std::shared_ptr<Module> &model);
 
-// Load LoRA state dict
+/**
+ * Load LoRA parameters from a state dict.
+ */
 void LoadLoRAStateDict(std::shared_ptr<Module> model,
                        const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict);
 
-// Print LoRA model summary (trainable vs frozen parameters)
-void PrintLoRASummary(const std::shared_ptr<Module> &model);
+/**
+ * Save only LoRA parameters to file.
+ */
+void SaveLoRAWeights(const std::shared_ptr<Module> &model, const std::string &filepath);
 
-// Count trainable parameters
+/**
+ * Load LoRA parameters from file.
+ */
+void LoadLoRAWeights(std::shared_ptr<Module> model, const std::string &filepath);
+
+/**
+ * Count parameters with requires_grad == true.
+ */
 int64_t CountTrainableParameters(const std::shared_ptr<Module> &model);
 
-// Count total parameters
+/**
+ * Count total parameters.
+ */
 int64_t CountTotalParameters(const std::shared_ptr<Module> &model);
+
+/**
+ * Print total/trainable/frozen parameter summary.
+ */
+void PrintLoRASummary(const std::shared_ptr<Module> &model);
+
+/**
+ * Parse comma-separated target modules string.
+ *
+ * Example: "c_attn,c_proj" -> {"c_attn", "c_proj"}
+ *
+ * Returns:
+ *   An unordered_set of target module names (whitespace trimmed).
+ */
+std::unordered_set<std::string> ParseLoRATargetModules(const std::string &targets);
 
 } // namespace infini_train::nn::lora
