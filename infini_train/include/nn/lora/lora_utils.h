@@ -108,7 +108,7 @@ int64_t CountTotalParameters(const std::shared_ptr<Module> &model);
 /**
  * Print total/trainable/frozen parameter summary.
  */
-void PrintLoRASummary(const std::shared_ptr<Module> &model);
+void PrintLoRASummary(const std::shared_ptr<Module> &model, int global_rank = -1);
 
 /**
  * Parse comma-separated target modules string.

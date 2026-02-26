@@ -213,7 +213,7 @@ args_string_for_test() {
     jq -r --argjson g "$group_idx" --argjson t "$test_idx" '
       .test_groups[$g].tests[$t].args
       | to_entries[]
-      | "--\(.key) \(.value|tostring)"
+      | "--\(.key)=\(.value|tostring)"
     ' "$CONFIG_FILE" | paste -sd' ' -
 }
 
