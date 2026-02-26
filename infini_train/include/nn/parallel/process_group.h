@@ -101,6 +101,8 @@ public:
 
     static ProcessGroupFactory *Instance();
 
+    static ProcessGroupFactory *Instance(Device::DeviceType backend);
+
     const ProcessGroup *GetOrCreate(const std::string &name, int comm_size);
 
     const ProcessGroup *GetOrCreate(const std::string &name, const std::vector<int> &device_indices);
@@ -110,7 +112,7 @@ public:
     const ProcessGroup *GetDefaultProcessGroup() const;
 
 private:
-    ProcessGroupFactory();
+    explicit ProcessGroupFactory(Device::DeviceType backend);
 
     template <typename Creator, typename = std::enable_if_t<std::is_invocable_v<Creator>>>
     const ProcessGroup *GetOrCreate(const std::string &name, Creator &&creator) {
@@ -135,5 +137,6 @@ private:
     mutable std::mutex mutex_;
     std::condition_variable cond_;
     std::unordered_map<std::string, std::unique_ptr<ProcessGroup>> name_to_group_;
+    Device::DeviceType backend_ = Device::DeviceType::kInvalid;
 };
 } // namespace infini_train::nn::parallel

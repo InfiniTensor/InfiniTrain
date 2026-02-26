@@ -4,8 +4,7 @@
 #include <memory>
 #include <unordered_map>
 
-#include "infini_train/include/core/event.h"
-#include "infini_train/include/core/runtime_status.h"
+#include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train::core {
@@ -86,6 +85,8 @@ public:
     virtual Stream *CreateStreamWithPriority(Device, int priority) const;
 
     virtual void DestroyStream(Stream *) const;
+
+    virtual void GetStreamPriorityRange(int *low, int *high) const;
 
     // ----------------------------------------------------------------------
     // Event management

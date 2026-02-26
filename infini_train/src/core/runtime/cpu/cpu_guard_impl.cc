@@ -1,4 +1,4 @@
-#include "infini_train/src/core/cpu/cpu_guard_impl.h"
+#include "infini_train/src/core/runtime/cpu/cpu_guard_impl.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -7,7 +7,7 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 
 namespace infini_train::core::cpu {
 
@@ -50,6 +50,13 @@ Stream *CpuGuardImpl::CreateStreamWithPriority(Device device, int priority) cons
 void CpuGuardImpl::DestroyStream(Stream *stream) const {
     LOG(WARNING) << "CpuGuardImpl::DestroyStream is not supported. "
                     "The call is ignored.";
+}
+
+void CpuGuardImpl::GetStreamPriorityRange(int *low, int *high) const {
+    *low = 0;
+    *high = 0;
+    LOG(WARNING) << "CpuGuardImpl::GetStreamPriorityRange is not supported. "
+                    "Return range [0, 0].";
 }
 
 void CpuGuardImpl::EventCreate(Event **event) const {

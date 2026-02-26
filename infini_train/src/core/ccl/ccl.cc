@@ -81,9 +81,9 @@ void CclImpl::Recv(void *buff, size_t count, DataType dtype, int peer, const Ccl
     LOG(FATAL) << "CclImpl::Recv is not implemented.";
 }
 
-Ccl::Ccl(Device::DeviceType type) : impl_(GetCclImpl(type)) { impl_->GroupStart(); }
+CclGroupGuard::CclGroupGuard(Device::DeviceType type) : impl_(GetCclImpl(type)) { impl_->GroupStart(); }
 
-Ccl::~Ccl() { impl_->GroupEnd(); }
+CclGroupGuard::~CclGroupGuard() { impl_->GroupEnd(); }
 
 CclImplRegistry &CclImplRegistry::Instance() {
     static CclImplRegistry instance;

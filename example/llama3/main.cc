@@ -8,7 +8,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
@@ -121,24 +121,25 @@ void Train(const nn::parallel::Rank &rank) {
 
     if (rank.IsParallel()) {
         device = Device(Device::DeviceType::kCUDA, rank.thread_rank());
+        auto *pg_factory = ProcessGroupFactory::Instance(device.type());
 
         if (ddp_world_size > 1) {
-            ddp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
-                                                                  GetDataParallelGroupRanks(rank.GlobalRank()));
+            ddp_pg = pg_factory->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
+                                             GetDataParallelGroupRanks(rank.GlobalRank()));
             ddp_rank = ddp_pg->GetGroupRank(rank.GlobalRank());
         }
 
         if (tp_world_size > 1) {
-            tp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetTensorParallelProcessGroupName(rank.GlobalRank()),
-                                                                 GetTensorParallelGroupRanks(rank.GlobalRank()));
+            tp_pg = pg_factory->GetOrCreate(GetTensorParallelProcessGroupName(rank.GlobalRank()),
+                                            GetTensorParallelGroupRanks(rank.GlobalRank()));
             tp_rank = tp_pg->GetGroupRank(rank.GlobalRank());
             // NOTE(zbl): Reserved for VocabParallelEmbedding
             nn::parallel::tp_rank = tp_rank;
         }
 
         if (pp_world_size > 1) {
-            pp_pg = ProcessGroupFactory::Instance()->GetOrCreate(GetPipelineParallelProcessGroupName(rank.GlobalRank()),
-                                                                 GetPipelineParallelGroupRanks(rank.GlobalRank()));
+            pp_pg = pg_factory->GetOrCreate(GetPipelineParallelProcessGroupName(rank.GlobalRank()),
+                                            GetPipelineParallelGroupRanks(rank.GlobalRank()));
             pp_rank = pp_pg->GetGroupRank(rank.GlobalRank());
 
             nn::parallel::pp_rank = pp_rank;

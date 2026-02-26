@@ -1,16 +1,14 @@
-#include "infini_train/src/core/cuda/cuda_guard_impl.h"
+#include "infini_train/src/core/runtime/cuda/cuda_guard_impl.h"
 
 #include <array>
 #include <memory>
 #include <mutex>
 
 #include "infini_train/include/common/cuda/common_cuda.h"
-#include "infini_train/include/core/blas_handle.h"
+#include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
 
-#include "infini_train/src/core/cuda/cuda_blas_handle.h"
-#include "infini_train/src/core/cuda/cuda_event.h"
-#include "infini_train/src/core/cuda/cuda_stream.h"
+#include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::core::cuda {
 namespace {
@@ -119,7 +117,7 @@ Stream *CudaGuardImpl::CreateStreamWithPriority(Device device, int priority) con
     CUDA_CHECK(cudaGetDevice(&current_device));
     CUDA_CHECK(cudaSetDevice(device.index()));
 
-    Stream *stream = new CudaStream();
+    Stream *stream = new CudaStream(priority);
 
     CUDA_CHECK(cudaSetDevice(current_device));
     return stream;
@@ -132,6 +130,10 @@ void CudaGuardImpl::DestroyStream(Stream *stream) const {
     auto *cuda_stream = dynamic_cast<CudaStream *>(stream);
     CHECK_NOTNULL(cuda_stream);
     delete cuda_stream;
+}
+
+void CudaGuardImpl::GetStreamPriorityRange(int *low, int *high) const {
+    CUDA_CHECK(cudaDeviceGetStreamPriorityRange(low, high));
 }
 
 // event

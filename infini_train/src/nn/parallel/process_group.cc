@@ -9,14 +9,34 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/core/ccl/ccl.h"
-#include "infini_train/include/core/device_guard.h"
-#include "infini_train/include/core/stream.h"
+#include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
+namespace {
+// Helper function to create object, transfer ownership to unique_ptr container, and return a borrowed raw pointer for
+// runtime api.
+core::CclComm *CreateOwnedComm(core::CclImpl *ccl_impl, std::vector<std::unique_ptr<core::CclComm>> &owned_comms) {
+    core::CclComm *comm_raw = nullptr;
+    ccl_impl->CreateComm(&comm_raw);
+    owned_comms.emplace_back(comm_raw);
+    return comm_raw;
+}
+
+core::Stream *CreateOwnedStream(core::DeviceGuardImpl *runtime_impl, Device device, int priority,
+                                std::vector<std::unique_ptr<core::Stream>> &owned_streams) {
+    core::Stream *stream_raw = runtime_impl->CreateStreamWithPriority(device, priority);
+    owned_streams.emplace_back(stream_raw);
+    return stream_raw;
+}
+
+std::mutex g_process_group_factory_mutex;
+std::unique_ptr<ProcessGroupFactory> g_process_group_factory_instance = nullptr;
+} // namespace
 
 int ProcessGroup::GetGroupRank(int global_rank) const { return global_group_rank_map_.at(global_rank); }
 
@@ -38,10 +58,14 @@ ProcessGroup::~ProcessGroup() {
     if (is_main_process_) {
         core::GetCclImpl(backend_)->CleanupUniqueIdFile(name_);
     }
+
+    // NOTE(zbl): The destruction could happen after GPU runtime is destroyed,
+    //            so do not explicitly destroy streams or comms here
 }
 
 void ProcessGroup::InitSingleProcess(const std::vector<int> &ranks) {
-    comms_.resize(world_size_);
+    comms_.clear();
+    comms_.reserve(world_size_);
 
     auto *ccl_impl = core::GetCclImpl(backend_);
     std::vector<core::CclComm *> comm_ptrs;
@@ -51,14 +75,9 @@ void ProcessGroup::InitSingleProcess(const std::vector<int> &ranks) {
         auto device = Device(backend_, ranks[i]);
         devices_.push_back(device);
 
-        core::CclComm *comm_raw = nullptr;
-        ccl_impl->CreateComm(&comm_raw);
-        CHECK_NOTNULL(comm_raw);
+        core::CclComm *comm_raw = CreateOwnedComm(ccl_impl, comms_);
         comm_ptrs.push_back(comm_raw);
         device_comm_map_[device.index()] = comm_raw;
-
-        auto comm = std::unique_ptr<core::CclComm>(comm_raw);
-        comms_[i] = std::move(comm);
         global_group_rank_map_[device.Rank().GlobalRank()] = i;
     }
     ccl_impl->CommInitAll(comm_ptrs.data(), world_size_, ranks.data());
@@ -74,8 +93,8 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
 
     core::CclUniqueId *unique_id_raw = nullptr;
     ccl_impl->CreateUniqueId(&unique_id_raw);
-    CHECK_NOTNULL(unique_id_raw);
     std::unique_ptr<core::CclUniqueId> unique_id(unique_id_raw);
+
     int min_rank = std::ranges::min(ranks);
     if (min_rank < upper_rank && min_rank >= lower_rank) {
         is_main_process_ = true;
@@ -85,21 +104,17 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
         ccl_impl->ReadUniqueId(unique_id.get(), name_);
     }
 
-    core::Ccl ccl(backend_);
+    core::CclGroupGuard ccl_group_guard(backend_);
     for (int i = 0; i < n_threads; ++i) {
         int global_thread_rank = lower_rank + i;
         auto it = std::ranges::find(ranks, global_thread_rank);
         if (it != ranks.end()) {
-            auto device = Device(backend_, static_cast<int8_t>(i));
+            auto device = Device(backend_, i);
             core::DeviceGuard guard(device);
 
-            core::CclComm *comm_raw = nullptr;
-            ccl_impl->CreateComm(&comm_raw);
-            CHECK_NOTNULL(comm_raw);
-            auto comm = std::unique_ptr<core::CclComm>(comm_raw);
+            core::CclComm *comm_raw = CreateOwnedComm(ccl_impl, comms_);
             int group_rank = std::distance(ranks.begin(), it);
-            ccl_impl->CommInitRank(comm.get(), world_size_, *unique_id, group_rank);
-            comms_.push_back(std::move(comm));
+            ccl_impl->CommInitRank(comm_raw, world_size_, *unique_id, group_rank);
 
             global_group_rank_map_[device.Rank().GlobalRank()] = group_rank;
             devices_.push_back(device);
@@ -112,8 +127,9 @@ void ProcessGroup::InitStreams() {
     for (const auto &device : devices_) {
         core::DeviceGuard guard(device);
         auto *impl = core::GetDeviceGuardImpl(device.type());
-        auto *stream = impl->CreateStreamWithPriority(device, 0);
-        comm_streams_.emplace_back(stream);
+        int low, high;
+        impl->GetStreamPriorityRange(&low, &high);
+        auto *stream = CreateOwnedStream(impl, device, high, comm_streams_);
         device_stream_map_[device.index()] = stream;
     }
 }
@@ -134,11 +150,13 @@ std::shared_ptr<Work> ProcessGroup::AllReduce(const std::shared_ptr<Tensor> &ten
     ccl_impl->AllReduce(tensor->DataPtr(), tensor->DataPtr(), tensor->NumElements(), tensor->Dtype(), reduce_op, comm,
                         comm_stream);
     runtime_impl->EventRecord(work->done_event(), comm_stream);
+
     if (async_op) {
         return work;
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
     }
-    work->WaitNonBlocking();
-    return nullptr;
 }
 
 std::shared_ptr<Work> ProcessGroup::AllGather(const std::shared_ptr<Tensor> &output,
@@ -156,11 +174,13 @@ std::shared_ptr<Work> ProcessGroup::AllGather(const std::shared_ptr<Tensor> &out
     runtime_impl->StreamWaitEvent(comm_stream, work->ready_event(), 0);
     ccl_impl->AllGather(input->DataPtr(), output->DataPtr(), input->NumElements(), input->Dtype(), comm, comm_stream);
     runtime_impl->EventRecord(work->done_event(), comm_stream);
+
     if (async_op) {
         return work;
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
     }
-    work->WaitNonBlocking();
-    return nullptr;
 }
 
 std::shared_ptr<Work> ProcessGroup::ReduceScatter(const std::shared_ptr<Tensor> &output,
@@ -180,11 +200,13 @@ std::shared_ptr<Work> ProcessGroup::ReduceScatter(const std::shared_ptr<Tensor> 
     ccl_impl->ReduceScatter(input->DataPtr(), output->DataPtr(), output->NumElements(), input->Dtype(), reduce_op, comm,
                             comm_stream);
     runtime_impl->EventRecord(work->done_event(), comm_stream);
+
     if (async_op) {
         return work;
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
     }
-    work->WaitNonBlocking();
-    return nullptr;
 }
 
 std::shared_ptr<Work> ProcessGroup::Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
@@ -207,11 +229,13 @@ std::shared_ptr<Work> ProcessGroup::Send(std::vector<std::shared_ptr<Tensor>> te
         ccl_impl->Send(tensor->DataPtr(), tensor->NumElements(), tensor->Dtype(), dest_rank, comm, comm_stream);
     }
     runtime_impl->EventRecord(work->done_event(), comm_stream);
+
     if (async_op) {
         return work;
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
     }
-    work->WaitNonBlocking();
-    return nullptr;
 }
 
 std::shared_ptr<Work> ProcessGroup::Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank,
@@ -234,11 +258,13 @@ std::shared_ptr<Work> ProcessGroup::Recv(std::vector<std::shared_ptr<Tensor>> te
         ccl_impl->Recv(tensor->DataPtr(), tensor->NumElements(), tensor->Dtype(), src_rank, comm, comm_stream);
     }
     runtime_impl->EventRecord(work->done_event(), comm_stream);
+
     if (async_op) {
         return work;
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
     }
-    work->WaitNonBlocking();
-    return nullptr;
 }
 
 std::vector<std::shared_ptr<Tensor>>
@@ -248,9 +274,9 @@ ProcessGroup::BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensor
     std::vector<core::CclComm *> comms;
     std::vector<Device> devices;
 
-    CHECK_EQ(world_size_, static_cast<int>(comms_.size()));
-    for (int i = 0; i < world_size_; ++i) {
-        auto device = devices_[static_cast<size_t>(i)];
+    CHECK_EQ(world_size_, comms_.size());
+    for (size_t i = 0; i < world_size_; ++i) {
+        auto device = devices_[i];
         for (const auto &input_tensor : input_tensors) {
             outputs.push_back(std::make_shared<Tensor>(input_tensor->Dims(), input_tensor->Dtype(), device));
         }
@@ -269,7 +295,7 @@ ProcessGroup::BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensor
     CHECK_NE(root, -1) << "Root not found in input devices";
 
     auto *ccl_impl = core::GetCclImpl(devices[0].type());
-    core::Ccl ccl(devices[0].type());
+    core::CclGroupGuard ccl_group_guard(devices[0].type());
     for (size_t i = 0; i < devices.size(); ++i) {
         core::DeviceGuard guard(devices[i]);
         for (size_t j = 0; j < input_tensors.size(); ++j) {
@@ -311,7 +337,7 @@ ProcessGroup::ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<T
     CHECK_NE(root, -1) << "Destination device not found in grads group";
 
     auto *ccl_impl = core::GetCclImpl(devices[0].type());
-    core::Ccl ccl(devices[0].type());
+    core::CclGroupGuard ccl_group_guard(devices[0].type());
     for (size_t i = 0; i < grads.size(); ++i) {
         core::DeviceGuard guard(devices[i]);
         for (size_t j = 0; j < grads[i].size(); ++j) {
@@ -343,12 +369,11 @@ std::vector<std::shared_ptr<Tensor>> ProcessGroup::Scatter(const std::shared_ptr
     CHECK_NE(src_rank, -1) << "Source device not found in input devices";
 
     auto *ccl_impl = core::GetCclImpl(devices[0].type());
-    core::Ccl ccl(devices[0].type());
+    core::CclGroupGuard ccl_group_guard(devices[0].type());
     for (size_t i = 0; i < devices.size(); ++i) {
         core::DeviceGuard guard(devices[i]);
-        ccl_impl->Send(split_tensors[i]->DataPtr(), split_tensors[i]->NumElements(), tensor->Dtype(),
-                       static_cast<int>(i), comms[static_cast<size_t>(src_rank)],
-                       streams[static_cast<size_t>(src_rank)]);
+        ccl_impl->Send(split_tensors[i]->DataPtr(), split_tensors[i]->NumElements(), tensor->Dtype(), i,
+                       comms[src_rank], streams[src_rank]);
         ccl_impl->Recv(outputs[i]->DataPtr(), outputs[i]->NumElements(), tensor->Dtype(), src_rank, comms[i],
                        streams[i]);
     }
@@ -383,38 +408,40 @@ std::shared_ptr<Tensor> ProcessGroup::Gather(const std::vector<std::shared_ptr<T
     CHECK_NE(dest_rank, -1) << "Destination device not found in input tensors's devices";
 
     auto *ccl_impl = core::GetCclImpl(devices[0].type());
-    core::Ccl ccl(devices[0].type());
+    core::CclGroupGuard ccl_group_guard(devices[0].type());
     int64_t offset = 0;
-    for (int64_t i = 0; i < num_devices; ++i) {
-        core::DeviceGuard guard(devices[static_cast<size_t>(i)]);
-        auto &tensor = tensors[static_cast<size_t>(i)];
+    for (size_t i = 0; i < num_devices; ++i) {
+        core::DeviceGuard guard(devices[i]);
+        auto &tensor = tensors[i];
         size_t num_elements = tensor->NumElements();
         void *send_ptr = tensor->DataPtr();
         auto *recv_ptr = static_cast<int8_t *>(output->DataPtr()) + offset;
-        ccl_impl->Send(send_ptr, num_elements, dtype, dest_rank, comms[static_cast<size_t>(i)],
-                       streams[static_cast<size_t>(i)]);
-        ccl_impl->Recv(recv_ptr, num_elements, dtype, static_cast<int>(i), comms[static_cast<size_t>(dest_rank)],
-                       streams[static_cast<size_t>(dest_rank)]);
+        ccl_impl->Send(send_ptr, num_elements, dtype, dest_rank, comms[i], streams[i]);
+        ccl_impl->Recv(recv_ptr, num_elements, dtype, i, comms[dest_rank], streams[dest_rank]);
         offset += tensor->SizeInBytes();
     }
     return output;
 }
 
-#if 0
-// Legacy ProcessGroupNCCL implementation is intentionally kept commented out.
-// It was the direct nccl/cuda path (ProcessGroupNCCL::InitSingleProcess / InitMultiProcess / InitStreams /
-// AllReduce / AllGather / ReduceScatter / Send / Recv / BroadCast / ReduceAddCoalesced / Scatter / Gather).
-// The active implementation above is backend-dispatched through DeviceGuardImpl + CclImpl.
-#endif
-
 ProcessGroupFactory *ProcessGroupFactory::Instance() {
-    static std::mutex mutex;
-    static std::unique_ptr<ProcessGroupFactory> instance = nullptr;
+    // NOTE(zbl): Instance() with no arguments only gets initialized instance with a certain backend
+    std::lock_guard<std::mutex> lock(g_process_group_factory_mutex);
+    auto &instance = g_process_group_factory_instance;
     if (instance == nullptr) {
-        std::lock_guard<std::mutex> lock(mutex);
-        if (instance == nullptr) {
-            instance.reset(new ProcessGroupFactory());
-        }
+        LOG(FATAL) << "ProcessGroupFactory is not initialized with backend. "
+                   << "Call ProcessGroupFactory::Instance(backend) first.";
+    }
+    return instance.get();
+}
+
+ProcessGroupFactory *ProcessGroupFactory::Instance(Device::DeviceType backend) {
+    std::lock_guard<std::mutex> lock(g_process_group_factory_mutex);
+    auto &instance = g_process_group_factory_instance;
+    if (instance == nullptr) {
+        instance.reset(new ProcessGroupFactory(backend));
+    } else if (instance->backend_ != backend) {
+        LOG(FATAL) << "ProcessGroupFactory backend mismatch. initialized=" << static_cast<int>(instance->backend_)
+                   << ", requested=" << static_cast<int>(backend);
     }
     return instance.get();
 }
@@ -422,13 +449,11 @@ ProcessGroupFactory *ProcessGroupFactory::Instance() {
 const ProcessGroup *ProcessGroupFactory::GetOrCreate(const std::string &name, int comm_size) {
     std::vector<int> device_indices(comm_size);
     std::iota(device_indices.begin(), device_indices.end(), 0);
-    return GetOrCreate(
-        name, [&]() { return std::make_unique<ProcessGroup>(Device::DeviceType::kCUDA, name, device_indices); });
+    return GetOrCreate(name, [&]() { return std::make_unique<ProcessGroup>(backend_, name, device_indices); });
 }
 
 const ProcessGroup *ProcessGroupFactory::GetOrCreate(const std::string &name, const std::vector<int> &device_indices) {
-    return GetOrCreate(
-        name, [&]() { return std::make_unique<ProcessGroup>(Device::DeviceType::kCUDA, name, device_indices); });
+    return GetOrCreate(name, [&]() { return std::make_unique<ProcessGroup>(backend_, name, device_indices); });
 }
 
 const ProcessGroup *ProcessGroupFactory::Get(const std::string &name) const {
@@ -440,6 +465,7 @@ const ProcessGroup *ProcessGroupFactory::GetDefaultProcessGroup() const {
     return name_to_group_.at(kDefaltProcessGroupName).get();
 }
 
-ProcessGroupFactory::ProcessGroupFactory() { GetOrCreate(kDefaltProcessGroupName, global::GetWorldSize()); }
-
+ProcessGroupFactory::ProcessGroupFactory(Device::DeviceType backend) : backend_(backend) {
+    GetOrCreate(kDefaltProcessGroupName, global::GetWorldSize());
+}
 } // namespace infini_train::nn::parallel

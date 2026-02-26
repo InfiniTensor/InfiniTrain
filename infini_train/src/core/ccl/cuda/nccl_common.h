@@ -28,7 +28,7 @@ public:
     const ncclUniqueId *nccl_unique_id() const;
 
 private:
-    ncclUniqueId id_{};
+    ncclUniqueId id_;
 };
 #endif
 
