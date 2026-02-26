@@ -338,18 +338,25 @@ int64_t CountTotalParameters(const std::shared_ptr<Module> &model) {
     return count;
 }
 
-void PrintLoRASummary(const std::shared_ptr<Module> &model) {
+void PrintLoRASummary(const std::shared_ptr<Module> &model, int global_rank) {
     int64_t trainable = CountTrainableParameters(model);
     int64_t total = CountTotalParameters(model);
     int64_t frozen = total - trainable;
 
     double trainable_pct = 100.0 * trainable / total;
 
-    std::cout << "========== LoRA Model Summary ==========" << std::endl;
+    std::string title
+        = global_rank >= 0 ? " LoRA Model Summary (Rank " + std::to_string(global_rank) + ") " : " LoRA Model Summary ";
+    size_t pad_left = (40 - title.size()) / 2;
+    size_t pad_right = 40 - title.size() - pad_left;
+    std::string header = std::string(pad_left, '=') + title + std::string(pad_right, '=');
+    std::string separator(header.size(), '=');
+
+    std::cout << header << std::endl;
     std::cout << "Total parameters:     " << total << std::endl;
     std::cout << "Trainable parameters: " << trainable << " (" << trainable_pct << "%)" << std::endl;
     std::cout << "Frozen parameters:    " << frozen << std::endl;
-    std::cout << "=========================================" << std::endl;
+    std::cout << separator << std::endl;
 }
 
 std::unordered_set<std::string> ParseLoRATargetModules(const std::string &targets) {

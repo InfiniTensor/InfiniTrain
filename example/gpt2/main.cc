@@ -222,7 +222,7 @@ void Train(const nn::parallel::Rank &rank) {
         }
 
         // Print LoRA summary
-        nn::lora::PrintLoRASummary(model);
+        nn::lora::PrintLoRASummary(model, rank.GlobalRank());
     }
 
     // select the data type
