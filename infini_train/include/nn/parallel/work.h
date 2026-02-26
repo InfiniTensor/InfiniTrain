@@ -6,7 +6,7 @@
 #include <mutex>
 
 #include "infini_train/include/core/ccl/ccl_common.h"
-#include "infini_train/include/core/event.h"
+#include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train::nn::parallel {

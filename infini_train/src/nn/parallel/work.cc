@@ -7,7 +7,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/core/ccl/ccl.h"
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train::nn::parallel {
@@ -35,9 +35,11 @@ Work::~Work() {
 }
 
 bool Work::WaitBlocking(std::chrono::milliseconds timeout) {
+    // Block wait on host
     core::DeviceGuard guard(device_);
     auto *impl = core::GetDeviceGuardImpl(device_.type());
 
+    // If timeout is not set, then wait till it finishes
     if (timeout <= std::chrono::milliseconds::zero()) {
         if (const auto status = impl->EventSynchronize(done_event_); status != core::RuntimeStatus::kSuccess) {
             SetException(makeRuntimeError("EventSynchronize", status));
@@ -46,6 +48,7 @@ bool Work::WaitBlocking(std::chrono::milliseconds timeout) {
         return CheckCclStatus();
     }
 
+    // If timeout is set, keep querying till time's up
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
         const auto query = impl->EventQuery(done_event_);
@@ -56,13 +59,21 @@ bool Work::WaitBlocking(std::chrono::milliseconds timeout) {
             SetException(makeRuntimeError("EventQuery", query));
             return false;
         }
+
+        // NOTE(zbl): sleep for a while in case of busy waiting
         std::this_thread::sleep_for(std::chrono::microseconds(50));
+    }
+
+    if (exception_) {
+        // NOTE(zbl): do not throw any c++ exception
+        LOG(FATAL) << "Work::WaitBlocking: Error occurs while wait(). ";
     }
 
     return false;
 }
 
 bool Work::WaitNonBlocking() {
+    // Non-blocking wait on compute stream
     core::DeviceGuard guard(device_);
     auto *impl = core::GetDeviceGuardImpl(device_.type());
     auto *stream = impl->GetStream(device_);

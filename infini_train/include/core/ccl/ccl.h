@@ -69,15 +69,15 @@ public:
     virtual void Recv(void *buff, size_t count, DataType dtype, int peer, const CclComm *comm, Stream *stream) const;
 };
 
-class Ccl {
+class CclGroupGuard {
 public:
-    explicit Ccl(Device::DeviceType type);
-    ~Ccl();
+    explicit CclGroupGuard(Device::DeviceType type);
+    ~CclGroupGuard();
 
-    Ccl(const Ccl &) = delete;
-    Ccl &operator=(const Ccl &) = delete;
-    Ccl(Ccl &&) = delete;
-    Ccl &operator=(Ccl &&) = delete;
+    CclGroupGuard(const CclGroupGuard &) = delete;
+    CclGroupGuard &operator=(const CclGroupGuard &) = delete;
+    CclGroupGuard(CclGroupGuard &&) = delete;
+    CclGroupGuard &operator=(CclGroupGuard &&) = delete;
 
 private:
     CclImpl *impl_ = nullptr;

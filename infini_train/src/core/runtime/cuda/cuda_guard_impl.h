@@ -1,6 +1,6 @@
 #pragma once
 
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train::core {
@@ -35,6 +35,8 @@ public:
     Stream *CreateStreamWithPriority(Device device, int priority) const override;
 
     void DestroyStream(Stream *stream) const override;
+
+    void GetStreamPriorityRange(int *low, int *high) const override;
 
     // event
     void EventCreate(Event **event) const override;

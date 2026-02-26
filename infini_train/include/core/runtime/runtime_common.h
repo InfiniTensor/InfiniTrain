@@ -4,6 +4,24 @@
 
 namespace infini_train::core {
 
+class BlasHandle {
+public:
+    BlasHandle() = default;
+    virtual ~BlasHandle() = default;
+};
+
+class Event {
+public:
+    Event() = default;
+    virtual ~Event() = default;
+};
+
+class Stream {
+public:
+    Stream() = default;
+    virtual ~Stream() = default;
+};
+
 // Generic runtime status for backend-agnostic control flow.
 #define INFINI_TRAIN_RUNTIME_STATUS_LIST(X)                                                                            \
     X(kSuccess, 0)                                                                                                     \

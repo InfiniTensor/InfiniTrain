@@ -1,4 +1,4 @@
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 
 #include <format>
 #include <memory>
@@ -6,8 +6,7 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/core/blas_handle.h"
-#include "infini_train/include/core/stream.h"
+#include "infini_train/include/core/runtime/runtime_common.h"
 
 namespace infini_train::core {
 
@@ -36,6 +35,10 @@ Stream *DeviceGuardImpl::CreateStreamWithPriority(Device, int) const {
 
 void DeviceGuardImpl::DestroyStream(Stream *) const {
     LOG(FATAL) << "DeviceGuardImpl::DestroyStream is not implemented.";
+}
+
+void DeviceGuardImpl::GetStreamPriorityRange(int *, int *) const {
+    LOG(FATAL) << "DeviceGuardImpl::GetStreamPriorityRange is not implemented.";
 }
 
 void DeviceGuardImpl::EventCreate(Event **) const { LOG(FATAL) << "DeviceGuardImpl::EventCreate is not implemented."; }

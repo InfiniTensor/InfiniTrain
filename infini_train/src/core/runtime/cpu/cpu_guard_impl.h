@@ -2,7 +2,7 @@
 
 #include <utility>
 
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 
 namespace infini_train::core::cpu {
 
@@ -27,6 +27,8 @@ public:
     Stream *CreateStreamWithPriority(Device device, int priority) const override;
 
     void DestroyStream(Stream *stream) const override;
+
+    void GetStreamPriorityRange(int *low, int *high) const override;
 
     // Event management (explicitly unsupported for now)
     void EventCreate(Event **event) const override;

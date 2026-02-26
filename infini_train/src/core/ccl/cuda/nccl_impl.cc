@@ -15,10 +15,10 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"
-#include "infini_train/include/core/stream.h"
+#include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
 #include "infini_train/src/core/ccl/cuda/nccl_common.h"
-#include "infini_train/src/core/cuda/cuda_stream.h"
+#include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::core::cuda {
 namespace {
