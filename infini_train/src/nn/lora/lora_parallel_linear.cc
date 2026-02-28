@@ -10,8 +10,10 @@
 #include "infini_train/include/autograd/linear.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/init.h"
+#include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
+#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::lora {
@@ -22,11 +24,21 @@ namespace infini_train::nn::lora {
 
 LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<nn::Module> base_module, const LoRAConfig &config,
                                                    int64_t in_features, int64_t out_features)
-    : CloneableModule(kType), config_(config), in_features_(in_features), out_features_(out_features), bias_(false),
-      gather_output_(false), input_is_parallel_(false), skip_bias_add_(false), sequence_parallel_(false) {
+    : CloneableModule(kType), config_(config), in_features_(in_features), out_features_(out_features) {
     if (!base_module) {
         throw std::invalid_argument("base_module cannot be null");
     }
+
+    base_module_ = base_module;
+
+    // Get TP config from base module
+    auto col_linear = std::dynamic_pointer_cast<parallel::ColumnParallelLinear>(base_module);
+    CHECK(col_linear != nullptr) << "base_module must be ColumnParallelLinear";
+    bias_ = col_linear->bias();
+    gather_output_ = col_linear->gather_output();
+    input_is_parallel_ = col_linear->input_is_parallel();
+    skip_bias_add_ = col_linear->skip_bias_add();
+    sequence_parallel_ = col_linear->sequence_parallel();
 
     // Get device from base module
     device_ = base_module->parameter(parallel::ColumnParallelLinear::kParamWeightName)->GetDevice();
@@ -41,7 +53,6 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<nn::Module> b
     // Transfer bias if exists
     if (base_module->has_parameter(parallel::ColumnParallelLinear::kParamBiasName)) {
         parameters_[kParamBiasName] = base_module->parameter(parallel::ColumnParallelLinear::kParamBiasName);
-        bias_ = true;
     }
 
     // Initialize LoRA weights
@@ -52,11 +63,21 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<nn::Module> b
 }
 
 LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<nn::Module> base_module, const LoRAConfig &config)
-    : CloneableModule(kType), config_(config), bias_(false), gather_output_(false), input_is_parallel_(false),
-      skip_bias_add_(false), sequence_parallel_(false) {
+    : CloneableModule(kType), config_(config) {
     if (!base_module) {
         throw std::invalid_argument("base_module cannot be null");
     }
+
+    base_module_ = base_module;
+
+    // Get TP config from base module
+    auto col_linear = std::dynamic_pointer_cast<parallel::ColumnParallelLinear>(base_module);
+    CHECK(col_linear != nullptr) << "base_module must be ColumnParallelLinear";
+    bias_ = col_linear->bias();
+    gather_output_ = col_linear->gather_output();
+    input_is_parallel_ = col_linear->input_is_parallel();
+    skip_bias_add_ = col_linear->skip_bias_add();
+    sequence_parallel_ = col_linear->sequence_parallel();
 
     // Get device from base module
     device_ = base_module->parameter(parallel::ColumnParallelLinear::kParamWeightName)->GetDevice();
@@ -76,7 +97,6 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<nn::Module> b
     // Transfer bias if exists
     if (base_module->has_parameter(parallel::ColumnParallelLinear::kParamBiasName)) {
         parameters_[kParamBiasName] = base_module->parameter(parallel::ColumnParallelLinear::kParamBiasName);
-        bias_ = true;
     }
 
     // Initialize LoRA weights
@@ -87,18 +107,22 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<nn::Module> b
 }
 
 void LoRAColumnParallelLinear::InitLoRAWeights() {
-    // A matrix: [rank, in_features] - replicated across TP ranks
+    // LoRA weights stored directly in parameters_
+    // Following PEFT pattern conceptually:
+    // lora_A: [rank, in_features] - replicated
+    // lora_B: [out_features_per_partition, rank] - sharded like base weight
+
+    // lora_A: [rank, in_features]
     parameters_[kParamLoraAName]
         = std::make_shared<Tensor>(std::vector<int64_t>{config_.rank, in_features_}, DataType::kFLOAT32, device_)
               ->RequiresGrad();
-
     if (config_.use_kaiming_a) {
         init::KaimingUniform(parameters_[kParamLoraAName], config_.kaiming_a_param);
     } else {
         init::Normal(parameters_[kParamLoraAName], 0.0f, 0.02f);
     }
 
-    // B matrix: [out_features_per_partition, rank] - sharded like base weight
+    // lora_B: [out_per_partition, rank] - sharded like base weight
     parameters_[kParamLoraBName]
         = std::make_shared<Tensor>(std::vector<int64_t>{out_features_per_partition_, config_.rank}, DataType::kFLOAT32,
                                    device_)
@@ -116,31 +140,43 @@ void LoRAColumnParallelLinear::FreezeBaseWeights() {
 std::vector<std::shared_ptr<Tensor>>
 LoRAColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1) << "LoRAColumnParallelLinear takes exactly one input";
-    const auto &input = input_tensors[0];
-
-    // Base linear computation
-    auto base_output = std::make_shared<autograd::Linear>()->Apply(
-        (bias_ && !skip_bias_add_)
-            ? std::vector<std::shared_ptr<Tensor>>{input, parameters_[kParamWeightName], parameters_[kParamBiasName]}
-            : std::vector<std::shared_ptr<Tensor>>{input, parameters_[kParamWeightName]})[0];
 
     if (!merged_) {
-        // LoRA computation: x @ A^T @ B^T
-        // A is replicated [rank, in_features], so x @ A^T gives same result on all ranks
-        auto hidden = std::make_shared<autograd::Linear>()->Apply({input, parameters_[kParamLoraAName]})[0];
+        // 1. Compute base output via base_module
+        // base_module handles all TP/SP communication internally
+        auto base_result = base_module_->Forward(input_tensors);
+        auto base_output = base_result[0];
 
-        // B is sharded [out_features_per_partition, rank], so hidden @ B^T gives sharded output
-        auto lora_output = std::make_shared<autograd::Linear>()->Apply({hidden, parameters_[kParamLoraBName]})[0];
+        // 2. Compute LoRA output using the SAME input that base module uses
+        // ColumnParallel: if input_is_parallel_=false, base gathers TP input
+        // If sequence_parallel_=true, base also gathers SP sequence
+        auto lora_input = input_tensors[0];
+        if (!input_is_parallel_) {
+            // Base uses CopyToTPRegionFunc to copy to TP region
+            lora_input = parallel::CopyToTPRegionFunc(input_tensors[0])[0];
+        }
+        if (sequence_parallel_) {
+            // Base uses GatherFromSPRegionFunc to gather sequence dimension
+            lora_input = parallel::GatherFromSPRegionFunc(lora_input)[0];
+        }
 
-        // Scale and add
-        float scaling = config_.Scaling();
-        auto scaled_lora = lora_output->Mul(scaling);
-        base_output = base_output->Add(scaled_lora);
+        // Compute LoRA: lora_A: [rank, in_features], lora_B: [out_per_partition, rank]
+        auto lora_proj = std::make_shared<autograd::Linear>()->Apply({lora_input, parameters_[kParamLoraAName]})[0];
+        auto lora_output = std::make_shared<autograd::Linear>()->Apply({lora_proj, parameters_[kParamLoraBName]})[0];
+        auto scaled_lora = lora_output->Mul(config_.Scaling());
+
+        // 3. Add LoRA contribution to base output
+        // Both should now have the same sequence dimension
+        auto output = base_output->Add(scaled_lora);
+
+        // Return in same format as base module
+        return skip_bias_add_
+                 ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_[kParamBiasName] : nullptr}
+                 : std::vector<std::shared_ptr<Tensor>>{output};
     }
 
-    return skip_bias_add_
-             ? std::vector<std::shared_ptr<Tensor>>{base_output, bias_ ? parameters_.at(kParamBiasName) : nullptr}
-             : std::vector<std::shared_ptr<Tensor>>{base_output};
+    // When merged, delegate to base module
+    return base_module_->Forward(input_tensors);
 }
 
 void LoRAColumnParallelLinear::MergeWeights() {
@@ -151,9 +187,6 @@ void LoRAColumnParallelLinear::MergeWeights() {
     original_weight_ = std::make_shared<Tensor>(*parameters_[kParamWeightName]);
 
     // W' = W + (alpha/r) * B @ A
-    // W: [out_features_per_partition, in_features]
-    // B: [out_features_per_partition, rank]
-    // A: [rank, in_features]
     auto delta = parameters_[kParamLoraBName]->Matmul(parameters_[kParamLoraAName]);
     auto scaled_delta = delta->Mul(config_.Scaling());
     auto new_weight = parameters_[kParamWeightName]->Add(scaled_delta);
@@ -190,11 +223,21 @@ int64_t LoRAColumnParallelLinear::rank() const { return config_.rank; }
 
 LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<nn::Module> base_module, const LoRAConfig &config,
                                              int64_t in_features, int64_t out_features)
-    : CloneableModule(kType), config_(config), in_features_(in_features), out_features_(out_features), bias_(false),
-      reduce_output_(false), input_is_parallel_(false), skip_bias_add_(false), sequence_parallel_(false) {
+    : CloneableModule(kType), config_(config), in_features_(in_features), out_features_(out_features) {
     if (!base_module) {
         throw std::invalid_argument("base_module cannot be null");
     }
+
+    base_module_ = base_module;
+
+    // Get TP config from base module
+    auto row_linear = std::dynamic_pointer_cast<parallel::RowParallelLinear>(base_module);
+    CHECK(row_linear != nullptr) << "base_module must be RowParallelLinear";
+    bias_ = row_linear->bias();
+    reduce_output_ = row_linear->reduce_output();
+    input_is_parallel_ = row_linear->input_is_parallel();
+    skip_bias_add_ = row_linear->skip_bias_add();
+    sequence_parallel_ = row_linear->sequence_parallel();
 
     // Get device from base module
     device_ = base_module->parameter(parallel::RowParallelLinear::kParamWeightName)->GetDevice();
@@ -209,7 +252,6 @@ LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<nn::Module> base_mo
     // Transfer bias if exists
     if (base_module->has_parameter(parallel::RowParallelLinear::kParamBiasName)) {
         parameters_[kParamBiasName] = base_module->parameter(parallel::RowParallelLinear::kParamBiasName);
-        bias_ = true;
     }
 
     // Initialize LoRA weights
@@ -220,11 +262,21 @@ LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<nn::Module> base_mo
 }
 
 LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<nn::Module> base_module, const LoRAConfig &config)
-    : CloneableModule(kType), config_(config), bias_(false), reduce_output_(false), input_is_parallel_(false),
-      skip_bias_add_(false), sequence_parallel_(false) {
+    : CloneableModule(kType), config_(config) {
     if (!base_module) {
         throw std::invalid_argument("base_module cannot be null");
     }
+
+    base_module_ = base_module;
+
+    // Get TP config from base module
+    auto row_linear = std::dynamic_pointer_cast<parallel::RowParallelLinear>(base_module);
+    CHECK(row_linear != nullptr) << "base_module must be RowParallelLinear";
+    bias_ = row_linear->bias();
+    reduce_output_ = row_linear->reduce_output();
+    input_is_parallel_ = row_linear->input_is_parallel();
+    skip_bias_add_ = row_linear->skip_bias_add();
+    sequence_parallel_ = row_linear->sequence_parallel();
 
     // Get device from base module
     device_ = base_module->parameter(parallel::RowParallelLinear::kParamWeightName)->GetDevice();
@@ -244,7 +296,6 @@ LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<nn::Module> base_mo
     // Transfer bias if exists
     if (base_module->has_parameter(parallel::RowParallelLinear::kParamBiasName)) {
         parameters_[kParamBiasName] = base_module->parameter(parallel::RowParallelLinear::kParamBiasName);
-        bias_ = true;
     }
 
     // Initialize LoRA weights
@@ -255,19 +306,21 @@ LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<nn::Module> base_mo
 }
 
 void LoRARowParallelLinear::InitLoRAWeights() {
-    // A matrix: [rank, in_features_per_partition] - sharded like base weight
+    // lora_A: [rank, in_features_per_partition] - sharded
+    // lora_B: [out_features, rank] - replicated
+
+    // lora_A: [rank, in_features_per_partition]
     parameters_[kParamLoraAName]
         = std::make_shared<Tensor>(std::vector<int64_t>{config_.rank, in_features_per_partition_}, DataType::kFLOAT32,
                                    device_)
               ->RequiresGrad();
-
     if (config_.use_kaiming_a) {
         init::KaimingUniform(parameters_[kParamLoraAName], config_.kaiming_a_param);
     } else {
         init::Normal(parameters_[kParamLoraAName], 0.0f, 0.02f);
     }
 
-    // B matrix: [out_features, rank] - replicated across TP ranks
+    // lora_B: [out_features, rank]
     parameters_[kParamLoraBName]
         = std::make_shared<Tensor>(std::vector<int64_t>{out_features_, config_.rank}, DataType::kFLOAT32, device_)
               ->RequiresGrad();
@@ -284,36 +337,51 @@ void LoRARowParallelLinear::FreezeBaseWeights() {
 std::vector<std::shared_ptr<Tensor>>
 LoRARowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1) << "LoRARowParallelLinear takes exactly one input";
-    const auto &input = input_tensors[0];
-
-    // Base linear computation (local matmul)
-    auto base_output = std::make_shared<autograd::Linear>()->Apply({input, parameters_[kParamWeightName]})[0];
 
     if (!merged_) {
-        // LoRA computation for RowParallel:
-        // A is sharded [rank, in_features_per_partition]
-        // x_local @ A_local^T gives partial result [batch, seq, rank]
-        auto hidden_local = std::make_shared<autograd::Linear>()->Apply({input, parameters_[kParamLoraAName]})[0];
+        // Get effective input - match what base module uses
+        auto effective_input = input_tensors[0];
+        const int64_t in_dim = effective_input->Dims().back();
 
-        // For RowParallel, we need to sum the partial results from all ranks
-        // This is handled by the reduce operation that follows
-        // B is replicated [out_features, rank]
-        auto lora_output = std::make_shared<autograd::Linear>()->Apply({hidden_local, parameters_[kParamLoraBName]})[0];
+        if (!input_is_parallel_) {
+            // base would scatter; lora must match
+            effective_input = parallel::ScatterToTPRegionFunc(effective_input)[0];
+            CHECK_EQ(effective_input->Dims().back(), in_features_per_partition_);
+        } else {
+            // input_is_parallel_=true means caller promised shard input
+            CHECK_EQ(in_dim, in_features_per_partition_)
+                << "RowParallel expects sharded input when input_is_parallel_=true. "
+                << "Got full in_dim=" << in_dim << " (likely upstream gathered TP output).";
+        }
 
-        // Scale and add to base output (before reduce)
-        float scaling = config_.Scaling();
-        auto scaled_lora = lora_output->Mul(scaling);
-        base_output = base_output->Add(scaled_lora);
+        // 1) base output - use effective_input
+        auto base_result = base_module_->Forward({effective_input});
+        auto base_output = base_result[0];
+
+        // 2) lora branch uses the SAME effective_input
+        auto lora_proj
+            = std::make_shared<autograd::Linear>()->Apply({effective_input, parameters_[kParamLoraAName]})[0];
+        auto lora_output = std::make_shared<autograd::Linear>()->Apply({lora_proj, parameters_[kParamLoraBName]})[0];
+
+        // 3) apply same reduction as base
+        auto lora_out = lora_output;
+        if (reduce_output_) {
+            lora_out = sequence_parallel_ ? parallel::ReduceScatterToSPRegionFunc(lora_out)[0]
+                                          : parallel::ReduceFromTPRegionFunc(lora_out)[0];
+        }
+
+        auto scaled_lora = lora_out->Mul(config_.Scaling());
+        CHECK_EQ(base_output->NumElements(), scaled_lora->NumElements());
+        auto output = base_output->Add(scaled_lora);
+
+        // Return in same format as base module
+        return skip_bias_add_
+                 ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_[kParamBiasName] : nullptr}
+                 : std::vector<std::shared_ptr<Tensor>>{output};
     }
 
-    // Handle bias
-    if (bias_ && !skip_bias_add_) {
-        base_output = base_output->Add(parameters_[kParamBiasName]);
-    }
-
-    return skip_bias_add_
-             ? std::vector<std::shared_ptr<Tensor>>{base_output, bias_ ? parameters_.at(kParamBiasName) : nullptr}
-             : std::vector<std::shared_ptr<Tensor>>{base_output};
+    // When merged, delegate to base module
+    return base_module_->Forward(input_tensors);
 }
 
 void LoRARowParallelLinear::MergeWeights() {
@@ -324,9 +392,6 @@ void LoRARowParallelLinear::MergeWeights() {
     original_weight_ = std::make_shared<Tensor>(*parameters_[kParamWeightName]);
 
     // W' = W + (alpha/r) * B @ A
-    // W: [out_features, in_features_per_partition]
-    // B: [out_features, rank]
-    // A: [rank, in_features_per_partition]
     auto delta = parameters_[kParamLoraBName]->Matmul(parameters_[kParamLoraAName]);
     auto scaled_delta = delta->Mul(config_.Scaling());
     auto new_weight = parameters_[kParamWeightName]->Add(scaled_delta);

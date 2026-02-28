@@ -235,13 +235,11 @@ void LinearResetParameters(std::shared_ptr<Tensor> weight, std::shared_ptr<Tenso
     }
 }
 
-// Comm Helper Functions
+} // anonymous namespace
+
+// TP/SP Communication Helper Functions (defined in utils.h)
 std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<CopyToTPRegion>()->Apply({input});
-}
-
-std::vector<std::shared_ptr<Tensor>> GatherFromTPRegionFunc(const std::shared_ptr<Tensor> &input) {
-    return std::make_shared<GatherFromTPRegion>()->Apply({input});
 }
 
 std::vector<std::shared_ptr<Tensor>> ScatterToTPRegionFunc(const std::shared_ptr<Tensor> &input) {
@@ -252,6 +250,10 @@ std::vector<std::shared_ptr<Tensor>> ReduceFromTPRegionFunc(const std::shared_pt
     return std::make_shared<ReduceFromTPRegion>()->Apply({input});
 }
 
+std::vector<std::shared_ptr<Tensor>> GatherFromTPRegionFunc(const std::shared_ptr<Tensor> &input) {
+    return std::make_shared<GatherFromTPRegion>()->Apply({input});
+}
+
 std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<ReduceScatterToSPRegion>()->Apply({input});
 }
@@ -259,7 +261,6 @@ std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(const std::shar
 std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<GatherFromSPRegion>()->Apply({input});
 }
-} // namespace
 
 ColumnParallelLinear::ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool gather_output,
                                            bool input_is_parallel, bool skip_bias_add, bool sequence_parallel)
@@ -307,6 +308,13 @@ ColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_
              : std::vector<std::shared_ptr<Tensor>>{output};
 }
 
+// ColumnParallelLinear getters
+bool ColumnParallelLinear::bias() const { return bias_; }
+bool ColumnParallelLinear::gather_output() const { return gather_output_; }
+bool ColumnParallelLinear::input_is_parallel() const { return input_is_parallel_; }
+bool ColumnParallelLinear::skip_bias_add() const { return skip_bias_add_; }
+bool ColumnParallelLinear::sequence_parallel() const { return sequence_parallel_; }
+
 RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool reduce_output,
                                      bool input_is_parallel, bool skip_bias_add, bool sequence_parallel)
     : CloneableModule(kType), bias_(bias), reduce_output_(reduce_output), input_is_parallel_(input_is_parallel),
@@ -353,6 +361,13 @@ RowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_ten
              ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_.at(kParamBiasName) : nullptr}
              : std::vector<std::shared_ptr<Tensor>>{output};
 }
+
+// RowParallelLinear getters
+bool RowParallelLinear::bias() const { return bias_; }
+bool RowParallelLinear::reduce_output() const { return reduce_output_; }
+bool RowParallelLinear::input_is_parallel() const { return input_is_parallel_; }
+bool RowParallelLinear::skip_bias_add() const { return skip_bias_add_; }
+bool RowParallelLinear::sequence_parallel() const { return sequence_parallel_; }
 
 VocabParallelEmbedding::VocabParallelEmbedding(int64_t num_embeddings, int64_t embedding_dim,
                                                bool reduce_scatter_embeddings)
