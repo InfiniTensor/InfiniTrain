@@ -22,6 +22,13 @@ public:
     virtual ~Stream() = default;
 };
 
+enum class EventFlag : uint32_t {
+    kDefault = 0x0,
+    kBlockingSync = 0x1,
+    kDisableTiming = 0x2,
+    kInterprocess = 0x4,
+};
+
 // Generic runtime status for backend-agnostic control flow.
 #define INFINI_TRAIN_RUNTIME_STATUS_LIST(X)                                                                            \
     X(kSuccess, 0)                                                                                                     \

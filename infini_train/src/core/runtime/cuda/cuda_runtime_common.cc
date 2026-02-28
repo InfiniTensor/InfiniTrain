@@ -3,8 +3,26 @@
 #include "infini_train/include/common/cuda/common_cuda.h"
 
 namespace infini_train::core::cuda {
+namespace {
+uint32_t ToCudaEventFlags(EventFlag flags) {
+    switch (flags) {
+    case EventFlag::kDefault:
+        return cudaEventDefault;
+    case EventFlag::kBlockingSync:
+        return cudaEventBlockingSync;
+    case EventFlag::kDisableTiming:
+        return cudaEventDisableTiming;
+    case EventFlag::kInterprocess:
+        // CUDA requires cudaEventDisableTiming with interprocess events.
+        return cudaEventInterprocess | cudaEventDisableTiming;
+    default:
+        LOG(FATAL) << "Unsupported EventFlag value: " << static_cast<uint32_t>(flags);
+    }
+    return cudaEventDefault;
+}
+} // namespace
 
-CudaEvent::CudaEvent(uint32_t flags) { CUDA_CHECK(cudaEventCreateWithFlags(&event_, flags)); }
+CudaEvent::CudaEvent(EventFlag flags) { CUDA_CHECK(cudaEventCreateWithFlags(&event_, ToCudaEventFlags(flags))); }
 
 CudaEvent::~CudaEvent() {
     if (event_ != nullptr) {

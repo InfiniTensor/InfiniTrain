@@ -139,7 +139,7 @@ void CudaGuardImpl::GetStreamPriorityRange(int *low, int *high) const {
 // event
 void CudaGuardImpl::EventCreate(Event **event) const { *event = new CudaEvent(); }
 
-void CudaGuardImpl::EventCreateWithFlags(Event **event, uint32_t flags) const { *event = new CudaEvent(flags); }
+void CudaGuardImpl::EventCreateWithFlags(Event **event, EventFlag flags) const { *event = new CudaEvent(flags); }
 
 void CudaGuardImpl::EventDestroy(Event *event) const {
     if (event == nullptr) {

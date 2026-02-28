@@ -425,20 +425,27 @@ std::shared_ptr<Tensor> ProcessGroup::Gather(const std::vector<std::shared_ptr<T
 
 ProcessGroupFactory *ProcessGroupFactory::Instance() {
     // NOTE(zbl): Instance() with no arguments only gets initialized instance with a certain backend
-    std::lock_guard<std::mutex> lock(g_process_group_factory_mutex);
     auto &instance = g_process_group_factory_instance;
     if (instance == nullptr) {
-        LOG(FATAL) << "ProcessGroupFactory is not initialized with backend. "
-                   << "Call ProcessGroupFactory::Instance(backend) first.";
+        std::lock_guard<std::mutex> lock(g_process_group_factory_mutex);
+        if (instance == nullptr) {
+            LOG(FATAL) << "ProcessGroupFactory is not initialized with backend. "
+                       << "Call ProcessGroupFactory::Instance(backend) first.";
+        }
     }
     return instance.get();
 }
 
 ProcessGroupFactory *ProcessGroupFactory::Instance(Device::DeviceType backend) {
-    std::lock_guard<std::mutex> lock(g_process_group_factory_mutex);
     auto &instance = g_process_group_factory_instance;
     if (instance == nullptr) {
-        instance.reset(new ProcessGroupFactory(backend));
+        std::lock_guard<std::mutex> lock(g_process_group_factory_mutex);
+        if (instance == nullptr) {
+            instance.reset(new ProcessGroupFactory(backend));
+        } else if (instance->backend_ != backend) {
+            LOG(FATAL) << "ProcessGroupFactory backend mismatch. initialized=" << static_cast<int>(instance->backend_)
+                       << ", requested=" << static_cast<int>(backend);
+        }
     } else if (instance->backend_ != backend) {
         LOG(FATAL) << "ProcessGroupFactory backend mismatch. initialized=" << static_cast<int>(instance->backend_)
                    << ", requested=" << static_cast<int>(backend);

@@ -94,7 +94,7 @@ public:
 
     virtual void EventCreate(Event **event) const;
 
-    virtual void EventCreateWithFlags(Event **event, uint32_t flags) const;
+    virtual void EventCreateWithFlags(Event **event, EventFlag flags) const;
 
     virtual void EventDestroy(Event *event) const;
 
