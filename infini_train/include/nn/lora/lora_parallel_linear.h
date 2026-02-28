@@ -15,8 +15,9 @@ namespace infini_train::nn::lora {
 
 // LoRA wrapper for ColumnParallelLinear
 // Weight shape: [out_features_per_partition, in_features]
-// LoRA A: [rank, in_features] - replicated across TP ranks
-// LoRA B: [out_features_per_partition, rank] - sharded like base weight
+// LoRA A: [rank, in_features] - replicated across TP ranks (implemented as Linear)
+// LoRA B: [out_features_per_partition, rank] - sharded like base weight (implemented as ColumnParallelLinear with
+// gather_output)
 class LoRAColumnParallelLinear : public nn::CloneableModule<LoRAColumnParallelLinear> {
 public:
     static constexpr char kType[] = "LoRAColumnParallelLinear";
@@ -62,12 +63,13 @@ private:
     bool merged_ = false;
 
     std::shared_ptr<Tensor> original_weight_;
+    std::shared_ptr<nn::Module> base_module_; // Not registered in modules_ to avoid double-counting
 };
 
 // LoRA wrapper for RowParallelLinear
 // Weight shape: [out_features, in_features_per_partition]
-// LoRA A: [rank, in_features_per_partition] - sharded like base weight
-// LoRA B: [out_features, rank] - replicated, but gradient needs AllReduce
+// LoRA A: [rank, in_features_per_partition] - sharded like base weight (implemented as RowParallelLinear with
+// input_is_parallel) LoRA B: [out_features, rank] - replicated (implemented as Linear)
 class LoRARowParallelLinear : public nn::CloneableModule<LoRARowParallelLinear> {
 public:
     static constexpr char kType[] = "LoRARowParallelLinear";
@@ -113,6 +115,7 @@ private:
     bool merged_ = false;
 
     std::shared_ptr<Tensor> original_weight_;
+    std::shared_ptr<nn::Module> base_module_; // Not registered in modules_ to avoid double-counting
 };
 
 } // namespace infini_train::nn::lora

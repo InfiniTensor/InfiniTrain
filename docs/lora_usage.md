@@ -11,6 +11,7 @@
 5. [API 参考](#api-参考)
 6. [使用示例](#使用示例)
 7. [最佳实践](#最佳实践)
+8. [常见问题](#常见问题)
 
 ## 快速开始
 
@@ -22,6 +23,8 @@
 #include "nn/lora/lora_utils.h"
 // 如果使用张量并行
 #include "nn/lora/lora_parallel_linear.h"
+// 如果使用 LoRAModel 包装器
+#include "nn/lora/lora_model.h"
 ```
 
 ### 最简示例
@@ -34,23 +37,23 @@ LoRAConfig config;
 config.rank = 8;       // 低秩维度
 config.alpha = 16.0f;  // 缩放因子
 
-// 2. 获取 LoRA 模型
-auto* lora_model = GetLoRAModel(model, config);
+// 2. 获取 LoRA 模型 (原地修改，自动冻结基础模型)
+auto lora_model = GetLoRAModel(model, config);
 
 // 3. 获取 LoRA 参数用于优化器
-auto lora_params = lora_model->TrainableParameters();
+auto lora_params = GetLoRAParameters(lora_model);
 auto optimizer = std::make_shared<Adam>(lora_params, lr);
 
 // 4. 训练循环
 for (int step = 0; step < num_steps; ++step) {
-    auto loss = (*model)(inputs);
+    auto loss = (*lora_model)(inputs);
     loss->Backward();
     optimizer->Step();
     optimizer->ZeroGrad();
 }
 
-// 6. 保存 LoRA 权重
-SaveLoRAWeights(model, "lora_weights.bin");
+// 5. 保存 LoRA 权重
+SaveLoRAWeights(lora_model, "lora_weights.bin");
 ```
 
 ## 核心概念
@@ -134,11 +137,12 @@ std::shared_ptr<LoRAModel> CreateLoRAModel(
 ```cpp
 struct LoRAConfig {
     int64_t rank = 8;       // 低秩维度 r
-    float alpha = 16.0f;    // 缩放因子 α
-    float dropout = 0.0f;   // Dropout 概率（暂未实现）
+    float alpha = 16.0f;   // 缩放因子 α
+    float dropout = 0.0f;  // Dropout 概率（暂未实现）
 
     // 目标模块名称（默认只对 attention 层应用）
-    std::unordered_set<std::string> target_modules = {"c_attn", "attn.c_proj"};
+    // 注意：匹配模块名的后缀，而非完整路径
+    std::unordered_set<std::string> target_modules = {"c_attn", "c_proj"};
 
     // 初始化参数
     bool use_kaiming_a = true;     // A 矩阵使用 Kaiming 初始化
@@ -148,6 +152,7 @@ struct LoRAConfig {
     float Scaling() const;  // 返回 alpha / rank
 
     // 检查模块是否应该应用 LoRA
+    // 匹配规则：模块名以 target_modules 中的任意一个结尾
     bool ShouldApplyLoRA(const std::string &module_name) const;
 };
 ```
@@ -159,7 +164,7 @@ struct LoRAConfig {
 PEFT-style 运行时包装器，使用 `NamedModules()` 自动遍历模型层次结构，创建 LoRA 模型。
 
 ```cpp
-LoRAModel* GetLoRAModel(
+std::shared_ptr<Module> GetLoRAModel(
     std::shared_ptr<Module> model,           // 目标模型
     const LoRAConfig &config                 // LoRA 配置
 );
@@ -169,17 +174,18 @@ LoRAModel* GetLoRAModel(
 - `model`: 要包装的模型
 - `config`: LoRA 配置（包含 `target_modules` 指定目标层）
 
-**返回值：** `LoRAModel*`，可用于调用 `LoadLoRA()`, `SaveLoRA()`, `PrintSummary()` 等方法
+**返回值：** `std::shared_ptr<Module>`，返回原地修改后的模型（已注入 LoRA 层并冻结基础模型）
 
 **使用示例：**
 ```cpp
 // 配置 LoRA
 LoRAConfig config{8, 16.0f};
-config.SetTargetModules("c_attn,attn.c_proj");       // 只对 attention
-// config.SetTargetModules("c_attn,attn.c_proj,c_fc,c_fc2,mlp.c_proj");  // 包含 MLP
+// 使用 ParseLoRATargetModules 解析逗号分隔的字符串
+config.target_modules = ParseLoRATargetModules("c_attn,c_proj");  // 只对 attention
+// config.target_modules = ParseLoRATargetModules("c_attn,c_proj,c_fc,c_proj");  // 包含 MLP
 
-// 一行启用 LoRA
-auto* lora_model = nn::lora::GetLoRAModel(model, config);
+// 一行启用 LoRA (原地修改，自动冻结基础模型)
+auto lora_model = nn::lora::GetLoRAModel(model, config);
 ```
 
 #### InjectLoRALayers
@@ -271,6 +277,33 @@ int64_t CountTrainableParameters(const std::shared_ptr<Module> &model);
 int64_t CountTotalParameters(const std::shared_ptr<Module> &model);
 ```
 
+### 工具函数
+
+```cpp
+// 解析逗号分隔的目标模块字符串
+std::unordered_set<std::string> ParseLoRATargetModules(const std::string &targets);
+
+// 示例: "c_attn,c_proj" -> {"c_attn", "c_proj"}
+```
+
+### 张量并行 LoRA 类
+
+当使用张量并行 (TP) 时，`GetLoRAModel` 会自动检测并使用对应的 LoRA 包装器：
+
+```cpp
+// LoRA for ColumnParallelLinear (e.g., QKV projection)
+// LoRA A: [rank, in_features] - replicated across TP ranks
+// LoRA B: [out_features_per_partition, rank] - sharded like base weight
+class LoRAColumnParallelLinear;
+
+// LoRA for RowParallelLinear (e.g., output projection)
+// LoRA A: [rank, in_features_per_partition] - sharded like base weight
+// LoRA B: [out_features, rank] - replicated across TP ranks
+class LoRARowParallelLinear;
+```
+
+**注意**: 使用张量并行时无需手动创建这些类，`GetLoRAModel` 会自动处理。
+
 ## 使用示例
 
 ### 示例 1: GPT2 微调
@@ -290,10 +323,10 @@ int main() {
     LoRAConfig lora_config;
     lora_config.rank = 8;
     lora_config.alpha = 16.0f;
-    lora_config.SetTargetModules("c_attn,attn.c_proj");  // 只对 attention 层
+    lora_config.target_modules = ParseLoRATargetModules("c_attn,c_proj");  // 只对 attention 层
 
-    // 获取 LoRA 模型
-    auto* lora_model = GetLoRAModel(model, lora_config);
+    // 获取 LoRA 模型 (原地修改，自动冻结基础模型)
+    auto lora_model = GetLoRAModel(model, lora_config);
 
     // 打印参数统计
     PrintLoRASummary(lora_model);
@@ -305,7 +338,7 @@ int main() {
     // =========================================
 
     // 创建优化器（只优化 LoRA 参数）
-    auto lora_params = lora_model->TrainableParameters();
+    auto lora_params = GetLoRAParameters(lora_model);
     auto optimizer = std::make_shared<Adam>(lora_params, /*lr=*/1e-4);
 
     // 训练循环
@@ -321,7 +354,7 @@ int main() {
     }
 
     // 保存 LoRA 权重（仅几 MB）
-    lora_model->SaveLoRA("gpt2_lora.bin");
+    SaveLoRAWeights(lora_model, "gpt2_lora.bin");
 
     return 0;
 }
@@ -350,10 +383,10 @@ int main(int argc, char **argv) {
 
     // 配置 LoRA（包含 MLP 层以获得更好效果）
     LoRAConfig lora_config{16, 32.0f};
-    lora_config.SetTargetModules("c_attn,attn.c_proj,c_fc,c_fc2,mlp.c_proj");
+    lora_config.target_modules = ParseLoRATargetModules("c_attn,c_proj,c_fc,c_fc2,c_proj");
 
-    // 获取 LoRA 模型（通过 target_modules 配置包含 MLP 层）
-    auto* lora_model = GetLoRAModel(model, lora_config);
+    // 获取 LoRA 模型（原地修改，自动冻结基础模型）
+    auto lora_model = GetLoRAModel(model, lora_config);
 
     PrintLoRASummary(lora_model);
 
@@ -361,7 +394,7 @@ int main(int argc, char **argv) {
 
     // 保存
     if (GetRank() == 0) {
-        SaveLoRAWeights(model, "llama3_lora.bin");
+        SaveLoRAWeights(lora_model, "llama3_lora.bin");
     }
 
     return 0;
@@ -375,30 +408,37 @@ int main(int argc, char **argv) {
 auto model = std::make_shared<GPT2>(config);
 model->LoadWeights("gpt2_weights.bin");
 
-// 获取 LoRA 模型
-auto* lora_model = GetLoRAModel(model, lora_config);
+// 配置并获取 LoRA 模型
+LoRAConfig lora_config;
+lora_config.rank = 8;
+lora_config.alpha = 16.0f;
+lora_config.target_modules = ParseLoRATargetModules("c_attn,c_proj");
+auto lora_model = GetLoRAModel(model, lora_config);
 
 // 加载 LoRA 权重
-lora_model->LoadLoRA("gpt2_lora.bin");
+LoadLoRAWeights(lora_model, "gpt2_lora.bin");
 
 // 合并权重（推理时无额外开销）
-lora_model->Merge();
+MergeLoRAWeights(lora_model);
 
 // 现在可以像普通模型一样推理
 auto output = (*lora_model)({input_ids});
 
 // 如果需要继续训练，先解除合并
-lora_model->Unmerge();
+UnmergeLoRAWeights(lora_model);
 ```
 
 ### 示例 4: 自定义目标层
 
 ```cpp
-// 或者对所有线性层应用
-config.SetTargetModules("c_attn,attn.c_proj,c_fc,c_fc2,mlp.c_proj,lm_head");
+// 对所有线性层应用
+LoRAConfig config;
+config.rank = 8;
+config.alpha = 16.0f;
+config.target_modules = ParseLoRATargetModules("c_attn,c_proj,c_fc,c_proj,lm_head");
 
 // 获取 LoRA 模型
-auto* lora_model = GetLoRAModel(model, config);
+auto lora_model = GetLoRAModel(model, config);
 ```
 
 ## 最佳实践
@@ -421,10 +461,10 @@ auto* lora_model = GetLoRAModel(model, config);
 
 ```cpp
 // 推荐：只对 attention 层（参数效率最高）
-config.SetTargetModules("c_attn,attn.c_proj");
+config.target_modules = ParseLoRATargetModules("c_attn,c_proj");
 
 // 可选：包含 MLP 层（效果可能更好，但参数更多）
-config.SetTargetModules("c_attn,attn.c_proj,c_fc,c_fc2,mlp.c_proj");
+config.target_modules = ParseLoRATargetModules("c_attn,c_proj,c_fc,c_fc2,c_proj");
 ```
 
 ### 4. 学习率
@@ -490,7 +530,7 @@ lm_head                  # Language Model Head
     --learning_rate 1e-5 \
     --lora_rank 8 \
     --lora_alpha 16.0 \
-    --lora_target_modules "c_attn,attn.c_proj" \
+    --lora_target_modules "c_attn,c_proj" \
     --lora_save_path data/lora_weights
 ```
 
@@ -500,7 +540,7 @@ lm_head                  # Language Model Head
 |------|--------|------|
 | `--lora_rank` | 0 | LoRA 秩 (0 = 禁用) |
 | `--lora_alpha` | 16.0 | LoRA 缩放因子 |
-| `--lora_target_modules` | "c_attn,attn.c_proj" | 目标模块 (逗号分隔: c_attn,attn.c_proj,c_fc,c_fc2,mlp.c_proj) |
+| `--lora_target_modules` | "c_attn,c_proj" | 目标模块 (逗号分隔: c_attn,c_proj,c_fc,c_proj) |
 | `--lora_load_path` | "" | 加载已有 LoRA 权重 |
 | `--lora_save_path` | "" | 保存 LoRA 权重路径 |
 
@@ -540,7 +580,7 @@ int main() {
 
     // 2. 创建 LoRA 配置
     LoRAConfig lora_config{8, 16.0f};
-    lora_config.SetTargetModules("c_attn,attn.c_proj");  // 只对 attention 层
+    lora_config.target_modules = ParseLoRATargetModules("c_attn,c_proj");  // 只对 attention 层
 
     // 3. 创建 LoRA 包装器 (一行代码)
     auto lora_model = std::make_shared<LoRAModel>(base_model, lora_config);
@@ -586,6 +626,20 @@ auto lora_model = CreateLoRAModel<GPT2, GPT2Config>(
     lora_config             // LoRA 配置
 );
 ```
+
+### 两种使用方式的区别
+
+| 特性 | `GetLoRAModel` | `LoRAModel` 包装器 |
+|------|---------------|-------------------|
+| 返回类型 | `std::shared_ptr<Module>` | `std::shared_ptr<LoRAModel>` |
+| 修改方式 | 原地修改模型 | 创建新包装器 |
+| 自动冻结 | 是 | 是 |
+| 适用场景 | 简单场景，直接修改原模型 | 需要更精细控制 |
+
+### 推荐场景
+
+- **使用 `GetLoRAModel`**: 想要最小化代码改动，直接在原模型上启用 LoRA
+- **使用 `LoRAModel`**: 需要更灵活的 API（如 `Merge()`/`Unmerge()` 方法），或者需要保留原始模型的引用
 
 ## 常见问题
 
