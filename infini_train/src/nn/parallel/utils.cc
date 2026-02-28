@@ -23,4 +23,5 @@ std::vector<int> GetTensorParallelGroupRanks(int global_rank) { return global::G
 std::vector<int> GetPipelineParallelGroupRanks(int global_rank) {
     return global::GetGroupRanks(global::PP, global_rank);
 }
+
 } // namespace infini_train::nn::parallel

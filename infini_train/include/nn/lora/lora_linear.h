@@ -43,8 +43,11 @@ public:
     // Get only LoRA parameters (for optimizer)
     std::vector<std::shared_ptr<Tensor>> LoRAParameters() const;
 
-    // Override Parameters() to return only trainable (LoRA) parameters
+    // Override Parameters() to return all parameters (frozen base + trainable LoRA)
     std::vector<std::shared_ptr<Tensor>> Parameters() const override;
+
+    // Get trainable parameters (requires_grad == true)
+    std::vector<std::shared_ptr<Tensor>> TrainableParameters() const;
 
     // Get all parameters including frozen base weights (for state dict)
     std::vector<std::shared_ptr<Tensor>> AllParameters() const;

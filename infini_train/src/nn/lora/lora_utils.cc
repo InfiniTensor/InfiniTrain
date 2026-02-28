@@ -12,7 +12,6 @@
 
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/lora/lora_linear.h"
-#include "infini_train/include/nn/lora/lora_model.h"
 #include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
@@ -333,8 +332,12 @@ int64_t CountTrainableParameters(const std::shared_ptr<Module> &model) {
 }
 
 int64_t CountTotalParameters(const std::shared_ptr<Module> &model) {
+    // Use Parameters() instead of StateDict() to avoid counting:
+    // 1. Shared/duplicated tensors (weight tying)
+    // 2. Buffers (which are not trainable parameters)
     int64_t count = 0;
-    for (auto &[name, param] : model->StateDict()) { count += param->NumElements(); }
+    auto params = model->Parameters();
+    for (auto &param : params) { count += param->NumElements(); }
     return count;
 }
 
