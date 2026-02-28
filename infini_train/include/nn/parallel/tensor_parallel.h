@@ -30,6 +30,13 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
+    // Getters for LoRA wrapper
+    bool bias() const;
+    bool gather_output() const;
+    bool input_is_parallel() const;
+    bool skip_bias_add() const;
+    bool sequence_parallel() const;
+
 private:
     bool bias_ = true;
     bool gather_output_ = false;     // whether to return full local output tensor after forward (need gather)
@@ -51,6 +58,13 @@ public:
                       bool skip_bias_add, bool sequence_parallel = false);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+    // Getters for LoRA wrapper
+    bool bias() const;
+    bool reduce_output() const;
+    bool input_is_parallel() const;
+    bool skip_bias_add() const;
+    bool sequence_parallel() const;
 
 private:
     bool bias_ = true;
@@ -113,4 +127,5 @@ private:
     float label_smoothing_ = 0.0f;
     int64_t vocab_size_original_ = 0; // For padded situations
 };
+
 } // namespace infini_train::nn::parallel

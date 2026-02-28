@@ -6,7 +6,6 @@
 
 #include "infini_train/include/nn/lora/lora_config.h"
 #include "infini_train/include/nn/lora/lora_linear.h"
-#include "infini_train/include/nn/lora/lora_model.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/linear.h"
@@ -89,10 +88,10 @@ void test_lora_linear_init() {
     CHECK(lora_B->requires_grad()) << "LoRA B should be trainable";
     std::cout << "requires_grad check passed!" << std::endl;
 
-    // Check Parameters() returns only LoRA params
-    auto params = lora_linear->Parameters();
-    CHECK_EQ(params.size(), 2) << "Parameters() should return only LoRA params";
-    std::cout << "Parameters() returns " << params.size() << " tensors (LoRA A and B)" << std::endl;
+    // Check LoRAParameters() returns only LoRA params
+    auto params = lora_linear->LoRAParameters();
+    CHECK_EQ(params.size(), 2) << "LoRAParameters() should return only LoRA params";
+    std::cout << "LoRAParameters() returns " << params.size() << " tensors (LoRA A and B)" << std::endl;
 
     std::cout << "LoRALinear initialization tests passed!" << std::endl;
 }
@@ -302,10 +301,10 @@ void test_lora_from_linear() {
 }
 
 // ============================================================================
-// Test 7: LoRAModel Wrapper (simplified test for wrapper interface)
+// Test 7: LoRALinear from existing Linear (tests LoRA utilities)
 // ============================================================================
 void test_lora_model_wrapper() {
-    std::cout << "\n=== Test 7: LoRAModel Wrapper (Simplified) ===" << std::endl;
+    std::cout << "\n=== Test 7: LoRALinear from existing Linear ===" << std::endl;
 
     // Create LoRA config
     LoRAConfig lora_config;
@@ -354,7 +353,109 @@ void test_lora_model_wrapper() {
     CHECK(!lora_linear->IsMerged()) << "Should be unmerged after UnmergeWeights()";
     std::cout << "UnmergeWeights completed" << std::endl;
 
-    std::cout << "LoRAModel wrapper tests passed!" << std::endl;
+    std::cout << "LoRALinear utility tests passed!" << std::endl;
+}
+
+// ============================================================================
+// Test 8: Save/Load LoRA Weights
+// ============================================================================
+void test_lora_save_load_weights() {
+    std::cout << "\n=== Test 8: Save/Load LoRA Weights ===" << std::endl;
+
+    // Create a LoRALinear
+    LoRAConfig config;
+    config.rank = 4;
+    config.alpha = 8.0f;
+
+    int64_t in_features = 32;
+    int64_t out_features = 64;
+
+    auto linear = std::make_shared<nn::Linear>(in_features, out_features, /*bias=*/true);
+    auto lora_linear = std::make_shared<LoRALinear>(linear, config);
+
+    // Get references to lora_A and lora_B
+    auto lora_A = lora_linear->parameter(LoRALinear::kParamLoraAName);
+    auto lora_B = lora_linear->parameter(LoRALinear::kParamLoraBName);
+
+    // Set specific values to lora_A and lora_B
+    // lora_A: [rank, in_features] = [4, 32]
+    // lora_B: [out_features, rank] = [64, 4]
+    lora_A->EigenMatrix().setZero();
+    lora_B->EigenMatrix().setZero();
+
+    // Set lora_A to all 1s
+    for (int64_t i = 0; i < lora_A->Dims()[0]; ++i) {
+        for (int64_t j = 0; j < lora_A->Dims()[1]; ++j) { lora_A->EigenMatrix()(i, j) = 1.0f; }
+    }
+
+    // Set lora_B to all 2s
+    for (int64_t i = 0; i < lora_B->Dims()[0]; ++i) {
+        for (int64_t j = 0; j < lora_B->Dims()[1]; ++j) { lora_B->EigenMatrix()(i, j) = 2.0f; }
+    }
+
+    // Record original sums
+    float lora_A_sum_orig = lora_A->EigenMatrix().sum();
+    float lora_B_sum_orig = lora_B->EigenMatrix().sum();
+    // lora_A: all 1.0f, shape [rank, in_features] = [4, 32]
+    // lora_B: all 2.0f, shape [out_features, rank] = [64, 4]
+    float expected_lora_A_sum = config.rank * in_features * 1.0f;  // 4 * 32 * 1 = 128
+    float expected_lora_B_sum = out_features * config.rank * 2.0f; // 64 * 4 * 2 = 512
+    std::cout << "Original lora_A sum: " << lora_A_sum_orig << " (expected: " << expected_lora_A_sum << ")"
+              << std::endl;
+    std::cout << "Original lora_B sum: " << lora_B_sum_orig << " (expected: " << expected_lora_B_sum << ")"
+              << std::endl;
+
+    CHECK_EQ(lora_A_sum_orig, expected_lora_A_sum);
+    CHECK_EQ(lora_B_sum_orig, expected_lora_B_sum);
+
+    // Save to file
+    const std::string test_path = "/tmp/test_lora_save_load.bin";
+    SaveLoRAWeights(lora_linear, test_path);
+    std::cout << "Saved LoRA weights to: " << test_path << std::endl;
+
+    // Modify weights to different values
+    lora_A->EigenMatrix().setConstant(9.0f);
+    lora_B->EigenMatrix().setConstant(9.0f);
+
+    float lora_A_sum_modified = lora_A->EigenMatrix().sum();
+    float lora_B_sum_modified = lora_B->EigenMatrix().sum();
+    std::cout << "Modified lora_A sum: " << lora_A_sum_modified << std::endl;
+    std::cout << "Modified lora_B sum: " << lora_B_sum_modified << std::endl;
+
+    CHECK_NE(lora_A_sum_modified, lora_A_sum_orig);
+    CHECK_NE(lora_B_sum_modified, lora_B_sum_orig);
+
+    // Load from file
+    LoadLoRAWeights(lora_linear, test_path);
+    std::cout << "Loaded LoRA weights from: " << test_path << std::endl;
+
+    // Verify weights are restored
+    float lora_A_sum_loaded = lora_A->EigenMatrix().sum();
+    float lora_B_sum_loaded = lora_B->EigenMatrix().sum();
+    std::cout << "Loaded lora_A sum: " << lora_A_sum_loaded << std::endl;
+    std::cout << "Loaded lora_B sum: " << lora_B_sum_loaded << std::endl;
+
+    CHECK_EQ(lora_A_sum_loaded, lora_A_sum_orig) << "lora_A should be restored to original values";
+    CHECK_EQ(lora_B_sum_loaded, lora_B_sum_orig) << "lora_B should be restored to original values";
+
+    // Also verify individual elements
+    for (int64_t i = 0; i < lora_A->Dims()[0]; ++i) {
+        for (int64_t j = 0; j < lora_A->Dims()[1]; ++j) {
+            CHECK_EQ(lora_A->EigenMatrix()(i, j), 1.0f) << "lora_A element mismatch at (" << i << "," << j << ")";
+        }
+    }
+
+    for (int64_t i = 0; i < lora_B->Dims()[0]; ++i) {
+        for (int64_t j = 0; j < lora_B->Dims()[1]; ++j) {
+            CHECK_EQ(lora_B->EigenMatrix()(i, j), 2.0f) << "lora_B element mismatch at (" << i << "," << j << ")";
+        }
+    }
+
+    std::cout << "All elements verified correctly!" << std::endl;
+
+    // Cleanup
+    std::remove(test_path.c_str());
+    std::cout << "Test 8: Save/Load LoRA Weights passed!" << std::endl;
 }
 
 // ============================================================================
@@ -471,7 +572,7 @@ void test_replace_module_by_path() {
     auto lora_linear = std::make_shared<LoRALinear>(base_linear, lora_config);
 
     // Verify LoRA was applied correctly
-    auto params = lora_linear->Parameters();
+    auto params = lora_linear->LoRAParameters();
     CHECK_EQ(params.size(), 2) << "LoRALinear should have 2 trainable parameters (lora_A and lora_B)";
     std::cout << "LoRALinear has " << params.size() << " trainable parameters" << std::endl;
 
@@ -671,6 +772,7 @@ int main(int argc, char **argv) {
     test_lora_utils();
     test_lora_from_linear();
     test_lora_model_wrapper();
+    test_lora_save_load_weights();
     test_set_target_modules();
     test_should_apply_lora_edge_cases();
     test_replace_module_by_path();

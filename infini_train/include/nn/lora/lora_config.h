@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <unordered_set>
@@ -17,8 +18,8 @@ struct LoRAConfig {
     std::unordered_set<std::string> target_modules = {"c_attn", "c_proj"};
 
     // Initialization parameters
-    bool use_kaiming_a = true;    // Use Kaiming init for A matrix
-    float kaiming_a_param = 1.0f; // Parameter 'a' for Kaiming init
+    bool use_kaiming_a = true;           // Use Kaiming init for A matrix
+    float kaiming_a_param = sqrtf(5.0f); // Parameter 'a' for Kaiming init
 
     // Default constructor (uses default target_modules = {"c_attn", "c_proj"})
     LoRAConfig() = default;

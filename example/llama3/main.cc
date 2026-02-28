@@ -263,15 +263,8 @@ void Train(const nn::parallel::Rank &rank) {
     auto optimizer_creator = optimizers::Adam::Create(FLAGS_learning_rate);
     std::shared_ptr<Optimizer> optimizer = nullptr;
 
-    // Create optimizer - use GetLoRAParameters() if LoRA is enabled
-    std::vector<std::shared_ptr<Tensor>> params_to_optimize;
-    if (lora_enabled) {
-        params_to_optimize = nn::lora::GetLoRAParameters(model);
-        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " LoRA parameters";
-    } else {
-        params_to_optimize = model->Parameters();
-        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " model parameters";
-    }
+    // Create optimizer - use TrainableParameters() as single source of truth
+    std::vector<std::shared_ptr<Tensor>> params_to_optimize = model->TrainableParameters();
 
     if (FLAGS_use_distributed_optimizer) {
         auto model_chunks = (pp_world_size > 1)

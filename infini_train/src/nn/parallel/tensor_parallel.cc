@@ -240,13 +240,11 @@ void LinearResetParameters(std::shared_ptr<Tensor> weight, std::shared_ptr<Tenso
     }
 }
 
-// Comm Helper Functions
+} // anonymous namespace
+
+// TP/SP Communication Helper Functions (defined in utils.h)
 std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<CopyToTPRegion>()->Apply({input});
-}
-
-std::vector<std::shared_ptr<Tensor>> GatherFromTPRegionFunc(const std::shared_ptr<Tensor> &input) {
-    return std::make_shared<GatherFromTPRegion>()->Apply({input});
 }
 
 std::vector<std::shared_ptr<Tensor>> ScatterToTPRegionFunc(const std::shared_ptr<Tensor> &input) {
@@ -257,6 +255,10 @@ std::vector<std::shared_ptr<Tensor>> ReduceFromTPRegionFunc(const std::shared_pt
     return std::make_shared<ReduceFromTPRegion>()->Apply({input});
 }
 
+std::vector<std::shared_ptr<Tensor>> GatherFromTPRegionFunc(const std::shared_ptr<Tensor> &input) {
+    return std::make_shared<GatherFromTPRegion>()->Apply({input});
+}
+
 std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<ReduceScatterToSPRegion>()->Apply({input});
 }
@@ -264,7 +266,6 @@ std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(const std::shar
 std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<GatherFromSPRegion>()->Apply({input});
 }
-} // namespace
 
 ColumnParallelLinear::ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool gather_output,
                                            bool input_is_parallel, bool skip_bias_add, bool sequence_parallel)
@@ -293,6 +294,20 @@ ColumnParallelLinear::ColumnParallelLinear(int64_t in_features, int64_t out_feat
 std::vector<std::shared_ptr<Tensor>>
 ColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1) << "ColumnParallelLinear takes exactly one input";
+
+    // TP=1 fast-path: behave like regular Linear (no communication needed)
+    if (global::GetTensorParallelSize() == 1 && !global::GetSequenceParallelEnabled()) {
+        auto input = input_tensors[0];
+        auto output = std::make_shared<autograd::Linear>()->Apply(
+            (bias_ && !skip_bias_add_)
+                ? std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName),
+                                                       parameters_[kParamBiasName]}
+                : std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
+        return skip_bias_add_
+                 ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_.at(kParamBiasName) : nullptr}
+                 : std::vector<std::shared_ptr<Tensor>>{output};
+    }
+
     auto input
         = (input_is_parallel_ || sequence_parallel_) ? input_tensors[0] : CopyToTPRegionFunc(input_tensors[0])[0];
 
@@ -311,6 +326,13 @@ ColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_
              ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_.at(kParamBiasName) : nullptr}
              : std::vector<std::shared_ptr<Tensor>>{output};
 }
+
+// ColumnParallelLinear getters
+bool ColumnParallelLinear::bias() const { return bias_; }
+bool ColumnParallelLinear::gather_output() const { return gather_output_; }
+bool ColumnParallelLinear::input_is_parallel() const { return input_is_parallel_; }
+bool ColumnParallelLinear::skip_bias_add() const { return skip_bias_add_; }
+bool ColumnParallelLinear::sequence_parallel() const { return sequence_parallel_; }
 
 RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool reduce_output,
                                      bool input_is_parallel, bool skip_bias_add, bool sequence_parallel)
@@ -341,6 +363,22 @@ RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features, 
 std::vector<std::shared_ptr<Tensor>>
 RowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1) << "RowParallelLinear takes exactly one input";
+
+    // TP=1 fast-path: behave like regular Linear (no communication needed)
+    if (global::GetTensorParallelSize() == 1 && !global::GetSequenceParallelEnabled()) {
+        auto input = input_tensors[0];
+        auto output = std::make_shared<autograd::Linear>()->Apply(
+            std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
+
+        if (bias_ && !skip_bias_add_) {
+            output = output->Add(parameters_[kParamBiasName]);
+        }
+
+        return skip_bias_add_
+                 ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_.at(kParamBiasName) : nullptr}
+                 : std::vector<std::shared_ptr<Tensor>>{output};
+    }
+
     auto input = input_is_parallel_ ? input_tensors[0] : ScatterToTPRegionFunc(input_tensors[0])[0];
 
     auto sharded_output = std::make_shared<autograd::Linear>()->Apply(
@@ -358,6 +396,13 @@ RowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_ten
              ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_.at(kParamBiasName) : nullptr}
              : std::vector<std::shared_ptr<Tensor>>{output};
 }
+
+// RowParallelLinear getters
+bool RowParallelLinear::bias() const { return bias_; }
+bool RowParallelLinear::reduce_output() const { return reduce_output_; }
+bool RowParallelLinear::input_is_parallel() const { return input_is_parallel_; }
+bool RowParallelLinear::skip_bias_add() const { return skip_bias_add_; }
+bool RowParallelLinear::sequence_parallel() const { return sequence_parallel_; }
 
 VocabParallelEmbedding::VocabParallelEmbedding(int64_t num_embeddings, int64_t embedding_dim,
                                                bool reduce_scatter_embeddings)
