@@ -20,8 +20,8 @@ std::exception_ptr makeRuntimeError(const char *api, core::RuntimeStatus status)
 
 Work::Work(Device device, core::CclComm *comm) : device_(device), comm_(comm) {
     auto *impl = core::GetDeviceGuardImpl(device_.type());
-    impl->EventCreate(&ready_event_);
-    impl->EventCreate(&done_event_);
+    impl->EventCreateWithFlags(&ready_event_, core::EventFlag::kDisableTiming);
+    impl->EventCreateWithFlags(&done_event_, core::EventFlag::kDisableTiming);
 }
 
 Work::~Work() {

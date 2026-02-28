@@ -33,7 +33,7 @@ public:
     // Event management (explicitly unsupported for now)
     void EventCreate(Event **event) const override;
 
-    void EventCreateWithFlags(Event **event, uint32_t flags) const override;
+    void EventCreateWithFlags(Event **event, EventFlag flags) const override;
 
     void EventDestroy(Event *event) const override;
 

@@ -43,7 +43,7 @@ void DeviceGuardImpl::GetStreamPriorityRange(int *, int *) const {
 
 void DeviceGuardImpl::EventCreate(Event **) const { LOG(FATAL) << "DeviceGuardImpl::EventCreate is not implemented."; }
 
-void DeviceGuardImpl::EventCreateWithFlags(Event **, uint32_t) const {
+void DeviceGuardImpl::EventCreateWithFlags(Event **, EventFlag) const {
     LOG(FATAL) << "DeviceGuardImpl::EventCreateWithFlags is not implemented.";
 }
 

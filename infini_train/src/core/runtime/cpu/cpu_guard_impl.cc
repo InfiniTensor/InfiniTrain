@@ -65,7 +65,7 @@ void CpuGuardImpl::EventCreate(Event **event) const {
     *event = nullptr;
 }
 
-void CpuGuardImpl::EventCreateWithFlags(Event **event, uint32_t flags) const {
+void CpuGuardImpl::EventCreateWithFlags(Event **event, EventFlag flags) const {
     CHECK_NOTNULL(event);
     LOG(WARNING) << "CpuGuardImpl::EventCreateWithFlags is not supported. Returning nullptr event.";
     *event = nullptr;
