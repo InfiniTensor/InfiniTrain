@@ -197,3 +197,6 @@ target_link_libraries(test_hook infini_train)
 
 add_executable(test_precision_check test/hook/test_precision_check.cc)
 target_link_libraries(test_precision_check infini_train)
+
+add_executable(test_lr_scheduler test/lr_scheduler/test_lr_scheduler.cc)
+target_link_libraries(test_lr_scheduler infini_train)
