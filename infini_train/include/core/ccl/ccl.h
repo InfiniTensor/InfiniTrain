@@ -26,23 +26,13 @@ public:
 
     virtual void GroupEnd() const;
 
-    virtual void CommGetAsyncError(const CclComm *comm, CclStatus *async_error) const;
+    virtual void GetAsyncError(const CclComm *comm, CclStatus *async_error) const;
 
-    virtual void CreateComm(CclComm **comm) const;
-
-    virtual void CreateUniqueId(CclUniqueId **unique_id) const;
-
-    virtual void GetUniqueId(CclUniqueId *unique_id) const;
-
-    virtual void WriteUniqueId(const CclUniqueId &unique_id, const std::string &pg_name) const;
-
-    virtual void ReadUniqueId(CclUniqueId *unique_id, const std::string &pg_name) const;
-
-    virtual void CleanupUniqueIdFile(const std::string &pg_name) const;
+    virtual void GetUniqueId(CclUniqueId **unique_id) const;
 
     virtual void CommInitAll(CclComm **comms, int ndev, const int *devlist) const;
 
-    virtual void CommInitRank(CclComm *comm, int nranks, const CclUniqueId &unique_id, int rank) const;
+    virtual void CommInitRank(CclComm **comm, int nranks, const CclUniqueId &unique_id, int rank) const;
 
     virtual void CommDestroy(CclComm *comm) const;
 

@@ -119,7 +119,7 @@ bool Work::CheckCclStatus() {
     if (comm_ != nullptr) {
         auto *impl = core::GetCclImpl(device_.type());
         core::CclStatus async_error = core::CclStatus::kSuccess;
-        impl->CommGetAsyncError(comm_, &async_error);
+        impl->GetAsyncError(comm_, &async_error);
         if (async_error != core::CclStatus::kSuccess) {
             SetException(std::make_exception_ptr(
                 std::runtime_error(std::string("CCL async error: ") + core::CclStatusToString(async_error))));

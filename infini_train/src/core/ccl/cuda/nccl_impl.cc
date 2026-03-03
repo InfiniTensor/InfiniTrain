@@ -1,15 +1,6 @@
 #include "infini_train/src/core/ccl/cuda/nccl_impl.h"
 
-#ifdef USE_NCCL
-
-#include <chrono>
-#include <cstdio>
-#include <cstring>
-#include <filesystem>
-#include <format>
-#include <fstream>
 #include <nccl.h>
-#include <thread>
 #include <vector>
 
 #include "glog/logging.h"
@@ -17,6 +8,7 @@
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
+
 #include "infini_train/src/core/ccl/cuda/nccl_common.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
@@ -35,10 +27,6 @@ inline const std::unordered_map<nn::parallel::function::ReduceOpType, ncclRedOp_
     {nn::parallel::function::ReduceOpType::kMin, ncclMin}, {nn::parallel::function::ReduceOpType::kMax, ncclMax},
     {nn::parallel::function::ReduceOpType::kAvg, ncclAvg},
 };
-
-inline std::string NcclFileName(const std::string &name, bool tmp = false) {
-    return std::format("ncclUniqueId_{}.{}", name, tmp ? "tmp" : "bin");
-}
 
 inline ncclComm_t GetNcclComm(const CclComm *comm) {
     auto *nccl_comm = dynamic_cast<const NcclComm *>(comm);
@@ -72,7 +60,7 @@ void NcclImpl::GroupStart() const { NCCL_CHECK(ncclGroupStart()); }
 
 void NcclImpl::GroupEnd() const { NCCL_CHECK(ncclGroupEnd()); }
 
-void NcclImpl::CommGetAsyncError(const CclComm *comm, CclStatus *async_error) const {
+void NcclImpl::GetAsyncError(const CclComm *comm, CclStatus *async_error) const {
     ncclResult_t nccl_async_error = ncclSuccess;
     NCCL_CHECK(ncclCommGetAsyncError(GetNcclComm(comm), &nccl_async_error));
     if (async_error != nullptr) {
@@ -80,50 +68,14 @@ void NcclImpl::CommGetAsyncError(const CclComm *comm, CclStatus *async_error) co
     }
 }
 
-void NcclImpl::CreateComm(CclComm **comm) const {
-    CHECK_NOTNULL(comm);
-    *comm = new NcclComm();
-}
-
-void NcclImpl::CreateUniqueId(CclUniqueId **unique_id) const {
+void NcclImpl::GetUniqueId(CclUniqueId **unique_id) const {
     CHECK_NOTNULL(unique_id);
-    *unique_id = new NcclUniqueId();
-}
-
-void NcclImpl::GetUniqueId(CclUniqueId *unique_id) const {
-    auto *nccl_unique_id = dynamic_cast<NcclUniqueId *>(unique_id);
+    if (*unique_id == nullptr) {
+        *unique_id = new NcclUniqueId();
+    }
+    auto *nccl_unique_id = dynamic_cast<NcclUniqueId *>(*unique_id);
     CHECK_NOTNULL(nccl_unique_id);
     NCCL_CHECK(ncclGetUniqueId(nccl_unique_id->nccl_unique_id()));
-}
-
-void NcclImpl::WriteUniqueId(const CclUniqueId &unique_id, const std::string &pg_name) const {
-    const ncclUniqueId &nccl_id = GetNcclUniqueId(unique_id);
-
-    std::string tmp_path = NcclFileName(pg_name, true);
-    std::ofstream ofs(tmp_path, std::ios::binary);
-    ofs.write(reinterpret_cast<const char *>(&nccl_id), sizeof(nccl_id));
-    ofs.close();
-
-    std::rename(tmp_path.c_str(), NcclFileName(pg_name).c_str());
-}
-
-void NcclImpl::ReadUniqueId(CclUniqueId *unique_id, const std::string &pg_name) const {
-    auto *nccl_unique_id = dynamic_cast<NcclUniqueId *>(unique_id);
-    CHECK_NOTNULL(nccl_unique_id);
-    std::string file_path = NcclFileName(pg_name);
-
-    while (!std::filesystem::exists(file_path)) { std::this_thread::sleep_for(std::chrono::microseconds(1000)); }
-
-    std::ifstream ifs(file_path, std::ios::binary);
-    ifs.read(reinterpret_cast<char *>(nccl_unique_id->nccl_unique_id()), sizeof(ncclUniqueId));
-    ifs.close();
-}
-
-void NcclImpl::CleanupUniqueIdFile(const std::string &pg_name) const {
-    std::string file_path = NcclFileName(pg_name);
-    if (std::filesystem::exists(file_path)) {
-        std::filesystem::remove(file_path);
-    }
 }
 
 void NcclImpl::CommInitAll(CclComm **comms, int ndev, const int *devlist) const {
@@ -133,17 +85,25 @@ void NcclImpl::CommInitAll(CclComm **comms, int ndev, const int *devlist) const 
 
     std::vector<ncclComm_t> nccl_comms(static_cast<size_t>(ndev), nullptr);
     NCCL_CHECK(ncclCommInitAll(nccl_comms.data(), ndev, devlist));
-    for (int i = 0; i < ndev; ++i) { SetNcclComm(comms[i], nccl_comms[static_cast<size_t>(i)]); }
+    for (int i = 0; i < ndev; ++i) {
+        if (comms[i] == nullptr) {
+            comms[i] = new NcclComm();
+        }
+        SetNcclComm(comms[i], nccl_comms[static_cast<size_t>(i)]);
+    }
 }
 
-void NcclImpl::CommInitRank(CclComm *comm, int nranks, const CclUniqueId &unique_id, int rank) const {
-
+void NcclImpl::CommInitRank(CclComm **comm, int nranks, const CclUniqueId &unique_id, int rank) const {
     CHECK_NOTNULL(comm);
     CHECK_GT(nranks, 0);
 
+    if (*comm == nullptr) {
+        *comm = new NcclComm();
+    }
+
     ncclComm_t nccl_comm = nullptr;
     NCCL_CHECK(ncclCommInitRank(&nccl_comm, nranks, GetNcclUniqueId(unique_id), rank));
-    SetNcclComm(comm, nccl_comm);
+    SetNcclComm(*comm, nccl_comm);
 }
 
 void NcclImpl::CommDestroy(CclComm *comm) const {
@@ -198,5 +158,3 @@ void NcclImpl::Recv(void *buff, size_t count, DataType dtype, int peer, const Cc
 INFINI_TRAIN_REGISTER_CCL_IMPL(Device::DeviceType::kCUDA, NcclImpl)
 
 } // namespace infini_train::core::cuda
-
-#endif

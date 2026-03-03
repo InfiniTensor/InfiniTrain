@@ -12,35 +12,17 @@ void CclImpl::GroupStart() const { LOG(FATAL) << "CclImpl::GroupStart is not imp
 
 void CclImpl::GroupEnd() const { LOG(FATAL) << "CclImpl::GroupEnd is not implemented."; }
 
-void CclImpl::CommGetAsyncError(const CclComm *comm, CclStatus *async_error) const {
-    LOG(FATAL) << "CclImpl::CommGetAsyncError is not implemented.";
+void CclImpl::GetAsyncError(const CclComm *comm, CclStatus *async_error) const {
+    LOG(FATAL) << "CclImpl::GetAsyncError is not implemented.";
 }
 
-void CclImpl::CreateComm(CclComm **comm) const { LOG(FATAL) << "CclImpl::CreateComm is not implemented."; }
-
-void CclImpl::CreateUniqueId(CclUniqueId **unique_id) const {
-    LOG(FATAL) << "CclImpl::CreateUniqueId is not implemented.";
-}
-
-void CclImpl::GetUniqueId(CclUniqueId *unique_id) const { LOG(FATAL) << "CclImpl::GetUniqueId is not implemented."; }
-
-void CclImpl::WriteUniqueId(const CclUniqueId &unique_id, const std::string &pg_name) const {
-    LOG(FATAL) << "CclImpl::WriteUniqueId is not implemented.";
-}
-
-void CclImpl::ReadUniqueId(CclUniqueId *unique_id, const std::string &pg_name) const {
-    LOG(FATAL) << "CclImpl::ReadUniqueId is not implemented.";
-}
-
-void CclImpl::CleanupUniqueIdFile(const std::string &pg_name) const {
-    LOG(FATAL) << "CclImpl::CleanupUniqueIdFile is not implemented.";
-}
+void CclImpl::GetUniqueId(CclUniqueId **unique_id) const { LOG(FATAL) << "CclImpl::GetUniqueId is not implemented."; }
 
 void CclImpl::CommInitAll(CclComm **comms, int ndev, const int *devlist) const {
     LOG(FATAL) << "CclImpl::CommInitAll is not implemented.";
 }
 
-void CclImpl::CommInitRank(CclComm *comm, int nranks, const CclUniqueId &unique_id, int rank) const {
+void CclImpl::CommInitRank(CclComm **comm, int nranks, const CclUniqueId &unique_id, int rank) const {
     LOG(FATAL) << "CclImpl::CommInitRank is not implemented.";
 }
 
