@@ -114,6 +114,20 @@ void DistributedOptimizer::ZeroGrad(bool set_to_none) {
     }
 }
 
+void DistributedOptimizer::SetLearningRate(float lr) {
+    Optimizer::SetLearningRate(lr);
+    if (base_optimizer_) {
+        base_optimizer_->SetLearningRate(lr);
+    }
+}
+
+float DistributedOptimizer::GetLearningRate() const {
+    if (base_optimizer_) {
+        return base_optimizer_->GetLearningRate();
+    }
+    return Optimizer::GetLearningRate();
+}
+
 void DistributedOptimizer::Step() {
     // 1. Ensure grads are synced
     FinishGradSync();
