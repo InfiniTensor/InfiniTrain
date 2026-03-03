@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "glog/logging.h"
+
 namespace infini_train::core {
 
 class BlasHandle {
@@ -58,7 +60,8 @@ inline const char *RuntimeStatusToString(RuntimeStatus s) {
         INFINI_TRAIN_RUNTIME_STATUS_LIST(INFINI_TRAIN_RUNTIME_STATUS_CASE)
 #undef INFINI_TRAIN_RUNTIME_STATUS_CASE
     default:
-        return "Unknown";
+        LOG(FATAL) << "Unsupported RuntimeStatus type: " << static_cast<int>(s);
+        return "";
     }
 }
 

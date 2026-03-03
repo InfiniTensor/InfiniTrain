@@ -28,6 +28,7 @@ public:
     Device::DeviceType Type() const override;
 
     // stream
+    // TODO(zbl): Better wrap the create/destroy API call inside the constructor/destructor of class Stream
     Stream *GetStream(Device device) const override;
 
     Stream *CreateStream(Device device) const override;
@@ -39,6 +40,7 @@ public:
     void GetStreamPriorityRange(int *low, int *high) const override;
 
     // event
+    // TODO(zbl): Better wrap the create/destroy API call inside the constructor/destructor of class Event
     void EventCreate(Event **event) const override;
 
     void EventCreateWithFlags(Event **event, EventFlag flags) const override;

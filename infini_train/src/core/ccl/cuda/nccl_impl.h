@@ -7,8 +7,6 @@
 
 namespace infini_train::core::cuda {
 
-#ifdef USE_NCCL
-
 class NcclImpl final : public CclImpl {
 public:
     Device::DeviceType Type() const override;
@@ -17,23 +15,13 @@ public:
 
     void GroupEnd() const override;
 
-    void CommGetAsyncError(const CclComm *comm, CclStatus *async_error) const override;
+    void GetAsyncError(const CclComm *comm, CclStatus *async_error) const override;
 
-    void CreateComm(CclComm **comm) const override;
-
-    void CreateUniqueId(CclUniqueId **unique_id) const override;
-
-    void GetUniqueId(CclUniqueId *unique_id) const override;
-
-    void WriteUniqueId(const CclUniqueId &unique_id, const std::string &pg_name) const override;
-
-    void ReadUniqueId(CclUniqueId *unique_id, const std::string &pg_name) const override;
-
-    void CleanupUniqueIdFile(const std::string &pg_name) const override;
+    void GetUniqueId(CclUniqueId **unique_id) const override;
 
     void CommInitAll(CclComm **comms, int ndev, const int *devlist) const override;
 
-    void CommInitRank(CclComm *comm, int nranks, const CclUniqueId &unique_id, int rank) const override;
+    void CommInitRank(CclComm **comm, int nranks, const CclUniqueId &unique_id, int rank) const override;
 
     void CommDestroy(CclComm *comm) const override;
 
@@ -59,6 +47,5 @@ public:
 
     void Recv(void *buff, size_t count, DataType dtype, int peer, const CclComm *comm, Stream *stream) const override;
 };
-#endif
 
 } // namespace infini_train::core::cuda

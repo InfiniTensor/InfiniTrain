@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+
+#include "glog/logging.h"
 
 namespace infini_train::core {
 
@@ -29,7 +32,8 @@ inline const char *CclStatusToString(CclStatus status) {
         INFINI_TRAIN_CCL_STATUS_LIST(INFINI_TRAIN_CCL_STATUS_CASE)
 #undef INFINI_TRAIN_CCL_STATUS_CASE
     default:
-        return "Unknown";
+        LOG(FATAL) << "Unsupported RuntimeStatus type: " << static_cast<int>(status);
+        return "";
     }
 }
 
@@ -45,6 +49,10 @@ class CclUniqueId {
 public:
     CclUniqueId() = default;
     virtual ~CclUniqueId() = default;
+
+    virtual size_t Size() const = 0;
+    virtual const void *Data() const = 0;
+    virtual void Load(const void *src, size_t size) = 0;
 };
 
 } // namespace infini_train::core

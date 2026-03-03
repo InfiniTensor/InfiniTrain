@@ -9,6 +9,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/core/ccl/ccl.h"
+#include "infini_train/include/core/ccl/ccl_utils.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
@@ -18,15 +19,6 @@
 
 namespace infini_train::nn::parallel {
 namespace {
-// Helper function to create object, transfer ownership to unique_ptr container, and return a borrowed raw pointer for
-// runtime api.
-core::CclComm *CreateOwnedComm(core::CclImpl *ccl_impl, std::vector<std::unique_ptr<core::CclComm>> &owned_comms) {
-    core::CclComm *comm_raw = nullptr;
-    ccl_impl->CreateComm(&comm_raw);
-    owned_comms.emplace_back(comm_raw);
-    return comm_raw;
-}
-
 core::Stream *CreateOwnedStream(core::DeviceGuardImpl *runtime_impl, Device device, int priority,
                                 std::vector<std::unique_ptr<core::Stream>> &owned_streams) {
     core::Stream *stream_raw = runtime_impl->CreateStreamWithPriority(device, priority);
@@ -56,7 +48,7 @@ ProcessGroup::ProcessGroup(Device::DeviceType backend, const std::string &proces
 
 ProcessGroup::~ProcessGroup() {
     if (is_main_process_) {
-        core::GetCclImpl(backend_)->CleanupUniqueIdFile(name_);
+        core::CleanupUniqueIdFile(name_);
     }
 
     // NOTE(zbl): The destruction could happen after GPU runtime is destroyed,
@@ -68,19 +60,20 @@ void ProcessGroup::InitSingleProcess(const std::vector<int> &ranks) {
     comms_.reserve(world_size_);
 
     auto *ccl_impl = core::GetCclImpl(backend_);
-    std::vector<core::CclComm *> comm_ptrs;
-    comm_ptrs.reserve(world_size_);
+    std::vector<core::CclComm *> comm_ptrs(static_cast<size_t>(world_size_), nullptr);
+    ccl_impl->CommInitAll(comm_ptrs.data(), world_size_, ranks.data());
 
     for (int i = 0; i < ranks.size(); ++i) {
+        auto *comm_raw = comm_ptrs[static_cast<size_t>(i)];
+        CHECK_NOTNULL(comm_raw);
+        comms_.emplace_back(comm_raw);
+
         auto device = Device(backend_, ranks[i]);
         devices_.push_back(device);
 
-        core::CclComm *comm_raw = CreateOwnedComm(ccl_impl, comms_);
-        comm_ptrs.push_back(comm_raw);
         device_comm_map_[device.index()] = comm_raw;
         global_group_rank_map_[device.Rank().GlobalRank()] = i;
     }
-    ccl_impl->CommInitAll(comm_ptrs.data(), world_size_, ranks.data());
 }
 
 void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
@@ -92,16 +85,15 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
     int upper_rank = (global_proc_rank + 1) * n_threads;
 
     core::CclUniqueId *unique_id_raw = nullptr;
-    ccl_impl->CreateUniqueId(&unique_id_raw);
+    ccl_impl->GetUniqueId(&unique_id_raw);
     std::unique_ptr<core::CclUniqueId> unique_id(unique_id_raw);
 
     int min_rank = std::ranges::min(ranks);
     if (min_rank < upper_rank && min_rank >= lower_rank) {
         is_main_process_ = true;
-        ccl_impl->GetUniqueId(unique_id.get());
-        ccl_impl->WriteUniqueId(*unique_id, name_);
+        core::WriteUniqueIdFile(*unique_id, name_);
     } else {
-        ccl_impl->ReadUniqueId(unique_id.get(), name_);
+        core::ReadUniqueIdFile(unique_id.get(), name_);
     }
 
     core::CclGroupGuard ccl_group_guard(backend_);
@@ -112,9 +104,11 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
             auto device = Device(backend_, i);
             core::DeviceGuard guard(device);
 
-            core::CclComm *comm_raw = CreateOwnedComm(ccl_impl, comms_);
+            core::CclComm *comm_raw = nullptr;
             int group_rank = std::distance(ranks.begin(), it);
-            ccl_impl->CommInitRank(comm_raw, world_size_, *unique_id, group_rank);
+            ccl_impl->CommInitRank(&comm_raw, world_size_, *unique_id, group_rank);
+            CHECK_NOTNULL(comm_raw);
+            comms_.emplace_back(comm_raw);
 
             global_group_rank_map_[device.Rank().GlobalRank()] = group_rank;
             devices_.push_back(device);
