@@ -13,6 +13,7 @@
 #include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/lr_scheduler.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
@@ -256,6 +257,7 @@ void Train(const nn::parallel::Rank &rank) {
     // auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
     auto optimizer_creator = optimizers::SGD::Create(FLAGS_learning_rate);
     std::shared_ptr<Optimizer> optimizer = nullptr;
+    std::shared_ptr<LRScheduler> scheduler = nullptr;
 
     if (FLAGS_use_distributed_optimizer) {
         auto model_chunks = (pp_world_size > 1)
@@ -265,6 +267,10 @@ void Train(const nn::parallel::Rank &rank) {
                                                                          model_chunks, ddp_world_size, ddp_rank);
     } else {
         optimizer = optimizer_creator(model->Parameters());
+    }
+
+    if (scheduler) {
+        scheduler->Step();
     }
 
     auto train_iter = train_loader.begin();
