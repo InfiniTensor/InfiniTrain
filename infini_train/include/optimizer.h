@@ -15,14 +15,19 @@ using OptimizerCreator = std::function<std::shared_ptr<Optimizer>(const std::vec
 
 class Optimizer {
 public:
-    explicit Optimizer(const std::vector<std::shared_ptr<Tensor>> &params);
+    explicit Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate = 0.0f);
 
     virtual void ZeroGrad(bool set_to_none = true);
 
     virtual void Step() = 0;
 
+    virtual void SetLearningRate(float lr);
+
+    virtual float GetLearningRate() const;
+
 protected:
     std::vector<std::shared_ptr<Tensor>> params_;
+    float learning_rate_ = 0.0f;
 };
 
 namespace optimizers {
@@ -38,8 +43,6 @@ public:
         };
     }
 
-private:
-    const float learning_rate_ = 0.0;
 };
 
 class Adam : public Optimizer {
@@ -58,7 +61,6 @@ public:
 
 private:
     int64_t t_;
-    const float learning_rate_;
     const float beta1_;
     const float beta2_;
     const float eps_;
