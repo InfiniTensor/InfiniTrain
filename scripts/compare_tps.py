@@ -31,7 +31,7 @@ def compare_files(file1, file2, threshold):
     tps2 = {k: v for k, v in tps2.items() if k > 1}
 
     if not tps1 or not tps2:
-        return 0, 1, ["  No valid steps found (after excluding step 1)"], 0, 0, 0
+        return 0, 1, ["  No valid steps found (after excluding step 1)"], 0, 0, 0, []
 
     # Calculate averages
     avg1 = sum(tps1.values()) / len(tps1)
@@ -39,13 +39,46 @@ def compare_files(file1, file2, threshold):
 
     # Calculate relative error
     rel_error = abs(avg1 - avg2) / max(avg1, avg2) if max(avg1, avg2) > 0 else 0
+    diff = avg2 - avg1
+    diff_pct = (diff / avg1) * 100 if avg1 > 0 else 0
+
+    # Find steps exceeding threshold (absolute difference > threshold)
+    step_mismatches = []
+    for step in sorted(set(tps1.keys()) & set(tps2.keys())):
+        v1, v2 = tps1[step], tps2[step]
+        step_diff = v2 - v1
+        step_diff_pct = (step_diff / v1) * 100 if v1 > 0 else 0
+        if abs(step_diff_pct) >= threshold * 100:
+            step_mismatches.append({
+                'step': step,
+                'v1': v1,
+                'v2': v2,
+                'diff': step_diff,
+                'diff_pct': step_diff_pct
+            })
 
     mismatches = []
-    if rel_error > threshold:
-        mismatches.append(f"  Average tok/s: {avg1:.2f} vs {avg2:.2f} ✗ (error: {rel_error*100:.2f}%, threshold: {threshold*100:.2f}%)")
-        mismatches.append(f"  Steps compared: {len(tps1)} vs {len(tps2)} (excluding step 1)")
+    # Only fail when dir2 is slower (negative diff exceeds threshold)
+    is_slow = diff < 0 and abs(diff_pct) >= threshold * 100
 
-    return 1, len(mismatches), mismatches, avg1, avg2, rel_error
+    if is_slow:
+        sign = '+' if diff >= 0 else ''
+        mismatches.append(f"  Average tok/s: {avg1:.2f} vs {avg2:.2f} ✗ SLOW ({sign}{diff:.2f} tok/s, {sign}{diff_pct:.2f}%, threshold: {threshold*100:.2f}%)")
+        mismatches.append(f"  Steps compared: {len(tps1)} vs {len(tps2)} (excluding step 1)")
+    elif diff > 0:
+        mismatches.append(f"  Average tok/s: {avg1:.2f} vs {avg2:.2f} ✓ FAST (+{diff:.2f} tok/s, +{diff_pct:.2f}%, threshold: {threshold*100:.2f}%)")
+    else:
+        mismatches.append(f"  Average tok/s: {avg1:.2f} vs {avg2:.2f} ✓ (diff: {diff_pct:.2f}%, threshold: {threshold*100:.2f}%)")
+
+    # Include step-level details if any exceed threshold
+    if step_mismatches:
+        mismatches.append(f"  Steps exceeding threshold ({threshold*100:.0f}%):")
+        for m in step_mismatches:
+            sign = '+' if m['diff'] >= 0 else ''
+            mismatches.append(f"    Step {m['step']:3d}: {m['v1']:7.2f} vs {m['v2']:7.2f}  ({sign}{m['diff']:8.2f} tok/s, {sign}{m['diff_pct']:6.2f}%)")
+
+    # Return is_slow as failure indicator (1 if slow, 0 otherwise)
+    return 1, (1 if is_slow else 0), mismatches, avg1, avg2, rel_error, step_mismatches
 
 def main():
     parser = ArgumentParser(description='Compare tok/s between two log directories')
@@ -75,24 +108,20 @@ def main():
 
     for name in sorted(common):
         total_files += 1
-        total_comparisons, num_mismatches, mismatches, avg1, avg2, rel_error = compare_files(files1[name], files2[name], args.threshold)
+        total_comparisons, num_failures, mismatches, avg1, avg2, rel_error, step_mismatches = compare_files(files1[name], files2[name], args.threshold)
 
-        if mismatches:
-            print(f"Comparing {name}:")
-            for msg in mismatches:
-                print(msg)
-            total_mismatches += num_mismatches
+        # Print always (to show step details that exceed threshold)
+        print(f"Comparing {name}:")
+        for msg in mismatches:
+            print(msg)
+
+        if num_failures > 0:
+            total_mismatches += num_failures
         else:
             passed_files += 1
-            # Only print details when verbose mode is enabled
-            if args.verbose:
-                print(f"Comparing {name}:")
-                print(f"  Average tok/s: {avg1:.2f} vs {avg2:.2f} ✓ (error: {rel_error*100:.2f}%, threshold: {args.threshold*100:.2f}%)")
-                print(f"  Steps compared: {len([k for k in parse_log(files1[name]) if k > 1])} (excluding step 1)")
 
-        # Print separator when there are mismatches or verbose mode
-        if mismatches or args.verbose:
-            print()
+        # Print separator when verbose mode or always (to show step details)
+        print()
 
     print("=" * 50)
     print(f"Overall Summary:")

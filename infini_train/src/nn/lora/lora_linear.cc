@@ -174,8 +174,8 @@ std::vector<std::shared_ptr<Tensor>> LoRALinear::LoRAParameters() const {
 }
 
 std::vector<std::shared_ptr<Tensor>> LoRALinear::Parameters() const {
-    // Only return trainable LoRA parameters
-    return LoRAParameters();
+    // Return all parameters (frozen base + trainable LoRA)
+    return AllParameters();
 }
 
 std::vector<std::shared_ptr<Tensor>> LoRALinear::AllParameters() const {
@@ -187,6 +187,16 @@ std::vector<std::shared_ptr<Tensor>> LoRALinear::AllParameters() const {
     all_params.push_back(parameters_.at(kParamLoraAName));
     all_params.push_back(parameters_.at(kParamLoraBName));
     return all_params;
+}
+
+std::vector<std::shared_ptr<Tensor>> LoRALinear::TrainableParameters() const {
+    std::vector<std::shared_ptr<Tensor>> trainable;
+    for (const auto &[name, param] : parameters_) {
+        if (param->requires_grad()) {
+            trainable.push_back(param);
+        }
+    }
+    return trainable;
 }
 
 int64_t LoRALinear::in_features() const { return in_features_; }

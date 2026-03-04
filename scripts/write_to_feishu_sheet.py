@@ -440,8 +440,10 @@ def get_model_data(model_name, sheet_title):
 
     # Insert $META_COLS empty columns at the front
     new_data = [["" for _ in range(META_COLS)] for _ in range(5)]
-    new_df = pd.DataFrame(new_data, index=report_df.index)
+    new_df = pd.DataFrame(new_data, index=report_df.index, dtype=object)
     combined_df = pd.concat([new_df, report_df], axis=1)
+    # Ensure all columns can hold mixed types
+    combined_df = combined_df.astype(object)
 
     # Fill first row's first $META_COLS columns with info
     combined_df.iloc[0, 0] = FeishuSheetHandler.convert_to_feishu_date(datetime.now().date())
