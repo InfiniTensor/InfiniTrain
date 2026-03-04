@@ -304,8 +304,11 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     return output;
 }
 
+
+#include <cub/block/block_reduce.cuh>
+
 template <int BLOCK_SIZE, typename T>
-__global__ void ReduceColumnsKernel(const T *__restrict__ input, T *__restrict__ output, int num_rows, int num_cols) {
+__global__ void ReduceColumnsKernel(const T *__restrict__ input, T *__restrict__ output, int num_rows, int num_cols) {//感觉这里可以改，有时间改一下
     using BlockReduce = cub::BlockReduce<float, BLOCK_SIZE>;
     __shared__ typename BlockReduce::TempStorage temp_storage;
 
@@ -322,6 +325,8 @@ __global__ void ReduceColumnsKernel(const T *__restrict__ input, T *__restrict__
         output[row] = reduced;
     }
 }
+
+
 
 std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
 LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight, bool transpose,
