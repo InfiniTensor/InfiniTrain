@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -44,4 +45,47 @@ protected:
     float base_lr_;
 };
 
+namespace lr_schedulers {
+class ConstantLR : public LRScheduler {
+public:
+    ConstantLR(std::shared_ptr<Optimizer> optimizer, float factor = 1.0f / 3.0f, int total_iters = 5, 
+                int64_t last_step = -1);
+
+    ~ConstantLR() override = default;
+
+protected:
+    float ComputeLR() override ;
+
+private:
+    const float factor_;
+    const int64_t total_iters_;
+};
+
+class StepLR : public LRScheduler {
+public:
+    StepLR(std::shared_ptr<Optimizer> optimizer, int64_t step_size, float gamma = 0.1f, int64_t last_step = -1);
+    ~StepLR() override = default;
+
+protected:
+    float ComputeLR() override;
+private:
+    const int64_t step_size_;
+    const float gamma_;
+};
+
+class LinearWarmupLR : public LRScheduler {
+public: 
+    LinearWarmupLR(std::shared_ptr<Optimizer> optimizer, int64_t warmup_steps, float start_factor = 0.0f, int64_t last_step = -1);
+    ~LinearWarmupLR() override = default;
+
+protected:
+    float ComputeLR() override ;
+
+private:
+    const int64_t warmup_steps_;
+    const float start_factor_;
+
+};
+
+}  // namespace lr_schedulers
 }  // namespace infini_train

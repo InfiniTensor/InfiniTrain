@@ -200,3 +200,12 @@ target_link_libraries(test_precision_check infini_train)
 
 add_executable(test_lr_scheduler test/lr_scheduler/test_lr_scheduler.cc)
 target_link_libraries(test_lr_scheduler infini_train)
+
+add_executable(test_constant_lr test/lr_scheduler/test_constant_lr.cc)
+target_link_libraries(test_constant_lr infini_train)
+
+add_executable(test_step_lr test/lr_scheduler/test_step_lr.cc)
+target_link_libraries(test_step_lr infini_train)
+
+add_executable(test_linear_lr test/lr_scheduler/test_linear_lr.cc)
+target_link_libraries(test_linear_lr infini_train)

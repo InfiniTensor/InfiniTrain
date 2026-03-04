@@ -42,4 +42,42 @@ void LRScheduler::LoadState(const StateDict &state) {
     optimizer_->SetLearningRate(current_lr_);
 }
 
+namespace lr_schedulers {
+ConstantLR::ConstantLR(std::shared_ptr<Optimizer> optimizer, float factor, int total_iters, int64_t last_step)
+    : LRScheduler(std::move(optimizer), last_step), factor_(factor), total_iters_(total_iters) {
+    Step();
+}
+
+float ConstantLR::ComputeLR() {
+    if(last_step_ < total_iters_) {
+        return base_lr_ * factor_;
+    }
+    return base_lr_;
+}
+
+StepLR::StepLR(std::shared_ptr<Optimizer> optimizer, int64_t step_size, float gamma , int64_t last_step)
+    : LRScheduler(std::move(optimizer), last_step), step_size_(step_size), gamma_(gamma) {
+    Step();
+}
+
+float StepLR::ComputeLR() {
+    return base_lr_ * static_cast<float>(std::pow(static_cast<double>(gamma_), 
+                                                    static_cast<double>(last_step_ / step_size_)));
+}
+
+LinearWarmupLR::LinearWarmupLR(std::shared_ptr<Optimizer> optimizer, int64_t warmup_steps, float start_factor, int64_t last_step)
+    : LRScheduler(std::move(optimizer), last_step), warmup_steps_(warmup_steps), start_factor_(start_factor) {
+    Step();
+}
+
+float LinearWarmupLR::ComputeLR() {
+    if (last_step_ >= warmup_steps_) {
+        return base_lr_;
+    }
+    float alpha = static_cast<float>(last_step_) / static_cast<float>(warmup_steps_);
+    return base_lr_ * ( start_factor_ + (1.0f - start_factor_) * alpha);
+}
+
+
+}  // namespace lr_schedulers
 }  // namespace infini_train
