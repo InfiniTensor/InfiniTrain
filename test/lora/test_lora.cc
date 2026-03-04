@@ -6,7 +6,6 @@
 
 #include "infini_train/include/nn/lora/lora_config.h"
 #include "infini_train/include/nn/lora/lora_linear.h"
-#include "infini_train/include/nn/lora/lora_model.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/linear.h"
@@ -89,10 +88,10 @@ void test_lora_linear_init() {
     CHECK(lora_B->requires_grad()) << "LoRA B should be trainable";
     std::cout << "requires_grad check passed!" << std::endl;
 
-    // Check Parameters() returns only LoRA params
-    auto params = lora_linear->Parameters();
-    CHECK_EQ(params.size(), 2) << "Parameters() should return only LoRA params";
-    std::cout << "Parameters() returns " << params.size() << " tensors (LoRA A and B)" << std::endl;
+    // Check LoRAParameters() returns only LoRA params
+    auto params = lora_linear->LoRAParameters();
+    CHECK_EQ(params.size(), 2) << "LoRAParameters() should return only LoRA params";
+    std::cout << "LoRAParameters() returns " << params.size() << " tensors (LoRA A and B)" << std::endl;
 
     std::cout << "LoRALinear initialization tests passed!" << std::endl;
 }
@@ -302,10 +301,10 @@ void test_lora_from_linear() {
 }
 
 // ============================================================================
-// Test 7: LoRAModel Wrapper (simplified test for wrapper interface)
+// Test 7: LoRALinear from existing Linear (tests LoRA utilities)
 // ============================================================================
 void test_lora_model_wrapper() {
-    std::cout << "\n=== Test 7: LoRAModel Wrapper (Simplified) ===" << std::endl;
+    std::cout << "\n=== Test 7: LoRALinear from existing Linear ===" << std::endl;
 
     // Create LoRA config
     LoRAConfig lora_config;
@@ -354,7 +353,7 @@ void test_lora_model_wrapper() {
     CHECK(!lora_linear->IsMerged()) << "Should be unmerged after UnmergeWeights()";
     std::cout << "UnmergeWeights completed" << std::endl;
 
-    std::cout << "LoRAModel wrapper tests passed!" << std::endl;
+    std::cout << "LoRALinear utility tests passed!" << std::endl;
 }
 
 // ============================================================================
@@ -573,7 +572,7 @@ void test_replace_module_by_path() {
     auto lora_linear = std::make_shared<LoRALinear>(base_linear, lora_config);
 
     // Verify LoRA was applied correctly
-    auto params = lora_linear->Parameters();
+    auto params = lora_linear->LoRAParameters();
     CHECK_EQ(params.size(), 2) << "LoRALinear should have 2 trainable parameters (lora_A and lora_B)";
     std::cout << "LoRALinear has " << params.size() << " trainable parameters" << std::endl;
 
