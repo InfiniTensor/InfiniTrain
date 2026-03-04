@@ -15,6 +15,8 @@ namespace infini_train {
 class Tensor;
 namespace core {
 class CclComm;
+class CclImpl;
+class DeviceGuardImpl;
 class Stream;
 } // namespace core
 namespace nn {
@@ -88,6 +90,10 @@ protected:
 
     bool is_main_process_ = false;
     Device::DeviceType backend_ = Device::DeviceType::kInvalid;
+
+    // Save impl for convenience
+    core::DeviceGuardImpl *runtime_impl_ = nullptr;
+    core::CclImpl *ccl_impl_ = nullptr;
 
     std::vector<std::unique_ptr<core::CclComm>> comms_;
     std::vector<std::unique_ptr<core::Stream>> comm_streams_;
