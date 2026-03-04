@@ -207,7 +207,28 @@ std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::LoRAParameters() 
     return {parameters_.at(kParamLoraAName), parameters_.at(kParamLoraBName)};
 }
 
-std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::Parameters() const { return LoRAParameters(); }
+std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::Parameters() const { return AllParameters(); }
+
+std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::AllParameters() const {
+    std::vector<std::shared_ptr<Tensor>> all_params;
+    all_params.push_back(parameters_.at(kParamWeightName));
+    if (bias_) {
+        all_params.push_back(parameters_.at(kParamBiasName));
+    }
+    all_params.push_back(parameters_.at(kParamLoraAName));
+    all_params.push_back(parameters_.at(kParamLoraBName));
+    return all_params;
+}
+
+std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::TrainableParameters() const {
+    std::vector<std::shared_ptr<Tensor>> trainable;
+    for (const auto &[name, param] : parameters_) {
+        if (param->requires_grad()) {
+            trainable.push_back(param);
+        }
+    }
+    return trainable;
+}
 
 bool LoRAColumnParallelLinear::IsMerged() const { return merged_; }
 
@@ -412,7 +433,28 @@ std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::LoRAParameters() con
     return {parameters_.at(kParamLoraAName), parameters_.at(kParamLoraBName)};
 }
 
-std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::Parameters() const { return LoRAParameters(); }
+std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::Parameters() const { return AllParameters(); }
+
+std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::AllParameters() const {
+    std::vector<std::shared_ptr<Tensor>> all_params;
+    all_params.push_back(parameters_.at(kParamWeightName));
+    if (bias_) {
+        all_params.push_back(parameters_.at(kParamBiasName));
+    }
+    all_params.push_back(parameters_.at(kParamLoraAName));
+    all_params.push_back(parameters_.at(kParamLoraBName));
+    return all_params;
+}
+
+std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::TrainableParameters() const {
+    std::vector<std::shared_ptr<Tensor>> trainable;
+    for (const auto &[name, param] : parameters_) {
+        if (param->requires_grad()) {
+            trainable.push_back(param);
+        }
+    }
+    return trainable;
+}
 
 bool LoRARowParallelLinear::IsMerged() const { return merged_; }
 

@@ -42,6 +42,8 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> LoRAParameters() const;
     std::vector<std::shared_ptr<Tensor>> Parameters() const override;
+    std::vector<std::shared_ptr<Tensor>> TrainableParameters() const;
+    std::vector<std::shared_ptr<Tensor>> AllParameters() const;
 
     int64_t in_features() const;
     int64_t out_features() const;
@@ -94,6 +96,8 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> LoRAParameters() const;
     std::vector<std::shared_ptr<Tensor>> Parameters() const override;
+    std::vector<std::shared_ptr<Tensor>> TrainableParameters() const;
+    std::vector<std::shared_ptr<Tensor>> AllParameters() const;
 
     int64_t in_features() const;
     int64_t out_features() const;
