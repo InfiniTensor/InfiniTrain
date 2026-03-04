@@ -294,6 +294,20 @@ ColumnParallelLinear::ColumnParallelLinear(int64_t in_features, int64_t out_feat
 std::vector<std::shared_ptr<Tensor>>
 ColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1) << "ColumnParallelLinear takes exactly one input";
+
+    // TP=1 fast-path: behave like regular Linear (no communication needed)
+    if (global::GetTensorParallelSize() == 1 && !global::GetSequenceParallelEnabled()) {
+        auto input = input_tensors[0];
+        auto output = std::make_shared<autograd::Linear>()->Apply(
+            (bias_ && !skip_bias_add_)
+                ? std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName),
+                                                       parameters_[kParamBiasName]}
+                : std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
+        return skip_bias_add_
+                 ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_.at(kParamBiasName) : nullptr}
+                 : std::vector<std::shared_ptr<Tensor>>{output};
+    }
+
     auto input
         = (input_is_parallel_ || sequence_parallel_) ? input_tensors[0] : CopyToTPRegionFunc(input_tensors[0])[0];
 
@@ -349,6 +363,22 @@ RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features, 
 std::vector<std::shared_ptr<Tensor>>
 RowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1) << "RowParallelLinear takes exactly one input";
+
+    // TP=1 fast-path: behave like regular Linear (no communication needed)
+    if (global::GetTensorParallelSize() == 1 && !global::GetSequenceParallelEnabled()) {
+        auto input = input_tensors[0];
+        auto output = std::make_shared<autograd::Linear>()->Apply(
+            std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
+
+        if (bias_ && !skip_bias_add_) {
+            output = output->Add(parameters_[kParamBiasName]);
+        }
+
+        return skip_bias_add_
+                 ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_.at(kParamBiasName) : nullptr}
+                 : std::vector<std::shared_ptr<Tensor>>{output};
+    }
+
     auto input = input_is_parallel_ ? input_tensors[0] : ScatterToTPRegionFunc(input_tensors[0])[0];
 
     auto sharded_output = std::make_shared<autograd::Linear>()->Apply(

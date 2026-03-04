@@ -12,7 +12,6 @@
 
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/lora/lora_linear.h"
-#include "infini_train/include/nn/lora/lora_model.h"
 #include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"

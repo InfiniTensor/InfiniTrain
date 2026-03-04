@@ -48,6 +48,8 @@ public:
     const std::string &type() const;
 
     virtual std::vector<std::shared_ptr<Tensor>> Parameters() const;
+    // Get parameters with requires_grad == true (trainable parameters)
+    std::vector<std::shared_ptr<Tensor>> TrainableParameters() const;
     bool has_parameter(const std::string &name) const;
     std::shared_ptr<Tensor> *mutable_parameter(const std::string &name);
     const std::shared_ptr<Tensor> &parameter(const std::string &name) const;

@@ -40,9 +40,9 @@ config.alpha = 16.0f;  // 缩放因子
 // 2. 获取 LoRA 模型 (原地修改，自动冻结基础模型)
 auto lora_model = GetLoRAModel(model, config);
 
-// 3. 获取 LoRA 参数用于优化器
-auto lora_params = GetLoRAParameters(lora_model);
-auto optimizer = std::make_shared<Adam>(lora_params, lr);
+// 3. 获取可训练参数用于优化器
+auto trainable_params = lora_model->TrainableParameters();
+auto optimizer = std::make_shared<Adam>(trainable_params, lr);
 
 // 4. 训练循环
 for (int step = 0; step < num_steps; ++step) {
@@ -145,8 +145,8 @@ struct LoRAConfig {
     std::unordered_set<std::string> target_modules = {"c_attn", "c_proj"};
 
     // 初始化参数
-    bool use_kaiming_a = true;     // A 矩阵使用 Kaiming 初始化
-    float kaiming_a_param = 1.0f;  // Kaiming 初始化参数
+    bool use_kaiming_a = true;           // A 矩阵使用 Kaiming 初始化
+    float kaiming_a_param = sqrtf(5.0f); // Kaiming 初始化参数 (默认值与 PyTorch 一致)
 
     // 计算缩放因子
     float Scaling() const;  // 返回 alpha / rank
@@ -304,6 +304,19 @@ class LoRARowParallelLinear;
 
 **注意**: 使用张量并行时无需手动创建这些类，`GetLoRAModel` 会自动处理。
 
+### TP=1 自动退化
+
+`ColumnParallelLinear` 和 `RowParallelLinear` 在 TP=1 时会自动退化为普通 Linear，无需在模型代码中条件分支：
+
+```cpp
+// 模型代码可以统一使用 ColumnParallelLinear/RowParallelLinear
+// TP=1 时自动走 fast-path，等价于普通 Linear
+modules_["c_attn"] = std::make_shared<nn::parallel::ColumnParallelLinear>(...);
+modules_["c_proj"] = std::make_shared<nn::parallel::RowParallelLinear>(...);
+```
+
+这使得 LoRA 包装可以统一工作，无论是否使用张量并行。
+
 ## 使用示例
 
 ### 示例 1: GPT2 微调
@@ -338,8 +351,8 @@ int main() {
     // =========================================
 
     // 创建优化器（只优化 LoRA 参数）
-    auto lora_params = GetLoRAParameters(lora_model);
-    auto optimizer = std::make_shared<Adam>(lora_params, /*lr=*/1e-4);
+    auto trainable_params = lora_model->TrainableParameters();
+    auto optimizer = std::make_shared<Adam>(trainable_params, /*lr=*/1e-4);
 
     // 训练循环
     for (int step = 0; step < num_steps; ++step) {

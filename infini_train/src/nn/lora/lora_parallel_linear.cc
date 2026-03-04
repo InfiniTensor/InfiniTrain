@@ -148,13 +148,11 @@ LoRAColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &in
         auto base_output = base_result[0];
 
         // 2. Compute LoRA output using the SAME input that base module uses
-        // ColumnParallel: if input_is_parallel_=false, base gathers TP input
-        // If sequence_parallel_=true, base also gathers SP sequence
-        auto lora_input = input_tensors[0];
-        if (!input_is_parallel_) {
-            // Base uses CopyToTPRegionFunc to copy to TP region
-            lora_input = parallel::CopyToTPRegionFunc(input_tensors[0])[0];
-        }
+        // Match base input path exactly: use direct input if input_is_parallel_ or sequence_parallel_,
+        // otherwise copy to TP region
+        auto lora_input = (input_is_parallel_ || sequence_parallel_)
+                            ? input_tensors[0]
+                            : parallel::CopyToTPRegionFunc(input_tensors[0])[0];
         if (sequence_parallel_) {
             // Base uses GatherFromSPRegionFunc to gather sequence dimension
             lora_input = parallel::GatherFromSPRegionFunc(lora_input)[0];
@@ -163,6 +161,12 @@ LoRAColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &in
         // Compute LoRA: lora_A: [rank, in_features], lora_B: [out_per_partition, rank]
         auto lora_proj = std::make_shared<autograd::Linear>()->Apply({lora_input, parameters_[kParamLoraAName]})[0];
         auto lora_output = std::make_shared<autograd::Linear>()->Apply({lora_proj, parameters_[kParamLoraBName]})[0];
+
+        // Match base output layout (gather if base gathers)
+        if (gather_output_) {
+            lora_output = parallel::GatherFromTPRegionFunc(lora_output)[0];
+        }
+
         auto scaled_lora = lora_output->Mul(config_.Scaling());
 
         // 3. Add LoRA contribution to base output
