@@ -19,6 +19,19 @@ void Optimizer::SetLearningRate(float lr) { learning_rate_ = lr; }
 
 float Optimizer::GetLearningRate() const { return learning_rate_; }
 
+float Optimizer::GetInitialLearningRate() const {
+    CHECK(initial_lr_set_) 
+        << "Optimizer: initial_learning_rate not set. "
+           "Use with an LRScheduler first.";
+    return initial_learning_rate_;
+}
+
+void Optimizer::SetInitialLearningRate(float lr) {
+    if (!initial_lr_set_) {
+        initial_learning_rate_ = lr;
+        initial_lr_set_ = true;
+    }
+}
 namespace optimizers {
 
 SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate)

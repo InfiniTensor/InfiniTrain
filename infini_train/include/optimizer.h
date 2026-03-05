@@ -25,9 +25,15 @@ public:
 
     virtual float GetLearningRate() const;
 
+    float GetInitialLearningRate() const;
+    
+    void SetInitialLearningRate(float lr);
+
 protected:
     std::vector<std::shared_ptr<Tensor>> params_;
     float learning_rate_ = 0.0f;
+    float initial_learning_rate_ = 0.0f;
+    bool initial_lr_set_ = false;
 };
 
 namespace optimizers {
