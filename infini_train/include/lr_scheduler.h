@@ -19,6 +19,13 @@ using StateDict = std::unordered_map<std::string, StateValue>;
 
 class LRScheduler {
 public:
+    template<typename T, typename... Args>
+    static std::shared_ptr<T> Create(Args&&... args) {
+        auto scheduler = std::make_shared<T>(std::forward<Args>(args)...);
+        scheduler->InitialStep();
+        return scheduler;
+    }
+
     explicit LRScheduler(std::shared_ptr<Optimizer> optimizer,
                          int64_t last_step = -1);
 
@@ -41,6 +48,8 @@ public:
 protected:
 
     virtual float ComputeLR() const = 0;
+
+    void InitialStep();
 
     void ApplyLR(float lr);
 
@@ -129,7 +138,7 @@ public:
 
     StateDict State() const override;
     void LoadState(const StateDict &state) override;
-    
+
 protected:
     float ComputeLR() const override { return 0.0f; }
 

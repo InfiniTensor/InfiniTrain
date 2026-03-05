@@ -23,6 +23,10 @@ void LRScheduler::Step() {
     ApplyLR(ComputeLR());
 }
 
+void LRScheduler::InitialStep() {
+    Step();
+}
+
 void LRScheduler::ApplyLR(float lr) {
     current_lr_ = lr;
     optimizer_->SetLearningRate(current_lr_);
@@ -65,9 +69,7 @@ ConstantLR::ConstantLR(std::shared_ptr<Optimizer> optimizer,
                        int64_t last_step)
     : LRScheduler(std::move(optimizer), last_step), 
       factor_(factor), 
-      total_iters_(total_iters) {
-    Step();
-}
+      total_iters_(total_iters) {}
 
 float ConstantLR::ComputeLR() const {
     return last_step_ < total_iters_ ? base_lr_ * factor_ : base_lr_;
@@ -81,9 +83,7 @@ StepLR::StepLR(std::shared_ptr<Optimizer> optimizer,
                int64_t last_step)
     : LRScheduler(std::move(optimizer), last_step),
       step_size_(step_size),
-      gamma_(gamma) {
-    Step();
-}
+      gamma_(gamma) {}
 
 float StepLR::ComputeLR() const {
   return base_lr_ * static_cast<float>(std::pow(
@@ -97,9 +97,7 @@ LinearWarmupLR::LinearWarmupLR(std::shared_ptr<Optimizer> optimizer,
                                int64_t last_step)
     : LRScheduler(std::move(optimizer), last_step), 
                   warmup_steps_(warmup_steps), 
-                  start_factor_(start_factor) {
-    Step();
-}
+                  start_factor_(start_factor) {}
 
 float LinearWarmupLR::ComputeLR() const {
   if (last_step_ >= warmup_steps_) {
@@ -114,9 +112,7 @@ LambdaLR::LambdaLR(std::shared_ptr<Optimizer> optimizer,
                    std::function<float(int64_t)> lr_lambda, 
                    int64_t last_step)
     : LRScheduler(std::move(optimizer), last_step), 
-                  lr_lambda_(std::move(lr_lambda)) {
-    Step();
-}
+                  lr_lambda_(std::move(lr_lambda)) {}
 
 float LambdaLR::ComputeLR() const {
   return base_lr_ * lr_lambda_(last_step_);
