@@ -102,5 +102,25 @@ private:
 
 };
 
+
+class SequentialLR : public LRScheduler {
+public:
+    SequentialLR(std::shared_ptr<Optimizer> optimizer, 
+                 std::vector<std::shared_ptr<LRScheduler>> schedulers,
+                 std::vector<int64_t> milestones, 
+                 int64_t last_step = -1);
+
+    ~SequentialLR() override = default;
+
+    void Step() override;
+    StateDict State() const override;
+    void LoadState(const StateDict &state) override;
+
+private:
+    std::vector<std::shared_ptr<LRScheduler>> schedulers_;
+    std::vector<int64_t> milestones_;
+};
+
+
 }  // namespace lr_schedulers
 }  // namespace infini_train
