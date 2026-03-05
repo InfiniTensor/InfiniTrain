@@ -11,8 +11,8 @@ void TestWarmupThenConstant() {
     std::cout << "[TC1] TestWarmupThenConstant" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
 
-    auto warmup = std::make_shared<LinearWarmupLR>(opt, /*warmup_steps=*/3, /*start_factor=*/1e-8);
-    auto constant = std::make_shared<ConstantLR>(opt, /*factor=*/1.0f, /*total_iters=*/100);
+    auto warmup = LRScheduler::Create<LinearWarmupLR>(opt, /*warmup_steps=*/3, /*start_factor=*/1e-8);
+    auto constant = LRScheduler::Create<ConstantLR>(opt, /*factor=*/1.0f, /*total_iters=*/100);
 
     SequentialLR sched(opt, {warmup, constant}, {3});
 
@@ -35,8 +35,8 @@ void TestWarmupThenStepLR() {
     std::cout << "[TC2] TestWarmupThenStepLR" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
 
-    auto warmup = std::make_shared<LinearWarmupLR>(opt, 3, 0.0f);
-    auto step_lr = std::make_shared<StepLR>(opt, /*step_size=*/3, /*gamma=*/0.5f);
+    auto warmup = LRScheduler::Create<LinearWarmupLR>(opt, /*warmup_steps=*/3, /*start_factor=*/0.0f);
+    auto step_lr = LRScheduler::Create<StepLR>(opt, /*step_size=*/3, /*gamma=*/0.5f);
 
     SequentialLR sched(opt, {warmup, step_lr}, {3});
 
@@ -56,9 +56,9 @@ void TestWarmupThenStepThenConstant(){
     std::cout << "[TC3] TestWarmupThenStepThenConstant" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
 
-    auto warmup = std::make_shared<LinearWarmupLR>(opt, 3, 0.0f);
-    auto step_lr = std::make_shared<StepLR>(opt, 3, 0.5f);
-    auto constant = std::make_shared<ConstantLR>(opt, 0.5f, 2);
+    auto warmup = LRScheduler::Create<LinearWarmupLR>(opt, /*warmup_steps=*/3, /*start_factor=*/0.0f);
+    auto step_lr = LRScheduler::Create<StepLR>(opt, /*step_size=*/3, /*gamma=*/0.5f);
+    auto constant = LRScheduler::Create<ConstantLR>(opt, /*factor=*/0.5f, /*total_iters=*/2);
 
     SequentialLR sched(opt, {warmup, step_lr, constant}, {3, 6});
     const std::vector<float> expected = {
@@ -72,16 +72,16 @@ void TestWarmupThenStepThenConstant(){
 void TestStateRoundTrip() {
     std::cout << "[TC4] TestStateRoundTrip" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
-    auto warmup = std::make_shared<LinearWarmupLR>(opt, 3, 0.0f);
-    auto step_lr = std::make_shared<StepLR>(opt, 3, 0.5f);
+    auto warmup = LRScheduler::Create<LinearWarmupLR>(opt, /*warmup_steps=*/3, /*start_factor=*/0.0f);
+    auto step_lr = LRScheduler::Create<StepLR>(opt, /*step_size=*/3, /*gamma=*/0.5f);
     SequentialLR sched(opt, {warmup, step_lr}, {3});
 
     for (int i = 0; i < 5; ++i) sched.Step();
     StateDict saved = sched.State();
 
     auto opt2 = MakeDummyOptimizer(kBaseLR);
-    auto warmup2 = std::make_shared<LinearWarmupLR>(opt2, 3, 0.0f);
-    auto step_lr2 = std::make_shared<StepLR>(opt2, 3, 0.5f);
+    auto warmup2 = LRScheduler::Create<LinearWarmupLR>(opt2, /*warmup_steps=*/3, /*start_factor=*/0.0f);
+    auto step_lr2 = LRScheduler::Create<StepLR>(opt2, /*step_size=*/3, /*gamma=*/0.5f);
     SequentialLR sched2(opt2, {warmup2, step_lr2}, {3});
     sched2.LoadState(saved);
 
@@ -94,8 +94,8 @@ void TestResumeConsistency() {
     constexpr int kN = 10, kK = 4;
 
     auto make_sched = [](std::shared_ptr<Optimizer> opt) {
-        auto warmup = std::make_shared<LinearWarmupLR>(opt, 3, 0.0f);
-        auto step_lr = std::make_shared<StepLR>(opt, 3, 0.5f);
+        auto warmup = LRScheduler::Create<LinearWarmupLR>(opt, /*warmup_steps=*/3, /*start_factor=*/0.0f);
+        auto step_lr = LRScheduler::Create<StepLR>(opt, /*step_size=*/3, /*gamma=*/0.5f);
         return std::make_unique<SequentialLR>(opt,
             std::vector<std::shared_ptr<LRScheduler>>{warmup, step_lr},
             std::vector<int64_t>{3});
