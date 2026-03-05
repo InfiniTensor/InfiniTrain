@@ -27,7 +27,7 @@ public:
     LRScheduler(const LRScheduler &) = delete;
     LRScheduler &operator=(const LRScheduler &) = delete;
 
-    virtual void Step() = 0;
+    virtual void Step();
 
     float GetLR() const;
     float BaseLR() const;
@@ -40,6 +40,8 @@ public:
 
 protected:
 
+    virtual float ComputeLR() const = 0;
+
     void ApplyLR(float lr);
 
     std::shared_ptr<Optimizer> optimizer_;
@@ -49,14 +51,17 @@ protected:
 };
 
 namespace lr_schedulers {
+
 class ConstantLR : public LRScheduler {
 public:
-    ConstantLR(std::shared_ptr<Optimizer> optimizer, float factor = 1.0f / 3.0f, int total_iters = 5, 
-                int64_t last_step = -1);
-
+    ConstantLR(std::shared_ptr<Optimizer> optimizer, 
+               float factor = 1.0f / 3.0f, 
+               int total_iters = 5, 
+               int64_t last_step = -1);
     ~ConstantLR() override = default;
 
-    void Step() override;
+protected:
+    float ComputeLR() const override;
 
 private:
     const float factor_;
@@ -65,10 +70,14 @@ private:
 
 class StepLR : public LRScheduler {
 public:
-    StepLR(std::shared_ptr<Optimizer> optimizer, int64_t step_size, float gamma = 0.1f, int64_t last_step = -1);
+    StepLR(std::shared_ptr<Optimizer> optimizer, 
+           int64_t step_size, 
+           float gamma = 0.1f, 
+           int64_t last_step = -1);
     ~StepLR() override = default;
 
-    void Step() override;
+protected:
+    float ComputeLR() const override;
 
 private:
     const int64_t step_size_;
@@ -77,29 +86,34 @@ private:
 
 class LinearWarmupLR : public LRScheduler {
 public: 
-    LinearWarmupLR(std::shared_ptr<Optimizer> optimizer, int64_t warmup_steps, float start_factor = 0.0f, int64_t last_step = -1);
+    LinearWarmupLR(std::shared_ptr<Optimizer> optimizer,
+                   int64_t warmup_steps, 
+                   float start_factor = 0.0f, 
+                   int64_t last_step = -1);
     ~LinearWarmupLR() override = default;
 
-    void Step() override;
+protected:
+    float ComputeLR() const override;
 
 private:
     const int64_t warmup_steps_;
     const float start_factor_;
-
 };
 
 class LambdaLR : public LRScheduler {
 public:
     using LambdaFunc = std::function<float(int64_t)>;
 
-    LambdaLR(std::shared_ptr<Optimizer> optimizer, LambdaFunc lr_lambda, int64_t last_step = -1);
+    LambdaLR(std::shared_ptr<Optimizer> optimizer, 
+                LambdaFunc lr_lambda, 
+                int64_t last_step = -1);
     ~LambdaLR() override = default;
 
-    void Step() override;
+protected:
+    float ComputeLR() const override;
 
 private:
     const LambdaFunc lr_lambda_;
-
 };
 
 
@@ -109,18 +123,20 @@ public:
                  std::vector<std::shared_ptr<LRScheduler>> schedulers,
                  std::vector<int64_t> milestones, 
                  int64_t last_step = -1);
-
     ~SequentialLR() override = default;
 
     void Step() override;
+
     StateDict State() const override;
     void LoadState(const StateDict &state) override;
+    
+protected:
+    float ComputeLR() const override { return 0.0f; }
 
 private:
     std::vector<std::shared_ptr<LRScheduler>> schedulers_;
     std::vector<int64_t> milestones_;
 };
-
 
 }  // namespace lr_schedulers
 }  // namespace infini_train

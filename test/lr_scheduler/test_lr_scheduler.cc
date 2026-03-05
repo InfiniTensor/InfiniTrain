@@ -19,10 +19,8 @@ class IdentityScheduler : public LRScheduler {
 public:
     using LRScheduler::LRScheduler;
 
-    void Step() override {
-        ++last_step_;
-        ApplyLR(base_lr_);
-    }
+protected:
+    float ComputeLR() const override { return base_lr_; }
 };
 
 class LinearDecayScheduler : public LRScheduler {
@@ -32,11 +30,13 @@ public:
         : LRScheduler(std::move(optimizer), last_step),
           total_steps_(total_steps) {}
 
-    void Step() override {
-        ++last_step_;
-        ApplyLR(
-            last_step_ >= total_steps_ ? 0.0f : base_lr_ * (1.0f - static_cast<float>(last_step_)
-                                   / static_cast<float>(total_steps_)));
+protected:
+    float ComputeLR() const override {
+        if (last_step_ >= total_steps_) {
+            return 0.0f;
+        }
+        return base_lr_ * (1.0f - static_cast<float>(last_step_) /
+                                  static_cast<float>(total_steps_));
     }
 
 private:

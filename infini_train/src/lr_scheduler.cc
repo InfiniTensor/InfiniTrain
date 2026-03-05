@@ -18,6 +18,11 @@ LRScheduler::LRScheduler(std::shared_ptr<Optimizer> optimizer,
     current_lr_ = base_lr_;
 }
 
+void LRScheduler::Step() {
+    ++last_step_;
+    ApplyLR(ComputeLR());
+}
+
 void LRScheduler::ApplyLR(float lr) {
     current_lr_ = lr;
     optimizer_->SetLearningRate(current_lr_);
@@ -46,65 +51,91 @@ void LRScheduler::LoadState(const StateDict &state) {
     optimizer_->SetLearningRate(current_lr_);
 }
 
+
+
+// Concrete LR Schedulers
+
 namespace lr_schedulers {
-ConstantLR::ConstantLR(std::shared_ptr<Optimizer> optimizer, float factor, int total_iters, int64_t last_step)
-    : LRScheduler(std::move(optimizer), last_step), factor_(factor), total_iters_(total_iters) {
+
+// --- ConstantLR --- 
+
+ConstantLR::ConstantLR(std::shared_ptr<Optimizer> optimizer, 
+                       float factor, 
+                       int total_iters, 
+                       int64_t last_step)
+    : LRScheduler(std::move(optimizer), last_step), 
+      factor_(factor), 
+      total_iters_(total_iters) {
     Step();
 }
 
-void ConstantLR::Step() {
-    ++last_step_;
-    ApplyLR(
-        last_step_ < total_iters_ ? base_lr_ * factor_ : base_lr_);
+float ConstantLR::ComputeLR() const {
+    return last_step_ < total_iters_ ? base_lr_ * factor_ : base_lr_;
 }
 
-StepLR::StepLR(std::shared_ptr<Optimizer> optimizer, int64_t step_size, float gamma , int64_t last_step)
-    : LRScheduler(std::move(optimizer), last_step), step_size_(step_size), gamma_(gamma) {
+// --- StepLR ---
+
+StepLR::StepLR(std::shared_ptr<Optimizer> optimizer,
+               int64_t step_size,
+               float gamma,
+               int64_t last_step)
+    : LRScheduler(std::move(optimizer), last_step),
+      step_size_(step_size),
+      gamma_(gamma) {
     Step();
 }
 
-void StepLR::Step() {
-    ++last_step_;
-    ApplyLR(base_lr_ * static_cast<float>(
-        std::pow(static_cast<double>(gamma_),
-                 static_cast<double>(last_step_ / step_size_))));
+float StepLR::ComputeLR() const {
+  return base_lr_ * static_cast<float>(std::pow(
+             static_cast<double>(gamma_),
+             static_cast<double>(last_step_ / step_size_)));
 }
 
-LinearWarmupLR::LinearWarmupLR(std::shared_ptr<Optimizer> optimizer, int64_t warmup_steps, float start_factor, int64_t last_step)
-    : LRScheduler(std::move(optimizer), last_step), warmup_steps_(warmup_steps), start_factor_(start_factor) {
+LinearWarmupLR::LinearWarmupLR(std::shared_ptr<Optimizer> optimizer, 
+                               int64_t warmup_steps, 
+                               float start_factor, 
+                               int64_t last_step)
+    : LRScheduler(std::move(optimizer), last_step), 
+                  warmup_steps_(warmup_steps), 
+                  start_factor_(start_factor) {
     Step();
 }
 
-void LinearWarmupLR::Step() {
-    ++last_step_;
-    if (last_step_ >= warmup_steps_) {
-        ApplyLR(base_lr_);
-    } else{
-        float alpha = static_cast<float>(last_step_) / static_cast<float>(warmup_steps_);
-        ApplyLR(base_lr_ * ( start_factor_ + (1.0f - start_factor_) * alpha));
-    }
+float LinearWarmupLR::ComputeLR() const {
+  if (last_step_ >= warmup_steps_) {
+    return base_lr_;
+  }
+  float alpha =
+      static_cast<float>(last_step_) / static_cast<float>(warmup_steps_);
+  return base_lr_ * (start_factor_ + (1.0f - start_factor_) * alpha);
 }
 
-LambdaLR::LambdaLR(std::shared_ptr<Optimizer> optimizer, std::function<float(int64_t)> lr_lambda, int64_t last_step)
-    : LRScheduler(std::move(optimizer), last_step), lr_lambda_(std::move(lr_lambda)) {
+LambdaLR::LambdaLR(std::shared_ptr<Optimizer> optimizer, 
+                   std::function<float(int64_t)> lr_lambda, 
+                   int64_t last_step)
+    : LRScheduler(std::move(optimizer), last_step), 
+                  lr_lambda_(std::move(lr_lambda)) {
     Step();
 }
 
-void LambdaLR::Step() {
-    ++last_step_;
-    ApplyLR(base_lr_ * lr_lambda_(last_step_));
+float LambdaLR::ComputeLR() const {
+  return base_lr_ * lr_lambda_(last_step_);
 }
 
 SequentialLR::SequentialLR(std::shared_ptr<Optimizer> optimizer,
                            std::vector<std::shared_ptr<LRScheduler>> schedulers, 
                            std::vector<int64_t>milestones, int64_t last_step)
-    : LRScheduler(std::move(optimizer), last_step), schedulers_(std::move(schedulers)), milestones_(std::move(milestones)) {
-    CHECK(!schedulers_.empty()) << "SequentialLR requires at least one scheduler.";
+    : LRScheduler(std::move(optimizer), last_step), 
+                  schedulers_(std::move(schedulers)), 
+                  milestones_(std::move(milestones)) {
+    CHECK(!schedulers_.empty()) 
+        << "SequentialLR requires at least one scheduler.";
     CHECK_EQ(milestones_.size(), schedulers_.size() - 1)
         << "SequentialLR: milestones count must be schedulers count - 1.";
 
     for(size_t i = 1; i < milestones_.size(); ++i) {
-        CHECK_GT(milestones_[i], milestones_[i-1]) << "Milestones must be strictly increasing.";
+        CHECK_GT(milestones_[i], milestones_[i-1]) 
+            << "Milestones must be strictly increasing.";
     }
 
     optimizer_->SetLearningRate(schedulers_[0]->BaseLR());
