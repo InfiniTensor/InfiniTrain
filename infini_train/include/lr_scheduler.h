@@ -26,18 +26,20 @@ public:
     LRScheduler(const LRScheduler &) = delete;
     LRScheduler &operator=(const LRScheduler &) = delete;
 
-    void Step();
+    virtual void Step() = 0;
 
     float GetLR() const;
-
+    float BaseLR() const;
     int64_t LastStep() const;
 
-    virtual StateDict State() const;
+    void ResetStep(int64_t step = -1);
 
+    virtual StateDict State() const;
     virtual void LoadState(const StateDict &state);
 
 protected:
-    virtual float ComputeLR() = 0;
+
+    void ApplyLR(float lr);
 
     std::shared_ptr<Optimizer> optimizer_;
     int64_t last_step_;
@@ -53,8 +55,7 @@ public:
 
     ~ConstantLR() override = default;
 
-protected:
-    float ComputeLR() override ;
+    void Step() override;
 
 private:
     const float factor_;
@@ -66,8 +67,8 @@ public:
     StepLR(std::shared_ptr<Optimizer> optimizer, int64_t step_size, float gamma = 0.1f, int64_t last_step = -1);
     ~StepLR() override = default;
 
-protected:
-    float ComputeLR() override;
+    void Step() override;
+
 private:
     const int64_t step_size_;
     const float gamma_;
@@ -78,8 +79,7 @@ public:
     LinearWarmupLR(std::shared_ptr<Optimizer> optimizer, int64_t warmup_steps, float start_factor = 0.0f, int64_t last_step = -1);
     ~LinearWarmupLR() override = default;
 
-protected:
-    float ComputeLR() override ;
+    void Step() override;
 
 private:
     const int64_t warmup_steps_;

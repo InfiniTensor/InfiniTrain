@@ -17,9 +17,8 @@ LRScheduler::LRScheduler(std::shared_ptr<Optimizer> optimizer,
     current_lr_ = base_lr_;
 }
 
-void LRScheduler::Step() {
-    ++last_step_;
-    current_lr_ = ComputeLR();
+void LRScheduler::ApplyLR(float lr) {
+    current_lr_ = lr;
     optimizer_->SetLearningRate(current_lr_);
 }
 
@@ -48,11 +47,10 @@ ConstantLR::ConstantLR(std::shared_ptr<Optimizer> optimizer, float factor, int t
     Step();
 }
 
-float ConstantLR::ComputeLR() {
-    if(last_step_ < total_iters_) {
-        return base_lr_ * factor_;
-    }
-    return base_lr_;
+void ConstantLR::Step() {
+    ++last_step_;
+    ApplyLR(
+        last_step_ < total_iters_ ? base_lr_ * factor_ : base_lr_);
 }
 
 StepLR::StepLR(std::shared_ptr<Optimizer> optimizer, int64_t step_size, float gamma , int64_t last_step)
@@ -60,9 +58,11 @@ StepLR::StepLR(std::shared_ptr<Optimizer> optimizer, int64_t step_size, float ga
     Step();
 }
 
-float StepLR::ComputeLR() {
-    return base_lr_ * static_cast<float>(std::pow(static_cast<double>(gamma_), 
-                                                    static_cast<double>(last_step_ / step_size_)));
+void StepLR::Step() {
+    ++last_step_;
+    ApplyLR(base_lr_ * static_cast<float>(
+        std::pow(static_cast<double>(gamma_),
+                 static_cast<double>(last_step_ / step_size_))));
 }
 
 LinearWarmupLR::LinearWarmupLR(std::shared_ptr<Optimizer> optimizer, int64_t warmup_steps, float start_factor, int64_t last_step)
@@ -70,12 +70,14 @@ LinearWarmupLR::LinearWarmupLR(std::shared_ptr<Optimizer> optimizer, int64_t war
     Step();
 }
 
-float LinearWarmupLR::ComputeLR() {
+void LinearWarmupLR::Step() {
+    ++last_step_;
     if (last_step_ >= warmup_steps_) {
-        return base_lr_;
+        ApplyLR(base_lr_);
+    } else{
+        float alpha = static_cast<float>(last_step_) / static_cast<float>(warmup_steps_);
+        ApplyLR(base_lr_ * ( start_factor_ + (1.0f - start_factor_) * alpha));
     }
-    float alpha = static_cast<float>(last_step_) / static_cast<float>(warmup_steps_);
-    return base_lr_ * ( start_factor_ + (1.0f - start_factor_) * alpha);
 }
 
 
