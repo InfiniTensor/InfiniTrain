@@ -209,3 +209,6 @@ target_link_libraries(test_step_lr infini_train)
 
 add_executable(test_linear_lr test/lr_scheduler/test_linear_lr.cc)
 target_link_libraries(test_linear_lr infini_train)
+
+add_executable(test_lambda_lr test/lr_scheduler/test_lambda_lr.cc)
+target_link_libraries(test_lambda_lr infini_train)

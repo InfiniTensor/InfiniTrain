@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cmath>
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -84,6 +85,20 @@ public:
 private:
     const int64_t warmup_steps_;
     const float start_factor_;
+
+};
+
+class LambdaLR : public LRScheduler {
+public:
+    using LambdaFunc = std::function<float(int64_t)>;
+
+    LambdaLR(std::shared_ptr<Optimizer> optimizer, LambdaFunc lr_lambda, int64_t last_step = -1);
+    ~LambdaLR() override = default;
+
+    void Step() override;
+
+private:
+    const LambdaFunc lr_lambda_;
 
 };
 

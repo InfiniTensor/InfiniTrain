@@ -80,6 +80,15 @@ void LinearWarmupLR::Step() {
     }
 }
 
+LambdaLR::LambdaLR(std::shared_ptr<Optimizer> optimizer, std::function<float(int64_t)> lr_lambda, int64_t last_step)
+    : LRScheduler(std::move(optimizer), last_step), lr_lambda_(std::move(lr_lambda)) {
+    Step();
+}
+
+void LambdaLR::Step() {
+    ++last_step_;
+    ApplyLR(base_lr_ * lr_lambda_(last_step_));
+}
 
 }  // namespace lr_schedulers
 }  // namespace infini_train
