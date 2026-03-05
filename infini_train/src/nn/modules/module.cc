@@ -48,6 +48,29 @@ std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
     return params;
 }
 
+std::vector<std::shared_ptr<Tensor>> Module::TrainableParameters() const {
+    std::vector<std::shared_ptr<Tensor>> params;
+    std::unordered_set<const Tensor *> visited;
+
+    auto AddIfUnvisited = [&](const std::shared_ptr<Tensor> &param) {
+        if (visited.insert(param.get()).second) {
+            if (param->requires_grad()) {
+                params.push_back(param);
+            }
+        }
+    };
+
+    // Add parameters of this module
+    for (const auto &[_, param] : parameters_) { AddIfUnvisited(param); }
+
+    // Recursively add parameters of submodules
+    for (const auto &[_, module] : modules_) {
+        for (const auto &param : module->TrainableParameters()) { AddIfUnvisited(param); }
+    }
+
+    return params;
+}
+
 bool Module::has_parameter(const std::string &name) const { return parameters_.find(name) != parameters_.end(); }
 
 std::shared_ptr<Tensor> *Module::mutable_parameter(const std::string &name) {
@@ -128,6 +151,11 @@ Module::NamedModules(std::unordered_set<Module *> *memory, const std::string &pr
 }
 
 std::shared_ptr<Module> Module::mutable_module(const std::string &name) { return modules_.at(name); }
+
+void Module::replace_module(const std::string &name, std::shared_ptr<Module> new_module) {
+    CHECK(modules_.find(name) != modules_.end()) << "Module not found: " << name;
+    modules_[name] = new_module;
+}
 
 const Module &Module::module(const std::string &name) const {
     CHECK(modules_.find(name) != modules_.end());

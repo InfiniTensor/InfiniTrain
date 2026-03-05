@@ -24,6 +24,9 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
     : ddp_config_(ddp_config),
       ddp_pg_(ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(thread_rank))) {
     for (auto &param : module->Parameters()) {
+        if (!param->requires_grad()) {
+            continue;
+        }
         auto device = param->GetDevice();
         CHECK_EQ(device.index(), thread_rank) << "All parameters must be on the same device as the module";
         if (!ddp_config.gradient_bucketing_enabled && !ddp_config.use_distributed_optimizer) {

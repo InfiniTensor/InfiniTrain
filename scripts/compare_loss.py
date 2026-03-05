@@ -4,11 +4,20 @@
 #   /data/shared/InfiniTrain-dev/logs/202511_a800/20260105/feature/add_1F1B_f2a383a/logs \
 #   /data/shared/InfiniTrain-dev/logs/202511_a800/20251223/feature/tp-pp-split-stream/logs \
 #   --threshold-fp32 1e-5 --threshold-bf16 1e-2
+#
+# With plotting:
+# python scripts/compare_loss.py dir1 dir2 --plot
 
 import re
 import sys
 from pathlib import Path
 from argparse import ArgumentParser
+
+try:
+    import matplotlib.pyplot as plt
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
 
 def get_dtype_from_filename(filename):
     """Determine dtype from filename. Returns 'bfloat16' or 'fp32'."""
@@ -45,7 +54,44 @@ def compare_files(file1, file2, threshold):
                 rel = diff / max(abs(loss1), abs(loss2)) * 100 if max(abs(loss1), abs(loss2)) > 0 else 0
                 mismatches.append(f"  Step {step}: {loss1:.6f} vs {loss2:.6f} ✗ (diff: {diff:.2e}, {rel:.4f}%)")
 
-    return len(all_steps), len(mismatches), mismatches
+    return len(all_steps), len(mismatches), mismatches, losses1, losses2
+
+
+def plot_loss_comparison(dir1_name, dir2_name, losses1, losses2, output_path):
+    """Plot loss curves comparison between two log files."""
+    if not HAS_MATPLOTLIB:
+        print("  WARNING: matplotlib not installed, skipping plot")
+        return
+
+    steps1 = sorted(losses1.keys())
+    steps2 = sorted(losses2.keys())
+
+    fig, axes = plt.subplots(2, 1, figsize=(12, 8))
+
+    # Plot 1: Loss curves
+    ax1 = axes[0]
+    ax1.plot(steps1, [losses1[s] for s in steps1], 'b-o', label=f'{dir1_name}', markersize=4)
+    ax1.plot(steps2, [losses2[s] for s in steps2], 'r--s', label=f'{dir2_name}', markersize=4)
+    ax1.set_xlabel('Step')
+    ax1.set_ylabel('Loss')
+    ax1.set_title('Training Loss Comparison')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+
+    # Plot 2: Absolute difference
+    ax2 = axes[1]
+    common_steps = sorted(set(steps1) & set(steps2))
+    diffs = [abs(losses1[s] - losses2[s]) for s in common_steps]
+    ax2.plot(common_steps, diffs, 'g-^', markersize=4)
+    ax2.set_xlabel('Step')
+    ax2.set_ylabel('Absolute Difference')
+    ax2.set_title('Loss Difference (|Loss1 - Loss2|)')
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"  Plot saved to: {output_path}")
 
 def main():
     parser = ArgumentParser(description='Compare training loss between two log directories')
@@ -55,6 +101,8 @@ def main():
     parser.add_argument('--threshold-fp32', type=float, default=1e-5, help='Loss difference threshold for fp32 (default: 1e-5)')
     parser.add_argument('--threshold-bf16', type=float, default=1e-2, help='Loss difference threshold for bfloat16 (default: 1e-2)')
     parser.add_argument('--verbose', action='store_true', help='Print detailed output for all files, including passed ones')
+    parser.add_argument('--plot', action='store_true', help='Generate loss curve comparison plots')
+    parser.add_argument('--plot-dir', type=Path, default=None, help='Output directory for plots (default: dir2)')
     args = parser.parse_args()
 
     # Support legacy --threshold argument
@@ -91,7 +139,13 @@ def main():
         else:
             fp32_total += 1
 
-        total_steps, num_mismatches, mismatches = compare_files(files1[name], files2[name], threshold)
+        total_steps, num_mismatches, mismatches, losses1, losses2 = compare_files(files1[name], files2[name], threshold)
+
+        # Generate plot if requested
+        if args.plot:
+            plot_dir = args.plot_dir or args.dir2
+            plot_path = plot_dir / f"{name.replace('.log', '')}_loss_comparison.png"
+            plot_loss_comparison(args.dir1.name, args.dir2.name, losses1, losses2, plot_path)
 
         if mismatches:
             print(f"Comparing {name} ({dtype}, threshold: {threshold:.0e}):")
