@@ -5,19 +5,10 @@
 #include <iostream>
 #include <map>
 
-#ifdef USE_CUDA
-#include <cuda_runtime.h>
-#endif
-
 #include "glog/logging.h"
 
-#ifdef USE_CUDA
-#include "infini_train/include/common/cuda/common_cuda.h"
-#endif
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
-
-#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train {
 namespace {
@@ -46,54 +37,39 @@ int GetRank(Device::DeviceType device) {
     return impl->GetDevice().index();
 }
 
-#ifdef USE_CUDA
-cudaStream_t GetCudaStream() {
-    int device_id = GetRank(Device::DeviceType::kCUDA);
-    // TODO(zbl): support multi-stream on single device
-    auto device = Device(Device::DeviceType::kCUDA, static_cast<int8_t>(device_id));
-    return dynamic_cast<infini_train::core::cuda::CudaStream *>(
-               core::GetDeviceGuardImpl(device.type())->GetStream(device))
-        ->cuda_stream();
-}
-#endif
-
 void Profiler::StartRecord(const std::string &name, Device::DeviceType device) {
     if (g_profiling_depth++ > 0) {
         return;
     }
     cpu_timing_map_[name] = std::chrono::high_resolution_clock::now();
 
-    switch (device) {
-    case Device::DeviceType::kCPU:
-        break;
-#ifdef USE_CUDA
-    case Device::DeviceType::kCUDA: {
-        auto it = cuda_timing_map_.find(name);
-        if (it != cuda_timing_map_.end()) {
-            // Make sure there are no conflicts
-            CUDA_CHECK(cudaEventDestroy(reinterpret_cast<cudaEvent_t>(it->second.start)));
-            CUDA_CHECK(cudaEventDestroy(reinterpret_cast<cudaEvent_t>(it->second.stop)));
-            cuda_timing_map_.erase(it);
-        }
-
-        cudaEvent_t start, stop;
-        cudaStream_t stream = GetCudaStream();
-        CUDA_CHECK(cudaEventCreate(&start));
-        CUDA_CHECK(cudaEventCreate(&stop));
-
-        // Make sure the compute stream has done waiting, and ready for the execution of next op
-        CUDA_CHECK(cudaStreamSynchronize(stream));
-        // Start record after waiting
-        cpu_timing_map_[name] = std::chrono::high_resolution_clock::now();
-        CUDA_CHECK(cudaEventRecord(start, stream));
-        cuda_timing_map_[name] = {reinterpret_cast<void *>(start), reinterpret_cast<void *>(stop)};
-        break;
+    if (device == Device::DeviceType::kCPU) {
+        return;
     }
-#endif
-    default:
-        LOG(FATAL) << "Unsupported device type.";
-        break;
+
+    auto *impl = core::GetDeviceGuardImpl(device);
+    const int device_id = impl->GetDevice().index();
+    auto current_device = Device(device, static_cast<int8_t>(device_id));
+    auto *stream = impl->GetStream(current_device);
+
+    auto it = device_timing_map_.find(name);
+    if (it != device_timing_map_.end()) {
+        impl->EventDestroy(it->second.start);
+        impl->EventDestroy(it->second.stop);
+        device_timing_map_.erase(it);
     }
+
+    core::Event *start = nullptr;
+    core::Event *stop = nullptr;
+    impl->EventCreate(&start);
+    impl->EventCreate(&stop);
+
+    // Make sure the compute stream has done waiting, and ready for the execution of next op
+    impl->SynchronizeStream(stream);
+    // Start record after waiting
+    cpu_timing_map_[name] = std::chrono::high_resolution_clock::now();
+    impl->EventRecord(start, stream);
+    device_timing_map_[name] = {start, stop};
 }
 
 void Profiler::EndRecord(const std::string &name, Device::DeviceType device) {
@@ -105,44 +81,28 @@ void Profiler::EndRecord(const std::string &name, Device::DeviceType device) {
     std::string device_str = "cpu";
     int rank = GetRank(device);
 
-    switch (device) {
-    case Device::DeviceType::kCPU:
-        break;
-#ifdef USE_CUDA
-    case Device::DeviceType::kCUDA: {
-        auto it = cuda_timing_map_.find(name);
-        if (it != cuda_timing_map_.end()) {
-            auto event_pair = it->second;
-            cudaEvent_t start = reinterpret_cast<cudaEvent_t>(event_pair.start);
-            cudaEvent_t stop = reinterpret_cast<cudaEvent_t>(event_pair.stop);
-            cudaStream_t stream = GetCudaStream();
-            CUDA_CHECK(cudaEventRecord(stop, stream));
-            CUDA_CHECK(cudaEventSynchronize(stop));
-            float elapsed_ms = 0.f;
-            CUDA_CHECK(cudaEventElapsedTime(&elapsed_ms, start, stop));
-            device_us = static_cast<int64_t>(elapsed_ms * 1000);
-            CUDA_CHECK(cudaEventDestroy(start));
-            CUDA_CHECK(cudaEventDestroy(stop));
-            cuda_timing_map_.erase(it);
+    if (device != Device::DeviceType::kCPU) {
+        auto *impl = core::GetDeviceGuardImpl(device);
+        auto current_device = Device(device, static_cast<int8_t>(rank));
+        auto *stream = impl->GetStream(current_device);
 
-            cudaMemPool_t pool;
-            size_t peak_bytes = 0;
-            if (cudaDeviceGetDefaultMemPool(&pool, rank) == cudaSuccess
-                && cudaMemPoolGetAttribute(pool, cudaMemPoolAttrReservedMemHigh, &peak_bytes) == cudaSuccess) {
-                peak_mem_mb = static_cast<int64_t>(peak_bytes) / (1024 * 1024);
-            } else {
-                LOG(FATAL) << "cudaMemPool not supported.";
-            }
-            device_str = "cuda:" + std::to_string(rank);
-        } else {
+        auto it = device_timing_map_.find(name);
+        if (it == device_timing_map_.end()) {
             LOG(FATAL) << "Start time of " + name + " is not recorded.";
         }
-        break;
-    }
-#endif
-    default:
-        LOG(FATAL) << "Unsupported device type.";
-        break;
+
+        auto event_pair = it->second;
+        impl->EventRecord(event_pair.stop, stream);
+        impl->EventSynchronize(event_pair.stop);
+        device_us = static_cast<int64_t>(impl->EventElapsedTime(event_pair.start, event_pair.stop) * 1000.0f);
+        impl->EventDestroy(event_pair.start);
+        impl->EventDestroy(event_pair.stop);
+        device_timing_map_.erase(it);
+
+        auto [peak_used_mb, peak_reserved_mb] = impl->GetMemPoolPeakMB(current_device);
+        (void)peak_used_mb;
+        peak_mem_mb = static_cast<int64_t>(peak_reserved_mb);
+        device_str = current_device.ToString();
     }
 
     auto cpu_start = cpu_timing_map_[name];
@@ -171,9 +131,16 @@ void Profiler::Reset() {
 void Profiler::SetTag(const std::string &tag) { current_tag_ = tag; }
 
 void Profiler::ReportGroupedByRank(std::function<std::ostream &(int64_t)> get_os, SortBy sort_by) const {
+    std::vector<KernelCallRecord> records_snapshot;
+    {
+        // Prevent call_records_ from being modified by other threads
+        std::lock_guard<std::mutex> lock(mtx_);
+        records_snapshot = call_records_;
+    }
+
     std::map<int64_t, std::map<std::string, std::map<std::string, KernelProfileInfo>>> grouped_stats;
 
-    for (const auto &rec : call_records_) {
+    for (const auto &rec : records_snapshot) {
         auto &entry = grouped_stats[rec.rank][rec.tag][rec.name];
         entry.host_total_us += rec.host_us;
         entry.device_total_us += rec.device_us;
@@ -193,7 +160,7 @@ void Profiler::ReportGroupedByRank(std::function<std::ostream &(int64_t)> get_os
 
             // Peak memory usage by tag
             int64_t tag_peak_mb = 0;
-            for (const auto &rec : call_records_) {
+            for (const auto &rec : records_snapshot) {
                 if (rec.rank == rank && rec.tag == tag) {
                     tag_peak_mb = std::max(tag_peak_mb, rec.max_device_mem_usage_mb);
                 }
@@ -283,9 +250,16 @@ void Profiler::Report(const std::string &file_prefix, SortBy sort_by) const {
 }
 
 void Profiler::PrintRecordsGroupedByRank(std::function<std::ostream &(int64_t)> get_os) const {
+    std::vector<KernelCallRecord> records_snapshot;
+    {
+        // Prevent call_records_ from being modified by other threads
+        std::lock_guard<std::mutex> lock(mtx_);
+        records_snapshot = call_records_;
+    }
+
     std::map<int64_t, std::map<std::string, std::vector<const KernelCallRecord *>>> grouped;
 
-    for (const auto &rec : call_records_) { grouped[rec.rank][rec.tag].push_back(&rec); }
+    for (const auto &rec : records_snapshot) { grouped[rec.rank][rec.tag].push_back(&rec); }
 
     for (const auto &[rank, tag_map] : grouped) {
         std::ostream &os = get_os(rank);

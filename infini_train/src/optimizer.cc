@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train::core {
@@ -28,12 +28,38 @@ public:
     Device::DeviceType Type() const override;
 
     // stream
+    // TODO(zbl): Better wrap the create/destroy API call inside the constructor/destructor of class Stream
     Stream *GetStream(Device device) const override;
 
+    Stream *CreateStream(Device device) const override;
+
+    Stream *CreateStreamWithPriority(Device device, int priority) const override;
+
+    void DestroyStream(Stream *stream) const override;
+
+    void GetStreamPriorityRange(int *low, int *high) const override;
+
     // event
+    // TODO(zbl): Better wrap the create/destroy API call inside the constructor/destructor of class Event
+    void EventCreate(Event **event) const override;
+
+    void EventCreateWithFlags(Event **event, EventFlag flags) const override;
+
+    void EventDestroy(Event *event) const override;
+
+    void EventRecord(Event *event, Stream *stream) const override;
+
+    void StreamWaitEvent(Stream *stream, Event *event, uint32_t flags) const override;
+
+    RuntimeStatus EventSynchronize(Event *event) const override;
+
+    RuntimeStatus EventQuery(Event *event) const override;
+
+    float EventElapsedTime(Event *start_event, Event *stop_event) const override;
 
     // sync
     void SynchronizeDevice(Device device) const override;
+    void SynchronizeStream(Stream *stream) const override;
 
     // blas
     BlasHandle *GetBlasHandle(Device device) const override;

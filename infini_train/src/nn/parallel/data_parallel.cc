@@ -8,7 +8,7 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
