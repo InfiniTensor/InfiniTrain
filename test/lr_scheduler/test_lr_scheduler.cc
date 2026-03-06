@@ -22,7 +22,7 @@ public:
     ~IdentityScheduler() override = default;
 
 protected:
-    float ComputeLR() const override { return base_lr_; }
+    float GetClosedFormLR() const override { return base_lr_; }
 };
 
 class LinearDecayScheduler : public LRScheduler {
@@ -33,7 +33,7 @@ public:
           total_steps_(total_steps) {}
 
 protected:
-    float ComputeLR() const override {
+    float GetClosedFormLR() const override {
         if (last_step_ >= total_steps_) {
             return 0.0f;
         }

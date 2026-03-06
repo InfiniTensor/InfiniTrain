@@ -53,6 +53,20 @@ void TestGammaOne() {
     }
 }
 
+void TestChainableAndClosedFormConsistency() {
+    auto opt_a = MakeDummyOptimizer(kBaseLR);
+    auto chainable = LRScheduler::Create<StepLR>(opt_a, 3, 0.1f);
+
+    auto opt_b = MakeDummyOptimizer(kBaseLR);
+    auto closed_form = LRScheduler::Create<StepLR>(opt_b, 3, 0.1f);
+
+    for (int epoch = 1; epoch <= 12; ++epoch) {
+        chainable->Step();
+        closed_form->Step(epoch);
+        ASSERT_FLOAT_NEAR(chainable->GetLR(), closed_form->GetLR(), 1e-7f);
+    }
+}
+
 int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
     std::cout << "=== Step Tests ===" << std::endl;
@@ -61,6 +75,7 @@ int main(int argc, char *argv[]) {
     TestMultipleDecays();
     TestPyTorchAlignment();
     TestGammaOne();
+    TestChainableAndClosedFormConsistency();
 
     std::cout << "========================" << std::endl;
     if (g_fail_count == 0) {
