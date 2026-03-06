@@ -78,8 +78,8 @@ public:
     size_t NumElements() const;
     DataType Dtype() const;
 
-    // TODO(dcj): use scalar class later
-    template <typename T> void Fill(T value);
+    // Fill tensor with a scalar value (accepts double, automatically converts to tensor's dtype)
+    void Fill(double value);
 
     Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> EigenMatrix();
     Eigen::Map<Eigen::Matrix<float, 1, Eigen::Dynamic, Eigen::RowMajor>> EigenVector();

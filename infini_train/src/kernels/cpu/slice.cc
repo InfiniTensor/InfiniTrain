@@ -83,7 +83,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     }
 
     auto new_tensor = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());
-    new_tensor->Fill<float>(0.0);
+    new_tensor->Fill(0.0);
 
     std::vector<int64_t> src_strides(dims.size());
     int64_t stride = 1;

@@ -47,7 +47,7 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
     CHECK_EQ(grad_outputs.size(), (input_dims[dim] + split_size - 1) / split_size);
 
     auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32);
-    grad_input->Fill<float>(0.0f);
+    grad_input->Fill(0.0);
     for (int64_t start = 0, idx = 0; start < input_dims[dim]; start += split_size, ++idx) {
         auto output_dims = input_dims;
         output_dims[dim] = std::min(split_size, input_dims[dim] - start);

@@ -8,6 +8,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/runtime/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::kernels::cuda {
@@ -33,11 +34,12 @@ std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
     dim3 grid_dims(CEIL_DIV(num_elements, block_dims.x));
     const size_t step = grid_dims.x * block_dims.x;
 
-    DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
+    core::cuda::DispatchCudaFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
         {dtype, input->Dtype()},
         [=]<typename Tdst, typename Tsrc>() {
             auto dst = static_cast<Tdst *>(dst_tensor->DataPtr());
             auto src = static_cast<const Tsrc *>(input->DataPtr());
+
             for (size_t offset = 0; offset < num_elements; offset += step) {
                 CastKernel<<<grid_dims, block_dims, 0, cuda_stream>>>(dst, src, num_elements, offset);
             }

@@ -885,8 +885,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
                       DataType::kBFLOAT16)
         // FIXME(zbl): AtomicAdd does not support int64_t
         // DISPATCH_CASE(WRAP({
-        //                   grad_a->Fill<int64_t>(0);
-        //                   grad_b->Fill<int64_t>(0);
+        //                   grad_a->Fill(0.0);
+        //                   grad_b->Fill(0.0);
         //                   LaunchBackward<256, int64_t>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
         //                   b);
         //               }),
