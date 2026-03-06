@@ -4,6 +4,7 @@
 
 #include "infini_train/include/optimizer.h"
 
+
 namespace infini_train {
 
 LRScheduler::LRScheduler(std::shared_ptr<Optimizer> optimizer,
@@ -226,7 +227,7 @@ void SequentialLR::Step() {
         scheduler->Step();
     }
 
-    ApplyLR(scheduler->GetLR());
+    current_lr_ = optimizer_->GetLearningRate();
 }
 
 StateDict SequentialLR::State() const {
@@ -262,6 +263,55 @@ void SequentialLR::LoadState(const StateDict &state) {
     optimizer_->SetLearningRate(current_lr_);
 }
 
+ChainedScheduler::ChainedScheduler(std::shared_ptr<Optimizer> optimizer,
+                                 std::vector<std::shared_ptr<LRScheduler>> schedulers,
+                                 int64_t last_step)
+    : LRScheduler(std::move(optimizer), last_step),
+      schedulers_(std::move(schedulers)) {}
+
+
+void ChainedScheduler::InitialStep() {
+    CHECK(!schedulers_.empty())
+        << "ChainedScheduler requires at least one scheduler.";
+
+    current_lr_ = optimizer_->GetLearningRate();
+}
+
+
+void ChainedScheduler::Step() {
+    ++last_step_;
+    for (auto &sched : schedulers_) {
+        sched->Step();
+    }
+    current_lr_ = optimizer_->GetLearningRate();
+}
+
+StateDict ChainedScheduler::State() const {
+    StateDict state = LRScheduler::State();
+    for (size_t i = 0; i < schedulers_.size(); ++i) {
+        auto sub_state = schedulers_[i]->State();
+        for (const auto& [key, value] : sub_state) {
+            state["scheduler_" + std::to_string(i) + "." + key] = value;
+        }
+    }
+    return state;
+}
+
+void ChainedScheduler::LoadState(const StateDict& state) {
+    LRScheduler::LoadState(state);
+    for (size_t i = 0; i < schedulers_.size(); ++i) {
+        StateDict sub_state;
+        std::string prefix = "scheduler_" + std::to_string(i) + ".";
+        for (const auto& [key, value] : state) {
+            if (key.substr(0, prefix.size()) == prefix) {
+                sub_state[key.substr(prefix.size())] = value;
+            }
+        }
+        if (!sub_state.empty()) {
+            schedulers_[i]->LoadState(sub_state);
+        }
+    }
+}
 
 }  // namespace lr_schedulers
 }  // namespace infini_train
