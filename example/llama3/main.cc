@@ -199,8 +199,8 @@ void Train(const nn::parallel::Rank &rank) {
                 = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
             auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
             for (int chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
-                (*mutable_chunks)[chunk_id] = std::make_shared<DistributedDataParallel>(mutable_chunks->at(chunk_id),
-                                                                                        rank.thread_rank(), ddp_config);
+                (*mutable_chunks)[chunk_id]
+                    = std::make_shared<DistributedDataParallel>(mutable_chunks->at(chunk_id), rank, ddp_config);
             }
         }
     } else if (ddp_world_size > 1) {
@@ -210,7 +210,7 @@ void Train(const nn::parallel::Rank &rank) {
         // are created during the conversion.
 
         auto ddp_config = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
-        model = std::make_shared<DistributedDataParallel>(model, rank.thread_rank(), ddp_config);
+        model = std::make_shared<DistributedDataParallel>(model, rank, ddp_config);
     }
 
     DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
