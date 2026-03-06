@@ -1,14 +1,15 @@
 #pragma once
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace infini_train::nn {
 
 struct TransformerConfig {
-    int64_t block_size = 8192;
-    ; // Max seq_len
-    int64_t vocab_size = 128256;
-    ;                            // Vocab size
+    std::string model_type; // e.g., "GPT-2", "LLaMA3"
+
+    int64_t block_size = 8192;   // Max seq_len
+    int64_t vocab_size = 128256; // Vocab size
     int64_t original_vocab_size; // Original vocab size before padding
     int64_t n_layer = 16;        // Num of transformer layers
     int64_t n_head = 32;         // Num of heads in MHA

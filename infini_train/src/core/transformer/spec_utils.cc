@@ -1,90 +1,39 @@
-#include "infini_train/include/core/models/decode_only_transformer/layer_specs.h"
-
-#include "example/common/utils.h"
 #include "infini_train/include/core/transformer/spec_utils.h"
+
 #include "infini_train/include/core/transformer/transformer_config.h"
-#include "infini_train/include/device.h"
-#include "infini_train/include/nn/functional.h"
-#include "infini_train/include/nn/init.h"
-#include "infini_train/include/nn/modules/container.h"
-#include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/modules/normalization.h"
-#include "infini_train/include/nn/modules/sparse.h"
-#include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/process_group.h"
-#include "infini_train/include/nn/parallel/tensor_parallel.h"
-#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-TransformerFirstStageABI::TransformerFirstStageABI(const TransformerConfig &config,
-                                                   std::shared_ptr<TransformerKernel> kernel)
-    : config_(config), kernel_(kernel) {
-    // HF ABI: transformer.wte
-    modules_[kWTELayerName] = std::make_shared<nn::parallel::VocabParallelEmbedding>(
-        config_.vocab_size, config_.n_embd, nn::parallel::global::GetSequenceParallelEnabled());
 
-    // GPT-2 has wpe, LLaMA does not
-    if (kernel_->UseAbsolutePositionEmbedding()) {
-        modules_[kWPELayerName] = std::make_shared<nn::Embedding>(config_.block_size, config_.n_embd);
+void ModuleRegistry::Register(std::type_index type, ModuleCreator creator) { registry_[type] = std::move(creator); }
+
+ModuleCreator ModuleRegistry::Get(std::type_index type) const {
+    auto it = registry_.find(type);
+    if (it == registry_.end()) {
+        return nullptr;
     }
+    return it->second;
 }
 
-std::vector<std::shared_ptr<Tensor>> TransformerFirstStageABI::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    auto tokens = x[0]; // (B, T)
+std::shared_ptr<Module> build_module(const TransformerConfig &config, const ModuleSpec &spec) {
 
-    auto tok_emb = modules_[kWTELayerName]->Forward({tokens})[0]; // (B,T,C)
-
-    std::shared_ptr<Tensor> h = tok_emb;
-
-    if (modules_.count(kWPELayerName)) {
-        auto pos = nn::init::Arange(0, tokens->Dims()[1], DataType::kINT64, tokens->GetDevice());
-        auto pos_emb = modules_[kWPELayerName]->Forward({pos})[0];
-        h = h + pos_emb;
+    if (spec.build) {
+        return spec.build(config, spec);
     }
 
-    return {h};
+    CHECK(spec.module_ != typeid(void)) << "ModuleSpec.module is not set";
+
+    auto creator = ModuleRegistry::Instance().Get(spec.module_);
+
+    CHECK(creator) << "Module not registered: " << spec.module_.name();
+
+    auto module = creator(config, spec);
+
+    // for (auto &[name, sub_spec] : spec.submodules_) { module->mutable_module(name) = build_module(config, sub_spec);
+    // }
+
+    return module;
 }
-
-TransformerChunkABI::TransformerChunkABI(const TransformerConfig &config, int start_layer, int end_layer,
-                                         std::shared_ptr<TransformerKernel> kernel)
-    : config_(config) {
-    std::vector<std::shared_ptr<nn::Module>> layers;
-
-    for (int i = start_layer; i < end_layer; ++i) { layers.push_back(kernel->MakeBlock(config_)); }
-
-    // HF ABI: transformer.h = ModuleList
-    modules_[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(layers));
-}
-
-std::vector<std::shared_ptr<Tensor>> TransformerChunkABI::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    auto h = x[0];
-    auto &layers = *std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName]);
-
-    for (auto &layer : layers) { h = layer->Forward({h})[0]; }
-    return {h};
-}
-
-TransformerLastStageABI::TransformerLastStageABI(const TransformerConfig &config,
-                                                 std::shared_ptr<TransformerKernel> kernel)
-    : config_(config) {
-    // HF ABI: transformer.ln_f
-    modules_[kLnFLayerName] = kernel->MakeFinalNorm(config_);
-
-    // HF ABI: lm_head
-    modules_[kLMHeadLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
-        config_.n_embd, config_.vocab_size, false, false, false, false,
-        nn::parallel::global::GetSequenceParallelEnabled());
-}
-
-std::vector<std::shared_ptr<Tensor>> TransformerLastStageABI::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    auto h = modules_[kLnFLayerName]->Forward(x);
-    return modules_[kLMHeadLayerName]->Forward(h);
-}
-
-/* Transformer:  spec_utils.cc */
-std::shared_ptr<Module> build_module(const ModuleSpec &spec, const BuildContext &ctx) { return spec.builder(ctx); }
-
 } // namespace infini_train::nn

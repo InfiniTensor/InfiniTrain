@@ -12,20 +12,12 @@
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
+#include "infini_train/include/core/transformer/module_kernel.h"
 #include "infini_train/include/core/transformer/spec_utils.h"
+#include "infini_train/include/core/transformer/transformer_block.h"
+#include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/models/llama3/llama3.h"
-#include "infini_train/include/nn/functional.h"
-#include "infini_train/include/nn/init.h"
-#include "infini_train/include/nn/modules/container.h"
-#include "infini_train/include/nn/modules/linear.h"
-#include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/modules/normalization.h"
-#include "infini_train/include/nn/modules/sparse.h"
-#include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
-#include "infini_train/include/tensor.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
@@ -135,7 +127,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
 
     const int64_t head_dim = static_cast<int64_t>(n_embd) / static_cast<int64_t>(n_head);
 
-    // MLP hidden dim calculation in LLaMA-3
+    // nn::MLP hidden dim calculation in LLaMA-3
     auto round_up_to = [](int64_t x, int64_t m) { return (x + m - 1) / m * m; };
     int64_t hidden_dim = 4LL * static_cast<int64_t>(n_embd);
     hidden_dim = (2LL * hidden_dim) / 3LL;
@@ -165,7 +157,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
 
     // RowParallel (proj)
     const int64_t in_pp = static_cast<int64_t>(n_embd) / tp_size;
-    // MLP: c_fc/c_fc2（shard along row），c_proj（shard along col）
+    // nn::MLP: c_fc/c_fc2（shard along row），c_proj（shard along col）
     const int64_t fc_out = ffn_hidden;
     const int64_t fc_pp = fc_out / tp_size;
     const int64_t in_fc_pp = ffn_hidden / tp_size;
@@ -175,9 +167,8 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     // ========== Read Sharded Params ==========
     // transformer.wte.weight : (vocab_size, n_embd) -> local tp_rank: rows of [v_start : v_start+vpp)
     if (is_first_stage) {
-        auto &wte
-            = state_dict[std::format("{}.{}.{}", kTransformerLayerName, nn::TransformerFirstStageABI::kWTELayerName,
-                                     nn::parallel::VocabParallelEmbedding::kParamWeightName)];
+        auto &wte = state_dict[std::format("{}.{}.{}", kTransformerLayerName, nn::TransformerFirstStage::kWTELayerName,
+                                           nn::parallel::VocabParallelEmbedding::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(wte->DataPtr()),
                                 /*rows=*/vocab_size, /*cols=*/n_embd,
                                 /*row_start=*/v_start, /*row_cnt=*/vpp);
@@ -186,13 +177,13 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
         ifs.seekg(wte_bytes, std::ios::cur);
     }
 
-    // transformer.h.{i}.ln_1.weight : Full version RMSNorm
+    // transformer.h.{i}.ln_1.weight : Full version nn::RMSNorm
     int local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
-            auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}", kTransformerLayerName, nn::TransformerChunkABI::kHLayerName,
-                std::to_string(local_layer_index), Block::kLn1LayerName, RMSNorm::kParamWeightName)];
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", kTransformerLayerName,
+                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
+                                                  nn::TransformerBlock::kLn1LayerName, nn::RMSNorm::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
             ++local_layer_index;
         } else {
@@ -207,9 +198,9 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
             auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", kTransformerLayerName, nn::TransformerChunkABI::kHLayerName,
-                std::to_string(local_layer_index), Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName,
-                nn::parallel::ColumnParallelLinear::kParamWeightName)];
+                "{}.{}.{}.{}.{}.{}", kTransformerLayerName, nn::TransformerChunk::kHLayerName,
+                std::to_string(local_layer_index), nn::TransformerBlock::kAttnLayerName,
+                nn::CausalSelfAttention::kCAttnLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
 
             float *dst = static_cast<float *>(tensor->DataPtr());
             const std::streampos base_pos = ifs.tellg();
@@ -247,9 +238,9 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
             auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", kTransformerLayerName, nn::TransformerChunkABI::kHLayerName,
-                std::to_string(local_layer_index), Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName,
-                nn::parallel::RowParallelLinear::kParamWeightName)];
+                "{}.{}.{}.{}.{}.{}", kTransformerLayerName, nn::TransformerChunk::kHLayerName,
+                std::to_string(local_layer_index), nn::TransformerBlock::kAttnLayerName,
+                nn::CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];
             ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                     /*rows=*/n_embd, /*cols=*/n_embd,
                                     /*col_start=*/tp_rank * in_pp, /*col_cnt=*/in_pp);
@@ -264,9 +255,9 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
-            auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}", kTransformerLayerName, nn::TransformerChunkABI::kHLayerName,
-                std::to_string(local_layer_index), Block::kLn2LayerName, RMSNorm::kParamWeightName)];
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", kTransformerLayerName,
+                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
+                                                  nn::TransformerBlock::kLn2LayerName, nn::RMSNorm::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
             ++local_layer_index;
         } else {
@@ -279,10 +270,10 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
-            auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", kTransformerLayerName, nn::TransformerChunkABI::kHLayerName,
-                std::to_string(local_layer_index), Block::kMlpLayerName, MLP::kCFcLayerName,
-                nn::parallel::ColumnParallelLinear::kParamWeightName)];
+            auto &tensor
+                = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, nn::TransformerChunk::kHLayerName,
+                                         std::to_string(local_layer_index), nn::TransformerBlock::kMlpLayerName,
+                                         nn::MLP::kCFcLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                     /*rows=*/fc_out, /*cols=*/n_embd,
                                     /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
@@ -297,10 +288,10 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
-            auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", kTransformerLayerName, nn::TransformerChunkABI::kHLayerName,
-                std::to_string(local_layer_index), Block::kMlpLayerName, MLP::kCFc2LayerName,
-                nn::parallel::ColumnParallelLinear::kParamWeightName)];
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName,
+                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
+                                                  nn::TransformerBlock::kMlpLayerName, nn::MLP::kCFc2LayerName,
+                                                  nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                     /*rows=*/fc_out, /*cols=*/n_embd,
                                     /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
@@ -315,10 +306,10 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
-            auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", kTransformerLayerName, nn::TransformerChunkABI::kHLayerName,
-                std::to_string(local_layer_index), Block::kMlpLayerName, MLP::kCProjLayerName,
-                nn::parallel::RowParallelLinear::kParamWeightName)];
+            auto &tensor
+                = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, nn::TransformerChunk::kHLayerName,
+                                         std::to_string(local_layer_index), nn::TransformerBlock::kMlpLayerName,
+                                         nn::MLP::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];
             ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                     /*rows=*/n_embd, /*cols=*/fc_out,
                                     /*col_start=*/tp_rank * in_fc_pp, /*col_cnt=*/in_fc_pp);
@@ -329,13 +320,14 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
         }
     }
 
-    // transformer.ln_f.weight : Full version RMSNorm
+    // transformer.ln_f.weight : Full version nn::RMSNorm
     // lm_head.weight : (vocab_size, n_embd) -> ColumnParallelLinear, but actually applies on "rows"
     {
         if (is_last_stage) {
-            auto &ln_f = state_dict[std::format("{}.{}.{}", kTransformerLayerName,
-                                                nn::TransformerLastStageABI::kLnFLayerName, RMSNorm::kParamWeightName)];
-            auto &lm_head = state_dict[std::format("{}.{}", nn::TransformerLastStageABI::kLMHeadLayerName,
+            auto &ln_f
+                = state_dict[std::format("{}.{}.{}", kTransformerLayerName, nn::TransformerLastStage::kLnFLayerName,
+                                         nn::RMSNorm::kParamWeightName)];
+            auto &lm_head = state_dict[std::format("{}.{}", nn::TransformerLastStage::kLMHeadLayerName,
                                                    nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(ln_f->DataPtr()), n_embd);
             ReadMatrixRowShardFloat(ifs, static_cast<float *>(lm_head->DataPtr()),
