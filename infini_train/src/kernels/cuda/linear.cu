@@ -13,6 +13,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/runtime/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::kernels::cuda {
@@ -242,7 +243,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
         int threads_per_block = 256;
         int num_blocks = (bs * out_features + threads_per_block - 1) / threads_per_block;
 
-        DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
+        core::cuda::DispatchCudaFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
             dtype,
             [=]<typename T>() {
                 BiasCopyKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
@@ -250,8 +251,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
             },
             "CUDA LinearForward");
     } else {
-        DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
-            input->Dtype(), [=]<typename T>() { output->Fill<T>(0); }, "CUDA LinearForward");
+        output->Fill(0.0);
     }
 
     const float alpha = 1.0f;

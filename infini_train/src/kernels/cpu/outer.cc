@@ -47,8 +47,8 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
 
     auto grad_input = std::make_shared<Tensor>(std::vector<int64_t>{m}, DataType::kFLOAT32);
     auto grad_other = std::make_shared<Tensor>(std::vector<int64_t>{n}, DataType::kFLOAT32);
-    grad_input->Fill<float>(0.0f);
-    grad_other->Fill<float>(0.0f);
+    grad_input->Fill(0.0);
+    grad_other->Fill(0.0);
 
     grad_input->EigenVector() = grad_output->EigenMatrix() * other->EigenVector().transpose();
     grad_other->EigenVector() = grad_output->EigenMatrix().transpose() * input->EigenVector().transpose();

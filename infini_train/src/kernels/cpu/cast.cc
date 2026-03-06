@@ -2,9 +2,11 @@
 
 #include "infini_train/include/common/cpu/common_cpu.h"
 #include "infini_train/include/dispatcher.h"
+#include "infini_train/include/dtype_dispatch.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
+
 std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
     auto device = input->GetDevice();
     auto dst_tensor = std::make_shared<Tensor>(input->Dims(), dtype, device);

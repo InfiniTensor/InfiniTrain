@@ -6,6 +6,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/runtime/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::kernels::cuda {
@@ -27,7 +28,7 @@ void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->cuda_stream();
 
-    DispatchFunc<INFINI_ALL_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
         tensor->Dtype(),
         [=]<typename T>() {
             FillKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(

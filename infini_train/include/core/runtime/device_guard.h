@@ -66,6 +66,7 @@ public:
     // Device management
     // ----------------------------------------------------------------------
 
+    // FIXME(dcj): impl should only bind with device type
     virtual Device GetDevice() const = 0;
 
     virtual void SetDevice(Device device) const;
