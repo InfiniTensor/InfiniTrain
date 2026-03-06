@@ -2,13 +2,29 @@
 
 #include <cstdint>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
-#ifdef USE_CUDA
-#include <cuda_bf16.h>
-#include <cuda_fp16.h>
-#endif
 
 namespace infini_train {
+
+// -----------------------------------------------------------------------------
+// Framework scalar types (opaque 16-bit wrappers)
+// -----------------------------------------------------------------------------
+// FP16/BF16 are framework-level 16-bit storage wrappers.
+// They are used for framework type identity / dtype mapping / metadata transport.
+// They are NOT intended to provide arithmetic semantics in backend kernels.
+//
+struct FP16 {
+    uint16_t x{0};
+};
+
+struct BF16 {
+    uint16_t x{0};
+};
+
+// -----------------------------------------------------------------------------
+// DataType enum and metadata tables
+// -----------------------------------------------------------------------------
 enum class DataType : int8_t {
     kUINT8,
     kINT8,
@@ -37,26 +53,19 @@ inline const std::unordered_map<DataType, std::string> kDataTypeToDesc = {
     {DataType::kFLOAT16, "fp16"},  {DataType::kFLOAT32, "fp32"},  {DataType::kFLOAT64, "fp64"},
 };
 
-/**
- * Compile-time type mapping from DataType enum to concrete C++ types.
- *
- * - Primary template: Declared but undefined to enforce specialization
- * - Specializations: Explicit mappings (DataType::kFLOAT32 → float, etc)
- * - TypeMap_t alias: Direct access to mapped type (TypeMap_t<DataType::kINT32> → int32_t)
- *
- * Enables type-safe generic code where operations dispatch based on DataType tokens,
- * with zero runtime overhead. Extend by adding new specializations.
- */
+// -----------------------------------------------------------------------------
+// Compile-time type mapping: DataType -> C++ type
+// -----------------------------------------------------------------------------
+// Primary template is declared but undefined to enforce specialization.
 template <DataType DType> struct TypeMap;
+
 template <DataType DType> using TypeMap_t = typename TypeMap<DType>::type;
 
-/**
- * Compile-time type mapping from C++ types to DataType enum.
- *
- * Example usage: DataTypeMap<int32_t>::value  // Returns DataType::kINT32
- * DataTypeMap_v for convenient access to the mapped value (e.g., DataTypeMap_v<int32_t>).
- */
+// -----------------------------------------------------------------------------
+// Compile-time type mapping: C++ type -> DataType
+// -----------------------------------------------------------------------------
 template <typename T> struct DataTypeMap;
+
 template <typename T> inline constexpr DataType DataTypeMap_v = DataTypeMap<T>::value;
 
 // Macro to define TypeMap specializations and reverse mappings
@@ -76,64 +85,49 @@ DEFINE_DATA_TYPE_MAPPING(kUINT32, uint32_t)
 DEFINE_DATA_TYPE_MAPPING(kINT32, int32_t)
 DEFINE_DATA_TYPE_MAPPING(kUINT64, uint64_t)
 DEFINE_DATA_TYPE_MAPPING(kINT64, int64_t)
+DEFINE_DATA_TYPE_MAPPING(kBFLOAT16, BF16)
+DEFINE_DATA_TYPE_MAPPING(kFLOAT16, FP16)
 DEFINE_DATA_TYPE_MAPPING(kFLOAT32, float)
 DEFINE_DATA_TYPE_MAPPING(kFLOAT64, double)
 
-#ifdef USE_CUDA
-DEFINE_DATA_TYPE_MAPPING(kBFLOAT16, nv_bfloat16)
-DEFINE_DATA_TYPE_MAPPING(kFLOAT16, half)
-#else
-// Non-CUDA fallbacks
-template <> struct TypeMap<DataType::kBFLOAT16> {
-    using type = uint16_t;
-};
-template <> struct TypeMap<DataType::kFLOAT16> {
-    using type = uint16_t;
-};
-
-// TODO(lzm): currently for non-CUDA/CPU, there's an ambiguity of uint16_t mapping to both kUINT16 and
-// kFLOAT16/kBFLOAT16. When CPU custom bfloat16/float16 types are defined, we should replace uint16_t with those types.
-#endif
 #undef DEFINE_DATA_TYPE_MAPPING
 
-// Extends std::is_floating_point to support CUDA floating-point types.
+// -----------------------------------------------------------------------------
+// Type traits extensions (treat FP16/BF16 as arithmetic + floating-point)
+// -----------------------------------------------------------------------------
 template <typename T> struct is_floating_point_ext : std::is_floating_point<T> {};
 
-// Extends std::is_arithmetic to support CUDA floating-point types.
 template <typename T> struct is_arithmetic_ext : std::is_arithmetic<T> {};
 
-// Specializations for CUDA types
-#ifdef USE_CUDA
-template <> struct is_floating_point_ext<__nv_bfloat16> : std::true_type {};
-template <> struct is_arithmetic_ext<__nv_bfloat16> : std::true_type {};
-template <> struct is_floating_point_ext<__half> : std::true_type {};
-template <> struct is_arithmetic_ext<__half> : std::true_type {};
-#endif
+// FP16/BF16 are framework floating-point types.
+template <> struct is_floating_point_ext<BF16> : std::true_type {};
+template <> struct is_arithmetic_ext<BF16> : std::true_type {};
 
-namespace {
+template <> struct is_floating_point_ext<FP16> : std::true_type {};
+template <> struct is_arithmetic_ext<FP16> : std::true_type {};
+
+// -----------------------------------------------------------------------------
+// Promotion helpers (WidestType)
+// -----------------------------------------------------------------------------
+namespace detail {
+
 template <typename T1, typename T2> struct LargerType {
     static constexpr size_t size1 = sizeof(T1);
     static constexpr size_t size2 = sizeof(T2);
     using type = std::conditional_t<(size1 >= size2), T1, T2>;
 };
 
-// Specializations of LargerType for the specific 16-bit FP combinations
-#ifdef USE_CUDA
-template <> struct LargerType<__nv_bfloat16, __half> {
+// Special-case: mixed 16-bit floating types promote to float
+template <> struct LargerType<BF16, FP16> {
     using type = float;
 };
-
-template <> struct LargerType<__half, __nv_bfloat16> {
+template <> struct LargerType<FP16, BF16> {
     using type = float;
 };
-#endif
 
 /**
- * @brief Finds the first type in a parameter pack that satisfies the given predicate. If no type matches,
- * returns the last type in the pack (base case).
- *
- * @tparam Predicate Template template parameter that takes one type and provides a static `value` member
- * @tparam Ts Parameter pack of types to check
+ * @brief Finds the first type in a parameter pack that satisfies the given predicate.
+ * If no type matches, returns the last type in the pack (base case).
  */
 template <template <typename> class Predicate, typename... Ts> struct FirstMatchingType;
 
@@ -147,12 +141,8 @@ struct FirstMatchingType<Predicate, T, Ts...> {
 };
 
 /**
- * @brief Recursively finds the widest type among those that satisfy a predicate. Types not satisfying the predicate are
- * ignored and don't affect the current maximum.
- *
- * @tparam Predicate Template template parameter that defines the type filter
- * @tparam CurrentMax The current widest type found so far
- * @tparam Ts Remaining types to process
+ * @brief Recursively finds the widest type among those that satisfy a predicate.
+ * Types not satisfying the predicate are ignored and don't affect the current maximum.
  */
 template <template <typename> class Predicate, typename CurrentMax, typename... Ts> struct WidestTypeImpl;
 
@@ -170,31 +160,34 @@ template <template <typename> class Predicate, typename... Ts> struct MaxTypeByS
     using first = typename FirstMatchingType<Predicate, Ts...>::type;
     using type = typename WidestTypeImpl<Predicate, first, Ts...>::type;
 };
-} // namespace
+
+} // namespace detail
 
 /**
- * @brief Finds the widest/largest type according to the dtype promotion logic in PyTorch among a pack of arithmetic
+ * @brief Finds the widest/largest type according to a PyTorch-like dtype promotion rule among a pack of arithmetic
  * types.
  *
- * Selects the type with the widest size from the provided type list. Includes support for CUDA floating-point types
- * (__half, __nv_bfloat16) when compiled with CUDA.
  * - If floating-point types are present, selects the largest floating-point type;
  * - Otherwise selects the largest integral type.
- * - If multiple integral types have the same size, the precedence follows the list order (i.e., the first type that has
- * the widest size will be selected).
+ * - If multiple integral types have the same size, precedence follows the list order.
  *
- * @tparam Ts Pack of types to evaluate. Must all be arithmetic or CUDA floating-point types.
- * @throws static_assert If no types are provided or if any type is non-arithmetic.
- * @note For mixed 16-bit floating-point types (__half and __nv_bfloat16), promotes to float (32-bit).
+ * Note:
+ * - FP16/BF16 are treated as floating-point.
+ * - Mixed FP16 and BF16 promotes to float (32-bit).
  */
 template <typename... Ts> struct WidestType {
     static_assert(sizeof...(Ts) > 0, "At least one type is required");
-    static_assert((is_arithmetic_ext<Ts>::value && ...), "All types must be arithmetic or CUDA floating-point types");
+    static_assert((is_arithmetic_ext<Ts>::value && ...),
+                  "All types must be arithmetic or framework floating-point types (FP16/BF16)");
+
     static constexpr bool has_float = (is_floating_point_ext<Ts>::value || ...);
-    using type = typename std::conditional_t<has_float, MaxTypeBySizeWithPredicate<is_floating_point_ext, Ts...>,
-                                             MaxTypeBySizeWithPredicate<std::is_integral, Ts...>>::type;
+
+    using type =
+        typename std::conditional_t<has_float, detail::MaxTypeBySizeWithPredicate<is_floating_point_ext, Ts...>,
+                                    detail::MaxTypeBySizeWithPredicate<std::is_integral, Ts...>>::type;
 };
 
-// Convenience alias for WidestType::type
+// Convenience alias
 template <typename... Ts> using WidestType_t = typename WidestType<Ts...>::type;
+
 } // namespace infini_train
