@@ -449,7 +449,7 @@ ProcessGroupNCCL::ReduceAddCoalesced(const std::vector<std::vector<std::shared_p
 
     for (size_t i = 0; i < grads[0].size(); ++i) {
         outputs.push_back(std::make_shared<Tensor>(grads[0][i]->Dims(), grads[0][i]->Dtype(), destination));
-        outputs[i]->Fill<float>(0.0f);
+        outputs[i]->Fill(0.0);
     }
     for (size_t i = 0; i < grads.size(); ++i) {
         devices.push_back(grads[i][0]->GetDevice());

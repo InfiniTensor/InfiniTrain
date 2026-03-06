@@ -38,13 +38,8 @@ Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_ra
     for (const auto &param : params_) {
         m_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
         v_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
-        DispatchFunc<INFINI_ALL_TYPES>(
-            param->Dtype(),
-            [this]<typename T>() {
-                m_.back()->Fill<T>(0);
-                v_.back()->Fill<T>(0);
-            },
-            "CUDA Adam");
+        m_.back()->Fill(0.0);
+        v_.back()->Fill(0.0);
     }
 }
 

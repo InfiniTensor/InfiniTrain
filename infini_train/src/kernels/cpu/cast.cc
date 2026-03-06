@@ -4,12 +4,15 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/cpu/cpu_dispatch.h"
+
 namespace infini_train::kernels::cpu {
+
 std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
     auto device = input->GetDevice();
     auto dst_tensor = std::make_shared<Tensor>(input->Dims(), dtype, device);
 
-    DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
+    core::cpu::DispatchCpuFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
         {dtype, input->Dtype()},
         [=]<typename Tdst, typename Tsrc>() {
             auto dst = static_cast<Tdst *>(dst_tensor->DataPtr());
@@ -19,13 +22,6 @@ std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
         },
         "CPU Cast");
 
-    return {dst_tensor};
+    return dst_tensor;
 }
 } // namespace infini_train::kernels::cpu
-
-#define REGISTER_CPU_CAST_KERNEL(kernel_name)                                                                          \
-    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
-
-REGISTER_CPU_CAST_KERNEL(Cast)
-
-#undef REGISTER_CPU_CAST_KERNEL

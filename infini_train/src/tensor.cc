@@ -23,6 +23,7 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/init.h"
+#include "infini_train/include/tensor_fill_impl.h"
 
 namespace infini_train {
 TensorBuffer::TensorBuffer(Device device, size_t size) : device_(device), size_(size) {
@@ -101,38 +102,6 @@ const std::vector<int64_t> &Tensor::Dims() const { return dims_; }
 size_t Tensor::NumElements() const { return num_elements_; }
 
 DataType Tensor::Dtype() const { return dtype_; }
-
-template <typename T> void Tensor::Fill(T value) {
-    auto device = GetDevice();
-    core::DeviceGuard guard(device);
-
-    DataType dtype = Dtype();
-
-    uint64_t storage = 0;
-
-    DispatchFunc<INFINI_ALL_TYPES>(Dtype(), [&storage, value]<typename TargetT>() {
-        TargetT casted_value = static_cast<TargetT>(value);
-        std::memcpy((void *)(&storage), &casted_value, sizeof(TargetT));
-    });
-
-    auto kernel = Dispatcher::Instance().GetKernel({device.type(), "Fill"});
-    kernel.Call<void>(shared_from_this(), static_cast<void *>(&storage));
-}
-
-template void Tensor::Fill<uint8_t>(uint8_t);
-template void Tensor::Fill<int8_t>(int8_t);
-template void Tensor::Fill<uint16_t>(uint16_t);
-template void Tensor::Fill<int16_t>(int16_t);
-template void Tensor::Fill<uint32_t>(uint32_t);
-template void Tensor::Fill<int32_t>(int32_t);
-template void Tensor::Fill<uint64_t>(uint64_t);
-template void Tensor::Fill<int64_t>(int64_t);
-template void Tensor::Fill<float>(float);
-template void Tensor::Fill<double>(double);
-#ifdef USE_CUDA
-template void Tensor::Fill<nv_bfloat16>(nv_bfloat16);
-template void Tensor::Fill<half>(half);
-#endif
 
 Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> Tensor::EigenMatrix() {
     const int64_t bs = std::accumulate(dims_.rbegin() + 1, dims_.rend(), 1, std::multiplies<int64_t>());
@@ -526,7 +495,7 @@ void Tensor::ZeroGrad(bool set_to_none) {
         if (set_to_none) {
             grad_.reset();
         } else {
-            grad_->Fill<float>(0.0f);
+            grad_->Fill(0.0);
         }
     }
 }
@@ -545,7 +514,7 @@ void Tensor::Backward(std::shared_ptr<Tensor> gradient, bool retain_graph, bool 
         if (!gradient) {
             CHECK_EQ(dims_.size(), 0);
             gradient = std::make_shared<Tensor>(std::vector<int64_t>{}, dtype_, GetDevice());
-            gradient->Fill<float>(1.0f);
+            gradient->Fill(1.0);
         } else {
             CHECK_EQ(static_cast<int>(GetDevice().type()), static_cast<int>(gradient->GetDevice().type()));
             CHECK_EQ(static_cast<int>(dtype_), static_cast<int>(gradient->Dtype()));

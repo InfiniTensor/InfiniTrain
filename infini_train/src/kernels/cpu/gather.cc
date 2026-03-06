@@ -129,7 +129,7 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
     }
 
     auto grad_input = std::make_shared<Tensor>(in_dims, grad_output->Dtype(), grad_output->GetDevice());
-    grad_input->Fill<float>(0.0f);
+    grad_input->Fill(0.0);
 
     std::vector<int64_t> in_strides(in_dims.size());
     int64_t s = 1;

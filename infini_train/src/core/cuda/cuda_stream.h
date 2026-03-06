@@ -21,7 +21,7 @@ public:
     cudaStream_t cuda_stream() const;
 
 private:
-    cudaStream_t stream_;
+    cudaStream_t cuda_stream_;
 };
 
 } // namespace infini_train::core::cuda

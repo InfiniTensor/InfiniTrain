@@ -7,6 +7,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
@@ -141,7 +142,7 @@ std::shared_ptr<Tensor> ReduceOpForward(const std::shared_ptr<Tensor> &input, co
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->cuda_stream();
 
-    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
             GenericReduceKernel<T, ReduceFunc, FinalizeOp<T>, BLOCK_SIZE>
@@ -177,10 +178,10 @@ std::shared_ptr<Tensor> ReduceOpBackward(const std::shared_ptr<Tensor> &grad_out
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->cuda_stream();
 
-    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            grad_input->Fill<T>(0);
+            grad_input->Fill(0.0);
             GenericReduceBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<T *>(grad_input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
                 input ? static_cast<const T *>(input->DataPtr()) : nullptr,

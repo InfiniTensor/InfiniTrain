@@ -8,6 +8,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
@@ -48,8 +49,7 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     auto dtype = input->Dtype();
     auto new_tensor = std::make_shared<Tensor>(new_dims, dtype, input->GetDevice());
     // NOTE(zbl): must initialize with 0
-    DispatchFunc<INFINI_ALL_TYPES>(
-        dtype, [=]<typename T>() { new_tensor->Fill<T>(0); }, "CUDA SliceForward");
+    new_tensor->Fill(0.0);
 
     std::vector<int64_t> src_strides(dims.size(), 0), dst_strides(new_dims.size(), 0);
     int64_t stride = 1;
@@ -92,7 +92,7 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
-    DispatchFunc<INFINI_ALL_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
         dtype,
         [=]<typename T>() {
             SliceForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
@@ -141,8 +141,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
 
     auto grad_output_dtype = grad_output->Dtype();
     auto grad_input = std::make_shared<Tensor>(input->Dims(), grad_output_dtype, grad_output->GetDevice());
-    DispatchFunc<INFINI_ALL_TYPES>(
-        grad_output_dtype, [=]<typename T>() { grad_input->Fill<T>(0); }, "CUDA SliceBackward");
+    grad_input->Fill(0.0);
 
     std::vector<int64_t> src_strides(dims.size());
     int64_t stride = 1;
@@ -186,7 +185,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
-    DispatchFunc<INFINI_ALL_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
         grad_output_dtype,
         [=]<typename T>() {
             SliceBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(

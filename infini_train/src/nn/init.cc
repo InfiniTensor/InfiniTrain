@@ -7,9 +7,6 @@
 #include <random>
 #include <unordered_set>
 
-#ifdef USE_CUDA
-#include <cuda_runtime_api.h>
-#endif
 #ifdef USE_OMP
 #include <omp.h>
 #endif
@@ -213,12 +210,8 @@ std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, Devic
         ARANGE_CASE(DataType::kINT32, int32_t)
         ARANGE_CASE(DataType::kUINT64, uint64_t)
         ARANGE_CASE(DataType::kINT64, int64_t)
-
-#ifdef USE_CUDA
-        ARANGE_CASE(DataType::kBFLOAT16, nv_bfloat16)
-        ARANGE_CASE(DataType::kFLOAT16, half)
-#endif
-
+        ARANGE_CASE(DataType::kBFLOAT16, BF16)
+        ARANGE_CASE(DataType::kFLOAT16, FP16)
         ARANGE_CASE(DataType::kFLOAT32, float)
         ARANGE_CASE(DataType::kFLOAT64, double)
 
