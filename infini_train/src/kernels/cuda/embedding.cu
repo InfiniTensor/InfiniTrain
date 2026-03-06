@@ -5,6 +5,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/runtime/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::kernels::cuda {
@@ -50,7 +51,7 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     int threads_per_block = 256;
     int num_blocks = (batch_size * max_seqlen * embed_dim + threads_per_block - 1) / threads_per_block;
 
-    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
             EmbeddingForwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
@@ -101,10 +102,10 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
     const int threads_per_block = 256;
     const int num_blocks = (num_tokens + threads_per_block - 1) / threads_per_block;
 
-    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            grad_weight->Fill<T>(0);
+            grad_weight->Fill(0.0);
             EmbeddingBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const int64_t *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
                 static_cast<T *>(grad_weight->DataPtr()), num_tokens, embedding_dim, vocab_size);

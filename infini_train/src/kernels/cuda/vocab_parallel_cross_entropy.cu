@@ -8,6 +8,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/runtime/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::kernels::cuda {
@@ -93,7 +94,8 @@ VocabParallelCrossEntropyBackward(const std::shared_ptr<Tensor> &grad_output,   
     constexpr int threads_per_block = 256;
     const int num_blocks = static_cast<int>(rows);
 
-    DispatchFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>, DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
+    core::cuda::DispatchCudaFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>,
+                                 DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
         {masked_target->Dtype(), softmax_local->Dtype()},
         [=]<typename Tindex, typename Tinput>() {
             using Tmask = Tinput;

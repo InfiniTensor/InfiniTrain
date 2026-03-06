@@ -196,7 +196,7 @@ std::shared_ptr<Tensor> RepeatInterleaveBackward(const std::shared_ptr<Tensor> &
     CHECK_EQ(grad_output->Dims()[dim], dim_size * repeat);
 
     auto grad_input = std::make_shared<Tensor>(input_dims, grad_output->Dtype(), grad_output->GetDevice());
-    grad_input->Fill<float>(0.0f);
+    grad_input->Fill(0.0);
 
     const float *grad_out_ptr = static_cast<const float *>(grad_output->DataPtr());
     float *grad_in_ptr = static_cast<float *>(grad_input->DataPtr());

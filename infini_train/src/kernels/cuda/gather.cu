@@ -5,6 +5,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/runtime/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::kernels::cuda {
@@ -99,7 +100,7 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
     const int threads = 256;
     const int blocks = (total_elements + threads - 1) / threads;
 
-    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
             IndexGatherForwardKernel<T><<<blocks, threads, 0, stream>>>(
@@ -173,8 +174,7 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
 
     auto dtype = grad_output->Dtype();
     auto grad_input = std::make_shared<Tensor>(in_dims, dtype, grad_output->GetDevice());
-    DispatchFunc<INFINI_ALL_TYPES>(
-        dtype, [=]<typename T>() { grad_input->Fill<T>(0); }, "CUDA IndexGatherBackwardZero");
+    grad_input->Fill(0.0);
 
     auto in_strides = ComputeStrides(in_dims);
     auto out_strides = ComputeStrides(idx_dims);
@@ -207,7 +207,7 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
     const int threads = 256;
     const int blocks = (int)((total_elements + threads - 1) / threads);
 
-    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
             IndexGatherBackwardKernel<T><<<blocks, threads, 0, stream>>>(
