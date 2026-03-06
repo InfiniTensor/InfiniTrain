@@ -89,6 +89,20 @@ void TestResumeConsistency() {
     ASSERT_TRUE(sched_b->LastStep() == sched_ref->LastStep());
 }
 
+void TestChainableAndClosedFormConsistency() {
+    auto opt_a = MakeDummyOptimizer(kBaseLR);
+    auto chainable = LRScheduler::Create<ConstantLR>(opt_a, 0.5f, 5);
+
+    auto opt_b = MakeDummyOptimizer(kBaseLR);
+    auto closed_form = LRScheduler::Create<ConstantLR>(opt_b, 0.5f, 5);
+
+    for (int epoch = 1; epoch <= 12; ++epoch) {
+        chainable->Step();
+        closed_form->Step(epoch);
+        ASSERT_FLOAT_NEAR(chainable->GetLR(), closed_form->GetLR(), 1e-7f);
+    }
+}
+
 int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
     std::cout << "=== ConstantLR Tests ===" << std::endl;
@@ -99,6 +113,7 @@ int main(int argc, char *argv[]) {
     TestPyTorchAlignment();
     TestStateRoundTrip();
     TestResumeConsistency();
+    TestChainableAndClosedFormConsistency();
     std::cout << "========================" << std::endl;
     if (g_fail_count == 0) {
         std::cout << "All Tests PASSED" << std::endl;
