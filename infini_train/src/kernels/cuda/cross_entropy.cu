@@ -12,6 +12,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
@@ -91,7 +92,8 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->cuda_stream();
 
-    return DispatchFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>, DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
+    return core::cuda::DispatchCudaFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>,
+                                        DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
         {target->Dtype(), input->Dtype()},
         [=]<typename Ttarget, typename Tinput>() {
             const Ttarget *target_ptr = static_cast<const Ttarget *>(target->DataPtr());
@@ -198,14 +200,16 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->cuda_stream();
 
-    DispatchFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>, DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
+    core::cuda::DispatchCudaFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>,
+                                 DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
         {target->Dtype(), input_casted->Dtype()},
         [=]<typename Ttarget, typename Tinput>() {
-            grad_input->Fill<Tinput>(0);
+            grad_input->Fill(0.0);
             const Tinput *output_grad_ptr = static_cast<const Tinput *>(grad_output->DataPtr());
             const Ttarget *target_ptr = static_cast<const Ttarget *>(target->DataPtr());
             const Tinput *input_ptr = static_cast<const Tinput *>(input_casted->DataPtr());
             Tinput *input_grad_ptr = static_cast<Tinput *>(grad_input->DataPtr());
+
             CrossEntropyBackwardKernel<threads_per_block, Ttarget, Tinput>
                 <<<num_blocks, threads_per_block, 0, cuda_stream>>>(input_ptr, input_grad_ptr, target_ptr,
                                                                     output_grad_ptr, bs, num_classes);

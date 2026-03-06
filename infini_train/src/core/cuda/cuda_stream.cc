@@ -6,12 +6,12 @@
 
 namespace infini_train::core::cuda {
 
-CudaStream::CudaStream() { CUDA_CHECK(cudaStreamCreate(&stream_)); }
+CudaStream::CudaStream() { CUDA_CHECK(cudaStreamCreate(&cuda_stream_)); }
 
 CudaStream::~CudaStream() {
     // Do nothing.
 }
 
-cudaStream_t CudaStream::cuda_stream() const { return stream_; }
+cudaStream_t CudaStream::cuda_stream() const { return cuda_stream_; }
 
 } // namespace infini_train::core::cuda

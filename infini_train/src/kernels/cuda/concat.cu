@@ -11,6 +11,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
@@ -89,7 +90,6 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
     const int64_t num_inputs = static_cast<int64_t>(inputs.size());
     const int64_t K_total = out_dims[dim];
 
-    // offsets records the sum of Ks
     // offsets[i] = sum_{j < i} K_j
     std::vector<int64_t> host_offsets(num_inputs + 1, 0);
     for (int64_t i = 0; i < num_inputs; ++i) { host_offsets[i + 1] = host_offsets[i] + Ks[i]; }
@@ -102,7 +102,7 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
     int threads_per_block = 256;
     int num_blocks = static_cast<int>((total + threads_per_block - 1) / threads_per_block);
 
-    DispatchFunc<INFINI_ALL_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
         dtype,
         [=, &inputs, &host_offsets]<typename T>() {
             std::vector<const T *> host_input_ptrs;
@@ -185,8 +185,7 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
     grads.reserve(input_dims_list.size());
     for (const auto &dvec : input_dims_list) {
         auto t = std::make_shared<Tensor>(dvec, dtype, device);
-        DispatchFunc<INFINI_ALL_TYPES>(
-            dtype, [=]<typename T>() { t->Fill<T>(0); }, "CUDA ConcatBackward");
+        t->Fill(0.0);
         grads.push_back(t);
     }
 
@@ -208,7 +207,7 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
     int threads_per_block = 256;
     int num_blocks = static_cast<int>((total + threads_per_block - 1) / threads_per_block);
 
-    DispatchFunc<INFINI_ALL_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
         dtype,
         [=, &grads, &host_offsets]<typename T>() {
             std::vector<T *> host_ptrs;

@@ -13,6 +13,7 @@
 #include "infini_train/include/tensor.h"
 
 #include "infini_train/src/core/cuda/cuda_blas_handle.h"
+#include "infini_train/src/core/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
@@ -127,13 +128,8 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto grad_input = std::make_shared<Tensor>(input_dims, promoted_type, grad_output->GetDevice());
     auto grad_other = std::make_shared<Tensor>(other_dims, promoted_type, grad_output->GetDevice());
 
-    DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
-        promoted_type,
-        [=]<typename T>() {
-            grad_input->Fill<T>(0);
-            grad_other->Fill<T>(0);
-        },
-        "CUDA MatmulBackward");
+    grad_input->Fill(0.0);
+    grad_other->Fill(0.0);
 
     auto device = input_promoted->GetDevice();
     const float alpha = 1.0f, beta = 0.0f;
@@ -249,7 +245,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
         int threads_per_block = 256;
         int num_blocks = (bs * out_features + threads_per_block - 1) / threads_per_block;
 
-        DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
+        core::cuda::DispatchCudaFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
             dtype,
             [=]<typename T>() {
                 BiasCopyKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
@@ -257,8 +253,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
             },
             "CUDA LinearForward");
     } else {
-        DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
-            input->Dtype(), [=]<typename T>() { output->Fill<T>(0); }, "CUDA LinearForward");
+        output->Fill(0.0);
     }
 
     const float alpha = 1.0f;
@@ -354,17 +349,13 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto grad_weight = std::make_shared<Tensor>(weight_dims, promoted_type, grad_output->GetDevice());
     std::shared_ptr<Tensor> grad_bias = nullptr;
 
-    auto initialize_gradients = [&](auto zero_value, DataType dtype) {
-        using T = decltype(zero_value);
-        grad_input->Fill<T>(zero_value);
-        grad_weight->Fill<T>(zero_value);
-        if (bias) {
-            grad_bias = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, dtype, grad_output->GetDevice());
-            grad_bias->Fill<T>(zero_value);
-        }
-    };
-    DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
-        promoted_type, [=]<typename T>() { initialize_gradients(T(0), promoted_type); }, "CUDA LinearBackward");
+    grad_input->Fill(0.0);
+    grad_weight->Fill(0.0);
+    if (bias) {
+        grad_bias
+            = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, promoted_type, grad_output->GetDevice());
+        grad_bias->Fill(0.0);
+    }
 
     auto device = input_promoted->GetDevice();
     const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(

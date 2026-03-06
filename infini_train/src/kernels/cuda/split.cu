@@ -7,6 +7,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
@@ -58,7 +59,7 @@ std::vector<std::shared_ptr<Tensor>> SplitForward(const std::shared_ptr<Tensor> 
                                       infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                       ->cuda_stream();
 
-        DispatchFunc<INFINI_ALL_TYPES>(
+        core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
             dtype,
             [=]<typename T>() {
                 SplitForwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
@@ -113,7 +114,7 @@ std::shared_ptr<Tensor> LaunchSplitBackward(const std::vector<int64_t> &input_di
     const auto &grad = grad_outputs[0];
     auto dtype = grad->Dtype();
     auto grad_input = std::make_shared<Tensor>(input_dims, dtype, grad->GetDevice());
-    grad_input->Fill<T>(0);
+    grad_input->Fill(0.0);
 
     int64_t N = std::accumulate(input_dims.begin(), input_dims.begin() + dim, 1, std::multiplies<int64_t>());
     int64_t W = std::accumulate(input_dims.begin() + dim + 1, input_dims.end(), 1, std::multiplies<int64_t>());
@@ -165,7 +166,7 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
     CHECK_GE(dim, 0) << "Currently we do not support negative dimension";
     CHECK_LT(dim, input_dims.size());
 
-    return DispatchFunc<INFINI_ALL_TYPES>(
+    return core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
         grad_outputs[0]->Dtype(),
         [=]<typename T>() { return LaunchSplitBackward<T>(input_dims, split_size, dim, grad_outputs); },
         "CUDA SplitBackward");

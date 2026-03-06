@@ -12,6 +12,7 @@
 #include "infini_train/include/tensor.h"
 
 #include "infini_train/src/core/cuda/cuda_blas_handle.h"
+#include "infini_train/src/core/cuda/cuda_dispatch.h"
 
 namespace infini_train::kernels::cuda {
 std::shared_ptr<Tensor> OuterForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &other) {
@@ -94,11 +95,11 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
     auto grad_input = std::make_shared<Tensor>(std::vector<int64_t>{M}, promoted_type, grad_output->GetDevice());
     auto grad_other = std::make_shared<Tensor>(std::vector<int64_t>{N}, promoted_type, grad_output->GetDevice());
 
-    DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
+    core::cuda::DispatchCudaFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
         promoted_type,
         [=]<typename T>() {
-            grad_input->Fill<T>(0);
-            grad_other->Fill<T>(0);
+            grad_input->Fill(0.0);
+            grad_other->Fill(0.0);
         },
         "CUDA OuterBackward");
 

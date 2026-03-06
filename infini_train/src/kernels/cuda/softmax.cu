@@ -12,6 +12,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
@@ -200,8 +201,7 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
     CHECK(dim >= 0 && dim < output->Dims().size());
 
     auto grad_input = std::make_shared<Tensor>(output_dims, promoted_type, output->GetDevice());
-    DispatchFunc<INFINI_ALL_TYPES>(
-        promoted_type, [=]<typename T>() { grad_input->Fill<T>(0); }, "CUDA SoftmaxBackward");
+    grad_input->Fill(0.0);
 
     switch (promoted_type) {
         DISPATCH_CASE(WRAP(LaunchBackward<256, float>(grad_input, grad_output_promoted, output_promoted, dim);),

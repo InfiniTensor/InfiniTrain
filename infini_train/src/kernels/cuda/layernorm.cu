@@ -7,6 +7,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
@@ -85,11 +86,11 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->cuda_stream();
 
-    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            mean->Fill<float>(0);
-            rstd->Fill<float>(0);
+            mean->Fill(0.0);
+            rstd->Fill(0.0);
             LayerNormForwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(input->DataPtr()), static_cast<const T *>(weight->DataPtr()),
                 static_cast<const T *>(bias->DataPtr()), static_cast<float *>(mean->DataPtr()),
@@ -179,12 +180,12 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->cuda_stream();
-    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            grad_input->Fill<T>(0);
-            grad_weight->Fill<T>(0);
-            grad_bias->Fill<T>(0);
+            grad_input->Fill(0.0);
+            grad_weight->Fill(0.0);
+            grad_bias->Fill(0.0);
             LayerNormBackwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
                 static_cast<const float *>(mean->DataPtr()), static_cast<const float *>(rstd->DataPtr()),

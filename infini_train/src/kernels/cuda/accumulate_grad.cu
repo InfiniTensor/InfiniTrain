@@ -6,6 +6,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
@@ -29,7 +30,7 @@ void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const s
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->cuda_stream();
 
-    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         gradient->Dtype(),
         [=]<typename T>() {
             AccumulateGradKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
@@ -73,7 +74,7 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->cuda_stream();
 
-    DispatchFunc<INFINI_ALL_FLOATING_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         grad->Dtype(),
         [=]<typename T>() {
             AdamAccumulateGradKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(

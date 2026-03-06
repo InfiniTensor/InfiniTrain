@@ -650,17 +650,17 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
 
     switch (promoted_type) {
         DISPATCH_CASE(WRAP({
-                          output->Fill<float>(0.0f);
+                          output->Fill(0.0);
                           LaunchBackward<256, float>(unary_fn, output, grad_output_promoted, a_promoted);
                       }),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
-                          output->Fill<nv_bfloat16>(0);
+                          output->Fill(0.0);
                           LaunchBackward<256, nv_bfloat16>(unary_fn, output, grad_output_promoted, a_promoted);
                       }),
                       DataType::kBFLOAT16)
         DISPATCH_CASE(WRAP({
-                          output->Fill<int64_t>(0);
+                          output->Fill(0.0);
                           LaunchBackward<256, int64_t>(unary_fn, output, grad_output_promoted, a_promoted);
                       }),
                       DataType::kINT64)
@@ -745,23 +745,23 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
 
     switch (promoted_type) {
         DISPATCH_CASE(WRAP({
-                          grad_a->Fill<float>(0.0f);
-                          grad_b->Fill<float>(0.0f);
+                          grad_a->Fill(0.0);
+                          grad_b->Fill(0.0);
                           LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
                                                      a_promoted, b_promoted);
                       }),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
-                          grad_a->Fill<nv_bfloat16>(0);
-                          grad_b->Fill<nv_bfloat16>(0);
+                          grad_a->Fill(0.0);
+                          grad_b->Fill(0.0);
                           LaunchBackward<256, nv_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims,
                                                            grad_output_promoted, a_promoted, b_promoted);
                       }),
                       DataType::kBFLOAT16)
         // FIXME(zbl): AtomicAdd does not support int64_t
         // DISPATCH_CASE(WRAP({
-        //                   grad_a->Fill<int64_t>(0);
-        //                   grad_b->Fill<int64_t>(0);
+        //                   grad_a->Fill(0.0);
+        //                   grad_b->Fill(0.0);
         //                   LaunchBackward<256, int64_t>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
         //                   b);
         //               }),
