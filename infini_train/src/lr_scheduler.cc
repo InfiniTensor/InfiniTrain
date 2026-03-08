@@ -29,6 +29,33 @@ std::shared_ptr<LRScheduler> CreateLRScheduler(
                 opt, config.linear_start_factor, config.linear_end_factor,
                 config.linear_total_iters);
         }
+        if (config.type == "lambda") {
+            return LRScheduler::Create<lr_schedulers::LambdaLR>(
+                opt, config.lambda_fn);
+        }
+        if (config.type == "sequential") {
+            std::vector<std::shared_ptr<LRScheduler>> schedulers;
+            std::vector<int64_t> milestones = config.sequential_milestones;
+            for (const auto& sub_config : config.sequential_configs) {
+                auto sub_sched = CreateLRScheduler(opt, sub_config);
+                if (sub_sched) {
+                    schedulers.push_back(sub_sched);
+                }
+            }
+            return LRScheduler::Create<lr_schedulers::SequentialLR>(
+                opt, schedulers, milestones);
+        }
+        if (config.type == "chained") {
+            std::vector<std::shared_ptr<LRScheduler>> schedulers;
+            for (const auto& sub_config : config.chained_configs) {
+                auto sub_sched = CreateLRScheduler(opt, sub_config);
+                if (sub_sched) {
+                    schedulers.push_back(sub_sched);
+                }
+            }
+            return LRScheduler::Create<lr_schedulers::ChainedScheduler>(
+                opt, schedulers);
+        }
         LOG(FATAL) << "Unsupported LR scheduler type: " << config.type;
         return nullptr; 
     };

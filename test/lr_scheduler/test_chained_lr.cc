@@ -11,7 +11,11 @@ constexpr float kBaseLR = 0.1f;
 void TestSingleScheduler() {
     std::cout << "[TC1] TestSingleScheduler" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
-    auto step_lr = std::make_shared<StepLR>(opt, 3, 0.5f);
+    auto step_lr = CreateLRScheduler(opt, {
+        .type = "step",
+        .step_size = 3,
+        .step_gamma = 0.5f,
+    });
     auto sched = LRScheduler::Create<ChainedScheduler>(opt, std::vector<std::shared_ptr<LRScheduler>>{step_lr});
 
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.1f, kEps);
@@ -23,11 +27,17 @@ void TestSingleScheduler() {
 void TestMultiplicativeChain() {
     std::cout << "[TC2] TestMultiplicativeChain" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
-    auto step_lr = LRScheduler::Create<StepLR>(opt, /*step_size=*/2, /*gamma=*/0.5f);
-    auto lambda_lr = LRScheduler::Create<LambdaLR>(opt,
-        [](int64_t step) { return 1.0f - 0.1f * step; });
-
-    auto sched = LRScheduler::Create<ChainedScheduler>(opt, std::vector<std::shared_ptr<LRScheduler>>{step_lr, lambda_lr});
+    auto sched = CreateLRScheduler(opt, {
+        .type = "chained",
+        .chained_configs = {{
+            .type = "step",
+            .step_size = 2,
+            .step_gamma = 0.5f,
+        },{
+            .type = "lambda",
+            .lambda_fn = [](int64_t step) { return 1.0f - 0.1f * step; },
+        }},
+    });
 
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.1f, kEps);
 
@@ -45,10 +55,18 @@ void TestMultiplicativeChain() {
 void TestConstantPlusStep() {
     std::cout << "[TC3] TestConstantPlusStep" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
-    auto constant = LRScheduler::Create<ConstantLR>(opt, /*factor=*/0.5f, /*total_iters=*/2);
-    auto step_lr = LRScheduler::Create<StepLR>(opt, /*step_size=*/3, /*gamma=*/0.1f);
-
-    auto sched = LRScheduler::Create<ChainedScheduler>(opt, std::vector<std::shared_ptr<LRScheduler>>{constant, step_lr});
+    auto sched = CreateLRScheduler(opt, {
+        .type = "chained",
+        .chained_configs = {{
+            .type = "constant",
+            .constant_factor = 0.5f,
+            .constant_total_iters = 2,
+        }, {
+            .type = "step",
+            .step_size = 3,
+            .step_gamma = 0.1f,
+        }},
+    });
 
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.05f, kEps);
 
@@ -69,11 +87,26 @@ void TestConstantPlusStep() {
 void TestConstantPlusStepDLC() {
     std::cout << "[TC4] TestConstantPlusStepDLC" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
-    auto constant = LRScheduler::Create<ConstantLR>(opt, /*factor=*/0.5f, /*total_iters=*/2);
-    auto linear = LRScheduler::Create<LinearLR>(opt, /*start_factor=*/1e-8f, /*end_factor=*/1.0f, /*total_iters=*/3);
-    auto step_lr = LRScheduler::Create<StepLR>(opt, /*step_size=*/3, /*gamma=*/0.1f);
-    auto Lambda = LRScheduler::Create<LambdaLR>(opt,
-        [](int64_t step) { return 1.0f - 0.1f * step; });
+    auto constant = CreateLRScheduler(opt, {
+        .type = "constant",
+        .constant_factor = 0.5f,
+        .constant_total_iters = 2,
+    });
+    auto linear = CreateLRScheduler(opt, {
+        .type = "linear",
+        .linear_start_factor = 1e-8f,
+        .linear_end_factor = 1.0f,
+        .linear_total_iters = 3,
+    });
+    auto step_lr = CreateLRScheduler(opt, {
+        .type = "step",
+        .step_size = 3,
+        .step_gamma = 0.1f,
+    });
+    auto Lambda = CreateLRScheduler(opt, {
+        .type = "lambda",
+        .lambda_fn = [](int64_t step) { return 1.0f - 0.1f * step; },
+    });
 
     auto sched = LRScheduler::Create<ChainedScheduler>(opt, std::vector<std::shared_ptr<LRScheduler>>{constant, step_lr});
 

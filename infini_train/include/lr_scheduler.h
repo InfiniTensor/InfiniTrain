@@ -29,6 +29,13 @@ struct LRSchedulerConfig {
     float linear_start_factor = 1.0f / 3.0f;
     float linear_end_factor = 1.0f;
     int linear_total_iters = 5;
+    // LambdaLR
+    std::function<float(int64_t)> lambda_fn = nullptr;
+    // SequentialLR
+    std::vector<LRSchedulerConfig> sequential_configs;
+    std::vector<int64_t> sequential_milestones;
+    // ChainedScheduler
+    std::vector<LRSchedulerConfig> chained_configs;
     // common
     int64_t warmup_steps = 0;
     int64_t total_iters = 0;
