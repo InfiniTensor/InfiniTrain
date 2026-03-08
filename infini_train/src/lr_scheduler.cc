@@ -7,6 +7,51 @@
 
 namespace infini_train {
 
+std::shared_ptr<LRScheduler> CreateLRScheduler(
+    std::shared_ptr<Optimizer> optimizer,
+    const LRSchedulerConfig& config) {
+    if (config.type == "none") {
+        return nullptr;
+    }
+
+    auto create_main = [&](std::shared_ptr<Optimizer> opt)
+        -> std::shared_ptr<LRScheduler> {
+        if (config.type == "constant") {
+            return LRScheduler::Create<lr_schedulers::ConstantLR>(
+                opt, config.constant_factor, config.constant_total_iters);
+        }
+        if (config.type == "step") {
+            return LRScheduler::Create<lr_schedulers::StepLR>(
+                opt, config.step_size, config.step_gamma);
+        }
+        if (config.type == "linear") {
+            return LRScheduler::Create<lr_schedulers::LinearLR>(
+                opt, config.linear_start_factor, config.linear_end_factor,
+                config.linear_total_iters);
+        }
+        LOG(FATAL) << "Unsupported LR scheduler type: " << config.type;
+        return nullptr; 
+    };
+
+    if (config.warmup_steps <= 0) {
+        return create_main(optimizer);
+    }
+
+    auto warmup_scheduler = LRScheduler::Create<lr_schedulers::LinearLR>(
+        optimizer,
+        /*start_factor=*/1e-8f,
+        /*end_factor=*/1.0f,
+        /*total_iters=*/config.warmup_steps);
+    
+    auto main_scheduler = create_main(optimizer);
+
+    return LRScheduler::Create<lr_schedulers::SequentialLR>(
+        optimizer,
+        std::vector<std::shared_ptr<LRScheduler>>{warmup_scheduler, main_scheduler},
+        std::vector<int64_t>{config.warmup_steps});
+    
+};
+
 LRScheduler::LRScheduler(std::shared_ptr<Optimizer> optimizer,
                            int64_t last_step)
     : optimizer_(std::move(optimizer)),

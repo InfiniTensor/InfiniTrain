@@ -17,6 +17,23 @@ using StateValue = std::variant<int64_t, float, double, std::string,
                                 std::vector<float>>;
 using StateDict = std::unordered_map<std::string, StateValue>;
 
+struct LRSchedulerConfig {
+    std::string type  = "none";
+    // ConstantLR
+    float constant_factor = 1.0f / 3.0f;
+    int constant_total_iters = 5;
+    // StepLR
+    int64_t step_size = 10;
+    float step_gamma = 0.1f;
+    // LinearLR
+    float linear_start_factor = 1.0f / 3.0f;
+    float linear_end_factor = 1.0f;
+    int linear_total_iters = 5;
+    // common
+    int64_t warmup_steps = 0;
+    int64_t total_iters = 0;
+};
+
 class LRScheduler {
 public:
     template<typename T, typename... Args>
@@ -56,6 +73,10 @@ protected:
     float base_lr_;
     bool is_initial_ = false;
 };
+
+std::shared_ptr<LRScheduler> CreateLRScheduler(
+    std::shared_ptr<Optimizer> optimizer,
+    const LRSchedulerConfig& config);
 
 namespace lr_schedulers {
 
