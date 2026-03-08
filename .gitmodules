@@ -1,9 +1,9 @@
 [submodule "third_party/glog"]
 	path = third_party/glog
-	url = git@github.com:google/glog.git
+	url = https://github.com/google/glog.git
 [submodule "third_party/gflags"]
 	path = third_party/gflags
-	url = git@github.com:gflags/gflags.git
+	url = https://github.com/gflags/gflags.git
 [submodule "third_party/eigen"]
 	path = third_party/eigen
-	url = git@github.com:InfiniTensor/eigen-mirror.git
+	url = https://github.com/eigenteam/eigen-git-mirror.git
