@@ -18,6 +18,7 @@ namespace infini_train::autograd {
 std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_GE(input_tensors.size(), 1);
     auto device = input_tensors[0]->GetDevice();
+    // *：Switch to the device where the input tensor is located
     core::DeviceGuard guard(device);
 
     // Register precision check hooks if enabled (before forward)
@@ -29,13 +30,15 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         }
     }
 
+
     // Call forward pre-hooks
     for (const auto &hook : forward_pre_hooks_) {
         if (hook) {
             hook(this, input_tensors);
         }
     }
-
+    
+    //调用前向函数，得到输出张量
     std::vector<std::shared_ptr<Tensor>> output_tensors;
     {
         autograd::NoGradGuard no_grad;
@@ -78,6 +81,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         // TODO(dcj): Mark if an output tensor need differentiable or not.
         output_tensor->set_requires_grad(output_requires_grad);
         output_tensor->set_grad_fn(output_requires_grad ? shared_from_this() : nullptr);
+        //条件二含义：需要梯度，但是它没有生父算子（即它是用户手动创建的原始参数，不是算出来的）。
         output_tensor->set_is_leaf(!output_requires_grad
                                    || ((output_tensor->grad_fn() == nullptr) && output_requires_grad));
         output_tensor->set_output_idx(output_idx);

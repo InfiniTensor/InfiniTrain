@@ -3,6 +3,8 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+
+//这里不用用到并行算法，直接把输入张量的视图返回即可
 namespace infini_train::kernels::cuda {
 std::shared_ptr<Tensor> NoOpForward(const std::shared_ptr<Tensor> &input, const std::vector<int64_t> &dims) {
     const int64_t num_elements = std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>());

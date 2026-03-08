@@ -91,6 +91,7 @@ constexpr char kDtypeBF16[] = "bfloat16";
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_bool(flash, false, "Whether to enable flash attention");
 
 void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;

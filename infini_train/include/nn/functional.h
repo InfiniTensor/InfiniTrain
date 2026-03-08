@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace infini_train {
@@ -161,6 +162,19 @@ std::shared_ptr<Tensor> Softmax(const std::shared_ptr<Tensor> &input, int64_t di
 //   A sliced view of the input tensor.
 std::shared_ptr<Tensor> Slice(const std::shared_ptr<Tensor> &input, const std::vector<int64_t> &starts,
                               const std::vector<int64_t> &ends, const std::vector<int64_t> &steps);
+
+// Scaled dot-product attention interface matching PyTorch's scaled_dot_product_attention.
+// - query, key, value: tensors with shape (..., seq_len, head_dim)
+// - attn_mask: optional additive mask (same broadcasting semantics as PyTorch)
+// - dropout_p: dropout probability (0.0 disables)
+// - is_causal: whether to apply causal mask
+// - scale: optional scale factor; if not provided, use 1/sqrt(head_dim)
+// - enable_gqa: grouped query attention flag
+std::shared_ptr<Tensor> ScaledDotProductAttention(
+    const std::shared_ptr<Tensor> &query, const std::shared_ptr<Tensor> &key,
+    const std::shared_ptr<Tensor> &value, const std::shared_ptr<Tensor> &attn_mask = nullptr,
+    double dropout_p = 0.0, bool is_causal = false,
+    const std::optional<double> &scale = std::nullopt, bool enable_gqa = false);
 
 // Concatenates a sequence of tensors along a new dimension.
 //

@@ -48,6 +48,9 @@ endif()
 # Framework core sources (*.cc), excluding cpu kernels (they are built separately)
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
 list(FILTER SRC EXCLUDE REGEX ".*kernels/cpu/.*")
+if(NOT USE_NCCL)
+  list(FILTER SRC EXCLUDE REGEX ".*infini_train/src/core/ccl/cuda/.*")
+endif()
 
 # CPU kernels (*.cc)
 file(GLOB_RECURSE CPU_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/kernels/cpu/*.cc)
@@ -72,15 +75,24 @@ if(USE_CUDA)
   add_compile_definitions(USE_CUDA=1)
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
+
+  # ========== cuDNN 库 ==========
+  find_library(CUDNN_LIBRARY cudnn REQUIRED)
+  message(STATUS "Found cuDNN at: ${CUDNN_LIBRARY}")
+  # ========================================
+
   include_directories(${CUDAToolkit_INCLUDE_DIRS})
 
   # CUDA compilation options
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
-  # Only compile CUDA kernels / cuda sources here (your original used src/*.cu)
+  # Only compile CUDA kernels / cuda sources here
   file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
 
   add_library(infini_train_cuda_kernels STATIC ${CUDA_KERNELS})
+  target_include_directories(infini_train_cuda_kernels PUBLIC 
+    ${PROJECT_SOURCE_DIR}/third_party/cudnn-frontend/include
+  )
   set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "75;80;90")
 
   target_link_libraries(infini_train_cuda_kernels
@@ -89,6 +101,7 @@ if(USE_CUDA)
       CUDA::cudart
       CUDA::cublas
       CUDA::cuda_driver
+      ${CUDNN_LIBRARY}
   )
 
   if(USE_NCCL)
@@ -113,8 +126,6 @@ target_link_libraries(infini_train
 )
 
 if(USE_CUDA)
-  # infini_train contains cuda runtime wrappers (*.cc) like cuda_blas_handle.cc/cuda_guard.cc
-  # Those may need CUDA runtime/driver/cublas symbols at final link, so attach them here too.
   target_link_libraries(infini_train
     PUBLIC
       infini_train_cuda_kernels
@@ -124,15 +135,12 @@ if(USE_CUDA)
   )
 
   if(USE_NCCL)
-    # If your core library code also directly references NCCL symbols (not only kernels),
-    # keep this. Otherwise it's harmless.
     target_link_libraries(infini_train PUBLIC nccl)
   endif()
 endif()
 
 # ------------------------------------------------------------------------------
 # Helper: link libraries in a group to fix static lib one-pass resolution
-# (THIS is what fixes "undefined reference" from cuda_kernels -> core symbols)
 # ------------------------------------------------------------------------------
 function(link_infini_train_exe target_name)
   if(USE_CUDA)
@@ -156,7 +164,6 @@ function(link_infini_train_exe target_name)
     )
   endif()
 endfunction()
-
 
 # ------------------------------------------------------------------------------
 # Examples

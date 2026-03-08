@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "glog/logging.h"
+#include "gflags/gflags.h"
 
 #include "example/common/utils.h"
 #include "infini_train/include/device.h"
@@ -28,6 +29,7 @@
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
+
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
@@ -78,6 +80,7 @@ CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
                                    ->View({1, 1, config_.block_size, config_.block_size});
 }
 
+DECLARE_bool(flash);
 std::vector<std::shared_ptr<infini_train::Tensor>>
 CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
@@ -96,7 +99,7 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     auto k = qkv[1];
     auto v = qkv[2];
 
-    // NOTE(zbl): Acquire full T after AllGather is performed in ColumnParallelLinear
+    // NOTE(zbl): Acquire full T after AllGather is performed in ColumnParallelLinear   T->seq_len
     const auto T = q->Dims()[1];
 
     // View to multi-head: local_n_head * head_dim == local_C
@@ -105,18 +108,27 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     q = q->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
     v = v->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
 
-    // (B, h_l, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
-    // (1, 1, T, T)
-    auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
-    // (1, 1, T, T) -> eq 0 -> (1, 1, T, T) -> masked_fill -> (B, h_l, T, T)
-    att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
-    // (B, h_l, T, T)
-    att = nn::function::Softmax(att, -1);
-    // (B, h_l, T, Dh)
-    auto y = att->Matmul(v);
-    // (B, h_l, T, Dh) -> (B, T, h_l, Dh) -> (B, T, local_C)
-    y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
+    std::shared_ptr<infini_train::Tensor> y;
+    if (FLAGS_flash) {
+        // cuDNN SDPA path: causal masking should be enabled by `is_causal=true`.
+        // Do not pass the 0/1 tril mask as additive bias (it is not -inf mask).
+        y = nn::function::ScaledDotProductAttention(q, k, v, nullptr, 0.0, true, std::nullopt, false);
+        // ensure expected layout: (B, h_l, T, Dh) -> (B, T, h_l, Dh) -> (B, T, local_C)
+        y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
+    } else {
+        // (B, h_l, T, T)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
+        // (1, 1, T, T)
+        auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
+        // (1, 1, T, T) -> eq 0 -> (1, 1, T, T) -> masked_fill -> (B, h_l, T, T)
+        att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
+        // (B, h_l, T, T)
+        att = nn::function::Softmax(att, -1);
+        // (B, h_l, T, Dh)
+        y = att->Matmul(v);
+        // (B, h_l, T, Dh) -> (B, T, h_l, Dh) -> (B, T, local_C)
+        y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
+    }
 
     // Get full tensor
     // (B, T, local_C) -> RowParallelLinear(n_embd, n_embd) -> (B, T, C)

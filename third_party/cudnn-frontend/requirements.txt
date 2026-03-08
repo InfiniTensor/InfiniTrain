@@ -1,0 +1,8 @@
+jupyter
+numpy<2.0.0
+pybind11[global]
+pytest
+pytest-xdist
+looseversion
+black==26.1.0
+clang-format==21.1.6

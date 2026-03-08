@@ -98,6 +98,7 @@ size_t Tensor::SizeInBytes() const { return kDataTypeToSize.at(dtype_) * num_ele
 
 const std::vector<int64_t> &Tensor::Dims() const { return dims_; }
 
+
 size_t Tensor::NumElements() const { return num_elements_; }
 
 DataType Tensor::Dtype() const { return dtype_; }

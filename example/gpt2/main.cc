@@ -78,6 +78,7 @@ DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)")
 DEFINE_string(
     precision_check, "",
     "precision check config: level=N,format=simple|table,output_md5=true|false,output_path=PATH,baseline=PATH");
+DEFINE_bool(flash, false, "Whether to enable flash attention");
 
 using namespace infini_train;
 

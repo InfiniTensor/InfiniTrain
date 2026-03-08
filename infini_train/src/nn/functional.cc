@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
+#include <cmath>
+#include <limits>
+#include <optional>
 
 #include "infini_train/include/autograd/activations.h"
 #include "infini_train/include/autograd/elementwise.h"
@@ -10,6 +13,7 @@
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/softmax.h"
 #include "infini_train/include/autograd/transform.h"
+#include "infini_train/include/autograd/scaled_dot_product_attention.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/tensor.h"
 
@@ -79,4 +83,22 @@ std::shared_ptr<Tensor> Softmax(const std::shared_ptr<Tensor> &input, int64_t di
 std::shared_ptr<Tensor> Sigmoid(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<autograd::Sigmoid>()->Apply({input})[0];
 }
-} // namespace infini_train::nn::function
+
+std::shared_ptr<Tensor> ScaledDotProductAttention(
+        const std::shared_ptr<Tensor> &query,
+        const std::shared_ptr<Tensor> &key,
+        const std::shared_ptr<Tensor> &value,
+        const std::shared_ptr<Tensor> &attn_mask,
+        double dropout_p,
+        bool is_causal,
+        const std::optional<double> &scale,
+        bool enable_gqa) {
+    std::vector<std::shared_ptr<Tensor>> inputs = {query, key, value};
+    if (attn_mask) inputs.push_back(attn_mask);
+    auto fn = std::make_shared<autograd::ScaledDotProductAttention>(
+        dropout_p, is_causal, scale, enable_gqa);
+    return fn->Apply(inputs)[0];
+}
+
+}
+// namespace infini_train::nn::function

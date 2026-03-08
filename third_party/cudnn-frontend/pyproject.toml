@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=64", "cmake>=3.18", "ninja==1.11.1.1", "pybind11[global]"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nvidia-cudnn-frontend"
+dynamic = ["version"]
+description = "CUDNN FrontEnd python library"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "NVIDIA Proprietary Software"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+
+[tool.setuptools]
+packages = ["cudnn", "include", "cudnn.native_sparse_attention", "cudnn.native_sparse_attention.selection", "cudnn.native_sparse_attention.compression", "cudnn.native_sparse_attention.sliding_window_attention", "cudnn.native_sparse_attention.top_k", "cudnn.gemm_swiglu", "cudnn.gemm_amax", "cudnn.grouped_gemm", "cudnn.grouped_gemm.grouped_gemm_swiglu"]
+package-dir = {"" = "python", "include" = "include"}
+include-package-data = true
+
+[project.urls]
+"Homepage" = "https://github.com/nvidia/cudnn-frontend"
+"Bug Tracker" = "https://github.com/nvidia/cudnn-frontend/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "cudnn.__version__"}
+
+[tool.setuptools.package-data]
+include = ["**/*"]
+
+[project.optional-dependencies]
+cutedsl = [
+    "nvidia-cutlass-dsl==4.3.5",
+    "cuda-python",
+    "torch",
+]

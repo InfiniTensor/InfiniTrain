@@ -138,6 +138,7 @@ std::vector<std::shared_ptr<Tensor>> RMSNorm::Forward(const std::vector<std::sha
     return {norm * parameters_[kParamWeightName]};
 }
 
+DECLARE_bool(flash);
 CausalSelfAttention::CausalSelfAttention(const LLaMA3Config &config)
     : CloneableModule(kType), config_(config), n_head_(config.n_head), n_embd_(config.n_embd),
       n_kv_head_(config.n_kv_head), n_rep_(config.n_head / config.n_kv_head), head_dim_(config.n_embd / config.n_head) {

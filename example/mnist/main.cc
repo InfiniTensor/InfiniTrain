@@ -35,6 +35,7 @@ constexpr char kDeviceCUDA[] = "cuda";
 
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_bool(flash, false, "Whether to enable flash attention");
 
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
