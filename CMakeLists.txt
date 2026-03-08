@@ -4,6 +4,7 @@ option(USE_CUDA "Support NVIDIA CUDA" OFF)
 option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
 option(USE_NCCL "Build project for distributed running" ON)
+option(BUILD_TEST "Build InfiniTrain tests" ON)
 
 project(infini_train VERSION 0.5.0 LANGUAGES CXX)
 
@@ -13,6 +14,21 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# ------------------------------------------------------------------------------
+# GoogleTest (FetchContent)
+# ------------------------------------------------------------------------------
+if(BUILD_TEST)
+  include(FetchContent)
+  FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG v1.14.0
+  )
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(googletest)
+  enable_testing()
+endif()
 
 # ------------------------------------------------------------------------------
 # Third-party deps
@@ -26,7 +42,9 @@ include_directories(${gflags_SOURCE_DIR}/include)
 set(WITH_GFLAGS OFF CACHE BOOL "Disable glog finding system gflags" FORCE)
 set(WITH_GTEST OFF CACHE BOOL "Disable glog finding system gtest" FORCE)
 add_subdirectory(third_party/glog)
+add_compile_definitions(GLOG_USE_GLOG_EXPORT=1)
 include_directories(${glog_SOURCE_DIR}/src)
+include_directories(${glog_BINARY_DIR}/glog)
 
 # eigen
 if(USE_OMP)
@@ -48,6 +66,8 @@ endif()
 # Framework core sources (*.cc), excluding cpu kernels (they are built separately)
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
 list(FILTER SRC EXCLUDE REGEX ".*kernels/cpu/.*")
+list(FILTER SRC EXCLUDE REGEX ".*runtime/cuda/.*")
+list(FILTER SRC EXCLUDE REGEX ".*ccl/cuda/.*")
 if(NOT USE_NCCL)
   list(FILTER SRC EXCLUDE REGEX ".*infini_train/src/core/ccl/cuda/.*")
 endif()
@@ -190,17 +210,8 @@ add_executable(llama3
 )
 link_infini_train_exe(llama3)
 
-# Tools
-add_subdirectory(tools/infini_run)
-set_target_properties(infini_run PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Tests
-add_executable(test_hook test/hook/test_hook.cc)
-link_infini_train_exe(test_hook)
-
-add_executable(test_precision_check test/hook/test_precision_check.cc)
-link_infini_train_exe(test_precision_check)
-
-add_executable(test_lora test/lora/test_lora.cc)
-link_infini_train_exe(test_lora)
-
+if(BUILD_TEST)
+  add_subdirectory(tests)
+endif()
