@@ -66,8 +66,8 @@ std::shared_ptr<LRScheduler> CreateLRScheduler(
 
     auto warmup_scheduler = LRScheduler::Create<lr_schedulers::LinearLR>(
         optimizer,
-        /*start_factor=*/1e-8f,
-        /*end_factor=*/1.0f,
+        /*start_factor=*/config.warmup_start_factor,
+        /*end_factor=*/config.warmup_end_factor,
         /*total_iters=*/config.warmup_steps);
     
     auto main_scheduler = create_main(optimizer);

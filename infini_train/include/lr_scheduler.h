@@ -36,9 +36,10 @@ struct LRSchedulerConfig {
     std::vector<int64_t> sequential_milestones;
     // ChainedScheduler
     std::vector<LRSchedulerConfig> chained_configs;
-    // common
+    // warmup
     int64_t warmup_steps = 0;
-    int64_t total_iters = 0;
+    float warmup_start_factor = 1.0f / 3.0f;
+    float warmup_end_factor = 1.0f;
 };
 
 class LRScheduler {
