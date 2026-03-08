@@ -14,6 +14,7 @@
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
+#include "infini_train/include/autograd/ScaledDotProductAttention.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
@@ -207,36 +208,38 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
     // TODO(zbl): use kv cache during inference
     // if (use_kv_) { ... }
 
-    // align n_head in GQA
-    // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
-    k = RepeatKV(k, n_rep_);
-    v = RepeatKV(v, n_rep_);
+    std::shared_ptr<Tensor> y = nullptr;
+    if (config_.flash) {
+        auto y_flash = std::make_shared<autograd::ScaledDotProductAttention>(
+                           /*attn_mask=*/nullptr, /*dropout_p=*/0, /*is_causal=*/true,
+                           /*scale=*/1.0 / std::sqrt(static_cast<double>(D)), /*enable_gqa=*/true)
+                           ->Apply({q, k, v})[0];
+        y = y_flash->Contiguous()->View({B, T, C_local});
+    } else {
+        // align n_head in GQA
+        // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
+        k = RepeatKV(k, n_rep_);
+        v = RepeatKV(v, n_rep_);
 
-    // (B, T, H_local, D) -> (B, H_local, T, D)
-    q = q->Transpose(1, 2);
-    k = k->Transpose(1, 2);
-    v = v->Transpose(1, 2);
+        // (B, T, H_local, D) -> (B, H_local, T, D)
+        q = q->Transpose(1, 2);
+        k = k->Transpose(1, 2);
+        v = v->Transpose(1, 2);
 
-    // TODO(zbl): support flash attention later
-    // if (flash_) { ... }
-
-    // manual implementation of attention
-    // this materializes the large (T,T) matrix for all the queries and keys
-
-    // q: (B, H_local, T, D)
-    // k: (B, H_local, T, D) -> (B, H_local, D, T)
-    // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
-    if (mask) {
-        // mask: (1, 1, T, T)
-        att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+        // manual implementation of attention
+        // this materializes the large (T,T) matrix for all the queries and keys
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
+        if (mask) {
+            // mask: (1, 1, T, T)
+            att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+        }
+        // (B, H_local, T, T)
+        att = nn::function::Softmax(att, -1);
+        // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
+        y = att->Matmul(v);
+        // (B, H_local, T, D) -> Transpose(1, 2) -> (B, T, H_local, D) -> (B, T, C_local)
+        y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
     }
-    // (B, H_local, T, T)
-    att = nn::function::Softmax(att, -1);
-    // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
-    auto y = att->Matmul(v);
-    // (B, H_local, T, D) -> Transpose(1, 2) -> (B, T, H_local, D) -> (B, T, C_local)
-    y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
     // output projection
     // (B, T, C_local) -> RowParallelLinear(C, C) -> (B, T, C)
     y = (*modules_[kCProjLayerName])({y})[0];

@@ -74,6 +74,25 @@ __device__ T warp_reduce_max(T val){
     return val;
 }
 
+__device__ __forceinline__ bool FlashAttnDropoutKeep(
+    unsigned long long seed,
+    int batch_idx, int head_idx, int q_idx, int k_idx,
+    int q_heads, int target_seq_len, int src_seq_len,
+    float dropout_p) {
+    // Stateless RNG mapping for one attention element (q_idx, k_idx).
+    unsigned long long linear_idx =
+        (((static_cast<unsigned long long>(batch_idx) * static_cast<unsigned long long>(q_heads)
+           + static_cast<unsigned long long>(head_idx))
+          * static_cast<unsigned long long>(target_seq_len)
+          + static_cast<unsigned long long>(q_idx))
+         * static_cast<unsigned long long>(src_seq_len))
+        + static_cast<unsigned long long>(k_idx);
+    curandStatePhilox4_32_10_t state;
+    curand_init(seed, linear_idx, 0, &state);
+    float rand_val = curand_uniform(&state);
+    return rand_val > dropout_p;
+}
+
 
 /**
  * FlashAttention Forward Kernel
@@ -173,12 +192,6 @@ __global__ void FlashAttentionForwardKernel(
     }
     __syncthreads();
 
-    // Initialize dropout random state with dropout_seed
-    curandStatePhilox4_32_10_t state;
-    if (dropout_p > 0) {
-        unsigned long long seq = bid_y * q_heads * target_seq_len + bid_x * target_seq_len + Br * bid_z + tid_y;
-        curand_init(dropout_seed, seq, 0, &state);
-    }
 /****************************end-of-preparation*************************/
 
 /****************************main-loop**************************/
@@ -260,8 +273,11 @@ __global__ void FlashAttentionForwardKernel(
 
         // step-5.5: Apply dropout to P (using dropout_seed for reproducibility)
         if (dropout_p > 0 && tid_y < bound_tid_y && tid_x < bound_tid_x) {
-            float rand_val = curand_uniform(&state);
-            bool keep = rand_val > dropout_p;
+            int global_q_idx = Br * bid_z + tid_y;
+            int global_k_idx = Bc * j + tid_x;
+            bool keep = FlashAttnDropoutKeep(
+                dropout_seed, bid_y, bid_x, global_q_idx, global_k_idx,
+                q_heads, target_seq_len, src_seq_len, static_cast<float>(dropout_p));
             if (keep) {
                 SP_AT(tid_y, tid_x) = SP_AT(tid_y, tid_x) / (1.0f - dropout_p);
             } else {
@@ -421,13 +437,6 @@ __global__ void FlashAttentionBackwardKernel(
     #define L_sm_AT(y) L_sm[y]
     #define dQ_sm_AT(y, x) dQ_sm[y * head_dim + x]
 
-    // Initialize dropout random state
-    curandStatePhilox4_32_10_t state;
-    if (dropout_p > 0) {
-        unsigned long long seq = bid_y * q_heads * target_seq_len + bid_x * target_seq_len + Br * bid_z + tid_y;
-        curand_init(dropout_seed, seq, 0, &state);
-    }
-
     /****************************Preparation*****************************/
     
     // Initialize dQ_sm to 0 for accumulation
@@ -559,8 +568,11 @@ __global__ void FlashAttentionBackwardKernel(
             for (int y = 0; y < Bc; ++y) {
                 for (int x = 0; x < Bc; ++x) {
                     if (tid_y < bound_tid_y && tid_x < bound_tid_x) {
-                        float rand_val = curand_uniform(&state);
-                        bool keep = rand_val > dropout_p;
+                        int global_q_pos = q_tile_start + tid_y;
+                        int global_k_pos = Bc * j + x;
+                        bool keep = FlashAttnDropoutKeep(
+                            dropout_seed, bid_y, bid_x, global_q_pos, global_k_pos,
+                            q_heads, target_seq_len, src_seq_len, static_cast<float>(dropout_p));
                         if (keep) {
                             P_sm_AT(tid_y, x) = P_sm_AT(tid_y, x) / (1.0f - dropout_p);
                         } else {
@@ -610,8 +622,11 @@ __global__ void FlashAttentionBackwardKernel(
             for (int y = 0; y < Bc; ++y) {
                 for (int x = 0; x < Bc; ++x) {
                     if (tid_y < bound_tid_y && tid_x < bound_tid_x) {
-                        float rand_val = curand_uniform(&state);
-                        bool keep = rand_val > dropout_p;
+                        int global_q_pos = q_tile_start + tid_y;
+                        int global_k_pos = Bc * j + x;
+                        bool keep = FlashAttnDropoutKeep(
+                            dropout_seed, bid_y, bid_x, global_q_pos, global_k_pos,
+                            q_heads, target_seq_len, src_seq_len, static_cast<float>(dropout_p));
                         if (keep) {
                             S_sm_AT(tid_y, x) = S_sm_AT(tid_y, x) / (1.0f - dropout_p);
                         } else {
@@ -757,7 +772,7 @@ template <typename T>
 void LaunchFlashAttentionForward(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &query,
                                  const std::shared_ptr<Tensor> &key, const std::shared_ptr<Tensor> &value,
                                  const std::shared_ptr<Tensor> &attn_mask, float scale, bool is_causal,
-                                 int64_t dropout_p, bool enable_gqa, float *logsumexp_ptr, unsigned long long *dropout_seed_ptr) {
+                                 int64_t dropout_p, bool enable_gqa, float *logsumexp_ptr, unsigned long long dropout_seed) {
 
     const auto &query_dims = query->Dims();
     const auto &key_dims = key->Dims();
@@ -997,11 +1012,11 @@ FlashAttentionForwardOutput FlashAttentionForward(const std::shared_ptr<Tensor> 
     switch (dtype) {
         DISPATCH_CASE(WRAP(LaunchFlashAttentionForward<float>(output, query, key, value, attn_mask, scale, is_causal,
                                                                dropout_p, enable_gqa, logsumexp_ptr,
-                                                               dropout_seed_tensor ? static_cast<unsigned long long*>(dropout_seed_tensor->DataPtr()) : nullptr);),
+                                                               dropout_seed);),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP(LaunchFlashAttentionForward<nv_bfloat16>(output, query, key, value, attn_mask, scale,
                                                                      is_causal, dropout_p, enable_gqa, logsumexp_ptr,
-                                                                     dropout_seed_tensor ? static_cast<unsigned long long*>(dropout_seed_tensor->DataPtr()) : nullptr);),
+                                                                     dropout_seed);),
                       DataType::kBFLOAT16)
     default:
         LOG_LOC(FATAL, "CUDA FlashAttention forward: 'Unsupported data type'");

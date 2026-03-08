@@ -36,7 +36,7 @@ struct LLaMA3Config {
 
     // Inference
     bool use_kv = false;            // kv cache
-    bool flash = false;             // flash attention
+    bool flash = false;             // enable flash attention path in CausalSelfAttention
     int64_t max_gen_batch_size = 4; // max batch size during inference
 };
 

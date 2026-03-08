@@ -19,6 +19,7 @@ struct GPT2Config {
     int64_t n_layer = 12;
     int64_t n_head = 12;
     int64_t n_embd = 768;
+    bool flash = false;
 };
 
 class NewGELU : public infini_train::nn::CloneableModule<NewGELU> {
