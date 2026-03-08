@@ -56,6 +56,17 @@ DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
 DEFINE_double(learning_rate, 1e-4, "learning rate warmup iterations");
 DEFINE_bool(use_distributed_optimizer, false, "Whether to enable DistributedOptimizer(only take effects when DP>1)");
+// lr scheduler
+DEFINE_string(lr_scheduler, "none",
+              "Learning rate scheduler type: none|constant|step|linear");
+DEFINE_int64(warmup_steps, 0, "Number of linear warmup steps (0 = no warmup)");
+DEFINE_double(warmup_start_factor, 0.333333, "Starting learning rate factor for linear warmup (multiplied by base LR)");
+DEFINE_double(warmup_end_factor, 1.0, "Ending learning rate factor for linear warmup (multiplied by base LR)");
+DEFINE_int64(step_size, 30, "StepLR: period of learning rate decay");
+DEFINE_double(gamma, 0.1, "StepLR: multiplicative factor of lr decay");
+DEFINE_double(start_factor, 0.333333, "LinearLR: starting multiplicative factor");
+DEFINE_double(end_factor, 1.0, "LinearLR: ending multiplicative factor");
+DEFINE_int64(lr_total_iters, 5, "ConstantLR/LinearLR: total iterations for the scheduler");
 // evaluation
 DEFINE_uint32(val_loss_every, 0, "every how many steps to evaluate val loss?");
 DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
@@ -257,7 +268,6 @@ void Train(const nn::parallel::Rank &rank) {
     // auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
     auto optimizer_creator = optimizers::SGD::Create(FLAGS_learning_rate);
     std::shared_ptr<Optimizer> optimizer = nullptr;
-    std::shared_ptr<LRScheduler> scheduler = nullptr;
 
     if (FLAGS_use_distributed_optimizer) {
         auto model_chunks = (pp_world_size > 1)
@@ -269,9 +279,19 @@ void Train(const nn::parallel::Rank &rank) {
         optimizer = optimizer_creator(model->Parameters());
     }
 
-    if (scheduler) {
-        scheduler->Step();
-    }
+    LRSchedulerConfig sched_config;
+    sched_config.type = FLAGS_lr_scheduler;
+    sched_config.warmup_steps = FLAGS_warmup_steps;
+    sched_config.warmup_start_factor = static_cast<float>(FLAGS_warmup_start_factor);
+    sched_config.warmup_end_factor = static_cast<float>(FLAGS_warmup_end_factor);
+    sched_config.step_size = FLAGS_step_size;
+    sched_config.step_gamma = static_cast<float>(FLAGS_gamma);
+    sched_config.linear_start_factor = static_cast<float>(FLAGS_start_factor);
+    sched_config.linear_end_factor = static_cast<float>(FLAGS_end_factor);
+    sched_config.constant_factor = static_cast<float>(FLAGS_start_factor);  // 复用
+    sched_config.constant_total_iters = FLAGS_lr_total_iters;
+    sched_config.linear_total_iters = FLAGS_lr_total_iters;
+    auto scheduler = CreateLRScheduler(optimizer,sched_config);
 
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
@@ -359,6 +379,9 @@ void Train(const nn::parallel::Rank &rank) {
             }
 
             optimizer->Step();
+            if (scheduler) {
+                scheduler->Step();
+            }
         } else {
             auto [x, y] = *train_iter;
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
@@ -368,6 +391,9 @@ void Train(const nn::parallel::Rank &rank) {
             y = std::make_shared<Tensor>(y->To(device));
 
             lossf = model->TrainStep({x}, {y}, optimizer, loss_fn, dtype);
+            if (scheduler) {
+                scheduler->Step();
+            }
         }
 
         if (ddp_world_size > 1) {
@@ -383,10 +409,11 @@ void Train(const nn::parallel::Rank &rank) {
         if (rank.IsLastRank()) {
             size_t used_mb = 0, reserved_mb = 0;
             std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
-
+            const float current_lr = scheduler ? scheduler->GetLR()
+                                   : static_cast<float>(FLAGS_learning_rate);
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
                                       "peak used: {:5d} MB | peak reserved: {:5d} MB, DP={}, TP={}, SP={}, PP={})",
-                                      step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
+                                      step + 1, FLAGS_num_iteration, lossf, current_lr, duration_us / 1e3f,
                                       tps, used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size,
                                       pp_world_size);
 
