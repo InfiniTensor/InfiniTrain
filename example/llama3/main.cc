@@ -76,6 +76,8 @@ DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)")
 DEFINE_string(
     precision_check, "",
     "precision check config: level=N,format=simple|table,output_md5=true|false,output_path=PATH,baseline=PATH");
+// flash attention
+DEFINE_bool(flash, false, "Enable FlashAttention for CausalSelfAttention");
 
 using namespace infini_train;
 
@@ -161,9 +163,10 @@ void Train(const nn::parallel::Rank &rank) {
     // ManualSeed(42);
 
     LLaMA3Config model_config = LLaMA3Config();
+    model_config.flash = FLAGS_flash;
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
+        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath, FLAGS_flash);
     } else {
         model = std::make_shared<LLaMA3>(model_config);
     }

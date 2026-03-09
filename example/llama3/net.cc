@@ -207,34 +207,49 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
     // TODO(zbl): use kv cache during inference
     // if (use_kv_) { ... }
 
-    // align n_head in GQA
-    // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
-    k = RepeatKV(k, n_rep_);
-    v = RepeatKV(v, n_rep_);
+    std::shared_ptr<Tensor> y;
 
-    // (B, T, H_local, D) -> (B, H_local, T, D)
-    q = q->Transpose(1, 2);
-    k = k->Transpose(1, 2);
-    v = v->Transpose(1, 2);
+    if (config_.flash) {
+        // FlashAttention path with native GQA support
+        // No need for RepeatKV - FlashAttention handles GQA internally
+        // (B, T, H_local, D) -> (B, H_local, T, D)
+        q = q->Transpose(1, 2);
+        // (B, T, KV_local, D) -> (B, KV_local, T, D)
+        k = k->Transpose(1, 2);
+        v = v->Transpose(1, 2);
 
-    // TODO(zbl): support flash attention later
-    // if (flash_) { ... }
+        // Q: (B, H_local, T, D), K: (B, KV_local, T, D), V: (B, KV_local, T, D)
+        // FlashAttention with causal mask and GQA
+        y = nn::function::ScaledDotProductAttention(q, k, v, /*is_causal=*/true);
+    } else {
+        // Original small-operator path
+        // align n_head in GQA
+        // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
+        k = RepeatKV(k, n_rep_);
+        v = RepeatKV(v, n_rep_);
 
-    // manual implementation of attention
-    // this materializes the large (T,T) matrix for all the queries and keys
+        // (B, T, H_local, D) -> (B, H_local, T, D)
+        q = q->Transpose(1, 2);
+        k = k->Transpose(1, 2);
+        v = v->Transpose(1, 2);
 
-    // q: (B, H_local, T, D)
-    // k: (B, H_local, T, D) -> (B, H_local, D, T)
-    // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
-    if (mask) {
-        // mask: (1, 1, T, T)
-        att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+        // manual implementation of attention
+        // this materializes the large (T,T) matrix for all the queries and keys
+
+        // q: (B, H_local, T, D)
+        // k: (B, H_local, T, D) -> (B, H_local, D, T)
+        // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
+        if (mask) {
+            // mask: (1, 1, T, T)
+            att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+        }
+        // (B, H_local, T, T)
+        att = nn::function::Softmax(att, -1);
+        // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
+        y = att->Matmul(v);
     }
-    // (B, H_local, T, T)
-    att = nn::function::Softmax(att, -1);
-    // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
-    auto y = att->Matmul(v);
+
     // (B, H_local, T, D) -> Transpose(1, 2) -> (B, T, H_local, D) -> (B, T, C_local)
     y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
     // output projection
@@ -457,7 +472,7 @@ constexpr int32_t kLLaMA3Magic = 20240803;
 constexpr int32_t kLLaMA3FP32Version = 3;
 } // namespace
 
-std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
+std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath, bool flash) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -496,6 +511,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
                                                         .rope_theta = rope_theta,
                                                         .use_scaled_rope = static_cast<bool>(use_scaled_rope),
                                                         .norm_eps = norm_eps,
+                                                        .flash = flash,
                                                         .max_gen_batch_size = max_gen_bs});
 
     // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========

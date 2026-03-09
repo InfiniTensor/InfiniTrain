@@ -73,9 +73,11 @@ CausalSelfAttention::CausalSelfAttention(const GPT2Config &config)
         /*skip_bias_add=*/false,
         /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 
-    // causal mask: (1, 1, block_size, block_size)
-    buffers_[kParamBiasName] = nn::function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
-                                   ->View({1, 1, config_.block_size, config_.block_size});
+    // causal mask: only needed when not using flash attention
+    if (!config.flash) {
+        buffers_[kParamBiasName] = nn::function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
+                                       ->View({1, 1, config_.block_size, config_.block_size});
+    }
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
@@ -105,16 +107,26 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     q = q->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
     v = v->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
 
-    // (B, h_l, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
-    // (1, 1, T, T)
-    auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
-    // (1, 1, T, T) -> eq 0 -> (1, 1, T, T) -> masked_fill -> (B, h_l, T, T)
-    att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
-    // (B, h_l, T, T)
-    att = nn::function::Softmax(att, -1);
-    // (B, h_l, T, Dh)
-    auto y = att->Matmul(v);
+    std::shared_ptr<infini_train::Tensor> y;
+
+    if (config_.flash) {
+        // FlashAttention path: fused scaled dot-product attention with causal mask
+        // Q, K, V: (B, h_l, T, Dh) -> O: (B, h_l, T, Dh)
+        y = nn::function::ScaledDotProductAttention(q, k, v, /*is_causal=*/true);
+    } else {
+        // Original small-operator path
+        // (B, h_l, T, T)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
+        // (1, 1, T, T)
+        auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
+        // (1, 1, T, T) -> eq 0 -> (1, 1, T, T) -> masked_fill -> (B, h_l, T, T)
+        att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
+        // (B, h_l, T, T)
+        att = nn::function::Softmax(att, -1);
+        // (B, h_l, T, Dh)
+        y = att->Matmul(v);
+    }
+
     // (B, h_l, T, Dh) -> (B, T, h_l, Dh) -> (B, T, local_C)
     y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
 
@@ -351,7 +363,7 @@ std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::
 }
 } // namespace
 
-std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
+std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath, bool flash) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -379,7 +391,8 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
                                                         .original_vocab_size = vocab_size,
                                                         .n_layer = n_layer,
                                                         .n_head = n_head,
-                                                        .n_embd = n_embd});
+                                                        .n_embd = n_embd,
+                                                        .flash = flash});
 
     LOG(INFO) << "magic: " << magic << " version: " << version << " block_size: " << block_size
               << " vocab_size: " << vocab_size << " n_layer: " << n_layer << " n_head: " << n_head
