@@ -1,0 +1,113 @@
+{
+    "variables": {
+        "BUILD_DIR": "../build",
+        "GPT2_INPUT_BIN": "/data/shared/InfiniTrain-dev/data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin",
+        "GPT2_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/gpt2/gpt2_124M.bin",
+        "LLAMA3_INPUT_BIN": "/data/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
+        "LLAMA3_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_fp32.bin",
+        "PROFILE_LOG_DIR": "./profile_logs",
+        "LOG_DIR": "./logs_flash",
+        "COMPARE_LOG_DIR": ""
+    },
+    "builds": [
+        {
+            "id": "build_flash",
+            "profile": false,
+            "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON .. && make -j"
+        }
+    ],
+    "tests": [
+        {
+            "id": "baseline_fp32_seq64",
+            "args": {
+                "dtype": "float32",
+                "num_iteration": 20,
+                "batch_size": 4,
+                "sequence_length": 64,
+                "total_batch_size": 256,
+                "overfit_single_batch": false
+            }
+        },
+        {
+            "id": "flash_fp32_seq64",
+            "args": {
+                "dtype": "float32",
+                "num_iteration": 20,
+                "batch_size": 4,
+                "sequence_length": 64,
+                "total_batch_size": 256,
+                "overfit_single_batch": false,
+                "flash": true
+            }
+        },
+        {
+            "id": "baseline_fp32_seq256",
+            "args": {
+                "dtype": "float32",
+                "num_iteration": 20,
+                "batch_size": 4,
+                "sequence_length": 256,
+                "total_batch_size": 1024,
+                "overfit_single_batch": false
+            }
+        },
+        {
+            "id": "flash_fp32_seq256",
+            "args": {
+                "dtype": "float32",
+                "num_iteration": 20,
+                "batch_size": 4,
+                "sequence_length": 256,
+                "total_batch_size": 1024,
+                "overfit_single_batch": false,
+                "flash": true
+            }
+        },
+        {
+            "id": "baseline_fp32_seq512",
+            "args": {
+                "dtype": "float32",
+                "num_iteration": 20,
+                "batch_size": 2,
+                "sequence_length": 512,
+                "total_batch_size": 1024,
+                "overfit_single_batch": false
+            }
+        },
+        {
+            "id": "flash_fp32_seq512",
+            "args": {
+                "dtype": "float32",
+                "num_iteration": 20,
+                "batch_size": 2,
+                "sequence_length": 512,
+                "total_batch_size": 1024,
+                "overfit_single_batch": false,
+                "flash": true
+            }
+        },
+        {
+            "id": "baseline_bf16_seq256",
+            "args": {
+                "dtype": "bfloat16",
+                "num_iteration": 20,
+                "batch_size": 4,
+                "sequence_length": 256,
+                "total_batch_size": 1024,
+                "overfit_single_batch": false
+            }
+        },
+        {
+            "id": "flash_bf16_seq256",
+            "args": {
+                "dtype": "bfloat16",
+                "num_iteration": 20,
+                "batch_size": 4,
+                "sequence_length": 256,
+                "total_batch_size": 1024,
+                "overfit_single_batch": false,
+                "flash": true
+            }
+        }
+    ]
+}
