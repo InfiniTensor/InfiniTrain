@@ -17,7 +17,7 @@ std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpT
                                 bool async_op) {
     auto device = tensor->GetDevice().type();
     if (pg == nullptr) {
-        pg = ProcessGroupFactory::Instance()->GetDefaultProcessGroup();
+        pg = ProcessGroupFactory::Instance(device)->GetDefaultProcessGroup();
     }
     return pg->AllReduce(tensor, reduce_op, async_op);
 }
@@ -26,7 +26,7 @@ std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std
                                 const ProcessGroup *pg, bool async_op) {
     auto device = output->GetDevice().type();
     if (pg == nullptr) {
-        pg = ProcessGroupFactory::Instance()->GetDefaultProcessGroup();
+        pg = ProcessGroupFactory::Instance(device)->GetDefaultProcessGroup();
     }
     return pg->AllGather(output, input, async_op);
 }
@@ -35,7 +35,7 @@ std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output, const
                                     ReduceOpType reduce_op, const ProcessGroup *pg, bool async_op) {
     auto device = output->GetDevice().type();
     if (pg == nullptr) {
-        pg = ProcessGroupFactory::Instance()->GetDefaultProcessGroup();
+        pg = ProcessGroupFactory::Instance(device)->GetDefaultProcessGroup();
     }
     return pg->ReduceScatter(output, input, reduce_op, async_op);
 }

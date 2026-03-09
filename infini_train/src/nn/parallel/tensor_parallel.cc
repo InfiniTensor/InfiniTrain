@@ -34,7 +34,8 @@ std::shared_ptr<Tensor> GatherAlongFirstDim(const std::shared_ptr<Tensor> &tenso
     }
 
     auto device = tensor->GetDevice();
-    auto tp_group = ProcessGroupFactory::Instance()->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+    auto tp_group = ProcessGroupFactory::Instance(device.type())
+                        ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
 
     std::vector<int64_t> output_shape = tensor->Dims();
     output_shape[0] *= world_size;
@@ -53,7 +54,8 @@ std::shared_ptr<Tensor> GatherAlongLastDim(const std::shared_ptr<Tensor> &tensor
     }
 
     auto device = tensor->GetDevice();
-    auto tp_group = ProcessGroupFactory::Instance()->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+    auto tp_group = ProcessGroupFactory::Instance(device.type())
+                        ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
 
     std::vector<int64_t> output_shape = tensor->Dims();
     output_shape[0] *= world_size;
@@ -77,7 +79,8 @@ std::shared_ptr<Tensor> SplitAlongLastDim(const std::shared_ptr<Tensor> &tensor)
     }
 
     auto device = tensor->GetDevice();
-    auto tp_group = ProcessGroupFactory::Instance()->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+    auto tp_group = ProcessGroupFactory::Instance(device.type())
+                        ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
     auto rank = tp_group->GetGroupRank(device.Rank().GlobalRank());
 
     auto last_dim_size = tensor->Dims().back() / world_size;
@@ -94,7 +97,8 @@ std::shared_ptr<Tensor> Reduce(const std::shared_ptr<Tensor> &tensor) {
     }
 
     auto device = tensor->GetDevice();
-    auto tp_group = ProcessGroupFactory::Instance()->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+    auto tp_group = ProcessGroupFactory::Instance(device.type())
+                        ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
 
     auto output = std::make_shared<Tensor>(*tensor);
 
@@ -111,7 +115,8 @@ std::shared_ptr<Tensor> ReduceScatterAlongFirstDim(const std::shared_ptr<Tensor>
     }
 
     auto device = tensor->GetDevice();
-    auto tp_group = ProcessGroupFactory::Instance()->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+    auto tp_group = ProcessGroupFactory::Instance(device.type())
+                        ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
 
     auto output_shape = tensor->Dims();
     CHECK_EQ(output_shape[0] % world_size, 0) << "First dimension of the tensor should be divisible by TP world size";
@@ -431,7 +436,8 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     const ProcessGroup *tp_group = nullptr;
     int rank = 0;
     if (tp_size > 1) {
-        tp_group = ProcessGroupFactory::Instance()->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+        tp_group = ProcessGroupFactory::Instance(device.type())
+                       ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
         rank = tp_group->GetGroupRank(device.Rank().GlobalRank());
     }
 
