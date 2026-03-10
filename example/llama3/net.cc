@@ -499,6 +499,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
                                                         .rope_theta = rope_theta,
                                                         .use_scaled_rope = static_cast<bool>(use_scaled_rope),
                                                         .norm_eps = norm_eps,
+                                                        .flash = true,
                                                         .max_gen_batch_size = max_gen_bs});
 
     // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
