@@ -26,5 +26,8 @@ namespace infini_train::kernels::cuda {
  */
 void FlashAttentionForward(const Tensor &q, const Tensor &k, const Tensor &v, Tensor &output, Tensor &softmax_lse,
                            float dropout_p, float softmax_scale, bool is_causal, const Device &device);
+void FlashAttentionBackward(const Tensor &q, const Tensor &k, const Tensor &v, const Tensor &grad_output, Tensor &grad_q,
+                            Tensor &grad_k, Tensor &grad_v, float softmax_scale, bool is_causal,
+                            const Device &device);
 
 } // namespace infini_train::kernels::cuda

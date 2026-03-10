@@ -32,7 +32,7 @@ ScaledDotProductAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     }
 
     // Prepare outputs
-    auto output = std::make_shared<Tensor>(q->Dims(), q->GetDType(), q->GetDevice());
+    auto output = std::make_shared<Tensor>(q->Dims(), q->Dtype(), q->GetDevice());
     
     // Prepare softmax_lse tensor for backward: (B, H, T) - assuming H is dim 2, T is dim 1
     // q shape: (B, T, H, D)
@@ -72,12 +72,18 @@ ScaledDotProductAttention::Backward(const std::vector<std::shared_ptr<Tensor>> &
     auto v = saved_tensors_[2];
     std::shared_ptr<Tensor> attn_mask = (saved_tensors_.size() == 4) ? saved_tensors_[3] : nullptr;
 
-    // TODO: Call FlashAttention Backward Kernel
-    LOG(INFO) << "FlashAttention Backward called (Placeholder).";
-    
-    auto dq = std::make_shared<Tensor>(q->Dims(), q->GetDType(), q->GetDevice());
-    auto dk = std::make_shared<Tensor>(k->Dims(), k->GetDType(), k->GetDevice());
-    auto dv = std::make_shared<Tensor>(v->Dims(), v->GetDType(), v->GetDevice());
+    auto dq = std::make_shared<Tensor>(q->Dims(), q->Dtype(), q->GetDevice());
+    auto dk = std::make_shared<Tensor>(k->Dims(), k->Dtype(), k->GetDevice());
+    auto dv = std::make_shared<Tensor>(v->Dims(), v->Dtype(), v->GetDevice());
+
+    double softmax_scale = 0.0;
+    if (scale_.has_value()) {
+        softmax_scale = scale_.value();
+    } else {
+        softmax_scale = 1.0 / std::sqrt(static_cast<double>(q->Dims().back()));
+    }
+    kernels::cuda::FlashAttentionBackward(*q, *k, *v, *grad_output, *dq, *dk, *dv, softmax_scale, is_causal_,
+                                          q->GetDevice());
     
     std::vector<std::shared_ptr<Tensor>> grads = {dq, dk, dv};
     if (attn_mask) {
