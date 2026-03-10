@@ -9,14 +9,19 @@
 
 using namespace infini_train;
 
-class OptimizerTest : public ::testing::Test {
+class OptimizerTestBase : public ::testing::Test {
 protected:
     static void SetUpTestSuite() {
         nn::parallel::global::GlobalEnv::Instance().Init(1, 1, false, 1, 1);
     }
 };
 
-TEST_F(OptimizerTest, SGDCreation) {
+class OptimizerCreationTest : public OptimizerTestBase {};
+class OptimizerGradTest : public OptimizerTestBase {};
+class OptimizerCudaTest : public OptimizerTestBase {};
+class OptimizerDistributedTest : public OptimizerTestBase {};
+
+TEST_F(OptimizerCreationTest, SGDCreation) {
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                           Device(Device::DeviceType::kCPU, 0));
     param->set_requires_grad(true);
@@ -27,7 +32,7 @@ TEST_F(OptimizerTest, SGDCreation) {
     EXPECT_NE(optimizer, nullptr);
 }
 
-TEST_F(OptimizerTest, AdamCreation) {
+TEST_F(OptimizerCreationTest, AdamCreation) {
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                           Device(Device::DeviceType::kCPU, 0));
     param->set_requires_grad(true);
@@ -38,7 +43,7 @@ TEST_F(OptimizerTest, AdamCreation) {
     EXPECT_NE(optimizer, nullptr);
 }
 
-TEST_F(OptimizerTest, ZeroGrad) {
+TEST_F(OptimizerGradTest, ZeroGrad) {
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                           Device(Device::DeviceType::kCPU, 0));
     param->set_requires_grad(true);
@@ -49,7 +54,7 @@ TEST_F(OptimizerTest, ZeroGrad) {
     optimizer->ZeroGrad();
 }
 
-TEST_F(OptimizerTest, SGDMultiParams) {
+TEST_F(OptimizerCreationTest, SGDMultiParams) {
     std::vector<std::shared_ptr<Tensor>> params;
     for (int i = 0; i < 3; ++i) {
         auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
@@ -64,7 +69,7 @@ TEST_F(OptimizerTest, SGDMultiParams) {
     optimizer->ZeroGrad();
 }
 
-TEST_F(OptimizerTest, SGDCreationCUDA) {
+TEST_F(OptimizerCudaTest, SGDCreationCUDA) {
     REQUIRE_CUDA();
 #if defined(USE_CUDA)
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
@@ -79,7 +84,7 @@ TEST_F(OptimizerTest, SGDCreationCUDA) {
 #endif
 }
 
-TEST_F(OptimizerTest, AdamCreationCUDA) {
+TEST_F(OptimizerCudaTest, AdamCreationCUDA) {
     REQUIRE_CUDA();
 #if defined(USE_CUDA)
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
@@ -94,7 +99,7 @@ TEST_F(OptimizerTest, AdamCreationCUDA) {
 #endif
 }
 
-TEST_F(OptimizerTest, ZeroGradCUDA) {
+TEST_F(OptimizerCudaTest, ZeroGradCUDA) {
     REQUIRE_CUDA();
 #if defined(USE_CUDA)
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
@@ -109,7 +114,7 @@ TEST_F(OptimizerTest, ZeroGradCUDA) {
 #endif
 }
 
-TEST_F(OptimizerTest, SGDMultiParamsCUDA) {
+TEST_F(OptimizerCudaTest, SGDMultiParamsCUDA) {
     REQUIRE_CUDA();
 #if defined(USE_CUDA)
     std::vector<std::shared_ptr<Tensor>> params;
@@ -127,7 +132,7 @@ TEST_F(OptimizerTest, SGDMultiParamsCUDA) {
 #endif
 }
 
-TEST_F(OptimizerTest, DistributedSGD) {
+TEST_F(OptimizerDistributedTest, DistributedSGD) {
     REQUIRE_DISTRIBUTED();
 #if defined(USE_CUDA) && defined(USE_NCCL)
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
@@ -142,7 +147,7 @@ TEST_F(OptimizerTest, DistributedSGD) {
 #endif
 }
 
-TEST_F(OptimizerTest, DistributedAdam) {
+TEST_F(OptimizerDistributedTest, DistributedAdam) {
     REQUIRE_DISTRIBUTED();
 #if defined(USE_CUDA) && defined(USE_NCCL)
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{4, 4}, DataType::kFLOAT32,
@@ -157,7 +162,7 @@ TEST_F(OptimizerTest, DistributedAdam) {
 #endif
 }
 
-TEST_F(OptimizerTest, DistributedZeroGrad) {
+TEST_F(OptimizerDistributedTest, DistributedZeroGrad) {
     REQUIRE_DISTRIBUTED();
 #if defined(USE_CUDA) && defined(USE_NCCL)
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
