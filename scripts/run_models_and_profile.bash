@@ -188,11 +188,11 @@ if [[ -n "$COMPARE_LOG_DIR" ]]; then
 
     # Run compare_loss.py
     echo -e "\n\033[1;33m[Running] compare_loss.py\033[0m"
-    python3 "${SCRIPT_DIR}/compare_loss.py" "$COMPARE_LOG_DIR" "$LOG_DIR" || true
+    python3 "${SCRIPT_DIR}/compare_loss.py" "$COMPARE_LOG_DIR" "$LOG_DIR" > compare_test/loss_comparison.log 2>&1 || true
 
     # Run compare_tps.py
     echo -e "\n\033[1;33m[Running] compare_tps.py\033[0m"
-    python3 "${SCRIPT_DIR}/compare_tps.py" "$COMPARE_LOG_DIR" "$LOG_DIR" || true
+    python3 "${SCRIPT_DIR}/compare_tps.py" "$COMPARE_LOG_DIR" "$LOG_DIR" > compare_test/tps_comparison.log 2>&1 || true
 
     echo -e "\n\033[1;32mComparison completed.\033[0m"
 else
