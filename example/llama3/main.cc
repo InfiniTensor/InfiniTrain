@@ -39,6 +39,7 @@
 DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_string(input_val_bin, "", "input .bin to eval validation loss on");
 DEFINE_string(tokenizer_bin, "", "input .bin to tokenizer");
+DEFINE_bool(flash, false, "Enable FlashAttention");
 // model bin file is downloaded and processed using the script at
 // https://github.com/karpathy/llm.c/blob/master/train_llama3.py
 DEFINE_string(llmc_filepath, "", "llmc model file path to load from");
@@ -165,6 +166,7 @@ void Train(const nn::parallel::Rank &rank) {
     if (!FLAGS_llmc_filepath.empty()) {
         model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
     } else {
+        model_config.use_flash_attn = FLAGS_flash;
         model = std::make_shared<LLaMA3>(model_config);
     }
 
