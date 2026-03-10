@@ -19,7 +19,7 @@
 
 ## 当前你的问题:
 - 在flash attention下，你跑的模型loss会出现NAN, 即使在测试代码中`test/test_flash_attention.cc`,forward和backward的过程应该是对的
-
+- 你可以通过运行`gpt2-flash.sh`和`gpt2-non-flash.sh`对比查看结果，结果我保存在`gpt2-flash-result.txt`和`gpt2-non-flash-result.txt`中
 ## 问题修复建议:
 - 你可以在训练gpt2或llama3中对比flash 和 non-flash每一层的输出，看看是否是forward出了问题，定位到是哪一个layer出了问题
 - 如果forward没有问题，那么你应该看看backward的哪一个layer出了问题，梯度是否计算正确，对于参数是否更新正确

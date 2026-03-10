@@ -6,6 +6,6 @@ build/
 *.report.rank*
 *.records.log.rank*
 
-*.sh
-g*.txt
-l*.txt
+# *.sh
+# g*.txt
+# l*.txt

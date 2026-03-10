@@ -1,0 +1,1 @@
+./build/gpt2 --input_bin /data/shared/InfiniTrain-dev/data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin --llmc_filepath /data/shared/InfiniTrain-dev/scripts/pytorch_scripts/gpt2_124M.bin --device cuda --dtype bfloat16 --num_iteration 10 --batch_size 4 --total_batch_size 256 --flash=false 2>&1 | grep "train loss"
