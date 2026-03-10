@@ -1,6 +1,6 @@
 #include <cmath>
 #include <cstddef>
-
+#include <curand_kernel.h>
 #include "glog/logging.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"
@@ -8,6 +8,7 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/kernels/cuda/flash_attention.h"
+#include "infini_train/include/nn/functional.h"
 #include "infini_train/include/tensor.h"
 
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
@@ -222,9 +223,9 @@ __global__ void FlashAttentionForwardKernel(
             V_sm_AT(tid_y, idx) = 0.0;
             if (tid_y < bound_tid_x) {
                 K_T_sm_AT(idx, tid_y) = float(
-                    K[((((bid_y * src_seq_len) + (Bc * j + tid_y)) * kv_heads) + (bid_x / p)) * head_dim + idx]);
+                    key[((((bid_y * src_seq_len) + (Bc * j + tid_y)) * kv_heads) + (bid_x / p)) * head_dim + idx]);
                 V_sm_AT(tid_y, idx) = float(
-                    V[((((bid_y * src_seq_len) + (Bc * j + tid_y)) * kv_heads) + (bid_x / p)) * head_dim + idx]);
+                    value[((((bid_y * src_seq_len) + (Bc * j + tid_y)) * kv_heads) + (bid_x / p)) * head_dim + idx]);
             }
         }
         __syncthreads();
@@ -386,16 +387,13 @@ __global__ void FlashAttentionBackwardKernel(
 
     const int Br = blockDim.y;                  // Q纵向每块大小, 32
     const int Bc = blockDim.x;                  // K/V纵向分块大小, 32
-    const int Tr = gridDim.z; // Q纵向分块数
+    // const int Tr = gridDim.z; // Q纵向分块数
     const int Tc = (src_seq_len + Bc - 1) / Bc; // K/V纵向分块数
 
     // Define shared memory
     extern __shared__ char shared_mem[];
     char *ptr = shared_mem;
     
-    // D_sm[Br] - D values loaded from HBM
-    float *D_sm = reinterpret_cast<float *>(ptr);
-    ptr += Br * sizeof(float);
     
     // Q_sm[Br][head_dim], K_T_sm[head_dim][Bc], V_sm[Bc][head_dim]
     float *Q_sm = reinterpret_cast<float *>(ptr);
@@ -405,8 +403,11 @@ __global__ void FlashAttentionBackwardKernel(
     float *V_sm = reinterpret_cast<float *>(ptr);
     ptr += Bc * head_dim * sizeof(float);
     
-    // dO_sm[Br][head_dim], dK_T_sm[head_dim][Bc], dV_sm[Bc][head_dim]
+    // dO_sm[Br][head_dim], dQ_sm[Br][head_dim], dK_T_sm[head_dim][Bc], dV_sm[Bc][head_dim]
     float *dO_sm = reinterpret_cast<float *>(ptr);
+    ptr += Br * head_dim * sizeof(float);
+    // dQ_sm[Br][head_dim] - accumulated gradient for Q
+    float *dQ_sm = reinterpret_cast<float *>(ptr);
     ptr += Br * head_dim * sizeof(float);
     float *dK_T_sm = reinterpret_cast<float *>(ptr);
     ptr += head_dim * Bc * sizeof(float);
@@ -417,25 +418,28 @@ __global__ void FlashAttentionBackwardKernel(
     float *S_sm = reinterpret_cast<float *>(ptr);
     ptr += Br * Bc * sizeof(float);
     float *P_sm = reinterpret_cast<float *>(ptr);
-    
+    ptr += Br * Bc * sizeof(float);
+
     // L_sm[Br] - logsumexp values
     float *L_sm = reinterpret_cast<float *>(ptr);
-    
-    // dQ_sm[Br][head_dim] - accumulated gradient for Q
-    float *dQ_sm = reinterpret_cast<float *>(ptr);
+    ptr += Br * sizeof(float);
+    // D_sm[Br] - D values loaded from HBM
+    float *D_sm = reinterpret_cast<float *>(ptr);
+    ptr += Br * sizeof(float);
+
     
     // Define access macros
-    #define D_sm_AT(y) D_sm[y]
     #define Q_sm_AT(y, x) Q_sm[y * head_dim + x]
     #define K_T_sm_AT(y, x) K_T_sm[y * Bc + x]
     #define V_sm_AT(y, x) V_sm[y * head_dim + x]
     #define dO_sm_AT(y, x) dO_sm[y * head_dim + x]
+    #define dQ_sm_AT(y, x) dQ_sm[y * head_dim + x]
     #define dK_T_sm_AT(y, x) dK_T_sm[y * Bc + x]
     #define dV_sm_AT(y, x) dV_sm[y * head_dim + x]
     #define S_sm_AT(y, x) S_sm[y * Bc + x]
     #define P_sm_AT(y, x) P_sm[y * Bc + x]
     #define L_sm_AT(y) L_sm[y]
-    #define dQ_sm_AT(y, x) dQ_sm[y * head_dim + x]
+    #define D_sm_AT(y) D_sm[y]
 
     /****************************Preparation*****************************/
     
@@ -482,9 +486,9 @@ __global__ void FlashAttentionBackwardKernel(
             if (tid_y < bound_tid_x) {
                 int kv_head_idx = bid_x / p;
                 K_T_sm_AT(idx, tid_y) = float(
-                    key[((((bid_y * src_seq_len) + (Bc * j + tid_y)) * kv_heads + kv_head_idx) * head_dim + idx]);
+                    key[((((bid_y * src_seq_len) + (Bc * j + tid_y)) * kv_heads + kv_head_idx)) * head_dim + idx]);
                 V_sm_AT(tid_y, idx) = float(
-                    value[((((bid_y * src_seq_len) + (Bc * j + tid_y)) * kv_heads + kv_head_idx) * head_dim + idx]);
+                    value[((((bid_y * src_seq_len) + (Bc * j + tid_y)) * kv_heads + kv_head_idx)) * head_dim + idx]);
             }
         }
         __syncthreads();
@@ -593,7 +597,7 @@ __global__ void FlashAttentionBackwardKernel(
                 for (int y = 0; y < Bc; ++y) {
                     val += P_sm_AT(tid_y, y) * dO_sm_AT(tid_y, x);
                 }
-                atomicAdd(&dV_sm_AT(y, x), val);
+                atomicAdd(&dV_sm_AT(tid_y, x), val);
             }
         }
         __syncthreads();
@@ -823,7 +827,7 @@ void LaunchFlashAttentionForward(const std::shared_ptr<Tensor> &output, const st
     // + Q_sm[Br][head_dim] (float) + K_T_sm[head_dim][Bc] (float) + V_sm[Bc][head_dim] (float) + O_sm[Br][head_dim] (float)
     size_t shared_mem_size = Br * Bc * sizeof(double)  // SP
                           + 4 * Br * sizeof(float)     // m_prev, m_new, l_prev, l_new
-                          + (Br + Bc + Bc + Br) * head_dim) * sizeof(float);  // Q_sm, K_T_sm, V_sm, O_sm
+                          + (Br + Bc + Bc + Br) * head_dim * sizeof(float);  // Q_sm, K_T_sm, V_sm, O_sm
     // Note: Removed dropout_sm[Br][Bc] (bool) allocation
 
     auto device = output->GetDevice();
@@ -900,7 +904,7 @@ void LaunchFlashAttentionBackward(const std::shared_ptr<Tensor> &grad_query, con
     // D shape: [batch_size, seq_len_q, num_heads]
     // dO shape: [batch_size, seq_len_q, num_heads, head_dim]
     // O shape: [batch_size, seq_len_q, num_heads, head_dim]
-    auto D = function::Sum(grad_output * output, 3, false);
+    auto D = infini_train::nn::function::Sum(grad_output * output, 3, false);
 
     T *grad_query_ptr = static_cast<T *>(grad_query->DataPtr());
     T *grad_key_ptr = static_cast<T *>(grad_key->DataPtr());
@@ -933,6 +937,7 @@ void LaunchFlashAttentionBackward(const std::shared_ptr<Tensor> &grad_query, con
                            + head_dim * Bc * sizeof(float)    // K_T_sm
                            + Bc * head_dim * sizeof(float)    // V_sm
                            + Br * head_dim * sizeof(float)     // dO_sm
+                           + Br * head_dim * sizeof(float)     // dQ_sm (accumulated gradient for Q)
                            + head_dim * Bc * sizeof(float)    // dK_T_sm
                            + Bc * head_dim * sizeof(float)    // dV_sm
                            + Br * Bc * sizeof(float)          // S_sm or (dP_sm when compute dP_sm = dO_i @ V_j^T \in R^{Br*Bc})
@@ -1029,9 +1034,9 @@ FlashAttentionForwardOutput FlashAttentionForward(const std::shared_ptr<Tensor> 
     return result;
 }
 
-std::vector<std::shared_ptr<Tensor>> FlashAttentionBackward(const std::shared_ptr<Tensor> &grad_query, const std::shared_ptr<Tensor> &grad_key,
-                                                          const std::shared_ptr<Tensor> &grad_value, const std::shared_ptr<Tensor> &query,
-                                                          const std::shared_ptr<Tensor> &key, const std::shared_ptr<Tensor> &value,
+std::vector<std::shared_ptr<Tensor>> FlashAttentionBackward(const std::shared_ptr<Tensor> &query,
+                                                          const std::shared_ptr<Tensor> &key,
+                                                          const std::shared_ptr<Tensor> &value,
                                                           const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &grad_output,
                                                           const std::shared_ptr<Tensor> &logsumexp,
                                                           const std::shared_ptr<Tensor> &dropout_seed,
