@@ -166,6 +166,21 @@ for ((id=0; id<num_builds; ++id)); do
         test_id=$(jq -r ".tests[$ti].id" "$CONFIG_FILE")
         arg_str="$(args_string_for_test "$ti")"
 
+        # Get flash value and set log directories accordingly
+        flash_value=$(jq -r ".tests[$ti].args.flash" "$CONFIG_FILE")
+        if [[ "$flash_value" == "true" ]]; then
+            LOG_DIR="./compare_logs"
+            PROFILE_LOG_DIR="./compare_profile_logs"
+        else
+            LOG_DIR="$(read_var LOG_DIR)"
+            : "${LOG_DIR:=./logs}"
+            PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)"
+            : "${PROFILE_LOG_DIR:=./profile_logs}"
+        fi
+
+        mkdir -p "$LOG_DIR" "$PROFILE_LOG_DIR"
+        export LOG_DIR PROFILE_LOG_DIR
+
         # gpt2
         gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
         run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag"
@@ -188,11 +203,11 @@ if [[ -n "$COMPARE_LOG_DIR" ]]; then
 
     # Run compare_loss.py
     echo -e "\n\033[1;33m[Running] compare_loss.py\033[0m"
-    python3 "${SCRIPT_DIR}/compare_loss.py" "$COMPARE_LOG_DIR" "$LOG_DIR" > compare_test/loss_comparison.log 2>&1 || true
+    python3 "${SCRIPT_DIR}/compare_loss.py" "$COMPARE_LOG_DIR" "$LOG_DIR" > compare_logs/loss_comparison.log 2>&1 || true
 
     # Run compare_tps.py
     echo -e "\n\033[1;33m[Running] compare_tps.py\033[0m"
-    python3 "${SCRIPT_DIR}/compare_tps.py" "$COMPARE_LOG_DIR" "$LOG_DIR" > compare_test/tps_comparison.log 2>&1 || true
+    python3 "${SCRIPT_DIR}/compare_tps.py" "$COMPARE_LOG_DIR" "$LOG_DIR" > compare_logs/tps_comparison.log 2>&1 || true
 
     echo -e "\n\033[1;32mComparison completed.\033[0m"
 else
