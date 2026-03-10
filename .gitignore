@@ -5,3 +5,7 @@ build/
 *.log
 *.report.rank*
 *.records.log.rank*
+
+*.sh
+g*.txt
+l*.txt

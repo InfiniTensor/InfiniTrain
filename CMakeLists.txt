@@ -94,6 +94,14 @@ if(USE_CUDA)
       CUDA::cuda_driver
   )
 
+  # Flash attention kernels require sm_80+ (cp.async, bf16 mma, ldmatrix).
+  # Build as a separate library targeting sm_80 and sm_90 only.
+  file(GLOB FA_KERNELS ${PROJECT_SOURCE_DIR}/my-flash-attention/attention_v6.cu
+                        ${PROJECT_SOURCE_DIR}/my-flash-attention/attention_v6_bp.cu)
+  add_library(infini_train_flash_attention STATIC ${FA_KERNELS})
+  set_target_properties(infini_train_flash_attention PROPERTIES CUDA_ARCHITECTURES "80;90")
+  target_link_libraries(infini_train_flash_attention PUBLIC CUDA::cudart)
+
   if(USE_NCCL)
     message(STATUS "Add USE_NCCL, use NCCL with CUDA")
     list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -121,6 +129,7 @@ if(USE_CUDA)
   target_link_libraries(infini_train
     PUBLIC
       infini_train_cuda_kernels
+      infini_train_flash_attention
       CUDA::cudart
       CUDA::cublas
       CUDA::cuda_driver
@@ -145,6 +154,7 @@ function(link_infini_train_exe target_name)
         infini_train
         infini_train_cpu_kernels
         infini_train_cuda_kernels
+        infini_train_flash_attention
       "-Wl,--no-whole-archive"
       "-Wl,--end-group"
     )
@@ -200,3 +210,6 @@ target_link_libraries(test_hook infini_train)
 
 add_executable(test_precision_check test/hook/test_precision_check.cc)
 target_link_libraries(test_precision_check infini_train)
+
+add_executable(test_flash_attention test/test_flash_attention.cc)
+link_infini_train_exe(test_flash_attention)

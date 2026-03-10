@@ -35,6 +35,13 @@
             }
         },
         {
+            "id": "1_bfloat16_flash",
+            "args": {
+                "dtype": "bfloat16",
+                "flash": true
+            }
+        },
+        {
             "id": "2",
             "args": {
                 "dtype": "float32",
@@ -50,6 +57,16 @@
                 "num_iteration": 10,
                 "batch_size": 80,
                 "total_batch_size": 5120
+            }
+        },
+        {
+            "id": "2_bfloat16_flash",
+            "args": {
+                "dtype": "bfloat16",
+                "num_iteration": 10,
+                "batch_size": 80,
+                "total_batch_size": 5120,
+                "flash": true
             }
         },
         {

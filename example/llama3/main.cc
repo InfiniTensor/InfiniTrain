@@ -70,6 +70,8 @@ DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
+// flash attention
+DEFINE_bool(flash, false, "Use FlashAttention for self-attention");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 // precision check
@@ -161,9 +163,10 @@ void Train(const nn::parallel::Rank &rank) {
     // ManualSeed(42);
 
     LLaMA3Config model_config = LLaMA3Config();
+    model_config.flash = FLAGS_flash;
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
+        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath, FLAGS_flash);
     } else {
         model = std::make_shared<LLaMA3>(model_config);
     }
@@ -173,6 +176,10 @@ void Train(const nn::parallel::Rank &rank) {
     utils::PrecisionChecker::BuildNameMap(model.get());
 
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": Model loaded to device.";
+
+    if (FLAGS_flash && FLAGS_dtype != kDtypeBF16) {
+        LOG(FATAL) << "--flash=true requires --dtype=bfloat16 (FlashAttention only supports bfloat16)";
+    }
 
     DataType dtype;
     if (FLAGS_dtype == kDtypeFP32) {
