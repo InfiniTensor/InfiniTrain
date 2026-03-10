@@ -6,8 +6,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/tensor.h"
-// TODO: Include flash attention kernel header when ready
-// #include "infini_train/include/kernels/cuda/flash_attention.h"
+#include "infini_train/src/kernels/cuda/flash_attention.h"
 
 namespace infini_train::autograd {
 
@@ -32,11 +31,21 @@ ScaledDotProductAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &i
         softmax_scale = 1.0 / std::sqrt(static_cast<double>(q->Dims().back()));
     }
 
-    // TODO: Call FlashAttention Forward Kernel
-    LOG(INFO) << "FlashAttention Forward called (Placeholder). q shape: " << q->Dims()[0] << ", " << q->Dims()[1];
-    
-    // Placeholder output: same shape as q
+    // Prepare outputs
     auto output = std::make_shared<Tensor>(q->Dims(), q->GetDType(), q->GetDevice());
+    
+    // Prepare softmax_lse tensor for backward: (B, H, T) - assuming H is dim 2, T is dim 1
+    // q shape: (B, T, H, D)
+    int64_t B = q->Dims()[0];
+    int64_t T = q->Dims()[1];
+    int64_t H = q->Dims()[2];
+    // LSE buffer needs to be float32 even for fp16 inputs
+    auto softmax_lse = std::make_shared<Tensor>(std::vector<int64_t>{B, H, T}, DataType::kFLOAT32, q->GetDevice());
+
+    // Call FlashAttention Forward Kernel
+    // LOG(INFO) << "Calling FlashAttention Kernel...";
+    kernels::cuda::FlashAttentionForward(*q, *k, *v, *output, *softmax_lse, 
+                                         dropout_p_, softmax_scale, is_causal_, q->GetDevice());
     
     // Setup context will be called by Function::Apply
     
