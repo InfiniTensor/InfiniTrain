@@ -26,7 +26,7 @@ public:
     virtual float GetLearningRate() const;
 
     float GetInitialLearningRate() const;
-    
+
     void SetInitialLearningRate(float lr);
 
 protected:
@@ -48,7 +48,6 @@ public:
             return std::make_shared<SGD>(params, learning_rate);
         };
     }
-
 };
 
 class Adam : public Optimizer {

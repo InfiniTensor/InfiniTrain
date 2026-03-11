@@ -17,9 +17,7 @@ std::shared_ptr<infini_train::Optimizer> MakeDummyOptimizer(float lr) {
     return std::make_shared<infini_train::optimizers::SGD>(empty_params, lr);
 }
 
-bool FloatNear(float a, float b, float eps = kEps) {
-    return std::fabs(a - b) < eps;
-}
+bool FloatNear(float a, float b, float eps = kEps) { return std::fabs(a - b) < eps; }
 
 int g_fail_count = 0;
 
@@ -31,9 +29,7 @@ void Check(bool cond, const char *expr, int line) {
 }
 
 #define ASSERT_TRUE(cond) Check((cond), #cond, __LINE__)
-#define ASSERT_FLOAT_EQ(a, b) \
-    Check(FloatNear((a), (b)), #a " == " #b, __LINE__)
-#define ASSERT_FLOAT_NEAR(a, b, eps) \
-    Check(FloatNear((a), (b), (eps)), #a " ≈ " #b, __LINE__)
+#define ASSERT_FLOAT_EQ(a, b) Check(FloatNear((a), (b)), #a " == " #b, __LINE__)
+#define ASSERT_FLOAT_NEAR(a, b, eps) Check(FloatNear((a), (b), (eps)), #a " ≈ " #b, __LINE__)
 
-}  // namespace
+} // namespace
