@@ -334,10 +334,10 @@ void Train(const nn::parallel::Rank &rank) {
     sched_config.step_gamma = static_cast<float>(FLAGS_gamma);
     sched_config.linear_start_factor = static_cast<float>(FLAGS_start_factor);
     sched_config.linear_end_factor = static_cast<float>(FLAGS_end_factor);
-    sched_config.constant_factor = static_cast<float>(FLAGS_start_factor);  // 复用
+    sched_config.constant_factor = static_cast<float>(FLAGS_start_factor); // 复用
     sched_config.constant_total_iters = FLAGS_lr_total_iters;
     sched_config.linear_total_iters = FLAGS_lr_total_iters;
-    auto scheduler = CreateLRScheduler(optimizer,sched_config);
+    auto scheduler = CreateLRScheduler(optimizer, sched_config);
 
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
@@ -507,8 +507,8 @@ void Train(const nn::parallel::Rank &rank) {
             std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
                                       "peak used: {:5d} MB | peak reserved: {:5d} MB, DP={}, TP={}, SP={}, PP={})",
-                                      step + 1, FLAGS_num_iteration, lossf, current_lr, duration_us / 1e3f,
-                                      tps, used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size,
+                                      step + 1, FLAGS_num_iteration, lossf, current_lr, duration_us / 1e3f, tps,
+                                      used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size,
                                       pp_world_size);
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
