@@ -25,23 +25,23 @@ void TestLinearThenConstant() {
     };
     auto constant = CreateLRScheduler(opt, constant_config);
     auto sched = CreateLRScheduler(opt, {
-        .type = "sequential",
-        .sequential_configs = {linear_config, constant_config},
-        .sequential_milestones = {3},
-    });
- 
+                                            .type = "sequential",
+                                            .sequential_configs = {linear_config, constant_config},
+                                            .sequential_milestones = {3},
+                                        });
+
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.0f, kEps);
 
-    sched->Step();  // global=1, warmup step=1, lr=0.1*(1/3)
+    sched->Step(); // global=1, warmup step=1, lr=0.1*(1/3)
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.1f / 3.0f, 1e-5f);
 
-    sched->Step();  // global=2, warmup step=2, lr=0.1*(2/3)
+    sched->Step(); // global=2, warmup step=2, lr=0.1*(2/3)
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.2f / 3.0f, 1e-5f);
 
-    sched->Step();  // global=3, constant step=0, lr=0.1*1.0=0.1
+    sched->Step(); // global=3, constant step=0, lr=0.1*1.0=0.1
     ASSERT_FLOAT_NEAR(sched->GetLR(), kBaseLR, kEps);
 
-    sched->Step();  // global=4, constant step=1, lr=0.1
+    sched->Step(); // global=4, constant step=1, lr=0.1
     ASSERT_FLOAT_NEAR(sched->GetLR(), kBaseLR, kEps);
 }
 
@@ -64,24 +64,24 @@ void TestLinearThenStepLR() {
     auto step_lr = CreateLRScheduler(opt, step_config);
 
     auto sched = CreateLRScheduler(opt, {
-        .type = "sequential",
-        .sequential_configs = {linear_config, step_config},
-        .sequential_milestones = {3},
-    });
+                                            .type = "sequential",
+                                            .sequential_configs = {linear_config, step_config},
+                                            .sequential_milestones = {3},
+                                        });
 
-    sched->Step();  // global=1
-    sched->Step();  // global=2
+    sched->Step(); // global=1
+    sched->Step(); // global=2
 
-    sched->Step();  // global=3, StepLR step=0, lr=0.1
+    sched->Step(); // global=3, StepLR step=0, lr=0.1
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.1f, kEps);
 
-    sched->Step();  // global=4, StepLR step=1
-    sched->Step();  // global=5, StepLR step=2
-    sched->Step();  // global=6, StepLR step=3, 3//3=1, lr=0.1*0.5=0.05
+    sched->Step(); // global=4, StepLR step=1
+    sched->Step(); // global=5, StepLR step=2
+    sched->Step(); // global=6, StepLR step=3, 3//3=1, lr=0.1*0.5=0.05
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.05f, kEps);
 }
 
-void TestLinearThenStepThenConstant(){
+void TestLinearThenStepThenConstant() {
     std::cout << "[TC3] TestLinearThenStepThenConstant" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
 
@@ -106,12 +106,11 @@ void TestLinearThenStepThenConstant(){
     auto constant = CreateLRScheduler(opt, constant_config);
 
     auto sched = CreateLRScheduler(opt, {
-        .type = "sequential",
-        .sequential_configs = {linear_config, step_config, constant_config},
-        .sequential_milestones = {3, 6},
-    });
-    const std::vector<float> expected = {
-        0.033333f, 0.066667f, 0.1f, 0.1f, 0.1f, 0.05f, 0.05f, 0.1f, 0.1f, 0.1f};
+                                            .type = "sequential",
+                                            .sequential_configs = {linear_config, step_config, constant_config},
+                                            .sequential_milestones = {3, 6},
+                                        });
+    const std::vector<float> expected = {0.033333f, 0.066667f, 0.1f, 0.1f, 0.1f, 0.05f, 0.05f, 0.1f, 0.1f, 0.1f};
     for (size_t i = 0; i < expected.size(); ++i) {
         sched->Step();
         ASSERT_FLOAT_NEAR(sched->GetLR(), expected[i], 1e-5f);
@@ -135,11 +134,11 @@ void TestStateRoundTrip() {
     };
     auto step_lr = CreateLRScheduler(opt, step_config);
     auto sched = CreateLRScheduler(opt, {
-        .type = "sequential",
-        .sequential_configs = {linear_config, step_config},
-        .sequential_milestones = {3},
-    });
-    for (int i = 0; i < 5; ++i) sched->Step();
+                                            .type = "sequential",
+                                            .sequential_configs = {linear_config, step_config},
+                                            .sequential_milestones = {3},
+                                        });
+    for (int i = 0; i < 5; ++i) { sched->Step(); }
     StateDict saved = sched->State();
 
     auto opt2 = MakeDummyOptimizer(kBaseLR);
@@ -157,10 +156,10 @@ void TestStateRoundTrip() {
     };
     auto step_lr2 = CreateLRScheduler(opt2, step_config2);
     auto sched2 = CreateLRScheduler(opt2, {
-        .type = "sequential",
-        .sequential_configs = {linear_config2, step_config2},
-        .sequential_milestones = {3},
-    });
+                                              .type = "sequential",
+                                              .sequential_configs = {linear_config2, step_config2},
+                                              .sequential_milestones = {3},
+                                          });
     sched2->LoadState(saved);
 
     ASSERT_TRUE(sched2->LastStep() == sched->LastStep());
@@ -173,33 +172,34 @@ void TestResumeConsistency() {
 
     auto make_sched = [](std::shared_ptr<Optimizer> opt) {
         return CreateLRScheduler(opt, {
-            .type = "sequential",
-            .sequential_configs = {{
-                .type = "linear",
-                .linear_start_factor = 1e-8f,
-                .linear_end_factor = 1.0f,
-                .linear_total_iters = 3,
-            }, { 
-                .type = "step",
-                .step_size = 3,
-                .step_gamma = 0.5f,
-            }},
-            .sequential_milestones = {3},
-        });
+                                          .type = "sequential",
+                                          .sequential_configs = {{
+                                                                     .type = "linear",
+                                                                     .linear_start_factor = 1e-8f,
+                                                                     .linear_end_factor = 1.0f,
+                                                                     .linear_total_iters = 3,
+                                                                 },
+                                                                 {
+                                                                     .type = "step",
+                                                                     .step_size = 3,
+                                                                     .step_gamma = 0.5f,
+                                                                 }},
+                                          .sequential_milestones = {3},
+                                      });
     };
     auto opt_ref = MakeDummyOptimizer(kBaseLR);
     auto sched_ref = make_sched(opt_ref);
-    for (int i = 0; i < kN; ++i) sched_ref->Step();
+    for (int i = 0; i < kN; ++i) { sched_ref->Step(); }
 
     auto opt_a = MakeDummyOptimizer(kBaseLR);
     auto sched_a = make_sched(opt_a);
-    for (int i = 0; i < kK; ++i) sched_a->Step();
+    for (int i = 0; i < kK; ++i) { sched_a->Step(); }
     StateDict ckpt = sched_a->State();
 
     auto opt_b = MakeDummyOptimizer(kBaseLR);
     auto sched_b = make_sched(opt_b);
     sched_b->LoadState(ckpt);
-    for (int i = 0; i < kN - kK; ++i) sched_b->Step();
+    for (int i = 0; i < kN - kK; ++i) { sched_b->Step(); }
 
     ASSERT_FLOAT_NEAR(sched_b->GetLR(), sched_ref->GetLR(), kEps);
     ASSERT_TRUE(sched_b->LastStep() == sched_ref->LastStep());

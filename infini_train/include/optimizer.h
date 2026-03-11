@@ -50,7 +50,6 @@ public:
     void Step() override;
 
     static OptimizerCreator Create(float learning_rate);
-
 };
 
 class Adam : public Optimizer {
