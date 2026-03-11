@@ -1,4 +1,4 @@
-#include "infini_train/src/core/cpu/cpu_guard_impl.h"
+#include "infini_train/src/core/runtime/cpu/cpu_guard_impl.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -7,7 +7,7 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 
 namespace infini_train::core::cpu {
 
@@ -31,6 +31,71 @@ Stream *CpuGuardImpl::GetStream(Device device) const {
     LOG(WARNING) << "CpuGuardImpl::GetStream is not supported. "
                     "Return nullptr.";
     return nullptr;
+}
+
+Stream *CpuGuardImpl::CreateStream(Device device) const {
+    CHECK(device.type() == Device::DeviceType::kCPU);
+    LOG(WARNING) << "CpuGuardImpl::CreateStream is not supported. "
+                    "Return nullptr.";
+    return nullptr;
+}
+
+Stream *CpuGuardImpl::CreateStreamWithPriority(Device device, int priority) const {
+    CHECK(device.type() == Device::DeviceType::kCPU);
+    LOG(WARNING) << "CpuGuardImpl::CreateStreamWithPriority is not supported. "
+                    "Return nullptr.";
+    return nullptr;
+}
+
+void CpuGuardImpl::DestroyStream(Stream *stream) const {
+    LOG(WARNING) << "CpuGuardImpl::DestroyStream is not supported. "
+                    "The call is ignored.";
+}
+
+void CpuGuardImpl::GetStreamPriorityRange(int *low, int *high) const {
+    *low = 0;
+    *high = 0;
+    LOG(WARNING) << "CpuGuardImpl::GetStreamPriorityRange is not supported. "
+                    "Return range [0, 0].";
+}
+
+void CpuGuardImpl::EventCreate(Event **event) const {
+    CHECK_NOTNULL(event);
+    LOG(WARNING) << "CpuGuardImpl::EventCreate is not supported. Returning nullptr event.";
+    *event = nullptr;
+}
+
+void CpuGuardImpl::EventCreateWithFlags(Event **event, EventFlag flags) const {
+    CHECK_NOTNULL(event);
+    LOG(WARNING) << "CpuGuardImpl::EventCreateWithFlags is not supported. Returning nullptr event.";
+    *event = nullptr;
+}
+
+void CpuGuardImpl::EventDestroy(Event *event) const {
+    LOG(WARNING) << "CpuGuardImpl::EventDestroy is not supported. The call is ignored.";
+}
+
+void CpuGuardImpl::EventRecord(Event *event, Stream *stream) const {
+    LOG(WARNING) << "CpuGuardImpl::EventRecord is not supported. The call is ignored.";
+}
+
+void CpuGuardImpl::StreamWaitEvent(Stream *stream, Event *event, uint32_t flags) const {
+    LOG(WARNING) << "CpuGuardImpl::StreamWaitEvent is not supported. The call is ignored.";
+}
+
+RuntimeStatus CpuGuardImpl::EventSynchronize(Event *event) const {
+    LOG(WARNING) << "CpuGuardImpl::EventSynchronize is not supported. Returning kError.";
+    return RuntimeStatus::kError;
+}
+
+RuntimeStatus CpuGuardImpl::EventQuery(Event *event) const {
+    LOG(WARNING) << "CpuGuardImpl::EventQuery is not supported. Returning kError.";
+    return RuntimeStatus::kError;
+}
+
+float CpuGuardImpl::EventElapsedTime(Event *start_event, Event *stop_event) const {
+    LOG(WARNING) << "CpuGuardImpl::EventElapsedTime is not supported. Returning 0.";
+    return 0.0f;
 }
 
 void CpuGuardImpl::SynchronizeDevice(Device device) const {

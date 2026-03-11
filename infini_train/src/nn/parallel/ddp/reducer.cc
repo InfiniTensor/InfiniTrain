@@ -8,7 +8,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/function_hook.h"
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
