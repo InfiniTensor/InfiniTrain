@@ -303,3 +303,6 @@ else
     echo -e "\033[1;33m         or export COMPARE_LOG_DIR=/path/to/baseline_logs before running.\033[0m"
     echo -e "\033[1;33m============================================================\033[0m"
 fi
+
+echo -e "\n\033[1;36m[END OF TEST] Cleaning build directory after all tests\033[0m"
+clean_build_dir
