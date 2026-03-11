@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -13,12 +13,11 @@ namespace infini_train {
 
 class Optimizer;
 
-using StateValue = std::variant<int64_t, float, double, std::string,
-                                std::vector<float>>;
+using StateValue = std::variant<int64_t, float, double, std::string, std::vector<float>>;
 using StateDict = std::unordered_map<std::string, StateValue>;
 
 struct LRSchedulerConfig {
-    std::string type  = "none";
+    std::string type = "none";
     // ConstantLR
     float constant_factor = 1.0f / 3.0f;
     int constant_total_iters = 5;
@@ -44,15 +43,13 @@ struct LRSchedulerConfig {
 
 class LRScheduler {
 public:
-    template<typename T, typename... Args>
-    static std::shared_ptr<T> Create(Args&&... args) {
+    template <typename T, typename... Args> static std::shared_ptr<T> Create(Args &&...args) {
         auto scheduler = std::make_shared<T>(std::forward<Args>(args)...);
         scheduler->InitialStep();
         return scheduler;
     }
 
-    explicit LRScheduler(std::shared_ptr<Optimizer> optimizer,
-                         int64_t last_step = -1);
+    explicit LRScheduler(std::shared_ptr<Optimizer> optimizer, int64_t last_step = -1);
     virtual ~LRScheduler() = default;
 
     LRScheduler(const LRScheduler &) = delete;
@@ -82,17 +79,13 @@ protected:
     bool is_initial_ = false;
 };
 
-std::shared_ptr<LRScheduler> CreateLRScheduler(
-    std::shared_ptr<Optimizer> optimizer,
-    const LRSchedulerConfig& config);
+std::shared_ptr<LRScheduler> CreateLRScheduler(std::shared_ptr<Optimizer> optimizer, const LRSchedulerConfig &config);
 
 namespace lr_schedulers {
 
 class ConstantLR : public LRScheduler {
 public:
-    ConstantLR(std::shared_ptr<Optimizer> optimizer, 
-               float factor = 1.0f / 3.0f, 
-               int total_iters = 5, 
+    ConstantLR(std::shared_ptr<Optimizer> optimizer, float factor = 1.0f / 3.0f, int total_iters = 5,
                int64_t last_step = -1);
     ~ConstantLR() override = default;
 
@@ -107,10 +100,7 @@ private:
 
 class StepLR : public LRScheduler {
 public:
-    StepLR(std::shared_ptr<Optimizer> optimizer, 
-           int64_t step_size, 
-           float gamma = 0.1f, 
-           int64_t last_step = -1);
+    StepLR(std::shared_ptr<Optimizer> optimizer, int64_t step_size, float gamma = 0.1f, int64_t last_step = -1);
     ~StepLR() override = default;
 
 protected:
@@ -124,11 +114,8 @@ private:
 
 class LinearLR : public LRScheduler {
 public:
-    LinearLR(std::shared_ptr<Optimizer> optimizer,
-             float start_factor = 1.0f / 3.0f,
-             float end_factor = 1.0f,
-             int64_t total_iters = 5,
-             int64_t last_step = -1);
+    LinearLR(std::shared_ptr<Optimizer> optimizer, float start_factor = 1.0f / 3.0f, float end_factor = 1.0f,
+             int64_t total_iters = 5, int64_t last_step = -1);
     ~LinearLR() override = default;
 
 protected:
@@ -145,9 +132,7 @@ class LambdaLR : public LRScheduler {
 public:
     using LambdaFunc = std::function<float(int64_t)>;
 
-    LambdaLR(std::shared_ptr<Optimizer> optimizer, 
-                LambdaFunc lr_lambda, 
-                int64_t last_step = -1);
+    LambdaLR(std::shared_ptr<Optimizer> optimizer, LambdaFunc lr_lambda, int64_t last_step = -1);
     ~LambdaLR() override = default;
 
 protected:
@@ -157,13 +142,10 @@ private:
     const LambdaFunc lr_lambda_;
 };
 
-
 class SequentialLR : public LRScheduler {
 public:
-    SequentialLR(std::shared_ptr<Optimizer> optimizer, 
-                 std::vector<std::shared_ptr<LRScheduler>> schedulers,
-                 std::vector<int64_t> milestones, 
-                 int64_t last_step = -1);
+    SequentialLR(std::shared_ptr<Optimizer> optimizer, std::vector<std::shared_ptr<LRScheduler>> schedulers,
+                 std::vector<int64_t> milestones, int64_t last_step = -1);
     ~SequentialLR() override = default;
 
     void Step() override;
@@ -183,8 +165,7 @@ private:
 
 class ChainedScheduler : public LRScheduler {
 public:
-    ChainedScheduler(std::shared_ptr<Optimizer> optimizer,
-                     std::vector<std::shared_ptr<LRScheduler>> schedulers,
+    ChainedScheduler(std::shared_ptr<Optimizer> optimizer, std::vector<std::shared_ptr<LRScheduler>> schedulers,
                      int64_t last_step = -1);
     ~ChainedScheduler() override = default;
 
@@ -192,7 +173,7 @@ public:
     void InitialStep() override;
 
     StateDict State() const override;
-    void LoadState(const StateDict& state) override;
+    void LoadState(const StateDict &state) override;
 
 protected:
     float GetClosedFormLR() const override { return current_lr_; }
@@ -201,6 +182,5 @@ private:
     std::vector<std::shared_ptr<LRScheduler>> schedulers_;
 };
 
-
-}  // namespace lr_schedulers
-}  // namespace infini_train
+} // namespace lr_schedulers
+} // namespace infini_train

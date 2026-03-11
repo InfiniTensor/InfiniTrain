@@ -27,18 +27,15 @@ protected:
 
 class LinearDecayScheduler : public LRScheduler {
 public:
-    LinearDecayScheduler(std::shared_ptr<Optimizer> optimizer,
-                         int64_t total_steps, int64_t last_step = -1)
-        : LRScheduler(std::move(optimizer), last_step),
-          total_steps_(total_steps) {}
+    LinearDecayScheduler(std::shared_ptr<Optimizer> optimizer, int64_t total_steps, int64_t last_step = -1)
+        : LRScheduler(std::move(optimizer), last_step), total_steps_(total_steps) {}
 
 protected:
     float GetClosedFormLR() const override {
         if (last_step_ >= total_steps_) {
             return 0.0f;
         }
-        return base_lr_ * (1.0f - static_cast<float>(last_step_) /
-                                  static_cast<float>(total_steps_));
+        return base_lr_ * (1.0f - static_cast<float>(last_step_) / static_cast<float>(total_steps_));
     }
 
 private:
@@ -62,9 +59,7 @@ void Check(bool cond, const char *expr, int line) {
 }
 
 #define ASSERT_TRUE(cond) Check((cond), #cond, __LINE__)
-#define ASSERT_FLOAT_EQ(a, b) \
-    Check(FloatEq((a), (b)), #a " == " #b, __LINE__)
-
+#define ASSERT_FLOAT_EQ(a, b) Check(FloatEq((a), (b)), #a " == " #b, __LINE__)
 
 // T1: Init
 void TestInitialState() {
@@ -99,11 +94,11 @@ void TestLinearDecay() {
     ASSERT_FLOAT_EQ(sched->GetLR(), kBaseLR);
     ASSERT_FLOAT_EQ(opt->GetLearningRate(), kBaseLR);
 
-    sched->Step();  // last_step = 1 -> 0.09
+    sched->Step(); // last_step = 1 -> 0.09
     ASSERT_FLOAT_EQ(sched->GetLR(), 0.09f);
     ASSERT_FLOAT_EQ(opt->GetLearningRate(), 0.09f);
 
-    for (int i = 0; i < 4; ++i) { sched->Step(); }  // last_step = 5
+    for (int i = 0; i < 4; ++i) { sched->Step(); } // last_step = 5
     ASSERT_FLOAT_EQ(sched->GetLR(), 0.05f);
     ASSERT_FLOAT_EQ(opt->GetLearningRate(), 0.05f);
 }
@@ -156,7 +151,7 @@ void TestResumeAndContinue() {
     ASSERT_TRUE(sched_b->LastStep() == sched_ref->LastStep());
 }
 
-}  // namespace
+} // namespace
 
 int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
