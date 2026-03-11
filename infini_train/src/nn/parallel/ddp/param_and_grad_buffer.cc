@@ -224,7 +224,8 @@ void ParamAndGradBucketGroup::AccumulateParamGrad(const std::shared_ptr<Tensor> 
     if (overwrite) {
         bucket_grad_view->CopyFrom(*grad);
     } else {
-        auto kernel = Dispatcher::Instance().GetKernel({parameter->GetDevice()->Type(), "AccumulateGrad"});
+        auto device = parameter->GetDevice();
+        auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
         kernel.Call<void>(grad, learning_rate, bucket_grad_view);
     }
 }
