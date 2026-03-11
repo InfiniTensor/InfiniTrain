@@ -5,9 +5,10 @@ set -o pipefail
 
 usage() {
     cat <<'EOF'
-Usage: run_models_and_profile.bash [config_file] [--only-run tag1,tag2]
+Usage: run_models_and_profile.bash [--test-config path] [--only-run tag1,tag2]
 
 Options:
+  --test-config PATH  Path to test config JSON. Default: test_config.json.
   --only-run TAGS   Only run the specified tag groups, separated by commas.
   -h, --help        Show this help message.
 EOF
@@ -15,10 +16,18 @@ EOF
 
 CONFIG_FILE="test_config.json"
 ONLY_RUN_TAGS=""
-CONFIG_FILE_SET="no"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --test-config)
+            [[ $# -lt 2 ]] && { echo "Error: --test-config requires a file path."; exit 1; }
+            CONFIG_FILE="$2"
+            shift 2
+            ;;
+        --test-config=*)
+            CONFIG_FILE="${1#*=}"
+            shift
+            ;;
         --only-run)
             [[ $# -lt 2 ]] && { echo "Error: --only-run requires a comma-separated tag list."; exit 1; }
             ONLY_RUN_TAGS="$2"
@@ -38,14 +47,9 @@ while [[ $# -gt 0 ]]; do
             exit 1
             ;;
         *)
-            if [[ "$CONFIG_FILE_SET" == "yes" ]]; then
-                echo "Error: Multiple config files provided."
-                usage
-                exit 1
-            fi
-            CONFIG_FILE="$1"
-            CONFIG_FILE_SET="yes"
-            shift
+            echo "Error: Unknown positional argument: $1"
+            usage
+            exit 1
             ;;
     esac
 done
