@@ -10,6 +10,24 @@ import sys
 from pathlib import Path
 from argparse import ArgumentParser
 
+
+def collect_log_files(base_dir):
+    """Collect comparable training logs keyed by basename."""
+    files = {}
+    duplicates = {}
+
+    for path in base_dir.rglob('*.log'):
+        if path.name.startswith('build') or path.name.endswith('_profile.log'):
+            continue
+
+        key = path.name
+        if key in files:
+            duplicates.setdefault(key, [files[key]]).append(path)
+            continue
+        files[key] = path
+
+    return files, duplicates
+
 def get_dtype_from_filename(filename):
     """Determine dtype from filename. Returns 'bfloat16' or 'fp32'."""
     return 'bfloat16' if '_bfloat16' in filename else 'fp32'
@@ -62,8 +80,20 @@ def main():
         args.threshold_fp32 = args.threshold
         args.threshold_bf16 = args.threshold
 
-    files1 = {f.name: f for f in args.dir1.glob('*.log') if not f.name.startswith('build')}
-    files2 = {f.name: f for f in args.dir2.glob('*.log') if not f.name.startswith('build')}
+    files1, duplicates1 = collect_log_files(args.dir1)
+    files2, duplicates2 = collect_log_files(args.dir2)
+
+    if duplicates1:
+        print(f"Found duplicate log basenames in {args.dir1.resolve()}, cannot compare safely:")
+        for name, paths in sorted(duplicates1.items()):
+            print(f"  {name}: {', '.join(str(p.relative_to(args.dir1)) for p in paths)}")
+        sys.exit(1)
+
+    if duplicates2:
+        print(f"Found duplicate log basenames in {args.dir2.resolve()}, cannot compare safely:")
+        for name, paths in sorted(duplicates2.items()):
+            print(f"  {name}: {', '.join(str(p.relative_to(args.dir2)) for p in paths)}")
+        sys.exit(1)
 
     only_in_1 = set(files1.keys()) - set(files2.keys())
     only_in_2 = set(files2.keys()) - set(files1.keys())
