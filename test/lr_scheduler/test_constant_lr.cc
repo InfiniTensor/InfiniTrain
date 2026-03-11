@@ -6,8 +6,7 @@ using namespace infini_train::lr_schedulers;
 
 namespace {
 constexpr float kBaseLR = 0.1f;
-} // namespace 
-
+} // namespace
 
 void TestInitialState() {
     auto opt = MakeDummyOptimizer(kBaseLR);
@@ -29,9 +28,9 @@ void TestFirstStepAppliesFactor() {
         .constant_factor = 0.5f,
         .constant_total_iters = 3,
     };
-    
+
     auto sched = CreateLRScheduler(opt, config);
-    sched->Step();  // last_step_ = 0
+    sched->Step(); // last_step_ = 0
     ASSERT_FLOAT_EQ(sched->GetLR(), 0.05f);
     ASSERT_FLOAT_EQ(opt->GetLearningRate(), 0.05f);
     ASSERT_TRUE(sched->LastStep() == 1);
@@ -45,7 +44,7 @@ void TestWithinTotalIters() {
         .constant_total_iters = 3,
     };
     auto sched = CreateLRScheduler(opt, config);
-    for (int i = 0; i < 2; ++i) sched->Step();
+    for (int i = 0; i < 2; ++i) { sched->Step(); }
     // last_step_ = 2, still < 3
     ASSERT_FLOAT_EQ(sched->GetLR(), 0.05f);
 }
@@ -58,7 +57,7 @@ void TestBeyondTotalIters() {
         .constant_total_iters = 3,
     };
     auto sched = CreateLRScheduler(opt, config);
-    for (int i = 0; i < 10; ++i) sched->Step();
+    for (int i = 0; i < 10; ++i) { sched->Step(); }
     ASSERT_FLOAT_EQ(sched->GetLR(), kBaseLR);
     ASSERT_FLOAT_EQ(opt->GetLearningRate(), kBaseLR);
 }
@@ -86,7 +85,7 @@ void TestStateRoundTrip() {
         .constant_total_iters = 5,
     };
     auto sched = CreateLRScheduler(opt, config);
-    for (int i = 0; i < 3; ++i) sched->Step();
+    for (int i = 0; i < 3; ++i) { sched->Step(); }
     StateDict saved = sched->State();
 
     auto opt2 = MakeDummyOptimizer(kBaseLR);
@@ -114,7 +113,7 @@ void TestResumeConsistency() {
         .constant_total_iters = 5,
     };
     auto sched_ref = CreateLRScheduler(opt_ref, config_ref);
-    for (int i = 0; i < kN; ++i) sched_ref->Step();
+    for (int i = 0; i < kN; ++i) { sched_ref->Step(); }
 
     auto opt_a = MakeDummyOptimizer(kBaseLR);
     LRSchedulerConfig config_a = {
@@ -123,7 +122,7 @@ void TestResumeConsistency() {
         .constant_total_iters = 5,
     };
     auto sched_a = CreateLRScheduler(opt_a, config_a);
-    for (int i = 0; i < kK; ++i) sched_a->Step();
+    for (int i = 0; i < kK; ++i) { sched_a->Step(); }
     StateDict ckpt = sched_a->State();
 
     auto opt_b = MakeDummyOptimizer(kBaseLR);
@@ -134,7 +133,7 @@ void TestResumeConsistency() {
     };
     auto sched_b = CreateLRScheduler(opt_b, config_b);
     sched_b->LoadState(ckpt);
-    for (int i = 0; i < kN - kK; ++i) sched_b->Step();
+    for (int i = 0; i < kN - kK; ++i) { sched_b->Step(); }
 
     ASSERT_FLOAT_EQ(sched_b->GetLR(), sched_ref->GetLR());
     ASSERT_TRUE(sched_b->LastStep() == sched_ref->LastStep());
