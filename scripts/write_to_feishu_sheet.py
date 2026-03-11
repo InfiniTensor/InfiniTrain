@@ -2,6 +2,7 @@ import requests
 import json
 import time
 import os
+import sys
 import argparse
 import glob
 import re
@@ -14,6 +15,10 @@ META_COLS=7
 HEADER_ROWS=5
 HEADER_COLS="W"
 
+# Retry settings
+REQUEST_RETRY_TIMES=3
+REQUEST_RETRY_DELAY=10
+
 class FeishuSheetHandler:
     """Feishu Sheet Handler for retrieving and writing sheet data"""
 
@@ -25,13 +30,36 @@ class FeishuSheetHandler:
         self.token_expire_time = 0
         self.get_access_token()
 
+    def _request_with_timeout_retry(self, request_func, request_name):
+        """Retry request when ReadTimeout happens."""
+        for attempt in range(REQUEST_RETRY_TIMES):
+            try:
+                return request_func()
+            except requests.exceptions.ReadTimeout:
+                if attempt == REQUEST_RETRY_TIMES - 1:
+                    print(
+                        f"FATAL: HTTP timeout after {REQUEST_RETRY_TIMES} attempts while handling "
+                        f"{request_name}. Please manually revert the Feishu sheet to a previous version."
+                    )
+                    sys.exit(1)
+                print(
+                    f"{request_name} timed out on attempt "
+                    f"{attempt + 1}/{REQUEST_RETRY_TIMES}, retry after {REQUEST_RETRY_DELAY}s"
+                )
+                time.sleep(REQUEST_RETRY_DELAY)
+
     def get_access_token(self):
         """Get and cache tenant_access_token"""
         if self.access_token and time.time() < self.token_expire_time:
             return self.access_token
 
         url = f"{self.base_url}/auth/v3/tenant_access_token/internal"
-        resp = requests.post(url, json={"app_id": self.app_id, "app_secret": self.app_secret}, timeout=10)
+        resp = self._request_with_timeout_retry(
+            lambda: requests.post(url, json={"app_id": self.app_id, "app_secret": self.app_secret}, timeout=10),
+            "Get access token"
+        )
+        if resp is None:
+            return None
         if resp.status_code != 200:
             print("Failed to get token: HTTP error", resp.status_code)
             return None
@@ -57,7 +85,12 @@ class FeishuSheetHandler:
         }
 
         url = f"{self.base_url}{endpoint}"
-        resp = requests.request(method, url, headers=headers, timeout=15, **kwargs)
+        resp = self._request_with_timeout_retry(
+            lambda: requests.request(method, url, headers=headers, timeout=15, **kwargs),
+            f"{method} {endpoint}"
+        )
+        if resp is None:
+            return None
 
         if resp.status_code != 200:
             print(f"Request failed: HTTP {resp.status_code}")
