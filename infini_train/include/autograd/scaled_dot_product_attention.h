@@ -36,6 +36,9 @@ private:
     // We need to save q, k, v, and potentially other metadata
     // Using saved_tensors_ from base class for tensors
     // Additional non-tensor metadata can be stored here if needed
+    
+    // Temporary storage for LSE computed in Forward, to be saved in SetupContext
+    std::shared_ptr<Tensor> softmax_lse_;
 };
 
 } // namespace infini_train::autograd

@@ -186,6 +186,9 @@ void Train(const nn::parallel::Rank &rank) {
     } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
         model_config.use_flash_attn = FLAGS_flash;
+        if (FLAGS_sequence_length > model_config.block_size) {
+             model_config.block_size = FLAGS_sequence_length;
+        }
         model = std::make_shared<GPT2>(model_config);
     } else {
         model = GPT2::FromPretrained(kStrToModelType.at(FLAGS_model));

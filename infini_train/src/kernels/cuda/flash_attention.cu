@@ -23,80 +23,135 @@ constexpr int Bc = 32; // Block size for columns (K, V)
 constexpr int D_static = 64; // Head dimension (typical for GPT-2 small / Llama-3 small)
 constexpr int D_max = 256;
 
-// Helper for loading from HBM to Shared Memory
-__device__ void load_block(const float* src, float* dst, int rows, int cols, int stride, int tid, int total_threads) {
-    int elements = rows * cols;
-    for (int i = tid; i < elements; i += total_threads) {
-        int r = i / cols;
-        int c = i % cols;
-        dst[r * cols + c] = src[r * stride + c];
+// Helper to load float4
+// src_stride: stride of src in floats
+// dst_stride: stride of dst in floats (must be multiple of 4)
+__device__ __forceinline__ void load_float4(const float* src, float* dst, int rows, int cols, int src_stride, int dst_stride, int tid, int total_threads) {
+    int cols_vec = cols / 4;
+    int elements_vec = rows * cols_vec;
+    
+    const float4* src_vec = reinterpret_cast<const float4*>(src);
+    float4* dst_vec = reinterpret_cast<float4*>(dst);
+    
+    int dst_stride_vec = dst_stride / 4;
+
+    for (int i = tid; i < elements_vec; i += total_threads) {
+        int r = i / cols_vec;
+        int c = i % cols_vec;
+        dst_vec[r * dst_stride_vec + c] = src_vec[r * (src_stride / 4) + c];
     }
 }
 
-// Helper for storing to HBM
-__device__ void store_block(float* dst, const float* src, int rows, int cols, int stride, int tid, int total_threads) {
-    int elements = rows * cols;
-    for (int i = tid; i < elements; i += total_threads) {
-        int r = i / cols;
-        int c = i % cols;
-        dst[r * stride + c] = src[r * cols + c];
+// Helper to store float4
+__device__ __forceinline__ void store_float4(float* dst, const float* src, int rows, int cols, int src_stride, int dst_stride, int tid, int total_threads) {
+    int cols_vec = cols / 4;
+    int elements_vec = rows * cols_vec;
+    
+    float4* dst_vec = reinterpret_cast<float4*>(dst);
+    const float4* src_vec = reinterpret_cast<const float4*>(src);
+    
+    int src_stride_vec = src_stride / 4;
+
+    for (int i = tid; i < elements_vec; i += total_threads) {
+        int r = i / cols_vec;
+        int c = i % cols_vec;
+        dst_vec[r * (dst_stride / 4) + c] = src_vec[r * src_stride_vec + c];
     }
 }
 
-// Helper for GEMM: C = A * B^T
-// A: (M, K), B: (N, K), C: (M, N)
-// Simplified naive implementation
-__device__ void gemm_ab_t(const float* A, const float* B, float* C, int M, int N, int K, int tid, int total_threads) {
+// Helper to load and transpose float4
+// dst_stride: stride of dst in floats (must be multiple of 4)
+// dst is (cols, rows) logically
+__device__ __forceinline__ void load_transpose_float4(const float* src, float* dst, int rows, int cols, int src_stride, int dst_stride, int tid, int total_threads) {
+    int cols_vec = cols / 4;
+    int elements_vec = rows * cols_vec;
+    
+    const float4* src_vec = reinterpret_cast<const float4*>(src);
+    
+    for (int i = tid; i < elements_vec; i += total_threads) {
+        int r = i / cols_vec;
+        int c_vec = i % cols_vec;
+        int c = c_vec * 4;
+        
+        float4 val = src_vec[r * (src_stride / 4) + c_vec];
+        
+        // dst[c, r]
+        dst[c * dst_stride + r] = val.x;
+        dst[(c + 1) * dst_stride + r] = val.y;
+        dst[(c + 2) * dst_stride + r] = val.z;
+        dst[(c + 3) * dst_stride + r] = val.w;
+    }
+}
+
+// Helper for GEMM with float4: C = A * B^T
+// A: (M, K) with stride_A
+// B: (N, K) with stride_B
+// C: (M, N) with stride_C
+__device__ __forceinline__ void gemm_ab_t_float4(const float* A, const float* B, float* C, int M, int N, int K, 
+                                                 int stride_A, int stride_B, int stride_C,
+                                                 int tid, int total_threads) {
     int elements = M * N;
+    int K_vec = K / 4;
+    const float4* A_vec = reinterpret_cast<const float4*>(A);
+    const float4* B_vec = reinterpret_cast<const float4*>(B);
+    
+    int stride_A_vec = stride_A / 4;
+    int stride_B_vec = stride_B / 4;
+
     for (int i = tid; i < elements; i += total_threads) {
         int r = i / N;
         int c = i % N;
         float sum = 0.0f;
-        for (int k = 0; k < K; ++k) {
-            sum += A[r * K + k] * B[c * K + k];
+        #pragma unroll
+        for (int k = 0; k < K_vec; ++k) {
+            float4 a = A_vec[r * stride_A_vec + k];
+            float4 b = B_vec[c * stride_B_vec + k];
+            sum += a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
         }
-        C[r * N + c] = sum;
+        // C might be padded too
+        C[r * stride_C + c] = sum;
     }
 }
 
-// Helper for GEMM: C = A * B
-// A: (M, K), B: (K, N), C: (M, N)
-__device__ void gemm_ab(const float* A, const float* B, float* C, int M, int N, int K, int tid, int total_threads) {
+// Helper for GEMM Accum with float4: C += A * B
+// A: (M, K) with stride_A
+// B_T: (N, K) with stride_B_T (Transposed B)
+// C: (M, N) with stride_C
+__device__ __forceinline__ void gemm_ab_accum_float4_transposed_b(const float* A, const float* B_T, float* C, int M, int N, int K, 
+                                                                  int stride_A, int stride_B_T, int stride_C,
+                                                                  int tid, int total_threads) {
     int elements = M * N;
+    int K_vec = K / 4;
+    const float4* A_vec = reinterpret_cast<const float4*>(A);
+    const float4* B_T_vec = reinterpret_cast<const float4*>(B_T);
+    
+    int stride_A_vec = stride_A / 4;
+    int stride_B_T_vec = stride_B_T / 4;
+
     for (int i = tid; i < elements; i += total_threads) {
         int r = i / N;
         int c = i % N;
         float sum = 0.0f;
-        for (int k = 0; k < K; ++k) {
-            sum += A[r * K + k] * B[k * N + c];
+        #pragma unroll
+        for (int k = 0; k < K_vec; ++k) {
+            float4 a = A_vec[r * stride_A_vec + k];
+            float4 b = B_T_vec[c * stride_B_T_vec + k];
+            sum += a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
         }
-        C[r * N + c] = sum; // Accumulate logic is handled outside (C += ...)
-    }
-}
-
-// Helper for GEMM accumulation: C += A * B
-__device__ void gemm_ab_accum(const float* A, const float* B, float* C, int M, int N, int K, int tid, int total_threads) {
-    int elements = M * N;
-    for (int i = tid; i < elements; i += total_threads) {
-        int r = i / N;
-        int c = i % N;
-        float sum = 0.0f;
-        for (int k = 0; k < K; ++k) {
-            sum += A[r * K + k] * B[k * N + c];
-        }
-        C[r * N + c] += sum;
+        C[r * stride_C + c] += sum;
     }
 }
 
 __global__ void FlashAttentionForwardKernel(const float* Q, const float* K, const float* V, float* O, float* L,
                                             int B, int T, int H, int D,
                                             float softmax_scale, bool is_causal) {
-    // Grid: (B, H)
+    // Grid: (B, H, Tr)
     // Block: (Br, D) or sufficient threads
-    // Each block processes one attention head for one sequence
+    // Each block processes one tile of rows (Br) for one attention head
     
     int batch_idx = blockIdx.x;
     int head_idx = blockIdx.y;
+    int row_tile_idx = blockIdx.z; // Replaces outer loop i
     int tid = threadIdx.x;
     int total_threads = blockDim.x;
 
@@ -110,57 +165,50 @@ __global__ void FlashAttentionForwardKernel(const float* Q, const float* K, cons
     // LSE offset: (B, H, T)
     float* l_base = L + (batch_idx * H + head_idx) * T;
 
+    // Padding to avoid shared memory bank conflicts
+    constexpr int Pad = 4;
+    int D_pad = D + Pad;
+    int Bc_pad = Bc + Pad;
+
     // Shared memory allocation
     // Need space for:
-    // Qi: Br * D
-    // Kj: Bc * D
-    // Vj: Bc * D
-    // Sij: Br * Bc
-    // Pij: Br * Bc (can reuse Sij)
-    // Oi: Br * D
+    // Qi: Br * D_pad
+    // Kj: Bc * D_pad
+    // Vj: D * Bc_pad (Transposed V)
+    // Sij: Br * Bc_pad
+    // Oi: Br * D_pad
     // li: Br
     // mi: Br
     
-    // Total simplified shared memory layout:
-    // [Qi (Br*D)] [Kj (Bc*D)] [Vj (Bc*D)] [Sij (Br*Bc)] [Oi (Br*D)] [li (Br)] [mi (Br)]
-    // For Br=32, Bc=32, D=64:
-    // Qi: 32*64 = 2048
-    // Kj: 32*64 = 2048
-    // Vj: 32*64 = 2048
-    // Sij: 32*32 = 1024
-    // Oi: 32*64 = 2048
-    // li: 32
-    // mi: 32
-    // Total floats: ~9280 floats = ~37KB (fits in 48KB shared mem)
-    
     extern __shared__ float sram[];
     float* s_Qi = sram;
-    float* s_Kj = s_Qi + Br * D;
-    float* s_Vj = s_Kj + Bc * D;
-    float* s_Sij = s_Vj + Bc * D;
-    float* s_Oi = s_Sij + Br * Bc;
-    float* s_li = s_Oi + Br * D;
+    float* s_Kj = s_Qi + Br * D_pad;
+    float* s_Vj = s_Kj + Bc * D_pad;
+    float* s_Sij = s_Vj + D * Bc_pad; 
+    float* s_Oi = s_Sij + Br * Bc_pad;
+    float* s_li = s_Oi + Br * D_pad;
     float* s_mi = s_li + Br;
 
-    // Outer loop: iterate over blocks of Q
     // T is split into Tr blocks of size Br
-    int Tr = (T + Br - 1) / Br;
+    // int Tr = (T + Br - 1) / Br; // Handled by Grid
     int Tc = (T + Bc - 1) / Bc;
 
-    for (int i = 0; i < Tr; ++i) {
+    // Single tile processing
+    int i = row_tile_idx;
+    {
         int row_start = i * Br;
+        // Check boundary
+        if (row_start >= T) return;
+        
         int row_end = min(row_start + Br, T);
         int valid_rows = row_end - row_start;
 
         // 1. Load Qi from HBM to SRAM
-        load_block(q_base + row_start * D, s_Qi, valid_rows, D, D, tid, total_threads);
+        load_float4(q_base + row_start * D, s_Qi, valid_rows, D, D, D_pad, tid, total_threads);
         
         // 2. Initialize Oi, li, mi in SRAM
-        // Oi = 0
-        for (int k = tid; k < Br * D; k += total_threads) s_Oi[k] = 0.0f;
-        // li = 0
+        for (int k = tid; k < Br * D_pad; k += total_threads) s_Oi[k] = 0.0f; // Note: Clearing padding is safe but wasteful, strictly only need Br*D? No, we use stride D_pad.
         for (int k = tid; k < Br; k += total_threads) s_li[k] = 0.0f;
-        // mi = -inf
         for (int k = tid; k < Br; k += total_threads) s_mi[k] = -1e20f; // -inf
 
         __syncthreads();
@@ -175,106 +223,91 @@ __global__ void FlashAttentionForwardKernel(const float* Q, const float* K, cons
             if (is_causal && col_start > row_end) continue; // strictly upper triangular blocks
 
             // 3. Load Kj, Vj from HBM to SRAM
-            load_block(k_base + col_start * D, s_Kj, valid_cols, D, D, tid, total_threads);
-            load_block(v_base + col_start * D, s_Vj, valid_cols, D, D, tid, total_threads);
+            load_float4(k_base + col_start * D, s_Kj, valid_cols, D, D, D_pad, tid, total_threads);
+            // Load V and transpose to (D, valid_cols)
+            load_transpose_float4(v_base + col_start * D, s_Vj, valid_cols, D, D, Bc_pad, tid, total_threads);
             
             __syncthreads();
 
             // 4. Compute Sij = Qi * Kj^T
-            // s_Qi: (valid_rows, D), s_Kj: (valid_cols, D) -> s_Sij: (valid_rows, valid_cols)
-            gemm_ab_t(s_Qi, s_Kj, s_Sij, valid_rows, valid_cols, D, tid, total_threads);
+            gemm_ab_t_float4(s_Qi, s_Kj, s_Sij, valid_rows, valid_cols, D, D_pad, D_pad, Bc_pad, tid, total_threads);
             
             __syncthreads();
 
             // 5. Apply Mask, Scale, Softmax
-            // Iterate over Sij elements
             for (int k = tid; k < valid_rows * valid_cols; k += total_threads) {
                 int r = k / valid_cols;
                 int c = k % valid_cols;
                 int global_row = row_start + r;
                 int global_col = col_start + c;
                 
+                // Use Bc_pad stride
+                float* s_Sij_ptr = s_Sij + r * Bc_pad + c;
+                
                 if (is_causal && global_col > global_row) {
-                    s_Sij[k] = -1e20f; // Masked out
+                    *s_Sij_ptr = -1e20f; // Masked out
                 } else {
-                    s_Sij[k] *= softmax_scale;
+                    *s_Sij_ptr *= softmax_scale;
                 }
             }
             __syncthreads();
 
             // 6. Online Softmax Update
-            // For each row in current block
             for (int r = tid; r < valid_rows; r += total_threads) {
                 float m_prev = s_mi[r];
                 
                 // Find max in current row of Sij
                 float m_curr = -1e20f;
                 for (int c = 0; c < valid_cols; ++c) {
-                    float val = s_Sij[r * valid_cols + c];
+                    float val = s_Sij[r * Bc_pad + c];
                     if (val > m_curr) m_curr = val;
                 }
                 
-                // New max
                 float m_new = max(m_prev, m_curr);
-                
-                // Compute Pij (exp(Sij - m_new)) and rowsum
                 float l_curr = 0.0f;
                 for (int c = 0; c < valid_cols; ++c) {
-                    float val = s_Sij[r * valid_cols + c];
+                    float val = s_Sij[r * Bc_pad + c];
                     float p = expf(val - m_new);
-                    s_Sij[r * valid_cols + c] = p; // Store Pij in place of Sij
+                    s_Sij[r * Bc_pad + c] = p; 
                     l_curr += p;
                 }
                 
-                // Update li and mi
                 float l_prev = s_li[r];
-                // l_new = exp(m_prev - m_new) * l_prev + l_curr
                 float alpha = expf(m_prev - m_new);
                 float l_new = alpha * l_prev + l_curr;
                 
                 s_mi[r] = m_new;
                 s_li[r] = l_new;
                 
-                // Rescale Oi: Oi = Oi * alpha
                 for (int d = 0; d < D; ++d) {
-                    s_Oi[r * D + d] *= alpha;
+                    s_Oi[r * D_pad + d] *= alpha;
                 }
             }
             __syncthreads();
             
             // 7. Compute Oi += Pij * Vj
-            // s_Sij (Pij): (valid_rows, valid_cols), s_Vj: (valid_cols, D) -> s_Oi: (valid_rows, D)
-            // Accumulate into s_Oi
-            // gemm_ab_accum(A, B, C, M, N, K) -> C(M, N) += A(M, K) * B(K, N)
-            // M = valid_rows
-            // N = D
-            // K = valid_cols
-            gemm_ab_accum(s_Sij, s_Vj, s_Oi, valid_rows, D, valid_cols, tid, total_threads);
+            gemm_ab_accum_float4_transposed_b(s_Sij, s_Vj, s_Oi, valid_rows, D, valid_cols, Bc_pad, Bc_pad, D_pad, tid, total_threads);
             
             __syncthreads();
         }
 
         // 8. Finalize Oi and store to HBM
-        // Oi = Oi / li
-        // Store li + mi as LSE (LogSumExp) = log(li) + mi
         for (int r = tid; r < valid_rows; r += total_threads) {
             float li = s_li[r];
             float mi = s_mi[r];
             float inv_li = 1.0f / (li + 1e-6f); // Avoid div by zero
             
             for (int d = 0; d < D; ++d) {
-                s_Oi[r * D + d] *= inv_li;
+                s_Oi[r * D_pad + d] *= inv_li;
             }
             
-            // Store LSE for backward
-            // LSE = mi + log(li)
             l_base[row_start + r] = mi + logf(li + 1e-6f);
         }
         __syncthreads();
 
         // Store Oi to HBM
-        store_block(o_base + row_start * D, s_Oi, valid_rows, D, D, tid, total_threads);
-        __syncthreads();
+        store_float4(o_base + row_start * D, s_Oi, valid_rows, D, D_pad, D, tid, total_threads);
+        // __syncthreads(); // Not needed at end of kernel
     }
 }
 
@@ -405,16 +438,30 @@ void FlashAttentionForward(const Tensor &q, const Tensor &k, const Tensor &v, Te
     float* out_ptr = static_cast<float*>(output.DataPtr());
     float* l_ptr = static_cast<float*>(softmax_lse.DataPtr());
 
-    // Grid: (B, H)
-    dim3 grid(B, H);
+    // Grid: (B, H, Tr)
+    int Tr = (T + Br - 1) / Br;
+    dim3 grid(B, H, Tr);
     // Threads: enough to cover operations. 
     // Br*D = 32*64 = 2048 elements. Max threads per block usually 1024.
     // We iterate inside kernel, so 256 threads is fine.
-    dim3 block(256);
+    dim3 block(128);
     
     // Shared memory size
-    // See layout in kernel
-    size_t sram_size = (Br * D + Bc * D + Bc * D + Br * Bc + Br * D + Br + Br) * sizeof(float);
+    // Padding
+    constexpr int Pad = 4;
+    int D_pad = D + Pad;
+    int Bc_pad = Bc + Pad;
+    
+    // Need space for:
+    // Qi: Br * D_pad
+    // Kj: Bc * D_pad
+    // Vj: D * Bc_pad
+    // Sij: Br * Bc_pad
+    // Oi: Br * D_pad
+    // li: Br
+    // mi: Br
+    
+    size_t sram_size = (Br * D_pad + Bc * D_pad + D * Bc_pad + Br * Bc_pad + Br * D_pad + Br + Br) * sizeof(float);
     
     // Ensure we are on the correct stream if provided (device.stream)
     cudaStream_t stream = 0; // TODO: get from device
