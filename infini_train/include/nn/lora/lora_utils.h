@@ -75,6 +75,19 @@ void MergeLoRAWeights(std::shared_ptr<Module> model);
 void UnmergeLoRAWeights(std::shared_ptr<Module> model);
 
 /**
+ * Merge LoRA weights and remove LoRA modules, returning a clean base model.
+ * Similar to PEFT's merge_and_unload().
+ *
+ * For each LoRA module:
+ * 1. Merge weights: W += (alpha/r) * B @ A
+ * 2. Replace LoRA module with a base module sharing the merged weight/bias
+ *
+ * After this call, the model contains no LoRA parameters.
+ * Root module may be replaced (same pattern as InjectLoRALayers).
+ */
+std::shared_ptr<Module> MergeAndUnload(std::shared_ptr<Module> model);
+
+/**
  * Return a state dict containing only LoRA parameters.
  */
 std::unordered_map<std::string, std::shared_ptr<Tensor>> LoRAStateDict(const std::shared_ptr<Module> &model);

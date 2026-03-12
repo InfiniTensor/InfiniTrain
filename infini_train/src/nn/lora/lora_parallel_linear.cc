@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <memory>
-#include <stdexcept>
 #include <vector>
 
 #include "glog/logging.h"
@@ -22,37 +21,27 @@ namespace infini_train::nn::lora {
 // LoRAColumnParallelLinear Implementation
 // ============================================================================
 
-LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<nn::Module> base_module, const LoRAConfig &config,
-                                                   int64_t in_features, int64_t out_features)
-    : CloneableModule(kType), config_(config), in_features_(in_features), out_features_(out_features) {
-    if (!base_module) {
-        throw std::invalid_argument("base_module cannot be null");
-    }
-
-    base_module_ = base_module;
-
-    // Get TP config from base module
-    auto col_linear = std::dynamic_pointer_cast<parallel::ColumnParallelLinear>(base_module);
-    CHECK(col_linear != nullptr) << "base_module must be ColumnParallelLinear";
-    bias_ = col_linear->bias();
-    gather_output_ = col_linear->gather_output();
-    input_is_parallel_ = col_linear->input_is_parallel();
-    skip_bias_add_ = col_linear->skip_bias_add();
-    sequence_parallel_ = col_linear->sequence_parallel();
+LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<parallel::ColumnParallelLinear> base_module,
+                                                   const LoRAConfig &config, int64_t in_features, int64_t out_features)
+    : ColumnParallelLinear(in_features, out_features, base_module->bias(), base_module->gather_output(),
+                           base_module->input_is_parallel(), base_module->skip_bias_add(),
+                           base_module->sequence_parallel()),
+      config_(config), in_features_(in_features), out_features_(out_features) {
+    CHECK(base_module != nullptr) << "base_module cannot be null";
 
     // Get device from base module
-    device_ = base_module->parameter(parallel::ColumnParallelLinear::kParamWeightName)->GetDevice();
+    device_ = base_module->parameter(kParamWeightName)->GetDevice();
 
-    // Transfer weight from base module
-    parameters_[kParamWeightName] = base_module->parameter(parallel::ColumnParallelLinear::kParamWeightName);
+    // Transfer weight from base module (overwrite base-created one)
+    parameters_[kParamWeightName] = base_module->parameter(kParamWeightName);
 
     // Get dimensions from weight shape [out_features_per_partition, in_features]
     const auto &weight_dims = parameters_[kParamWeightName]->Dims();
     out_features_per_partition_ = weight_dims[0];
 
     // Transfer bias if exists
-    if (base_module->has_parameter(parallel::ColumnParallelLinear::kParamBiasName)) {
-        parameters_[kParamBiasName] = base_module->parameter(parallel::ColumnParallelLinear::kParamBiasName);
+    if (base_module->has_parameter(kParamBiasName)) {
+        parameters_[kParamBiasName] = base_module->parameter(kParamBiasName);
     }
 
     // Initialize LoRA weights
@@ -62,28 +51,21 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<nn::Module> b
     FreezeBaseWeights();
 }
 
-LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<nn::Module> base_module, const LoRAConfig &config)
-    : CloneableModule(kType), config_(config) {
-    if (!base_module) {
-        throw std::invalid_argument("base_module cannot be null");
-    }
-
-    base_module_ = base_module;
-
-    // Get TP config from base module
-    auto col_linear = std::dynamic_pointer_cast<parallel::ColumnParallelLinear>(base_module);
-    CHECK(col_linear != nullptr) << "base_module must be ColumnParallelLinear";
-    bias_ = col_linear->bias();
-    gather_output_ = col_linear->gather_output();
-    input_is_parallel_ = col_linear->input_is_parallel();
-    skip_bias_add_ = col_linear->skip_bias_add();
-    sequence_parallel_ = col_linear->sequence_parallel();
+LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<parallel::ColumnParallelLinear> base_module,
+                                                   const LoRAConfig &config)
+    : ColumnParallelLinear(base_module->parameter(parallel::ColumnParallelLinear::kParamWeightName)->Dims()[1],
+                           base_module->parameter(parallel::ColumnParallelLinear::kParamWeightName)->Dims()[0]
+                               * parallel::global::GetTensorParallelSize(),
+                           base_module->bias(), base_module->gather_output(), base_module->input_is_parallel(),
+                           base_module->skip_bias_add(), base_module->sequence_parallel()),
+      config_(config) {
+    CHECK(base_module != nullptr) << "base_module cannot be null";
 
     // Get device from base module
-    device_ = base_module->parameter(parallel::ColumnParallelLinear::kParamWeightName)->GetDevice();
+    device_ = base_module->parameter(kParamWeightName)->GetDevice();
 
-    // Transfer weight from base module
-    parameters_[kParamWeightName] = base_module->parameter(parallel::ColumnParallelLinear::kParamWeightName);
+    // Transfer weight from base module (overwrite base-created one)
+    parameters_[kParamWeightName] = base_module->parameter(kParamWeightName);
 
     // Get dimensions from weight shape [out_features_per_partition, in_features]
     const auto &weight_dims = parameters_[kParamWeightName]->Dims();
@@ -95,8 +77,8 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<nn::Module> b
     out_features_ = out_features_per_partition_ * tp_size;
 
     // Transfer bias if exists
-    if (base_module->has_parameter(parallel::ColumnParallelLinear::kParamBiasName)) {
-        parameters_[kParamBiasName] = base_module->parameter(parallel::ColumnParallelLinear::kParamBiasName);
+    if (base_module->has_parameter(kParamBiasName)) {
+        parameters_[kParamBiasName] = base_module->parameter(kParamBiasName);
     }
 
     // Initialize LoRA weights
@@ -140,11 +122,12 @@ void LoRAColumnParallelLinear::FreezeBaseWeights() {
 std::vector<std::shared_ptr<Tensor>>
 LoRAColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1) << "LoRAColumnParallelLinear takes exactly one input";
+    CHECK(!(merged_ && parameters_.at(kParamLoraAName)->requires_grad()))
+        << "Forward() on merged LoRA with requires_grad=true. Call UnmergeWeights() before training.";
 
     if (!merged_) {
-        // 1. Compute base output via base_module
-        // base_module handles all TP/SP communication internally
-        auto base_result = base_module_->Forward(input_tensors);
+        // 1. Compute base output via parent class
+        auto base_result = ColumnParallelLinear::Forward(input_tensors);
         auto base_output = base_result[0];
 
         // 2. Compute LoRA output using the SAME input that base module uses
@@ -179,8 +162,8 @@ LoRAColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &in
                  : std::vector<std::shared_ptr<Tensor>>{output};
     }
 
-    // When merged, delegate to base module
-    return base_module_->Forward(input_tensors);
+    // When merged, delegate to base class
+    return ColumnParallelLinear::Forward(input_tensors);
 }
 
 void LoRAColumnParallelLinear::MergeWeights() {
@@ -188,50 +171,39 @@ void LoRAColumnParallelLinear::MergeWeights() {
         return;
     }
 
-    original_weight_ = std::make_shared<Tensor>(*parameters_[kParamWeightName]);
-
     // W' = W + (alpha/r) * B @ A
     auto delta = parameters_[kParamLoraBName]->Matmul(parameters_[kParamLoraAName]);
     auto scaled_delta = delta->Mul(config_.Scaling());
     auto new_weight = parameters_[kParamWeightName]->Add(scaled_delta);
     parameters_[kParamWeightName]->CopyFrom(new_weight);
 
+    // Freeze LoRA params to prevent training while merged
+    parameters_[kParamLoraAName]->set_requires_grad(false);
+    parameters_[kParamLoraBName]->set_requires_grad(false);
+
     merged_ = true;
 }
 
 void LoRAColumnParallelLinear::UnmergeWeights() {
-    if (!merged_ || !original_weight_) {
+    if (!merged_) {
         return;
     }
-    parameters_[kParamWeightName]->CopyFrom(original_weight_);
+
+    // W = W - (alpha/r) * B @ A
+    auto delta = parameters_[kParamLoraBName]->Matmul(parameters_[kParamLoraAName]);
+    auto scaled_delta = delta->Mul(config_.Scaling());
+    auto new_weight = parameters_[kParamWeightName]->Sub(scaled_delta);
+    parameters_[kParamWeightName]->CopyFrom(new_weight);
+
+    // Restore LoRA params to trainable
+    parameters_[kParamLoraAName]->set_requires_grad(true);
+    parameters_[kParamLoraBName]->set_requires_grad(true);
+
     merged_ = false;
 }
 
 std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::LoRAParameters() const {
     return {parameters_.at(kParamLoraAName), parameters_.at(kParamLoraBName)};
-}
-
-std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::Parameters() const { return AllParameters(); }
-
-std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::AllParameters() const {
-    std::vector<std::shared_ptr<Tensor>> all_params;
-    all_params.push_back(parameters_.at(kParamWeightName));
-    if (bias_) {
-        all_params.push_back(parameters_.at(kParamBiasName));
-    }
-    all_params.push_back(parameters_.at(kParamLoraAName));
-    all_params.push_back(parameters_.at(kParamLoraBName));
-    return all_params;
-}
-
-std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::TrainableParameters() const {
-    std::vector<std::shared_ptr<Tensor>> trainable;
-    for (const auto &[name, param] : parameters_) {
-        if (param->requires_grad()) {
-            trainable.push_back(param);
-        }
-    }
-    return trainable;
 }
 
 bool LoRAColumnParallelLinear::IsMerged() const { return merged_; }
@@ -246,37 +218,27 @@ int64_t LoRAColumnParallelLinear::rank() const { return config_.rank; }
 // LoRARowParallelLinear Implementation
 // ============================================================================
 
-LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<nn::Module> base_module, const LoRAConfig &config,
-                                             int64_t in_features, int64_t out_features)
-    : CloneableModule(kType), config_(config), in_features_(in_features), out_features_(out_features) {
-    if (!base_module) {
-        throw std::invalid_argument("base_module cannot be null");
-    }
-
-    base_module_ = base_module;
-
-    // Get TP config from base module
-    auto row_linear = std::dynamic_pointer_cast<parallel::RowParallelLinear>(base_module);
-    CHECK(row_linear != nullptr) << "base_module must be RowParallelLinear";
-    bias_ = row_linear->bias();
-    reduce_output_ = row_linear->reduce_output();
-    input_is_parallel_ = row_linear->input_is_parallel();
-    skip_bias_add_ = row_linear->skip_bias_add();
-    sequence_parallel_ = row_linear->sequence_parallel();
+LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<parallel::RowParallelLinear> base_module,
+                                             const LoRAConfig &config, int64_t in_features, int64_t out_features)
+    : RowParallelLinear(in_features, out_features, base_module->bias(), base_module->reduce_output(),
+                        base_module->input_is_parallel(), base_module->skip_bias_add(),
+                        base_module->sequence_parallel()),
+      config_(config), in_features_(in_features), out_features_(out_features) {
+    CHECK(base_module != nullptr) << "base_module cannot be null";
 
     // Get device from base module
-    device_ = base_module->parameter(parallel::RowParallelLinear::kParamWeightName)->GetDevice();
+    device_ = base_module->parameter(kParamWeightName)->GetDevice();
 
-    // Transfer weight from base module
-    parameters_[kParamWeightName] = base_module->parameter(parallel::RowParallelLinear::kParamWeightName);
+    // Transfer weight from base module (overwrite base-created one)
+    parameters_[kParamWeightName] = base_module->parameter(kParamWeightName);
 
     // Get dimensions from weight shape [out_features, in_features_per_partition]
     const auto &weight_dims = parameters_[kParamWeightName]->Dims();
     in_features_per_partition_ = weight_dims[1];
 
     // Transfer bias if exists
-    if (base_module->has_parameter(parallel::RowParallelLinear::kParamBiasName)) {
-        parameters_[kParamBiasName] = base_module->parameter(parallel::RowParallelLinear::kParamBiasName);
+    if (base_module->has_parameter(kParamBiasName)) {
+        parameters_[kParamBiasName] = base_module->parameter(kParamBiasName);
     }
 
     // Initialize LoRA weights
@@ -286,28 +248,21 @@ LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<nn::Module> base_mo
     FreezeBaseWeights();
 }
 
-LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<nn::Module> base_module, const LoRAConfig &config)
-    : CloneableModule(kType), config_(config) {
-    if (!base_module) {
-        throw std::invalid_argument("base_module cannot be null");
-    }
-
-    base_module_ = base_module;
-
-    // Get TP config from base module
-    auto row_linear = std::dynamic_pointer_cast<parallel::RowParallelLinear>(base_module);
-    CHECK(row_linear != nullptr) << "base_module must be RowParallelLinear";
-    bias_ = row_linear->bias();
-    reduce_output_ = row_linear->reduce_output();
-    input_is_parallel_ = row_linear->input_is_parallel();
-    skip_bias_add_ = row_linear->skip_bias_add();
-    sequence_parallel_ = row_linear->sequence_parallel();
+LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<parallel::RowParallelLinear> base_module,
+                                             const LoRAConfig &config)
+    : RowParallelLinear(base_module->parameter(parallel::RowParallelLinear::kParamWeightName)->Dims()[1]
+                            * parallel::global::GetTensorParallelSize(),
+                        base_module->parameter(parallel::RowParallelLinear::kParamWeightName)->Dims()[0],
+                        base_module->bias(), base_module->reduce_output(), base_module->input_is_parallel(),
+                        base_module->skip_bias_add(), base_module->sequence_parallel()),
+      config_(config) {
+    CHECK(base_module != nullptr) << "base_module cannot be null";
 
     // Get device from base module
-    device_ = base_module->parameter(parallel::RowParallelLinear::kParamWeightName)->GetDevice();
+    device_ = base_module->parameter(kParamWeightName)->GetDevice();
 
-    // Transfer weight from base module
-    parameters_[kParamWeightName] = base_module->parameter(parallel::RowParallelLinear::kParamWeightName);
+    // Transfer weight from base module (overwrite base-created one)
+    parameters_[kParamWeightName] = base_module->parameter(kParamWeightName);
 
     // Get dimensions from weight shape [out_features, in_features_per_partition]
     const auto &weight_dims = parameters_[kParamWeightName]->Dims();
@@ -319,8 +274,8 @@ LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<nn::Module> base_mo
     in_features_ = in_features_per_partition_ * tp_size;
 
     // Transfer bias if exists
-    if (base_module->has_parameter(parallel::RowParallelLinear::kParamBiasName)) {
-        parameters_[kParamBiasName] = base_module->parameter(parallel::RowParallelLinear::kParamBiasName);
+    if (base_module->has_parameter(kParamBiasName)) {
+        parameters_[kParamBiasName] = base_module->parameter(kParamBiasName);
     }
 
     // Initialize LoRA weights
@@ -362,6 +317,8 @@ void LoRARowParallelLinear::FreezeBaseWeights() {
 std::vector<std::shared_ptr<Tensor>>
 LoRARowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1) << "LoRARowParallelLinear takes exactly one input";
+    CHECK(!(merged_ && parameters_.at(kParamLoraAName)->requires_grad()))
+        << "Forward() on merged LoRA with requires_grad=true. Call UnmergeWeights() before training.";
 
     if (!merged_) {
         // Get effective input - match what base module uses
@@ -380,7 +337,7 @@ LoRARowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input
         }
 
         // 1) base output - use effective_input
-        auto base_result = base_module_->Forward({effective_input});
+        auto base_result = RowParallelLinear::Forward({effective_input});
         auto base_output = base_result[0];
 
         // 2) lora branch uses the SAME effective_input
@@ -405,8 +362,8 @@ LoRARowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input
                  : std::vector<std::shared_ptr<Tensor>>{output};
     }
 
-    // When merged, delegate to base module
-    return base_module_->Forward(input_tensors);
+    // When merged, delegate to base class
+    return RowParallelLinear::Forward(input_tensors);
 }
 
 void LoRARowParallelLinear::MergeWeights() {
@@ -414,50 +371,39 @@ void LoRARowParallelLinear::MergeWeights() {
         return;
     }
 
-    original_weight_ = std::make_shared<Tensor>(*parameters_[kParamWeightName]);
-
     // W' = W + (alpha/r) * B @ A
     auto delta = parameters_[kParamLoraBName]->Matmul(parameters_[kParamLoraAName]);
     auto scaled_delta = delta->Mul(config_.Scaling());
     auto new_weight = parameters_[kParamWeightName]->Add(scaled_delta);
     parameters_[kParamWeightName]->CopyFrom(new_weight);
 
+    // Freeze LoRA params to prevent training while merged
+    parameters_[kParamLoraAName]->set_requires_grad(false);
+    parameters_[kParamLoraBName]->set_requires_grad(false);
+
     merged_ = true;
 }
 
 void LoRARowParallelLinear::UnmergeWeights() {
-    if (!merged_ || !original_weight_) {
+    if (!merged_) {
         return;
     }
-    parameters_[kParamWeightName]->CopyFrom(original_weight_);
+
+    // W = W - (alpha/r) * B @ A
+    auto delta = parameters_[kParamLoraBName]->Matmul(parameters_[kParamLoraAName]);
+    auto scaled_delta = delta->Mul(config_.Scaling());
+    auto new_weight = parameters_[kParamWeightName]->Sub(scaled_delta);
+    parameters_[kParamWeightName]->CopyFrom(new_weight);
+
+    // Restore LoRA params to trainable
+    parameters_[kParamLoraAName]->set_requires_grad(true);
+    parameters_[kParamLoraBName]->set_requires_grad(true);
+
     merged_ = false;
 }
 
 std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::LoRAParameters() const {
     return {parameters_.at(kParamLoraAName), parameters_.at(kParamLoraBName)};
-}
-
-std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::Parameters() const { return AllParameters(); }
-
-std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::AllParameters() const {
-    std::vector<std::shared_ptr<Tensor>> all_params;
-    all_params.push_back(parameters_.at(kParamWeightName));
-    if (bias_) {
-        all_params.push_back(parameters_.at(kParamBiasName));
-    }
-    all_params.push_back(parameters_.at(kParamLoraAName));
-    all_params.push_back(parameters_.at(kParamLoraBName));
-    return all_params;
-}
-
-std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::TrainableParameters() const {
-    std::vector<std::shared_ptr<Tensor>> trainable;
-    for (const auto &[name, param] : parameters_) {
-        if (param->requires_grad()) {
-            trainable.push_back(param);
-        }
-    }
-    return trainable;
 }
 
 bool LoRARowParallelLinear::IsMerged() const { return merged_; }

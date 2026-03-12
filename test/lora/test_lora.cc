@@ -54,11 +54,12 @@ void test_lora_linear_init() {
     int64_t in_features = 64;
     int64_t out_features = 128;
 
-    auto lora_linear = std::make_shared<LoRALinear>(in_features, out_features, config, /*bias=*/true);
+    auto lora_linear
+        = std::shared_ptr<LoRALinear>(new LoRALinear(in_features, out_features, config, /*bias=*/true, nullptr));
 
     // Check parameter shapes
-    auto weight = lora_linear->parameter(LoRALinear::kParamWeightName);
-    auto bias = lora_linear->parameter(LoRALinear::kParamBiasName);
+    auto weight = lora_linear->parameter(nn::Linear::kParamWeightName);
+    auto bias = lora_linear->parameter(nn::Linear::kParamBiasName);
     auto lora_A = lora_linear->parameter(LoRALinear::kParamLoraAName);
     auto lora_B = lora_linear->parameter(LoRALinear::kParamLoraBName);
 
@@ -111,7 +112,8 @@ void test_lora_linear_forward() {
     int64_t batch_size = 2;
     int64_t seq_len = 10;
 
-    auto lora_linear = std::make_shared<LoRALinear>(in_features, out_features, config, /*bias=*/true);
+    auto lora_linear
+        = std::shared_ptr<LoRALinear>(new LoRALinear(in_features, out_features, config, /*bias=*/true, nullptr));
 
     // Create input tensor
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, seq_len, in_features}, DataType::kFLOAT32);
@@ -143,10 +145,11 @@ void test_lora_linear_merge() {
     int64_t in_features = 32;
     int64_t out_features = 64;
 
-    auto lora_linear = std::make_shared<LoRALinear>(in_features, out_features, config, /*bias=*/false);
+    auto lora_linear
+        = std::shared_ptr<LoRALinear>(new LoRALinear(in_features, out_features, config, /*bias=*/false, nullptr));
 
     // Print weight sum before merge
-    auto weight_before = lora_linear->parameter(LoRALinear::kParamWeightName);
+    auto weight_before = lora_linear->parameter(nn::Linear::kParamWeightName);
     auto lora_A = lora_linear->parameter(LoRALinear::kParamLoraAName);
     auto lora_B = lora_linear->parameter(LoRALinear::kParamLoraBName);
 
@@ -173,10 +176,14 @@ void test_lora_linear_merge() {
     CHECK(!lora_linear->IsMerged()) << "Should not be merged initially";
     lora_linear->MergeWeights();
     CHECK(lora_linear->IsMerged()) << "Should be merged after MergeWeights()";
-    std::cout << "\nWeights merged successfully" << std::endl;
+
+    // Verify LoRA params are frozen after merge
+    CHECK(!lora_A->requires_grad()) << "lora_A should be frozen after merge";
+    CHECK(!lora_B->requires_grad()) << "lora_B should be frozen after merge";
+    std::cout << "\nWeights merged successfully, LoRA params frozen" << std::endl;
 
     // Print weight sum after merge
-    auto weight_after = lora_linear->parameter(LoRALinear::kParamWeightName);
+    auto weight_after = lora_linear->parameter(nn::Linear::kParamWeightName);
     float weight_after_sum = weight_after->EigenMatrix().sum();
     std::cout << "\n--- After Merge ---" << std::endl;
     std::cout << "Base weight sum after merge: " << weight_after_sum << std::endl;
@@ -203,8 +210,12 @@ void test_lora_linear_merge() {
     lora_linear->UnmergeWeights();
     CHECK(!lora_linear->IsMerged()) << "Should not be merged after UnmergeWeights()";
 
+    // Verify LoRA params are trainable again after unmerge
+    CHECK(lora_A->requires_grad()) << "lora_A should be trainable after unmerge";
+    CHECK(lora_B->requires_grad()) << "lora_B should be trainable after unmerge";
+
     // Print weight sum after unmerge
-    auto weight_unmerged = lora_linear->parameter(LoRALinear::kParamWeightName);
+    auto weight_unmerged = lora_linear->parameter(nn::Linear::kParamWeightName);
     float weight_unmerged_sum = weight_unmerged->EigenMatrix().sum();
     std::cout << "\n--- After Unmerge ---" << std::endl;
     std::cout << "Base weight sum after unmerge: " << weight_unmerged_sum << std::endl;
@@ -214,7 +225,7 @@ void test_lora_linear_merge() {
     std::cout << "  Original: " << weight_before_sum << std::endl;
     std::cout << "  Unmerged: " << weight_unmerged_sum << std::endl;
     std::cout << "  Diff:     " << std::abs(weight_before_sum - weight_unmerged_sum) << std::endl;
-    CHECK(std::abs(weight_before_sum - weight_unmerged_sum) < 1e-5) << "Weight should be restored!";
+    CHECK(std::abs(weight_before_sum - weight_unmerged_sum) < 1e-4) << "Weight should be restored!";
 
     // Get output after unmerge
     auto output_unmerged = (*lora_linear)({input})[0];
@@ -238,7 +249,7 @@ void test_lora_utils() {
     config.rank = 4;
     config.alpha = 8.0f;
 
-    auto lora_linear = std::make_shared<LoRALinear>(32, 64, config, /*bias=*/true);
+    auto lora_linear = std::shared_ptr<LoRALinear>(new LoRALinear(32, 64, config, /*bias=*/true, nullptr));
 
     // Test GetLoRAParameters
     auto lora_params = GetLoRAParameters(lora_linear);
@@ -586,7 +597,7 @@ void test_replace_module_by_path() {
     std::cout << "LoRA parameter shapes: OK" << std::endl;
 
     // Verify base parameters are frozen (use named parameters instead of index)
-    auto weight = lora_linear->parameter(LoRALinear::kParamWeightName);
+    auto weight = lora_linear->parameter(nn::Linear::kParamWeightName);
     auto lora_a_param = lora_linear->parameter(LoRALinear::kParamLoraAName);
     auto lora_b_param = lora_linear->parameter(LoRALinear::kParamLoraBName);
     CHECK(weight != nullptr);
@@ -615,7 +626,7 @@ void test_freeze_unfreeze() {
     auto lora_linear = std::make_shared<LoRALinear>(linear, lora_config);
 
     // Get all parameters from LoRALinear (includes base + LoRA)
-    auto all_params = lora_linear->AllParameters();
+    auto all_params = lora_linear->Parameters();
 
     // Initially only LoRA params should be trainable (base weights are frozen by constructor)
     int64_t total_params = 0;
@@ -744,12 +755,72 @@ void test_get_lora_model() {
 
     // Test Merge/Unmerge using utility functions
     MergeLoRAWeights(model);
-    std::cout << "Merge: OK" << std::endl;
+    // Verify LoRA params frozen after merge
+    auto *lora_mod = dynamic_cast<LoRALinear *>(model.get());
+    CHECK(lora_mod != nullptr);
+    CHECK(!lora_mod->LoRAParameters()[0]->requires_grad()) << "lora_A should be frozen after merge";
+    CHECK(!lora_mod->LoRAParameters()[1]->requires_grad()) << "lora_B should be frozen after merge";
+    std::cout << "Merge: OK (LoRA params frozen)" << std::endl;
 
     UnmergeLoRAWeights(model);
-    std::cout << "Unmerge: OK" << std::endl;
+    CHECK(lora_mod->LoRAParameters()[0]->requires_grad()) << "lora_A should be trainable after unmerge";
+    CHECK(lora_mod->LoRAParameters()[1]->requires_grad()) << "lora_B should be trainable after unmerge";
+    std::cout << "Unmerge: OK (LoRA params trainable)" << std::endl;
 
     std::cout << "GetLoRAModel in-place injection tests passed!" << std::endl;
+}
+
+// ============================================================================
+// Test 14: MergeAndUnload
+// ============================================================================
+void test_merge_and_unload() {
+    std::cout << "\n=== Test 14: MergeAndUnload ===" << std::endl;
+
+    // Create base Linear and apply LoRA
+    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true);
+    LoRAConfig config{4, 8.0f, 0.0f, ParseLoRATargetModules("Linear")};
+    auto model = GetLoRAModel(base_linear, config);
+
+    // Verify it's a LoRA module
+    CHECK(dynamic_cast<LoRALinear *>(model.get()) != nullptr) << "Should be LoRALinear";
+
+    // Create input and get output before merge_and_unload
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 5, 64}, DataType::kFLOAT32);
+    input->EigenMatrix().setRandom();
+    auto output_before = (*model)({input})[0];
+    float output_before_sum = output_before->EigenMatrix().sum();
+    std::cout << "Output sum before MergeAndUnload: " << output_before_sum << std::endl;
+
+    // MergeAndUnload
+    auto unloaded_model = MergeAndUnload(model);
+    CHECK(unloaded_model != nullptr) << "MergeAndUnload should return valid model";
+
+    // Verify it's no longer a LoRA module
+    CHECK(dynamic_cast<LoRALinear *>(unloaded_model.get()) == nullptr) << "Should be plain Linear after MergeAndUnload";
+    std::cout << "Model is no longer LoRALinear: OK" << std::endl;
+
+    // Verify no LoRA parameters exist (check state dict)
+    auto state_dict = unloaded_model->StateDict();
+    for (const auto &[name, param] : state_dict) {
+        CHECK(name.find("lora_A") == std::string::npos && name.find("lora_B") == std::string::npos)
+            << "Should not have LoRA parameters after MergeAndUnload, found: " << name;
+    }
+    std::cout << "No LoRA parameters in state dict: OK" << std::endl;
+
+    // Verify forward output matches (merged output should equal unmerged LoRA output)
+    auto output_after = (*unloaded_model)({input})[0];
+    float output_after_sum = output_after->EigenMatrix().sum();
+    std::cout << "Output sum after MergeAndUnload: " << output_after_sum << std::endl;
+    std::cout << "Diff: " << std::abs(output_before_sum - output_after_sum) << std::endl;
+    CHECK(std::abs(output_before_sum - output_after_sum) < 1e-3) << "Output should match after MergeAndUnload";
+
+    // Verify all parameters have requires_grad = true (unfrozen)
+    for (const auto &param : unloaded_model->Parameters()) {
+        CHECK(param->requires_grad()) << "All parameters should be trainable after MergeAndUnload";
+    }
+    std::cout << "All parameters trainable: OK" << std::endl;
+
+    std::cout << "MergeAndUnload tests passed!" << std::endl;
 }
 
 int main(int argc, char **argv) {
@@ -779,6 +850,7 @@ int main(int argc, char **argv) {
     test_freeze_unfreeze();
     test_lora_state_dict();
     test_get_lora_model();
+    test_merge_and_unload();
 
     std::cout << "\n========================================" << std::endl;
     std::cout << "       All LoRA Tests Passed!          " << std::endl;

@@ -57,7 +57,7 @@ void ReplaceModuleByPath(std::shared_ptr<Module> model, const std::string &path,
 
     // Replace the module
     const std::string &module_name = parts.back();
-    current->replace_module(module_name, new_module);
+    current->mutable_module(module_name) = new_module;
 }
 
 std::shared_ptr<Module> InjectLoRALayers(std::shared_ptr<Module> model, const LoRAConfig &config) {
@@ -79,6 +79,9 @@ std::shared_ptr<Module> InjectLoRALayers(std::shared_ptr<Module> model, const Lo
         }
 
         if (type == Linear::kType) {
+            if (dynamic_cast<LoRALinear *>(module.get())) {
+                continue;
+            }
             if (name.empty()) {
                 // Root module is Linear - create new LoRA module and return it
                 result = std::make_shared<LoRALinear>(module, config);
@@ -88,18 +91,32 @@ std::shared_ptr<Module> InjectLoRALayers(std::shared_ptr<Module> model, const Lo
             }
             lora_layers_applied++;
         } else if (type == parallel::ColumnParallelLinear::kType) {
+            if (dynamic_cast<LoRAColumnParallelLinear *>(module.get())) {
+                continue;
+            }
+
+            auto column_module = std::dynamic_pointer_cast<parallel::ColumnParallelLinear>(module);
+            CHECK(column_module != nullptr) << "Failed to cast module to ColumnParallelLinear: " << name;
+
             if (name.empty()) {
-                result = std::make_shared<LoRAColumnParallelLinear>(module, config);
+                result = std::make_shared<LoRAColumnParallelLinear>(column_module, config);
             } else {
-                auto lora_module = std::make_shared<LoRAColumnParallelLinear>(module, config);
+                auto lora_module = std::make_shared<LoRAColumnParallelLinear>(column_module, config);
                 ReplaceModuleByPath(model, name, lora_module);
             }
             lora_layers_applied++;
         } else if (type == parallel::RowParallelLinear::kType) {
+            if (dynamic_cast<LoRARowParallelLinear *>(module.get())) {
+                continue;
+            }
+
+            auto row_module = std::dynamic_pointer_cast<parallel::RowParallelLinear>(module);
+            CHECK(row_module != nullptr) << "Failed to cast module to RowParallelLinear: " << name;
+
             if (name.empty()) {
-                result = std::make_shared<LoRARowParallelLinear>(module, config);
+                result = std::make_shared<LoRARowParallelLinear>(row_module, config);
             } else {
-                auto lora_module = std::make_shared<LoRARowParallelLinear>(module, config);
+                auto lora_module = std::make_shared<LoRARowParallelLinear>(row_module, config);
                 ReplaceModuleByPath(model, name, lora_module);
             }
             lora_layers_applied++;
@@ -131,27 +148,26 @@ void UnfreezeModel(std::shared_ptr<Module> model) {
 
 std::vector<std::shared_ptr<Tensor>> GetLoRAParameters(const std::shared_ptr<Module> &model) {
     std::vector<std::shared_ptr<Tensor>> lora_params;
+    std::unordered_set<const Tensor *> visited;
 
-    model->Apply([&lora_params](Module *m) {
-        // Check if this is a LoRA module
-        if (m->type() == LoRALinear::kType) {
-            auto lora_module = dynamic_cast<LoRALinear *>(m);
-            if (lora_module) {
-                auto params = lora_module->LoRAParameters();
-                lora_params.insert(lora_params.end(), params.begin(), params.end());
-            }
-        } else if (m->type() == LoRAColumnParallelLinear::kType) {
-            auto lora_module = dynamic_cast<LoRAColumnParallelLinear *>(m);
-            if (lora_module) {
-                auto params = lora_module->LoRAParameters();
-                lora_params.insert(lora_params.end(), params.begin(), params.end());
-            }
-        } else if (m->type() == LoRARowParallelLinear::kType) {
-            auto lora_module = dynamic_cast<LoRARowParallelLinear *>(m);
-            if (lora_module) {
-                auto params = lora_module->LoRAParameters();
-                lora_params.insert(lora_params.end(), params.begin(), params.end());
-            }
+    auto collect_lora
+        = [&lora_params, &visited](auto *lora_module) {
+              CHECK(!lora_module->IsMerged())
+                  << "GetLoRAParameters() called on merged LoRA module. Call UnmergeLoRAWeights() first.";
+              for (auto &param : lora_module->LoRAParameters()) {
+                  if (visited.insert(param.get()).second) {
+                      lora_params.push_back(param);
+                  }
+              }
+          };
+
+    model->Apply([&collect_lora](Module *m) {
+        if (auto lora_module = dynamic_cast<LoRALinear *>(m)) {
+            collect_lora(lora_module);
+        } else if (auto lora_module = dynamic_cast<LoRAColumnParallelLinear *>(m)) {
+            collect_lora(lora_module);
+        } else if (auto lora_module = dynamic_cast<LoRARowParallelLinear *>(m)) {
+            collect_lora(lora_module);
         }
     });
 
@@ -163,7 +179,8 @@ std::vector<std::shared_ptr<Tensor>> GetBaseParameters(const std::shared_ptr<Mod
 
     for (auto &[name, param] : model->StateDict()) {
         // Skip LoRA parameters
-        if (name.find("lora_A") != std::string::npos || name.find("lora_B") != std::string::npos) {
+        if (name.find(LoRALinear::kParamLoraAName) != std::string::npos
+            || name.find(LoRALinear::kParamLoraBName) != std::string::npos) {
             continue;
         }
         base_params.push_back(param);
@@ -174,26 +191,92 @@ std::vector<std::shared_ptr<Tensor>> GetBaseParameters(const std::shared_ptr<Mod
 
 void MergeLoRAWeights(std::shared_ptr<Module> model) {
     model->Apply([](Module *m) {
-        if (m->type() == LoRALinear::kType) {
-            dynamic_cast<LoRALinear *>(m)->MergeWeights();
-        } else if (m->type() == LoRAColumnParallelLinear::kType) {
-            dynamic_cast<LoRAColumnParallelLinear *>(m)->MergeWeights();
-        } else if (m->type() == LoRARowParallelLinear::kType) {
-            dynamic_cast<LoRARowParallelLinear *>(m)->MergeWeights();
+        if (auto lora = dynamic_cast<LoRALinear *>(m)) {
+            lora->MergeWeights();
+        } else if (auto lora = dynamic_cast<LoRAColumnParallelLinear *>(m)) {
+            lora->MergeWeights();
+        } else if (auto lora = dynamic_cast<LoRARowParallelLinear *>(m)) {
+            lora->MergeWeights();
         }
     });
 }
 
 void UnmergeLoRAWeights(std::shared_ptr<Module> model) {
     model->Apply([](Module *m) {
-        if (m->type() == LoRALinear::kType) {
-            dynamic_cast<LoRALinear *>(m)->UnmergeWeights();
-        } else if (m->type() == LoRAColumnParallelLinear::kType) {
-            dynamic_cast<LoRAColumnParallelLinear *>(m)->UnmergeWeights();
-        } else if (m->type() == LoRARowParallelLinear::kType) {
-            dynamic_cast<LoRARowParallelLinear *>(m)->UnmergeWeights();
+        if (auto lora = dynamic_cast<LoRALinear *>(m)) {
+            lora->UnmergeWeights();
+        } else if (auto lora = dynamic_cast<LoRAColumnParallelLinear *>(m)) {
+            lora->UnmergeWeights();
+        } else if (auto lora = dynamic_cast<LoRARowParallelLinear *>(m)) {
+            lora->UnmergeWeights();
         }
     });
+}
+
+std::shared_ptr<Module> MergeAndUnload(std::shared_ptr<Module> model) {
+    // First merge all LoRA weights
+    MergeLoRAWeights(model);
+
+    // Traverse model and replace LoRA modules with base modules
+    auto named_modules = model->NamedModules();
+    std::shared_ptr<Module> result = model;
+
+    for (const auto &[name, module] : named_modules) {
+        if (auto *lora = dynamic_cast<LoRALinear *>(module.get())) {
+            // Create base Linear with same dimensions
+            auto base = std::make_shared<nn::Linear>(lora->in_features(), lora->out_features(), lora->has_bias(),
+                                                     lora->parameter(nn::Linear::kParamWeightName)->GetDevice());
+            // Share the merged weight
+            *base->mutable_parameter(nn::Linear::kParamWeightName) = lora->parameter(nn::Linear::kParamWeightName);
+            if (lora->has_bias()) {
+                *base->mutable_parameter(nn::Linear::kParamBiasName) = lora->parameter(nn::Linear::kParamBiasName);
+            }
+
+            if (name.empty()) {
+                result = base;
+            } else {
+                ReplaceModuleByPath(model, name, base);
+            }
+        } else if (auto *lora = dynamic_cast<LoRAColumnParallelLinear *>(module.get())) {
+            auto base = std::make_shared<parallel::ColumnParallelLinear>(
+                lora->in_features(), lora->out_features(), lora->bias(), lora->gather_output(),
+                lora->input_is_parallel(), lora->skip_bias_add(), lora->sequence_parallel());
+            *base->mutable_parameter(parallel::ColumnParallelLinear::kParamWeightName)
+                = lora->parameter(parallel::ColumnParallelLinear::kParamWeightName);
+            if (lora->bias()) {
+                *base->mutable_parameter(parallel::ColumnParallelLinear::kParamBiasName)
+                    = lora->parameter(parallel::ColumnParallelLinear::kParamBiasName);
+            }
+
+            if (name.empty()) {
+                result = base;
+            } else {
+                ReplaceModuleByPath(model, name, base);
+            }
+        } else if (auto *lora = dynamic_cast<LoRARowParallelLinear *>(module.get())) {
+            auto base = std::make_shared<parallel::RowParallelLinear>(
+                lora->in_features(), lora->out_features(), lora->bias(), lora->reduce_output(),
+                lora->input_is_parallel(), lora->skip_bias_add(), lora->sequence_parallel());
+            *base->mutable_parameter(parallel::RowParallelLinear::kParamWeightName)
+                = lora->parameter(parallel::RowParallelLinear::kParamWeightName);
+            if (lora->bias()) {
+                *base->mutable_parameter(parallel::RowParallelLinear::kParamBiasName)
+                    = lora->parameter(parallel::RowParallelLinear::kParamBiasName);
+            }
+
+            if (name.empty()) {
+                result = base;
+            } else {
+                ReplaceModuleByPath(model, name, base);
+            }
+        }
+    }
+
+    // Unfreeze all parameters so the model is fully usable
+    UnfreezeModel(result);
+
+    LOG(INFO) << "MergeAndUnload: Merged LoRA weights and removed LoRA modules";
+    return result;
 }
 
 std::unordered_map<std::string, std::shared_ptr<Tensor>> LoRAStateDict(const std::shared_ptr<Module> &model) {
@@ -201,7 +284,8 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> LoRAStateDict(const std
 
     for (auto &[name, param] : model->StateDict()) {
         // Only include LoRA parameters
-        if (name.find("lora_A") != std::string::npos || name.find("lora_B") != std::string::npos) {
+        if (name.find(LoRALinear::kParamLoraAName) != std::string::npos
+            || name.find(LoRALinear::kParamLoraBName) != std::string::npos) {
             lora_state_dict[name] = param;
         }
     }
