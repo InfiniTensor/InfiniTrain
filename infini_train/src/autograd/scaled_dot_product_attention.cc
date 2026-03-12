@@ -14,9 +14,9 @@ std::vector<std::shared_ptr<Tensor>>
 ScaledDotProductAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     // Inputs: query, key, value, [attn_mask]
     CHECK(input_tensors.size() >= 3 && input_tensors.size() <= 4);
-    auto q = input_tensors[0];
-    auto k = input_tensors[1];
-    auto v = input_tensors[2];
+    auto q = input_tensors[0]->Contiguous();
+    auto k = input_tensors[1]->Contiguous();
+    auto v = input_tensors[2]->Contiguous();
     std::shared_ptr<Tensor> attn_mask = (input_tensors.size() == 4) ? input_tensors[3] : nullptr;
 
     // Check dimensions
@@ -47,7 +47,8 @@ ScaledDotProductAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     kernels::cuda::FlashAttentionForward(*q, *k, *v, *output, *softmax_lse, 
                                          dropout_p_, softmax_scale, is_causal_, q->GetDevice());
     
-    // Setup context will be called by Function::Apply
+    // Store LSE for SetupContext
+    softmax_lse_ = softmax_lse;
     
     return {output};
 }
@@ -58,8 +59,11 @@ void ScaledDotProductAttention::SetupContext(const std::vector<std::shared_ptr<T
     // 0: q, 1: k, 2: v, 3: attn_mask (optional)
     saved_tensors_ = input_tensors; 
     
-    // Also need to save output and potentially softmax_lse from kernel for backward
-    // For now just saving inputs
+    // Save softmax_lse computed in Forward
+    if (softmax_lse_) {
+        saved_tensors_.push_back(softmax_lse_);
+        softmax_lse_ = nullptr; // Clear reference
+    }
 }
 
 std::vector<std::shared_ptr<Tensor>>
@@ -67,10 +71,20 @@ ScaledDotProductAttention::Backward(const std::vector<std::shared_ptr<Tensor>> &
     CHECK_EQ(grad_outputs.size(), 1);
     auto grad_output = grad_outputs[0];
     
-    auto q = saved_tensors_[0];
-    auto k = saved_tensors_[1];
-    auto v = saved_tensors_[2];
-    std::shared_ptr<Tensor> attn_mask = (saved_tensors_.size() == 4) ? saved_tensors_[3] : nullptr;
+    // Determine if LSE is present at the end
+    bool has_lse = false;
+    if (!saved_tensors_.empty() && saved_tensors_.back()->Dims().size() == 3) {
+        has_lse = true;
+    }
+    
+    size_t num_inputs = saved_tensors_.size() - (has_lse ? 1 : 0);
+    
+    auto q = saved_tensors_[0]->Contiguous();
+    auto k = saved_tensors_[1]->Contiguous();
+    auto v = saved_tensors_[2]->Contiguous();
+    std::shared_ptr<Tensor> attn_mask = (num_inputs >= 4) ? saved_tensors_[3] : nullptr;
+    
+    std::shared_ptr<Tensor> softmax_lse = has_lse ? saved_tensors_.back() : nullptr;
 
     auto dq = std::make_shared<Tensor>(q->Dims(), q->Dtype(), q->GetDevice());
     auto dk = std::make_shared<Tensor>(k->Dims(), k->Dtype(), k->GetDevice());
@@ -82,9 +96,14 @@ ScaledDotProductAttention::Backward(const std::vector<std::shared_ptr<Tensor>> &
     } else {
         softmax_scale = 1.0 / std::sqrt(static_cast<double>(q->Dims().back()));
     }
-    kernels::cuda::FlashAttentionBackward(*q, *k, *v, *grad_output, *dq, *dk, *dv, softmax_scale, is_causal_,
-                                          q->GetDevice());
     
+    if (softmax_lse) {
+         kernels::cuda::FlashAttentionBackward(*q, *k, *v, *grad_output->Contiguous(), *dq, *dk, *dv, *softmax_lse, softmax_scale, is_causal_,
+                                          q->GetDevice());
+    } else {
+         LOG(FATAL) << "Softmax LSE missing";
+    }
+
     std::vector<std::shared_ptr<Tensor>> grads = {dq, dk, dv};
     if (attn_mask) {
         // Mask usually doesn't require grad

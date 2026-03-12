@@ -164,8 +164,7 @@ void Train(const nn::parallel::Rank &rank) {
     LLaMA3Config model_config = LLaMA3Config();
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
-        // TODO: support flash attn in llmc path
+        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath, FLAGS_flash);
     } else {
         model_config.use_flash_attn = FLAGS_flash;
         model = std::make_shared<LLaMA3>(model_config);
