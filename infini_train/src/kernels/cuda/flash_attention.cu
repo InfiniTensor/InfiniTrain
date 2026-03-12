@@ -17,12 +17,12 @@
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
-#include "infini_train/src/core/cuda/cuda_blas_handle.h"
-#include "infini_train/src/core/cuda/cuda_stream.h"
+#include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
+//#include "infini_train/src/core/cuda/cuda_stream.h"
 #include "infini_train/include/common/common.h"   // ComputeStrides
 #include <cuda_runtime.h>  // cudaStream_t
 
@@ -344,12 +344,14 @@ static CachedPlan const &get_or_create_fwd_plan(const std::shared_ptr<Tensor> &q
     key.is_causal = is_causal;
     key.attn_scale_bits = float_to_bits(attn_scale);
 
+    //cache ——FwdPlanCache::map<FwdPlanKey, CachedPlan, FwdPlanKeyHash>，根据key查找是否已经存在对应的plan，如果存在就直接返回，如果不存在就创建新的plan并插入cache
     auto &cache = forward_plan_cache();
     auto it = cache.find(key);
+    //若能直接找到就返回对应的plan,优化速度
     if (it != cache.end()) {
         return it->second;
     }
-
+    
     auto graph = std::make_shared<fe::graph::Graph>();
     graph->set_io_data_type(get_cudnn_dtype(q->Dtype()))
         .set_intermediate_data_type(fe::DataType_t::FLOAT)
@@ -379,7 +381,6 @@ static CachedPlan const &get_or_create_fwd_plan(const std::shared_ptr<Tensor> &q
         .set_uid(O_UID)
         .set_dim(q->Dims())
         .set_stride(ComputeStrides(q->Dims()));
-
     std::vector<int64_t> lse_dims = {q->Dims()[0], q->Dims()[1], q->Dims()[2], 1};
     stats_tensor->set_output(true)
         .set_uid(STATS_UID)
