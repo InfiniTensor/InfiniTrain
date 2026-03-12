@@ -41,7 +41,7 @@ config.alpha = 16.0f;  // 缩放因子
 auto lora_model = GetLoRAModel(model, config);
 
 // 3. 获取可训练参数用于优化器
-auto trainable_params = lora_model->TrainableParameters();
+auto trainable_params = nn::lora::GetLoRAParameters(lora_model);
 auto optimizer = std::make_shared<Adam>(trainable_params, lr);
 
 // 4. 训练循环
@@ -93,9 +93,6 @@ public:
     // 构造函数 - 自动遍历模型层次结构
     LoRAModel(std::shared_ptr<Module> base_model,
               const LoRAConfig &config);
-
-    // 获取可训练参数
-    std::vector<std::shared_ptr<Tensor>> TrainableParameters() const;
 
     // 获取所有参数
     std::vector<std::shared_ptr<Tensor>> Parameters() const override;
@@ -237,11 +234,15 @@ void MergeLoRAWeights(std::shared_ptr<Module> model);
 
 // 恢复原始基础权重
 void UnmergeLoRAWeights(std::shared_ptr<Module> model);
+
+// 合并权重并卸载 LoRA 模块，返回纯基础模型
+std::shared_ptr<Module> MergeAndUnload(std::shared_ptr<Module> model);
 ```
 
 **使用场景：**
 - 推理时合并权重可以消除额外计算开销
 - 导出模型时合并权重得到标准模型格式
+- `MergeAndUnload`: 导出完整的标准模型，替换所有 LoRA 模块为普通 Linear 层
 
 ### 保存/加载函数
 
@@ -351,7 +352,7 @@ int main() {
     // =========================================
 
     // 创建优化器（只优化 LoRA 参数）
-    auto trainable_params = lora_model->TrainableParameters();
+    auto trainable_params = nn::lora::GetLoRAParameters(lora_model);
     auto optimizer = std::make_shared<Adam>(trainable_params, /*lr=*/1e-4);
 
     // 训练循环
@@ -441,7 +442,39 @@ auto output = (*lora_model)({input_ids});
 UnmergeLoRAWeights(lora_model);
 ```
 
-### 示例 4: 自定义目标层
+### 示例 4: 导出标准模型 (MergeAndUnload)
+
+使用 `MergeAndUnload` 将 LoRA 模型转换为标准模型，可以直接保存为普通模型文件：
+
+```cpp
+// 加载基础模型并应用 LoRA
+auto model = std::make_shared<GPT2>(config);
+model->LoadWeights("gpt2_weights.bin");
+
+LoRAConfig lora_config;
+lora_config.rank = 8;
+lora_config.alpha = 16.0f;
+lora_config.target_modules = ParseLoRATargetModules("c_attn,c_proj");
+auto lora_model = GetLoRAModel(model, lora_config);
+
+// 训练...
+// ...
+
+// 加载训练好的 LoRA 权重
+LoadLoRAWeights(lora_model, "gpt2_lora.bin");
+
+// 合并并卸载 LoRA，返回标准模型
+// lora_model 中的所有 LoRALinear 都被替换为普通 Linear
+auto merged_model = MergeAndUnload(lora_model);
+
+// 保存为标准模型（与原始模型格式相同）
+merged_model->SaveWeights("gpt2_finetuned.bin");
+
+// 现在 merged_model 是一个普通模型，无需 LoRA 即可推理
+auto output = (*merged_model)({input_ids});
+```
+
+### 示例 5: 自定义目标层
 
 ```cpp
 // 对所有线性层应用
@@ -599,7 +632,7 @@ int main() {
     auto lora_model = std::make_shared<LoRAModel>(base_model, lora_config);
 
     // 4. 获取可训练参数用于优化器
-    auto trainable_params = lora_model->TrainableParameters();
+    auto trainable_params = nn::lora::GetLoRAParameters(lora_model);
     auto optimizer = std::make_shared<Adam>(trainable_params, 1e-5);
 
     // 5. 打印摘要

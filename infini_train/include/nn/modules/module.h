@@ -47,9 +47,8 @@ public:
 
     const std::string &type() const;
 
+    // TODO: Change return type to filterable iterator (like PyTorch's named_parameters with prefix matching)
     virtual std::vector<std::shared_ptr<Tensor>> Parameters() const;
-    // Get parameters with requires_grad == true (trainable parameters)
-    std::vector<std::shared_ptr<Tensor>> TrainableParameters() const;
     bool has_parameter(const std::string &name) const;
     std::shared_ptr<Tensor> *mutable_parameter(const std::string &name);
     const std::shared_ptr<Tensor> &parameter(const std::string &name) const;
@@ -57,7 +56,7 @@ public:
     virtual std::vector<std::shared_ptr<Tensor>> Buffers() const;
 
     std::vector<std::shared_ptr<Module>> modules();
-    std::shared_ptr<Module> mutable_module(const std::string &name);
+    std::shared_ptr<Module> &mutable_module(const std::string &name);
     const Module &module(const std::string &name) const;
     void replace_module(const std::string &name, std::shared_ptr<Module> new_module);
 

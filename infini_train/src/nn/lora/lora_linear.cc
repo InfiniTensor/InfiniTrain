@@ -15,22 +15,8 @@ namespace infini_train::nn::lora {
 
 LoRALinear::LoRALinear(int64_t in_features, int64_t out_features, const LoRAConfig &config, bool bias,
                        const Device *device)
-    : CloneableModule(kType), config_(config), in_features_(in_features), out_features_(out_features), bias_(bias) {
-    device_ = device ? *device : Device();
-
-    // Create base weight (frozen)
-    parameters_[kParamWeightName]
-        = std::make_shared<Tensor>(std::vector<int64_t>{out_features, in_features}, DataType::kFLOAT32, device_);
-    init::KaimingUniform(parameters_[kParamWeightName], sqrt(5.0f));
-
-    // Create base bias (frozen)
-    if (bias) {
-        parameters_[kParamBiasName]
-            = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, DataType::kFLOAT32, device_);
-        const auto [fan_in, _] = init::CalculateFanInAndFanOut(parameters_[kParamWeightName]);
-        const float bound = fan_in > 0 ? 1.0 / sqrt(fan_in) : 0.0;
-        init::Uniform(parameters_[kParamBiasName], -bound, bound);
-    }
+    : Linear(in_features, out_features, bias, device ? *device : Device()), config_(config), in_features_(in_features),
+      out_features_(out_features) {
 
     // Initialize LoRA weights
     InitLoRAWeights();
@@ -40,26 +26,20 @@ LoRALinear::LoRALinear(int64_t in_features, int64_t out_features, const LoRAConf
 }
 
 LoRALinear::LoRALinear(std::shared_ptr<nn::Module> base_linear, const LoRAConfig &config)
-    : CloneableModule(kType), config_(config), bias_(false) {
+    : Linear(base_linear->parameter(kParamWeightName)->Dims()[1], base_linear->parameter(kParamWeightName)->Dims()[0],
+             base_linear->has_parameter(kParamBiasName), base_linear->parameter(kParamWeightName)->GetDevice()),
+      config_(config), in_features_(base_linear->parameter(kParamWeightName)->Dims()[1]),
+      out_features_(base_linear->parameter(kParamWeightName)->Dims()[0]) {
     if (!base_linear) {
-        throw std::invalid_argument("base_linear cannot be null");
+        LOG(FATAL) << "base_linear cannot be null";
     }
 
-    // Get device from base linear
-    device_ = base_linear->parameter(nn::Linear::kParamWeightName)->GetDevice();
-
-    // Transfer weight from base linear
-    parameters_[kParamWeightName] = base_linear->parameter(nn::Linear::kParamWeightName);
-
-    // Get dimensions from weight shape [out_features, in_features]
-    const auto &weight_dims = parameters_[kParamWeightName]->Dims();
-    out_features_ = weight_dims[0];
-    in_features_ = weight_dims[1];
+    // Transfer weight from base linear (overwrite base-created one)
+    parameters_[kParamWeightName] = base_linear->parameter(kParamWeightName);
 
     // Transfer bias if exists
-    if (base_linear->has_parameter(nn::Linear::kParamBiasName)) {
-        parameters_[kParamBiasName] = base_linear->parameter(nn::Linear::kParamBiasName);
-        bias_ = true;
+    if (has_bias()) {
+        parameters_[kParamBiasName] = base_linear->parameter(kParamBiasName);
     }
 
     // Initialize LoRA weights
@@ -93,23 +73,24 @@ void LoRALinear::InitLoRAWeights() {
 void LoRALinear::FreezeBaseWeights() {
     // Set requires_grad to false for base weights
     parameters_[kParamWeightName]->set_requires_grad(false);
-    if (bias_) {
+    if (has_bias()) {
         parameters_[kParamBiasName]->set_requires_grad(false);
     }
 }
 
 std::vector<std::shared_ptr<Tensor>> LoRALinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    const auto &input = input_tensors[0];
+    CHECK(!(merged_ && parameters_.at(kParamLoraAName)->requires_grad()))
+        << "Forward() on merged LoRA with requires_grad=true. Call UnmergeWeights() before training.";
 
     // Base linear computation: y = x @ W^T + b
-    auto base_output = std::make_shared<autograd::Linear>()->Apply(
-        bias_ ? std::vector<std::shared_ptr<Tensor>>{input, parameters_[kParamWeightName], parameters_[kParamBiasName]}
-              : std::vector<std::shared_ptr<Tensor>>{input, parameters_[kParamWeightName]})[0];
+    auto base_output = Linear::Forward(input_tensors)[0];
 
     if (merged_) {
         // If merged, base weight already contains LoRA contribution
         return {base_output};
     }
+
+    const auto &input = input_tensors[0];
 
     // LoRA computation: delta = (alpha/r) * x @ A^T @ B^T
     // A: [rank, in_features], B: [out_features, rank]
@@ -134,69 +115,45 @@ void LoRALinear::MergeWeights() {
         return;
     }
 
-    // Save original weight for potential unmerge
-    original_weight_ = std::make_shared<Tensor>(*parameters_[kParamWeightName]);
-
     // W' = W + (alpha/r) * B @ A
-    // W: [out_features, in_features]
-    // B: [out_features, rank]
-    // A: [rank, in_features]
-    // B @ A: [out_features, in_features]
-
     auto lora_A = parameters_[kParamLoraAName];
     auto lora_B = parameters_[kParamLoraBName];
 
-    // Compute B @ A using matmul
     auto delta = lora_B->Matmul(lora_A); // [out_features, in_features]
-
-    // Scale and add to weight
-    float scaling = config_.Scaling();
-    auto scaled_delta = delta->Mul(scaling);
+    auto scaled_delta = delta->Mul(config_.Scaling());
     auto new_weight = parameters_[kParamWeightName]->Add(scaled_delta);
-
-    // Update weight data
     parameters_[kParamWeightName]->CopyFrom(new_weight);
+
+    // Freeze LoRA params to prevent training while merged
+    lora_A->set_requires_grad(false);
+    lora_B->set_requires_grad(false);
 
     merged_ = true;
 }
 
 void LoRALinear::UnmergeWeights() {
-    if (!merged_ || !original_weight_) {
+    if (!merged_) {
         return;
     }
 
-    parameters_[kParamWeightName]->CopyFrom(original_weight_);
+    // W = W - (alpha/r) * B @ A
+    auto lora_A = parameters_[kParamLoraAName];
+    auto lora_B = parameters_[kParamLoraBName];
+
+    auto delta = lora_B->Matmul(lora_A);
+    auto scaled_delta = delta->Mul(config_.Scaling());
+    auto new_weight = parameters_[kParamWeightName]->Sub(scaled_delta);
+    parameters_[kParamWeightName]->CopyFrom(new_weight);
+
+    // Restore LoRA params to trainable
+    lora_A->set_requires_grad(true);
+    lora_B->set_requires_grad(true);
+
     merged_ = false;
 }
 
 std::vector<std::shared_ptr<Tensor>> LoRALinear::LoRAParameters() const {
     return {parameters_.at(kParamLoraAName), parameters_.at(kParamLoraBName)};
-}
-
-std::vector<std::shared_ptr<Tensor>> LoRALinear::Parameters() const {
-    // Return all parameters (frozen base + trainable LoRA)
-    return AllParameters();
-}
-
-std::vector<std::shared_ptr<Tensor>> LoRALinear::AllParameters() const {
-    std::vector<std::shared_ptr<Tensor>> all_params;
-    all_params.push_back(parameters_.at(kParamWeightName));
-    if (bias_) {
-        all_params.push_back(parameters_.at(kParamBiasName));
-    }
-    all_params.push_back(parameters_.at(kParamLoraAName));
-    all_params.push_back(parameters_.at(kParamLoraBName));
-    return all_params;
-}
-
-std::vector<std::shared_ptr<Tensor>> LoRALinear::TrainableParameters() const {
-    std::vector<std::shared_ptr<Tensor>> trainable;
-    for (const auto &[name, param] : parameters_) {
-        if (param->requires_grad()) {
-            trainable.push_back(param);
-        }
-    }
-    return trainable;
 }
 
 int64_t LoRALinear::in_features() const { return in_features_; }
