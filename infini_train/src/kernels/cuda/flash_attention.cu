@@ -245,7 +245,11 @@ __global__ void FlashAttentionForwardKernel(const float* Q, const float* K, cons
             // 7. Compute Oi += Pij * Vj
             // s_Sij (Pij): (valid_rows, valid_cols), s_Vj: (valid_cols, D) -> s_Oi: (valid_rows, D)
             // Accumulate into s_Oi
-            gemm_ab_accum(s_Sij, s_Vj, s_Oi, valid_rows, valid_cols, D, tid, total_threads);
+            // gemm_ab_accum(A, B, C, M, N, K) -> C(M, N) += A(M, K) * B(K, N)
+            // M = valid_rows
+            // N = D
+            // K = valid_cols
+            gemm_ab_accum(s_Sij, s_Vj, s_Oi, valid_rows, D, valid_cols, tid, total_threads);
             
             __syncthreads();
         }
@@ -275,8 +279,8 @@ __global__ void FlashAttentionForwardKernel(const float* Q, const float* K, cons
 }
 
 __global__ void FlashAttentionBackwardKernel(const float *Q, const float *K, const float *V, const float *dO, float *dQ,
-                                             float *dK, float *dV, int T, int H, int D, float softmax_scale,
-                                             bool is_causal) {
+                                             float *dK, float *dV, const float *L, int T, int H, int D,
+                                             float softmax_scale, bool is_causal) {
     int b = blockIdx.x;
     int h = blockIdx.y;
     int i = blockIdx.z;
@@ -293,84 +297,77 @@ __global__ void FlashAttentionBackwardKernel(const float *Q, const float *K, con
     float *gq = dQ + base;
     float *gk = dK + base;
     float *gv = dV + base;
+    const float *l = L + (b * H + h) * T;
 
     int row_off = i * D;
+    float l_val = l[i]; // LSE for current row
 
-    float row_max = -1e20f;
-    for (int j = 0; j < T; ++j) {
-        if (is_causal && j > i) {
-            continue;
-        }
-        float s = 0.0f;
-        int col_off = j * D;
-        for (int d = 0; d < D; ++d) {
-            s += q[row_off + d] * k[col_off + d];
-        }
-        s *= softmax_scale;
-        if (s > row_max) {
-            row_max = s;
-        }
-    }
-
-    float row_sum = 0.0f;
-    for (int j = 0; j < T; ++j) {
-        if (is_causal && j > i) {
-            continue;
-        }
-        float s = 0.0f;
-        int col_off = j * D;
-        for (int d = 0; d < D; ++d) {
-            s += q[row_off + d] * k[col_off + d];
-        }
-        s = expf(s * softmax_scale - row_max);
-        row_sum += s;
-    }
-
-    float row_inv_sum = 1.0f / (row_sum + 1e-6f);
+    // Pass 1: Compute dpsum
     float dpsum = 0.0f;
     for (int j = 0; j < T; ++j) {
         if (is_causal && j > i) {
             continue;
         }
         int col_off = j * D;
+        
+        // Compute S
         float s = 0.0f;
         for (int d = 0; d < D; ++d) {
             s += q[row_off + d] * k[col_off + d];
         }
-        float p = expf(s * softmax_scale - row_max) * row_inv_sum;
+        
+        // Compute P = exp(S * scale - L)
+        float p = expf(s * softmax_scale - l_val);
+        
+        // Compute dP (partial) = dO . V
         float dp = 0.0f;
         for (int d = 0; d < D; ++d) {
             dp += go[row_off + d] * v[col_off + d];
         }
+        
         dpsum += dp * p;
-        for (int d = tid; d < D; d += blockDim.x) {
-            atomicAdd(gv + col_off + d, p * go[row_off + d]);
-        }
     }
 
+    // Initialize dQ accumulator
     for (int d = tid; d < D; d += blockDim.x) {
         gq[row_off + d] = 0.0f;
     }
     __syncthreads();
 
+    // Pass 2: Compute Gradients
     for (int j = 0; j < T; ++j) {
         if (is_causal && j > i) {
             continue;
         }
         int col_off = j * D;
+        
+        // Recompute S and P
         float s = 0.0f;
         for (int d = 0; d < D; ++d) {
             s += q[row_off + d] * k[col_off + d];
         }
-        float p = expf(s * softmax_scale - row_max) * row_inv_sum;
+        float p = expf(s * softmax_scale - l_val);
+        
+        // Recompute dP
         float dp = 0.0f;
         for (int d = 0; d < D; ++d) {
             dp += go[row_off + d] * v[col_off + d];
         }
+        
+        // Compute dS
         float ds = p * (dp - dpsum);
+        
+        // Update dQ (accumulate in registers/shared, then write)
+        // Here we write directly to global memory gq (initialized to 0)
+        // Since this thread block owns row i, no atomic needed for gq
         for (int d = tid; d < D; d += blockDim.x) {
             atomicAdd(gq + row_off + d, softmax_scale * ds * k[col_off + d]);
+        }
+
+        // Update dK and dV (atomic needed)
+        for (int d = tid; d < D; d += blockDim.x) {
             atomicAdd(gk + col_off + d, softmax_scale * ds * q[row_off + d]);
+            atomicAdd(gv + col_off + d, p * go[row_off + d]);
         }
     }
 }
@@ -378,10 +375,10 @@ __global__ void FlashAttentionBackwardKernel(const float *Q, const float *K, con
 void FlashAttentionForward(const Tensor &q, const Tensor &k, const Tensor &v, Tensor &output, Tensor &softmax_lse,
                            float dropout_p, float softmax_scale, bool is_causal, const Device &device) {
     // Get dimensions
-    auto dims = q.Dims(); // (B, T, H, D)
+    auto dims = q.Dims(); // (B, H, T, D)
     int B = dims[0];
-    int T = dims[1];
-    int H = dims[2];
+    int H = dims[1];
+    int T = dims[2];
     int D = dims[3];
 
     // Check data type - only supporting float32 for stub
@@ -433,12 +430,12 @@ void FlashAttentionForward(const Tensor &q, const Tensor &k, const Tensor &v, Te
 }
 
 void FlashAttentionBackward(const Tensor &q, const Tensor &k, const Tensor &v, const Tensor &grad_output, Tensor &grad_q,
-                            Tensor &grad_k, Tensor &grad_v, float softmax_scale, bool is_causal,
-                            const Device &device) {
+                            Tensor &grad_k, Tensor &grad_v, const Tensor &softmax_lse, float softmax_scale,
+                            bool is_causal, const Device &device) {
     auto dims = q.Dims();
     int B = dims[0];
-    int T = dims[1];
-    int H = dims[2];
+    int H = dims[1];
+    int T = dims[2];
     int D = dims[3];
     if (q.Dtype() != DataType::kFLOAT32 || grad_output.Dtype() != DataType::kFLOAT32 || D > D_max) {
         LOG(FATAL) << "FlashAttentionBackward only supports float32 with head_dim <= " << D_max;
@@ -451,6 +448,7 @@ void FlashAttentionBackward(const Tensor &q, const Tensor &k, const Tensor &v, c
     auto *gq_ptr = static_cast<float *>(grad_q.DataPtr());
     auto *gk_ptr = static_cast<float *>(grad_k.DataPtr());
     auto *gv_ptr = static_cast<float *>(grad_v.DataPtr());
+    auto *l_ptr = static_cast<const float *>(softmax_lse.DataPtr());
 
     size_t bytes = grad_q.SizeInBytes();
     cudaMemset(gq_ptr, 0, bytes);
@@ -459,7 +457,7 @@ void FlashAttentionBackward(const Tensor &q, const Tensor &k, const Tensor &v, c
 
     dim3 grid(B, H, T);
     dim3 block(128);
-    FlashAttentionBackwardKernel<<<grid, block>>>(q_ptr, k_ptr, v_ptr, go_ptr, gq_ptr, gk_ptr, gv_ptr, T, H, D,
+    FlashAttentionBackwardKernel<<<grid, block>>>(q_ptr, k_ptr, v_ptr, go_ptr, gq_ptr, gk_ptr, gv_ptr, l_ptr, T, H, D,
                                                   softmax_scale, is_causal);
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
