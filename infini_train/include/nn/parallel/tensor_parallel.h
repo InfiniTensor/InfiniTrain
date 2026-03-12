@@ -37,7 +37,7 @@ public:
     bool skip_bias_add() const;
     bool sequence_parallel() const;
 
-private:
+protected:
     bool bias_ = true;
     bool gather_output_ = false;     // whether to return full local output tensor after forward (need gather)
     bool input_is_parallel_ = false; // will perform an autograd-aware copy when false
@@ -66,7 +66,7 @@ public:
     bool skip_bias_add() const;
     bool sequence_parallel() const;
 
-private:
+protected:
     bool bias_ = true;
     bool reduce_output_ = false;     // whether to return full local output tensor after forward (need reduce)
     bool input_is_parallel_ = false; // will perform an autograd-aware copy when false

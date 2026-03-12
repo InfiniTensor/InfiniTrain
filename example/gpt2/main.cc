@@ -239,7 +239,7 @@ void Train(const nn::parallel::Rank &rank) {
 
     auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
 
-    // Create optimizer - use LoRAModel's TrainableParameters() if LoRA is enabled
+    // Create optimizer - use GetLoRAParameters if LoRA is enabled
     std::vector<std::shared_ptr<Tensor>> params_to_optimize;
     if (lora_enabled) {
         params_to_optimize = nn::lora::GetLoRAParameters(model);

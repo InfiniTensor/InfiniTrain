@@ -4,7 +4,13 @@
 #include <vector>
 
 #include "infini_train/include/nn/lora/lora_config.h"
-#include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/modules/linear.h"
+
+// Forward declarations for test functions (required for friend declarations)
+void test_lora_linear_init();
+void test_lora_linear_forward();
+void test_lora_linear_merge();
+void test_lora_utils();
 
 namespace infini_train {
 class Tensor;
@@ -16,19 +22,13 @@ namespace infini_train::nn::lora {
 // LoRA wrapper for standard Linear layer
 // Implements: y = Wx + b + (alpha/r) * x @ A^T @ B^T
 // Where W is frozen, A and B are trainable low-rank matrices
-class LoRALinear : public nn::CloneableModule<LoRALinear> {
+class LoRALinear : public nn::Linear {
 public:
     static constexpr char kType[] = "LoRALinear";
 
-    // Parameter names
-    static constexpr char kParamWeightName[] = "weight"; // Frozen base weight
-    static constexpr char kParamBiasName[] = "bias";     // Frozen base bias
-    static constexpr char kParamLoraAName[] = "lora_A";  // Trainable A matrix [rank, in_features]
-    static constexpr char kParamLoraBName[] = "lora_B";  // Trainable B matrix [out_features, rank]
-
-    // Constructor from scratch
-    LoRALinear(int64_t in_features, int64_t out_features, const LoRAConfig &config, bool bias = true,
-               const Device *device = nullptr);
+    // Parameter names for LoRA-specific parameters
+    static constexpr char kParamLoraAName[] = "lora_A"; // Trainable A matrix [rank, in_features]
+    static constexpr char kParamLoraBName[] = "lora_B"; // Trainable B matrix [out_features, rank]
 
     // Constructor wrapping existing Linear module (transfers ownership of parameters)
     LoRALinear(std::shared_ptr<nn::Module> base_linear, const LoRAConfig &config);
@@ -43,15 +43,6 @@ public:
     // Get only LoRA parameters (for optimizer)
     std::vector<std::shared_ptr<Tensor>> LoRAParameters() const;
 
-    // Override Parameters() to return all parameters (frozen base + trainable LoRA)
-    std::vector<std::shared_ptr<Tensor>> Parameters() const override;
-
-    // Get trainable parameters (requires_grad == true)
-    std::vector<std::shared_ptr<Tensor>> TrainableParameters() const;
-
-    // Get all parameters including frozen base weights (for state dict)
-    std::vector<std::shared_ptr<Tensor>> AllParameters() const;
-
     // Accessors
     int64_t in_features() const;
     int64_t out_features() const;
@@ -59,17 +50,22 @@ public:
     float scaling() const;
 
 private:
+    // Test-only: Create LoRA module from scratch (normal usage goes through InjectLoRALayers)
+    LoRALinear(int64_t in_features, int64_t out_features, const LoRAConfig &config, bool bias, const Device *device);
+
+    // Test access
+    friend void ::test_lora_linear_init();
+    friend void ::test_lora_linear_forward();
+    friend void ::test_lora_linear_merge();
+    friend void ::test_lora_utils();
+
     void InitLoRAWeights();
     void FreezeBaseWeights();
 
     LoRAConfig config_;
-    int64_t in_features_;
-    int64_t out_features_;
-    bool bias_;
+    int64_t in_features_ = 0;
+    int64_t out_features_ = 0;
     bool merged_ = false;
-
-    // Store original weight for unmerge
-    std::shared_ptr<Tensor> original_weight_;
 };
 
 } // namespace infini_train::nn::lora
