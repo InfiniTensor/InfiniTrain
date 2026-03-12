@@ -127,7 +127,12 @@ Module::NamedModules(std::unordered_set<Module *> *memory, const std::string &pr
     return named_modules;
 }
 
-std::shared_ptr<Module> Module::mutable_module(const std::string &name) { return modules_.at(name); }
+std::shared_ptr<Module> &Module::mutable_module(const std::string &name) { return modules_.at(name); }
+
+void Module::replace_module(const std::string &name, std::shared_ptr<Module> new_module) {
+    CHECK(modules_.find(name) != modules_.end()) << "Module not found: " << name;
+    modules_[name] = new_module;
+}
 
 const Module &Module::module(const std::string &name) const {
     CHECK(modules_.find(name) != modules_.end());

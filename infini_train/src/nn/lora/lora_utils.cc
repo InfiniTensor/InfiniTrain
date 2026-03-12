@@ -1,0 +1,464 @@
+#include "infini_train/include/nn/lora/lora_utils.h"
+
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include "glog/logging.h"
+
+#include "infini_train/include/device.h"
+#include "infini_train/include/nn/lora/lora_linear.h"
+#include "infini_train/include/nn/lora/lora_parallel_linear.h"
+#include "infini_train/include/nn/modules/linear.h"
+#include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/tensor_parallel.h"
+#include "infini_train/include/tensor.h"
+
+namespace infini_train::nn::lora {
+
+std::shared_ptr<Module> GetLoRAModel(std::shared_ptr<Module> model, const LoRAConfig &config) {
+    // In-place injection: modify the module tree directly
+    // No wrapper, no base_model_, no extra layer
+    model = InjectLoRALayers(model, config);
+
+    // Freeze all non-LoRA parameters in the model
+    // This is needed to freeze modules that are NOT LoRA targets (e.g., embedding, LayerNorm)
+    // Uses StateDict() to get ALL parameters (not just trainable ones like Parameters())
+    FreezeBaseModel(model);
+
+    LOG(INFO) << "GetLoRAModel: Applied LoRA in-place, rank=" << config.rank << ", alpha=" << config.alpha;
+    return model;
+}
+
+void ReplaceModuleByPath(std::shared_ptr<Module> model, const std::string &path, std::shared_ptr<Module> new_module) {
+    // Parse the path (e.g., "transformer.h.0.attn.c_attn" -> ["transformer", "h", "0", "attn", "c_attn"])
+    std::vector<std::string> parts;
+    std::string remaining = path;
+    size_t pos = 0;
+    while ((pos = remaining.find('.')) != std::string::npos) {
+        parts.push_back(remaining.substr(0, pos));
+        remaining = remaining.substr(pos + 1);
+    }
+    parts.push_back(remaining);
+
+    // Navigate to parent module
+    std::shared_ptr<Module> current = model;
+    for (size_t i = 0; i < parts.size() - 1; ++i) {
+        current = current->mutable_module(parts[i]);
+        if (!current) {
+            LOG(ERROR) << "ReplaceModuleByPath: Failed to find path: " << path;
+            return;
+        }
+    }
+
+    // Replace the module
+    const std::string &module_name = parts.back();
+    current->mutable_module(module_name) = new_module;
+}
+
+std::shared_ptr<Module> InjectLoRALayers(std::shared_ptr<Module> model, const LoRAConfig &config) {
+    // Use NamedModules() to automatically traverse the entire model hierarchy
+    auto named_modules = model->NamedModules();
+
+    int lora_layers_applied = 0;
+    std::shared_ptr<Module> result = model;
+
+    for (const auto &[name, module] : named_modules) {
+        // Get module type
+        auto type = module->type();
+
+        // Check if this module should have LoRA applied
+        // For root module (name.empty()), check if its type matches target_modules
+        bool should_apply = name.empty() ? config.ShouldApplyLoRA(type) : config.ShouldApplyLoRA(name);
+        if (!should_apply) {
+            continue;
+        }
+
+        if (type == Linear::kType) {
+            if (dynamic_cast<LoRALinear *>(module.get())) {
+                continue;
+            }
+            if (name.empty()) {
+                // Root module is Linear - create new LoRA module and return it
+                result = std::make_shared<LoRALinear>(module, config);
+            } else {
+                auto lora_module = std::make_shared<LoRALinear>(module, config);
+                ReplaceModuleByPath(model, name, lora_module);
+            }
+            lora_layers_applied++;
+        } else if (type == parallel::ColumnParallelLinear::kType) {
+            if (dynamic_cast<LoRAColumnParallelLinear *>(module.get())) {
+                continue;
+            }
+
+            auto column_module = std::dynamic_pointer_cast<parallel::ColumnParallelLinear>(module);
+            CHECK(column_module != nullptr) << "Failed to cast module to ColumnParallelLinear: " << name;
+
+            if (name.empty()) {
+                result = std::make_shared<LoRAColumnParallelLinear>(column_module, config);
+            } else {
+                auto lora_module = std::make_shared<LoRAColumnParallelLinear>(column_module, config);
+                ReplaceModuleByPath(model, name, lora_module);
+            }
+            lora_layers_applied++;
+        } else if (type == parallel::RowParallelLinear::kType) {
+            if (dynamic_cast<LoRARowParallelLinear *>(module.get())) {
+                continue;
+            }
+
+            auto row_module = std::dynamic_pointer_cast<parallel::RowParallelLinear>(module);
+            CHECK(row_module != nullptr) << "Failed to cast module to RowParallelLinear: " << name;
+
+            if (name.empty()) {
+                result = std::make_shared<LoRARowParallelLinear>(row_module, config);
+            } else {
+                auto lora_module = std::make_shared<LoRARowParallelLinear>(row_module, config);
+                ReplaceModuleByPath(model, name, lora_module);
+            }
+            lora_layers_applied++;
+        }
+    }
+
+    LOG(INFO) << "InjectLoRALayers: Applied LoRA to " << lora_layers_applied << " layers "
+              << "(rank=" << config.rank << ", alpha=" << config.alpha << ")";
+    return result;
+}
+
+void FreezeBaseModel(std::shared_ptr<Module> model) {
+    // Freeze all parameters by setting requires_grad to false
+    model->Apply([](Module *m) {
+        for (auto &[name, param] : m->StateDict()) { param->set_requires_grad(false); }
+    });
+
+    // Re-enable training for LoRA parameters (lora_A and lora_B)
+    // This ensures LoRA weights remain trainable after freezing all parameters
+    auto lora_params = GetLoRAParameters(model);
+    for (auto &param : lora_params) { param->set_requires_grad(true); }
+}
+
+void UnfreezeModel(std::shared_ptr<Module> model) {
+    model->Apply([](Module *m) {
+        for (auto &[name, param] : m->StateDict()) { param->set_requires_grad(true); }
+    });
+}
+
+std::vector<std::shared_ptr<Tensor>> GetLoRAParameters(const std::shared_ptr<Module> &model) {
+    std::vector<std::shared_ptr<Tensor>> lora_params;
+    std::unordered_set<const Tensor *> visited;
+
+    auto collect_lora
+        = [&lora_params, &visited](auto *lora_module) {
+              CHECK(!lora_module->IsMerged())
+                  << "GetLoRAParameters() called on merged LoRA module. Call UnmergeLoRAWeights() first.";
+              for (auto &param : lora_module->LoRAParameters()) {
+                  if (visited.insert(param.get()).second) {
+                      lora_params.push_back(param);
+                  }
+              }
+          };
+
+    model->Apply([&collect_lora](Module *m) {
+        if (auto lora_module = dynamic_cast<LoRALinear *>(m)) {
+            collect_lora(lora_module);
+        } else if (auto lora_module = dynamic_cast<LoRAColumnParallelLinear *>(m)) {
+            collect_lora(lora_module);
+        } else if (auto lora_module = dynamic_cast<LoRARowParallelLinear *>(m)) {
+            collect_lora(lora_module);
+        }
+    });
+
+    return lora_params;
+}
+
+std::vector<std::shared_ptr<Tensor>> GetBaseParameters(const std::shared_ptr<Module> &model) {
+    std::vector<std::shared_ptr<Tensor>> base_params;
+
+    for (auto &[name, param] : model->StateDict()) {
+        // Skip LoRA parameters
+        if (name.find(LoRALinear::kParamLoraAName) != std::string::npos
+            || name.find(LoRALinear::kParamLoraBName) != std::string::npos) {
+            continue;
+        }
+        base_params.push_back(param);
+    }
+
+    return base_params;
+}
+
+void MergeLoRAWeights(std::shared_ptr<Module> model) {
+    model->Apply([](Module *m) {
+        if (auto lora = dynamic_cast<LoRALinear *>(m)) {
+            lora->MergeWeights();
+        } else if (auto lora = dynamic_cast<LoRAColumnParallelLinear *>(m)) {
+            lora->MergeWeights();
+        } else if (auto lora = dynamic_cast<LoRARowParallelLinear *>(m)) {
+            lora->MergeWeights();
+        }
+    });
+}
+
+void UnmergeLoRAWeights(std::shared_ptr<Module> model) {
+    model->Apply([](Module *m) {
+        if (auto lora = dynamic_cast<LoRALinear *>(m)) {
+            lora->UnmergeWeights();
+        } else if (auto lora = dynamic_cast<LoRAColumnParallelLinear *>(m)) {
+            lora->UnmergeWeights();
+        } else if (auto lora = dynamic_cast<LoRARowParallelLinear *>(m)) {
+            lora->UnmergeWeights();
+        }
+    });
+}
+
+std::shared_ptr<Module> MergeAndUnload(std::shared_ptr<Module> model) {
+    // First merge all LoRA weights
+    MergeLoRAWeights(model);
+
+    // Traverse model and replace LoRA modules with base modules
+    auto named_modules = model->NamedModules();
+    std::shared_ptr<Module> result = model;
+
+    for (const auto &[name, module] : named_modules) {
+        if (auto *lora = dynamic_cast<LoRALinear *>(module.get())) {
+            // Create base Linear with same dimensions
+            auto base = std::make_shared<nn::Linear>(lora->in_features(), lora->out_features(), lora->has_bias(),
+                                                     lora->parameter(nn::Linear::kParamWeightName)->GetDevice());
+            // Share the merged weight
+            *base->mutable_parameter(nn::Linear::kParamWeightName) = lora->parameter(nn::Linear::kParamWeightName);
+            if (lora->has_bias()) {
+                *base->mutable_parameter(nn::Linear::kParamBiasName) = lora->parameter(nn::Linear::kParamBiasName);
+            }
+
+            if (name.empty()) {
+                result = base;
+            } else {
+                ReplaceModuleByPath(model, name, base);
+            }
+        } else if (auto *lora = dynamic_cast<LoRAColumnParallelLinear *>(module.get())) {
+            auto base = std::make_shared<parallel::ColumnParallelLinear>(
+                lora->in_features(), lora->out_features(), lora->bias(), lora->gather_output(),
+                lora->input_is_parallel(), lora->skip_bias_add(), lora->sequence_parallel());
+            *base->mutable_parameter(parallel::ColumnParallelLinear::kParamWeightName)
+                = lora->parameter(parallel::ColumnParallelLinear::kParamWeightName);
+            if (lora->bias()) {
+                *base->mutable_parameter(parallel::ColumnParallelLinear::kParamBiasName)
+                    = lora->parameter(parallel::ColumnParallelLinear::kParamBiasName);
+            }
+
+            if (name.empty()) {
+                result = base;
+            } else {
+                ReplaceModuleByPath(model, name, base);
+            }
+        } else if (auto *lora = dynamic_cast<LoRARowParallelLinear *>(module.get())) {
+            auto base = std::make_shared<parallel::RowParallelLinear>(
+                lora->in_features(), lora->out_features(), lora->bias(), lora->reduce_output(),
+                lora->input_is_parallel(), lora->skip_bias_add(), lora->sequence_parallel());
+            *base->mutable_parameter(parallel::RowParallelLinear::kParamWeightName)
+                = lora->parameter(parallel::RowParallelLinear::kParamWeightName);
+            if (lora->bias()) {
+                *base->mutable_parameter(parallel::RowParallelLinear::kParamBiasName)
+                    = lora->parameter(parallel::RowParallelLinear::kParamBiasName);
+            }
+
+            if (name.empty()) {
+                result = base;
+            } else {
+                ReplaceModuleByPath(model, name, base);
+            }
+        }
+    }
+
+    // Unfreeze all parameters so the model is fully usable
+    UnfreezeModel(result);
+
+    LOG(INFO) << "MergeAndUnload: Merged LoRA weights and removed LoRA modules";
+    return result;
+}
+
+std::unordered_map<std::string, std::shared_ptr<Tensor>> LoRAStateDict(const std::shared_ptr<Module> &model) {
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> lora_state_dict;
+
+    for (auto &[name, param] : model->StateDict()) {
+        // Only include LoRA parameters
+        if (name.find(LoRALinear::kParamLoraAName) != std::string::npos
+            || name.find(LoRALinear::kParamLoraBName) != std::string::npos) {
+            lora_state_dict[name] = param;
+        }
+    }
+
+    return lora_state_dict;
+}
+
+void LoadLoRAStateDict(std::shared_ptr<Module> model,
+                       const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
+    auto model_state_dict = model->StateDict();
+
+    for (auto &[name, param] : state_dict) {
+        if (model_state_dict.find(name) != model_state_dict.end()) {
+            model_state_dict[name]->CopyFrom(param);
+        } else {
+            LOG(WARNING) << "LoRA parameter not found in model: " << name;
+        }
+    }
+}
+
+void SaveLoRAWeights(const std::shared_ptr<Module> &model, const std::string &filepath) {
+    auto lora_state_dict = LoRAStateDict(model);
+
+    std::ofstream file(filepath, std::ios::binary);
+    CHECK(file.is_open()) << "Failed to open file for writing: " << filepath;
+
+    // Write magic number
+    uint32_t magic = 0x4C4F5241; // "LORA"
+    file.write(reinterpret_cast<const char *>(&magic), sizeof(magic));
+
+    // Write version
+    uint32_t version = 1;
+    file.write(reinterpret_cast<const char *>(&version), sizeof(version));
+
+    // Write number of tensors
+    uint32_t num_tensors = static_cast<uint32_t>(lora_state_dict.size());
+    file.write(reinterpret_cast<const char *>(&num_tensors), sizeof(num_tensors));
+
+    // Write each tensor
+    for (const auto &[name, tensor] : lora_state_dict) {
+        // Write name length and name
+        uint32_t name_len = static_cast<uint32_t>(name.length());
+        file.write(reinterpret_cast<const char *>(&name_len), sizeof(name_len));
+        file.write(name.c_str(), name_len);
+
+        // Write tensor dimensions
+        const auto &dims = tensor->Dims();
+        uint32_t num_dims = static_cast<uint32_t>(dims.size());
+        file.write(reinterpret_cast<const char *>(&num_dims), sizeof(num_dims));
+        for (auto dim : dims) {
+            int64_t d = dim;
+            file.write(reinterpret_cast<const char *>(&d), sizeof(d));
+        }
+
+        // Write tensor data (copy to CPU first if needed)
+        int64_t num_elements = tensor->NumElements();
+        Tensor cpu_tensor = tensor->To(Device(Device::DeviceType::kCPU, 0));
+        file.write(reinterpret_cast<const char *>(cpu_tensor.DataPtr()), num_elements * sizeof(float));
+    }
+
+    file.close();
+    LOG(INFO) << "Saved LoRA weights to " << filepath << " (" << num_tensors << " tensors)";
+}
+
+void LoadLoRAWeights(std::shared_ptr<Module> model, const std::string &filepath) {
+    std::ifstream file(filepath, std::ios::binary);
+    CHECK(file.is_open()) << "Failed to open file for reading: " << filepath;
+
+    // Read and verify magic number
+    uint32_t magic;
+    file.read(reinterpret_cast<char *>(&magic), sizeof(magic));
+    CHECK_EQ(magic, 0x4C4F5241) << "Invalid LoRA file format";
+
+    // Read version
+    uint32_t version;
+    file.read(reinterpret_cast<char *>(&version), sizeof(version));
+    CHECK_EQ(version, 1) << "Unsupported LoRA file version: " << version;
+
+    // Read number of tensors
+    uint32_t num_tensors;
+    file.read(reinterpret_cast<char *>(&num_tensors), sizeof(num_tensors));
+
+    auto model_state_dict = model->StateDict();
+
+    // Read each tensor
+    for (uint32_t i = 0; i < num_tensors; ++i) {
+        // Read name
+        uint32_t name_len;
+        file.read(reinterpret_cast<char *>(&name_len), sizeof(name_len));
+        std::string name(name_len, '\0');
+        file.read(&name[0], name_len);
+
+        // Read dimensions
+        uint32_t num_dims;
+        file.read(reinterpret_cast<char *>(&num_dims), sizeof(num_dims));
+        std::vector<int64_t> dims(num_dims);
+        for (uint32_t j = 0; j < num_dims; ++j) { file.read(reinterpret_cast<char *>(&dims[j]), sizeof(int64_t)); }
+
+        // Calculate number of elements
+        int64_t num_elements = 1;
+        for (auto dim : dims) { num_elements *= dim; }
+
+        // Read tensor data into a temporary CPU tensor
+        auto cpu_tensor = std::make_shared<Tensor>(dims, DataType::kFLOAT32, Device(Device::DeviceType::kCPU, 0));
+        file.read(reinterpret_cast<char *>(cpu_tensor->DataPtr()), num_elements * sizeof(float));
+
+        // Load into model
+        auto it = model_state_dict.find(name);
+        if (it != model_state_dict.end()) {
+            it->second->CopyFrom(cpu_tensor);
+        } else {
+            LOG(WARNING) << "LoRA parameter not found in model: " << name;
+        }
+    }
+
+    file.close();
+    LOG(INFO) << "Loaded LoRA weights from " << filepath << " (" << num_tensors << " tensors)";
+}
+
+int64_t CountTrainableParameters(const std::shared_ptr<Module> &model) {
+    int64_t count = 0;
+    for (auto &param : model->Parameters()) {
+        if (param->requires_grad()) {
+            count += param->NumElements();
+        }
+    }
+    return count;
+}
+
+int64_t CountTotalParameters(const std::shared_ptr<Module> &model) {
+    // Use Parameters() instead of StateDict() to avoid counting:
+    // 1. Shared/duplicated tensors (weight tying)
+    // 2. Buffers (which are not trainable parameters)
+    int64_t count = 0;
+    auto params = model->Parameters();
+    for (auto &param : params) { count += param->NumElements(); }
+    return count;
+}
+
+void PrintLoRASummary(const std::shared_ptr<Module> &model, int global_rank) {
+    int64_t trainable = CountTrainableParameters(model);
+    int64_t total = CountTotalParameters(model);
+    int64_t frozen = total - trainable;
+
+    double trainable_pct = 100.0 * trainable / total;
+
+    std::string title
+        = global_rank >= 0 ? " LoRA Model Summary (Rank " + std::to_string(global_rank) + ") " : " LoRA Model Summary ";
+    size_t pad_left = (40 - title.size()) / 2;
+    size_t pad_right = 40 - title.size() - pad_left;
+    std::string header = std::string(pad_left, '=') + title + std::string(pad_right, '=');
+    std::string separator(header.size(), '=');
+
+    std::cout << header << std::endl;
+    std::cout << "Total parameters:     " << total << std::endl;
+    std::cout << "Trainable parameters: " << trainable << " (" << trainable_pct << "%)" << std::endl;
+    std::cout << "Frozen parameters:    " << frozen << std::endl;
+    std::cout << separator << std::endl;
+}
+
+std::unordered_set<std::string> ParseLoRATargetModules(const std::string &targets) {
+    std::unordered_set<std::string> result;
+    std::stringstream ss(targets);
+    std::string module;
+    while (std::getline(ss, module, ',')) {
+        // Trim whitespace
+        module.erase(module.find_last_not_of(" \t\r\n") + 1);
+        module.erase(0, module.find_first_not_of(" \t\r\n"));
+        if (!module.empty()) {
+            result.insert(module);
+        }
+    }
+    return result;
+}
+
+} // namespace infini_train::nn::lora
