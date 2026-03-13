@@ -10,7 +10,9 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
+#include "infini_train/include/core/models/decode_only_transformer/model.h"
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
@@ -34,7 +36,6 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
-#include "example/gpt2/net.h"
 
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
@@ -91,7 +92,7 @@ constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 
 //
-const std::unordered_map<std::string, GPT2Config> kModelToConfigs = {
+const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
     {"d12", {.block_size = 1024, .vocab_size = 50257, .n_layer = 12, .n_head = 12, .n_embd = 768}},
     {"d24", {.block_size = 1024, .vocab_size = 50257, .n_layer = 24, .n_head = 16, .n_embd = 1024}},
     {"d36", {.block_size = 1024, .vocab_size = 50257, .n_layer = 36, .n_head = 20, .n_embd = 1280}},
@@ -178,10 +179,12 @@ void Train(const nn::parallel::Rank &rank) {
     // ManualSeed(42);
 
     // init the model, either from scratch or from OpenAI pretrained checkpoint
-    GPT2Config model_config;
+    nn::TransformerConfig model_config;
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        model = GPT2::FromLLMC(FLAGS_llmc_filepath);
+        auto gpt2_model = GPT2::FromLLMC(FLAGS_llmc_filepath);
+        model_config = gpt2_model->GetConfig();
+        model = gpt2_model;
     } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
         model = std::make_shared<GPT2>(model_config);

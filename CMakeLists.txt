@@ -200,3 +200,6 @@ target_link_libraries(test_hook infini_train)
 
 add_executable(test_precision_check test/hook/test_precision_check.cc)
 target_link_libraries(test_precision_check infini_train)
+
+add_executable(test_transformer_spec test/transformer_spec/test_transformer_spec.cc)
+link_infini_train_exe(test_transformer_spec)

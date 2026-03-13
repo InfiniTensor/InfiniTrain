@@ -8,7 +8,9 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
+#include "infini_train/include/core/models/decode_only_transformer/model.h"
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
@@ -33,7 +35,6 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
-#include "example/llama3/net.h"
 
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
@@ -160,10 +161,12 @@ void Train(const nn::parallel::Rank &rank) {
     // rng / reproducibility
     // ManualSeed(42);
 
-    LLaMA3Config model_config = LLaMA3Config();
+    nn::TransformerConfig model_config;
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
+        auto llama3_model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
+        model_config = llama3_model->GetConfig();
+        model = llama3_model;
     } else {
         model = std::make_shared<LLaMA3>(model_config);
     }
