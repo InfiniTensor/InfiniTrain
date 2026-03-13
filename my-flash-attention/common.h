@@ -133,6 +133,73 @@ void gloabl_to_shared_swizzle_padded(
   }
 }
 
+
+template <int HEIGHT, int WIDTH, int TB_SIZE>
+__device__ inline
+void global_to_shared_swizzle_float2bfloat16(uint32_t dst, const float* src, int stride, int tid){
+  constexpr int num_elems = 16 / sizeof(float);
+  constexpr int num_iters = HEIGHT * WIDTH / (TB_SIZE * num_elems);
+
+  #pragma unroll
+  for (int iter = 0; iter < num_iters; iter++) {
+    const int idx = (iter * TB_SIZE + tid) * num_elems;
+    const int row = idx / WIDTH;
+    const int col = idx % WIDTH;
+
+    const uint32_t dst_addr = swizzle<WIDTH * sizeof(nv_bfloat16)>(dst + (row * WIDTH + col) * sizeof(nv_bfloat16));
+    const float *src_addr = src + (row * stride + col);
+    float4 reg_f4 = *reinterpret_cast<const float4*>(src_addr);
+
+    __nv_bfloat162 bf_01 = __floats2bfloat162_rn(reg_f4.x, reg_f4.y);
+    __nv_bfloat162 bf_23 = __floats2bfloat162_rn(reg_f4.z, reg_f4.w);
+
+    uint2 reg_store;
+    reg_store.x = reinterpret_cast<uint32_t&>(bf_01);
+    reg_store.y = reinterpret_cast<uint32_t&>(bf_23);
+
+    asm volatile("st.shared.v2.u32 [%0], {%1, %2};" 
+                 :: "r"(dst_addr), "r"(reg_store.x), "r"(reg_store.y));
+  }
+}
+
+template <int HEIGHT, int WIDTH, int TB_SIZE>
+__device__ inline
+void global_to_shared_swizzle_float2bfloat16_padded(
+    uint32_t dst, const float* src, int stride, int tid, int valid_height) {
+    
+    constexpr int num_elems = 16 / sizeof(float);
+    constexpr int num_iters = (HEIGHT * WIDTH) / (TB_SIZE * num_elems);
+
+    #pragma unroll
+    for (int iter = 0; iter < num_iters; iter++) {
+        const int idx = (iter * TB_SIZE + tid) * num_elems;
+        const int row = idx / WIDTH;
+        const int col = idx % WIDTH;
+
+        float4 reg_f4;
+        if (row < valid_height) {
+            const float* src_addr = src + (row * stride + col);
+            reg_f4 = *reinterpret_cast<const float4*>(src_addr);
+        } else {
+            reg_f4 = {0.0f, 0.0f, 0.0f, 0.0f};
+        }
+
+        __nv_bfloat162 bf_01 = __floats2bfloat162_rn(reg_f4.x, reg_f4.y);
+        __nv_bfloat162 bf_23 = __floats2bfloat162_rn(reg_f4.z, reg_f4.w);
+
+        const uint32_t dst_addr = swizzle<WIDTH * sizeof(__nv_bfloat16)>(
+            dst + (row * WIDTH + col) * sizeof(__nv_bfloat16)
+        );
+
+        uint2 reg_store;
+        reg_store.x = reinterpret_cast<uint32_t&>(bf_01);
+        reg_store.y = reinterpret_cast<uint32_t&>(bf_23);
+
+        asm volatile("st.shared.v2.u32 [%0], {%1, %2};" 
+                     :: "r"(dst_addr), "r"(reg_store.x), "r"(reg_store.y));
+    }
+}
+
 // 初始化 shared memory 为 0，使用 swizzle 避免 bank conflict
 template <int HEIGHT, int WIDTH, int TB_SIZE>
 __device__ inline
@@ -190,6 +257,33 @@ void ldmatrix_x4_trans(uint32_t regs[4], uint32_t addr) {
 
 __device__ inline
 void mma_m16n8k16(uint32_t A[4], uint32_t B[2], float D[4]) {
+  asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 "
+              "{%0, %1, %2, %3}, "
+              "{%4, %5, %6, %7}, "
+              "{%8, %9}, "
+              "{%10, %11, %12, %13};"
+              : "=f"(D[0]), "=f"(D[1]), "=f"(D[2]), "=f"(D[3])
+              : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]),
+                "r"(B[0]), "r"(B[1]),
+                "f"(D[0]), "f"(D[1]), "f"(D[2]), "f"(D[3]));
+}
+
+__device__ __forceinline__
+void mma_k16m16n8(uint32_t A[4], uint32_t B[2], float D[4]){
+  // A should be loaded with ldmatrix.trans so it's in row-fragment format representing A^T
+  asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 "
+              "{%0, %1, %2, %3}, "
+              "{%4, %5, %6, %7}, "
+              "{%8, %9}, "
+              "{%10, %11, %12, %13};"
+              : "=f"(D[0]), "=f"(D[1]), "=f"(D[2]), "=f"(D[3])
+              : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]),
+                "r"(B[0]), "r"(B[1]),
+                "f"(D[0]), "f"(D[1]), "f"(D[2]), "f"(D[3]));
+}
+
+__device__ __forceinline__
+void mma_m16k16n8(uint32_t A[4], uint32_t B[2], float D[4]){
   asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 "
               "{%0, %1, %2, %3}, "
               "{%4, %5, %6, %7}, "
