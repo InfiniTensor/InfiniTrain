@@ -335,6 +335,9 @@ const nv_bfloat16 *Q,
                 addr += mma_id_q * MMA_M * BLOCK_KV * sizeof(nv_bfloat16);
                 addr ^= (warp_id * WARP_KV + mma_id_kv * MMA_K) * sizeof(nv_bfloat16);
                 ldmatrix_x4_trans(P_rmem[mma_id_q][mma_id_kv],addr);
+                uint32_t tem = P_rmem[mma_id_q][mma_id_kv][1];
+                P_rmem[mma_id_q][mma_id_kv][1] = P_rmem[mma_id_q][mma_id_kv][2];
+                P_rmem[mma_id_q][mma_id_kv][2] = tem;
             }
         } 
         // 2) update dV: dV <- dV + P.T @ dO
@@ -396,6 +399,9 @@ const nv_bfloat16 *Q,
                 addr += mma_id_q * MMA_M * BLOCK_KV * sizeof(nv_bfloat16);
                 addr ^= (warp_id * WARP_KV + mma_id_kv * MMA_K) * sizeof(nv_bfloat16);
                 ldmatrix_x4_trans(P_rmem[mma_id_q][mma_id_kv],addr);
+                uint32_t tem = P_rmem[mma_id_q][mma_id_kv][1];
+                P_rmem[mma_id_q][mma_id_kv][1] = P_rmem[mma_id_q][mma_id_kv][2];
+                P_rmem[mma_id_q][mma_id_kv][2] = tem;
             }
         }
         uint32_t  Q_rmem_thread_new;
