@@ -4,7 +4,6 @@
 const int MMA_M = 16;
 const int MMA_K = 16;
 const int MMA_N = 8;
-#define DEBUG
 
 // per tile A is m x k: 16 x 16
 // per tile B is n x k: 8 x 16
@@ -67,12 +66,12 @@ void compute_P(const int q_height, const int kv_height, const int dim, auto &q_r
                             bool mask = (kv_global_idx >= kv_len) || (is_causal && kv_global_idx > q_global_idx);
                             s_rmem[mma_id_q][mma_id_kv][i] = mask?0:expf(s_rmem[mma_id_q][mma_id_kv][i] - L[q_local_idx]);
 
-                            //  kv height is also WARP_KV
-                            uint32_t byte_off = q_local_idx * BLOCK_KV * sizeof(nv_bfloat16) + warp_id * kv_height * sizeof(nv_bfloat16) + kv_local_idx * sizeof(nv_bfloat16);
-                            uint32_t swz_off  = swizzle<BLOCK_KV * sizeof(nv_bfloat16)>(byte_off);
-                            nv_bfloat16* dst = reinterpret_cast<nv_bfloat16*>(__cvta_shared_to_generic(P_smem + swz_off));
+                            // P_smem: [BLOCK_Q, BLOCK_KV], row-major
+                            // byte offset = (q_local_idx * BLOCK_KV + warp_id * kv_height + kv_local_idx) * sizeof(nv_bfloat16)
+                            uint32_t byte_off = (q_local_idx * BLOCK_KV + warp_id * kv_height + kv_local_idx) * sizeof(nv_bfloat16);
+                            uint32_t swz_off  = P_smem + swizzle<128>(byte_off);  // BLOCK_KV=64
+                            nv_bfloat16* dst = reinterpret_cast<nv_bfloat16*>(__cvta_shared_to_generic(swz_off));
                             *dst = __float2bfloat16(s_rmem[mma_id_q][mma_id_kv][i]);
-
                         }
                     }
                 }
@@ -171,7 +170,7 @@ const nv_bfloat16 *Q,
     const int bs_id = bid / num_kv_blocks;
     const int batch_id = bs_id / q_head;
     const int q_head_id = bs_id % q_head;
-    const int kv_head_id = q_head / q_kv_ratio;
+    const int kv_head_id = q_head_id / q_kv_ratio;
     const int kv_block_id = bid % num_kv_blocks;
     const int WARP_KV = BLOCK_KV / NUM_WARPS;
     //当前thread block要处理的初始位置
@@ -181,8 +180,8 @@ const nv_bfloat16 *Q,
     V += (batch_id * kv_head * kv_len * DIM + kv_head_id * kv_len * DIM + kv_block_id * BLOCK_KV * DIM); // process [BLOCK_KV, DIM]
     O += (batch_id * q_head * q_len * DIM + q_head_id * q_len * DIM); // process [q_len, DIM]
     dO += (batch_id * q_head * q_len * DIM + q_head_id * q_len * DIM); // process [q_len, DIM]
-    d_temp_K += (batch_id * q_head * kv_len * DIM + q_head_id * kv_len * DIM + kv_block_id * BLOCK_KV * DIM); // process [BLOCK_KV, DIM]
-    d_temp_V += (batch_id * q_head * kv_len * DIM + q_head_id * kv_len * DIM + kv_block_id * BLOCK_KV * DIM); // process [BLOCK_KV, DIM]
+    d_temp_K += (batch_id * q_head * kv_len * DIM + q_head_id * kv_len * DIM); 
+    d_temp_V += (batch_id * q_head * kv_len * DIM + q_head_id * kv_len * DIM);// process [BLOCK_KV, DIM]
     L += (batch_id * q_head * q_len + q_head_id * q_len); //process [q_len,]
     D += (batch_id * q_head * q_len + q_head_id * q_len);
     // Load K, V HBM -> SRAM [BLOCK_KV, DIM]
@@ -262,18 +261,18 @@ const nv_bfloat16 *Q,
             gloabl_to_shared_swizzle_padded<BLOCK_Q, DIM, TB_SIZE>(Q_smem, Q, DIM, tid, q_valid_rows);
             global_to_shared_swizzle_float2bfloat16_padded<BLOCK_Q, DIM, TB_SIZE>(dO_smem, dO, DIM, tid, q_valid_rows);
         }
-        // Load L,D: [BLOCK_Q] from HBM -> shared
         for(int i = tid; i < BLOCK_Q; i += TB_SIZE){
             int idx = i + off_q;
-            if(idx < q_len){
+            if(idx < q_len){ 
                 // load L
                 asm volatile("cp.async.ca.shared.global [%0], [%1], 4;"
                 :: "r"((uint32_t)(L_smem + i * sizeof(float)))
-                , "l"(&L[idx]));
+                , "l"(&L[i])); 
+                
                 // Load D
                 asm volatile("cp.async.ca.shared.global [%0], [%1], 4;"
                 :: "r"((uint32_t)(D_smem + i * sizeof(float)))
-                , "l"(&D[idx])
+                , "l"(&D[i])  
                 );
             }
         }
@@ -318,7 +317,8 @@ const nv_bfloat16 *Q,
         }
 
         // 1) get P
-        compute_P(BLOCK_Q, WARP_KV, DIM, Q_rmem, K_rmem, S_rmem, P_smem, L, is_causal, off_q, kv_start, kv_len, lane_id, warp_id, BLOCK_KV);
+        float* L_smem_ptr = reinterpret_cast<float*>(__cvta_shared_to_generic(L_smem));
+        compute_P(BLOCK_Q, WARP_KV, DIM, Q_rmem, K_rmem, S_rmem, P_smem, L_smem_ptr, is_causal, off_q, kv_start, kv_len, lane_id, warp_id, BLOCK_KV);
         
         // load P x4 trans
         uint32_t P_rmem[BLOCK_Q / MMA_M][WARP_KV / MMA_K][4];
@@ -326,7 +326,7 @@ const nv_bfloat16 *Q,
         {
             const int row_off = lane_id % 16;
             const int col_off = lane_id / 16 * 8;
-            p_smem_thread = swizzle<BLOCK_KV * sizeof(nv_bfloat16)> (P_smem + warp_id * WARP_KV * sizeof(nv_bfloat16) + (row_off * BLOCK_KV + col_off + warp_id * WARP_KV) * sizeof(nv_bfloat16));   
+            p_smem_thread = swizzle<BLOCK_KV * sizeof(nv_bfloat16)> (P_smem + (row_off * BLOCK_KV + warp_id * WARP_KV + col_off) * sizeof(nv_bfloat16));   
         }
         for(int mma_id_q = 0; mma_id_q < BLOCK_Q / MMA_M; mma_id_q++){
             for(int mma_id_kv = 0; mma_id_kv < WARP_KV / MMA_K; mma_id_kv++){
@@ -372,14 +372,14 @@ const nv_bfloat16 *Q,
         // write dS to share memory
         for(int mma_id_q = 0; mma_id_q < BLOCK_Q / MMA_M; mma_id_q++){
             for(int mma_id_kv = 0; mma_id_kv < WARP_KV / MMA_K; mma_id_kv++){
-                nv_bfloat162* regs = reinterpret_cast<nv_bfloat162*> P_rmem[mma_id_q][mma_id_kv];
+                nv_bfloat162* regs = reinterpret_cast<nv_bfloat162*>(P_rmem[mma_id_q][mma_id_kv]);
                 int row0 = lane_id >> 2;
-                int col0 = lane_id % 4;
+                int col0 = (lane_id % 4) * 2;
                 for(int i = 0; i < 2; i++){
                     for(int j = 0; j < 2; j++){
                         uint32_t byte_off = (mma_id_q * MMA_M + row0 + 8 * i) * BLOCK_KV * sizeof(nv_bfloat16) + (warp_id * WARP_KV + mma_id_kv * MMA_K + col0 + 8 * j) * sizeof(nv_bfloat16);
-                        uint32_t swz_off  = swizzle<BLOCK_KV * sizeof(nv_bfloat16)>(byte_off);
-                        nv_bfloat162* dst = reinterpret_cast<nv_bfloat162*>((P_smem + swz_off));
+                        uint32_t swz_off  = P_smem + swizzle<128>(byte_off);  // BLOCK_KV=64
+                        nv_bfloat162* dst = reinterpret_cast<nv_bfloat162*>(__cvta_shared_to_generic(swz_off));
                         *dst = regs[i * 2 + j];
                     }
                 }
@@ -409,7 +409,7 @@ const nv_bfloat16 *Q,
                 uint32_t addr = Q_rmem_thread_new;
                 addr += mma_id_q * MMA_K * DIM * sizeof(nv_bfloat16);
                 addr ^= mma_id_d * MMA_N * sizeof(nv_bfloat16);
-                ldmatrix_x2_trans(Q_rmem_thread_new[mma_id_q][mma_id_d], addr);
+                ldmatrix_x2_trans(Q_new_rmem[mma_id_q][mma_id_d], addr);
             }
         }
         ATB(BLOCK_Q, BLOCK_KV, DIM, P_rmem, Q_rmem, dK_rmem);
@@ -421,7 +421,6 @@ const nv_bfloat16 *Q,
         Q += q_valid_rows * DIM;
         O += q_valid_rows * DIM;
         dO += q_valid_rows * DIM;
-        dQ += q_valid_rows * DIM;
         L += q_valid_rows;
         D += q_valid_rows;
     }
@@ -430,50 +429,6 @@ const nv_bfloat16 *Q,
     write_dkv(dK_rmem, d_temp_K, WARP_KV, DIM, lane_id, kv_start, kv_len);
     write_dkv(dV_rmem, d_temp_V, WARP_KV, DIM, lane_id, kv_start, kv_len);
 }
-
-/**
- * @brief flash attention backward的入口函数
- * @param[in] Q (bs, q_head, q_len, head_dim)
- * @param[in] K (bs, kv_head, kv_len, head_dim)
- * @param[in] V (bs, kv_head, kv_len, head_dim)
- * @param[in] O (bs, q_head, q_len, head_dim)
- * @param[in] L (bs, q_head, q_len)
- * @param[in] dO same shape as O
- */
-// void attention_v6_backward(
-//     const nv_bfloat16 *Q,
-//     const nv_bfloat16 *K,
-//     const nv_bfloat16 *V,
-//     const nv_bfloat16 *O,
-//     const float *L,
-//     const float *dO,
-//     float *dQ,
-//     float *dK,
-//     float *dV,
-//     int batch_size,
-//     int q_head,
-//     int kv_head,
-//     int q_len,
-//     int kv_len,
-//     int head_dim,
-//     bool is_causal
-// ){
-//     ASSERT_NOT_NULL(Q, K, V, O, dO, dQ, dK, dV);
-//     if(q_head % kv_head){
-//         ERROR("q_head is %d, kv_head is %d, q_head % kv_head not equal 0", q_head,kv_head);
-//     }
-//     // 四种情况
-//     // 1) 非gqa + 非causal
-//     // 2) gqa + 非causal
-//     // 3) 非gqa + causal
-//     // 4) gqa + causal
-
-//     if(is_causal == false && q_head == kv_head){
-//         #ifdef DEBUG
-
-//         #endif
-//     }
-// }
 
 int main(){
     const int batch_size = 4;
@@ -543,19 +498,18 @@ int main(){
     cudaMemcpy(d_k, dk_in.data(), kv_N * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_v, dv_in.data(), kv_N * sizeof(float), cudaMemcpyHostToDevice);
 
-    const int KV_BLOCKS = 64;
-    const int Q_BLOCKS = 64;
-    const int kv_blocks = batch_size * q_head * cdiv(kv_len, KV_BLOCKS);
-    const int TB_SIZE = 128;
-    const int WARP_SIZE = 32;
-    const int NUM_WARPS = 4;
-    const int DIM = 64;
+    constexpr int KV_BLOCKS = 64;
+    constexpr int Q_BLOCKS = 64;
+    constexpr int kv_blocks = batch_size * q_head * cdiv(kv_len, KV_BLOCKS);
+    constexpr int TB_SIZE = 128;
+    constexpr int NUM_WARPS = 4;
+    constexpr int DIM = 64;
 
-    int smem_size = max(KV_BLOCKS, Q_BLOCKS) * DIM * sizeof(nv_bfloat16) + 
+    constexpr int smem_size = (KV_BLOCKS > Q_BLOCKS ? KV_BLOCKS : Q_BLOCKS) * DIM * sizeof(nv_bfloat16) +
                     KV_BLOCKS * DIM * sizeof(nv_bfloat16) + 2 * Q_BLOCKS * sizeof(float) +
-                    Q_BLOCKS * DIM * sizeof(float);
+                    Q_BLOCKS * DIM * sizeof(float) + Q_BLOCKS * KV_BLOCKS * sizeof(nv_bfloat16);
 
-    flash_atten_bakward_1<kv_blocks, KV_BLOCKS, DIM, NUM_WARPS><<<kv_blocks, TB_SIZE, smem_size>>>(
+    flash_atten_bakward_1<Q_BLOCKS, KV_BLOCKS, DIM, NUM_WARPS><<<kv_blocks, TB_SIZE, smem_size>>>(
         q, k, v, o,
         l, d, 
         d_o, d_q, d_k, d_v,
@@ -563,5 +517,9 @@ int main(){
         is_causal
     );
     cudaStreamSynchronize(0);
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("CUDA error: %s\n", cudaGetErrorString(err));
+    }
 
 }
