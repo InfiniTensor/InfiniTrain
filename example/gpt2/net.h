@@ -141,7 +141,7 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
     static std::shared_ptr<GPT2> FromPretrained(ModelType model_type);
-    static std::shared_ptr<GPT2> FromLLMC(const std::string &filepath);
+    static std::shared_ptr<GPT2> FromLLMC(const std::string &filepath, bool flash = false);
 
     int GetChunkSize() const;
 

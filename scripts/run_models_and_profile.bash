@@ -135,7 +135,10 @@ args_string_for_test() {
     jq -r --argjson i "$idx" '
       .tests[$i].args
       | to_entries[]
-      | "--\(.key) \(.value|tostring)"
+      | if .value == true then "--\(.key)"
+        elif .value == false then "--no\(.key)"
+        else "--\(.key)=\(.value|tostring)"
+        end
     ' "$CONFIG_FILE" | paste -sd' ' -
 }
 

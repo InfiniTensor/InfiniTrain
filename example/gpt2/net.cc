@@ -365,7 +365,7 @@ std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::
 }
 } // namespace
 
-std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
+std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath, bool flash) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -394,7 +394,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
                                                         .n_layer = n_layer,
                                                         .n_head = n_head,
                                                         .n_embd = n_embd,
-                                                        .flash = true});
+                                                        .flash = flash});
 
     LOG(INFO) << "magic: " << magic << " version: " << version << " block_size: " << block_size
               << " vocab_size: " << vocab_size << " n_layer: " << n_layer << " n_head: " << n_head
