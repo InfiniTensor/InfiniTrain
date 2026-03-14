@@ -52,7 +52,7 @@ void AB(const int m, const int k, const int n, auto &a_rmem, auto &b_rmem, auto 
 // apply padding mask
 __device__ __forceinline__
 void compute_P(const int q_height, const int kv_height, const int dim, auto &q_rmem, auto &kv_rmem, auto &s_rmem, auto &P_smem, auto &L,
-               bool is_causal, int q_start, int kv_start, int kv_len, int lane_id, int warp_id, int BLOCK_KV){
+               bool is_causal, int q_start, int kv_start, int kv_len, int lane_id, int warp_id, int BLOCK_KV, float scale){
                 for(int mma_id_q = 0; mma_id_q < q_height / MMA_M; mma_id_q++){
                     for(int mma_id_kv = 0; mma_id_kv < kv_height / MMA_N; mma_id_kv++){
                         for(int mma_id_d = 0; mma_id_d < dim / MMA_K; mma_id_d++){
@@ -64,7 +64,7 @@ void compute_P(const int q_height, const int kv_height, const int dim, auto &q_r
                             int q_global_idx = q_start + q_local_idx;
                             int kv_global_idx = kv_start + kv_local_idx;
                             bool mask = (kv_global_idx >= kv_len) || (is_causal && kv_global_idx > q_global_idx);
-                            s_rmem[mma_id_q][mma_id_kv][i] = mask?0:expf(s_rmem[mma_id_q][mma_id_kv][i] - L[q_local_idx]);
+                            s_rmem[mma_id_q][mma_id_kv][i] = mask?0:expf(s_rmem[mma_id_q][mma_id_kv][i]*scale - L[q_local_idx]);
 
                             // P_smem: [BLOCK_Q, BLOCK_KV], row-major
                             // byte offset = (q_local_idx * BLOCK_KV + warp_id * kv_height + kv_local_idx) * sizeof(nv_bfloat16)
@@ -97,7 +97,7 @@ void get_S(auto &p_rmem, auto &dp_rmem, auto &d, int height, int width, int lane
 }
 
 __device__ __forceinline__
-void write_dQ(auto &dq_rmem, auto &d_q, int height, int width, int lane_id, int q_start, int q_len){
+void write_dQ(auto &dq_rmem, auto &d_q, int height, int width, int lane_id, int q_start, int q_len, float scale){
     for(int mma_id_q = 0; mma_id_q < height / MMA_M; mma_id_q++){
         for(int mma_id_d = 0; mma_id_d < width / MMA_N; mma_id_d++){
             int q_local_idx = mma_id_q * MMA_M + (lane_id >> 2);
@@ -105,32 +105,32 @@ void write_dQ(auto &dq_rmem, auto &d_q, int height, int width, int lane_id, int 
             int d_local_idx = (lane_id % 4) * 2 ;
             if(q_global_idx < q_len){
                 float *this_dq = &d_q[q_global_idx * width + mma_id_d * MMA_N + d_local_idx];
-                atomicAdd(this_dq,     dq_rmem[mma_id_q][mma_id_d][0]);
-                atomicAdd(this_dq + 1, dq_rmem[mma_id_q][mma_id_d][1]);
+                atomicAdd(this_dq,     dq_rmem[mma_id_q][mma_id_d][0] * scale);
+                atomicAdd(this_dq + 1, dq_rmem[mma_id_q][mma_id_d][1] * scale);
             }
             if(q_global_idx + 8 < q_len){
                 float *this_dq = &d_q[(q_global_idx + 8) * width + mma_id_d * MMA_N + d_local_idx];
-                atomicAdd(this_dq,     dq_rmem[mma_id_q][mma_id_d][2]);
-                atomicAdd(this_dq + 1, dq_rmem[mma_id_q][mma_id_d][3]);
+                atomicAdd(this_dq,     dq_rmem[mma_id_q][mma_id_d][2] * scale);
+                atomicAdd(this_dq + 1, dq_rmem[mma_id_q][mma_id_d][3] * scale);
             }
         }
     }
 }
 
 __device__ __forceinline__
-void write_dkv(auto &d_kv_rmem, auto &d_kv, int height, int width, int lane_id, int kv_start, int kv_len){
+void write_dkv(auto &d_kv_rmem, auto &d_kv, int height, int width, int lane_id, int kv_start, int kv_len, float scale){
     for(int mma_id_kv = 0; mma_id_kv < height / MMA_M; mma_id_kv++){
         for(int mma_id_d = 0; mma_id_d < width / MMA_N; mma_id_d++){
             int kv_local_idx = mma_id_kv * MMA_M + (lane_id >> 2);
             int kv_global_idx = kv_start + kv_local_idx;
             int d_local_idx = (lane_id % 4) * 2;
             if(kv_global_idx < kv_len){
-                float2 vals = {d_kv_rmem[mma_id_kv][mma_id_d][0], d_kv_rmem[mma_id_kv][mma_id_d][1]};
+                float2 vals = {d_kv_rmem[mma_id_kv][mma_id_d][0] * scale, d_kv_rmem[mma_id_kv][mma_id_d][1] * scale};
                 float2 *this_dkv = reinterpret_cast<float2 *>(&d_kv[kv_global_idx * width + mma_id_d * MMA_N + d_local_idx]);
                 *this_dkv = vals;
             }
             if(kv_global_idx + 8 < kv_len){
-                float2 vals = {d_kv_rmem[mma_id_kv][mma_id_d][2], d_kv_rmem[mma_id_kv][mma_id_d][3]};
+                float2 vals = {d_kv_rmem[mma_id_kv][mma_id_d][2] * scale, d_kv_rmem[mma_id_kv][mma_id_d][3] * scale};
                 float2 *this_dkv = reinterpret_cast<float2 *>(&d_kv[(kv_global_idx + 8) * width + mma_id_d * MMA_N + d_local_idx]);
                 *this_dkv = vals;
             }
@@ -157,6 +157,7 @@ const nv_bfloat16 *Q,
     int q_len,
     int kv_len,
     int head_dim,
+    float scale,
     bool is_causal = false,
     int q_kv_ratio = 1
 ){
@@ -318,7 +319,7 @@ const nv_bfloat16 *Q,
 
         // 1) get P
         float* L_smem_ptr = reinterpret_cast<float*>(__cvta_shared_to_generic(L_smem));
-        compute_P(BLOCK_Q, WARP_KV, DIM, Q_rmem, K_rmem, S_rmem, P_smem, L_smem_ptr, is_causal, off_q, kv_start, kv_len, lane_id, warp_id, BLOCK_KV);
+        compute_P(BLOCK_Q, WARP_KV, DIM, Q_rmem, K_rmem, S_rmem, P_smem, L_smem_ptr, is_causal, off_q, kv_start, kv_len, lane_id, warp_id, BLOCK_KV, scale);
         
         // load P x4 trans
         uint32_t P_rmem[BLOCK_Q / MMA_M][WARP_KV / MMA_K][4];
@@ -412,10 +413,10 @@ const nv_bfloat16 *Q,
                 ldmatrix_x2_trans(Q_new_rmem[mma_id_q][mma_id_d], addr);
             }
         }
-        ATB(BLOCK_Q, BLOCK_KV, DIM, P_rmem, Q_rmem, dK_rmem);
+        ATB(BLOCK_Q, WARP_KV, DIM, P_rmem, Q_new_rmem, dK_rmem);
 
         // 7) atomic add and write to dQ
-        write_dQ(dQ_rmem, dQ, BLOCK_Q, DIM, lane_id, off_q, q_len);
+        write_dQ(dQ_rmem, dQ, BLOCK_Q, DIM, lane_id, off_q, q_len, scale);
 
         // 8) update address: Q, O, dO, dQ,  L, D
         Q += q_valid_rows * DIM;
@@ -426,100 +427,90 @@ const nv_bfloat16 *Q,
     }
 
     // last: write to dK, dV
-    write_dkv(dK_rmem, d_temp_K, WARP_KV, DIM, lane_id, kv_start, kv_len);
-    write_dkv(dV_rmem, d_temp_V, WARP_KV, DIM, lane_id, kv_start, kv_len);
+    write_dkv(dK_rmem, d_temp_K, WARP_KV, DIM, lane_id, kv_start, kv_len, scale);
+    write_dkv(dV_rmem, d_temp_V, WARP_KV, DIM, lane_id, kv_start, kv_len, 1.0);
 }
 
-int main(){
-    const int batch_size = 4;
-    const int q_head = 8;
-    const int kv_head = 8;
-    const int q_len = 256;
-    const int kv_len = 256;
-    const int head_dim = 64;
-    bool is_causal = true;
 
-    std::mt19937 gen(42); 
-    std::uniform_real_distribution<float> dis(-1.0f, 1.0f);
-    constexpr  int q_N = batch_size * q_head * q_len * head_dim;
-    constexpr int kv_N = batch_size * kv_head * kv_len * head_dim;
-    constexpr int l_N = batch_size * q_head * q_len;
-    std::vector<__nv_bfloat16> q_in(q_N), k_in(kv_N), v_in(kv_N), o_in(q_N);
-    std::vector<float> l_in(l_N), d_in(l_N), do_in(q_N), dq_in(q_N), dk_in(kv_N), dv_in(kv_N);
+// ============ PyTorch Python Binding ============
+#include <torch/extension.h>
+#include <pybind11/pybind11.h>
 
-    #pragma unroll
-    for(int i = 0; i < q_N; i++){
-        q_in[i] = __float2bfloat16(dis(gen));
-        o_in[i] = __float2bfloat16(dis(gen));
-        do_in[i] = dis(gen);
-        dq_in[i] = dis(gen);
-    }
+namespace py = pybind11;
 
-    #pragma unroll
-    for(int i = 0; i < kv_N; i++){
-        k_in[i] = __float2bfloat16(dis(gen));
-        v_in[i] = __float2bfloat16(dis(gen));
-        dk_in[i] = dis(gen);
-        dv_in[i] = dis(gen);
-    }
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> flash_attention_backward(
+    torch::Tensor Q,   // [bs, q_head, q_seq, head_dim], bf16
+    torch::Tensor K,   // [bs, kv_head, kv_seq, head_dim], bf16
+    torch::Tensor V,   // [bs, kv_head, kv_seq, head_dim], bf16
+    torch::Tensor O,   // [bs, q_head, q_seq, head_dim], bf16, forward output
+    torch::Tensor L,   // [bs, q_head, q_seq], float, logsumexp
+    torch::Tensor D,   // [bs, q_head, q_seq], float, sum(dO * O)
+    torch::Tensor dO,  // [bs, q_head, q_seq, head_dim], float
+    bool is_causal = true
+) {
+    const int bs = Q.size(0);
+    const int q_head = Q.size(1);
+    const int q_len = Q.size(2);
+    const int head_dim = Q.size(3);
+    const int kv_head = K.size(1);
+    const int kv_len = K.size(2);
 
-    #pragma unroll
-    for(int i = 0; i < l_N; i++){
-        l_in[i] = dis(gen);
-        d_in[i] = dis(gen);
-    }
+    const int q_kv_ratio = q_head / kv_head;
 
-    // allocate device memory
-    nv_bfloat16 *q, *k, *v, *o;
-    float *l, *d, *d_o, *d_q, *d_k, *d_v;
+    // 临时 buffer (每个 kv block 累加)
+    auto opts_f32 = Q.options().dtype(torch::kFloat32); // ✅ 继承 Q 的 device (cuda)
 
-    cudaMalloc(&q, q_N * sizeof(nv_bfloat16)); 
-    cudaMalloc(&k, kv_N * sizeof(nv_bfloat16));
-    cudaMalloc(&v, kv_N * sizeof(nv_bfloat16));
-    cudaMalloc(&o, q_N * sizeof(nv_bfloat16));
+    auto dQ     = torch::zeros({bs, q_head, q_len,  head_dim}, opts_f32);
+    // ✅ d_temp_K/V 必须在 CUDA 上，用 opts_f32 继承 device
+    auto d_temp_K = torch::zeros({bs, q_head, kv_len, head_dim}, opts_f32);
+    auto d_temp_V = torch::zeros({bs, q_head, kv_len, head_dim}, opts_f32);
 
-    cudaMalloc(&l, l_N * sizeof(float));
-    cudaMalloc(&d, l_N * sizeof(float));
-    cudaMalloc(&d_o, q_N * sizeof(float));
-    cudaMalloc(&d_q, q_N * sizeof(float));
-    cudaMalloc(&d_k, kv_N * sizeof(float));
-    cudaMalloc(&d_v, kv_N * sizeof(float));
 
-    // host -> device
-    cudaMemcpy(q, q_in.data(), q_N * sizeof(nv_bfloat16), cudaMemcpyHostToDevice);
-    cudaMemcpy(k, k_in.data(), kv_N * sizeof(nv_bfloat16), cudaMemcpyHostToDevice);
-    cudaMemcpy(v, v_in.data(), kv_N * sizeof(nv_bfloat16), cudaMemcpyHostToDevice);
-    cudaMemcpy(o, o_in.data(), q_N * sizeof(nv_bfloat16), cudaMemcpyHostToDevice);
-
-    cudaMemcpy(l, l_in.data(), l_N * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d, d_in.data(), l_N * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_o, do_in.data(), q_N * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_q, dq_in.data(), q_N * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_k, dk_in.data(), kv_N * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_v, dv_in.data(), kv_N * sizeof(float), cudaMemcpyHostToDevice);
-
-    constexpr int KV_BLOCKS = 64;
-    constexpr int Q_BLOCKS = 64;
-    constexpr int kv_blocks = batch_size * q_head * cdiv(kv_len, KV_BLOCKS);
-    constexpr int TB_SIZE = 128;
-    constexpr int NUM_WARPS = 4;
+    constexpr int BLOCK_Q = 64;
+    constexpr int BLOCK_KV = 64;
     constexpr int DIM = 64;
+    constexpr int NUM_WARPS = 4;
+    constexpr int TB_SIZE = NUM_WARPS * 32;
 
-    constexpr int smem_size = (KV_BLOCKS > Q_BLOCKS ? KV_BLOCKS : Q_BLOCKS) * DIM * sizeof(nv_bfloat16) +
-                    KV_BLOCKS * DIM * sizeof(nv_bfloat16) + 2 * Q_BLOCKS * sizeof(float) +
-                    Q_BLOCKS * DIM * sizeof(float) + Q_BLOCKS * KV_BLOCKS * sizeof(nv_bfloat16);
+    const int num_kv_blocks = (kv_len + BLOCK_KV - 1) / BLOCK_KV;
+    const int num_blocks = bs * q_head * num_kv_blocks;
 
-    flash_atten_bakward_1<Q_BLOCKS, KV_BLOCKS, DIM, NUM_WARPS><<<kv_blocks, TB_SIZE, smem_size>>>(
-        q, k, v, o,
-        l, d, 
-        d_o, d_q, d_k, d_v,
-        batch_size, q_head, kv_head, q_len, kv_len, head_dim,
-        is_causal
+    constexpr int smem_size =
+        (BLOCK_KV > BLOCK_Q ? BLOCK_KV : BLOCK_Q) * DIM * sizeof(nv_bfloat16) +
+        BLOCK_KV * DIM * sizeof(nv_bfloat16) +
+        2 * BLOCK_Q * sizeof(float) +
+        BLOCK_Q * DIM * sizeof(float) +
+        BLOCK_Q * BLOCK_KV * sizeof(nv_bfloat16);
+
+    // 调整 layout: [bs, head, seq, dim] -> [bs * head * seq, dim]
+    // 这里简化处理，假设 layout 匹配
+    auto Q_ptr = reinterpret_cast<nv_bfloat16*>(Q.data_ptr());
+    auto K_ptr = reinterpret_cast<nv_bfloat16*>(K.data_ptr());
+    auto V_ptr = reinterpret_cast<nv_bfloat16*>(V.data_ptr());
+    auto O_ptr = reinterpret_cast<nv_bfloat16*>(O.data_ptr());
+    auto L_ptr = L.data_ptr<float>();
+    auto D_ptr = D.data_ptr<float>();
+    auto dO_ptr = dO.data_ptr<float>();
+    auto dQ_ptr = dQ.data_ptr<float>();
+    auto d_temp_K_ptr = d_temp_K.data_ptr<float>();
+    auto d_temp_V_ptr = d_temp_V.data_ptr<float>();
+
+    cudaStream_t stream = 0;
+    const float scale = 1.0f / sqrtf((float)head_dim);
+    flash_atten_bakward_1<BLOCK_Q, BLOCK_KV, DIM, NUM_WARPS><<<num_blocks, TB_SIZE, smem_size, stream>>>(
+        Q_ptr, K_ptr, V_ptr, O_ptr,
+        L_ptr, D_ptr, dO_ptr,
+        dQ_ptr, d_temp_K_ptr, d_temp_V_ptr,
+        bs, q_head, kv_head, q_len, kv_len, head_dim,
+        scale, is_causal, q_kv_ratio
     );
-    cudaStreamSynchronize(0);
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        printf("CUDA error: %s\n", cudaGetErrorString(err));
-    }
 
+    cudaDeviceSynchronize();
+
+    return std::make_tuple(dQ, d_temp_K, d_temp_V);
+}
+
+PYBIND11_MODULE(attention_bp, m) {
+    m.def("flash_attention_backward", &flash_attention_backward,
+          "Flash Attention Backward");
 }
