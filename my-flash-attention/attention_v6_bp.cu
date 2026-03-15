@@ -38,16 +38,21 @@ void AB(const int m, const int k, const int n, auto &a_rmem, auto &b_rmem, auto 
 }
 __device__ __forceinline__
 void get_S(auto &p_rmem, auto &dp_rmem, auto &d, int height, int width, int lane_id){
+    // P_rmem layout (ldmatrix_x4, A-operand for mma m16n8k16):
+    //   reg[0] = P[row1, lower-K cols]   reg[1] = P[row1, upper-K cols]
+    //   reg[2] = P[row2, lower-K cols]   reg[3] = P[row2, upper-K cols]
+    // dP_rmem[h][0] (lower N-tile): dp[0,1]=row1 lower-K, dp[2,3]=row2 lower-K
+    // dP_rmem[h][1] (upper N-tile): dp[0,1]=row1 upper-K, dp[2,3]=row2 upper-K
     for(int mma_id_h = 0; mma_id_h < height / MMA_M; mma_id_h++){
-        for(int mma_id_w = 0; mma_id_w < width / MMA_N; mma_id_w++){
-            float* dp_regs = dp_rmem[mma_id_h][mma_id_w]; // 4个float
-
-            nv_bfloat162* this_p_rmem = reinterpret_cast<nv_bfloat162 *>(p_rmem[mma_id_h][mma_id_w / 2]);
-            int row_idx1 = mma_id_h * MMA_M + (lane_id >> 2);
-            int row_idx2 = row_idx1 + 8;
-            this_p_rmem[(mma_id_w % 2) * 2] = this_p_rmem[(mma_id_w % 2) * 2] * __float22bfloat162_rn({dp_regs[0] - d[row_idx1], dp_regs[1] - d[row_idx1]});
-            this_p_rmem[(mma_id_w % 2) * 2 + 1] = this_p_rmem[(mma_id_w % 2) * 2 + 1] * __float22bfloat162_rn({dp_regs[2] - d[row_idx2], dp_regs[3] - d[row_idx2]});
-        }
+        nv_bfloat162* p = reinterpret_cast<nv_bfloat162*>(p_rmem[mma_id_h][0]);
+        float* dp0 = dp_rmem[mma_id_h][0];  // lower-K cols
+        float* dp1 = dp_rmem[mma_id_h][1];  // upper-K cols
+        int row1 = mma_id_h * MMA_M + (lane_id >> 2);
+        int row2 = row1 + 8;
+        p[0] = p[0] * __float22bfloat162_rn({dp0[0] - d[row1], dp0[1] - d[row1]});
+        p[1] = p[1] * __float22bfloat162_rn({dp1[0] - d[row1], dp1[1] - d[row1]});
+        p[2] = p[2] * __float22bfloat162_rn({dp0[2] - d[row2], dp0[3] - d[row2]});
+        p[3] = p[3] * __float22bfloat162_rn({dp1[2] - d[row2], dp1[3] - d[row2]});
     }
 }
 
@@ -67,7 +72,7 @@ void compute_P(const int q_height, const int kv_height, const int dim, auto &q_r
                             bool mask = (kv_global_idx >= kv_len) || (is_causal && kv_global_idx > q_global_idx);
                             s_rmem[mma_id_q][mma_id_kv][i] = mask?0:expf(s_rmem[mma_id_q][mma_id_kv][i]*scale - L[q_local_idx]);
                             uint32_t byte_off = (q_local_idx * BLOCK_KV + warp_id * kv_height + kv_local_idx) * sizeof(nv_bfloat16);
-                            uint32_t swz_off  = P_smem + swizzle<128>(byte_off);  // BLOCK_KV=64
+                            uint32_t swz_off  = swizzle<128>(P_smem + byte_off);  // use absolute-address swizzle
                             nv_bfloat16* dst = reinterpret_cast<nv_bfloat16*>(__cvta_shared_to_generic(swz_off));
                             *dst = __float2bfloat16(s_rmem[mma_id_q][mma_id_kv][i]);
                         }
@@ -351,8 +356,8 @@ const nv_bfloat16 *Q,
         for(int mma_id_kv = 0; mma_id_kv < WARP_KV / MMA_K; mma_id_kv++){
             for(int mma_id_d = 0; mma_id_d < DIM / MMA_N; mma_id_d++){
                 uint32_t k_addr = K_smem_thread;
-                k_addr += mma_id_kv * MMA_N * DIM *sizeof(nv_bfloat16);
-                k_addr ^= mma_id_d * MMA_K * sizeof(nv_bfloat16);
+                k_addr += mma_id_kv * MMA_K * DIM *sizeof(nv_bfloat16);
+                k_addr ^= mma_id_d * MMA_N * sizeof(nv_bfloat16);
                 ldmatrix_x2_trans(new_K_rmem[mma_id_kv][mma_id_d], k_addr);
             }
         }
@@ -366,7 +371,7 @@ const nv_bfloat16 *Q,
                 for(int i = 0; i < 2; i++){
                     for(int j = 0; j < 2; j++){
                         uint32_t byte_off = (mma_id_q * MMA_M + row0 + 8 * i) * BLOCK_KV * sizeof(nv_bfloat16) + (warp_id * WARP_KV + mma_id_kv * MMA_K + col0 + 8 * j) * sizeof(nv_bfloat16);
-                        uint32_t swz_off  = P_smem + swizzle<128>(byte_off);  // BLOCK_KV=64
+                        uint32_t swz_off  = swizzle<128>(P_smem + byte_off);  // use absolute-address swizzle
                         nv_bfloat162* dst = reinterpret_cast<nv_bfloat162*>(__cvta_shared_to_generic(swz_off));
                         *dst = regs[i * 2 + j];
                     }
