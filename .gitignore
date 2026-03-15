@@ -5,7 +5,12 @@ build/
 *.log
 *.report.rank*
 *.records.log.rank*
-
+my-flash-attention/.claude
+my-flash-attention/atb_test
+my-flash-attention/CLAUDE.md
+my-flash-attention/test_aTb.cu
+.claude
+CLAUDE.md
 # *.sh
 # g*.txt
 # l*.txt
