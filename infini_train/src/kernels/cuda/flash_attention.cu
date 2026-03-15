@@ -740,6 +740,48 @@ __device__ __forceinline__ void atomic_add_block(float* dest, const float* src, 
     }
 }
 
+// Helper for GEMM: C += A^T * B
+// A: (K, M) row-major. A^T is (M, K).
+// B: (K, N) row-major.
+// C: (M, N) row-major.
+// M=Bc, N=D, K=Br.
+__device__ __forceinline__ void gemm_at_b_accum(const float* A, const float* B, float* C, int M, int N, int K, 
+                                                 int stride_A, int stride_B, int stride_C,
+                                                 int tid, int total_threads) {
+    int elements = M * N;
+    for (int i = tid; i < elements; i += total_threads) {
+        int r = i / N; // 0..M-1
+        int c = i % N; // 0..N-1
+        float sum = 0.0f;
+        for (int k = 0; k < K; ++k) {
+            // A[k, r] * B[k, c]
+            sum += A[k * stride_A + r] * B[k * stride_B + c];
+        }
+        C[r * stride_C + c] += sum;
+    }
+}
+
+// Helper for GEMM: C += A * B
+// A: (M, K) row-major.
+// B: (K, N) row-major.
+// C: (M, N) row-major.
+// M=Br, N=D, K=Bc.
+__device__ __forceinline__ void gemm_ab_accum(const float* A, const float* B, float* C, int M, int N, int K, 
+                                                 int stride_A, int stride_B, int stride_C,
+                                                 int tid, int total_threads) {
+    int elements = M * N;
+    for (int i = tid; i < elements; i += total_threads) {
+        int r = i / N;
+        int c = i % N;
+        float sum = 0.0f;
+        for (int k = 0; k < K; ++k) {
+            // A[r, k] * B[k, c]
+            sum += A[r * stride_A + k] * B[k * stride_B + c];
+        }
+        C[r * stride_C + c] += sum;
+    }
+}
+
 __global__ void FlashAttentionBackwardKernel(const float *Q, const float *K, const float *V, const float *dO, float *dQ,
                                              float *dK, float *dV, const float *L, int T, int H, int D,
                                              float softmax_scale, bool is_causal) {
@@ -1005,18 +1047,10 @@ __global__ void FlashAttentionBackwardKernel(const float *Q, const float *K, con
         
         // 3. Accumulate dVj += Pij^T * dOi.
         // Pij (Br, Bc). dOi (Br, D).
-        // We want (Bc, Br) * (Br, D) -> (Bc, D).
-        // gemm_ab_accum_float4_transposed_a?
-        // My helper `gemm_ab_accum_float4_transposed_b` does C += A * B^T.
-        // I need C += A^T * B.
-        // Let's implement `gemm_at_b_accum`.
-        // Or assume we transpose Pij? No.
-        // We can implement a new helper `gemm_at_b_accum`.
-        // Or swap roles? No.
-        
-        // Let's implement `gemm_at_b_accum_float4` later.
-        // Assuming we have it.
-        // gemm_at_b_accum(s_Sij, s_dOi, s_dVj, ...);
+        // 3. Accumulate dVj += Pij^T * dOi.
+        // A=Pij (Br, Bc), B=dOi (Br, D).
+        // gemm_at_b_accum: M=Bc, N=D, K=Br. stride_A=Bc_bw, stride_B=D_pad, stride_C=D_pad.
+        gemm_at_b_accum(s_Sij, s_dOi, s_dVj, Bc_bw, D, valid_rows, Bc_bw, D_pad, D_pad, tid, total_threads);
         
         // 4. Compute dSij = Pij * (dP - dpsum).
         // dP is in s_dKj.
@@ -1038,16 +1072,17 @@ __global__ void FlashAttentionBackwardKernel(const float *Q, const float *K, con
         
         // 6. Accumulate dKj += dSij^T * Qi.
         // dSij (Br, Bc). Qi (Br, D).
-        // We want (Bc, Br) * (Br, D) -> (Bc, D).
-        // Same pattern: A^T * B.
-        // gemm_at_b_accum(s_Sij, s_Qi, s_dKj, ...);
+        // (Bc, Br) * (Br, D) -> (Bc, D).
+        // A=dSij, B=Qi.
+        // gemm_at_b_accum: M=Bc, N=D, K=Br. stride_A=Bc_bw, stride_B=D_pad, stride_C=D_pad.
+        gemm_at_b_accum(s_Sij, s_Qi, s_dKj, Bc_bw, D, valid_rows, Bc_bw, D_pad, D_pad, tid, total_threads);
         
         // 7. Accumulate dQi += dSij * Kj.
         // dSij (Br, Bc). Kj (Bc, D).
         // (Br, Bc) * (Bc, D) -> (Br, D).
-        // Standard MatMul.
-        // gemm_ab_accum(s_Sij, s_Kj, s_dQi, ...);
-        // Note: s_dQi accumulates across j loop.
+        // A=dSij, B=Kj.
+        // gemm_ab_accum: M=Br, N=D, K=Bc. stride_A=Bc_bw, stride_B=D_pad, stride_C=D_pad.
+        gemm_ab_accum(s_Sij, s_Kj, s_dQi, valid_rows, D, valid_cols, Bc_bw, D_pad, D_pad, tid, total_threads);
         
         __syncthreads();
         
@@ -1195,6 +1230,9 @@ void FlashAttentionBackward(const Tensor &q, const Tensor &k, const Tensor &v, c
     sram_size += Br * D_pad * sizeof(float); // s_dQi
     // s_dpsum reuses s_dQi + ...
     sram_size += Br * sizeof(float); // s_dpsum
+    
+    // Enable >48KB Shared Memory
+    cudaFuncSetAttribute(FlashAttentionBackwardKernel, cudaFuncAttributeMaxDynamicSharedMemorySize, sram_size);
     
     FlashAttentionBackwardKernel<<<grid, block, sram_size>>>(q_ptr, k_ptr, v_ptr, go_ptr, gq_ptr, gk_ptr, gv_ptr, l_ptr, T, H, D,
                                                   softmax_scale, is_causal);

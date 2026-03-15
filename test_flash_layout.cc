@@ -206,14 +206,14 @@ void TestBackward(int B, int T, int H, int D) {
 int main(int argc, char** argv) {
     google::InitGoogleLogging(argv[0]);
     
-    // LOG(INFO) << "=== Test 1: T=16 (Partial Tile) ===";
-    // TestLayout(1, 16, 2, 64);
+    LOG(INFO) << "=== Test 1: T=16 (Partial Tile) ===";
+    TestLayout(1, 16, 2, 64);
     
-    // LOG(INFO) << "=== Test 2: T=32 (Full Tile) ===";
-    // TestLayout(1, 32, 2, 64);
+    LOG(INFO) << "=== Test 2: T=32 (Full Tile) ===";
+    TestLayout(1, 32, 2, 64);
     
-    // LOG(INFO) << "=== Test 3: T=1024 (Many Tiles) ===";
-    // TestLayout(1, 1024, 2, 64);
+    LOG(INFO) << "=== Test 3: T=1024 (Many Tiles) ===";
+    TestLayout(1, 1024, 2, 64);
     
     LOG(INFO) << "=== Test Backward: T=128 ===";
     TestBackward(1, 128, 2, 64);
