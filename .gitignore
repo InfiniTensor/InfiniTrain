@@ -5,4 +5,4 @@ build/
 *.log
 *.report.rank*
 *.records.log.rank*
-docs/flash_attention_design.md
+*.md

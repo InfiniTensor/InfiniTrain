@@ -13,7 +13,7 @@
         {
             "id": "build_flash",
             "profile": false,
-            "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON .. && make -j"
+            "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON .. && make -j4"
         }
     ],
     "tests": [
