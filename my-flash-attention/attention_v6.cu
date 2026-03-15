@@ -10,7 +10,7 @@ void flash_atten_kernel(
     const nv_bfloat16 *K,
     const nv_bfloat16 *V,
     nv_bfloat16 *O,
-    nv_bfloat16 *L_out,  // [bs * q_head * q_len], logsumexp per row
+    float *L_out,  // [bs * q_head * q_len], logsumexp per row
     const float scale,
     int q_len,
     int kv_len,
@@ -275,11 +275,9 @@ void flash_atten_kernel(
             const int local_row = warp_id * WARP_Q + mma_id_q * MMA_M + (lane_id / 4);
             const int global_row = q_block_id * BLOCK_Q + local_row;
             if (global_row < q_len)
-                L_out[local_row] = __float2bfloat16(
-                    rowmax[mma_id_q][0] + logf(rowsumexp[mma_id_q][0]));
+                L_out[local_row] = rowmax[mma_id_q][0] + logf(rowsumexp[mma_id_q][0]);
             if (global_row + 8 < q_len)
-                L_out[local_row + 8] = __float2bfloat16(
-                    rowmax[mma_id_q][1] + logf(rowsumexp[mma_id_q][1]));
+                L_out[local_row + 8] = rowmax[mma_id_q][1] + logf(rowsumexp[mma_id_q][1]);
         }
     }
 }
@@ -291,7 +289,7 @@ void flash_atten_kernel_causal(
     const nv_bfloat16 *K,
     const nv_bfloat16 *V,
     nv_bfloat16 *O,
-    nv_bfloat16 *L_out,
+    float *L_out,
     const float scale,
     int q_len,
     int kv_len,
@@ -677,11 +675,9 @@ void flash_atten_kernel_causal(
             const int local_row = warp_id * WARP_Q + mma_id_q * MMA_M + (lane_id / 4);
             const int global_row = q_block_id * BLOCK_Q + local_row;
             if (global_row < q_len)
-                L_out[local_row] = __float2bfloat16(
-                    rowmax[mma_id_q][0] + logf(rowsumexp[mma_id_q][0]));
+                L_out[local_row] = rowmax[mma_id_q][0] + logf(rowsumexp[mma_id_q][0]);
             if (global_row + 8 < q_len)
-                L_out[local_row + 8] = __float2bfloat16(
-                    rowmax[mma_id_q][1] + logf(rowsumexp[mma_id_q][1]));
+                L_out[local_row + 8] = rowmax[mma_id_q][1] + logf(rowsumexp[mma_id_q][1]);
         }
     }
 }
@@ -702,7 +698,7 @@ void attention_v6(
     const nv_bfloat16 *K,
     const nv_bfloat16 *V,
     nv_bfloat16 *O,
-    nv_bfloat16 *L_out,  // [bs * q_head * q_len]
+    float *L_out,  // [bs * q_head * q_len]
     int bs,
     int q_head,
     int kv_head,
@@ -763,6 +759,55 @@ void attention_v6(
         }
 
         return;
-    
+
 
 }
+
+// ============ PyTorch Python Binding ============
+#ifndef INFINI_TRAIN_BUILD
+#include <torch/extension.h>
+#include <pybind11/pybind11.h>
+
+namespace py = pybind11;
+
+// Returns (O [bs,q_head,q_len,head_dim] bf16, L [bs,q_head,q_len] bf16)
+std::tuple<torch::Tensor, torch::Tensor> flash_attention_forward(
+    torch::Tensor Q,   // [bs, q_head, q_seq, head_dim], bf16
+    torch::Tensor K,   // [bs, kv_head, kv_seq, head_dim], bf16
+    torch::Tensor V,   // [bs, kv_head, kv_seq, head_dim], bf16
+    bool is_causal = true
+) {
+    const int bs       = Q.size(0);
+    const int q_head   = Q.size(1);
+    const int q_len    = Q.size(2);
+    const int head_dim = Q.size(3);
+    const int kv_head  = K.size(1);
+    const int kv_len   = K.size(2);
+
+    auto opts_bf16 = Q.options();
+    auto opts_f32  = Q.options().dtype(torch::kFloat32);
+    auto O = torch::empty({bs, q_head, q_len, head_dim}, opts_bf16);
+    auto L = torch::empty({bs, q_head, q_len},           opts_f32);   // float32
+
+    cudaStream_t stream = 0;
+    attention_v6(
+        reinterpret_cast<nv_bfloat16*>(Q.data_ptr()),
+        reinterpret_cast<nv_bfloat16*>(K.data_ptr()),
+        reinterpret_cast<nv_bfloat16*>(V.data_ptr()),
+        reinterpret_cast<nv_bfloat16*>(O.data_ptr()),
+        L.data_ptr<float>(),
+        bs, q_head, kv_head, q_len, kv_len, head_dim,
+        nullptr,           // atten_mask
+        is_causal,
+        0.0f,              // dropout_p
+        kv_head != q_head, // is_gqa
+        stream
+    );
+    cudaDeviceSynchronize();
+    return std::make_tuple(O, L);
+}
+
+PYBIND11_MODULE(attention_fwd, m) {
+    m.def("flash_attention_forward", &flash_attention_forward, "Flash Attention Forward");
+}
+#endif // INFINI_TRAIN_BUILD

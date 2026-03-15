@@ -78,6 +78,11 @@ ApplyRotaryEmbedding(const std::shared_ptr<Tensor> &xq, const std::shared_ptr<Te
     std::vector<int64_t> target_shape(cos_sin->Dims().begin(), cos_sin->Dims().end() - 1);
     auto cos = cos_sin->Slice(-1, 0, 1, 1)->Squeeze(-1); // (1, T, 1, D/2)
     auto sin = cos_sin->Slice(-1, 1, 2, 1)->Squeeze(-1); // (1, T, 1, D/2)
+    // Cast cos/sin to match xq dtype to avoid float32 promotion when freqs_cis is float32
+    if (cos->Dtype() != xq->Dtype()) {
+        cos = std::make_shared<Tensor>(cos->To(xq->Dtype()));
+        sin = std::make_shared<Tensor>(sin->To(xq->Dtype()));
+    }
 
     auto slice_pair = [](const std::shared_ptr<Tensor> &x) {
         auto even = x->Slice(-1, 0, x->Dims().back(), 2);

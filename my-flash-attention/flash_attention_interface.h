@@ -6,11 +6,13 @@
 // Forward declarations for flash attention kernel entry points.
 // Implementations are in attention_v6.cu and attention_v6_bp.cu.
 
+// Forward pass.
+// L_out is float32 (log-sum-exp per query row).
 void attention_v6(const nv_bfloat16 *Q,
                   const nv_bfloat16 *K,
                   const nv_bfloat16 *V,
                   nv_bfloat16 *O,
-                  nv_bfloat16 *L_out,
+                  float *L_out,          // [bs, q_head, q_len], float32
                   int bs,
                   int q_head,
                   int kv_head,
@@ -23,15 +25,19 @@ void attention_v6(const nv_bfloat16 *Q,
                   bool is_gqa,
                   cudaStream_t stream = 0);
 
+// Backward pass.
+// L:  float32 logsumexp from forward.
+// dO: float32 upstream gradient (caller converts from bf16 if needed).
+// dQ/dK/dV: float32 output gradients (caller converts to bf16 if needed).
 void attention_v6_backward(const nv_bfloat16 *Q,
                             const nv_bfloat16 *K,
                             const nv_bfloat16 *V,
                             const nv_bfloat16 *O,
-                            const nv_bfloat16 *L_bf16,
-                            const nv_bfloat16 *dO,
-                            nv_bfloat16 *dQ,
-                            nv_bfloat16 *dK,
-                            nv_bfloat16 *dV,
+                            const float       *L,
+                            const float       *dO,
+                            float             *dQ,
+                            float             *dK,
+                            float             *dV,
                             int batch_size,
                             int q_head,
                             int kv_head,

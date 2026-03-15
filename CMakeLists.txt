@@ -100,6 +100,7 @@ if(USE_CUDA)
                         ${PROJECT_SOURCE_DIR}/my-flash-attention/attention_v6_bp.cu)
   add_library(infini_train_flash_attention STATIC ${FA_KERNELS})
   set_target_properties(infini_train_flash_attention PROPERTIES CUDA_ARCHITECTURES "80;90")
+  target_compile_definitions(infini_train_flash_attention PRIVATE INFINI_TRAIN_BUILD=1)
   target_link_libraries(infini_train_flash_attention PUBLIC CUDA::cudart)
 
   if(USE_NCCL)

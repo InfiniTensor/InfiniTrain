@@ -118,7 +118,6 @@ void write_dkv(auto &d_kv_rmem, auto &d_kv, int height, int width, int lane_id, 
     }
 }
 
-// no gqa +  causal
 template <int BLOCK_Q, int BLOCK_KV, int DIM, int NUM_WARPS>
 __global__ void flash_atten_bakward_1(
 const nv_bfloat16 *Q,
@@ -422,7 +421,174 @@ const nv_bfloat16 *Q,
 }
 
 
+// ============ D Computation Kernel ============
+// Computes D[row] = dot(dO[row,:], O[row,:]).
+// One warp per row; dim=64 so each lane handles 2 elements then warp-reduces.
+__global__ void compute_D(
+    const float*       __restrict__ dO,  // [total_rows, dim]
+    const nv_bfloat16* __restrict__ O,   // [total_rows, dim]
+    float* __restrict__ D,               // [total_rows]
+    int total_rows, int dim
+) {
+    int row  = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
+    int lane = threadIdx.x % 32;
+    if (row >= total_rows) return;
+
+    const float*       dO_row = dO + row * dim;
+    const nv_bfloat16* O_row  = O  + row * dim;
+
+    float acc = 0.f;
+    for (int d = lane; d < dim; d += 32)
+        acc += dO_row[d] * __bfloat162float(O_row[d]);
+
+    for (int off = 16; off > 0; off >>= 1)
+        acc += __shfl_down_sync(0xffffffff, acc, off);
+
+    if (lane == 0)
+        D[row] = acc;
+}
+
+// ============ GQA Reduction Kernel ============
+// Reduces d_temp_K and d_temp_V simultaneously:
+//   [bs, q_head, kv_len, dim] -> [bs, kv_head, kv_len, dim]
+// Each thread handles one float4 (4 floats) for both K and V.
+// Requires dim % 4 == 0.
+__global__ void reduce_dkv_grad(
+    const float* __restrict__ d_temp_K,  // [bs, q_head, kv_len, dim]
+    const float* __restrict__ d_temp_V,
+    float*       __restrict__ dK,        // [bs, kv_head, kv_len, dim]
+    float*       __restrict__ dV,
+    int bs, int q_head, int kv_head, int kv_len, int dim4, int q_kv_ratio
+    // dim4 = dim / 4
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = bs * kv_head * kv_len * dim4;
+    if (idx >= total) return;
+
+    int d4_idx = idx % dim4;
+    int kl_idx = (idx / dim4) % kv_len;
+    int kh_idx = (idx / dim4 / kv_len) % kv_head;
+    int b_idx  = idx / dim4 / kv_len / kv_head;
+
+    // base index in float4 units for the first q_head of this kv_head
+    int base = (b_idx * q_head + kh_idx * q_kv_ratio) * kv_len * dim4 + kl_idx * dim4 + d4_idx;
+    int stride = kv_len * dim4;  // stride between consecutive q_heads in float4 units
+
+    const float4* srcK = reinterpret_cast<const float4*>(d_temp_K);
+    const float4* srcV = reinterpret_cast<const float4*>(d_temp_V);
+
+    float4 accK = {0.f, 0.f, 0.f, 0.f};
+    float4 accV = {0.f, 0.f, 0.f, 0.f};
+    for (int r = 0; r < q_kv_ratio; r++) {
+        float4 k = srcK[base + r * stride];
+        float4 v = srcV[base + r * stride];
+        accK.x += k.x; accK.y += k.y; accK.z += k.z; accK.w += k.w;
+        accV.x += v.x; accV.y += v.y; accV.z += v.z; accV.w += v.w;
+    }
+    reinterpret_cast<float4*>(dK)[idx] = accK;
+    reinterpret_cast<float4*>(dV)[idx] = accV;
+}
+
+// ============ C Interface (no PyTorch dependency) ============
+// attention_v6_backward: raw-pointer entry point used by infini_train framework.
+// Q/K/V/O: bf16 inputs.  L: float32 logsumexp from forward.
+// dO: float32 upstream gradient (caller must convert from bf16 if needed).
+// dQ/dK/dV: float32 output gradients (caller converts back to bf16 if needed).
+void attention_v6_backward(
+    const nv_bfloat16 *Q,
+    const nv_bfloat16 *K,
+    const nv_bfloat16 *V,
+    const nv_bfloat16 *O,
+    const float       *L,
+    const float       *dO,
+    float             *dQ,
+    float             *dK,
+    float             *dV,
+    int batch_size,
+    int q_head,
+    int kv_head,
+    int q_len,
+    int kv_len,
+    int head_dim,
+    bool is_causal,
+    cudaStream_t stream
+) {
+    const int q_kv_ratio = q_head / kv_head;
+    const int total_rows = batch_size * q_head * q_len;
+
+    // Allocate temporary buffers on the stream
+    float *D_buf   = nullptr;
+    float *temp_K  = nullptr;
+    float *temp_V  = nullptr;
+    cudaMallocAsync(&D_buf,  (size_t)total_rows * sizeof(float), stream);
+    cudaMallocAsync(&temp_K, (size_t)batch_size * q_head * kv_len * head_dim * sizeof(float), stream);
+    cudaMallocAsync(&temp_V, (size_t)batch_size * q_head * kv_len * head_dim * sizeof(float), stream);
+
+    // Zero dQ and temp buffers (backward accumulates into them)
+    cudaMemsetAsync(dQ,     0, (size_t)batch_size * q_head * q_len  * head_dim * sizeof(float), stream);
+    cudaMemsetAsync(temp_K, 0, (size_t)batch_size * q_head * kv_len * head_dim * sizeof(float), stream);
+    cudaMemsetAsync(temp_V, 0, (size_t)batch_size * q_head * kv_len * head_dim * sizeof(float), stream);
+
+    // Step 1: compute D[row] = dot(dO[row], O[row])
+    {
+        constexpr int WARPS_PER_BLOCK = 8;
+        int grid = (total_rows + WARPS_PER_BLOCK - 1) / WARPS_PER_BLOCK;
+        compute_D<<<grid, WARPS_PER_BLOCK * 32, 0, stream>>>(
+            dO, O, D_buf, total_rows, head_dim);
+    }
+
+    // Step 2: main backward kernel
+    constexpr int BLOCK_Q   = 64;
+    constexpr int BLOCK_KV  = 64;
+    constexpr int DIM       = 64;
+    constexpr int NUM_WARPS = 4;
+    constexpr int TB_SIZE   = NUM_WARPS * 32;
+
+    const int num_kv_blocks = (kv_len + BLOCK_KV - 1) / BLOCK_KV;
+    const int num_blocks    = batch_size * q_head * num_kv_blocks;
+
+    constexpr size_t smem_size =
+        BLOCK_KV * DIM * sizeof(nv_bfloat16) +   // K tile
+        BLOCK_KV * DIM * sizeof(nv_bfloat16) +   // V tile
+        BLOCK_Q  * DIM * sizeof(nv_bfloat16) +   // Q tile
+        BLOCK_Q  * sizeof(float)              +   // L slice
+        BLOCK_Q  * sizeof(float)              +   // D slice
+        BLOCK_Q  * DIM * sizeof(nv_bfloat16) +   // dO tile
+        BLOCK_Q  * BLOCK_KV * sizeof(nv_bfloat16); // P tile
+
+    cudaFuncSetAttribute(
+        flash_atten_bakward_1<BLOCK_Q, BLOCK_KV, DIM, NUM_WARPS>,
+        cudaFuncAttributeMaxDynamicSharedMemorySize,
+        smem_size);
+
+    const float scale = 1.0f / sqrtf((float)head_dim);
+    flash_atten_bakward_1<BLOCK_Q, BLOCK_KV, DIM, NUM_WARPS>
+        <<<num_blocks, TB_SIZE, smem_size, stream>>>(
+            Q, K, V, O,
+            L, D_buf, dO,
+            dQ, temp_K, temp_V,
+            batch_size, q_head, kv_head, q_len, kv_len, head_dim,
+            scale, is_causal, q_kv_ratio);
+
+    // Step 3: reduce temp_K/V [bs,q_head,kv_len,dim] -> [bs,kv_head,kv_len,dim]
+    {
+        int dim4  = head_dim / 4;
+        int total = batch_size * kv_head * kv_len * dim4;
+        int block = 256;
+        int grid  = (total + block - 1) / block;
+        reduce_dkv_grad<<<grid, block, 0, stream>>>(
+            temp_K, temp_V, dK, dV,
+            batch_size, q_head, kv_head, kv_len, dim4, q_kv_ratio);
+    }
+
+    // Free temporary buffers (queued after the kernels on the same stream)
+    cudaFreeAsync(D_buf,  stream);
+    cudaFreeAsync(temp_K, stream);
+    cudaFreeAsync(temp_V, stream);
+}
+
 // ============ PyTorch Python Binding ============
+#ifndef INFINI_TRAIN_BUILD
 #include <torch/extension.h>
 #include <pybind11/pybind11.h>
 
@@ -433,8 +599,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> flash_attention_backward
     torch::Tensor K,   // [bs, kv_head, kv_seq, head_dim], bf16
     torch::Tensor V,   // [bs, kv_head, kv_seq, head_dim], bf16
     torch::Tensor O,   // [bs, q_head, q_seq, head_dim], bf16, forward output
-    torch::Tensor L,   // [bs, q_head, q_seq], float, logsumexp
-    torch::Tensor D,   // [bs, q_head, q_seq], float, sum(dO * O)
+    torch::Tensor L,   // [bs, q_head, q_seq], float32, logsumexp from forward
     torch::Tensor dO,  // [bs, q_head, q_seq, head_dim], float
     bool is_causal = true
 ) {
@@ -447,13 +612,25 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> flash_attention_backward
 
     const int q_kv_ratio = q_head / kv_head;
 
-    // 临时 buffer (每个 kv block 累加)
-    auto opts_f32 = Q.options().dtype(torch::kFloat32); // ✅ 继承 Q 的 device (cuda)
+    auto opts_f32 = Q.options().dtype(torch::kFloat32);
 
-    auto dQ     = torch::zeros({bs, q_head, q_len,  head_dim}, opts_f32);
-    // ✅ d_temp_K/V 必须在 CUDA 上，用 opts_f32 继承 device
+    auto dQ       = torch::zeros({bs, q_head, q_len,  head_dim}, opts_f32);
     auto d_temp_K = torch::zeros({bs, q_head, kv_len, head_dim}, opts_f32);
     auto d_temp_V = torch::zeros({bs, q_head, kv_len, head_dim}, opts_f32);
+
+    // Compute D = sum(dO * O) on GPU
+    const int total_rows = bs * q_head * q_len;
+    auto D_buf = torch::empty({bs, q_head, q_len}, opts_f32);
+    {
+        constexpr int WARPS_PER_BLOCK = 8;
+        int grid = (total_rows + WARPS_PER_BLOCK - 1) / WARPS_PER_BLOCK;
+        compute_D<<<grid, WARPS_PER_BLOCK * 32>>>(
+            dO.data_ptr<float>(),
+            reinterpret_cast<nv_bfloat16*>(O.data_ptr()),
+            D_buf.data_ptr<float>(),
+            total_rows, head_dim
+        );
+    }
 
 
     constexpr int BLOCK_Q = 64;
@@ -479,7 +656,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> flash_attention_backward
     auto V_ptr = reinterpret_cast<nv_bfloat16*>(V.data_ptr());
     auto O_ptr = reinterpret_cast<nv_bfloat16*>(O.data_ptr());
     auto L_ptr = L.data_ptr<float>();
-    auto D_ptr = D.data_ptr<float>();
+    auto D_ptr = D_buf.data_ptr<float>();
     auto dO_ptr = dO.data_ptr<float>();
     auto dQ_ptr = dQ.data_ptr<float>();
     auto d_temp_K_ptr = d_temp_K.data_ptr<float>();
@@ -495,12 +672,27 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> flash_attention_backward
         scale, is_causal, q_kv_ratio
     );
 
+    // Reduce d_temp_K/V: [bs, q_head, kv_len, dim] -> [bs, kv_head, kv_len, dim]
+    auto dK = torch::empty({bs, kv_head, kv_len, head_dim}, opts_f32);
+    auto dV = torch::empty({bs, kv_head, kv_len, head_dim}, opts_f32);
+    {
+        int dim4  = head_dim / 4;  // head_dim is always 64, so dim4 = 16
+        int total = bs * kv_head * kv_len * dim4;
+        int block = 256;
+        int grid  = (total + block - 1) / block;
+        reduce_dkv_grad<<<grid, block, 0, stream>>>(
+            d_temp_K_ptr, d_temp_V_ptr,
+            dK.data_ptr<float>(), dV.data_ptr<float>(),
+            bs, q_head, kv_head, kv_len, dim4, q_kv_ratio);
+    }
+
     cudaDeviceSynchronize();
 
-    return std::make_tuple(dQ, d_temp_K, d_temp_V);
+    return std::make_tuple(dQ, dK, dV);
 }
 
 PYBIND11_MODULE(attention_bp, m) {
     m.def("flash_attention_backward", &flash_attention_backward,
-          "Flash Attention Backward");
+          "Flash Attention Backward (L is bf16 from forward; D is computed internally)");
 }
+#endif // INFINI_TRAIN_BUILD
