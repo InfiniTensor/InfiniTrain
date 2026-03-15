@@ -1,0 +1,74 @@
+# Environment
+date: Sun Mar 15 10:34:18 CST 2026
+hostname: dsw-607126-85f54bdf75-5lzlx
+CUDA_VISIBLE_DEVICES=5
+
+## nvidia-smi
+Sun Mar 15 10:34:18 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 570.133.20             Driver Version: 570.133.20     CUDA Version: 12.8     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A100-SXM4-80GB          On  |   00000000:03:00.0 Off |                    0 |
+| N/A   48C    P0            130W /  400W |   30992MiB /  81920MiB |    100%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA A100-SXM4-80GB          On  |   00000000:04:00.0 Off |                    0 |
+| N/A   37C    P0             87W /  400W |   38152MiB /  81920MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   2  NVIDIA A100-SXM4-80GB          On  |   00000000:09:00.0 Off |                    0 |
+| N/A   39C    P0             90W /  400W |   45634MiB /  81920MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   3  NVIDIA A100-SXM4-80GB          On  |   00000000:0A:00.0 Off |                    0 |
+| N/A   44C    P0             94W /  400W |   21145MiB /  81920MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   4  NVIDIA A100-SXM4-80GB          On  |   00000000:10:00.0 Off |                    0 |
+| N/A   48C    P0            121W /  400W |   25494MiB /  81920MiB |    100%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   5  NVIDIA A100-SXM4-80GB          On  |   00000000:11:00.0 Off |                    0 |
+| N/A   37C    P0             87W /  400W |    4047MiB /  81920MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   6  NVIDIA A100-SXM4-80GB          On  |   00000000:16:00.0 Off |                    0 |
+| N/A   38C    P0             88W /  400W |    5401MiB /  81920MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   7  NVIDIA A100-SXM4-80GB          On  |   00000000:17:00.0 Off |                    0 |
+| N/A   43C    P0             91W /  400W |    5511MiB /  81920MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
++-----------------------------------------------------------------------------------------+
+
+## nvcc --version
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2025 NVIDIA Corporation
+Built on Wed_Jan_15_19:20:09_PST_2025
+Cuda compilation tools, release 12.8, V12.8.61
+Build cuda_12.8.r12.8/compiler.35404655_0
+
+## cudnn version header
+57:#define CUDNN_MAJOR 9
+58:#define CUDNN_MINOR 7
+59:#define CUDNN_PATCHLEVEL 0
+61:#define CUDNN_VERSION (CUDNN_MAJOR * 10000 + CUDNN_MINOR * 100 + CUDNN_PATCHLEVEL)
+
+## gcc/g++/cmake
+/usr/bin/gcc
+gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
+/usr/bin/g++
+g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
+/usr/local/bin/cmake
+cmake version 3.31.4

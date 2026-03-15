@@ -216,9 +216,25 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
     q = q->Transpose(1, 2);
     k = k->Transpose(1, 2);
     v = v->Transpose(1, 2);
+    //------modify-start------------------------------------------
+    // FlashAttention path (BF16 on CUDA only).
+    if (config_.flash && q->GetDevice().type() == Device::DeviceType::kCUDA && q->Dtype() == DataType::kBFLOAT16) {
+        // cudnn SDPA expects a standard (B, H, T, D) layout; enforce contiguous strides.
+        q = q->Contiguous();
+        k = k->Contiguous();
+        v = v->Contiguous();
 
-    // TODO(zbl): support flash attention later
-    // if (flash_) { ... }
+        // (B, H_local, T, D) -> (B, H_local, T, D)
+        auto y = nn::function::ScaledDotProductAttention(q, k, v, /*attn_mask=*/nullptr, /*dropout_p=*/0.0,
+                                                         /*is_causal=*/true);
+        // (B, H_local, T, D) -> (B, T, H_local, D) -> (B, T, C_local)
+        y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
+
+        // output projection
+        y = (*modules_[kCProjLayerName])({y})[0];
+        return {y};
+    }
+    //---------modify-end-----------------------------------------
 
     // manual implementation of attention
     // this materializes the large (T,T) matrix for all the queries and keys

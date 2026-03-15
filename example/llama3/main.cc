@@ -72,6 +72,9 @@ DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
+//------modify-start------------------------------------------
+DEFINE_bool(flash, false, "enable fused scaled-dot-product attention (BF16 only)");
+//---------modify-end-----------------------------------------
 // precision check
 DEFINE_string(
     precision_check, "",
@@ -161,6 +164,9 @@ void Train(const nn::parallel::Rank &rank) {
     // ManualSeed(42);
 
     LLaMA3Config model_config = LLaMA3Config();
+//------modify-start------------------------------------------
+model_config.flash = FLAGS_flash;
+//---------modify-end-----------------------------------------
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
         model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);

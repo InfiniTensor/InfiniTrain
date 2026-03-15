@@ -5,3 +5,10 @@ build/
 *.log
 *.report.rank*
 *.records.log.rank*
+
+#------modify-start------------------------------------------
+# Local sanity-check datasets (not part of repo)
+tmp_data/
+#---------modify-end-----------------------------------------
+tmp/
+third_party/cudnn_frontend/
