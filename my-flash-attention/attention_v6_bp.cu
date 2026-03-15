@@ -511,6 +511,7 @@ void attention_v6_backward(
     int kv_len,
     int head_dim,
     bool is_causal,
+    float scale,
     cudaStream_t stream
 ) {
     const int q_kv_ratio = q_head / kv_head;
@@ -561,7 +562,7 @@ void attention_v6_backward(
         cudaFuncAttributeMaxDynamicSharedMemorySize,
         smem_size);
 
-    const float scale = 1.0f / sqrtf((float)head_dim);
+    if (scale < 0.0f) { scale = 1.0f / sqrtf((float)head_dim); }
     flash_atten_bakward_1<BLOCK_Q, BLOCK_KV, DIM, NUM_WARPS>
         <<<num_blocks, TB_SIZE, smem_size, stream>>>(
             Q, K, V, O,

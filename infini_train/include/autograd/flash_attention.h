@@ -14,7 +14,8 @@ class FlashAttention : public Function {
 public:
     static constexpr char kType[] = "FlashAttentionFunction";
 
-    explicit FlashAttention(bool is_causal = true) : Function(kType), is_causal_(is_causal) {}
+    explicit FlashAttention(bool is_causal = true, float scale = -1.0f)
+        : Function(kType), is_causal_(is_causal), scale_(scale) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
     void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -23,6 +24,7 @@ public:
 
 private:
     bool is_causal_;
+    float scale_; // <0 means use default 1/sqrt(head_dim)
     // L (logsumexp) is returned by the forward kernel alongside O, but is not an
     // output visible to the caller. We stash it here so SetupContext can save it.
     std::shared_ptr<Tensor> l_;

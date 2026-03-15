@@ -709,6 +709,7 @@ void attention_v6(
     bool is_causal,
     float dropout_p,
     bool is_gqa,
+    float scale,
     cudaStream_t stream
 ){
     ASSERT_NOT_NULL(Q, K, V, O);
@@ -730,7 +731,7 @@ void attention_v6(
             ERROR("current only support head_dim =64");
         }
         const int smem_size = max(BLOCK_Q, BLOCK_KV * 2) * DIM * sizeof(nv_bfloat16);
-        float scale = 1.0f / sqrtf((float(DIM)));
+        if (scale < 0.0f) { scale = 1.0f / sqrtf((float(DIM))); }
         if(is_causal == false){
         cudaFuncSetAttribute(
             flash_atten_kernel<BLOCK_Q, BLOCK_KV, DIM, NUM_WARPS>,

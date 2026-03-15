@@ -23,6 +23,7 @@ void attention_v6(const nv_bfloat16 *Q,
                   bool is_causal,
                   float dropout_p,
                   bool is_gqa,
+                  float scale = -1.0f,   // <0 means use default 1/sqrt(head_dim)
                   cudaStream_t stream = 0);
 
 // Backward pass.
@@ -45,4 +46,5 @@ void attention_v6_backward(const nv_bfloat16 *Q,
                             int kv_len,
                             int head_dim,
                             bool is_causal,
+                            float scale = -1.0f,  // <0 means use default 1/sqrt(head_dim)
                             cudaStream_t stream = 0);
