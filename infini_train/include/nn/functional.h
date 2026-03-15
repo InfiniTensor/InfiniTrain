@@ -2,6 +2,10 @@
 
 #include <cstdint>
 #include <memory>
+
+//------modify-start------------------------------------------
+#include <optional>
+//---------modify-end-----------------------------------------
 #include <vector>
 
 namespace infini_train {
@@ -182,5 +186,19 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &inputs
 // Returns:
 //   Concatenation of the input tensors.
 std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim = 0);
+
+
+//------modify-start------------------------------------------
+// PyTorch-aligned scaled_dot_product_attention (FlashAttention/SDPA backend).
+// NOTE: Current implementation supports CUDA BF16 causal attention; other modes fall back at model level.
+std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &query,
+                                                  const std::shared_ptr<Tensor> &key,
+                                                  const std::shared_ptr<Tensor> &value,
+                                                  const std::shared_ptr<Tensor> &attn_mask = nullptr,
+                                                  double dropout_p = 0.0,
+                                                  bool is_causal = false,
+                                                  std::optional<double> scale = std::nullopt,
+                                                  bool enable_gqa = false);
+//---------modify-end-----------------------------------------
 
 } // namespace infini_train::nn::function

@@ -73,6 +73,18 @@ endif()
 
 if(USE_CUDA)
   add_compile_definitions(USE_CUDA=1)
+
+  #------modify-start------------------------------------------
+  # CMake may fail to auto-detect nvcc / default architectures if CUDA is not in PATH.
+  # Pin nvcc path and a reasonable default arch for A100 (sm_80).
+  if(NOT DEFINED CMAKE_CUDA_COMPILER AND EXISTS "/usr/local/cuda/bin/nvcc")
+    set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
+  endif()
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES 80)
+  endif()
+  #---------modify-end-----------------------------------------
+
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
   include_directories(${CUDAToolkit_INCLUDE_DIRS})
@@ -90,9 +102,22 @@ if(USE_CUDA)
     PUBLIC
       glog
       CUDA::cudart
+      #------modify-start------------------------------------------
+      CUDA::nvrtc
+      #---------modify-end-----------------------------------------
       CUDA::cublas
       CUDA::cuda_driver
   )
+
+  #------modify-start------------------------------------------
+  # cuDNN + cudnn-frontend (header-only) for fused SDPA backend
+  find_library(CUDNN_LIBRARY cudnn HINTS /lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu)
+  if(NOT CUDNN_LIBRARY)
+    message(FATAL_ERROR "cuDNN (libcudnn.so) not found")
+  endif()
+  target_link_libraries(infini_train_cuda_kernels PUBLIC ${CUDNN_LIBRARY})
+  target_include_directories(infini_train_cuda_kernels PUBLIC ${PROJECT_SOURCE_DIR}/third_party/cudnn_frontend/include)
+  #---------modify-end-----------------------------------------
 
   if(USE_NCCL)
     message(STATUS "Add USE_NCCL, use NCCL with CUDA")
