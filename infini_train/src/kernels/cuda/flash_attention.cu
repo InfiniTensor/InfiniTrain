@@ -730,98 +730,335 @@ __global__ void FlashAttentionForwardKernel(const float* Q, const float* K, cons
     }
 }
 
+// Backward Kernel Helper: Atomic Add Block to Global
+__device__ __forceinline__ void atomic_add_block(float* dest, const float* src, int rows, int cols, int dst_stride, int src_stride, int tid, int total_threads) {
+    int elements = rows * cols;
+    for (int i = tid; i < elements; i += total_threads) {
+        int r = i / cols;
+        int c = i % cols;
+        atomicAdd(&dest[r * dst_stride + c], src[r * src_stride + c]);
+    }
+}
+
 __global__ void FlashAttentionBackwardKernel(const float *Q, const float *K, const float *V, const float *dO, float *dQ,
                                              float *dK, float *dV, const float *L, int T, int H, int D,
                                              float softmax_scale, bool is_causal) {
-    int b = blockIdx.x;
-    int h = blockIdx.y;
-    int i = blockIdx.z;
+    // Grid: (B, H, Tr)
+    int batch_idx = blockIdx.x;
+    int head_idx = blockIdx.y;
+    int row_tile_idx = blockIdx.z;
     int tid = threadIdx.x;
-    if (D > D_max) {
-        return;
-    }
+    int total_threads = blockDim.x;
 
-    size_t base = static_cast<size_t>(b * H + h) * T * D;
-    const float *q = Q + base;
-    const float *k = K + base;
-    const float *v = V + base;
-    const float *go = dO + base;
-    float *gq = dQ + base;
-    float *gk = dK + base;
-    float *gv = dV + base;
-    const float *l = L + (b * H + h) * T;
+    // Check dimensions
+    if (D > D_max) return;
 
-    int row_off = i * D;
-    float l_val = l[i]; // LSE for current row
+    // Offsets
+    size_t batch_head_offset = static_cast<size_t>(batch_idx * H + head_idx) * T * D;
+    const float *q_base = Q + batch_head_offset;
+    const float *k_base = K + batch_head_offset;
+    const float *v_base = V + batch_head_offset;
+    const float *do_base = dO + batch_head_offset;
+    float *dq_base = dQ + batch_head_offset;
+    float *dk_base = dK + batch_head_offset;
+    float *dv_base = dV + batch_head_offset;
+    const float *l_base = L + (batch_idx * H + head_idx) * T;
 
-    // Pass 1: Compute dpsum
-    float dpsum = 0.0f;
-    for (int j = 0; j < T; ++j) {
-        if (is_causal && j > i) {
-            continue;
-        }
-        int col_off = j * D;
-        
-        // Compute S
-        float s = 0.0f;
-        for (int d = 0; d < D; ++d) {
-            s += q[row_off + d] * k[col_off + d];
-        }
-        
-        // Compute P = exp(S * scale - L)
-        float p = expf(s * softmax_scale - l_val);
-        
-        // Compute dP (partial) = dO . V
-        float dp = 0.0f;
-        for (int d = 0; d < D; ++d) {
-            dp += go[row_off + d] * v[col_off + d];
-        }
-        
-        dpsum += dp * p;
-    }
+    // Constants
+    constexpr int Br_bw = 32;
+    constexpr int Bc_bw = 32;
+    // Align strides to 4 for float4
+    int D_pad = (D + 3) / 4 * 4; 
+    
+    // Shared Memory
+    extern __shared__ float sram_bw[];
+    float* s_Qi = sram_bw;                  // Br * D
+    float* s_dOi = s_Qi + Br_bw * D_pad;    // Br * D
+    float* s_Kj = s_dOi + Br_bw * D_pad;    // Bc * D
+    float* s_Vj = s_Kj + Bc_bw * D_pad;     // Bc * D
+    float* s_Sij = s_Vj + Bc_bw * D_pad;    // Br * Bc (Reusable)
+    // dKj and dVj accumulators
+    float* s_dKj = s_Sij + Br_bw * Bc_bw;   // Bc * D
+    float* s_dVj = s_dKj + Bc_bw * D_pad;   // Bc * D
+    
+    // Current Tile
+    int row_start = row_tile_idx * Br_bw;
+    if (row_start >= T) return;
+    int row_end = min(row_start + Br_bw, T);
+    int valid_rows = row_end - row_start;
 
-    // Initialize dQ accumulator
-    for (int d = tid; d < D; d += blockDim.x) {
-        gq[row_off + d] = 0.0f;
-    }
+    // 1. Load Qi, dOi, Li
+    load_float4(q_base + row_start * D, s_Qi, valid_rows, D, D, D_pad, tid, total_threads);
+    load_float4(do_base + row_start * D, s_dOi, valid_rows, D, D, D_pad, tid, total_threads);
+    
+    // Load Li into registers? Or shared if accessed frequently. 
+    // We access Li[r] in inner loop. Let's keep in register or shared.
+    // Optimization: dpsum needs Li.
+    
+    // Initialize dQi accumulator in Global Memory? No, we compute dQi locally and write once.
+    // We can reuse s_Sij or allocate s_dQi. 
+    // Let's allocate s_dQi at the end or reuse.
+    // Ideally s_dQi needs to be accumulated.
+    // s_dQi size Br * D.
+    // We can reuse s_dKj buffer for s_dQi? No, we need s_dKj for atomicAdd.
+    // Let's add s_dQi to shared mem layout.
+    float* s_dQi = s_dVj + Bc_bw * D_pad; // Br * D
+    
+    for (int k = tid; k < Br_bw * D_pad; k += total_threads) s_dQi[k] = 0.0f;
+    
     __syncthreads();
 
-    // Pass 2: Compute Gradients
-    for (int j = 0; j < T; ++j) {
-        if (is_causal && j > i) {
-            continue;
-        }
-        int col_off = j * D;
-        
-        // Recompute S and P
-        float s = 0.0f;
-        for (int d = 0; d < D; ++d) {
-            s += q[row_off + d] * k[col_off + d];
-        }
-        float p = expf(s * softmax_scale - l_val);
-        
-        // Recompute dP
-        float dp = 0.0f;
-        for (int d = 0; d < D; ++d) {
-            dp += go[row_off + d] * v[col_off + d];
-        }
-        
-        // Compute dS
-        float ds = p * (dp - dpsum);
-        
-        // Update dQ (accumulate in registers/shared, then write)
-        // Here we write directly to global memory gq (initialized to 0)
-        // Since this thread block owns row i, no atomic needed for gq
-        for (int d = tid; d < D; d += blockDim.x) {
-            atomicAdd(gq + row_off + d, softmax_scale * ds * k[col_off + d]);
-        }
+    // 2. Compute dpsum (Delta) = sum_j (P_ij * (dO_i . V_j))
+    // We need to iterate over all j to compute dpsum first?
+    // Yes, dS depends on dpsum.
+    // We can store dpsum[Br] in shared memory.
+    float* s_dpsum = s_dQi + Br_bw * D_pad; // Br
+    for (int k = tid; k < Br_bw; k += total_threads) s_dpsum[k] = 0.0f;
+    
+    int Tc = (T + Bc_bw - 1) / Bc_bw;
 
-        // Update dK and dV (atomic needed)
-        for (int d = tid; d < D; d += blockDim.x) {
-            atomicAdd(gk + col_off + d, softmax_scale * ds * q[row_off + d]);
-            atomicAdd(gv + col_off + d, p * go[row_off + d]);
+    // Pass 1: Compute dpsum
+    for (int j = 0; j < Tc; ++j) {
+        int col_start = j * Bc_bw;
+        int col_end = min(col_start + Bc_bw, T);
+        int valid_cols = col_end - col_start;
+        
+        if (is_causal && col_start > row_end) continue;
+
+        // Load Kj, Vj
+        // Note: For Forward we need V^T (D, Bc).
+        // For Backward Pass 1 dP = dO * V^T. dO(Br, D), V(Bc, D).
+        // dO * V^T needs V as (D, Bc) or (Bc, D)^T.
+        // gemm_ab_t_float4 computes A * B^T.
+        // So we need A=dO (Br, D) and B=V (Bc, D).
+        // So we should load V as (Bc, D) row-major.
+        
+        load_float4(k_base + col_start * D, s_Kj, valid_cols, D, D, D_pad, tid, total_threads);
+        load_float4(v_base + col_start * D, s_Vj, valid_cols, D, D, D_pad, tid, total_threads); // V (Bc, D)
+        
+        __syncthreads();
+        
+        // Sij = Qi * Kj^T
+        // s_Qi (Br, D), s_Kj (Bc, D) -> Sij (Br, Bc)
+        gemm_ab_t_float4(s_Qi, s_Kj, s_Sij, valid_rows, valid_cols, D, D_pad, D_pad, Bc_bw, tid, total_threads);
+        
+        // Compute dP_partial = dOi * Vj^T
+        // s_dOi (Br, D), s_Vj (Bc, D) -> dP (Br, Bc)
+        // Reusing s_Kj buffer for dP is risky if we needed s_Kj later?
+        // We compute Sij first, then we don't need s_Kj for this pass.
+        // So reuse s_Kj for dP.
+        float* s_dP = s_Kj;
+        gemm_ab_t_float4(s_dOi, s_Vj, s_dP, valid_rows, valid_cols, D, D_pad, D_pad, Bc_bw, tid, total_threads);
+        
+        __syncthreads();
+        
+        // Accumulate dpsum
+        for (int k = tid; k < valid_rows * valid_cols; k += total_threads) {
+            int r = k / valid_cols;
+            int c = k % valid_cols;
+            int global_row = row_start + r;
+            int global_col = col_start + c;
+            
+            float val = s_Sij[r * Bc_bw + c]; // Sij
+            if (is_causal && global_col > global_row) {
+                // Masked, no contribution
+            } else {
+                float l_val = l_base[global_row];
+                float p = expf(val * softmax_scale - l_val);
+                float dp = s_dP[r * Bc_bw + c];
+                
+                // dpsum[r] += p * dp
+                atomicAdd(&s_dpsum[r], p * dp);
+            }
         }
+        __syncthreads();
     }
+    
+    // Pass 2: Compute Gradients
+    for (int j = 0; j < Tc; ++j) {
+        int col_start = j * Bc_bw;
+        int col_end = min(col_start + Bc_bw, T);
+        int valid_cols = col_end - col_start;
+        
+        if (is_causal && col_start > row_end) continue;
+
+        // Load Kj, Vj again
+        load_float4(k_base + col_start * D, s_Kj, valid_cols, D, D, D_pad, tid, total_threads);
+        load_float4(v_base + col_start * D, s_Vj, valid_cols, D, D, D_pad, tid, total_threads);
+        
+        // Initialize dKj, dVj accumulators to 0
+        for (int k = tid; k < Bc_bw * D_pad; k += total_threads) {
+            s_dKj[k] = 0.0f;
+            s_dVj[k] = 0.0f;
+        }
+        
+        __syncthreads();
+        
+        // Recompute Sij = Qi * Kj^T
+        gemm_ab_t_float4(s_Qi, s_Kj, s_Sij, valid_rows, valid_cols, D, D_pad, D_pad, Bc_bw, tid, total_threads);
+        
+        __syncthreads();
+        
+        // Compute dSij
+        // dSij = Pij * (dPij - dpsum[i])
+        // dPij = dOi . Vj^T
+        // We need dPij again. Can we avoid recomputing GEMM?
+        // We need to recompute dPij (dOi * Vj^T).
+        // Let's reuse s_dVj buffer for dPij temporarily? 
+        // No, s_dVj is Bc*D. dPij is Br*Bc. Size matches (32*32=1024 vs 32*64=2048).
+        // But s_dVj needs to accumulate results.
+        // We can compute dPij element-wise? No.
+        // We must recompute GEMM dOi * Vj^T.
+        // Where to store it?
+        // We have s_Sij (Br, Bc). We can store dSij there.
+        // But we need Pij to compute dSij.
+        // So:
+        // 1. Compute dPij -> Store in temp buffer (e.g. s_dVj).
+        // 2. Compute Pij from s_Sij.
+        // 3. Compute dSij = Pij * (dPij - dpsum) -> Store in s_Sij.
+        // 4. Zero out s_dVj (it was used as temp).
+        
+        float* s_dP = s_dVj; // Reuse
+        gemm_ab_t_float4(s_dOi, s_Vj, s_dP, valid_rows, valid_cols, D, D_pad, D_pad, Bc_bw, tid, total_threads);
+        
+        __syncthreads();
+        
+        for (int k = tid; k < valid_rows * valid_cols; k += total_threads) {
+            int r = k / valid_cols;
+            int c = k % valid_cols;
+            int global_row = row_start + r;
+            int global_col = col_start + c;
+            
+            float sij = s_Sij[r * Bc_bw + c];
+            float ds = 0.0f;
+            float p = 0.0f;
+            
+            if (!is_causal || global_col <= global_row) {
+                float l_val = l_base[global_row];
+                p = expf(sij * softmax_scale - l_val);
+                float dp = s_dP[r * Bc_bw + c];
+                ds = p * (dp - s_dpsum[r]);
+                ds *= softmax_scale; // Scale gradient
+            }
+            
+            s_Sij[r * Bc_bw + c] = ds; // Store dSij
+            // Also accumulate dVj here?
+            // dVj += Pij^T * dOi.
+            // Wait, dVj term is Pij^T * dOi.
+            // Pij is (Br, Bc). dOi is (Br, D).
+            // Pij^T is (Bc, Br).
+            // (Bc, Br) * (Br, D) -> (Bc, D).
+            // Standard GEMM.
+            // But we need Pij, not dSij for dVj!
+            // Ah. dV_j = sum_i P_ij * dO_i.
+            // So we need to store Pij somewhere or compute contribution immediately.
+            // We replaced s_Sij with dSij.
+            // We lost Pij.
+            // We can compute contribution to dVj BEFORE overwriting s_Sij with dSij.
+            
+            // Re-plan:
+            // 1. Compute dP -> s_dP (s_dVj).
+            // 2. Loop k:
+            //    Compute Pij.
+            //    Accumulate dVj contribution? No, that's a GEMM.
+            //    We can't do element-wise GEMM easily.
+            //    We need Pij in a matrix form for GEMM.
+            
+            // We need storage for Pij AND dSij?
+            // s_Sij holds Sij.
+            // Convert s_Sij -> Pij (in place).
+            // Then compute dVj += Pij^T * dOi.
+            // Then compute dSij = Pij * (dP - dpsum).
+            // We need dP.
+            // If we store dP in s_dVj, we can't accumulate dVj there yet.
+            // We need another buffer?
+            // We have s_dKj (Bc*D) free?
+            // Yes, we compute dKj later.
+            // So store dP in s_dKj?
+            // dKj is (Bc, D). dP is (Br, Bc).
+            // Size: 32*64 vs 32*32. Fits.
+        }
+        __syncthreads();
+        
+        // Correct Sequence:
+        // 1. Compute dP = dOi * Vj^T -> Store in s_dKj (Temp).
+        gemm_ab_t_float4(s_dOi, s_Vj, s_dKj, valid_rows, valid_cols, D, D_pad, D_pad, Bc_bw, tid, total_threads);
+        __syncthreads();
+        
+        // 2. Compute Pij (from s_Sij), then dVj contribution, then dSij.
+        // Wait, dVj needs Pij^T * dOi.
+        // If we do GEMM, we need Pij in memory.
+        // So convert s_Sij -> Pij.
+        for (int k = tid; k < valid_rows * valid_cols; k += total_threads) {
+            int r = k / valid_cols;
+            int c = k % valid_cols;
+            int global_row = row_start + r;
+            int global_col = col_start + c;
+            if (!is_causal || global_col <= global_row) {
+                float l_val = l_base[global_row];
+                s_Sij[r * Bc_bw + c] = expf(s_Sij[r * Bc_bw + c] * softmax_scale - l_val);
+            } else {
+                s_Sij[r * Bc_bw + c] = 0.0f;
+            }
+        }
+        __syncthreads();
+        
+        // 3. Accumulate dVj += Pij^T * dOi.
+        // Pij (Br, Bc). dOi (Br, D).
+        // We want (Bc, Br) * (Br, D) -> (Bc, D).
+        // gemm_ab_accum_float4_transposed_a?
+        // My helper `gemm_ab_accum_float4_transposed_b` does C += A * B^T.
+        // I need C += A^T * B.
+        // Let's implement `gemm_at_b_accum`.
+        // Or assume we transpose Pij? No.
+        // We can implement a new helper `gemm_at_b_accum`.
+        // Or swap roles? No.
+        
+        // Let's implement `gemm_at_b_accum_float4` later.
+        // Assuming we have it.
+        // gemm_at_b_accum(s_Sij, s_dOi, s_dVj, ...);
+        
+        // 4. Compute dSij = Pij * (dP - dpsum).
+        // dP is in s_dKj.
+        // Pij is in s_Sij.
+        // Result dSij -> s_Sij.
+        for (int k = tid; k < valid_rows * valid_cols; k += total_threads) {
+            int r = k / valid_cols;
+            int c = k % valid_cols;
+            float p = s_Sij[r * Bc_bw + c];
+            float dp = s_dKj[r * Bc_bw + c]; // Read dP
+            float ds = p * (dp - s_dpsum[r]) * softmax_scale;
+            s_Sij[r * Bc_bw + c] = ds;
+        }
+        __syncthreads();
+        
+        // 5. Clear s_dKj (it was holding dP).
+        for (int k = tid; k < Bc_bw * D_pad; k += total_threads) s_dKj[k] = 0.0f;
+        __syncthreads();
+        
+        // 6. Accumulate dKj += dSij^T * Qi.
+        // dSij (Br, Bc). Qi (Br, D).
+        // We want (Bc, Br) * (Br, D) -> (Bc, D).
+        // Same pattern: A^T * B.
+        // gemm_at_b_accum(s_Sij, s_Qi, s_dKj, ...);
+        
+        // 7. Accumulate dQi += dSij * Kj.
+        // dSij (Br, Bc). Kj (Bc, D).
+        // (Br, Bc) * (Bc, D) -> (Br, D).
+        // Standard MatMul.
+        // gemm_ab_accum(s_Sij, s_Kj, s_dQi, ...);
+        // Note: s_dQi accumulates across j loop.
+        
+        __syncthreads();
+        
+        // 8. Atomic Add dKj, dVj to Global
+        atomic_add_block(dk_base + col_start * D, s_dKj, valid_cols, D, D, D_pad, tid, total_threads);
+        atomic_add_block(dv_base + col_start * D, s_dVj, valid_cols, D, D, D_pad, tid, total_threads);
+        __syncthreads();
+    }
+    
+    // Store dQi
+    store_float4(dq_base + row_start * D, s_dQi, valid_rows, D, D_pad, D, tid, total_threads);
 }
 
 void FlashAttentionForward(const Tensor &q, const Tensor &k, const Tensor &v, Tensor &output, Tensor &softmax_lse,
@@ -926,9 +1163,40 @@ void FlashAttentionBackward(const Tensor &q, const Tensor &k, const Tensor &v, c
     cudaMemset(gk_ptr, 0, bytes);
     cudaMemset(gv_ptr, 0, bytes);
 
-    dim3 grid(B, H, T);
+    // Grid: (B, H, Tr)
+    int Tr = (T + 32 - 1) / 32;
+    dim3 grid(B, H, Tr);
     dim3 block(128);
-    FlashAttentionBackwardKernel<<<grid, block>>>(q_ptr, k_ptr, v_ptr, go_ptr, gq_ptr, gk_ptr, gv_ptr, l_ptr, T, H, D,
+    
+    // Shared Mem Size for Backward
+    // float buffers: s_Qi, s_dOi, s_Kj, s_Vj, s_Sij, s_dKj, s_dVj
+    // D=64. D_pad=64. (Aligned to 4 float4 = 16 floats? No, just multiple of 4).
+    // Let's use D_pad = (D+3)/4*4.
+    int D_pad = (D + 3) / 4 * 4; 
+    int Br = 32;
+    int Bc = 32;
+    
+    // Size calculation
+    // s_Qi: Br * D (we used D not D_pad in load_float4 dest stride?)
+    // Kernel uses D for load stride?
+    // load_float4(..., s_Qi, ..., D_pad...) 
+    // Kernel uses D_pad stride for shared memory.
+    
+    size_t sram_size = 0;
+    sram_size += Br * D_pad * sizeof(float); // s_Qi
+    sram_size += Br * D_pad * sizeof(float); // s_dOi
+    sram_size += Bc * D_pad * sizeof(float); // s_Kj
+    sram_size += Bc * D_pad * sizeof(float); // s_Vj
+    sram_size += Br * Bc * sizeof(float);    // s_Sij
+    sram_size += Bc * D_pad * sizeof(float); // s_dKj
+    sram_size += Bc * D_pad * sizeof(float); // s_dVj
+    // s_dQi reuses s_dVj + ... or we allocate it?
+    // Kernel: float* s_dQi = s_dVj + Bc_bw * D_pad;
+    sram_size += Br * D_pad * sizeof(float); // s_dQi
+    // s_dpsum reuses s_dQi + ...
+    sram_size += Br * sizeof(float); // s_dpsum
+    
+    FlashAttentionBackwardKernel<<<grid, block, sram_size>>>(q_ptr, k_ptr, v_ptr, go_ptr, gq_ptr, gk_ptr, gv_ptr, l_ptr, T, H, D,
                                                   softmax_scale, is_causal);
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {

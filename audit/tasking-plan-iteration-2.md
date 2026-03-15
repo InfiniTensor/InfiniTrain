@@ -33,17 +33,19 @@
 
 ---
 
-## Story 8: Backward Pass 优化 (消除 AtomicAdd) (待开始)
+## Story 8: Backward Pass 优化 (消除 AtomicAdd) (已完成)
 **点数**: 1.0 人日
 **描述**:
 当前 Backward Pass 使用全局 `atomicAdd` 更新 `dK` 和 `dV`，导致严重的内存竞争。需要重构 Backward Kernel，使用确定性的并行归约或 Thread Block 级别的累加策略。
 
 **Tasking**:
-1. **分析现有 Backward Kernel**: 确认 `atomicAdd` 的瓶颈位置。
+1. **分析现有 Backward Kernel**: 确认 `atomicAdd` 的瓶颈位置。 (已完成)
 2. **设计并行归约策略**:
-    - 每个 Thread Block 计算一部分 `dQ, dK, dV`。
-    - 对于 `dK, dV`，由于它们在 Seq 维度上共享，需要跨 Block 累加。
-    - 方案 A: 使用 Grid 级别的同步 (Global Barrier) 或两阶段 Kernel (Compute -> Reduce)。
-    - 方案 B: 限制 Grid 映射，使得同一 Head 的计算在同一 Block 或通过 Shared Memory 交换 (FlashAttention 原始论文策略)。
-3. **实现新 Kernel**: 移除 Global AtomicAdd。
-4. **验证正确性**: 使用 `test_flash_layout` 或 Gradient Check。
+    - 采用 Block 级累加：每个 Block 负责一个 `j` Tile (Key/Value)，在 Shared Memory 中累加 `dK, dV`，最后进行一次 Block 级原子写。
+    - 将全局原子操作频率从 `T` 次/Thread 降低到 `T/Bc` 次/Block (降低约 32x)。 (已完成)
+3. **实现新 Kernel**:
+    - 重构 `FlashAttentionBackwardKernel`，引入 `j` 维度的 Tiling。
+    - 使用 `load_float4`, `store_float4` 优化访存。 (已完成)
+4. **验证正确性**:
+    - 扩展 `test_flash_layout.cc` 增加 Backward Gradient Check。
+    - 验证 `dQ`, `dK`, `dV` 与 CPU Reference 实现的一致性 (Avg Diff < 0.01)。 (已完成)
