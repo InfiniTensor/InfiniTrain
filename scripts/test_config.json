@@ -18,14 +18,24 @@
     ],
     "tests": [
         {
-            "id": "3",
+            "id": "3_bfloat16",
             "args": {
-                "dtype": "float32",
+                "dtype": "bfloat16",
+                "nthread_per_process": 8,
+                "num_iteration": 10,
+                "batch_size": 10,
+                "total_batch_size": 5120
+            }
+        },
+        {
+            "id": "3_bfloat16_distopt",
+            "args": {
+                "dtype": "bfloat16",
                 "nthread_per_process": 8,
                 "num_iteration": 10,
                 "batch_size": 10,
                 "total_batch_size": 5120,
-                "flash": false
+                "use_distributed_optimizer": true
             }
         }
     ]

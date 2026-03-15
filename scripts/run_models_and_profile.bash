@@ -4,6 +4,7 @@ set -e
 set -o pipefail
 
 CONFIG_FILE="${1:-test_config.json}"
+export INFINI_FLASH_BF16_USE_FP32=0
 
 # Dependencies check
 if ! command -v jq >/dev/null 2>&1; then
@@ -167,29 +168,56 @@ for ((id=0; id<num_builds; ++id)); do
 
     for ((ti=0; ti<num_tests; ++ti)); do
         test_id=$(jq -r ".tests[$ti].id" "$CONFIG_FILE")
-        arg_str="$(args_string_for_test "$ti")"
+        base_arg_str="$(args_string_for_test "$ti")"
 
-        # Get flash value and set log directories accordingly
-        flash_value=$(jq -r ".tests[$ti].args.flash" "$CONFIG_FILE")
-        if [[ "$flash_value" == "true" ]]; then
-            LOG_DIR="./compare_logs"
-            PROFILE_LOG_DIR="./compare_profile_logs"
-        else
-            LOG_DIR="$(read_var LOG_DIR)"
-            : "${LOG_DIR:=./logs}"
-            PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)"
-            : "${PROFILE_LOG_DIR:=./profile_logs}"
-        fi
+        # Add --noflash to the beginning of arg_str (will override any existing flash arg)
+        arg_str="--noflash $base_arg_str"
+
+        # Add --flash to the beginning of arg_str (will override any existing flash arg)
+        arg_str1="--flash $base_arg_str"
+
+        # Run gpt2 with flash=false
+        LOG_DIR="$(read_var LOG_DIR)"
+        : "${LOG_DIR:=./logs}"
+        PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)"
+        : "${PROFILE_LOG_DIR:=./profile_logs}"
 
         mkdir -p "$LOG_DIR" "$PROFILE_LOG_DIR"
         export LOG_DIR PROFILE_LOG_DIR
 
-        # gpt2
-        gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
+        gpt2_cmd="./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
         run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag"
 
-        # llama3
-        llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str}"
+        # Run gpt2 with flash=true
+        COMPARE_LOG_DIR="./compare_logs"
+        COMPARE_PROFILE_LOG_DIR="./compare_profile_logs"
+
+        mkdir -p "$COMPARE_LOG_DIR" "$COMPARE_PROFILE_LOG_DIR"
+        export COMPARE_LOG_DIR COMPARE_PROFILE_LOG_DIR
+
+        gpt2_cmd="./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str1}"
+        run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag"
+
+        # Run llama3 with flash=false
+        LOG_DIR="$(read_var LOG_DIR)"
+        : "${LOG_DIR:=./logs}"
+        PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)"
+        : "${PROFILE_LOG_DIR:=./profile_logs}"
+
+        mkdir -p "$LOG_DIR" "$PROFILE_LOG_DIR"
+        export LOG_DIR PROFILE_LOG_DIR
+
+        llama3_cmd="./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str}"
+        run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag"
+
+        # Run llama3 with flash=true
+        COMPARE_LOG_DIR="./compare_logs"
+        COMPARE_PROFILE_LOG_DIR="./compare_profile_logs"
+
+        mkdir -p "$COMPARE_LOG_DIR" "$COMPARE_PROFILE_LOG_DIR"
+        export COMPARE_LOG_DIR COMPARE_PROFILE_LOG_DIR
+
+        llama3_cmd="./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str1}"
         run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag"
     done
 done
