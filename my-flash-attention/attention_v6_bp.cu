@@ -4,10 +4,6 @@
 const int MMA_M = 16;
 const int MMA_K = 16;
 const int MMA_N = 8;
-
-// per tile A is m x k: 16 x 16
-// per tile B is n x k: 8 x 16
-// per tile C is m x n: 16 x 8
 __device__ __forceinline__
 void ABT(const int a_height, const int b_height, const int dim, auto &a_rmem, auto &b_rmem, auto &c_rmem ){
     for(int mma_id_a = 0; mma_id_a < a_height / MMA_M; mma_id_a++){
@@ -19,9 +15,6 @@ void ABT(const int a_height, const int b_height, const int dim, auto &a_rmem, au
     }
 }
 
-// per tile A is k x m: 16 x 16
-// per tile B is k x n: 16 x 8
-// per tile C is m x n: 16 x 8
 __device__ __forceinline__
 void ATB(const int height, const int a_dim, const int b_dim, auto &a_rmem, auto &b_rmem, auto &c_rmem){
     for(int mma_id_a_dim = 0; mma_id_a_dim < a_dim / MMA_M; mma_id_a_dim++){
@@ -33,9 +26,6 @@ void ATB(const int height, const int a_dim, const int b_dim, auto &a_rmem, auto 
     }
 }
 
-//per tile A is m x k: 16 x 16
-//per tile B is k x n: 16 x 8
-//per tile C is m x n: 16 x 8
 __device__ __forceinline__
 void AB(const int m, const int k, const int n, auto &a_rmem, auto &b_rmem, auto &c_rmem){
     for(int mma_id_m = 0; mma_id_m < m / MMA_M; mma_id_m++){
@@ -46,10 +36,21 @@ void AB(const int m, const int k, const int n, auto &a_rmem, auto &b_rmem, auto 
         }
     }
 }
+__device__ __forceinline__
+void get_S(auto &p_rmem, auto &dp_rmem, auto &d, int height, int width, int lane_id){
+    for(int mma_id_h = 0; mma_id_h < height / MMA_M; mma_id_h++){
+        for(int mma_id_w = 0; mma_id_w < width / MMA_N; mma_id_w++){
+            float* dp_regs = dp_rmem[mma_id_h][mma_id_w]; // 4个float
 
-// get P
-// apply causal mask
-// apply padding mask
+            nv_bfloat162* this_p_rmem = reinterpret_cast<nv_bfloat162 *>(p_rmem[mma_id_h][mma_id_w / 2]);
+            int row_idx1 = mma_id_h * MMA_M + (lane_id >> 2);
+            int row_idx2 = row_idx1 + 8;
+            this_p_rmem[(mma_id_w % 2) * 2] = this_p_rmem[(mma_id_w % 2) * 2] * __float22bfloat162_rn({dp_regs[0] - d[row_idx1], dp_regs[1] - d[row_idx1]});
+            this_p_rmem[(mma_id_w % 2) * 2 + 1] = this_p_rmem[(mma_id_w % 2) * 2 + 1] * __float22bfloat162_rn({dp_regs[2] - d[row_idx2], dp_regs[3] - d[row_idx2]});
+        }
+    }
+}
+
 __device__ __forceinline__
 void compute_P(const int q_height, const int kv_height, const int dim, auto &q_rmem, auto &kv_rmem, auto &s_rmem, auto &P_smem, auto &L,
                bool is_causal, int q_start, int kv_start, int kv_len, int lane_id, int warp_id, int BLOCK_KV, float scale){
@@ -65,9 +66,6 @@ void compute_P(const int q_height, const int kv_height, const int dim, auto &q_r
                             int kv_global_idx = kv_start + kv_local_idx;
                             bool mask = (kv_global_idx >= kv_len) || (is_causal && kv_global_idx > q_global_idx);
                             s_rmem[mma_id_q][mma_id_kv][i] = mask?0:expf(s_rmem[mma_id_q][mma_id_kv][i]*scale - L[q_local_idx]);
-
-                            // P_smem: [BLOCK_Q, BLOCK_KV], row-major
-                            // byte offset = (q_local_idx * BLOCK_KV + warp_id * kv_height + kv_local_idx) * sizeof(nv_bfloat16)
                             uint32_t byte_off = (q_local_idx * BLOCK_KV + warp_id * kv_height + kv_local_idx) * sizeof(nv_bfloat16);
                             uint32_t swz_off  = P_smem + swizzle<128>(byte_off);  // BLOCK_KV=64
                             nv_bfloat16* dst = reinterpret_cast<nv_bfloat16*>(__cvta_shared_to_generic(swz_off));
@@ -77,24 +75,6 @@ void compute_P(const int q_height, const int kv_height, const int dim, auto &q_r
                 }
 }
 
-// per tile P: 16 x 16, nv_bfloat16
-// per tile dP: 16 x 8, float
-// per tile dS: 16 x 16, nv_bfloat16
-// D: float
-__device__ __forceinline__
-void get_S(auto &p_rmem, auto &dp_rmem, auto &d, int height, int width, int lane_id){
-    for(int mma_id_h = 0; mma_id_h < height / MMA_M; mma_id_h++){
-        for(int mma_id_w = 0; mma_id_w < width / MMA_N; mma_id_w++){
-            float* dp_regs = dp_rmem[mma_id_h][mma_id_w]; // 4个float
-
-            nv_bfloat162* this_p_rmem = reinterpret_cast<nv_bfloat162 *>(p_rmem[mma_id_h][mma_id_w / 2]);
-            int row_idx1 = mma_id_h * MMA_M + (lane_id >> 2);
-            int row_idx2 = row_idx1 + 8;
-            this_p_rmem[(mma_id_w % 2) * 2] = this_p_rmem[(mma_id_w % 2) * 2] * __float22bfloat162_rn({dp_regs[0] - d[row_idx1], dp_regs[1] - d[row_idx1]});
-            this_p_rmem[(mma_id_w % 2) * 2 + 1] = this_p_rmem[(mma_id_w % 2) * 2 + 1] * __float22bfloat162_rn({dp_regs[2] - d[row_idx2], dp_regs[3] - d[row_idx2]});
-        }
-    }
-}
 
 __device__ __forceinline__
 void write_dQ(auto &dq_rmem, auto &d_q, int height, int width, int lane_id, int q_start, int q_len, float scale){
@@ -188,13 +168,13 @@ const nv_bfloat16 *Q,
     // Load K, V HBM -> SRAM [BLOCK_KV, DIM]
     // initialize dK,dV: [BLOCK_KV, DIM]
     extern __shared__ nv_bfloat16 smem[];
-    const uint32_t K_smem = __cvta_generic_to_shared(smem);
-    const uint32_t Q_smem = K_smem;
-    const uint32_t V_smem = Q_smem + max(BLOCK_KV, BLOCK_Q) * DIM * sizeof(nv_bfloat16);
-    const uint32_t L_smem = V_smem + BLOCK_KV * DIM * sizeof(nv_bfloat16);
-    const uint32_t D_smem = L_smem + BLOCK_Q * sizeof(float);
-    const uint32_t dO_smem = D_smem + BLOCK_Q * sizeof(float);
-    const uint32_t P_smem = dO_smem + BLOCK_Q * DIM * sizeof(float);
+    const uint32_t K_smem  = __cvta_generic_to_shared(smem);
+    const uint32_t V_smem  = K_smem  + BLOCK_KV * DIM * sizeof(nv_bfloat16);
+    const uint32_t Q_smem  = V_smem  + BLOCK_KV * DIM * sizeof(nv_bfloat16);
+    const uint32_t L_smem  = Q_smem  + BLOCK_Q  * DIM * sizeof(nv_bfloat16);
+    const uint32_t D_smem  = L_smem  + BLOCK_Q  * sizeof(float);
+    const uint32_t dO_smem = D_smem  + BLOCK_Q  * sizeof(float);
+    const uint32_t P_smem  = dO_smem + BLOCK_Q  * DIM * sizeof(nv_bfloat16);
     //for ldmatrix: 计算每个线程要load的行和列，并且要swizzle一下
     uint32_t  K_smem_thread, V_smem_thread;
     {
@@ -219,7 +199,6 @@ const nv_bfloat16 *Q,
 
     // K,V,dK, dV: shared -> registers
     uint32_t K_rmem[WARP_KV / MMA_N][DIM / MMA_K][2];
-    // TBD: modify V_rmem
     uint32_t V_rmem[WARP_KV / MMA_N][DIM / MMA_K][2];
 
     // Load K,V registers: shared -> register
@@ -313,7 +292,7 @@ const nv_bfloat16 *Q,
                 uint32_t addr = dO_right_smem_thread;
                     addr += mma_id_q * MMA_K * DIM * sizeof(nv_bfloat16);
                     addr ^= mma_id_d * MMA_N * sizeof(nv_bfloat16);
-                    ldmatrix_x2(dO_right_rmem[mma_id_q][mma_id_d], addr);
+                    ldmatrix_x2_trans(dO_right_rmem[mma_id_q][mma_id_d], addr);
             }
         }
 
@@ -333,7 +312,7 @@ const nv_bfloat16 *Q,
             for(int mma_id_kv = 0; mma_id_kv < WARP_KV / MMA_K; mma_id_kv++){
                 uint32_t addr = p_smem_thread;
                 addr += mma_id_q * MMA_M * BLOCK_KV * sizeof(nv_bfloat16);
-                addr ^= (warp_id * WARP_KV + mma_id_kv * MMA_K) * sizeof(nv_bfloat16);
+                addr ^= (mma_id_kv * MMA_K) * sizeof(nv_bfloat16); // delete warp_id * WARP_KV
                 ldmatrix_x4_trans(P_rmem[mma_id_q][mma_id_kv],addr);
                 uint32_t tem = P_rmem[mma_id_q][mma_id_kv][1];
                 P_rmem[mma_id_q][mma_id_kv][1] = P_rmem[mma_id_q][mma_id_kv][2];
@@ -353,7 +332,7 @@ const nv_bfloat16 *Q,
             for(int mma_id_kv = 0; mma_id_kv < WARP_KV / MMA_K; mma_id_kv++){
                 uint32_t addr = p_smem_thread;
                 addr += mma_id_q * MMA_M * BLOCK_KV * sizeof(nv_bfloat16);
-                addr ^= (warp_id * WARP_KV + mma_id_kv * MMA_K) * sizeof(nv_bfloat16);
+                addr ^= ( mma_id_kv * MMA_K) * sizeof(nv_bfloat16); // delete warp_id * WARP_KV
                 ldmatrix_x4(P_rmem[mma_id_q][mma_id_kv],addr);
             }
         }
@@ -363,6 +342,11 @@ const nv_bfloat16 *Q,
         
         // 5) get dQ: dQ <- dQ + dS @ K
         // Load K rmem trans
+        {
+            const int row_off = lane_id % 16 + warp_id * WARP_KV;
+            const int col_off = lane_id / 16 * 8;
+            K_smem_thread = swizzle<DIM * sizeof(nv_bfloat16)> (K_smem + (row_off * DIM + col_off) * sizeof(nv_bfloat16));
+        }
         uint32_t new_K_rmem[WARP_KV / MMA_K][DIM / MMA_N][2];
         for(int mma_id_kv = 0; mma_id_kv < WARP_KV / MMA_K; mma_id_kv++){
             for(int mma_id_d = 0; mma_id_d < DIM / MMA_N; mma_id_d++){
@@ -397,7 +381,7 @@ const nv_bfloat16 *Q,
             for(int mma_id_kv = 0; mma_id_kv < WARP_KV / MMA_K; mma_id_kv++){
                 uint32_t addr = p_smem_thread;
                 addr += mma_id_q * MMA_M * BLOCK_KV * sizeof(nv_bfloat16);
-                addr ^= (warp_id * WARP_KV + mma_id_kv * MMA_K) * sizeof(nv_bfloat16);
+                addr ^= ( mma_id_kv * MMA_K) * sizeof(nv_bfloat16);  // delete warp_id * WARP_KV
                 ldmatrix_x4_trans(P_rmem[mma_id_q][mma_id_kv],addr);
                 uint32_t tem = P_rmem[mma_id_q][mma_id_kv][1];
                 P_rmem[mma_id_q][mma_id_kv][1] = P_rmem[mma_id_q][mma_id_kv][2];
@@ -482,14 +466,14 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> flash_attention_backward
     const int num_blocks = bs * q_head * num_kv_blocks;
 
     constexpr int smem_size =
-        (BLOCK_KV > BLOCK_Q ? BLOCK_KV : BLOCK_Q) * DIM * sizeof(nv_bfloat16) +
-        BLOCK_KV * DIM * sizeof(nv_bfloat16) +
-        2 * BLOCK_Q * sizeof(float) +
-        BLOCK_Q * DIM * sizeof(float) +
-        BLOCK_Q * BLOCK_KV * sizeof(nv_bfloat16);
+    BLOCK_KV * DIM * sizeof(nv_bfloat16) +   // K
+    BLOCK_KV * DIM * sizeof(nv_bfloat16) +   // V
+    BLOCK_Q  * DIM * sizeof(nv_bfloat16) +   // Q
+    BLOCK_Q  * sizeof(float) +                // L
+    BLOCK_Q  * sizeof(float) +                // D
+    BLOCK_Q  * DIM * sizeof(nv_bfloat16) +   // dO  ← bf16
+    BLOCK_Q  * BLOCK_KV * sizeof(nv_bfloat16); // P
 
-    // 调整 layout: [bs, head, seq, dim] -> [bs * head * seq, dim]
-    // 这里简化处理，假设 layout 匹配
     auto Q_ptr = reinterpret_cast<nv_bfloat16*>(Q.data_ptr());
     auto K_ptr = reinterpret_cast<nv_bfloat16*>(K.data_ptr());
     auto V_ptr = reinterpret_cast<nv_bfloat16*>(V.data_ptr());
