@@ -80,8 +80,9 @@ if(USE_CUDA)
   # CUDA compilation options
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
-  # Only compile CUDA kernels / cuda sources here (your original used src/*.cu)
+  # Compile regular CUDA kernels (sm_75+), excluding flash_attention.cu which needs sm_80+
   file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
+  list(FILTER CUDA_KERNELS EXCLUDE REGEX ".*flash_attention\\.cu$")
 
   add_library(infini_train_cuda_kernels STATIC ${CUDA_KERNELS})
   set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "75;80;90")
@@ -94,14 +95,12 @@ if(USE_CUDA)
       CUDA::cuda_driver
   )
 
-  # Flash attention kernels require sm_80+ (cp.async, bf16 mma, ldmatrix).
+  # Flash attention kernel requires sm_80+ (cp.async, bf16 mma, ldmatrix).
   # Build as a separate library targeting sm_80 and sm_90 only.
-  file(GLOB FA_KERNELS ${PROJECT_SOURCE_DIR}/my-flash-attention/attention_v6.cu
-                        ${PROJECT_SOURCE_DIR}/my-flash-attention/attention_v6_bp.cu)
-  add_library(infini_train_flash_attention STATIC ${FA_KERNELS})
+  add_library(infini_train_flash_attention STATIC
+    ${PROJECT_SOURCE_DIR}/infini_train/src/kernels/cuda/flash_attention.cu)
   set_target_properties(infini_train_flash_attention PROPERTIES CUDA_ARCHITECTURES "80;90")
-  target_compile_definitions(infini_train_flash_attention PRIVATE INFINI_TRAIN_BUILD=1)
-  target_link_libraries(infini_train_flash_attention PUBLIC CUDA::cudart)
+  target_link_libraries(infini_train_flash_attention PUBLIC glog CUDA::cudart)
 
   if(USE_NCCL)
     message(STATUS "Add USE_NCCL, use NCCL with CUDA")

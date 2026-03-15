@@ -10,6 +10,9 @@ my-flash-attention/CLAUDE.md
 my-flash-attention/test_aTb.cu
 .claude
 CLAUDE.md
+scripts/compare_logs
+my_tmp
+my-flash-attention
 # *.sh
 # g*.txt
 # l*.txt
