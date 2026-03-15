@@ -2,12 +2,46 @@
 """
 Extract training statistics from log files and display them in a table.
 
+This script parses log files from training runs and extracts statistics such as
+loss, time, tokens per second, and memory usage. It can compare
+results from different configurations (e.g., flash vs noflash attention)
+and calculate speedup ratios.
+
 Usage:
     python extract_training_stats.py <log_dir1> <log_dir2> [options]
+
+Arguments:
+    log_dir1: First log directory (typically contains noflash results)
+    log_dir2: Second log directory (typically contains flash results)
 
 Options:
     --threshold-fp32: Loss difference threshold for fp32 (default: 1e-5)
     --threshold-bf16: Loss difference threshold for bfloat16 (default: 1e-2)
+    --markdown: Output tables in markdown format
+    --output: Specify output file path (for markdown tables)
+    --speedup: Output speedup ratio table (noflash_time / flash_time)
+
+Examples:
+    # Display training statistics in plain text
+    python extract_training_stats.py logs compare_logs
+
+    # Display training statistics in markdown format
+    python extract_training_stats.py logs compare_logs --markdown
+
+    # Display training statistics in markdown and save to file
+    python extract_training_stats.py logs compare_logs --markdown --output results.md
+
+    # Display speedup ratio table
+    python extract_training_stats.py logs compare_logs --speedup
+
+    # Display speedup ratio table in markdown and save to file
+    python extract_training_stats.py logs compare_logs --speedup --markdown --output results.md
+
+Output:
+    The script outputs three types of information:
+    1. Training Statistics Table: Detailed statistics for each configuration
+    2. Comparison between flash and noflash: Comparison of loss, time, and memory
+    3. Speedup Ratio Table (if --speedup is specified): Speedup ratios for each configuration
 """
 
 import re
@@ -18,12 +52,29 @@ from collections import defaultdict
 
 
 def get_dtype_from_filename(filename):
-    """Determine dtype from filename. Returns 'bfloat16' or 'fp32'."""
+    """
+    Determine dtype from filename.
+    
+    Args:
+        filename: Name of the log file
+        
+    Returns:
+        'bfloat16' or 'fp32'
+    """
     return 'bfloat16' if '_bfloat16' in filename else 'fp32'
 
 
 def get_flash_from_filename(filename, dir_path):
-    """Determine flash mode from filename and directory. Returns 'flash' or 'noflash'."""
+    """
+    Determine flash mode from filename and directory.
+    
+    Args:
+        filename: Name of the log file
+        dir_path: Path to the directory containing the log file
+        
+    Returns:
+        'flash' or 'noflash'
+    """
     # First check if filename contains flash/noflash suffix
     if '_flash' in filename:
         return 'flash'
@@ -79,7 +130,16 @@ def parse_command_line(line):
 
 
 def parse_log_file(file_path):
-    """Extract statistics from log file."""
+    """
+    Extract statistics from log file.
+    
+    Args:
+        file_path: Path to the log file
+        
+    Returns:
+        Dictionary containing lists of losses, times, tokens per second,
+        peak memory usage, and configuration
+    """
     stats = {
         'losses': [],
         'times': [],
@@ -120,7 +180,19 @@ def parse_log_file(file_path):
 
 
 def calculate_averages(stats, exclude_first_step=True):
-    """Calculate average values, optionally excluding first step."""
+    """
+    Calculate average values, optionally excluding first step.
+    
+    Args:
+        stats: Dictionary containing lists of losses, times, tokens per second,
+                and peak memory usage
+        exclude_first_step: If True, exclude the first step from calculations
+                             (default: True, as first step may have overhead)
+                             
+    Returns:
+        Dictionary containing average values for loss, time, tokens per second,
+        and peak memory usage
+    """
     losses = stats['losses']
     times = stats['times']
     toks_per_sec = stats['toks_per_sec']
@@ -145,6 +217,17 @@ def calculate_averages(stats, exclude_first_step=True):
 
 
 def main():
+    """
+    Main function to extract and display training statistics.
+    
+    This function:
+    1. Parses command line arguments
+    2. Reads log files from two directories
+    3. Extracts statistics from each log file
+    4. Groups results by configuration
+    5. Displays tables and comparisons
+    6. Optionally displays speedup ratios
+    """
     parser = ArgumentParser(description='Extract training statistics from log files')
     parser.add_argument('dir1', type=Path, help='First log directory')
     parser.add_argument('dir2', type=Path, help='Second log directory')
@@ -355,6 +438,7 @@ def main():
         print("=" * 120)
         
         # Group by model, dtype, disopt, and test_id
+        # This allows us to calculate speedup for each individual test configuration
         grouped_by_test = defaultdict(list)
         for result in results:
             key = f"{result['model']}_{result['dtype']}_{result['disopt']}_{result.get('test_id', '')}"
@@ -373,6 +457,7 @@ def main():
                 avg_noflash_time = sum(r['avg_time_ms'] for r in noflash_results) / len(noflash_results)
                 
                 # Calculate speedup ratio
+                # Speedup > 1.0 means flash is faster than noflash
                 speedup = avg_noflash_time / avg_flash_time if avg_flash_time > 0 else 0
                 
                 # Extract test_id from key
@@ -385,7 +470,7 @@ def main():
                     'noflash_time': avg_noflash_time
                 })
         
-        # Sort by configuration name
+        # Sort by configuration name (alphabetical order)
         speedup_results.sort(key=lambda x: x['config'])
         
         # Print speedup table
