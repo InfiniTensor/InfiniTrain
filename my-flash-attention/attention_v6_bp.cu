@@ -363,12 +363,12 @@ const nv_bfloat16 *Q,
                 nv_bfloat162* regs = reinterpret_cast<nv_bfloat162*>(P_rmem[mma_id_q][mma_id_kv]);
                 int row0 = lane_id >> 2;
                 int col0 = (lane_id % 4) * 2;
-                for(int i = 0; i < 2; i++){
-                    for(int j = 0; j < 2; j++){
+                for(int j = 0; j < 2; j++){
+                    for(int i = 0; i < 2; i++){
                         uint32_t byte_off = (mma_id_q * MMA_M + row0 + 8 * i) * BLOCK_KV * sizeof(nv_bfloat16) + (warp_id * WARP_KV + mma_id_kv * MMA_K + col0 + 8 * j) * sizeof(nv_bfloat16);
                         uint32_t swz_off  = swizzle<128>(P_smem + byte_off);  // use absolute-address swizzle
                         nv_bfloat162* dst = reinterpret_cast<nv_bfloat162*>(__cvta_shared_to_generic(swz_off));
-                        *dst = regs[i * 2 + j];
+                        *dst = regs[j * 2 + i];
                     }
                 }
 
