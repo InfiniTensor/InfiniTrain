@@ -37,22 +37,17 @@ void AB(const int m, const int k, const int n, auto &a_rmem, auto &b_rmem, auto 
     }
 }
 __device__ __forceinline__
-void get_S(auto &p_rmem, auto &dp_rmem, auto &d, int height, int width, int lane_id){
-    // P_rmem layout (ldmatrix_x4, A-operand for mma m16n8k16):
-    //   reg[0] = P[row1, lower-K cols]   reg[1] = P[row1, upper-K cols]
-    //   reg[2] = P[row2, lower-K cols]   reg[3] = P[row2, upper-K cols]
-    // dP_rmem[h][0] (lower N-tile): dp[0,1]=row1 lower-K, dp[2,3]=row2 lower-K
-    // dP_rmem[h][1] (upper N-tile): dp[0,1]=row1 upper-K, dp[2,3]=row2 upper-K
+void get_dS(auto &p_rmem, auto &dp_rmem, auto &d, int height, int width, int lane_id){
     for(int mma_id_h = 0; mma_id_h < height / MMA_M; mma_id_h++){
-        nv_bfloat162* p = reinterpret_cast<nv_bfloat162*>(p_rmem[mma_id_h][0]);
-        float* dp0 = dp_rmem[mma_id_h][0];  // lower-K cols
-        float* dp1 = dp_rmem[mma_id_h][1];  // upper-K cols
-        int row1 = mma_id_h * MMA_M + (lane_id >> 2);
-        int row2 = row1 + 8;
-        p[0] = p[0] * __float22bfloat162_rn({dp0[0] - d[row1], dp0[1] - d[row1]});
-        p[1] = p[1] * __float22bfloat162_rn({dp1[0] - d[row1], dp1[1] - d[row1]});
-        p[2] = p[2] * __float22bfloat162_rn({dp0[2] - d[row2], dp0[3] - d[row2]});
-        p[3] = p[3] * __float22bfloat162_rn({dp1[2] - d[row2], dp1[3] - d[row2]});
+        for(int mma_id_w = 0; mma_id_w < width / MMA_N; mma_id_w++){
+            float* dp_regs = dp_rmem[mma_id_h][mma_id_w]; // 4个float
+
+            nv_bfloat162* this_p_rmem = reinterpret_cast<nv_bfloat162 *>(p_rmem[mma_id_h][mma_id_w / 2]);
+            int row_idx1 = mma_id_h * MMA_M + (lane_id >> 2);
+            int row_idx2 = row_idx1 + 8;
+            this_p_rmem[(mma_id_w % 2) * 2] = this_p_rmem[(mma_id_w % 2) * 2] * __float22bfloat162_rn({dp_regs[0] - d[row_idx1], dp_regs[1] - d[row_idx1]});
+            this_p_rmem[(mma_id_w % 2) * 2 + 1] = this_p_rmem[(mma_id_w % 2) * 2 + 1] * __float22bfloat162_rn({dp_regs[2] - d[row_idx2], dp_regs[3] - d[row_idx2]});
+        }
     }
 }
 
@@ -290,7 +285,7 @@ const nv_bfloat16 *Q,
                 ldmatrix_x4(Q_rmem[mma_id_q][mma_id_d], q_addr);
                 ldmatrix_x4(dO_left_rmem[mma_id_q][mma_id_d], do_left_addr);
             }
-        }
+        } 
         // Load dO_rmem_right: shared -> registers
         for(int mma_id_q = 0; mma_id_q < BLOCK_Q / MMA_K; mma_id_q ++){
             for(int mma_id_d = 0; mma_id_d < DIM / MMA_N; mma_id_d ++){
@@ -342,7 +337,7 @@ const nv_bfloat16 *Q,
             }
         }
         float* D_ptr = reinterpret_cast<float*>(__cvta_shared_to_generic(D_smem));
-        get_S(P_rmem, dP_rmem, D_ptr, BLOCK_Q, WARP_KV, lane_id);
+        get_dS(P_rmem, dP_rmem, D_ptr, BLOCK_Q, WARP_KV, lane_id);
 
         
         // 5) get dQ: dQ <- dQ + dS @ K
