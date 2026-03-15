@@ -1,5 +1,7 @@
 #include <cmath>
 #include <cstddef>
+#include <ctime>
+#include <limits>
 #include <curand_kernel.h>
 #include "glog/logging.h"
 
@@ -94,6 +96,71 @@ __device__ __forceinline__ bool FlashAttnDropoutKeep(
     return rand_val > dropout_p;
 }
 
+template <typename T>
+__global__ void FlashAttnComputeDFusedKernel(const T *grad_output, const T *output,
+                                             float *D_fp32, int64_t rows, int head_dim) {
+    int64_t row = static_cast<int64_t>(blockIdx.x);
+    if (row >= rows) {
+        return;
+    }
+
+    float local_sum = 0.0f;
+    int64_t base = row * static_cast<int64_t>(head_dim);
+    for (int k = threadIdx.x; k < head_dim; k += blockDim.x) {
+        local_sum += common::cuda::Cast<float>(grad_output[base + k]) * common::cuda::Cast<float>(output[base + k]);
+    }
+
+    local_sum = warp_reduce_sum(local_sum);
+
+    __shared__ float warp_sums[32]; // up to 1024 threads -> 32 warps
+    int lane = threadIdx.x & 31;
+    int warp_id = threadIdx.x >> 5;
+    int num_warps = (blockDim.x + 31) >> 5;
+    if (lane == 0) {
+        warp_sums[warp_id] = local_sum;
+    }
+    __syncthreads();
+
+    if (warp_id == 0) {
+        float block_sum = (lane < num_warps) ? warp_sums[lane] : 0.0f;
+        block_sum = warp_reduce_sum(block_sum);
+        if (lane == 0) {
+            D_fp32[row] = block_sum;
+        }
+    }
+}
+
+template <typename T>
+std::shared_ptr<Tensor> ComputeFlashAttnDFused(const std::shared_ptr<Tensor> &grad_output,
+                                               const std::shared_ptr<Tensor> &output) {
+    const auto &dims = grad_output->Dims();
+    CHECK_EQ(dims.size(), 4) << "FlashAttention backward expects grad_output rank=4";
+    CHECK(output->Dims() == dims) << "FlashAttention backward expects output and grad_output same shape";
+
+    std::vector<int64_t> D_dims = {dims[0], dims[1], dims[2]}; // [B, S, H]
+    auto D_fp32 = std::make_shared<Tensor>(D_dims, DataType::kFLOAT32, grad_output->GetDevice());
+
+    int64_t rows = dims[0] * dims[1] * dims[2];
+    int head_dim = static_cast<int>(dims[3]);
+    CHECK_LE(rows, static_cast<int64_t>(std::numeric_limits<unsigned int>::max()))
+        << "FlashAttention D fused kernel row count exceeds CUDA grid.x limit";
+
+    auto device = grad_output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+
+    constexpr int kThreads = 256;
+    dim3 grid_dims(static_cast<unsigned int>(rows));
+    FlashAttnComputeDFusedKernel<T><<<grid_dims, kThreads, 0, cuda_stream>>>(
+        static_cast<const T *>(grad_output->DataPtr()),
+        static_cast<const T *>(output->DataPtr()),
+        static_cast<float *>(D_fp32->DataPtr()),
+        rows, head_dim);
+
+    return D_fp32;
+}
+
 
 /**
  * FlashAttention Forward Kernel
@@ -136,7 +203,9 @@ __global__ void FlashAttentionForwardKernel(
 
     const int Br = blockDim.y;                  // Q纵向每块大小, 32
     const int Bc = blockDim.x;                  // K/V纵向分块大小, 32
-    const int Tc = gridDim.z; // 对应原始论文中K/V纵向分块数Tc,其中Bc = 32
+    const int Tc = (src_seq_len + Bc - 1) / Bc; // 对应原始论文中K/V纵向分块数Tc,其中Bc = 32
+    const float dropout_prob = static_cast<float>(dropout_p);
+    const bool apply_dropout = (dropout_prob > 0.0f && dropout_prob < 1.0f);
 
     // 定义一系列临时变量
     extern __shared__ char shared_mem[];
@@ -173,7 +242,8 @@ __global__ void FlashAttentionForwardKernel(
     // Note: Removed DROPOUT_SM_AT macro
 
     /****************************preparation**************************/
-    int bound_tid_y = min(Br, target_seq_len - Br * bid_z);
+    int q_tile_start = Br * bid_z;
+    int bound_tid_y = min(Br, target_seq_len - q_tile_start);
 
     // preparation-1: load Qi from GM to SM, and reset Oi to 0
     for (int idx = tid_x; idx < head_dim; idx += blockDim.x) {
@@ -188,7 +258,7 @@ __global__ void FlashAttentionForwardKernel(
 
     // preparation-2: reset m_prev to -INFINITY and l_prev to 0
     if (tid_x == 0) {
-        m_prev[tid_y] = -8192.0;
+        m_prev[tid_y] = -INFINITY;
         l_prev[tid_y] = 0.0;
     }
     __syncthreads();
@@ -198,22 +268,22 @@ __global__ void FlashAttentionForwardKernel(
 /****************************main-loop**************************/
 #pragma unroll 4
     for (int j = 0; j < Tc; ++j) { // 对于每个K/V分块
-        bool skip = (is_causal && bid_z < j);
+        int k_tile_start = Bc * j;
+        int q_max_pos = q_tile_start + bound_tid_y - 1;
+        bool skip = (is_causal && (bound_tid_y <= 0 || q_max_pos < k_tile_start));
         if (skip) { // early exit, 直接跳过
             __syncthreads();
             continue;
         }
 
-        SP_AT(tid_y, tid_x) = -8192.0;
+        SP_AT(tid_y, tid_x) = -INFINITY;
         __syncthreads();
-        int bound_tid_x = min(Bc, src_seq_len - Bc * j);
+        int bound_tid_x = min(Bc, src_seq_len - k_tile_start);
         bool is_compute = true; // optimization: 分支处理,加速branch-resolving
-        if (is_causal) {
-            if (bid_z < j) {
-                is_compute = false; // 早期退出情况
-            } else if (bid_z == j) {
-                is_compute = (tid_y >= tid_x); // 对角线以上
-            }
+        if (is_causal && tid_y < bound_tid_y && tid_x < bound_tid_x) {
+            int global_q_pos = q_tile_start + tid_y;
+            int global_k_pos = k_tile_start + tid_x;
+            is_compute = (global_q_pos >= global_k_pos);
         }
 
         // step-1: load Ki, Vi from GM to SM
@@ -266,21 +336,24 @@ __global__ void FlashAttentionForwardKernel(
         // step-5: l_new = exp(m_prev - m_new) * l_prev + rowSum(P)
         float val2 = float(SP_AT(tid_y, tid_x));
         val2 = warp_reduce_sum(val2);
-        float exp_result = myexp<float>(m_prev[tid_y] - m_new[tid_y]);
+        float exp_result = 0.0f;
+        if (tid_y < bound_tid_y) {
+            exp_result = myexp<float>(m_prev[tid_y] - m_new[tid_y]);
+        }
         if (tid_x == 0 && tid_y < bound_tid_y) {
             l_new[tid_y] = exp_result * l_prev[tid_y] + val2;
         }
         __syncthreads();
 
         // step-5.5: Apply dropout to P (using dropout_seed for reproducibility)
-        if (dropout_p > 0 && tid_y < bound_tid_y && tid_x < bound_tid_x) {
-            int global_q_idx = Br * bid_z + tid_y;
-            int global_k_idx = Bc * j + tid_x;
+        if (apply_dropout && tid_y < bound_tid_y && tid_x < bound_tid_x) {
+            int global_q_idx = q_tile_start + tid_y;
+            int global_k_idx = k_tile_start + tid_x;
             bool keep = FlashAttnDropoutKeep(
                 dropout_seed, bid_y, bid_x, global_q_idx, global_k_idx,
-                q_heads, target_seq_len, src_seq_len, static_cast<float>(dropout_p));
+                q_heads, target_seq_len, src_seq_len, dropout_prob);
             if (keep) {
-                SP_AT(tid_y, tid_x) = SP_AT(tid_y, tid_x) / (1.0f - dropout_p);
+                SP_AT(tid_y, tid_x) = SP_AT(tid_y, tid_x) / (1.0f - dropout_prob);
             } else {
                 SP_AT(tid_y, tid_x) = 0.0;
             }
@@ -289,11 +362,11 @@ __global__ void FlashAttentionForwardKernel(
         __syncthreads();
 
         // step-6: O = 1/(exp(m_prev - m_new)) * O + P @ V
-        if (tid_x < bound_tid_x && tid_y < bound_tid_y) {
+        if (tid_y < bound_tid_y) {
             for (int u = tid_x; u < head_dim; u += blockDim.x) {
                 float val3 = 0.0;
 #pragma unroll
-                for (int w = 0; w < Bc; ++w) { 
+                for (int w = 0; w < bound_tid_x; ++w) {
                     val3 += float(SP_AT(tid_y, w)) * V_sm_AT(w, u);
                 }
                 O_sm_AT(tid_y, u) = O_sm_AT(tid_y, u) * exp_result + val3;
@@ -375,9 +448,6 @@ __global__ void FlashAttentionBackwardKernel(
     bool enable_gqa,
     int batch_size, int target_seq_len, int src_seq_len,
     int q_heads, int kv_heads, int head_dim) {
-    
-    // Grid/block dimensions: grid_dims(num_heads_q, batch_size, Tr), block_dim(Bc, Br)
-    // where Br corresponds to thread block row index, Bc corresponds to column index
     int tid_x = threadIdx.x;          // 横向, blockDim.x列 (Bc)
     int tid_y = threadIdx.y;          // 纵向, blockDim.y行 (Br)
     int bid_x = blockIdx.x;           // x方向, 总数 = #q_heads
@@ -387,14 +457,14 @@ __global__ void FlashAttentionBackwardKernel(
 
     const int Br = blockDim.y;                  // Q纵向每块大小, 32
     const int Bc = blockDim.x;                  // K/V纵向分块大小, 32
-    // const int Tr = gridDim.z; // Q纵向分块数
     const int Tc = (src_seq_len + Bc - 1) / Bc; // K/V纵向分块数
+    const float dropout_prob = static_cast<float>(dropout_p);
+    const bool apply_dropout = (dropout_prob > 0.0f && dropout_prob < 1.0f);
 
     // Define shared memory
     extern __shared__ char shared_mem[];
     char *ptr = shared_mem;
-    
-    
+
     // Q_sm[Br][head_dim], K_T_sm[head_dim][Bc], V_sm[Bc][head_dim]
     float *Q_sm = reinterpret_cast<float *>(ptr);
     ptr += Br * head_dim * sizeof(float);
@@ -402,335 +472,257 @@ __global__ void FlashAttentionBackwardKernel(
     ptr += head_dim * Bc * sizeof(float);
     float *V_sm = reinterpret_cast<float *>(ptr);
     ptr += Bc * head_dim * sizeof(float);
-    
+
     // dO_sm[Br][head_dim], dQ_sm[Br][head_dim], dK_T_sm[head_dim][Bc], dV_sm[Bc][head_dim]
     float *dO_sm = reinterpret_cast<float *>(ptr);
     ptr += Br * head_dim * sizeof(float);
-    // dQ_sm[Br][head_dim] - accumulated gradient for Q
     float *dQ_sm = reinterpret_cast<float *>(ptr);
     ptr += Br * head_dim * sizeof(float);
     float *dK_T_sm = reinterpret_cast<float *>(ptr);
     ptr += head_dim * Bc * sizeof(float);
     float *dV_sm = reinterpret_cast<float *>(ptr);
     ptr += Bc * head_dim * sizeof(float);
-    
+
     // S_sm[Br][Bc], P_sm[Br][Bc]
     float *S_sm = reinterpret_cast<float *>(ptr);
     ptr += Br * Bc * sizeof(float);
     float *P_sm = reinterpret_cast<float *>(ptr);
     ptr += Br * Bc * sizeof(float);
 
-    // L_sm[Br] - logsumexp values
+    // L_sm[Br], D_sm[Br]
     float *L_sm = reinterpret_cast<float *>(ptr);
     ptr += Br * sizeof(float);
-    // D_sm[Br] - D values loaded from HBM
     float *D_sm = reinterpret_cast<float *>(ptr);
     ptr += Br * sizeof(float);
 
-    
     // Define access macros
-    #define Q_sm_AT(y, x) Q_sm[y * head_dim + x]
-    #define K_T_sm_AT(y, x) K_T_sm[y * Bc + x]
-    #define V_sm_AT(y, x) V_sm[y * head_dim + x]
-    #define dO_sm_AT(y, x) dO_sm[y * head_dim + x]
-    #define dQ_sm_AT(y, x) dQ_sm[y * head_dim + x]
-    #define dK_T_sm_AT(y, x) dK_T_sm[y * Bc + x]
-    #define dV_sm_AT(y, x) dV_sm[y * head_dim + x]
-    #define S_sm_AT(y, x) S_sm[y * Bc + x]
-    #define P_sm_AT(y, x) P_sm[y * Bc + x]
-    #define L_sm_AT(y) L_sm[y]
-    #define D_sm_AT(y) D_sm[y]
+#define Q_sm_AT(y, x) Q_sm[y * head_dim + x]
+#define K_T_sm_AT(y, x) K_T_sm[y * Bc + x]
+#define V_sm_AT(y, x) V_sm[y * head_dim + x]
+#define dO_sm_AT(y, x) dO_sm[y * head_dim + x]
+#define dQ_sm_AT(y, x) dQ_sm[y * head_dim + x]
+#define dK_T_sm_AT(y, x) dK_T_sm[y * Bc + x]
+#define dV_sm_AT(y, x) dV_sm[y * head_dim + x]
+#define S_sm_AT(y, x) S_sm[y * Bc + x]
+#define P_sm_AT(y, x) P_sm[y * Bc + x]
+#define L_sm_AT(y) L_sm[y]
+#define D_sm_AT(y) D_sm[y]
 
     /****************************Preparation*****************************/
-    
-    // Initialize dQ_sm to 0 for accumulation
+    const int i = bid_z;
+    const int q_tile_start = Br * i;
+    const int bound_tid_y = min(Br, target_seq_len - q_tile_start);
+
     for (int idx = tid_x; idx < head_dim; idx += blockDim.x) {
         dQ_sm_AT(tid_y, idx) = 0.0f;
-    }
-    __syncthreads();
+        Q_sm_AT(tid_y, idx) = 0.0f;
+        dO_sm_AT(tid_y, idx) = 0.0f;
 
-    // Load D_i from HBM to shared memory
-    int q_idx = Br * bid_z + tid_y;  // Global query position within this head
-    if (q_idx < target_seq_len) {
-        int d_idx = ((bid_y * q_heads + bid_x) * target_seq_len) + q_idx;
-        D_sm_AT(tid_y) = D[d_idx];
-    } else {
-        D_sm_AT(tid_y) = 0.0f;  // Padding for out-of-bounds positions
+        if (tid_y < bound_tid_y) {
+            int global_q_idx = q_tile_start + tid_y;
+            int q_tensor_idx = ((bid_y * target_seq_len) + global_q_idx) * q_heads + bid_x;
+            Q_sm_AT(tid_y, idx) = float(query[q_tensor_idx * head_dim + idx]);
+            dO_sm_AT(tid_y, idx) = float(grad_output[q_tensor_idx * head_dim + idx]);
+        }
+    }
+
+    if (tid_x == 0) {
+        if (tid_y < bound_tid_y) {
+            int global_q_idx = q_tile_start + tid_y;
+            L_sm_AT(tid_y) = logsumexp[((bid_y * q_heads + bid_x) * target_seq_len) + global_q_idx];
+            // D 的布局为 [batch_size, seq_len_q, q_heads]
+            int d_idx = ((bid_y * target_seq_len) + global_q_idx) * q_heads + bid_x;
+            D_sm_AT(tid_y) = D[d_idx];
+        } else {
+            L_sm_AT(tid_y) = 0.0f;
+            D_sm_AT(tid_y) = 0.0f;
+        }
     }
     __syncthreads();
 
     /****************************Main Loop - Outer Loop over K/V tiles*****************************/
-    for (int j = 0; j < Tc; ++j) {  // For each K/V column tile
-        
-        // Skip entire tile if causal and this tile is completely to the right
-        bool skip_tile = (is_causal && bid_z < j);
+    for (int j = 0; j < Tc; ++j) { // For each K/V column tile
+        int k_tile_start = Bc * j;
+        int bound_tid_x = min(Bc, src_seq_len - k_tile_start);
+
+        int q_max_pos = q_tile_start + bound_tid_y - 1;
+        bool skip_tile = (is_causal && (bound_tid_y <= 0 || q_max_pos < k_tile_start));
         if (skip_tile) {
             __syncthreads();
             continue;
         }
 
-        // Initialize dK_T_sm, dV_sm to 0 for this column tile
+        // Initialize dK_T_sm, dV_sm for this column tile
         for (int idx = tid_x; idx < head_dim; idx += blockDim.x) {
-            for (int y = 0; y < Bc; ++y) {
-                dK_T_sm_AT(idx, y) = 0.0f;
-                dV_sm_AT(y, idx) = 0.0f;
-            }
+            dK_T_sm_AT(idx, tid_y) = 0.0f;
+            dV_sm_AT(tid_y, idx) = 0.0f;
         }
-        __syncthreads();
 
-        // Load K_j, V_j from HBM to shared memory
-        int bound_tid_x = min(Bc, src_seq_len - Bc * j);
+        // Load K_j, V_j
         for (int idx = tid_x; idx < head_dim; idx += blockDim.x) {
             K_T_sm_AT(idx, tid_y) = 0.0f;
             V_sm_AT(tid_y, idx) = 0.0f;
             if (tid_y < bound_tid_x) {
                 int kv_head_idx = bid_x / p;
-                K_T_sm_AT(idx, tid_y) = float(
-                    key[((((bid_y * src_seq_len) + (Bc * j + tid_y)) * kv_heads + kv_head_idx)) * head_dim + idx]);
-                V_sm_AT(tid_y, idx) = float(
-                    value[((((bid_y * src_seq_len) + (Bc * j + tid_y)) * kv_heads + kv_head_idx)) * head_dim + idx]);
+                int k_tensor_idx = ((bid_y * src_seq_len) + (k_tile_start + tid_y)) * kv_heads + kv_head_idx;
+                K_T_sm_AT(idx, tid_y) = float(key[k_tensor_idx * head_dim + idx]);
+                V_sm_AT(tid_y, idx) = float(value[k_tensor_idx * head_dim + idx]);
             }
         }
         __syncthreads();
 
-        /****************************Single Q tile for this block*****************************/
-        // gridDim.z already indexes the Q row tile, so this block only handles i = bid_z.
-        const int i = bid_z;
-        int q_tile_start = Br * i;
-        int q_tile_end = min(q_tile_start + Br, target_seq_len);
-        int bound_tid_y = min(Br, q_tile_end - q_tile_start);
+        // Recompute S_ij and P_ij
+        if (tid_y < bound_tid_y && tid_x < bound_tid_x) {
+            int global_q_pos = q_tile_start + tid_y;
+            int global_k_pos = k_tile_start + tid_x;
+            bool is_compute = (!is_causal) || (global_q_pos >= global_k_pos);
 
-        if (tid_y < bound_tid_y) {
-            int global_q_idx = q_tile_start + tid_y;
-            int q_tensor_idx = ((bid_y * target_seq_len) + global_q_idx) * q_heads + bid_x;
+            float score = 0.0f;
+            if (is_compute) {
+#pragma unroll
+                for (int k = 0; k < head_dim; ++k) {
+                    score += Q_sm_AT(tid_y, k) * K_T_sm_AT(k, tid_x);
+                }
+            }
+            S_sm_AT(tid_y, tid_x) = score * scale;
+            P_sm_AT(tid_y, tid_x) = is_compute ? myexp<float>(S_sm_AT(tid_y, tid_x) - L_sm_AT(tid_y)) : 0.0f;
+        } else {
+            S_sm_AT(tid_y, tid_x) = 0.0f;
+            P_sm_AT(tid_y, tid_x) = 0.0f;
+        }
+        __syncthreads();
 
+        // Apply dropout to P_ij
+        if (apply_dropout && tid_y < bound_tid_y && tid_x < bound_tid_x) {
+            int global_q_pos = q_tile_start + tid_y;
+            int global_k_pos = k_tile_start + tid_x;
+            bool keep = FlashAttnDropoutKeep(
+                dropout_seed, bid_y, bid_x, global_q_pos, global_k_pos,
+                q_heads, target_seq_len, src_seq_len, dropout_prob);
+            if (keep) {
+                P_sm_AT(tid_y, tid_x) = P_sm_AT(tid_y, tid_x) / (1.0f - dropout_prob);
+            } else {
+                P_sm_AT(tid_y, tid_x) = 0.0f;
+            }
+        }
+        __syncthreads();
+
+        // dV_j = P_ij^T @ dO_i
+        if (tid_y < bound_tid_x) {
             for (int idx = tid_x; idx < head_dim; idx += blockDim.x) {
-                Q_sm_AT(tid_y, idx) = float(query[q_tensor_idx * head_dim + idx]);
-                dO_sm_AT(tid_y, idx) = float(grad_output[q_tensor_idx * head_dim + idx]);
-            }
-            if (tid_x == 0) {
-                L_sm_AT(tid_y) = logsumexp[((bid_y * q_heads + bid_x) * target_seq_len) + global_q_idx];
-            }
-        }
-        __syncthreads();
-
-        // Get D_i for this row.
-        float D_i_row = D_sm_AT(tid_y);
-
-        // Recompute S_ij = Q_i @ K_j^T, apply causal mask at element level if needed.
-        #pragma unroll
-        for (int y = 0; y < Bc; ++y) {
-            for (int x = 0; x < Bc; ++x) {
                 float val = 0.0f;
-                if (tid_y < bound_tid_y && tid_x < bound_tid_x) {
-                    bool is_compute = true;
-                    if (is_causal && i == j) {
-                        int global_q_pos = q_tile_start + tid_y;
-                        int global_k_pos = Bc * j + x;
-                        is_compute = (global_q_pos >= global_k_pos);
-                    }
-
-                    if (is_compute) {
-                        #pragma unroll
-                        for (int k = 0; k < head_dim; ++k) {
-                            val += Q_sm_AT(tid_y, k) * K_T_sm_AT(k, y);
-                        }
+#pragma unroll
+                for (int y = 0; y < Br; ++y) {
+                    if (y < bound_tid_y) {
+                        val += P_sm_AT(y, tid_y) * dO_sm_AT(y, idx);
                     }
                 }
-                S_sm_AT(tid_y, x) = val * scale;
+                dV_sm_AT(tid_y, idx) = val;
             }
         }
         __syncthreads();
 
-        // Recompute P_ij = exp(S_ij - L_i).
-        #pragma unroll
-        for (int y = 0; y < Bc; ++y) {
-            for (int x = 0; x < Bc; ++x) {
-                if (tid_y < bound_tid_y && tid_x < bound_tid_x) {
-                    bool is_compute = true;
-                    if (is_causal && i == j) {
-                        int global_q_pos = q_tile_start + tid_y;
-                        int global_k_pos = Bc * j + x;
-                        is_compute = (global_q_pos >= global_k_pos);
-                    }
+        // dP_ij = dO_i @ V_j^T (reuse S_sm)
+        if (tid_y < bound_tid_y && tid_x < bound_tid_x) {
+            float val = 0.0f;
+#pragma unroll
+            for (int k = 0; k < head_dim; ++k) {
+                val += dO_sm_AT(tid_y, k) * V_sm_AT(tid_x, k);
+            }
+            S_sm_AT(tid_y, tid_x) = val;
+        } else {
+            S_sm_AT(tid_y, tid_x) = 0.0f;
+        }
+        __syncthreads();
 
-                    if (is_compute) {
-                        P_sm_AT(tid_y, x) = myexp<float>(S_sm_AT(tid_y, x) - L_sm_AT(tid_y));
-                    } else {
-                        P_sm_AT(tid_y, x) = 0.0f;
-                    }
-                } else {
-                    P_sm_AT(tid_y, x) = 0.0f;
-                }
+        // Apply dropout to dP_ij
+        if (apply_dropout && tid_y < bound_tid_y && tid_x < bound_tid_x) {
+            int global_q_pos = q_tile_start + tid_y;
+            int global_k_pos = k_tile_start + tid_x;
+            bool keep = FlashAttnDropoutKeep(
+                dropout_seed, bid_y, bid_x, global_q_pos, global_k_pos,
+                q_heads, target_seq_len, src_seq_len, dropout_prob);
+            if (keep) {
+                S_sm_AT(tid_y, tid_x) = S_sm_AT(tid_y, tid_x) / (1.0f - dropout_prob);
+            } else {
+                S_sm_AT(tid_y, tid_x) = 0.0f;
             }
         }
         __syncthreads();
 
-        // Apply dropout to P_ij.
-        if (dropout_p > 0) {
-            #pragma unroll
-            for (int y = 0; y < Bc; ++y) {
-                for (int x = 0; x < Bc; ++x) {
-                    if (tid_y < bound_tid_y && tid_x < bound_tid_x) {
-                        int global_q_pos = q_tile_start + tid_y;
-                        int global_k_pos = Bc * j + x;
-                        bool keep = FlashAttnDropoutKeep(
-                            dropout_seed, bid_y, bid_x, global_q_pos, global_k_pos,
-                            q_heads, target_seq_len, src_seq_len, static_cast<float>(dropout_p));
-                        if (keep) {
-                            P_sm_AT(tid_y, x) = P_sm_AT(tid_y, x) / (1.0f - dropout_p);
-                        } else {
-                            P_sm_AT(tid_y, x) = 0.0f;
-                        }
+        // dS_ij = P_ij ∘ (dP_ij - D_i)
+        float D_i_row = (tid_y < bound_tid_y) ? D_sm_AT(tid_y) : 0.0f;
+        if (tid_y < bound_tid_y && tid_x < bound_tid_x) {
+            S_sm_AT(tid_y, tid_x) = P_sm_AT(tid_y, tid_x) * (S_sm_AT(tid_y, tid_x) - D_i_row);
+        } else {
+            S_sm_AT(tid_y, tid_x) = 0.0f;
+        }
+        __syncthreads();
+
+        // dK_j = dS_ij^T @ Q_i
+        if (tid_y < bound_tid_x) {
+            for (int idx = tid_x; idx < head_dim; idx += blockDim.x) {
+                float val = 0.0f;
+#pragma unroll
+                for (int y = 0; y < Br; ++y) {
+                    if (y < bound_tid_y) {
+                        val += S_sm_AT(y, tid_y) * Q_sm_AT(y, idx);
                     }
                 }
+                dK_T_sm_AT(idx, tid_y) = val * scale;
             }
-            __syncthreads();
         }
+        __syncthreads();
 
-        // Compute dV_j += P_ij^T @ dO_i.
+        // dQ_i += dS_ij @ K_j
         if (tid_y < bound_tid_y) {
-            #pragma unroll
-            for (int x = 0; x < head_dim; x += blockDim.x) {
+            for (int idx = tid_x; idx < head_dim; idx += blockDim.x) {
                 float val = 0.0f;
-                #pragma unroll
-                for (int y = 0; y < Bc; ++y) {
-                    val += P_sm_AT(tid_y, y) * dO_sm_AT(tid_y, x);
-                }
-                atomicAdd(&dV_sm_AT(tid_y, x), val);
-            }
-        }
-        __syncthreads();
-
-        // Compute dP_ij = dO_i @ V_j^T.
-        #pragma unroll
-        for (int y = 0; y < Bc; ++y) {
-            for (int x = 0; x < Bc; ++x) {
-                float val = 0.0f;
-                if (tid_y < bound_tid_y && tid_x < bound_tid_x) {
-                    #pragma unroll
-                    for (int k = 0; k < head_dim; ++k) {
-                        val += dO_sm_AT(tid_y, k) * V_sm_AT(y, k);
-                    }
-                    S_sm_AT(tid_y, x) = val;  // Reuse S_sm as temporary storage for dP_ij
-                } else {
-                    S_sm_AT(tid_y, x) = 0.0f;
-                }
-            }
-        }
-        __syncthreads();
-
-        // Apply dropout to dP_ij.
-        if (dropout_p > 0) {
-            #pragma unroll
-            for (int y = 0; y < Bc; ++y) {
+#pragma unroll
                 for (int x = 0; x < Bc; ++x) {
-                    if (tid_y < bound_tid_y && tid_x < bound_tid_x) {
-                        int global_q_pos = q_tile_start + tid_y;
-                        int global_k_pos = Bc * j + x;
-                        bool keep = FlashAttnDropoutKeep(
-                            dropout_seed, bid_y, bid_x, global_q_pos, global_k_pos,
-                            q_heads, target_seq_len, src_seq_len, static_cast<float>(dropout_p));
-                        if (keep) {
-                            S_sm_AT(tid_y, x) = S_sm_AT(tid_y, x) / (1.0f - dropout_p);
-                        } else {
-                            S_sm_AT(tid_y, x) = 0.0f;
-                        }
+                    if (x < bound_tid_x) {
+                        val += S_sm_AT(tid_y, x) * K_T_sm_AT(idx, x);
                     }
                 }
-            }
-            __syncthreads();
-        }
-
-        // Compute dS_ij = P_ij * (dP_ij - D_i).
-        #pragma unroll
-        for (int y = 0; y < Bc; ++y) {
-            for (int x = 0; x < Bc; ++x) {
-                if (tid_y < bound_tid_y && tid_x < bound_tid_x) {
-                    S_sm_AT(tid_y, x) = P_sm_AT(tid_y, x) * (S_sm_AT(tid_y, x) - D_i_row);
-                } else {
-                    S_sm_AT(tid_y, x) = 0.0f;
-                }
-            }
-        }
-        __syncthreads();
-
-        // Compute dK_j += dS_ij^T @ Q_i.
-        if (tid_x < head_dim) {
-            #pragma unroll
-            for (int y = 0; y < Bc; ++y) {
-                float val = 0.0f;
-                #pragma unroll
-                for (int x = 0; x < Br; ++x) {
-                    val += S_sm_AT(x, y) * Q_sm_AT(x, tid_x);
-                }
-                atomicAdd(&dK_T_sm_AT(tid_x, y), val * scale);
-            }
-        }
-        __syncthreads();
-
-        // Compute dQ_i += dS_ij @ K_j.
-        if (tid_y < bound_tid_y) {
-            #pragma unroll
-            for (int x = 0; x < head_dim; x += blockDim.x) {
-                float val = 0.0f;
-                #pragma unroll
-                for (int y = 0; y < Bc; ++y) {
-                    val += S_sm_AT(tid_y, y) * K_T_sm_AT(x, y);
-                }
-                dQ_sm_AT(tid_y, x) += val * scale;
+                dQ_sm_AT(tid_y, idx) += val * scale;
             }
         }
         __syncthreads();
 
         // Write back dK_j, dV_j to HBM
-        // Note: For GQA, dK_j and dV_j need to be accumulated across multiple q-head blocks
         int kv_head_idx = bid_x / p;
-        int k_tile_start = Bc * j;
-        int k_tile_end = min(k_tile_start + Bc, src_seq_len);
-        
-        for (int y = 0; y < Bc; ++y) {
-            int global_k_idx = k_tile_start + y;
-            if (global_k_idx < src_seq_len) {
-                for (int idx = tid_x; idx < head_dim; idx += blockDim.x) {
-                    // dK: [batch_size, src_seq_len, kv_heads, head_dim]
-                    int k_tensor_idx = ((bid_y * src_seq_len) + global_k_idx) * kv_heads + kv_head_idx;
-                    atomicAdd(&grad_key[k_tensor_idx * head_dim + idx], T(dK_T_sm_AT(idx, y)));
-                    
-                    // dV: [batch_size, src_seq_len, kv_heads, head_dim]
-                    atomicAdd(&grad_value[k_tensor_idx * head_dim + idx], T(dV_sm_AT(y, idx)));
-                }
+        if (tid_y < bound_tid_x) {
+            int global_k_idx = k_tile_start + tid_y;
+            int k_tensor_idx = ((bid_y * src_seq_len) + global_k_idx) * kv_heads + kv_head_idx;
+            for (int idx = tid_x; idx < head_dim; idx += blockDim.x) {
+                atomicAdd(&grad_key[k_tensor_idx * head_dim + idx], T(dK_T_sm_AT(idx, tid_y)));
+                atomicAdd(&grad_value[k_tensor_idx * head_dim + idx], T(dV_sm_AT(tid_y, idx)));
             }
         }
-    }  // End of outer loop over K/V tiles
+        __syncthreads();
+    } // End of outer loop over K/V tiles
 
     // Write back dQ_i to HBM
-    int q_tile_start = Br * bid_z;
-    int q_tile_end = min(q_tile_start + Br, target_seq_len);
-    int bound_tid_y = min(Br, q_tile_end - q_tile_start);
-    
     if (tid_y < bound_tid_y) {
         int global_q_idx = q_tile_start + tid_y;
         int q_tensor_idx = ((bid_y * target_seq_len) + global_q_idx) * q_heads + bid_x;
-        
         for (int idx = tid_x; idx < head_dim; idx += blockDim.x) {
-            // dQ: [batch_size, target_seq_len, q_heads, head_dim]
             grad_query[q_tensor_idx * head_dim + idx] += T(dQ_sm_AT(tid_y, idx));
         }
     }
 
     // Undefine access macros
-    #undef D_sm_AT
-    #undef Q_sm_AT
-    #undef K_T_sm_AT
-    #undef V_sm_AT
-    #undef dO_sm_AT
-    #undef dK_T_sm_AT
-    #undef dV_sm_AT
-    #undef S_sm_AT
-    #undef P_sm_AT
-    #undef L_sm_AT
-    #undef dQ_sm_AT
+#undef D_sm_AT
+#undef Q_sm_AT
+#undef K_T_sm_AT
+#undef V_sm_AT
+#undef dO_sm_AT
+#undef dK_T_sm_AT
+#undef dV_sm_AT
+#undef S_sm_AT
+#undef P_sm_AT
+#undef L_sm_AT
+#undef dQ_sm_AT
 }
 
 /**
@@ -799,6 +791,8 @@ void LaunchFlashAttentionForward(const std::shared_ptr<Tensor> &output, const st
     CHECK_EQ(value_dims[3], head_dim) << "Value head dimension must match query head dimension";
     CHECK_EQ(value_dims[1], seq_len_k) << "Value sequence length must match key sequence length";
     CHECK_EQ(value_dims[2], num_heads_kv) << "Value number of KV heads must match key";
+    CHECK(dropout_p >= 0 && dropout_p < 1)
+        << "FlashAttention dropout_p must be in [0, 1). Current API is int64, so only 0 is representable.";
 
     if (enable_gqa) {
         CHECK(num_heads % num_heads_kv == 0) << "Number of query heads must be divisible by number of KV heads for GQA";
@@ -893,6 +887,8 @@ void LaunchFlashAttentionBackward(const std::shared_ptr<Tensor> &grad_query, con
     CHECK_EQ(value->Dims()[3], head_dim) << "Value head dimension must match query head dimension";
     CHECK_EQ(value->Dims()[1], seq_len_k) << "Value sequence length must match key sequence length";
     CHECK_EQ(value->Dims()[2], num_heads_kv) << "Value number of KV heads must match key";
+    CHECK(dropout_p >= 0 && dropout_p < 1)
+        << "FlashAttention dropout_p must be in [0, 1). Current API is int64, so only 0 is representable.";
 
     if (enable_gqa) {
         CHECK(num_heads % num_heads_kv == 0) << "Number of query heads must be divisible by number of KV heads for GQA";
@@ -900,11 +896,9 @@ void LaunchFlashAttentionBackward(const std::shared_ptr<Tensor> &grad_query, con
         CHECK_EQ(num_heads, num_heads_kv) << "Number of query and KV heads must match for standard attention";
     }
 
-    // Precompute D = rowsum(dO ∘ O) before main backward loop
-    // D shape: [batch_size, seq_len_q, num_heads]
-    // dO shape: [batch_size, seq_len_q, num_heads, head_dim]
-    // O shape: [batch_size, seq_len_q, num_heads, head_dim]
-    auto D = infini_train::nn::function::Sum(grad_output * output, 3, false);
+    // Fused D = rowsum(dO ∘ O) into float32, avoiding an intermediate tensor (dO * O).
+    // D_fp32 shape: [batch_size, seq_len_q, num_heads]
+    auto D_fp32 = ComputeFlashAttnDFused<T>(grad_output, output);
 
     T *grad_query_ptr = static_cast<T *>(grad_query->DataPtr());
     T *grad_key_ptr = static_cast<T *>(grad_key->DataPtr());
@@ -915,7 +909,7 @@ void LaunchFlashAttentionBackward(const std::shared_ptr<Tensor> &grad_query, con
     const T *output_ptr = static_cast<const T *>(output->DataPtr());
     const T *grad_output_ptr = static_cast<const T *>(grad_output->DataPtr());
     const float *logsumexp_ptr = static_cast<const float *>(logsumexp->DataPtr());
-    const float *D_ptr = static_cast<const float *>(D->DataPtr());
+    const float *D_ptr = static_cast<const float *>(D_fp32->DataPtr());
     const T *attn_mask_ptr = attn_mask ? static_cast<const T *>(attn_mask->DataPtr()) : nullptr;
 
     // Set up grid and block dimensions according to FlashAttention v2 backward

@@ -3,7 +3,22 @@
 set -e
 set -o pipefail
 
-CONFIG_FILE="${1:-test_config.json}"
+# Parse arguments
+REBUILD=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --rebuild)
+            REBUILD=true
+            shift
+            ;;
+        *)
+            CONFIG_FILE="$1"
+            shift
+            ;;
+    esac
+done
+
+CONFIG_FILE="${CONFIG_FILE:-test_config.json}"
 export INFINI_FLASH_BF16_USE_FP32=0
 
 # Dependencies check
@@ -47,9 +62,11 @@ run_and_log() {
     local cmd="$1"
     local log_name="$2"
     local is_profile="$3"
+    local log_dir="$4"
+    local profile_log_dir="$5"
     local timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    local log_path="$(realpath "${LOG_DIR}/${log_name}.log")"
+    local log_path="$(realpath "${log_dir}/${log_name}.log")"
 
     echo -e "\033[1;32m============================================================\033[0m"
     echo -e "\033[1;36m[$timestamp] [Running] ${log_name}\033[0m"
@@ -66,7 +83,7 @@ run_and_log() {
 
     # Notify if profiling mode is enabled
     if [[ "$is_profile" == "yes" ]]; then
-        echo -e "\033[1;35m[PROFILE MODE ON] Profiling logs will be saved to: ${PROFILE_LOG_DIR}\033[0m"
+        echo -e "\033[1;35m[PROFILE MODE ON] Profiling logs will be saved to: ${profile_log_dir}\033[0m"
     fi
 
     echo -e "\033[1;32m============================================================\033[0m"
@@ -100,7 +117,7 @@ run_and_log() {
 
     # If profiling is enabled, move profiling files to the target directory
     if [[ "$is_profile" == "yes" ]]; then
-        move_profile_logs "$log_name"
+        move_profile_logs "$log_name" "$profile_log_dir"
     fi
 }
 
@@ -108,14 +125,15 @@ run_and_log() {
 # Move profiling output logs
 move_profile_logs() {
     local prefix="$1"
+    local target_profile_log_dir="$2"
 
     # Move *.report.rankN files
     for report_file in "${BUILD_DIR}"/*.report.rank*; do
         if [[ -f "$report_file" ]]; then
             local base_name
             base_name=$(basename "$report_file")
-            mv "$report_file" "${PROFILE_LOG_DIR}/${prefix}_${base_name}"
-            echo "Moved $base_name to ${PROFILE_LOG_DIR}/${prefix}_${base_name}"
+            mv "$report_file" "${target_profile_log_dir}/${prefix}_${base_name}"
+            echo "Moved $base_name to ${target_profile_log_dir}/${prefix}_${base_name}"
         fi
     done
 
@@ -124,8 +142,8 @@ move_profile_logs() {
         if [[ -f "$record_file" ]]; then
             local base_name
             base_name=$(basename "$record_file")
-            mv "$record_file" "${PROFILE_LOG_DIR}/${prefix}_${base_name}"
-            echo "Moved $base_name to ${PROFILE_LOG_DIR}/${prefix}_${base_name}"
+            mv "$record_file" "${target_profile_log_dir}/${prefix}_${base_name}"
+            echo "Moved $base_name to ${target_profile_log_dir}/${prefix}_${base_name}"
         fi
     done
 }
@@ -154,9 +172,29 @@ for ((id=0; id<num_builds; ++id)); do
 
     LAST_CMAKE_CMD="$build_cmake"
 
-    # always clean before another build
-    clean_build_dir
-    run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no"
+    # Check if rebuild is needed
+    if [[ "$REBUILD" == true ]]; then
+        # Clean and rebuild
+        clean_build_dir
+        run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "$LOG_DIR" "$PROFILE_LOG_DIR"
+    else
+        # Check if build directory exists and executables are present
+        if [[ -d "$BUILD_DIR" ]]; then
+            # Check if gpt2 and llama3 executables exist
+            if [[ -f "${BUILD_DIR}/gpt2" ]] && [[ -f "${BUILD_DIR}/llama3" ]]; then
+                echo -e "\033[1;33m[SKIP] Build directory already exists and executables are present. Skipping build.\033[0m"
+                echo -e "\033[1;33m        Use --rebuild to force a clean rebuild.\033[0m"
+            else
+                # Build executables that are missing
+                echo -e "\033[1;33m[BUILD] Some executables are missing. Building...\033[0m"
+                run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "$LOG_DIR" "$PROFILE_LOG_DIR"
+            fi
+        else
+            # Build directory doesn't exist, build from scratch
+            echo -e "\033[1;33m[BUILD] Build directory doesn't exist. Building...\033[0m"
+            run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "$LOG_DIR" "$PROFILE_LOG_DIR"
+        fi
+    fi
 
     # profile flag for runs
     profile_flag="no"
@@ -183,20 +221,18 @@ for ((id=0; id<num_builds; ++id)); do
         : "${PROFILE_LOG_DIR:=./profile_logs}"
 
         mkdir -p "$LOG_DIR" "$PROFILE_LOG_DIR"
-        export LOG_DIR PROFILE_LOG_DIR
 
         gpt2_cmd="./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
-        run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag"
+        run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$LOG_DIR" "$PROFILE_LOG_DIR"
 
         # Run gpt2 with flash=true
         COMPARE_LOG_DIR="./compare_logs"
         COMPARE_PROFILE_LOG_DIR="./compare_profile_logs"
 
         mkdir -p "$COMPARE_LOG_DIR" "$COMPARE_PROFILE_LOG_DIR"
-        export COMPARE_LOG_DIR COMPARE_PROFILE_LOG_DIR
 
         gpt2_cmd="./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str1}"
-        run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag"
+        run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$COMPARE_LOG_DIR" "$COMPARE_PROFILE_LOG_DIR"
 
         # Run llama3 with flash=false
         LOG_DIR="$(read_var LOG_DIR)"
@@ -205,20 +241,18 @@ for ((id=0; id<num_builds; ++id)); do
         : "${PROFILE_LOG_DIR:=./profile_logs}"
 
         mkdir -p "$LOG_DIR" "$PROFILE_LOG_DIR"
-        export LOG_DIR PROFILE_LOG_DIR
 
         llama3_cmd="./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str}"
-        run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag"
+        run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$LOG_DIR" "$PROFILE_LOG_DIR"
 
         # Run llama3 with flash=true
         COMPARE_LOG_DIR="./compare_logs"
         COMPARE_PROFILE_LOG_DIR="./compare_profile_logs"
 
         mkdir -p "$COMPARE_LOG_DIR" "$COMPARE_PROFILE_LOG_DIR"
-        export COMPARE_LOG_DIR COMPARE_PROFILE_LOG_DIR
 
         llama3_cmd="./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str1}"
-        run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag"
+        run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$COMPARE_LOG_DIR" "$COMPARE_PROFILE_LOG_DIR"
     done
 done
 
@@ -234,11 +268,11 @@ if [[ -n "$COMPARE_LOG_DIR" ]]; then
 
     # Run compare_loss.py
     echo -e "\n\033[1;33m[Running] compare_loss.py\033[0m"
-    python3 "${SCRIPT_DIR}/compare_loss.py" "$COMPARE_LOG_DIR" "$LOG_DIR" > compare_logs/loss_comparison.log 2>&1 || true
+    python3 "${SCRIPT_DIR}/compare_loss.py" "$COMPARE_LOG_DIR" "$LOG_DIR" --threshold-fp32 1e-1 --threshold-bf16 1e-1 > compare_logs/loss_comparison.log 2>&1 || true
 
     # Run compare_tps.py
     echo -e "\n\033[1;33m[Running] compare_tps.py\033[0m"
-    python3 "${SCRIPT_DIR}/compare_tps.py" "$COMPARE_LOG_DIR" "$LOG_DIR" > compare_logs/tps_comparison.log 2>&1 || true
+    python3 "${SCRIPT_DIR}/compare_tps.py" "$COMPARE_LOG_DIR" "$LOG_DIR" --threshold 0.20 > compare_logs/tps_comparison.log 2>&1 || true
 
     echo -e "\n\033[1;32mComparison completed.\033[0m"
 else
