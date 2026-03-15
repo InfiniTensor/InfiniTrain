@@ -18,12 +18,32 @@
 
 ---
 
-## Story 6: FlashAttention Kernel 性能优化 (Tiling)
+## Story 7: FlashAttention Kernel Tensor Core (WMMA) 优化 (进行中)
 **点数**: 1.0 人日
 **描述**:
-当前的 FlashAttention Kernel 为 Naive 实现，性能较差 (0.1x Speedup)。需要引入 Tiling 分块优化与向量化访存，提升计算吞吐。
+当前 FlashAttention 性能受限于 CUDA Core (FP32) 的计算能力。为了利用 Ampere/Volta 架构的 Tensor Cores，需要引入 WMMA (Warp Matrix Multiply Accumulate) API。
+考虑到现有模型为 FP32，本 Story 将实现 "Mixed Precision Kernel"：输入/输出仍为 FP32，但在 Kernel 内部将数据转换为 FP16 并使用 Tensor Cores 进行矩阵乘法。
 
 **Acceptance Criteria (AC)**:
-- **AC1 [Tiling优化]**: 在 CUDA Kernel 中实现 Q/K/V 的分块加载 (SRAM 缓存)，减少 HBM 访问。
-- **AC2 [向量化访存]**: 使用 `float4` 进行向量化加载与存储。
-- **AC3 [性能提升]**: 在 GPT-2 (1024/2048) 基准测试中，FlashAttention 的 Tokens/s 至少达到 Baseline 的 80% 或更高（理想情况应 >1.5x）。
+- **AC1 [WMMA Kernel]**: 实现基于 `nvcuda::wmma` 的 FlashAttention Forward Kernel。 (已完成)
+- **AC2 [Mixed Precision]**: Kernel 能够从 FP32 HBM 加载数据，转换为 FP16 存入 SRAM，并在 Tensor Cores 上计算，最后输出 FP32。 (已完成)
+- **AC3 [正确性验证]**: 通过 `test_flash_layout` 验证 WMMA Kernel 的数值正确性（允许 FP16 精度误差）。 (已完成 - 修复 Padding 初始化问题，测试通过)
+- **AC4 [性能提升]**: 在 LLaMA-3 (1024) 任务上，FlashAttention 性能超越 Baseline (目标 >1.5x Speedup)。 (失败 - 性能回退，需后续优化)
+    - **Status**: Forward Kernel 正确性已验证 (Loss 对齐)，但 TPS 仅为 Baseline 的 7% (863 vs 12280)。暂挂起性能优化，优先完成 Story 8 (Backward Pass)。
+
+---
+
+## Story 8: Backward Pass 优化 (消除 AtomicAdd) (待开始)
+**点数**: 1.0 人日
+**描述**:
+当前 Backward Pass 使用全局 `atomicAdd` 更新 `dK` 和 `dV`，导致严重的内存竞争。需要重构 Backward Kernel，使用确定性的并行归约或 Thread Block 级别的累加策略。
+
+**Tasking**:
+1. **分析现有 Backward Kernel**: 确认 `atomicAdd` 的瓶颈位置。
+2. **设计并行归约策略**:
+    - 每个 Thread Block 计算一部分 `dQ, dK, dV`。
+    - 对于 `dK, dV`，由于它们在 Seq 维度上共享，需要跨 Block 累加。
+    - 方案 A: 使用 Grid 级别的同步 (Global Barrier) 或两阶段 Kernel (Compute -> Reduce)。
+    - 方案 B: 限制 Grid 映射，使得同一 Head 的计算在同一 Block 或通过 Shared Memory 交换 (FlashAttention 原始论文策略)。
+3. **实现新 Kernel**: 移除 Global AtomicAdd。
+4. **验证正确性**: 使用 `test_flash_layout` 或 Gradient Check。
