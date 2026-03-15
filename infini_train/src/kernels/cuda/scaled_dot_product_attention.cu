@@ -506,6 +506,7 @@ void LaunchFlashAttnBackward(const std::shared_ptr<Tensor> &dO, const std::share
                              const std::shared_ptr<Tensor> &K, const std::shared_ptr<Tensor> &V,
                              const std::shared_ptr<Tensor> &O, const std::shared_ptr<Tensor> &L,
                              std::shared_ptr<Tensor> &dQ, std::shared_ptr<Tensor> &dK, std::shared_ptr<Tensor> &dV,
+                             const std::shared_ptr<Tensor> &dQ_float, const std::shared_ptr<Tensor> &dK_float, const std::shared_ptr<Tensor> &dV_float,
                              float scale, bool is_causal, float dropout_p, cudaStream_t stream) {
     const auto &dims = Q->Dims();
     const int B = dims[0];
@@ -526,11 +527,6 @@ void LaunchFlashAttnBackward(const std::shared_ptr<Tensor> &dO, const std::share
     dim3 block(NUM_THREADS);
 
     unsigned long long rng_seed = 42;
-
-    // Allocate float buffers for gradient accumulation (required for atomicAdd with GQA + bf16)
-    auto dQ_float = std::make_shared<Tensor>(Q->Dims(), DataType::kFLOAT32, Q->GetDevice());
-    auto dK_float = std::make_shared<Tensor>(K->Dims(), DataType::kFLOAT32, K->GetDevice());
-    auto dV_float = std::make_shared<Tensor>(V->Dims(), DataType::kFLOAT32, V->GetDevice());
 
     cudaMemsetAsync(dQ_float->DataPtr(), 0, dQ_float->NumElements() * sizeof(float), stream);
     cudaMemsetAsync(dK_float->DataPtr(), 0, dK_float->NumElements() * sizeof(float), stream);
@@ -603,8 +599,9 @@ std::vector<std::shared_ptr<Tensor>> FlashAttentionForward(const std::shared_ptr
 std::vector<std::shared_ptr<Tensor>>
 FlashAttentionBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &query,
                        const std::shared_ptr<Tensor> &key, const std::shared_ptr<Tensor> &value,
-                       const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &logsumexp, float scale,
-                       bool is_causal, float dropout_p) {
+                       const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &logsumexp,
+                       const std::shared_ptr<Tensor> &dQ_float, const std::shared_ptr<Tensor> &dK_float, const std::shared_ptr<Tensor> &dV_float,
+                       float scale, bool is_causal, float dropout_p) {
     auto dtype = query->Dtype();
     auto device = query->GetDevice();
 
@@ -616,10 +613,10 @@ FlashAttentionBackward(const std::shared_ptr<Tensor> &grad_output, const std::sh
 
     switch (dtype) {
         DISPATCH_CASE(WRAP(LaunchFlashAttnBackward<float>(grad_output, query, key, value, output, logsumexp, dQ, dK, dV,
-                                                          scale, is_causal, dropout_p, stream);),
+                                                          dQ_float, dK_float, dV_float, scale, is_causal, dropout_p, stream);),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP(LaunchFlashAttnBackward<nv_bfloat16>(grad_output, query, key, value, output, logsumexp, dQ,
-                                                                dK, dV, scale, is_causal, dropout_p, stream);),
+                                                                dK, dV, dQ_float, dK_float, dV_float, scale, is_causal, dropout_p, stream);),
                       DataType::kBFLOAT16)
     default:
         LOG(FATAL) << "FlashAttention backward: unsupported dtype";

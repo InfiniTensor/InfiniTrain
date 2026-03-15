@@ -49,26 +49,40 @@ ScaledDotProductAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     auto results = Dispatcher::Instance().Call<std::vector<std::shared_ptr<Tensor>>>(
         {device, "FlashAttentionForward"}, query, key, value, scale, is_causal_, dropout_p_);
 
-    return results;
+    logsumexp_ = results[1];
+    return {results[0]};
 }
 
 void ScaledDotProductAttention::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                                              const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
     // Save inputs and forward outputs needed for backward
-    // output_tensors[0] = O, output_tensors[1] = L (logsumexp)
-    saved_tensors_ = {input_tensors[0], input_tensors[1], input_tensors[2], output_tensors[0], output_tensors[1]};
+    // output_tensors[0] = O
+    
+    // Allocate temporary float buffers here to associate their lifecycle with the graph node
+    auto dQ_float = std::make_shared<Tensor>(input_tensors[0]->Dims(), DataType::kFLOAT32, input_tensors[0]->GetDevice());
+    auto dK_float = std::make_shared<Tensor>(input_tensors[1]->Dims(), DataType::kFLOAT32, input_tensors[1]->GetDevice());
+    auto dV_float = std::make_shared<Tensor>(input_tensors[2]->Dims(), DataType::kFLOAT32, input_tensors[2]->GetDevice());
+
+    saved_tensors_ = {input_tensors[0], input_tensors[1], input_tensors[2], output_tensors[0], logsumexp_, dQ_float, dK_float, dV_float};
+    logsumexp_ = nullptr; // Clear temporary reference
 }
 
 std::vector<std::shared_ptr<Tensor>>
 ScaledDotProductAttention::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1) << "Expected 1 gradient output (dO)";
-    CHECK_EQ(saved_tensors_.size(), 5) << "Expected 5 saved tensors: Q, K, V, O, L";
+    CHECK_EQ(saved_tensors_.size(), 8) << "Expected 8 saved tensors: Q, K, V, O, L, dQ_f, dK_f, dV_f";
 
     const auto &query = saved_tensors_[0];
     const auto &key = saved_tensors_[1];
     const auto &value = saved_tensors_[2];
     const auto &output = saved_tensors_[3];
     const auto &logsumexp = saved_tensors_[4];
+    
+    // Pass temporary buffers via dispatcher
+    const auto &dQ_float = saved_tensors_[5];
+    const auto &dK_float = saved_tensors_[6];
+    const auto &dV_float = saved_tensors_[7];
+    
     const auto &grad_output = grad_outputs[0];
 
     const auto d = query->Dims()[3];
@@ -79,7 +93,7 @@ ScaledDotProductAttention::Backward(const std::vector<std::shared_ptr<Tensor>> &
     // Call the fused FlashAttention backward kernel
     // Returns: {dQ, dK, dV}
     auto grads = Dispatcher::Instance().Call<std::vector<std::shared_ptr<Tensor>>>(
-        {device, "FlashAttentionBackward"}, grad_output, query, key, value, output, logsumexp, scale, is_causal_,
+        {device, "FlashAttentionBackward"}, grad_output, query, key, value, output, logsumexp, dQ_float, dK_float, dV_float, scale, is_causal_,
         dropout_p_);
 
     return grads;

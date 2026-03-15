@@ -41,6 +41,7 @@ private:
     bool is_causal_ = false;
     float dropout_p_ = 0.0f;
     std::optional<float> scale_;
+    std::shared_ptr<Tensor> logsumexp_;
 };
 
 } // namespace infini_train::autograd
