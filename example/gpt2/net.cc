@@ -14,8 +14,8 @@
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
-#include "infini_train/include/device.h"
 #include "infini_train/include/autograd/ScaledDotProductAttention.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/container.h"

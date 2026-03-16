@@ -1,9 +1,9 @@
+#include "glog/logging.h"
 #include <cmath>
 #include <cstddef>
 #include <ctime>
-#include <limits>
 #include <curand_kernel.h>
-#include "glog/logging.h"
+#include <limits>
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
@@ -40,55 +40,45 @@ namespace infini_train::kernels::cuda {
  *
  * Note: Actual kernel implementation is not included in this version.
  */
-template <typename T>
-__device__ T warp_reduce_sum(T val){
-#pragma unroll//短循环自动展开,省去分支预测,提升效率
-    for(int offset = 16; offset > 0; offset >>= 1){
-        val += __shfl_down_sync(0xffffffff, val, offset);
-    }
+template <typename T> __device__ T warp_reduce_sum(T val) {
+#pragma unroll // 短循环自动展开,省去分支预测,提升效率
+    for (int offset = 16; offset > 0; offset >>= 1) { val += __shfl_down_sync(0xffffffff, val, offset); }
     return val;
 }
 
-template <typename T>
-__device__ T myexp(T x) {
-    if constexpr(std::is_same<T, __half>::value) {
+template <typename T> __device__ T myexp(T x) {
+    if constexpr (std::is_same<T, __half>::value) {
         float fx = __half2float(x);
         float result = expf(fx);
         return __float2half(result);
-    }
-    else if constexpr(std::is_same<T, float>::value) {
-        return expf(x);  // expf返回float
-    }
-    else if constexpr(std::is_same<T, double>::value) {
-        return exp(x);   // exp返回double
-    }
-    else{//other types
-      return T(0);
+    } else if constexpr (std::is_same<T, float>::value) {
+        return expf(x); // expf返回float
+    } else if constexpr (std::is_same<T, double>::value) {
+        return exp(x); // exp返回double
+    } else {           // other types
+        return T(0);
     }
 }
 
-template <typename T>
-__device__ T warp_reduce_max(T val){
-#pragma unroll//短循环自动展开,省去分支预测,提升效率
-    for(int offset = 16; offset > 0; offset >>= 1){
+template <typename T> __device__ T warp_reduce_max(T val) {
+#pragma unroll // 短循环自动展开,省去分支预测,提升效率
+    for (int offset = 16; offset > 0; offset >>= 1) {
         T tmp = __shfl_down_sync(0xffffffff, val, offset);
         val = (val > tmp) ? val : tmp;
     }
     return val;
 }
 
-__device__ __forceinline__ bool FlashAttnDropoutKeep(
-    unsigned long long seed,
-    int batch_idx, int head_idx, int q_idx, int k_idx,
-    int q_heads, int target_seq_len, int src_seq_len,
-    float dropout_p) {
+__device__ __forceinline__ bool FlashAttnDropoutKeep(unsigned long long seed, int batch_idx, int head_idx, int q_idx,
+                                                     int k_idx, int q_heads, int target_seq_len, int src_seq_len,
+                                                     float dropout_p) {
     // Stateless RNG mapping for one attention element (q_idx, k_idx).
-    unsigned long long linear_idx =
-        (((static_cast<unsigned long long>(batch_idx) * static_cast<unsigned long long>(q_heads)
-           + static_cast<unsigned long long>(head_idx))
-          * static_cast<unsigned long long>(target_seq_len)
-          + static_cast<unsigned long long>(q_idx))
-         * static_cast<unsigned long long>(src_seq_len))
+    unsigned long long linear_idx
+        = (((static_cast<unsigned long long>(batch_idx) * static_cast<unsigned long long>(q_heads)
+             + static_cast<unsigned long long>(head_idx))
+                * static_cast<unsigned long long>(target_seq_len)
+            + static_cast<unsigned long long>(q_idx))
+           * static_cast<unsigned long long>(src_seq_len))
         + static_cast<unsigned long long>(k_idx);
     curandStatePhilox4_32_10_t state;
     curand_init(seed, linear_idx, 0, &state);
@@ -97,8 +87,8 @@ __device__ __forceinline__ bool FlashAttnDropoutKeep(
 }
 
 template <typename T>
-__global__ void FlashAttnComputeDFusedKernel(const T *grad_output, const T *output,
-                                             float *D_fp32, int64_t rows, int head_dim) {
+__global__ void FlashAttnComputeDFusedKernel(const T *grad_output, const T *output, float *D_fp32, int64_t rows,
+                                             int head_dim) {
     int64_t row = static_cast<int64_t>(blockIdx.x);
     if (row >= rows) {
         return;
@@ -153,14 +143,11 @@ std::shared_ptr<Tensor> ComputeFlashAttnDFused(const std::shared_ptr<Tensor> &gr
     constexpr int kThreads = 256;
     dim3 grid_dims(static_cast<unsigned int>(rows));
     FlashAttnComputeDFusedKernel<T><<<grid_dims, kThreads, 0, cuda_stream>>>(
-        static_cast<const T *>(grad_output->DataPtr()),
-        static_cast<const T *>(output->DataPtr()),
-        static_cast<float *>(D_fp32->DataPtr()),
-        rows, head_dim);
+        static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(output->DataPtr()),
+        static_cast<float *>(D_fp32->DataPtr()), rows, head_dim);
 
     return D_fp32;
 }
-
 
 /**
  * FlashAttention Forward Kernel
@@ -186,14 +173,13 @@ std::shared_ptr<Tensor> ComputeFlashAttnDFused(const std::shared_ptr<Tensor> &gr
  * Note: Actual kernel implementation is not included in this version.
  */
 template <typename T>
-__global__ void FlashAttentionForwardKernel(
-    T *output, const T *query, const T *key, const T *value, const T *attn_mask,
-    float *logsumexp,  // Save logsumexp for backward pass
-    float scale, bool is_causal, bool enable_gqa, int64_t dropout_p,
-    unsigned long long dropout_seed,  // Use dropout_seed instead of dropout_mask
-    int batch_size, int target_seq_len, int src_seq_len,
-    int q_heads, int kv_heads, int head_dim) {
-    
+__global__ void FlashAttentionForwardKernel(T *output, const T *query, const T *key, const T *value, const T *attn_mask,
+                                            float *logsumexp, // Save logsumexp for backward pass
+                                            float scale, bool is_causal, bool enable_gqa, int64_t dropout_p,
+                                            unsigned long long dropout_seed, // Use dropout_seed instead of dropout_mask
+                                            int batch_size, int target_seq_len, int src_seq_len, int q_heads,
+                                            int kv_heads, int head_dim) {
+
     int tid_x = threadIdx.x;          // 横向,blockDim.x列 (Bc)
     int tid_y = threadIdx.y;          // 纵向,blockDim.y行 (Br)
     int bid_x = blockIdx.x;           // x方向,总数 = #q_heads
@@ -210,7 +196,7 @@ __global__ void FlashAttentionForwardKernel(
     // 定义一系列临时变量
     extern __shared__ char shared_mem[];
     char *ptr = shared_mem;
-    
+
     // 计算中间变量,包括S, P(复用为SP), m_prev, m_new, l_prev, l_new
     double *SP = reinterpret_cast<double *>(ptr); // double SP[Br][Bc]
     ptr += Br * Bc * sizeof(double);
@@ -250,8 +236,8 @@ __global__ void FlashAttentionForwardKernel(
         O_sm_AT(tid_y, idx) = 0.0;
         Q_sm_AT(tid_y, idx) = 0.0;
         if (tid_y < bound_tid_y) {
-            Q_sm_AT(tid_y, idx)
-                = float(query[((((bid_y * target_seq_len) + (Br * bid_z + tid_y)) * q_heads) + bid_x) * head_dim + idx]);
+            Q_sm_AT(tid_y, idx) = float(
+                query[((((bid_y * target_seq_len) + (Br * bid_z + tid_y)) * q_heads) + bid_x) * head_dim + idx]);
         }
     }
     __syncthreads();
@@ -305,9 +291,7 @@ __global__ void FlashAttentionForwardKernel(
             float val0 = 0.0;
             if (is_compute) {
 #pragma unroll
-                for (int k = 0; k < head_dim; ++k) { 
-                    val0 += Q_sm_AT(tid_y, k) * K_T_sm_AT(k, tid_x); 
-                }
+                for (int k = 0; k < head_dim; ++k) { val0 += Q_sm_AT(tid_y, k) * K_T_sm_AT(k, tid_x); }
                 SP_AT(tid_y, tid_x) = double(val0) * scale;
             }
         }
@@ -349,9 +333,8 @@ __global__ void FlashAttentionForwardKernel(
         if (apply_dropout && tid_y < bound_tid_y && tid_x < bound_tid_x) {
             int global_q_idx = q_tile_start + tid_y;
             int global_k_idx = k_tile_start + tid_x;
-            bool keep = FlashAttnDropoutKeep(
-                dropout_seed, bid_y, bid_x, global_q_idx, global_k_idx,
-                q_heads, target_seq_len, src_seq_len, dropout_prob);
+            bool keep = FlashAttnDropoutKeep(dropout_seed, bid_y, bid_x, global_q_idx, global_k_idx, q_heads,
+                                             target_seq_len, src_seq_len, dropout_prob);
             if (keep) {
                 SP_AT(tid_y, tid_x) = SP_AT(tid_y, tid_x) / (1.0f - dropout_prob);
             } else {
@@ -366,9 +349,7 @@ __global__ void FlashAttentionForwardKernel(
             for (int u = tid_x; u < head_dim; u += blockDim.x) {
                 float val3 = 0.0;
 #pragma unroll
-                for (int w = 0; w < bound_tid_x; ++w) {
-                    val3 += float(SP_AT(tid_y, w)) * V_sm_AT(w, u);
-                }
+                for (int w = 0; w < bound_tid_x; ++w) { val3 += float(SP_AT(tid_y, w)) * V_sm_AT(w, u); }
                 O_sm_AT(tid_y, u) = O_sm_AT(tid_y, u) * exp_result + val3;
             }
         }
@@ -393,7 +374,7 @@ __global__ void FlashAttentionForwardKernel(
                 = T(O_sm_AT(tid_y, idx) / float(l_prev[tid_y]));
         }
     }
-    
+
     // Save logsumexp for backward pass
     if (tid_x == 0 && tid_y < bound_tid_y) {
         int logsumexp_idx = ((bid_y * q_heads + bid_x) * target_seq_len) + (Br * bid_z + tid_y);
@@ -436,18 +417,13 @@ __global__ void FlashAttentionForwardKernel(
  *   q_heads, kv_heads, head_dim: Attention head dimensions
  */
 template <typename T>
-__global__ void FlashAttentionBackwardKernel(
-    T *grad_query, T *grad_key, T *grad_value,
-    const T *query, const T *key, const T *value,
-    const T *output, const T *grad_output,
-    const float *logsumexp,
-    const float *D,  // Precomputed D = rowsum(dO ∘ O)
-    unsigned long long dropout_seed,
-    const T *attn_mask,
-    float scale, bool is_causal, int64_t dropout_p,
-    bool enable_gqa,
-    int batch_size, int target_seq_len, int src_seq_len,
-    int q_heads, int kv_heads, int head_dim) {
+__global__ void
+FlashAttentionBackwardKernel(T *grad_query, T *grad_key, T *grad_value, const T *query, const T *key, const T *value,
+                             const T *output, const T *grad_output, const float *logsumexp,
+                             const float *D, // Precomputed D = rowsum(dO ∘ O)
+                             unsigned long long dropout_seed, const T *attn_mask, float scale, bool is_causal,
+                             int64_t dropout_p, bool enable_gqa, int batch_size, int target_seq_len, int src_seq_len,
+                             int q_heads, int kv_heads, int head_dim) {
     int tid_x = threadIdx.x;          // 横向, blockDim.x列 (Bc)
     int tid_y = threadIdx.y;          // 纵向, blockDim.y行 (Br)
     int bid_x = blockIdx.x;           // x方向, 总数 = #q_heads
@@ -580,9 +556,7 @@ __global__ void FlashAttentionBackwardKernel(
             float score = 0.0f;
             if (is_compute) {
 #pragma unroll
-                for (int k = 0; k < head_dim; ++k) {
-                    score += Q_sm_AT(tid_y, k) * K_T_sm_AT(k, tid_x);
-                }
+                for (int k = 0; k < head_dim; ++k) { score += Q_sm_AT(tid_y, k) * K_T_sm_AT(k, tid_x); }
             }
             S_sm_AT(tid_y, tid_x) = score * scale;
             P_sm_AT(tid_y, tid_x) = is_compute ? myexp<float>(S_sm_AT(tid_y, tid_x) - L_sm_AT(tid_y)) : 0.0f;
@@ -596,9 +570,8 @@ __global__ void FlashAttentionBackwardKernel(
         if (apply_dropout && tid_y < bound_tid_y && tid_x < bound_tid_x) {
             int global_q_pos = q_tile_start + tid_y;
             int global_k_pos = k_tile_start + tid_x;
-            bool keep = FlashAttnDropoutKeep(
-                dropout_seed, bid_y, bid_x, global_q_pos, global_k_pos,
-                q_heads, target_seq_len, src_seq_len, dropout_prob);
+            bool keep = FlashAttnDropoutKeep(dropout_seed, bid_y, bid_x, global_q_pos, global_k_pos, q_heads,
+                                             target_seq_len, src_seq_len, dropout_prob);
             if (keep) {
                 P_sm_AT(tid_y, tid_x) = P_sm_AT(tid_y, tid_x) / (1.0f - dropout_prob);
             } else {
@@ -626,9 +599,7 @@ __global__ void FlashAttentionBackwardKernel(
         if (tid_y < bound_tid_y && tid_x < bound_tid_x) {
             float val = 0.0f;
 #pragma unroll
-            for (int k = 0; k < head_dim; ++k) {
-                val += dO_sm_AT(tid_y, k) * V_sm_AT(tid_x, k);
-            }
+            for (int k = 0; k < head_dim; ++k) { val += dO_sm_AT(tid_y, k) * V_sm_AT(tid_x, k); }
             S_sm_AT(tid_y, tid_x) = val;
         } else {
             S_sm_AT(tid_y, tid_x) = 0.0f;
@@ -639,9 +610,8 @@ __global__ void FlashAttentionBackwardKernel(
         if (apply_dropout && tid_y < bound_tid_y && tid_x < bound_tid_x) {
             int global_q_pos = q_tile_start + tid_y;
             int global_k_pos = k_tile_start + tid_x;
-            bool keep = FlashAttnDropoutKeep(
-                dropout_seed, bid_y, bid_x, global_q_pos, global_k_pos,
-                q_heads, target_seq_len, src_seq_len, dropout_prob);
+            bool keep = FlashAttnDropoutKeep(dropout_seed, bid_y, bid_x, global_q_pos, global_k_pos, q_heads,
+                                             target_seq_len, src_seq_len, dropout_prob);
             if (keep) {
                 S_sm_AT(tid_y, tid_x) = S_sm_AT(tid_y, tid_x) / (1.0f - dropout_prob);
             } else {
@@ -747,7 +717,6 @@ __global__ void FlashAttentionBackwardKernel(
  *   dropout_seed: Dropout seed for backward pass [1]
  */
 
-
 /**
  * Launch FlashAttention Forward Kernel
  *
@@ -768,7 +737,8 @@ template <typename T>
 void LaunchFlashAttentionForward(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &query,
                                  const std::shared_ptr<Tensor> &key, const std::shared_ptr<Tensor> &value,
                                  const std::shared_ptr<Tensor> &attn_mask, float scale, bool is_causal,
-                                 int64_t dropout_p, bool enable_gqa, float *logsumexp_ptr, unsigned long long dropout_seed) {
+                                 int64_t dropout_p, bool enable_gqa, float *logsumexp_ptr,
+                                 unsigned long long dropout_seed) {
 
     const auto &query_dims = query->Dims();
     const auto &key_dims = key->Dims();
@@ -812,16 +782,17 @@ void LaunchFlashAttentionForward(const std::shared_ptr<Tensor> &output, const st
     constexpr int Br = 32;
     constexpr int Bc = 32;
     int64_t Tr = (seq_len_q + Br - 1) / Br;
-    
-    dim3 block_dims(Bc, Br);  // (blockDim.x, blockDim.y) = (Bc, Br)
-    dim3 grid_dims(num_heads, batch_size, Tr);  // (gridDim.x, gridDim.y, gridDim.z) = (num_heads, batch_size, Tr)
+
+    dim3 block_dims(Bc, Br);                   // (blockDim.x, blockDim.y) = (Bc, Br)
+    dim3 grid_dims(num_heads, batch_size, Tr); // (gridDim.x, gridDim.y, gridDim.z) = (num_heads, batch_size, Tr)
 
     // Calculate shared memory size (removed dropout_sm allocation)
     // SP[Br][Bc] (double) + m_prev[Br] (float) + m_new[Br] (float) + l_prev[Br] (float) + l_new[Br] (float)
-    // + Q_sm[Br][head_dim] (float) + K_T_sm[head_dim][Bc] (float) + V_sm[Bc][head_dim] (float) + O_sm[Br][head_dim] (float)
-    size_t shared_mem_size = Br * Bc * sizeof(double)  // SP
-                          + 4 * Br * sizeof(float)     // m_prev, m_new, l_prev, l_new
-                          + (Br + Bc + Bc + Br) * head_dim * sizeof(float);  // Q_sm, K_T_sm, V_sm, O_sm
+    // + Q_sm[Br][head_dim] (float) + K_T_sm[head_dim][Bc] (float) + V_sm[Bc][head_dim] (float) + O_sm[Br][head_dim]
+    // (float)
+    size_t shared_mem_size = Br * Bc * sizeof(double)                        // SP
+                           + 4 * Br * sizeof(float)                          // m_prev, m_new, l_prev, l_new
+                           + (Br + Bc + Bc + Br) * head_dim * sizeof(float); // Q_sm, K_T_sm, V_sm, O_sm
     // Note: Removed dropout_sm[Br][Bc] (bool) allocation
 
     auto device = output->GetDevice();
@@ -830,9 +801,8 @@ void LaunchFlashAttentionForward(const std::shared_ptr<Tensor> &output, const st
                                   ->cuda_stream();
 
     FlashAttentionForwardKernel<T><<<grid_dims, block_dims, shared_mem_size, cuda_stream>>>(
-        output_ptr, query_ptr, key_ptr, value_ptr, attn_mask_ptr,
-        logsumexp_ptr, scale, is_causal, enable_gqa, dropout_p, dropout_seed,
-        batch_size, seq_len_q, seq_len_k, num_heads, num_heads_kv, head_dim);
+        output_ptr, query_ptr, key_ptr, value_ptr, attn_mask_ptr, logsumexp_ptr, scale, is_causal, enable_gqa,
+        dropout_p, dropout_seed, batch_size, seq_len_q, seq_len_k, num_heads, num_heads_kv, head_dim);
 }
 
 /**
@@ -859,13 +829,12 @@ void LaunchFlashAttentionForward(const std::shared_ptr<Tensor> &output, const st
  */
 template <typename T>
 void LaunchFlashAttentionBackward(const std::shared_ptr<Tensor> &grad_query, const std::shared_ptr<Tensor> &grad_key,
-                                 const std::shared_ptr<Tensor> &grad_value, const std::shared_ptr<Tensor> &query,
-                                 const std::shared_ptr<Tensor> &key, const std::shared_ptr<Tensor> &value,
-                                 const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &grad_output,
-                                 const std::shared_ptr<Tensor> &logsumexp,
-                                 unsigned long long dropout_seed,
-                                 const std::shared_ptr<Tensor> &attn_mask,
-                                 float scale, bool is_causal, int64_t dropout_p, bool enable_gqa) {
+                                  const std::shared_ptr<Tensor> &grad_value, const std::shared_ptr<Tensor> &query,
+                                  const std::shared_ptr<Tensor> &key, const std::shared_ptr<Tensor> &value,
+                                  const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &grad_output,
+                                  const std::shared_ptr<Tensor> &logsumexp, unsigned long long dropout_seed,
+                                  const std::shared_ptr<Tensor> &attn_mask, float scale, bool is_causal,
+                                  int64_t dropout_p, bool enable_gqa) {
 
     const auto &query_dims = query->Dims();
     const auto &key_dims = key->Dims();
@@ -919,25 +888,26 @@ void LaunchFlashAttentionBackward(const std::shared_ptr<Tensor> &grad_query, con
     constexpr int Bc = 32;
     int64_t Tr = (seq_len_q + Br - 1) / Br;
 
-    dim3 block_dims(Bc, Br);  // (blockDim.x, blockDim.y) = (Bc, Br)
-    dim3 grid_dims(num_heads, batch_size, Tr);  // (gridDim.x, gridDim.y, gridDim.z) = (num_heads, batch_size, Tr)
+    dim3 block_dims(Bc, Br);                   // (blockDim.x, blockDim.y) = (Bc, Br)
+    dim3 grid_dims(num_heads, batch_size, Tr); // (gridDim.x, gridDim.y, gridDim.z) = (num_heads, batch_size, Tr)
 
     // Calculate shared memory size for backward pass
     // Q_sm[Br][head_dim], K_T_sm[head_dim][Bc], V_sm[Bc][head_dim]
     // dO_sm[Br][head_dim], dK_T_sm[head_dim][Bc], dV_sm[Bc][head_dim]
     // S_sm[Br][Bc], P_sm[Br][Bc]
     // D_sm[Br] - D values loaded from HBM to shared memory
-    size_t shared_mem_size = Br * head_dim * sizeof(float)     // Q_sm
-                           + head_dim * Bc * sizeof(float)    // K_T_sm
-                           + Bc * head_dim * sizeof(float)    // V_sm
-                           + Br * head_dim * sizeof(float)     // dO_sm
-                           + Br * head_dim * sizeof(float)     // dQ_sm (accumulated gradient for Q)
-                           + head_dim * Bc * sizeof(float)    // dK_T_sm
-                           + Bc * head_dim * sizeof(float)    // dV_sm
-                           + Br * Bc * sizeof(float)          // S_sm or (dP_sm when compute dP_sm = dO_i @ V_j^T \in R^{Br*Bc})
-                           + Br * Bc * sizeof(float)         // P_sm or (dS_sm when compute dS_sm = P_sm_ij pointwise multiplied by (dP_sm_ij - D_i) \in R^{Br*Bc})
-                           + Br * sizeof(float)        // L_i
-                           + Br * sizeof(float);              // D_sm (loaded from HBM)
+    size_t shared_mem_size = Br * head_dim * sizeof(float) // Q_sm
+                           + head_dim * Bc * sizeof(float) // K_T_sm
+                           + Bc * head_dim * sizeof(float) // V_sm
+                           + Br * head_dim * sizeof(float) // dO_sm
+                           + Br * head_dim * sizeof(float) // dQ_sm (accumulated gradient for Q)
+                           + head_dim * Bc * sizeof(float) // dK_T_sm
+                           + Bc * head_dim * sizeof(float) // dV_sm
+                           + Br * Bc * sizeof(float) // S_sm or (dP_sm when compute dP_sm = dO_i @ V_j^T \in R^{Br*Bc})
+                           + Br * Bc * sizeof(float) // P_sm or (dS_sm when compute dS_sm = P_sm_ij pointwise multiplied
+                                                     // by (dP_sm_ij - D_i) \in R^{Br*Bc})
+                           + Br * sizeof(float)      // L_i
+                           + Br * sizeof(float);     // D_sm (loaded from HBM)
 
     auto device = query->GetDevice();
     const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
@@ -945,11 +915,9 @@ void LaunchFlashAttentionBackward(const std::shared_ptr<Tensor> &grad_query, con
                                   ->cuda_stream();
 
     FlashAttentionBackwardKernel<T><<<grid_dims, block_dims, shared_mem_size, cuda_stream>>>(
-        grad_query_ptr, grad_key_ptr, grad_value_ptr,
-        query_ptr, key_ptr, value_ptr, output_ptr, grad_output_ptr,
-        logsumexp_ptr, D_ptr, dropout_seed, attn_mask_ptr,
-        scale, is_causal, dropout_p, enable_gqa,
-        batch_size, seq_len_q, seq_len_k, num_heads, num_heads_kv, head_dim);
+        grad_query_ptr, grad_key_ptr, grad_value_ptr, query_ptr, key_ptr, value_ptr, output_ptr, grad_output_ptr,
+        logsumexp_ptr, D_ptr, dropout_seed, attn_mask_ptr, scale, is_causal, dropout_p, enable_gqa, batch_size,
+        seq_len_q, seq_len_k, num_heads, num_heads_kv, head_dim);
 }
 
 /**
@@ -977,12 +945,12 @@ void LaunchFlashAttentionBackward(const std::shared_ptr<Tensor> &grad_query, con
  *   Tuple of (grad_query, grad_key, grad_value) tensors
  */
 
-
 // Non-template wrapper functions for registration
-FlashAttentionForwardOutput FlashAttentionForward(const std::shared_ptr<Tensor> &query, const std::shared_ptr<Tensor> &key,
-                                               const std::shared_ptr<Tensor> &value,
-                                               const std::shared_ptr<Tensor> &attn_mask, float scale, bool is_causal,
-                                               int64_t dropout_p, bool enable_gqa) {
+FlashAttentionForwardOutput FlashAttentionForward(const std::shared_ptr<Tensor> &query,
+                                                  const std::shared_ptr<Tensor> &key,
+                                                  const std::shared_ptr<Tensor> &value,
+                                                  const std::shared_ptr<Tensor> &attn_mask, float scale, bool is_causal,
+                                                  int64_t dropout_p, bool enable_gqa) {
     auto dtype = query->Dtype();
     const auto &query_dims = query->Dims();
 
@@ -1010,13 +978,12 @@ FlashAttentionForwardOutput FlashAttentionForward(const std::shared_ptr<Tensor> 
 
     switch (dtype) {
         DISPATCH_CASE(WRAP(LaunchFlashAttentionForward<float>(output, query, key, value, attn_mask, scale, is_causal,
-                                                               dropout_p, enable_gqa, logsumexp_ptr,
-                                                               dropout_seed);),
+                                                              dropout_p, enable_gqa, logsumexp_ptr, dropout_seed);),
                       DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP(LaunchFlashAttentionForward<nv_bfloat16>(output, query, key, value, attn_mask, scale,
-                                                                     is_causal, dropout_p, enable_gqa, logsumexp_ptr,
-                                                                     dropout_seed);),
-                      DataType::kBFLOAT16)
+        DISPATCH_CASE(
+            WRAP(LaunchFlashAttentionForward<nv_bfloat16>(output, query, key, value, attn_mask, scale, is_causal,
+                                                          dropout_p, enable_gqa, logsumexp_ptr, dropout_seed);),
+            DataType::kBFLOAT16)
     default:
         LOG_LOC(FATAL, "CUDA FlashAttention forward: 'Unsupported data type'");
     }
@@ -1028,14 +995,12 @@ FlashAttentionForwardOutput FlashAttentionForward(const std::shared_ptr<Tensor> 
     return result;
 }
 
-std::vector<std::shared_ptr<Tensor>> FlashAttentionBackward(const std::shared_ptr<Tensor> &query,
-                                                          const std::shared_ptr<Tensor> &key,
-                                                          const std::shared_ptr<Tensor> &value,
-                                                          const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &grad_output,
-                                                          const std::shared_ptr<Tensor> &logsumexp,
-                                                          const std::shared_ptr<Tensor> &dropout_seed,
-                                                          const std::shared_ptr<Tensor> &attn_mask,
-                                                          float scale, bool is_causal, int64_t dropout_p, bool enable_gqa) {
+std::vector<std::shared_ptr<Tensor>>
+FlashAttentionBackward(const std::shared_ptr<Tensor> &query, const std::shared_ptr<Tensor> &key,
+                       const std::shared_ptr<Tensor> &value, const std::shared_ptr<Tensor> &output,
+                       const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &logsumexp,
+                       const std::shared_ptr<Tensor> &dropout_seed, const std::shared_ptr<Tensor> &attn_mask,
+                       float scale, bool is_causal, int64_t dropout_p, bool enable_gqa) {
     auto dtype = query->Dtype();
 
     // Create gradient tensors with same shapes as inputs
@@ -1044,9 +1009,12 @@ std::vector<std::shared_ptr<Tensor>> FlashAttentionBackward(const std::shared_pt
     auto grad_value = std::make_shared<Tensor>(value->Dims(), dtype, value->GetDevice());
 
     // Initialize gradients to zero
-    DispatchFunc<INFINI_ALL_TYPES>(dtype, [=]<typename T>() { grad_query->Fill<T>(0); }, "CUDA FlashAttentionBackward");
-    DispatchFunc<INFINI_ALL_TYPES>(dtype, [=]<typename T>() { grad_key->Fill<T>(0); }, "CUDA FlashAttentionBackward");
-    DispatchFunc<INFINI_ALL_TYPES>(dtype, [=]<typename T>() { grad_value->Fill<T>(0); }, "CUDA FlashAttentionBackward");
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype, [=]<typename T>() { grad_query->Fill<T>(0); }, "CUDA FlashAttentionBackward");
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype, [=]<typename T>() { grad_key->Fill<T>(0); }, "CUDA FlashAttentionBackward");
+    DispatchFunc<INFINI_ALL_TYPES>(
+        dtype, [=]<typename T>() { grad_value->Fill<T>(0); }, "CUDA FlashAttentionBackward");
 
     // Get dropout seed value
     unsigned long long dropout_seed_value = 0;
@@ -1055,13 +1023,13 @@ std::vector<std::shared_ptr<Tensor>> FlashAttentionBackward(const std::shared_pt
     }
 
     switch (dtype) {
-        DISPATCH_CASE(WRAP(LaunchFlashAttentionBackward<float>(grad_query, grad_key, grad_value, query, key, value, output, grad_output,
-                                                               logsumexp, dropout_seed_value, attn_mask, scale, is_causal,
-                                                               dropout_p, enable_gqa);),
+        DISPATCH_CASE(WRAP(LaunchFlashAttentionBackward<float>(grad_query, grad_key, grad_value, query, key, value,
+                                                               output, grad_output, logsumexp, dropout_seed_value,
+                                                               attn_mask, scale, is_causal, dropout_p, enable_gqa);),
                       DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP(LaunchFlashAttentionBackward<nv_bfloat16>(grad_query, grad_key, grad_value, query, key, value, output, grad_output,
-                                                                    logsumexp, dropout_seed_value, attn_mask, scale, is_causal,
-                                                                    dropout_p, enable_gqa);),
+        DISPATCH_CASE(WRAP(LaunchFlashAttentionBackward<nv_bfloat16>(
+                               grad_query, grad_key, grad_value, query, key, value, output, grad_output, logsumexp,
+                               dropout_seed_value, attn_mask, scale, is_causal, dropout_p, enable_gqa);),
                       DataType::kBFLOAT16)
     default:
         LOG_LOC(FATAL, "CUDA FlashAttention backward: 'Unsupported data type'");
@@ -1073,7 +1041,7 @@ std::vector<std::shared_ptr<Tensor>> FlashAttentionBackward(const std::shared_pt
 } // namespace infini_train::kernels::cuda
 
 // Register FlashAttention kernels with the dispatcher
-#define REGISTER_CUDA_FLASHATTENTION_KERNEL(kernel_name) \
+#define REGISTER_CUDA_FLASHATTENTION_KERNEL(kernel_name)                                                               \
     REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_FLASHATTENTION_KERNEL(FlashAttentionForward)
