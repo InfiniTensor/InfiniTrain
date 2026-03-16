@@ -11,6 +11,11 @@
     },
     "builds": [
         {
+            "id": "build_1",
+            "profile": false,
+            "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON .. && make -j"
+        },
+        {
             "id": "build_2",
             "profile": true,
             "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON -DPROFILE_MODE=ON .. && make -j"
