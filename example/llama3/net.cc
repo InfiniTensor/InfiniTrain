@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "gflags/gflags.h"
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
@@ -29,6 +30,8 @@
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
+
+DECLARE_bool(flash);
 
 namespace {
 constexpr int kRandomSeed = 42;
@@ -219,6 +222,16 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
 
     // TODO(zbl): support flash attention later
     // if (flash_) { ... }
+
+    if (FLAGS_flash) {
+        // FlashAttention path (placeholder): use unified SDPA API.
+        // q/k/v: (B, H_local, T, D)
+        auto y = nn::function::ScaledDotProductAttention(q, k, v, /*attn_mask=*/mask,
+                                                      /*dropout_p=*/0.0, /*is_causal=*/false);
+        y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
+        y = (*modules_[kCProjLayerName])({y})[0];
+        return {y};
+    }
 
     // manual implementation of attention
     // this materializes the large (T,T) matrix for all the queries and keys

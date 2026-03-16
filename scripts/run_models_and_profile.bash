@@ -22,6 +22,13 @@ LOG_DIR="$(read_var LOG_DIR)";                  : "${LOG_DIR:=logs}"
 PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_logs}"
 COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
 
+# Optional runtime flags
+FLASH="$(read_var FLASH)"
+FLASH_FLAG=""
+if [[ -n "$FLASH" && "$FLASH" != "null" ]]; then
+    FLASH_FLAG="--flash ${FLASH}"
+fi
+
 mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
 
 # export custom PATHs
@@ -165,13 +172,28 @@ for ((id=0; id<num_builds; ++id)); do
     for ((ti=0; ti<num_tests; ++ti)); do
         test_id=$(jq -r ".tests[$ti].id" "$CONFIG_FILE")
         arg_str="$(args_string_for_test "$ti")"
-
         # gpt2
-        gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
+        gpt2_args=(
+            "${prefix}./gpt2"
+            "--input_bin" "${GPT2_INPUT_BIN}"
+            "--llmc_filepath" "${GPT2_LLMC_FILEPATH}"
+            "--device" "cuda"
+            ${arg_str}
+            ${FLASH_FLAG}
+        )
+        gpt2_cmd="${gpt2_args[*]}"
         run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag"
 
         # llama3
-        llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str}"
+        llama3_args=(
+            "${prefix}./llama3"
+            "--input_bin" "${LLAMA3_INPUT_BIN}"
+            "--llmc_filepath" "${LLAMA3_LLMC_FILEPATH}"
+            "--device" "cuda"
+            ${arg_str}
+            ${FLASH_FLAG}
+        )
+        llama3_cmd="${llama3_args[*]}"
         run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag"
     done
 done

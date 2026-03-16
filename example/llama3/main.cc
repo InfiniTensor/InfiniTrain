@@ -61,6 +61,7 @@ DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 // memory management
 DEFINE_string(device, "cuda", "device type (cpu/cuda), useless if using parallel training mode");
+DEFINE_bool(flash, false, "enable flash attention");
 // parallel
 DEFINE_int32(
     nthread_per_process, 1,

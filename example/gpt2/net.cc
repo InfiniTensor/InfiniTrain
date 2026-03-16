@@ -11,6 +11,7 @@
 #include <tuple>
 #include <vector>
 
+#include "gflags/gflags.h"
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
@@ -31,6 +32,8 @@
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
+
+DECLARE_bool(flash);
 
 namespace {
 constexpr int kRandomSeed = 42;
@@ -104,6 +107,18 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     k = k->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
     q = q->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
     v = v->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
+
+    if (FLAGS_flash) {
+        // FlashAttention path (placeholder): use unified SDPA API.
+        // q/k/v: (B, h_l, T, Dh)
+        auto y_flash = nn::function::ScaledDotProductAttention(q, k, v, /*attn_mask=*/nullptr,
+                                                              /*dropout_p=*/0.0, /*is_causal=*/true);
+        // y: (B, h_l, T, Dh)
+        auto y = y_flash;
+        y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
+        y = (*modules_[kCProjLayerName])({y})[0];
+        return {y};
+    }
 
     // (B, h_l, T, T)
     auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
