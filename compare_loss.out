@@ -1,8 +1,0 @@
-Files only in /home/jiew/InfiniTrain/logs_flash_smoke: gpt2_smoke_fp32.log, llama3_smoke_fp32.log
-
-==================================================
-Overall Summary:
-  fp32:    2/2 test cases passed (threshold: 1e-05)
-  bfloat16: 0/0 test cases passed (threshold: 1e-02)
-  Total:   2/2 test cases passed
-==================================================

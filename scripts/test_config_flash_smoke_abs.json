@@ -8,7 +8,8 @@
     "PROFILE_LOG_DIR": "/home/jiew/InfiniTrain/profile_logs_flash_smoke",
     "LOG_DIR": "/home/jiew/InfiniTrain/logs_flash_smoke",
     "COMPARE_LOG_DIR": "/home/jiew/InfiniTrain/logs_baseline_smoke",
-    "TMPDIR": "/home/jiew/tmp"
+    "TMPDIR": "/home/jiew/tmp",
+    "CUDA_VISIBLE_DEVICES": "4"
   },
   "builds": [
     {
@@ -17,17 +18,22 @@
       "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON /home/jiew/InfiniTrain && make -j"
     }
   ],
-  "tests": [
+  "test_groups": [
     {
-      "id": "smoke",
-      "args": {
-        "dtype": "float32",
-        "num_iteration": 2,
-        "batch_size": 4,
-        "total_batch_size": 256,
-        "sequence_length": 64,
-        "flash": true
-      }
+      "tag": "smoke",
+      "tests": [
+        {
+          "id": "smoke",
+          "args": {
+            "dtype": "float32",
+            "num_iteration": 2,
+            "batch_size": 4,
+            "sequence_length": 64,
+            "total_batch_size": 256,
+            "flash": true
+          }
+        }
+      ]
     }
   ]
 }

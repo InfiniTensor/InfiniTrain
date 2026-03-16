@@ -282,7 +282,6 @@ for ((id=0; id<num_builds; ++id)); do
             run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
         done
     done
-    done
 done
 
 echo -e "\n\033[1;32mAll done.\033[0m"

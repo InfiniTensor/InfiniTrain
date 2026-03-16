@@ -1,31 +1,37 @@
 {
-    "variables": {
-        "BUILD_DIR": "/home/jiew/InfiniTrain/build_script",
-        "LOG_DIR": "/home/jiew/InfiniTrain/logs_baseline_smoke",
-        "PROFILE_LOG_DIR": "/home/jiew/InfiniTrain/profile_logs_baseline_smoke",
-        "COMPARE_LOG_DIR": "",
-        "GPT2_INPUT_BIN": "/home/jiew/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin",
-        "GPT2_LLMC_FILEPATH": "/home/jiew/llmc/gpt2/gpt2_124M.bin",
-        "LLAMA3_INPUT_BIN": "/home/jiew/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
-        "LLAMA3_LLMC_FILEPATH": "/home/jiew/llmc/llama3/llama3.2_1B_fp32.bin"
-    },
-    "builds": [
+  "variables": {
+    "BUILD_DIR": "/home/jiew/InfiniTrain/build_script",
+    "LOG_DIR": "/home/jiew/InfiniTrain/logs_baseline_smoke",
+    "PROFILE_LOG_DIR": "/home/jiew/InfiniTrain/profile_logs_baseline_smoke",
+    "COMPARE_LOG_DIR": "",
+    "GPT2_INPUT_BIN": "/home/jiew/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin",
+    "GPT2_LLMC_FILEPATH": "/home/jiew/llmc/gpt2/gpt2_124M.bin",
+    "LLAMA3_INPUT_BIN": "/home/jiew/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
+    "LLAMA3_LLMC_FILEPATH": "/home/jiew/llmc/llama3/llama3.2_1B_fp32.bin",
+    "CUDA_VISIBLE_DEVICES": "4"
+  },
+  "builds": [
+    {
+      "id": "build",
+      "profile": false,
+      "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON /home/jiew/InfiniTrain && make -j"
+    }
+  ],
+  "test_groups": [
+    {
+      "tag": "smoke",
+      "tests": [
         {
-            "id": "build",
-            "profile": false,
-            "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON /home/jiew/InfiniTrain && make -j"
+          "id": "smoke",
+          "args": {
+            "dtype": "float32",
+            "num_iteration": 2,
+            "batch_size": 4,
+            "sequence_length": 64,
+            "total_batch_size": 256
+          }
         }
-    ],
-    "tests": [
-        {
-            "id": "smoke",
-            "args": {
-                "dtype": "float32",
-                "num_iteration": 2,
-                "batch_size": 4,
-                "total_batch_size": 256,
-                "sequence_length": 64
-            }
-        }
-    ]
+      ]
+    }
+  ]
 }
