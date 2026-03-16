@@ -31,13 +31,32 @@ class Summary:
     peak_reserved_mb: int
 
 
-def iter_logs(d: Path) -> Dict[str, Path]:
-    out = {}
-    for f in d.glob("*.log"):
-        if f.name.startswith("build"):
+def iter_logs(d: Path) -> Tuple[Dict[str, Path], Dict[str, List[Path]]]:
+    files: Dict[str, Path] = {}
+    duplicates: Dict[str, List[Path]] = {}
+
+    for f in d.rglob("*.log"):
+        if f.name.startswith("build") or f.name.endswith("_profile.log"):
             continue
-        out[f.name] = f
-    return out
+
+        key = f.name
+        if key in files:
+            duplicates.setdefault(key, [files[key]]).append(f)
+            continue
+        files[key] = f
+
+    return files, duplicates
+
+
+def _exit_if_duplicate_logs(base_dir: Path, duplicates: Dict[str, List[Path]]) -> None:
+    if not duplicates:
+        return
+
+    print(f"Found duplicate log basenames in {base_dir.resolve()}, cannot summarize safely:")
+    for name, paths in sorted(duplicates.items()):
+        rels = ", ".join(str(p.relative_to(base_dir)) for p in paths)
+        print(f"  {name}: {rels}")
+    raise SystemExit(1)
 
 
 def parse_rows(p: Path) -> List[Tuple[int, float, float, int, int]]:
@@ -93,8 +112,11 @@ def main() -> int:
     fl = args.flash
     excl = not args.include_step1
 
-    bfiles = iter_logs(base)
-    ffiles = iter_logs(fl)
+    bfiles, bdups = iter_logs(base)
+    ffiles, fdups = iter_logs(fl)
+
+    _exit_if_duplicate_logs(base, bdups)
+    _exit_if_duplicate_logs(fl, fdups)
 
     common = sorted(set(bfiles) & set(ffiles))
     if not common:
