@@ -36,7 +36,7 @@ struct LLaMA3Config {
 
     // Inference
     bool use_kv = false;            // kv cache
-    bool flash = false;             // flash attention
+    bool flash = false;             // enable flash attention path in CausalSelfAttention
     int64_t max_gen_batch_size = 4; // max batch size during inference
 };
 
@@ -179,7 +179,7 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
     static std::shared_ptr<LLaMA3> FromPretrained(ModelType model_type);
-    static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath);
+    static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath, bool flash = false);
 
     int GetChunkSize() const { return stage_info_.layer_ranges_per_chunk.size(); }
 
