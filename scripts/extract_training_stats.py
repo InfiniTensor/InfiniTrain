@@ -299,140 +299,136 @@ def main():
         key = f"{result['model']}_{result['dtype']}_{result['disopt']}"
         grouped_by_config[key].append(result)
     
-    # Prepare output
-    if args.markdown:
-        # Output as markdown table
-        markdown_lines = []
-        
-        # Add header
-        markdown_lines.append("| Row ID | Avg Loss | Avg Time (ms) | Avg Tok/s | Peak Used (MB) | Peak Reserved (MB) | DP | TP | SP | PP |")
-        markdown_lines.append("|---------|----------|---------------|-----------|-----------------|-------------------|----|----|----|----|")
-        
-        # Print rows (flash and noflash interleaved)
-        for key in sorted(grouped_by_config.keys()):
-            group = grouped_by_config[key]
-            if len(group) >= 2:
-                # Separate flash and noflash results
-                flash_results = [r for r in group if r['flash'] == 'flash']
-                noflash_results = [r for r in group if r['flash'] == 'noflash']
-                
-                # Interleave flash and noflash results
-                for i in range(max(len(flash_results), len(noflash_results))):
-                    if i < len(flash_results):
-                        result = flash_results[i]
-                        row = f"| {result['row_id']:<40} | {result['avg_loss']:<15.6f} | {result['avg_time_ms']:<15.2f} | {result['avg_tok_per_sec']:<15.2f} | {result['avg_peak_used']:<15.2f} | {result['avg_peak_reserved']:<15.2f} | {result['dp']:<5} | {result['tp']:<5} | {result['sp']:<5} | {result['pp']:<5} |"
+    # Output speedup ratio table if requested
+    if args.speedup:
+        # Only output speedup ratio table
+        pass
+    else:
+        # Prepare output
+        if args.markdown:
+            # Output as markdown table
+            markdown_lines = []
+            
+            # Add header
+            markdown_lines.append("| Row ID | Avg Loss | Avg Time (ms) | Avg Tok/s | Peak Used (MB) | Peak Reserved (MB) | DP | TP | SP | PP |")
+            markdown_lines.append("|---------|----------|---------------|-----------|-----------------|-------------------|----|----|----|----|")
+            
+            # Print rows (flash and noflash interleaved)
+            for key in sorted(grouped_by_config.keys()):
+                group = grouped_by_config[key]
+                if len(group) >= 2:
+                    # Separate flash and noflash results
+                    flash_results = [r for r in group if r['flash'] == 'flash']
+                    noflash_results = [r for r in group if r['flash'] == 'noflash']
+                    
+                    # Interleave flash and noflash results
+                    for i in range(max(len(flash_results), len(noflash_results))):
+                        if i < len(flash_results):
+                            result = flash_results[i]
+                            row = f"| {result['row_id']:<40} | {result['avg_loss']:<15.6f} | {result['avg_time_ms']:<15.2f} | {result['avg_tok_per_sec']:<15.2f} | {result['avg_peak_used']:<15.2f} | {result['avg_peak_reserved']:<15.2f} | {result['dp']:<5} | {result['tp']:<5} | {result['sp']:<5} | {result['pp']:<5} |"
+                            markdown_lines.append(row)
+                        if i < len(noflash_results):
+                            result = noflash_results[i]
+                            row = f"| {result['row_id']:<40} | {result['avg_loss']:<15.6f} | {result['avg_time_ms']:<15.2f} | {result['avg_tok_per_sec']:<15.2f} | {result['avg_peak_used']:<15.2f} | {result['avg_peak_reserved']:<15.2f} | {result['dp']:<5} | {result['tp']:<5} | {result['sp']:<5} | {result['pp']:<5} |"
+                            markdown_lines.append(row)
+                else:
+                    # Only one result, print it
+                    for result in group:
+                        row = f"| {result['row_id']:<40} | {result['avg_loss']:<15.6f} {result['avg_time_ms']:<15.2f} {result['avg_tok_per_sec']:<15.2f} {result['avg_peak_used']:<15.2f} | {result['avg_peak_reserved']:<15.2f} | {result['dp']:<5} | {result['tp']:<5} | {result['sp']:<5} | {result['pp']:<5} |"
                         markdown_lines.append(row)
-                    if i < len(noflash_results):
-                        result = noflash_results[i]
-                        row = f"| {result['row_id']:<40} | {result['avg_loss']:<15.6f} | {result['avg_time_ms']:<15.2f} | {result['avg_tok_per_sec']:<15.2f} | {result['avg_peak_used']:<15.2f} | {result['avg_peak_reserved']:<15.2f} | {result['dp']:<5} | {result['tp']:<5} | {result['sp']:<5} | {result['pp']:<5} |"
-                        markdown_lines.append(row)
+            
+            # Print markdown table
+            markdown_table = "\n".join(markdown_lines)
+            print(markdown_table)
+            
+            # Write to file if output path is specified
+            if args.output:
+                with open(args.output, 'w') as f:
+                    f.write(markdown_table)
+                print(f"Markdown table saved to: {args.output}")
+        else:
+            # Print plain text table
+            print("\n" + "=" * 150)
+            print("Training Statistics Table (excluding step 1)")
+            print("=" * 150)
+            
+            # Print header
+            header = f"{'Row ID':<40} {'Avg Loss':<15} {'Avg Time (ms)':<15} {'Avg Tok/s':<15} {'Peak Used (MB)':<15} {'Peak Reserved (MB)':<15} {'DP':<5} {'TP':<5} {'SP':<5} {'PP':<5}"
+            print(header)
+            print("-" * 150)
+            
+            # Print rows (flash and noflash interleaved)
+            for key in sorted(grouped_by_config.keys()):
+                group = grouped_by_config[key]
+                if len(group) >= 2:
+                    # Separate flash and noflash results
+                    flash_results = [r for r in group if r['flash'] == 'flash']
+                    noflash_results = [r for r in group if r['flash'] == 'noflash']
+                    
+                    # Interleave flash and noflash results
+                    for i in range(max(len(flash_results), len(noflash_results))):
+                        if i < len(flash_results):
+                            result = flash_results[i]
+                            row = f"{result['row_id']:<40} {result['avg_loss']:<15.6f} {result['avg_time_ms']:<15.2f} {result['avg_tok_per_sec']:<15.2f} {result['avg_peak_used']:<15.2f} {result['avg_peak_reserved']:<15.2f} {result['dp']:<5} {result['tp']:<5} {result['sp']:<5} {result['pp']:<5}"
+                            print(row)
+                        if i < len(noflash_results):
+                            result = noflash_results[i]
+                            row = f"{result['row_id']:<40} {result['avg_loss']:<15.6f} {result['avg_time_ms']:<15.2f} {result['avg_tok_per_sec']:<15.2f} {result['avg_peak_used']:<15.2f} {result['avg_peak_reserved']:<15.2f} {result['dp']:<5} {result['tp']:<5} {result['sp']:<5} {result['pp']:<5}"
+                            print(row)
             else:
                 # Only one result, print it
                 for result in group:
-                    row = f"| {result['row_id']:<40} | {result['avg_loss']:<15.6f} {result['avg_time_ms']:<15.2f} {result['avg_tok_per_sec']:<15.2f} {result['avg_peak_used']:<15.2f} | {result['avg_peak_reserved']:<15.2f} | {result['dp']:<5} | {result['tp']:<5} | {result['sp']:<5} | {result['pp']:<5} |"
-                    markdown_lines.append(row)
+                    row = f"{result['row_id']:<40} {result['avg_loss']:<15.6f} {result['avg_time_ms']:<15.2f} {result['avg_tok_per_sec']:<15.2f} {result['avg_peak_used']:<15.2f} {result['avg_peak_reserved']:<15.2f} {result['dp']:<5} {result['tp']:<5} {result['sp']:<5} {result['pp']:<5}"
+                    print(row)
         
-        # Print markdown table
-        markdown_table = "\n".join(markdown_lines)
-        print(markdown_table)
-        
-        # Write to file if output path is specified
-        if args.output:
-            with open(args.output, 'w') as f:
-                f.write(markdown_table)
-            print(f"Markdown table saved to: {args.output}")
-    else:
-        # Print plain text table
-        print("\n" + "=" * 150)
-        print("Training Statistics Table (excluding step 1)")
         print("=" * 150)
         
-        # Print header
-        header = f"{'Row ID':<40} {'Avg Loss':<15} {'Avg Time (ms)':<15} {'Avg Tok/s':<15} {'Peak Used (MB)':<15} {'Peak Reserved (MB)':<15} {'DP':<5} {'TP':<5} {'SP':<5} {'PP':<5}"
-        print(header)
-        print("-" * 150)
+        # Print comparison between flash and noflash
+        print("\nComparison between flash and noflash:")
+        print("=" * 150)
         
-        # Print rows (flash and noflash interleaved)
-        for key in sorted(grouped_by_config.keys()):
-            group = grouped_by_config[key]
-            if len(group) >= 2:
-                # Separate flash and noflash results
-                flash_results = [r for r in group if r['flash'] == 'flash']
-                noflash_results = [r for r in group if r['flash'] == 'noflash']
+        for key, group in sorted(grouped_by_config.items()):
+            # Separate flash and noflash results
+            flash_results = [r for r in group if r['flash'] == 'flash']
+            noflash_results = [r for r in group if r['flash'] == 'noflash']
+            
+            if flash_results and noflash_results:
+                # Calculate averages for each group
+                avg_flash_loss = sum(r['avg_loss'] for r in flash_results) / len(flash_results)
+                avg_flash_time = sum(r['avg_time_ms'] for r in flash_results) / len(flash_results)
+                avg_flash_tok = sum(r['avg_tok_per_sec'] for r in flash_results) / len(flash_results)
+                avg_flash_peak_used = sum(r['avg_peak_used'] for r in flash_results) / len(flash_results)
+                avg_flash_peak_reserved = sum(r['avg_peak_reserved'] for r in flash_results) / len(flash_results)
                 
-                # Interleave flash and noflash results
-                for i in range(max(len(flash_results), len(noflash_results))):
-                    if i < len(flash_results):
-                        result = flash_results[i]
-                        row = f"{result['row_id']:<40} {result['avg_loss']:<15.6f} {result['avg_time_ms']:<15.2f} {result['avg_tok_per_sec']:<15.2f} {result['avg_peak_used']:<15.2f} {result['avg_peak_reserved']:<15.2f} {result['dp']:<5} {result['tp']:<5} {result['sp']:<5} {result['pp']:<5}"
-                        print(row)
-                    if i < len(noflash_results):
-                        result = noflash_results[i]
-                        row = f"{result['row_id']:<40} {result['avg_loss']:<15.6f} {result['avg_time_ms']:<15.2f} {result['avg_tok_per_sec']:<15.2f} {result['avg_peak_used']:<15.2f} {result['avg_peak_reserved']:<15.2f} {result['dp']:<5} {result['tp']:<5} {result['sp']:<5} {result['pp']:<5}"
-                        print(row)
-        else:
-            # Only one result, print it
-            for result in group:
-                row = f"{result['row_id']:<40} {result['avg_loss']:<15.6f} {result['avg_time_ms']:<15.2f} {result['avg_tok_per_sec']:<15.2f} {result['avg_peak_used']:<15.2f} {result['avg_peak_reserved']:<15.2f} {result['dp']:<5} {result['tp']:<5} {result['sp']:<5} {result['pp']:<5}"
-                print(row)
-    
-    print("=" * 150)
-    
-    # Print comparison between flash and noflash
-    print("\nComparison between flash and noflash:")
-    print("=" * 150)
-    
-    for key, group in sorted(grouped_by_config.items()):
-        # Separate flash and noflash results
-        flash_results = [r for r in group if r['flash'] == 'flash']
-        noflash_results = [r for r in group if r['flash'] == 'noflash']
-        
-        if flash_results and noflash_results:
-            # Calculate averages for each group
-            avg_flash_loss = sum(r['avg_loss'] for r in flash_results) / len(flash_results)
-            avg_flash_time = sum(r['avg_time_ms'] for r in flash_results) / len(flash_results)
-            avg_flash_tok = sum(r['avg_tok_per_sec'] for r in flash_results) / len(flash_results)
-            avg_flash_peak_used = sum(r['avg_peak_used'] for r in flash_results) / len(flash_results)
-            avg_flash_peak_reserved = sum(r['avg_peak_reserved'] for r in flash_results) / len(flash_results)
-            
-            avg_noflash_loss = sum(r['avg_loss'] for r in noflash_results) / len(noflash_results)
-            avg_noflash_time = sum(r['avg_time_ms'] for r in noflash_results) / len(noflash_results)
-            avg_noflash_tok = sum(r['avg_tok_per_sec'] for r in noflash_results) / len(noflash_results)
-            avg_noflash_peak_used = sum(r['avg_peak_used'] for r in noflash_results) / len(noflash_results)
-            avg_noflash_peak_reserved = sum(r['avg_peak_reserved'] for r in noflash_results) / len(noflash_results)
-            
-            # Calculate differences
-            loss_diff = avg_flash_loss - avg_noflash_loss
-            time_diff = avg_flash_time - avg_noflash_time
-            tok_diff = avg_flash_tok - avg_noflash_tok
-            
-            loss_pct = (loss_diff / avg_noflash_loss * 100) if avg_noflash_loss > 0 else 0
-            time_pct = (time_diff / avg_noflash_time * 100) if avg_noflash_time > 0 else 0
-            tok_pct = (tok_diff / avg_noflash_tok * 100) if avg_noflash_tok > 0 else 0
-            
-            print(f"\n{key}:")
-            print(f"  Loss: {avg_flash_loss:.6f} vs {avg_noflash_loss:.6f} (diff: {loss_diff:+.6f}, {loss_pct:+.2f}%)")
-            print(f"  Time: {avg_flash_time:.2f} vs {avg_noflash_time:.2f} ms (diff: {time_diff:+.2f}, {time_pct:+.2f}%)")
-            print(f"  Tok/s: {avg_flash_tok:.2f} vs {avg_noflash_tok:.2f} (diff: {tok_diff:+.2f}, {tok_pct:+.2f}%)")
-            
-            # Calculate memory differences
-            mem_used_diff = avg_flash_peak_used - avg_noflash_peak_used
-            mem_reserved_diff = avg_flash_peak_reserved - avg_noflash_peak_reserved
-            
-            mem_used_pct = (mem_used_diff / avg_noflash_peak_used * 100) if avg_noflash_peak_used > 0 else 0
-            mem_reserved_pct = (mem_reserved_diff / avg_noflash_peak_reserved * 100) if avg_noflash_peak_reserved > 0 else 0
-            
-            print(f"  Peak Used: {avg_flash_peak_used:.2f} vs {avg_noflash_peak_used:.2f} MB (diff: {mem_used_diff:+.2f}, {mem_used_pct:+.2f}%)")
-            print(f"  Peak Reserved: {avg_flash_peak_reserved:.2f} vs {avg_noflash_peak_reserved:.2f} MB (diff: {mem_reserved_diff:+.2f}, {mem_reserved_pct:+.2f}%)")
-            
-            # Calculate memory differences
-            mem_used_diff = avg_flash_peak_used - avg_noflash_peak_used
-            mem_reserved_diff = avg_flash_peak_reserved - avg_noflash_peak_reserved
-            mem_used_pct = (mem_used_diff / avg_noflash_peak_used * 100) if avg_noflash_peak_used > 0 else 0
-            mem_reserved_pct = (mem_reserved_diff / avg_noflash_peak_reserved * 100) if avg_noflash_peak_reserved > 0 else 0
-    
-    # Output speedup ratio table if requested
-    if args.speedup:
+                avg_noflash_loss = sum(r['avg_loss'] for r in noflash_results) / len(noflash_results)
+                avg_noflash_time = sum(r['avg_time_ms'] for r in noflash_results) / len(noflash_results)
+                avg_noflash_tok = sum(r['avg_tok_per_sec'] for r in noflash_results) / len(noflash_results)
+                avg_noflash_peak_used = sum(r['avg_peak_used'] for r in noflash_results) / len(noflash_results)
+                avg_noflash_peak_reserved = sum(r['avg_peak_reserved'] for r in noflash_results) / len(noflash_results)
+                
+                # Calculate differences
+                loss_diff = avg_flash_loss - avg_noflash_loss
+                time_diff = avg_flash_time - avg_noflash_time
+                tok_diff = avg_flash_tok - avg_noflash_tok
+                
+                loss_pct = (loss_diff / avg_noflash_loss * 100) if avg_noflash_loss > 0 else 0
+                time_pct = (time_diff / avg_noflash_time * 100) if avg_noflash_time > 0 else 0
+                tok_pct = (tok_diff / avg_noflash_tok * 100) if avg_noflash_tok > 0 else 0
+                
+                print(f"\n{key}:")
+                print(f"  Loss: {avg_flash_loss:.6f} vs {avg_noflash_loss:.6f} (diff: {loss_diff:+.6f}, {loss_pct:+.2f}%)")
+                print(f"  Time: {avg_flash_time:.2f} vs {avg_noflash_time:.2f} ms (diff: {time_diff:+.2f}, {time_pct:+.2f}%)")
+                print(f"  Tok/s: {avg_flash_tok:.2f} vs {avg_noflash_tok:.2f} (diff: {tok_diff:+.2f}, {tok_pct:+.2f}%)")
+                
+                # Calculate memory differences
+                mem_used_diff = avg_flash_peak_used - avg_noflash_peak_used
+                mem_reserved_diff = avg_flash_peak_reserved - avg_noflash_peak_reserved
+                
+                mem_used_pct = (mem_used_diff / avg_noflash_peak_used * 100) if avg_noflash_peak_used > 0 else 0
+                mem_reserved_pct = (mem_reserved_diff / avg_noflash_peak_reserved * 100) if avg_noflash_peak_reserved > 0 else 0
+                
+                print(f"  Peak Used: {avg_flash_peak_used:.2f} vs {avg_noflash_peak_used:.2f} MB (diff: {mem_used_diff:+.2f}, {mem_used_pct:+.2f}%)")
+                print(f"  Peak Reserved: {avg_flash_peak_reserved:.2f} vs {avg_noflash_peak_reserved:.2f} MB (diff: {mem_reserved_diff:+.2f}, {mem_reserved_pct:+.2f}%)")
         print("\n" + "=" * 120)
         print("Speedup Ratio Table (noflash_time / flash_time)")
         print("=" * 120)
