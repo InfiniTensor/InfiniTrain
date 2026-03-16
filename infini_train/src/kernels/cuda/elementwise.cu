@@ -4,16 +4,26 @@
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
-#include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
-#include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
+#include "infini_train/src/core/cuda/cuda_stream.h"
 
 namespace infini_train::kernels::cuda {
 namespace {
 using namespace infini_train::common::cuda;
 constexpr int kWarpSize = 32;
+
+template <typename T, int VecSize>
+struct alignas(sizeof(T) * VecSize) AlignedVector {
+    T val[VecSize];
+};
+
+template <typename T>
+__device__ __host__ inline bool IsAligned(const T* ptr, int vec_size) {
+    return reinterpret_cast<uintptr_t>(ptr) % (sizeof(T) * vec_size) == 0;
+}
 
 template <typename T, typename Func>
 __global__ void UnaryForwardKernel(T *output, Func fn, size_t num_elements, size_t offset, const T *input) {
