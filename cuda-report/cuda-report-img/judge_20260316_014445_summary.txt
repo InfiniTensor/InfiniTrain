@@ -1,0 +1,6 @@
+timestamp=20260316_014445
+[RUN] gpt2_baseline_1024
+[EXIT] gpt2_baseline_1024=134
+[RUN] gpt2_flash_1024
+[EXIT] gpt2_flash_1024=134
+[RUN] llama3_baseline_1024
