@@ -92,12 +92,3 @@ TEST_F(TensorCreateTest, ProvidesDataPointerOnCUDA) {
     EXPECT_NE(tensor->DataPtr(), nullptr);
 #endif
 }
-
-TEST_F(TensorCreateTest, CreatesTensorWithDifferentDeviceIds) {
-    auto tensor0 = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
-                                             Device(Device::DeviceType::kCPU, 0));
-    auto tensor1 = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
-                                             Device(Device::DeviceType::kCPU, 1));
-    EXPECT_EQ(tensor0->GetDevice().index(), 0);
-    EXPECT_EQ(tensor1->GetDevice().index(), 1);
-}

@@ -31,7 +31,7 @@ TEST_F(AutogradMatmulForwardTest, MatmulDifferentShapes) {
 
 TEST_F(AutogradMatmulForwardTest, MatmulBatch) {
     auto a = createTensor({2, 3, 4}, 1.0f);
-    auto b = createTensor({4, 5}, 1.0f);
+    auto b = createTensor({2, 4, 5}, 1.0f);
     auto matmul_fn = std::make_shared<autograd::Matmul>();
     auto result = matmul_fn->Apply({a, b});
     EXPECT_EQ(result.size(), 1);

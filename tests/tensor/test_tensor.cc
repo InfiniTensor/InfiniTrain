@@ -210,7 +210,9 @@ TEST_F(TensorDeleteTest, MoveTransferKeepsData) {
 }
 
 TEST_F(TensorDistributedTest, AllReduce) {
+    REQUIRE_CUDA();
     REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
 #if defined(USE_CUDA) && defined(USE_NCCL)
     auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                            Device(Device::DeviceType::kCUDA, 0));
@@ -225,7 +227,9 @@ TEST_F(TensorDistributedTest, AllReduce) {
 }
 
 TEST_F(TensorDistributedTest, AllGather) {
+    REQUIRE_CUDA();
     REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
 #if defined(USE_CUDA) && defined(USE_NCCL)
     auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{4, 4}, DataType::kFLOAT32,
                                            Device(Device::DeviceType::kCUDA, 0));
@@ -237,7 +241,9 @@ TEST_F(TensorDistributedTest, AllGather) {
 }
 
 TEST_F(TensorDistributedTest, ReduceScatter) {
+    REQUIRE_CUDA();
     REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
 #if defined(USE_CUDA) && defined(USE_NCCL)
     auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 8}, DataType::kFLOAT32,
                                            Device(Device::DeviceType::kCUDA, 0));

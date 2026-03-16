@@ -474,6 +474,9 @@ TEST_F(AutogradCudaTest, LinearForwardCUDA) {
 
 #ifdef USE_NCCL
 TEST_F(AutogradDistributedTest, AllReduceDistributed) {
+    REQUIRE_CUDA();
+    REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
@@ -485,6 +488,9 @@ TEST_F(AutogradDistributedTest, AllReduceDistributed) {
 }
 
 TEST_F(AutogradDistributedTest, AllGatherDistributed) {
+    REQUIRE_CUDA();
+    REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{4, 4}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
@@ -496,6 +502,9 @@ TEST_F(AutogradDistributedTest, AllGatherDistributed) {
 }
 
 TEST_F(AutogradDistributedTest, ReduceScatterDistributed) {
+    REQUIRE_CUDA();
+    REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 8}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
@@ -507,6 +516,9 @@ TEST_F(AutogradDistributedTest, ReduceScatterDistributed) {
 }
 
 TEST_F(AutogradDistributedTest, DistributedMatmul) {
+    REQUIRE_CUDA();
+    REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 4}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
@@ -522,6 +534,9 @@ TEST_F(AutogradDistributedTest, DistributedMatmul) {
 }
 
 TEST_F(AutogradDistributedTest, DistributedLinear) {
+    REQUIRE_CUDA();
+    REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                            Device(Device::DeviceType::kCUDA, 0));
     input->set_requires_grad(true);

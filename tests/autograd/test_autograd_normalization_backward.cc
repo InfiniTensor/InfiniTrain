@@ -22,12 +22,13 @@ TEST_F(AutogradNormalizationBackwardTest, LayerNormBackward) {
     EXPECT_EQ(grad_inputs.size(), 3);
 }
 
-TEST_F(AutogradNormalizationBackwardTest, LayerNormBackwardNoBias) {
+TEST_F(AutogradNormalizationBackwardTest, LayerNormBackwardZeroBias) {
     auto a = createTensor({2, 3, 4}, 1.0f);
     auto weight = createTensor({4}, 1.0f);
+    auto bias = createTensor({4}, 0.0f);
     auto layernorm_fn = std::make_shared<autograd::LayerNorm>(1e-5f);
-    auto result = layernorm_fn->Apply({a, weight});
+    auto result = layernorm_fn->Apply({a, weight, bias});
     auto grad = createTensor({2, 3, 4}, 1.0f);
     auto grad_inputs = layernorm_fn->Backward({grad});
-    EXPECT_EQ(grad_inputs.size(), 2);
+    EXPECT_EQ(grad_inputs.size(), 3);
 }

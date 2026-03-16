@@ -114,3 +114,13 @@ target_link_libraries(test_tensor_dist PRIVATE
 )
 add_test(NAME tensor_distributed COMMAND test_tensor_dist --gtest_filter=TensorDistributedTest.*)
 set_tests_properties(tensor_distributed PROPERTIES LABELS "cuda;distributed")
+
+# Convenience aggregate target so `cmake --build ... --target test_tensor` works
+add_custom_target(test_tensor
+  DEPENDS
+    test_tensor_create
+    test_tensor_copy
+    test_tensor_delete
+    test_tensor_op
+    test_tensor_dist
+)

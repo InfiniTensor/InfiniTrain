@@ -133,7 +133,9 @@ TEST_F(OptimizerCudaTest, SGDMultiParamsCUDA) {
 }
 
 TEST_F(OptimizerDistributedTest, DistributedSGD) {
+    REQUIRE_CUDA();
     REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
 #if defined(USE_CUDA) && defined(USE_NCCL)
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                           Device(Device::DeviceType::kCUDA, 0));
@@ -148,7 +150,9 @@ TEST_F(OptimizerDistributedTest, DistributedSGD) {
 }
 
 TEST_F(OptimizerDistributedTest, DistributedAdam) {
+    REQUIRE_CUDA();
     REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
 #if defined(USE_CUDA) && defined(USE_NCCL)
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{4, 4}, DataType::kFLOAT32,
                                           Device(Device::DeviceType::kCUDA, 0));
@@ -163,7 +167,9 @@ TEST_F(OptimizerDistributedTest, DistributedAdam) {
 }
 
 TEST_F(OptimizerDistributedTest, DistributedZeroGrad) {
+    REQUIRE_CUDA();
     REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
 #if defined(USE_CUDA) && defined(USE_NCCL)
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                           Device(Device::DeviceType::kCUDA, 0));

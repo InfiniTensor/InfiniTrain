@@ -139,3 +139,23 @@ add_test(NAME autograd_cuda_legacy COMMAND test_autograd_legacy --gtest_filter=A
 set_tests_properties(autograd_cuda_legacy PROPERTIES LABELS "cuda")
 add_test(NAME autograd_distributed_legacy COMMAND test_autograd_legacy --gtest_filter=AutogradDistributedTest.*)
 set_tests_properties(autograd_distributed_legacy PROPERTIES LABELS "cuda;distributed")
+
+# Aggregate target for convenient builds
+add_custom_target(test_autograd
+  DEPENDS
+    test_autograd_elementwise_forward
+    test_autograd_elementwise_backward
+    test_autograd_matmul_forward
+    test_autograd_matmul_backward
+    test_autograd_reduction_forward
+    test_autograd_reduction_backward
+    test_autograd_linear_forward
+    test_autograd_linear_backward
+    test_autograd_softmax_forward
+    test_autograd_softmax_backward
+    test_autograd_transform_forward
+    test_autograd_transform_backward
+    test_autograd_normalization_forward
+    test_autograd_normalization_backward
+    test_autograd_legacy
+)

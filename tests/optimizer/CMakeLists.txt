@@ -61,7 +61,7 @@ target_link_libraries(test_optimizer_legacy PRIVATE
   infini_train_cpu_kernels
   "-Wl,--no-whole-archive"
 )
-add_test(NAME optimizer_create_legacy_legacy --gtest_filter=Optimizer COMMAND test_optimizerCreationTest.*)
+add_test(NAME optimizer_create_legacy COMMAND test_optimizer_legacy --gtest_filter=OptimizerCreationTest.*)
 set_tests_properties(optimizer_create_legacy PROPERTIES LABELS "cpu")
 add_test(NAME optimizer_zero_grad_legacy COMMAND test_optimizer_legacy --gtest_filter=OptimizerGradTest.*)
 set_tests_properties(optimizer_zero_grad_legacy PROPERTIES LABELS "cpu")
@@ -69,3 +69,13 @@ add_test(NAME optimizer_cuda_legacy COMMAND test_optimizer_legacy --gtest_filter
 set_tests_properties(optimizer_cuda_legacy PROPERTIES LABELS "cuda")
 add_test(NAME optimizer_distributed_legacy COMMAND test_optimizer_legacy --gtest_filter=OptimizerDistributedTest.*)
 set_tests_properties(optimizer_distributed_legacy PROPERTIES LABELS "cuda;distributed")
+
+# Aggregate target for convenient builds
+add_custom_target(test_optimizer
+  DEPENDS
+    test_optimizer_creation
+    test_optimizer_step
+    test_optimizer_cuda
+    test_optimizer_distributed
+    test_optimizer_legacy
+)
