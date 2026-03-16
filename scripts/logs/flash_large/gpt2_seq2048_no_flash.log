@@ -1,0 +1,8 @@
+[LAST_CMAKE] cmake -DUSE_CUDA=ON -DUSE_NCCL=ON .. && make -j
+[COMMAND] ./gpt2 --input_bin /data/shared/InfiniTrain-dev/data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin --llmc_filepath /data/shared/InfiniTrain-dev/data/llmc/gpt2/gpt2_124M.bin --device cuda --dtype bfloat16 --num_iteration 30 --batch_size 2 --sequence_length 2048 --total_batch_size 4096 --overfit_single_batch true
+F20260316 10:24:11.964540 140589600985088 tiny_shakespeare_dataset.cc:86] Check failed: sequence_length <= 1024 (2048 vs. 1024) 
+    @     0x7fdd988fd0c1  google::LogMessage::Fail()
+    @     0x7fdd98900cd0  google::LogMessageFatal::~LogMessageFatal()
+    @     0x5600eca6c956  (anonymous namespace)::ReadTinyShakespeareFile(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long)
+    @     0x5600eca6ce06  TinyShakespeareDataset::TinyShakespeareDataset(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long)
+run_models_and_profile.bash: line 161: 1818318 Aborted                 ./gpt2 --input_bin /data/shared/InfiniTrain-dev/data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin --llmc_filepath /data/shared/InfiniTrain-dev/data/llmc/gpt2/gpt2_124M.bin --device cuda --dtype bfloat16 --num_iteration 30 --batch_size 2 --sequence_length 2048 --total_batch_size 4096 --overfit_single_batch true

@@ -96,6 +96,61 @@ step   10/30 | train loss 4.134 | lr 1.00e-04 | (169.3 ms | 3043 tok/s | peak us
 
 ---
 
+### 1.4 大序列扩展实验（seq > 512）
+
+**实验配置**
+
+| 模型 | seq_len | batch_size | 说明 |
+|------|---------|------------|------|
+| GPT2-124M | 1024 | 2 | GPT2 数据集上限 seq=1024 |
+| LLaMA3.2-1B | 1024 | 2 | — |
+| LLaMA3.2-1B | 2048 | 1 | — |
+| LLaMA3.2-1B | 4096 | 1 | — |
+
+> GPT2 的 tinyshakespeare 数据集硬限制 `sequence_length ≤ 1024`，无法测试更长序列；seq2048/4096 仅 LLaMA3 可用。
+
+**Loss 曲线**
+
+![GPT2 seq1024 Loss](scripts/report_figures/large_seq/fig1_gpt2_seq1024_loss.png)
+
+![LLaMA3 Large Seq Loss](scripts/report_figures/large_seq/fig2_llama3_loss.png)
+
+**平均延迟**
+
+![Large Seq Latency](scripts/report_figures/large_seq/fig3_latency.png)
+
+**吞吐率**
+
+![Large Seq Throughput](scripts/report_figures/large_seq/fig4_throughput.png)
+
+**GPU 显存**
+
+![Large Seq Memory](scripts/report_figures/large_seq/fig5_memory.png)
+
+**加速比与显存节省比**
+
+![Large Seq Speedup & Memory Ratio](scripts/report_figures/large_seq/fig6_speedup_memory_ratio.png)
+
+**数值汇总**
+
+| 模型 | seq_len | Flash | Latency (ms) | Throughput (tok/s) | Peak Mem (MB) | 延迟加速比 | 显存节省 |
+|------|---------|-------|--------------|--------------------|---------------|-----------|---------|
+| GPT2 | 1024 | No | 668.4 | 3064 | 7333 | — | — |
+| GPT2 | 1024 | Yes | 553.1 | 3710 | 5897 | **1.21×** | **19.6%** |
+| LLaMA3 | 1024 | No | 4066.7 | 504 | 39752 | — | — |
+| LLaMA3 | 1024 | Yes | 3955.9 | 518 | 35428 | 1.03× | 10.9% |
+| LLaMA3 | 2048 | No | 7792.2 | 526 | 47988 | — | — |
+| LLaMA3 | 2048 | Yes | 7806.8 | 525 | 47988 | 1.00× | 0.0% |
+| LLaMA3 | 4096 | No | 8528.8 | 481 | 47988 | — | — |
+| LLaMA3 | 4096 | Yes | 8516.1 | 481 | 47988 | 1.00× | 0.0% |
+
+**分析：**
+- **GPT2 seq1024** 是本内核最佳表现点：加速比 1.21×、显存节省 19.6%，随序列增长收益持续提升（seq128: 1.09×、seq512: 1.13×、seq1024: 1.21×）。
+- **LLaMA3 seq1024** 有小幅加速（1.03×）和显著显存节省（10.9%）。
+- **LLaMA3 seq2048/4096, batch=1** Flash 与标准 Attention 表现相当（1.00×，显存节省为 0）。原因：在 batch=1 下，注意力矩阵内存（GQA 8 kv-head × T² × 2B × 32层，seq4096 ≈ 8.6GB）被框架内存池吸收，未体现在 peak_used 中；同时此时整体耗时由线性层（GEMM）主导而非 attention，Flash 的带宽优势难以体现。
+
+---
+
 ## 2. 复现实验
 
 ### 2.1 环境依赖
@@ -128,7 +183,37 @@ cd scripts
 python3 plot_flash_report.py ./logs/flash ./report_figures
 ```
 
-### 2.5 手动运行单个实验
+### 2.5 大序列扩展实验（seq > 512）
+
+GPT2 数据集限制 seq ≤ 1024，seq2048/4096 只跑 LLaMA3：
+
+```bash
+cd scripts
+# seq1024（GPT2 + LLaMA3，batch=2）
+bash run_models_and_profile.bash --test-config flash_large_seq_test_config.json --only-run flash_large
+
+# seq2048/4096 仅 LLaMA3（手动运行）
+cd ../build
+LLAMA3_INPUT=/data/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin
+LLAMA3_LLMC=/data/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_fp32.bin
+for seq in 2048 4096; do
+  batch=$([[ $seq -le 2048 ]] && echo 2 || echo 1)
+  for flash in "" "--flash true"; do
+    tag=$([[ -z "$flash" ]] && echo "no_flash" || echo "flash")
+    ./llama3 --input_bin $LLAMA3_INPUT --llmc_filepath $LLAMA3_LLMC \
+      --device cuda --dtype bfloat16 --num_iteration 30 \
+      --batch_size $batch --sequence_length $seq --total_batch_size $((batch*seq)) \
+      --overfit_single_batch true $flash \
+      > ../scripts/logs/flash_large/llama3_seq${seq}_${tag}.log 2>&1
+  done
+done
+
+# 生成大序列图表
+cd ../scripts
+python3 plot_flash_large_report.py ./logs/flash_large ./report_figures/large_seq
+```
+
+### 2.6 手动运行单个实验
 
 ```bash
 cd build

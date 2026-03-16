@@ -1,0 +1,95 @@
+{
+    "variables": {
+        "BUILD_DIR": "../build",
+        "GPT2_INPUT_BIN": "/data/shared/InfiniTrain-dev/data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin",
+        "GPT2_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/gpt2/gpt2_124M.bin",
+        "LLAMA3_INPUT_BIN": "/data/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
+        "LLAMA3_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_fp32.bin",
+        "LOG_DIR": "./logs",
+        "PROFILE_LOG_DIR": "./profile_logs",
+        "COMPARE_LOG_DIR": ""
+    },
+    "builds": [
+        {
+            "id": "build",
+            "profile": false,
+            "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON .. && make -j"
+        }
+    ],
+    "test_groups": [
+        {
+            "tag": "flash_large",
+            "tests": [
+                {
+                    "id": "seq1024_no_flash",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 30,
+                        "batch_size": 2,
+                        "sequence_length": 1024,
+                        "total_batch_size": 2048,
+                        "overfit_single_batch": true
+                    }
+                },
+                {
+                    "id": "seq1024_flash",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 30,
+                        "batch_size": 2,
+                        "sequence_length": 1024,
+                        "total_batch_size": 2048,
+                        "overfit_single_batch": true,
+                        "flash": true
+                    }
+                },
+                {
+                    "id": "seq2048_no_flash",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 30,
+                        "batch_size": 2,
+                        "sequence_length": 2048,
+                        "total_batch_size": 4096,
+                        "overfit_single_batch": true
+                    }
+                },
+                {
+                    "id": "seq2048_flash",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 30,
+                        "batch_size": 2,
+                        "sequence_length": 2048,
+                        "total_batch_size": 4096,
+                        "overfit_single_batch": true,
+                        "flash": true
+                    }
+                },
+                {
+                    "id": "seq4096_no_flash",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 30,
+                        "batch_size": 1,
+                        "sequence_length": 4096,
+                        "total_batch_size": 4096,
+                        "overfit_single_batch": true
+                    }
+                },
+                {
+                    "id": "seq4096_flash",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 30,
+                        "batch_size": 1,
+                        "sequence_length": 4096,
+                        "total_batch_size": 4096,
+                        "overfit_single_batch": true,
+                        "flash": true
+                    }
+                }
+            ]
+        }
+    ]
+}
