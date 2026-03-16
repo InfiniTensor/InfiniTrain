@@ -16,52 +16,57 @@
             "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON .. && make -j"
         }
     ],
-    "tests": [
+    "test_groups": [
         {
-            "id": "seq128_no_flash",
-            "args": {
-                "dtype": "bfloat16",
-                "num_iteration": 30,
-                "batch_size": 4,
-                "sequence_length": 128,
-                "total_batch_size": 512,
-                "overfit_single_batch": true
-            }
-        },
-        {
-            "id": "seq128_flash",
-            "args": {
-                "dtype": "bfloat16",
-                "num_iteration": 30,
-                "batch_size": 4,
-                "sequence_length": 128,
-                "total_batch_size": 512,
-                "overfit_single_batch": true,
-                "flash": true
-            }
-        },
-        {
-            "id": "seq512_no_flash",
-            "args": {
-                "dtype": "bfloat16",
-                "num_iteration": 30,
-                "batch_size": 4,
-                "sequence_length": 512,
-                "total_batch_size": 2048,
-                "overfit_single_batch": true
-            }
-        },
-        {
-            "id": "seq512_flash",
-            "args": {
-                "dtype": "bfloat16",
-                "num_iteration": 30,
-                "batch_size": 4,
-                "sequence_length": 512,
-                "total_batch_size": 2048,
-                "overfit_single_batch": true,
-                "flash": true
-            }
+            "tag": "flash",
+            "tests": [
+                {
+                    "id": "seq128_no_flash",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 30,
+                        "batch_size": 4,
+                        "sequence_length": 128,
+                        "total_batch_size": 512,
+                        "overfit_single_batch": true
+                    }
+                },
+                {
+                    "id": "seq128_flash",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 30,
+                        "batch_size": 4,
+                        "sequence_length": 128,
+                        "total_batch_size": 512,
+                        "overfit_single_batch": true,
+                        "flash": true
+                    }
+                },
+                {
+                    "id": "seq512_no_flash",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 30,
+                        "batch_size": 4,
+                        "sequence_length": 512,
+                        "total_batch_size": 2048,
+                        "overfit_single_batch": true
+                    }
+                },
+                {
+                    "id": "seq512_flash",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 30,
+                        "batch_size": 4,
+                        "sequence_length": 512,
+                        "total_batch_size": 2048,
+                        "overfit_single_batch": true,
+                        "flash": true
+                    }
+                }
+            ]
         }
     ]
 }

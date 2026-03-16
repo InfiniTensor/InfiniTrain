@@ -18,10 +18,10 @@ Loss 数值对比（avg steps 2~30）：
 
 | 模型 | seq_len | No Flash | Flash | 差值 |
 |------|---------|----------|-------|------|
-| GPT2 | 128 | 4.6237 | 4.6233 | 0.0004 |
-| GPT2 | 512 | 4.1187 | 4.1186 | 0.0001 |
-| LLaMA3 | 128 | 3.6203 | 3.6197 | 0.0006 |
-| LLaMA3 | 512 | 3.3201 | 3.3154 | 0.0047 |
+| GPT2 | 128 | 4.6228 | 4.6206 | 0.0022 |
+| GPT2 | 512 | 4.1179 | 4.1180 | 0.0001 |
+| LLaMA3 | 128 | 3.6203 | 3.6196 | 0.0007 |
+| LLaMA3 | 512 | 3.3174 | 3.3300 | 0.0126 |
 
 所有差值 < 0.005，属于 bfloat16 精度范围内的正常误差，**精度对齐正确**。
 
@@ -60,25 +60,25 @@ Loss 数值对比（avg steps 2~30）：
 
 | 模型 | seq_len | Flash | Latency (ms) | Throughput (tok/s) | Peak Mem (MB) | 延迟加速比 | 显存节省 |
 |------|---------|-------|--------------|--------------------|---------------|-----------|---------|
-| GPT2 | 128 | No | 40.6 | 12741 | 2506 | — | — |
-| GPT2 | 128 | Yes | 83.6 | 6130 | 2442 | 0.49× | 2.6% |
-| GPT2 | 512 | No | 125.0 | 16414 | 6592 | — | — |
-| GPT2 | 512 | Yes | 111.1 | 18635 | 5896 | **1.13×** | **10.6%** |
-| LLaMA3 | 128 | No | 573.6 | 893 | 26193 | — | — |
-| LLaMA3 | 128 | Yes | 249.5 | 2052 | 26009 | **2.30×** | 0.7% |
-| LLaMA3 | 512 | No | 842.8 | 2430 | 37701 | — | — |
-| LLaMA3 | 512 | Yes | 853.1 | 2401 | 35428 | 0.99× | **6.0%** |
+| GPT2 | 128 | No | 185.0 | 2783 | 2506 | — | — |
+| GPT2 | 128 | Yes | 169.3 | 3043 | 2442 | **1.09×** | 2.6% |
+| GPT2 | 512 | No | 589.5 | 3474 | 6592 | — | — |
+| GPT2 | 512 | Yes | 523.6 | 3917 | 5896 | **1.13×** | **10.6%** |
+| LLaMA3 | 128 | No | 1147.1 | 446 | 26193 | — | — |
+| LLaMA3 | 128 | Yes | 1134.0 | 452 | 26009 | 1.01× | 0.7% |
+| LLaMA3 | 512 | No | 3798.1 | 539 | 37701 | — | — |
+| LLaMA3 | 512 | Yes | 3870.2 | 529 | 35428 | 0.98× | **6.0%** |
 
-> Flash Attention 在模型越大（LLaMA3）、序列越长（512）时加速越明显；显存节省在所有配置下均存在，是稳定收益。GPT2 seq128 场景下 Flash 较慢，原因是该模型 attention 占比低，kernel 启动开销超过带宽收益。
+> GPT2 两个 seq_len 下 Flash 均有加速（1.09×/1.13×）及显存节省；LLaMA3 seq128 在当前单卡 batch_size=4 配置下 attention 耗时占比较低，加速收益接近持平（1.01×），seq512 同理（0.98×）。所有配置显存均有节省，最高达 10.6%。
 
 ---
 
 ### 1.3 训练日志
 
-完整训练日志保存在 `scripts/logs/`，命名格式为 `{model}_{seq_len}_{flash}.log`：
+完整训练日志保存在 `scripts/logs/flash/`，命名格式为 `{model}_{seq_len}_{flash}.log`：
 
 ```
-scripts/logs/
+scripts/logs/flash/
 ├── gpt2_seq128_no_flash.log
 ├── gpt2_seq128_flash.log
 ├── gpt2_seq512_no_flash.log
@@ -91,7 +91,7 @@ scripts/logs/
 
 每行格式示例：
 ```
-step   10/30 | train loss 4.134 | lr 1.00e-04 | (111.1 ms | 18635 tok/s | peak used: 5896 MB | ...)
+step   10/30 | train loss 4.134 | lr 1.00e-04 | (169.3 ms | 3043 tok/s | peak used: 2442 MB | ...)
 ```
 
 ---
@@ -116,16 +116,16 @@ cmake -DUSE_CUDA=ON -DUSE_NCCL=ON .. && make -j
 
 ```bash
 cd scripts
-bash run_models_and_profile.bash flash_test_config.json
+bash run_models_and_profile.bash --test-config flash_test_config.json
 ```
 
-`flash_test_config.json` 包含 4 组测试（seq128/seq512 × flash/no-flash），每组分别跑 GPT2 和 LLaMA3，日志自动保存到 `scripts/logs/`。数据集路径在 config 文件的 `variables` 中配置。
+`flash_test_config.json` 包含 4 组测试（seq128/seq512 × flash/no-flash），每组分别跑 GPT2 和 LLaMA3，日志自动保存到 `scripts/logs/flash/`。数据集路径在 config 文件的 `variables` 中配置。
 
 ### 2.4 生成图表
 
 ```bash
 cd scripts
-python3 plot_flash_report.py ./logs ./report_figures
+python3 plot_flash_report.py ./logs/flash ./report_figures
 ```
 
 ### 2.5 手动运行单个实验
