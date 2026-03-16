@@ -32,6 +32,15 @@ constexpr int WMMA_M = 16;
 constexpr int WMMA_N = 16;
 constexpr int WMMA_K = 16;
 
+#ifndef NDEBUG
+#define ENSURE_FINITE(val, msg) \
+    if (isnan(val) || isinf(val)) { \
+        printf("NaN/Inf detected: %s\n", msg); \
+    }
+#else
+#define ENSURE_FINITE(val, msg)
+#endif
+
 // Helper to load float4
 // src_stride: stride of src in floats
 // dst_stride: stride of dst in floats (must be multiple of 4)
@@ -160,15 +169,15 @@ __device__ __forceinline__ void gemm_ab_t_float4(const float* A, const float* B,
     for (int i = tid; i < elements; i += total_threads) {
         int r = i / N;
         int c = i % N;
-        float sum = 0.0f;
+        double sum = 0.0;
         #pragma unroll
         for (int k = 0; k < K_vec; ++k) {
             float4 a = A_vec[r * stride_A_vec + k];
             float4 b = B_vec[c * stride_B_vec + k];
-            sum += a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+            sum += static_cast<double>(a.x) * b.x + static_cast<double>(a.y) * b.y + static_cast<double>(a.z) * b.z + static_cast<double>(a.w) * b.w;
         }
         // C might be padded too
-        C[r * stride_C + c] = sum;
+        C[r * stride_C + c] = static_cast<float>(sum);
     }
 }
 
@@ -190,15 +199,15 @@ __device__ __forceinline__ void gemm_ab_accum_float4_transposed_b(const float* A
     for (int i = tid; i < elements; i += total_threads) {
         int r = i / N;
         int c = i % N;
-        float sum = 0.0f;
+        double sum = 0.0;
         #pragma unroll
         for (int k = 0; k < K_vec; ++k) {
             float4 a = A_vec[r * stride_A_vec + k];
             float4 b = B_vec[c * stride_B_vec + k];
-            sum += a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+            sum += static_cast<double>(a.x) * b.x + static_cast<double>(a.y) * b.y + static_cast<double>(a.z) * b.z + static_cast<double>(a.w) * b.w;
         }
         // Accumulate
-        C[r * stride_C + c] += sum;
+        C[r * stride_C + c] += static_cast<float>(sum);
     }
 }
 
@@ -253,6 +262,19 @@ __global__ void FlashAttentionForwardKernelWMMA(const float* Q, const float* K, 
     float* s_Oi = s_Sij + Br * Bc_pad;
     float* s_li = s_Oi + Br * D_pad;
     float* s_mi = s_li + Br;
+
+    // Fix: Initialize Shared Memory to 0 to avoid NaN in padding
+    // Zero out half buffers (Q, K, V)
+    for (int idx = tid; idx < half_offset; idx += blockDim.x) {
+        sram[idx] = __float2half(0.0f);
+    }
+    
+    // Zero out float buffers (Sij, Oi, li, mi)
+    int total_floats = (Br * Bc_pad) + (Br * D_pad) + Br + Br;
+    for (int idx = tid; idx < total_floats; idx += blockDim.x) {
+        s_Sij[idx] = 0.0f;
+    }
+    __syncthreads();
     
     // WMMA Fragments
     wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_N, WMMA_K, half, wmma::row_major> a_frag;
@@ -752,12 +774,12 @@ __device__ __forceinline__ void gemm_at_b_accum(const float* A, const float* B, 
     for (int i = tid; i < elements; i += total_threads) {
         int r = i / N; // 0..M-1
         int c = i % N; // 0..N-1
-        float sum = 0.0f;
+        double sum = 0.0;
         for (int k = 0; k < K; ++k) {
             // A[k, r] * B[k, c]
-            sum += A[k * stride_A + r] * B[k * stride_B + c];
+            sum += static_cast<double>(A[k * stride_A + r]) * B[k * stride_B + c];
         }
-        C[r * stride_C + c] += sum;
+        C[r * stride_C + c] += static_cast<float>(sum);
     }
 }
 
@@ -773,12 +795,12 @@ __device__ __forceinline__ void gemm_ab_accum(const float* A, const float* B, fl
     for (int i = tid; i < elements; i += total_threads) {
         int r = i / N;
         int c = i % N;
-        float sum = 0.0f;
+        double sum = 0.0;
         for (int k = 0; k < K; ++k) {
             // A[r, k] * B[k, c]
-            sum += A[r * stride_A + k] * B[k * stride_B + c];
+            sum += static_cast<double>(A[r * stride_A + k]) * B[k * stride_B + c];
         }
-        C[r * stride_C + c] += sum;
+        C[r * stride_C + c] += static_cast<float>(sum);
     }
 }
 
@@ -960,8 +982,8 @@ __global__ void FlashAttentionBackwardKernel(const float *Q, const float *K, con
         // 3. Compute dSij = Pij * (dPij - dpsum) -> Store in s_Sij.
         // 4. Zero out s_dVj (it was used as temp).
         
-        float* s_dP = s_dVj; // Reuse
-        gemm_ab_t_float4(s_dOi, s_Vj, s_dP, valid_rows, valid_cols, D, D_pad, D_pad, Bc_bw, tid, total_threads);
+        // 1. Compute dP = dOi * Vj^T -> Store in s_dKj (Temp).
+        gemm_ab_t_float4(s_dOi, s_Vj, s_dKj, valid_rows, valid_cols, D, D_pad, D_pad, Bc_bw, tid, total_threads);
         
         __syncthreads();
         
@@ -978,47 +1000,12 @@ __global__ void FlashAttentionBackwardKernel(const float *Q, const float *K, con
             if (!is_causal || global_col <= global_row) {
                 float l_val = l_base[global_row];
                 p = expf(sij * softmax_scale - l_val);
-                float dp = s_dP[r * Bc_bw + c];
+                float dp = s_dKj[r * Bc_bw + c]; // Read dP from s_dKj
                 ds = p * (dp - s_dpsum[r]);
                 ds *= softmax_scale; // Scale gradient
             }
             
             s_Sij[r * Bc_bw + c] = ds; // Store dSij
-            // Also accumulate dVj here?
-            // dVj += Pij^T * dOi.
-            // Wait, dVj term is Pij^T * dOi.
-            // Pij is (Br, Bc). dOi is (Br, D).
-            // Pij^T is (Bc, Br).
-            // (Bc, Br) * (Br, D) -> (Bc, D).
-            // Standard GEMM.
-            // But we need Pij, not dSij for dVj!
-            // Ah. dV_j = sum_i P_ij * dO_i.
-            // So we need to store Pij somewhere or compute contribution immediately.
-            // We replaced s_Sij with dSij.
-            // We lost Pij.
-            // We can compute contribution to dVj BEFORE overwriting s_Sij with dSij.
-            
-            // Re-plan:
-            // 1. Compute dP -> s_dP (s_dVj).
-            // 2. Loop k:
-            //    Compute Pij.
-            //    Accumulate dVj contribution? No, that's a GEMM.
-            //    We can't do element-wise GEMM easily.
-            //    We need Pij in a matrix form for GEMM.
-            
-            // We need storage for Pij AND dSij?
-            // s_Sij holds Sij.
-            // Convert s_Sij -> Pij (in place).
-            // Then compute dVj += Pij^T * dOi.
-            // Then compute dSij = Pij * (dP - dpsum).
-            // We need dP.
-            // If we store dP in s_dVj, we can't accumulate dVj there yet.
-            // We need another buffer?
-            // We have s_dKj (Bc*D) free?
-            // Yes, we compute dKj later.
-            // So store dP in s_dKj?
-            // dKj is (Bc, D). dP is (Br, Bc).
-            // Size: 32*64 vs 32*32. Fits.
         }
         __syncthreads();
         
@@ -1062,6 +1049,9 @@ __global__ void FlashAttentionBackwardKernel(const float *Q, const float *K, con
             float p = s_Sij[r * Bc_bw + c];
             float dp = s_dKj[r * Bc_bw + c]; // Read dP
             float ds = p * (dp - s_dpsum[r]) * softmax_scale;
+            
+            // ENSURE_FINITE(ds, "dSij value"); // Too noisy for every element, maybe check once per block?
+            
             s_Sij[r * Bc_bw + c] = ds;
         }
         __syncthreads();

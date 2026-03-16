@@ -78,7 +78,7 @@ if(USE_CUDA)
   include_directories(${CUDAToolkit_INCLUDE_DIRS})
 
   # CUDA compilation options
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr -prec-div=true -prec-sqrt=true -fmad=false")
 
   # Only compile CUDA kernels / cuda sources here (your original used src/*.cu)
   file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
@@ -203,3 +203,6 @@ target_link_libraries(test_precision_check infini_train)
 
 add_executable(test_flash_layout test_flash_layout.cc)
 link_infini_train_exe(test_flash_layout)
+
+add_executable(test_flash_precision tests/flash_attn/test_flash_precision.cc)
+link_infini_train_exe(test_flash_precision)
