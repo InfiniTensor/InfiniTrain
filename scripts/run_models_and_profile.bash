@@ -3,23 +3,56 @@
 set -e
 set -o pipefail
 
-# Parse arguments
-REBUILD=false
+usage() {
+    cat <<'EOF'
+Usage: run_models_and_profile.bash [--test-config path] [--only-run tag1,tag2]
+
+Options:
+  --test-config PATH  Path to test config JSON. Default: test_config.json.
+  --only-run TAGS   Only run the specified tag groups, separated by commas.
+  -h, --help        Show this help message.
+EOF
+}
+
+CONFIG_FILE="test_config.json"
+ONLY_RUN_TAGS=""
+
 while [[ $# -gt 0 ]]; do
-    case $1 in
-        --rebuild)
-            REBUILD=true
+    case "$1" in
+        --test-config)
+            [[ $# -lt 2 ]] && { echo "Error: --test-config requires a file path."; exit 1; }
+            CONFIG_FILE="$2"
+            shift 2
+            ;;
+        --test-config=*)
+            CONFIG_FILE="${1#*=}"
             shift
             ;;
-        *)
-            CONFIG_FILE="$1"
+        --only-run)
+            [[ $# -lt 2 ]] && { echo "Error: --only-run requires a comma-separated tag list."; exit 1; }
+            ONLY_RUN_TAGS="$2"
+            shift 2
+            ;;
+        --only-run=*)
+            ONLY_RUN_TAGS="${1#*=}"
             shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -*)
+            echo "Error: Unknown option: $1"
+            usage
+            exit 1
+            ;;
+        *)
+            echo "Error: Unknown positional argument: $1"
+            usage
+            exit 1
             ;;
     esac
 done
-
-CONFIG_FILE="${CONFIG_FILE:-test_config.json}"
-export INFINI_FLASH_BF16_USE_FP32=0
 
 # Dependencies check
 if ! command -v jq >/dev/null 2>&1; then
@@ -49,6 +82,28 @@ done < <(jq -r '.variables | to_entries[] | "\(.key)=\(.value)"' "$CONFIG_FILE")
 
 # Global variable to save the last cmake command
 LAST_CMAKE_CMD=""
+declare -A SELECTED_TAGS=()
+
+normalize_tag() {
+    local raw="$1"
+    raw="${raw#"${raw%%[![:space:]]*}"}"
+    raw="${raw%"${raw##*[![:space:]]}"}"
+    printf '%s' "$raw"
+}
+
+if [[ -n "$ONLY_RUN_TAGS" ]]; then
+    IFS=',' read -r -a requested_tags <<< "$ONLY_RUN_TAGS"
+    for raw_tag in "${requested_tags[@]}"; do
+        tag="$(normalize_tag "$raw_tag")"
+        [[ -z "$tag" ]] && continue
+        SELECTED_TAGS["$tag"]=1
+    done
+
+    if [[ ${#SELECTED_TAGS[@]} -eq 0 ]]; then
+        echo "Error: --only-run did not contain any valid tags."
+        exit 1
+    fi
+fi
 
 # Clean the build directory
 clean_build_dir() {
@@ -62,11 +117,12 @@ run_and_log() {
     local cmd="$1"
     local log_name="$2"
     local is_profile="$3"
-    local log_dir="$4"
-    local profile_log_dir="$5"
+    local tag="${4:-basic}"
     local timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    local log_path="$(realpath "${log_dir}/${log_name}.log")"
+    local tag_log_dir="${LOG_DIR}/${tag}"
+    mkdir -p "$tag_log_dir"
+    local log_path="$(realpath "${tag_log_dir}/${log_name}.log")"
 
     echo -e "\033[1;32m============================================================\033[0m"
     echo -e "\033[1;36m[$timestamp] [Running] ${log_name}\033[0m"
@@ -83,7 +139,7 @@ run_and_log() {
 
     # Notify if profiling mode is enabled
     if [[ "$is_profile" == "yes" ]]; then
-        echo -e "\033[1;35m[PROFILE MODE ON] Profiling logs will be saved to: ${profile_log_dir}\033[0m"
+        echo -e "\033[1;35m[PROFILE MODE ON] Profiling logs will be saved to: ${PROFILE_LOG_DIR}\033[0m"
     fi
 
     echo -e "\033[1;32m============================================================\033[0m"
@@ -117,7 +173,7 @@ run_and_log() {
 
     # If profiling is enabled, move profiling files to the target directory
     if [[ "$is_profile" == "yes" ]]; then
-        move_profile_logs "$log_name" "$profile_log_dir"
+        move_profile_logs "$log_name" "$tag"
     fi
 }
 
@@ -125,15 +181,17 @@ run_and_log() {
 # Move profiling output logs
 move_profile_logs() {
     local prefix="$1"
-    local target_profile_log_dir="$2"
+    local tag="${2:-basic}"
+    local tag_profile_dir="${PROFILE_LOG_DIR}/${tag}"
+    mkdir -p "$tag_profile_dir"
 
     # Move *.report.rankN files
     for report_file in "${BUILD_DIR}"/*.report.rank*; do
         if [[ -f "$report_file" ]]; then
             local base_name
             base_name=$(basename "$report_file")
-            mv "$report_file" "${target_profile_log_dir}/${prefix}_${base_name}"
-            echo "Moved $base_name to ${target_profile_log_dir}/${prefix}_${base_name}"
+            mv "$report_file" "${tag_profile_dir}/${prefix}_${base_name}"
+            echo "Moved $base_name to ${tag_profile_dir}/${prefix}_${base_name}"
         fi
     done
 
@@ -142,28 +200,39 @@ move_profile_logs() {
         if [[ -f "$record_file" ]]; then
             local base_name
             base_name=$(basename "$record_file")
-            mv "$record_file" "${target_profile_log_dir}/${prefix}_${base_name}"
-            echo "Moved $base_name to ${target_profile_log_dir}/${prefix}_${base_name}"
+            mv "$record_file" "${tag_profile_dir}/${prefix}_${base_name}"
+            echo "Moved $base_name to ${tag_profile_dir}/${prefix}_${base_name}"
         fi
     done
 }
 
-# Build "--key value" arg string from tests[i].args (shell-escaped)
+# Build "--key value" arg string from test_groups[gi].tests[ti].args (shell-escaped)
 args_string_for_test() {
-    local idx="$1"
-    jq -r --argjson i "$idx" '
-      .tests[$i].args
+    local group_idx="$1"
+    local test_idx="$2"
+    jq -r --argjson g "$group_idx" --argjson t "$test_idx" '
+      .test_groups[$g].tests[$t].args
       | to_entries[]
-      | if .value == true then "--\(.key)"
-        elif .value == false then "--no\(.key)"
-        else "--\(.key)=\(.value|tostring)"
-        end
+      | "--\(.key) \(.value|tostring)"
     ' "$CONFIG_FILE" | paste -sd' ' -
 }
 
 # Run tests
 num_builds=$(jq '.builds | length' "$CONFIG_FILE")
-num_tests=$(jq '.tests  | length' "$CONFIG_FILE")
+num_groups=$(jq '.test_groups | length' "$CONFIG_FILE")
+
+selected_group_count=0
+for ((gi=0; gi<num_groups; ++gi)); do
+    group_tag=$(jq -r ".test_groups[$gi].tag" "$CONFIG_FILE")
+    if [[ ${#SELECTED_TAGS[@]} -eq 0 || -n "${SELECTED_TAGS[$group_tag]}" ]]; then
+        ((selected_group_count += 1))
+    fi
+done
+
+if [[ "$selected_group_count" -eq 0 ]]; then
+    echo "Error: No matching test groups found for --only-run=${ONLY_RUN_TAGS}"
+    exit 1
+fi
 
 for ((id=0; id<num_builds; ++id)); do
     build_id=$(jq -r ".builds[$id].id" "$CONFIG_FILE")
@@ -172,29 +241,9 @@ for ((id=0; id<num_builds; ++id)); do
 
     LAST_CMAKE_CMD="$build_cmake"
 
-    # Check if rebuild is needed
-    if [[ "$REBUILD" == true ]]; then
-        # Clean and rebuild
-        clean_build_dir
-        run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "$LOG_DIR" "$PROFILE_LOG_DIR"
-    else
-        # Check if build directory exists and executables are present
-        if [[ -d "$BUILD_DIR" ]]; then
-            # Check if gpt2 and llama3 executables exist
-            if [[ -f "${BUILD_DIR}/gpt2" ]] && [[ -f "${BUILD_DIR}/llama3" ]]; then
-                echo -e "\033[1;33m[SKIP] Build directory already exists and executables are present. Skipping build.\033[0m"
-                echo -e "\033[1;33m        Use --rebuild to force a clean rebuild.\033[0m"
-            else
-                # Build executables that are missing
-                echo -e "\033[1;33m[BUILD] Some executables are missing. Building...\033[0m"
-                run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "$LOG_DIR" "$PROFILE_LOG_DIR"
-            fi
-        else
-            # Build directory doesn't exist, build from scratch
-            echo -e "\033[1;33m[BUILD] Build directory doesn't exist. Building...\033[0m"
-            run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "$LOG_DIR" "$PROFILE_LOG_DIR"
-        fi
-    fi
+    # always clean before another build
+    clean_build_dir
+    run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "build"
 
     # profile flag for runs
     profile_flag="no"
@@ -204,55 +253,27 @@ for ((id=0; id<num_builds; ++id)); do
         log_suffix="_profile"
     fi
 
-    for ((ti=0; ti<num_tests; ++ti)); do
-        test_id=$(jq -r ".tests[$ti].id" "$CONFIG_FILE")
-        base_arg_str="$(args_string_for_test "$ti")"
+    for ((gi=0; gi<num_groups; ++gi)); do
+        group_tag=$(jq -r ".test_groups[$gi].tag" "$CONFIG_FILE")
+        if [[ ${#SELECTED_TAGS[@]} -gt 0 && -z "${SELECTED_TAGS[$group_tag]}" ]]; then
+            continue
+        fi
 
-        # Add --noflash to the beginning of arg_str (will override any existing flash arg)
-        arg_str="--noflash $base_arg_str"
+        num_tests=$(jq ".test_groups[$gi].tests | length" "$CONFIG_FILE")
+        echo -e "\033[1;36m[TEST GROUP] tag=${group_tag}, cases=${num_tests}\033[0m"
 
-        # Add --flash to the beginning of arg_str (will override any existing flash arg)
-        arg_str1="--flash $base_arg_str"
+        for ((ti=0; ti<num_tests; ++ti)); do
+            test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
+            arg_str="$(args_string_for_test "$gi" "$ti")"
 
-        # Run gpt2 with flash=false
-        LOG_DIR="$(read_var LOG_DIR)"
-        : "${LOG_DIR:=./logs}"
-        PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)"
-        : "${PROFILE_LOG_DIR:=./profile_logs}"
+            # gpt2
+            gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
+            run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
 
-        mkdir -p "$LOG_DIR" "$PROFILE_LOG_DIR"
-
-        gpt2_cmd="./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
-        run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$LOG_DIR" "$PROFILE_LOG_DIR"
-
-        # Run gpt2 with flash=true
-        COMPARE_LOG_DIR="./compare_logs"
-        COMPARE_PROFILE_LOG_DIR="./compare_profile_logs"
-
-        mkdir -p "$COMPARE_LOG_DIR" "$COMPARE_PROFILE_LOG_DIR"
-
-        gpt2_cmd="./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str1}"
-        run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$COMPARE_LOG_DIR" "$COMPARE_PROFILE_LOG_DIR"
-
-        # Run llama3 with flash=false
-        LOG_DIR="$(read_var LOG_DIR)"
-        : "${LOG_DIR:=./logs}"
-        PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)"
-        : "${PROFILE_LOG_DIR:=./profile_logs}"
-
-        mkdir -p "$LOG_DIR" "$PROFILE_LOG_DIR"
-
-        llama3_cmd="./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str}"
-        run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$LOG_DIR" "$PROFILE_LOG_DIR"
-
-        # Run llama3 with flash=true
-        COMPARE_LOG_DIR="./compare_logs"
-        COMPARE_PROFILE_LOG_DIR="./compare_profile_logs"
-
-        mkdir -p "$COMPARE_LOG_DIR" "$COMPARE_PROFILE_LOG_DIR"
-
-        llama3_cmd="./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str1}"
-        run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$COMPARE_LOG_DIR" "$COMPARE_PROFILE_LOG_DIR"
+            # llama3
+            llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str}"
+            run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+        done
     done
 done
 
@@ -268,11 +289,11 @@ if [[ -n "$COMPARE_LOG_DIR" ]]; then
 
     # Run compare_loss.py
     echo -e "\n\033[1;33m[Running] compare_loss.py\033[0m"
-    python3 "${SCRIPT_DIR}/compare_loss.py" "$COMPARE_LOG_DIR" "$LOG_DIR" --threshold-fp32 1e-1 --threshold-bf16 1e-1 > compare_logs/loss_comparison.log 2>&1 || true
+    python3 "${SCRIPT_DIR}/compare_loss.py" "$COMPARE_LOG_DIR" "$LOG_DIR" || true
 
     # Run compare_tps.py
     echo -e "\n\033[1;33m[Running] compare_tps.py\033[0m"
-    python3 "${SCRIPT_DIR}/compare_tps.py" "$COMPARE_LOG_DIR" "$LOG_DIR" --threshold 0.20 > compare_logs/tps_comparison.log 2>&1 || true
+    python3 "${SCRIPT_DIR}/compare_tps.py" "$COMPARE_LOG_DIR" "$LOG_DIR" || true
 
     echo -e "\n\033[1;32mComparison completed.\033[0m"
 else
@@ -282,3 +303,6 @@ else
     echo -e "\033[1;33m         or export COMPARE_LOG_DIR=/path/to/baseline_logs before running.\033[0m"
     echo -e "\033[1;33m============================================================\033[0m"
 fi
+
+echo -e "\n\033[1;36m[END OF TEST] Cleaning build directory after all tests\033[0m"
+clean_build_dir
