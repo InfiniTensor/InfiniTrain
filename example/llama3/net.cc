@@ -14,6 +14,7 @@
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
+#include "infini_train/include/autograd/flash_attention.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
@@ -77,6 +78,11 @@ ApplyRotaryEmbedding(const std::shared_ptr<Tensor> &xq, const std::shared_ptr<Te
     std::vector<int64_t> target_shape(cos_sin->Dims().begin(), cos_sin->Dims().end() - 1);
     auto cos = cos_sin->Slice(-1, 0, 1, 1)->Squeeze(-1); // (1, T, 1, D/2)
     auto sin = cos_sin->Slice(-1, 1, 2, 1)->Squeeze(-1); // (1, T, 1, D/2)
+    // Cast cos/sin to match xq dtype to avoid float32 promotion when freqs_cis is float32
+    if (cos->Dtype() != xq->Dtype()) {
+        cos = std::make_shared<Tensor>(cos->To(xq->Dtype()));
+        sin = std::make_shared<Tensor>(sin->To(xq->Dtype()));
+    }
 
     auto slice_pair = [](const std::shared_ptr<Tensor> &x) {
         auto even = x->Slice(-1, 0, x->Dims().back(), 2);
@@ -217,26 +223,31 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
     k = k->Transpose(1, 2);
     v = v->Transpose(1, 2);
 
-    // TODO(zbl): support flash attention later
-    // if (flash_) { ... }
+    std::shared_ptr<Tensor> y;
+    if (config_.flash) {
+        // FlashAttention: q, k, v are (B, H_local, T, D)
+        y = std::make_shared<autograd::FlashAttention>(/*is_causal=*/true)->Apply({q, k, v})[0];
+        // (B, H_local, T, D) -> (B, T, H_local, D) -> (B, T, C_local)
+        y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
+    } else {
+        // manual implementation of attention
+        // this materializes the large (T,T) matrix for all the queries and keys
 
-    // manual implementation of attention
-    // this materializes the large (T,T) matrix for all the queries and keys
-
-    // q: (B, H_local, T, D)
-    // k: (B, H_local, T, D) -> (B, H_local, D, T)
-    // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
-    if (mask) {
-        // mask: (1, 1, T, T)
-        att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+        // q: (B, H_local, T, D)
+        // k: (B, H_local, T, D) -> (B, H_local, D, T)
+        // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
+        if (mask) {
+            // mask: (1, 1, T, T)
+            att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+        }
+        // (B, H_local, T, T)
+        att = nn::function::Softmax(att, -1);
+        // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
+        auto att_v = att->Matmul(v);
+        // (B, H_local, T, D) -> Transpose(1, 2) -> (B, T, H_local, D) -> (B, T, C_local)
+        y = att_v->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
     }
-    // (B, H_local, T, T)
-    att = nn::function::Softmax(att, -1);
-    // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
-    auto y = att->Matmul(v);
-    // (B, H_local, T, D) -> Transpose(1, 2) -> (B, T, H_local, D) -> (B, T, C_local)
-    y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
     // output projection
     // (B, T, C_local) -> RowParallelLinear(C, C) -> (B, T, C)
     y = (*modules_[kCProjLayerName])({y})[0];
@@ -457,7 +468,7 @@ constexpr int32_t kLLaMA3Magic = 20240803;
 constexpr int32_t kLLaMA3FP32Version = 3;
 } // namespace
 
-std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
+std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath, bool flash) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -496,6 +507,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
                                                         .rope_theta = rope_theta,
                                                         .use_scaled_rope = static_cast<bool>(use_scaled_rope),
                                                         .norm_eps = norm_eps,
+                                                        .flash = flash,
                                                         .max_gen_batch_size = max_gen_bs});
 
     // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
