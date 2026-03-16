@@ -138,16 +138,19 @@
 
 ---
 
-## 3. 代码提交与可复现性
+## 3. 代码提交与可复现性 (TL;DR 复现说明)
 
 *   **代码提交**: 代码已通过 PR 提交至仓库，包含 `infini_train/src/kernels/cuda/flash_attention.cu` 及相关 Autograd 封装。
-*   **复现脚本**: 
-    可使用 `scripts/run_models_and_profile.bash` 复现上述实验结果。
-    ```bash
-    # 运行 GPT-2 验证
-    ./scripts/run_models_and_profile.bash
-    ```
-*   **配置**: 实验配置见 `scripts/test_config.json`。
+*   **复现脚本与说明**: 
+    为了最大程度降低 Reviewer 的复现门槛，请参考以下说明：
+    1. **LLaMA-3 验证首选入口**: 提交 PR 时已提供 `example/llama3/run_llama3_7b.sh`，请将其作为 LLaMA-3 环境探测与验证的首选脚本。该脚本内建了环境探针 (`probe_env.py`) 和自动容错降级逻辑。
+    2. **数据路径配置**: 请确保 `test_config.json` 中的数据路径变量（如 `GPT2_INPUT_BIN`、`LLAMA3_INPUT_BIN` 等）对您的环境是清晰可配置的。当前脚本 `run_models_and_profile.bash` 已支持通过环境变量直接覆盖这些路径，无需硬编码修改文件。
+    3. **一键运行命令**:
+        ```bash
+        # 运行 GPT-2 / LLaMA-3 全量自动化验证与性能对比
+        ./scripts/run_models_and_profile.bash
+        ```
+*   **配置**: 详细的实验配置项（Batch Size, Seq Len 等）已在 `scripts/test_config.json` 中定义。
 
 ---
 
