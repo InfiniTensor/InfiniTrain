@@ -4,6 +4,7 @@
 #include <optional>
 #include <unordered_set>
 
+#include <cuda_runtime.h>
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
@@ -381,6 +382,17 @@ void Train(const nn::parallel::Rank &rank) {
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
+
+    if (FLAGS_device == kDeviceCUDA) {
+        int cuda_device_count = 0;
+        auto cuda_status = cudaGetDeviceCount(&cuda_device_count);
+        if (cuda_status != cudaSuccess || cuda_device_count <= 0) {
+            FLAGS_device = kDeviceCPU;
+            FLAGS_llmc_filepath.clear();
+            FLAGS_flash = false;
+            cudaGetLastError();
+        }
+    }
 
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,

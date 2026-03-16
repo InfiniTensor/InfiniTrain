@@ -106,7 +106,7 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     v = v->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
 
     std::shared_ptr<Tensor> y = nullptr;
-    if (config_.use_flash_attn) {
+    if (config_.use_flash_attn && !(q->requires_grad() || k->requires_grad() || v->requires_grad())) {
         // q, k, v: (B, h_l, T, Dh) -> (B, T, h_l, Dh)
         q = q->Transpose(1, 2);
         k = k->Transpose(1, 2);

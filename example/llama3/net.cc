@@ -218,7 +218,7 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
     v = v->Transpose(1, 2);
 
     std::shared_ptr<Tensor> y = nullptr;
-    if (config_.use_flash_attn) {
+    if (config_.use_flash_attn && !(q->requires_grad() || k->requires_grad() || v->requires_grad())) {
         // q, k, v: (B, H_local, T, D) -> (B, T, H_local, D)
         q = q->Transpose(1, 2);
         k = k->Transpose(1, 2);
