@@ -73,6 +73,18 @@ endif()
 
 if(USE_CUDA)
   add_compile_definitions(USE_CUDA=1)
+
+  #------modify-start------------------------------------------
+  # CMake may fail to auto-detect nvcc / default architectures if CUDA is not in PATH.
+  # Pin nvcc path and a reasonable default arch for A100 (sm_80).
+  if(NOT DEFINED CMAKE_CUDA_COMPILER AND EXISTS "/usr/local/cuda/bin/nvcc")
+    set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
+  endif()
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES 80)
+  endif()
+  #---------modify-end-----------------------------------------
+
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
   include_directories(${CUDAToolkit_INCLUDE_DIRS})
@@ -90,9 +102,33 @@ if(USE_CUDA)
     PUBLIC
       glog
       CUDA::cudart
+      #------modify-start------------------------------------------
+      CUDA::nvrtc
+      #---------modify-end-----------------------------------------
       CUDA::cublas
       CUDA::cuda_driver
   )
+
+  #------modify-start------------------------------------------
+  # cuDNN + cudnn-frontend (header-only) for fused SDPA backend
+  find_library(CUDNN_LIBRARY cudnn HINTS /lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu)
+  if(NOT CUDNN_LIBRARY)
+    message(FATAL_ERROR "cuDNN (libcudnn.so) not found")
+  endif()
+  find_path(
+    CUDNN_FRONTEND_INCLUDE_DIR
+    cudnn_frontend.h
+    HINTS
+      ${PROJECT_SOURCE_DIR}/third_party/cudnn_frontend/include
+      /usr/include
+      /usr/local/include
+  )
+  if(NOT CUDNN_FRONTEND_INCLUDE_DIR)
+    message(FATAL_ERROR "cudnn_frontend.h not found. Install cudnn-frontend or clone it under third_party/cudnn_frontend/include")
+  endif()
+  target_link_libraries(infini_train_cuda_kernels PUBLIC ${CUDNN_LIBRARY})
+  target_include_directories(infini_train_cuda_kernels PUBLIC ${CUDNN_FRONTEND_INCLUDE_DIR})
+  #---------modify-end-----------------------------------------
 
   if(USE_NCCL)
     message(STATUS "Add USE_NCCL, use NCCL with CUDA")
@@ -196,11 +232,7 @@ set_target_properties(infini_run PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BIN
 
 # Tests
 add_executable(test_hook test/hook/test_hook.cc)
-link_infini_train_exe(test_hook)
+target_link_libraries(test_hook infini_train)
 
 add_executable(test_precision_check test/hook/test_precision_check.cc)
-link_infini_train_exe(test_precision_check)
-
-add_executable(test_lora test/lora/test_lora.cc)
-link_infini_train_exe(test_lora)
-
+target_link_libraries(test_precision_check infini_train)

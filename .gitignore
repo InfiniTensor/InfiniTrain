@@ -5,3 +5,15 @@ build/
 *.log
 *.report.rank*
 *.records.log.rank*
+
+#------modify-start------------------------------------------
+# Local sanity-check datasets (not part of repo)
+tmp_data/
+#---------modify-end-----------------------------------------
+tmp/
+
+# Generated Flash SDPA benchmark outputs
+docs/flash_sdpa/logs/
+docs/flash_sdpa/env/
+docs/flash_sdpa/report_*.md
+docs/flash_sdpa/summary_*.csv

@@ -9,6 +9,10 @@
 #include "infini_train/include/autograd/misc.h"
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/softmax.h"
+
+//------modify-start------------------------------------------
+#include "infini_train/include/autograd/scaled_dot_product_attention.h"
+//---------modify-end-----------------------------------------
 #include "infini_train/include/autograd/transform.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/tensor.h"
@@ -79,4 +83,20 @@ std::shared_ptr<Tensor> Softmax(const std::shared_ptr<Tensor> &input, int64_t di
 std::shared_ptr<Tensor> Sigmoid(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<autograd::Sigmoid>()->Apply({input})[0];
 }
+
+//------modify-start------------------------------------------
+std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &query,
+                                                  const std::shared_ptr<Tensor> &key,
+                                                  const std::shared_ptr<Tensor> &value,
+                                                  const std::shared_ptr<Tensor> &attn_mask, double dropout_p,
+                                                  bool is_causal, std::optional<double> scale, bool enable_gqa) {
+    // Match PyTorch semantics on the signature; currently we only support the common training case.
+    CHECK(attn_mask == nullptr) << "attn_mask is not supported in current SDPA backend";
+    CHECK_EQ(dropout_p, 0.0) << "dropout is not supported in current SDPA backend";
+    (void)enable_gqa;
+    return std::make_shared<autograd::ScaledDotProductAttention>(dropout_p, is_causal, scale)
+        ->Apply({query, key, value})[0];
+}
+//---------modify-end-----------------------------------------
+
 } // namespace infini_train::nn::function
