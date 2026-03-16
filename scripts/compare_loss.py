@@ -9,6 +9,7 @@ import re
 import sys
 from pathlib import Path
 from argparse import ArgumentParser
+from compare_utils import collect_log_files, exit_if_duplicate_logs
 
 def get_dtype_from_filename(filename):
     """Determine dtype from filename. Returns 'bfloat16' or 'fp32'."""
@@ -62,8 +63,10 @@ def main():
         args.threshold_fp32 = args.threshold
         args.threshold_bf16 = args.threshold
 
-    files1 = {f.name: f for f in args.dir1.glob('*.log') if not f.name.startswith('build')}
-    files2 = {f.name: f for f in args.dir2.glob('*.log') if not f.name.startswith('build')}
+    files1, duplicates1 = collect_log_files(args.dir1)
+    files2, duplicates2 = collect_log_files(args.dir2)
+    exit_if_duplicate_logs(args.dir1, duplicates1)
+    exit_if_duplicate_logs(args.dir2, duplicates2)
 
     only_in_1 = set(files1.keys()) - set(files2.keys())
     only_in_2 = set(files2.keys()) - set(files1.keys())

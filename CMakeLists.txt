@@ -206,3 +206,6 @@ link_infini_train_exe(test_sdpa)
 
 add_executable(test_sdpa_cuda test/hook/test_sdpa_cuda.cc)
 link_infini_train_exe(test_sdpa_cuda)
+
+add_executable(test_lora test/lora/test_lora.cc)
+link_infini_train_exe(test_lora)
