@@ -211,6 +211,32 @@ __device__ __forceinline__ void gemm_ab_accum_float4_transposed_b(const float* A
     }
 }
 
+__device__ __forceinline__ void gemm_ab_accum_float4_transposed_b_double(const float* A, const float* B, double* C, int M, int N, int K, 
+                                                 int stride_A, int stride_B, int stride_C,
+                                                 int tid, int total_threads) {
+    int elements = M * N;
+    int K_vec = K / 4;
+    const float4* A_vec = reinterpret_cast<const float4*>(A);
+    const float4* B_vec = reinterpret_cast<const float4*>(B);
+    
+    int stride_A_vec = stride_A / 4;
+    int stride_B_vec = stride_B / 4;
+
+    for (int i = tid; i < elements; i += total_threads) {
+        int r = i / N;
+        int c = i % N;
+        double sum = 0.0;
+        #pragma unroll
+        for (int k = 0; k < K_vec; ++k) {
+            float4 a = A_vec[r * stride_A_vec + k];
+            float4 b = B_vec[c * stride_B_vec + k];
+            sum += static_cast<double>(a.x) * b.x + static_cast<double>(a.y) * b.y + static_cast<double>(a.z) * b.z + static_cast<double>(a.w) * b.w;
+        }
+        // Accumulate in double
+        C[r * stride_C + c] += sum;
+    }
+}
+
 __global__ void FlashAttentionForwardKernelWMMA(const float* Q, const float* K, const float* V, float* O, float* L,
                                             int B, int T, int H, int D,
                                             float softmax_scale, bool is_causal) {
@@ -411,7 +437,7 @@ __global__ void FlashAttentionForwardKernelWMMA(const float* Q, const float* K, 
             
             float* val_ptr = s_Sij + r * Bc_pad + c;
             if (is_causal && global_col > global_row) {
-                *val_ptr = -INFINITY;
+                *val_ptr = -1e4f; // Match Baseline mask exactly
             } else {
                 *val_ptr *= softmax_scale;
             }
@@ -421,7 +447,7 @@ __global__ void FlashAttentionForwardKernelWMMA(const float* Q, const float* K, 
         // Online Softmax
         for (int r = tid; r < valid_rows; r += blockDim.x) {
             float m_prev = s_mi[r];
-            float m_curr = -INFINITY;
+            float m_curr = -1e20f;
             for (int c = 0; c < valid_cols; ++c) {
                 float val = s_Sij[r * Bc_pad + c];
                 if (val > m_curr) m_curr = val;
@@ -437,7 +463,7 @@ __global__ void FlashAttentionForwardKernelWMMA(const float* Q, const float* K, 
             for (int c = 0; c < valid_cols; ++c) {
                 float val = s_Sij[r * Bc_pad + c];
                 float p = 0.0f;
-                if (m_new > -INFINITY) {
+                if (m_new > -1e20f) {
                      p = expf(val - m_new);
                 }
                 s_Sij[r * Bc_pad + c] = p; // Store P (float)
@@ -452,7 +478,7 @@ __global__ void FlashAttentionForwardKernelWMMA(const float* Q, const float* K, 
             
             float l_prev = s_li[r];
             float alpha = 0.0f;
-            if (m_new > -INFINITY) {
+            if (m_new > -1e20f) {
                  alpha = expf(m_prev - m_new);
             }
             float l_new = alpha * l_prev + l_curr;
@@ -552,13 +578,13 @@ __global__ void FlashAttentionForwardKernelWMMA(const float* Q, const float* K, 
     for (int r = tid; r < valid_rows; r += blockDim.x) {
         float li = s_li[r];
         float mi = s_mi[r];
-        float inv_li = 1.0f / (li + 1e-6f);
+        float inv_li = 1.0f / li; // Match Baseline
         
         for (int d = 0; d < D; ++d) {
             s_Oi[r * D_pad + d] *= inv_li;
         }
         
-        l_base[row_start + r] = mi + logf(li + 1e-6f);
+        l_base[row_start + r] = mi + logf(li); // Match Baseline
     }
     __syncthreads();
     
@@ -612,13 +638,13 @@ __global__ void FlashAttentionForwardKernel(const float* Q, const float* K, cons
 
     // Shared memory allocation
     // Need space for:
-    // Qi: Br * D_pad
-    // Kj: Bc * D_pad
-    // Vj: D * Bc_pad (Transposed V)
-    // Sij: Br * Bc_pad
-    // Oi: Br * D_pad
-    // li: Br
-    // mi: Br
+    // Qi: Br * D_pad (float)
+    // Kj: Bc * D_pad (float)
+    // Vj: D * Bc_pad (float)
+    // Sij: Br * Bc_pad (float)
+    // Oi: Br * D_pad (double)
+    // li: Br (double)
+    // mi: Br (double)
     
     extern __shared__ char smem[];
     float* sram = reinterpret_cast<float*>(smem);
@@ -626,9 +652,14 @@ __global__ void FlashAttentionForwardKernel(const float* Q, const float* K, cons
     float* s_Kj = s_Qi + Br * D_pad;
     float* s_Vj = s_Kj + Bc * D_pad;
     float* s_Sij = s_Vj + D * Bc_pad; 
-    float* s_Oi = s_Sij + Br * Bc_pad;
-    float* s_li = s_Oi + Br * D_pad;
-    float* s_mi = s_li + Br;
+    
+    // Align double to 8 bytes
+    size_t double_offset = (Br * D_pad + Bc * D_pad + D * Bc_pad + Br * Bc_pad) * sizeof(float);
+    if (double_offset % 8 != 0) double_offset += (8 - (double_offset % 8));
+    
+    double* s_Oi = reinterpret_cast<double*>(smem + double_offset);
+    double* s_li = s_Oi + Br * D_pad;
+    double* s_mi = s_li + Br;
 
     // T is split into Tr blocks of size Br
     // int Tr = (T + Br - 1) / Br; // Handled by Grid
@@ -644,13 +675,24 @@ __global__ void FlashAttentionForwardKernel(const float* Q, const float* K, cons
         int row_end = min(row_start + Br, T);
         int valid_rows = row_end - row_start;
 
+        // Initialize Shared Memory to 0 to avoid NaN in padding (Stability Fix)
+        int total_floats = (Br * D_pad) + (Bc * D_pad) + (D * Bc_pad) + (Br * Bc_pad);
+        for (int idx = tid; idx < total_floats; idx += total_threads) {
+            s_Qi[idx] = 0.0f;
+        }
+        int total_doubles = (Br * D_pad) + Br + Br;
+        for (int idx = tid; idx < total_doubles; idx += total_threads) {
+            s_Oi[idx] = 0.0;
+        }
+        __syncthreads();
+
         // 1. Load Qi from HBM to SRAM
         load_float4(q_base + row_start * D, s_Qi, valid_rows, D, D, D_pad, tid, total_threads);
         
         // 2. Initialize Oi, li, mi in SRAM
-        for (int k = tid; k < Br * D_pad; k += total_threads) s_Oi[k] = 0.0f; // Note: Clearing padding is safe but wasteful, strictly only need Br*D? No, we use stride D_pad.
-        for (int k = tid; k < Br; k += total_threads) s_li[k] = 0.0f;
-        for (int k = tid; k < Br; k += total_threads) s_mi[k] = -1e20f; // -inf
+        for (int k = tid; k < Br * D_pad; k += total_threads) s_Oi[k] = 0.0; 
+        for (int k = tid; k < Br; k += total_threads) s_li[k] = 0.0;
+        for (int k = tid; k < Br; k += total_threads) s_mi[k] = -1e20; // -inf in double
 
         __syncthreads();
 
@@ -686,7 +728,7 @@ __global__ void FlashAttentionForwardKernel(const float* Q, const float* K, cons
                 float* s_Sij_ptr = s_Sij + r * Bc_pad + c;
                 
                 if (is_causal && global_col > global_row) {
-                    *s_Sij_ptr = -1e20f; // Masked out
+                    *s_Sij_ptr = -1e4f; // Match Baseline exactly
                 } else {
                     *s_Sij_ptr *= softmax_scale;
                 }
@@ -695,27 +737,27 @@ __global__ void FlashAttentionForwardKernel(const float* Q, const float* K, cons
 
             // 6. Online Softmax Update
             for (int r = tid; r < valid_rows; r += total_threads) {
-                float m_prev = s_mi[r];
+                double m_prev = s_mi[r];
                 
                 // Find max in current row of Sij
-                float m_curr = -1e20f;
+                double m_curr = -1e20;
                 for (int c = 0; c < valid_cols; ++c) {
-                    float val = s_Sij[r * Bc_pad + c];
+                    double val = s_Sij[r * Bc_pad + c];
                     if (val > m_curr) m_curr = val;
                 }
                 
-                float m_new = max(m_prev, m_curr);
-                float l_curr = 0.0f;
+                double m_new = max(m_prev, m_curr);
+                double l_curr = 0.0;
                 for (int c = 0; c < valid_cols; ++c) {
-                    float val = s_Sij[r * Bc_pad + c];
-                    float p = expf(val - m_new);
-                    s_Sij[r * Bc_pad + c] = p; 
+                    double val = s_Sij[r * Bc_pad + c];
+                    double p = exp(val - m_new);
+                    s_Sij[r * Bc_pad + c] = static_cast<float>(p); 
                     l_curr += p;
                 }
                 
-                float l_prev = s_li[r];
-                float alpha = expf(m_prev - m_new);
-                float l_new = alpha * l_prev + l_curr;
+                double l_prev = s_li[r];
+                double alpha = exp(m_prev - m_new);
+                double l_new = alpha * l_prev + l_curr;
                 
                 s_mi[r] = m_new;
                 s_li[r] = l_new;
@@ -727,27 +769,41 @@ __global__ void FlashAttentionForwardKernel(const float* Q, const float* K, cons
             __syncthreads();
             
             // 7. Compute Oi += Pij * Vj
-            gemm_ab_accum_float4_transposed_b(s_Sij, s_Vj, s_Oi, valid_rows, D, valid_cols, Bc_pad, Bc_pad, D_pad, tid, total_threads);
+            gemm_ab_accum_float4_transposed_b_double(s_Sij, s_Vj, s_Oi, valid_rows, D, valid_cols, Bc_pad, Bc_pad, D_pad, tid, total_threads);
             
             __syncthreads();
         }
 
         // 8. Finalize Oi and store to HBM
         for (int r = tid; r < valid_rows; r += total_threads) {
-            float li = s_li[r];
-            float mi = s_mi[r];
-            float inv_li = 1.0f / (li + 1e-6f); // Avoid div by zero
+            double li = s_li[r];
+            double mi = s_mi[r];
+            double inv_li = 1.0 / li; // Match Baseline
             
             for (int d = 0; d < D; ++d) {
                 s_Oi[r * D_pad + d] *= inv_li;
             }
             
-            l_base[row_start + r] = mi + logf(li + 1e-6f);
+            l_base[row_start + r] = static_cast<float>(mi + log(li)); // Match Baseline
         }
         __syncthreads();
 
         // Store Oi to HBM
-        store_float4(o_base + row_start * D, s_Oi, valid_rows, D, D_pad, D, tid, total_threads);
+        // Can't use store_float4 directly since s_Oi is double
+        // We will store it manually with float4 coalescing
+        float* out_ptr = o_base + row_start * D;
+        int vec_cols = D / 4;
+        for (int k = tid; k < valid_rows * vec_cols; k += total_threads) {
+            int r = k / vec_cols;
+            int c_vec = k % vec_cols;
+            int c = c_vec * 4;
+            float4 val;
+            val.x = static_cast<float>(s_Oi[r * D_pad + c + 0]);
+            val.y = static_cast<float>(s_Oi[r * D_pad + c + 1]);
+            val.z = static_cast<float>(s_Oi[r * D_pad + c + 2]);
+            val.w = static_cast<float>(s_Oi[r * D_pad + c + 3]);
+            *reinterpret_cast<float4*>(&out_ptr[r * D + c]) = val;
+        }
         // __syncthreads(); // Not needed at end of kernel
     }
 }
@@ -1125,34 +1181,37 @@ void FlashAttentionForward(const Tensor &q, const Tensor &k, const Tensor &v, Te
     // Threads: 128 (4 Warps) for WMMA Kernel
     dim3 block(128);
     
-    // Shared memory size for WMMA Kernel
+    // Shared memory size for FP32 Kernel with Double Accumulators
     // Padding
-    constexpr int Pad = 8;
+    constexpr int Pad = 4;
     int D_pad = D + Pad;
     int Bc_pad = Bc + Pad;
     
     // Layout:
-    // s_Qi: Br * D_pad (half) = 32 * (64+8) * 2 = 4608 bytes
-    // s_Kj: Bc * D_pad (half) = 32 * (64+8) * 2 = 4608 bytes
-    // s_Vj: D * Bc_pad (half) = 64 * (32+8) * 2 = 5120 bytes
-    // s_Sij: Br * Bc_pad (float) = 32 * (32+8) * 4 = 5120 bytes
-    // s_Oi: Br * D_pad (float) = 32 * (64+8) * 4 = 9216 bytes
-    // s_li: Br * 4 = 128 bytes
-    // s_mi: Br * 4 = 128 bytes
-    // Alignment padding between half and float buffers (max 16 bytes)
+    // s_Qi: Br * D_pad (float)
+    // s_Kj: Bc * D_pad (float)
+    // s_Vj: D * Bc_pad (float)
+    // s_Sij: Br * Bc_pad (float)
+    // s_Oi: Br * D_pad (double)
+    // s_li: Br (double)
+    // s_mi: Br (double)
     
-    size_t half_size = (Br * D_pad + Bc * D_pad + D * Bc_pad) * sizeof(half);
-    // Align half_size to 16 bytes
-    if (half_size % 16 != 0) half_size += (16 - (half_size % 16));
+    size_t float_bytes = (Br * D_pad + Bc * D_pad + D * Bc_pad + Br * Bc_pad) * sizeof(float);
+    if (float_bytes % 8 != 0) float_bytes += (8 - (float_bytes % 8)); // align to 8 bytes
     
-    size_t float_size = (Br * Bc_pad + Br * D_pad + Br + Br) * sizeof(float);
+    size_t double_bytes = (Br * D_pad + Br + Br) * sizeof(double);
     
-    size_t sram_size = half_size + float_size;
+    size_t sram_size = float_bytes + double_bytes;
     
     // Ensure we are on the correct stream if provided (device.stream)
     cudaStream_t stream = 0; // TODO: get from device
 
-    FlashAttentionForwardKernelWMMA<<<grid, block, sram_size, stream>>>(
+    // Enable >48KB Shared Memory if needed
+    if (sram_size > 48 * 1024) {
+        cudaFuncSetAttribute(FlashAttentionForwardKernel, cudaFuncAttributeMaxDynamicSharedMemorySize, sram_size);
+    }
+
+    FlashAttentionForwardKernel<<<grid, block, sram_size, stream>>>(
         q_ptr, k_ptr, v_ptr, out_ptr, l_ptr, B, T, H, D, softmax_scale, is_causal
     );
     
