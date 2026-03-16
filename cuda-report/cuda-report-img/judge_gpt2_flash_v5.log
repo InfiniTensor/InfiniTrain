@@ -1,0 +1,33 @@
+F20260316 12:14:56.174085 140628204793856 cuda_guard_impl.cc:247] cudaMalloc failed
+    @     0x7fe68e4a52d0  google::LogMessage::Fail()
+    @     0x7fe68e4a5c27  google::LogMessageFatal::~LogMessageFatal()
+    @     0x556cda6df37f  infini_train::core::cuda::CudaGuardImpl::MallocAsync(void**, unsigned long, infini_train::core::Stream*)
+    @     0x556cda76609e  infini_train::TensorBuffer::TensorBuffer(infini_train::Device, unsigned long)
+    @     0x556cda768426  infini_train::Tensor::Tensor(std::vector<long, std::allocator<long> > const&, infini_train::DataType, infini_train::Device)
+    @     0x556cda81009f  void std::_Construct<infini_train::Tensor, std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device>(infini_train::Tensor*, std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device
+    @     0x556cda80f955  std::_Sp_counted_ptr_inplace<infini_train::Tensor, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>::_Sp_counted_ptr_inplace<std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device>(std::allocator<void>, std::vector<
+    @     0x556cda80f0cf  std::__shared_count<(__gnu_cxx::_Lock_policy)2>::__shared_count<infini_train::Tensor, std::allocator<void>, std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device>(infini_train::Tensor*&, std::_Sp_alloc_shared_tag<st
+    @     0x556cda80e7f0  std::__shared_ptr<infini_train::Tensor, (__gnu_cxx::_Lock_policy)2>::__shared_ptr<std::allocator<void>, std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device>(std::_Sp_alloc_shared_tag<std::allocator<void> >, std::v
+    @     0x556cda80d8d5  std::shared_ptr<infini_train::Tensor>::shared_ptr<std::allocator<void>, std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device>(std::_Sp_alloc_shared_tag<std::allocator<void> >, std::vector<long, std::allocator<long>
+    @     0x556cda80a6ea  std::shared_ptr<infini_train::Tensor> std::make_shared<infini_train::Tensor, std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device>(std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_tr
+    @     0x556cdabd4cb6  infini_train::kernels::cuda::SoftmaxBackward(std::shared_ptr<infini_train::Tensor> const&, std::shared_ptr<infini_train::Tensor> const&, long)
+    @     0x556cda6c9ed4  infini_train::autograd::Softmax::Backward(std::vector<std::shared_ptr<infini_train::Tensor>, std::allocator<std::shared_ptr<infini_train::Tensor> > > const&)
+    @     0x556cda6a12be  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)
+    @     0x556cda6a17d1  infini_train::autograd::Function::BackwardPartial(std::shared_ptr<infini_train::Tensor> const&, int)

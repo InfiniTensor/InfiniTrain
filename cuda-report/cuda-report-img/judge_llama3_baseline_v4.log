@@ -1,0 +1,5 @@
+E20260316 11:58:20.188738 140288913821696 main.cc:361] step    1/5 | train loss 11.761727 | lr 1.00e-05 | (947351.34 ms | 2 tok/s | peak used:     0 MB | peak reserved:     0 MB, DP=1, TP=1, SP=1, PP=1)
+E20260316 12:16:25.119665 140288913821696 main.cc:361] step    2/5 | train loss 11.918188 | lr 1.00e-05 | (1084917.24 ms | 2 tok/s | peak used:     0 MB | peak reserved:     0 MB, DP=1, TP=1, SP=1, PP=1)
+E20260316 12:34:34.568089 140288913821696 main.cc:361] step    3/5 | train loss 11.564693 | lr 1.00e-05 | (1089448.35 ms | 2 tok/s | peak used:     0 MB | peak reserved:     0 MB, DP=1, TP=1, SP=1, PP=1)
+E20260316 12:52:16.968665 140288913821696 main.cc:361] step    4/5 | train loss 11.429454 | lr 1.00e-05 | (1062400.52 ms | 2 tok/s | peak used:     0 MB | peak reserved:     0 MB, DP=1, TP=1, SP=1, PP=1)
+E20260316 13:09:49.429756 140288913821696 main.cc:361] step    5/5 | train loss 11.264898 | lr 1.00e-05 | (1052461.03 ms | 2 tok/s | peak used:     0 MB | peak reserved:     0 MB, DP=1, TP=1, SP=1, PP=1)

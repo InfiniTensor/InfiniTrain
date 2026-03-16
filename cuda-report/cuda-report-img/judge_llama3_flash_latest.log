@@ -1,0 +1,8 @@
+F20260316 00:46:20.777251 139885773852672 cuda_guard_impl.cc:75] CUDA Error: OS call failed or operation not supported on this OS at /home/simon_chou/InfiniTrain/infini_train/src/core/runtime/cuda/cuda_guard_impl.cc:75
+    @     0x7f39b220e299  google::LogMessage::Fail()
+    @     0x7f39b2211f38  google::LogMessageFatal::~LogMessageFatal()
+    @     0x55a9ab3c8b26  infini_train::core::cuda::CudaGuardImpl::GetDevice() const
+    @     0x55a9ab3d8d8c  infini_train::core::DeviceGuard::DeviceGuard(infini_train::Device)
+    @     0x55a9ab57ceed  infini_train::TensorBuffer::TensorBuffer(infini_train::Device, unsigned long)
+    @     0x55a9ab5a99e9  void std::_Construct<infini_train::TensorBuffer, infini_train::Device&, unsigned long>(infini_train::TensorBuffer*, infini_train::Device&, unsigned long&&)
+    @     0x55a9ab5a1dad  std::_Sp_counted_ptr_inplace<infini_train::TensorBuffer, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>::_Sp_counted_ptr_inplace<infini_train::Device&, unsigned long>(std::allocator<void>, infini_train::Device&, unsigned long&&)

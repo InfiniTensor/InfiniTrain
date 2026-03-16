@@ -1,0 +1,32 @@
+F20260316 12:14:53.583128 140714963841024 cuda_guard_impl.cc:247] cudaMalloc failed
+    @     0x7ffac179c2d0  google::LogMessage::Fail()
+    @     0x7ffac179cc27  google::LogMessageFatal::~LogMessageFatal()
+    @     0x55ba406df37f  infini_train::core::cuda::CudaGuardImpl::MallocAsync(void**, unsigned long, infini_train::core::Stream*)
+    @     0x55ba4076609e  infini_train::TensorBuffer::TensorBuffer(infini_train::Device, unsigned long)
+    @     0x55ba40768426  infini_train::Tensor::Tensor(std::vector<long, std::allocator<long> > const&, infini_train::DataType, infini_train::Device)
+    @     0x55ba4081009f  void std::_Construct<infini_train::Tensor, std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device>(infini_train::Tensor*, std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device
+    @     0x55ba4080f955  std::_Sp_counted_ptr_inplace<infini_train::Tensor, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>::_Sp_counted_ptr_inplace<std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device>(std::allocator<void>, std::vector<
+    @     0x55ba4080f0cf  std::__shared_count<(__gnu_cxx::_Lock_policy)2>::__shared_count<infini_train::Tensor, std::allocator<void>, std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device>(infini_train::Tensor*&, std::_Sp_alloc_shared_tag<st
+    @     0x55ba4080e7f0  std::__shared_ptr<infini_train::Tensor, (__gnu_cxx::_Lock_policy)2>::__shared_ptr<std::allocator<void>, std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device>(std::_Sp_alloc_shared_tag<std::allocator<void> >, std::v
+    @     0x55ba4080d8d5  std::shared_ptr<infini_train::Tensor>::shared_ptr<std::allocator<void>, std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device>(std::_Sp_alloc_shared_tag<std::allocator<void> >, std::vector<long, std::allocator<long>
+    @     0x55ba4080a6ea  std::shared_ptr<infini_train::Tensor> std::make_shared<infini_train::Tensor, std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_train::Device>(std::vector<long, std::allocator<long> > const&, infini_train::DataType&, infini_tr
+    @     0x55ba409f7392  std::shared_ptr<infini_train::Tensor> infini_train::kernels::cuda::(anonymous namespace)::UnaryForward<__nv_dl_wrapper_t<__nv_dl_tag<std::shared_ptr<infini_train::Tensor> (*)(std::shared_ptr<infini_train::Tensor> const&, float), &infini_train::kernels::cud
+    @     0x55ba4085fa32  infini_train::kernels::cuda::MulScalarForward(std::shared_ptr<infini_train::Tensor> const&, float)
+    @     0x55ba4069dc1f  std::shared_ptr<infini_train::Tensor> infini_train::Dispatcher::Call<std::shared_ptr<infini_train::Tensor>, std::shared_ptr<infini_train::Tensor>, float>(std::pair<infini_train::Device::DeviceType, std::__cxx11::basic_string<char, std::char_traits<char>, s
+    @     0x55ba4069752d  infini_train::autograd::MulScalar::Forward(std::vector<std::shared_ptr<infini_train::Tensor>, std::allocator<std::shared_ptr<infini_train::Tensor> > > const&)
+    @     0x55ba4069f866  infini_train::autograd::Function::Apply(std::vector<std::shared_ptr<infini_train::Tensor>, std::allocator<std::shared_ptr<infini_train::Tensor> > > const&)
+    @     0x55ba407704dc  infini_train::Tensor::Mul(float)
+    @     0x55ba40770644  infini_train::operator*(std::shared_ptr<infini_train::Tensor> const&, float)
+    @     0x55ba4067c1b8  CausalSelfAttention::Forward(std::vector<std::shared_ptr<infini_train::Tensor>, std::allocator<std::shared_ptr<infini_train::Tensor> > > const&)
+    @     0x55ba406fdc28  infini_train::nn::Module::operator()(std::vector<std::shared_ptr<infini_train::Tensor>, std::allocator<std::shared_ptr<infini_train::Tensor> > > const&)
+    @     0x55ba4067a03e  Block::Forward(std::vector<std::shared_ptr<infini_train::Tensor>, std::allocator<std::shared_ptr<infini_train::Tensor> > > const&)
+    @     0x55ba406fdc28  infini_train::nn::Module::operator()(std::vector<std::shared_ptr<infini_train::Tensor>, std::allocator<std::shared_ptr<infini_train::Tensor> > > const&)
+    @     0x55ba4067ac8f  GPT2Chunk::Forward(std::vector<std::shared_ptr<infini_train::Tensor>, std::allocator<std::shared_ptr<infini_train::Tensor> > > const&)
+    @     0x55ba406fdc28  infini_train::nn::Module::operator()(std::vector<std::shared_ptr<infini_train::Tensor>, std::allocator<std::shared_ptr<infini_train::Tensor> > > const&)
+    @     0x55ba4067b625  GPT2::Forward(std::vector<std::shared_ptr<infini_train::Tensor>, std::allocator<std::shared_ptr<infini_train::Tensor> > > const&)
+    @     0x55ba406fdc28  infini_train::nn::Module::operator()(std::vector<std::shared_ptr<infini_train::Tensor>, std::allocator<std::shared_ptr<infini_train::Tensor> > > const&)
+    @     0x55ba40660c12  Train(infini_train::nn::parallel::Rank const&)
+    @     0x55ba40640826  main
+    @     0x7ffa9e82a1ca  (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a1c9)
+    @     0x7ffa9e82a28b  __libc_start_main
+    @     0x55ba4065eec5  _start
