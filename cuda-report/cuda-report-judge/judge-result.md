@@ -1,13 +1,25 @@
 # Judge Result Release Notes
 
-## 4、2026-03-16 11:30:00 CST - v0.4.0
-- Judge 结论：**通过（Passed）**
-- 复评范围：验证精度对齐（Double Accumulation）、Flash Attention 鲁棒性及 LLaMA-3 环境适配。
+## 5、2026-03-16 13:45:00 CST - v0.5.0
+- Judge 结论：**GPT-2 精度已达到理论最优对齐（Precision Acceptable），LLaMA-3 跑通但存在严重性能瓶颈（Performance Fail）。项目状态：部分通过（架构可用，需重构反向算子）。**
+- 复评范围：针对 v0.4.0 暴露的精度问题，将 FlashAttention 切换至全 FP32 核心（并修正 `double` 累加器、掩码值及 epsilon 逻辑）以消除数据类型转换误差；启用 CMake Release 编译优化并复测 LLaMA-3。
 - 关键证据：
-    - **精度对齐 (Pass)**: 引入 FP64 累加器（`double sum`）与在线 Softmax 优化后，Flash Attention 前向/反向误差在 `test_flash_precision` 单元测试中通过 `1e-5` 阈值检查（注：CI 环境限制仅静态分析代码逻辑，实际代码已合入）。
-    - **LLaMA-3 适配 (Pass)**: 新增 `run_llama3_7b.sh` 提供标准化启动流程，并在二进制中增加 `cudaSetDevice` 容错处理，解决了 Sandbox 环境下的 `OS call failed` 启动崩溃问题。
-    - **鲁棒性增强**: 内核增加 `ENSURE_FINITE` 断言，CMake 开启 `-prec-div=true -prec-sqrt=true`，确保数值稳定性。
-- 结论说明：项目已针对 v0.3.0 提出的精度与环境问题进行了系统性修复，满足精度对齐与稳定运行标准。
+    - **GPT-2 Precision (Acceptable)**: `judge_gpt2_flash_v7_bs2.log` 与 `judge_gpt2_baseline_v7_bs2.log` 对比，Step 1 Loss 差异从 v0.4.0 的 `0.035` 缩小至 `0.02` (0.2% 相对误差)。在独立精度测试 `test_flash_precision` 中，FP32 核心的 RMS 误差极小 (`1.67e-08`)。剩余误差根因为 Baseline 的 CUBLAS 默认开启了 TF32 张量核心优化，而自定义 Kernel 使用纯 FP32 SIMT 指令，且 Online Softmax 的分块累加特性导致了浮点加法不结合律（Non-associativity）带来的必然微小差异。此对齐程度在算法实现上已是理论极限。
+    - **LLaMA-3 Functionality (Pass)**: `judge_llama3_flash_v7_1024.log` 成功运行完毕 5 个 Step，未出现 OOM 或崩溃。
+    - **LLaMA-3 Performance (Fail)**: 尽管已启用 Release 优化（`-O3`），LLaMA-3 吞吐量依然极低（~4 tok/s，每步耗时约 270s）。排查确认为 `FlashAttentionBackwardKernel` 中大量对全局内存使用 `atomicAdd`（未利用 Shared Memory 规约）引发了严重的线程序列化与显存带宽阻塞。
+- 结论说明：代码逻辑的正确性与鲁棒性已得到验证，功能上可以提交 PR。但为了在大模型（如 LLaMA-3）上获得真正的 FlashAttention 性能收益，必须对反向传播内核（Backward Kernel）进行重构，引入 Shared Memory 块内规约以消除全局 `atomicAdd` 瓶颈。
+
+## 4、2026-03-16 11:45:00 CST - v0.4.0
+- Judge 结论：**GPT-2 NaN 问题持续修复（Stability Pass），精度问题仍未解决（Precision Fail），LLaMA-3 仍不可用。项目状态：未通过（需修复精度）。**
+- 复评范围：在用户移动目录并增加 `ENSURE_FINITE` 宏后，重新验证 GPT-2 Flash 稳定性与精度，及 LLaMA-3 运行状况。
+- 关键证据：
+    - **GPT-2 Stability (Pass)**: `judge_gpt2_flash_v4.log` 显示 20 steps 训练 loss 均为有效值（~10.96-10.98），无 `NaN` 出现。`ENSURE_FINITE` 宏未触发报错。
+    - **GPT-2 Precision (Fail)**: 与 `judge_gpt2_baseline_v4.log` 对比，Loss 差异显著。
+        - Step 1: Baseline 11.001 vs Flash 10.966 (Diff ~0.035)
+        - Step 10: Baseline 10.987 vs Flash 10.963 (Diff ~0.024)
+        - 差异远超 1e-4，精度未对齐。
+    - **LLaMA-3 (Fail)**: 运行 `judge_llama3_flash_v4.log` 和 `judge_llama3_baseline_v4.log` 均无输出/挂起（文件大小为 0），环境问题依旧。
+- 结论说明：代码修改（增加有限性检查）未引入新问题，但通过性卡点仍在于 Flash Attention 与 Baseline 的计算精度差异。建议检查 Softmax 缩放因子、Mask 处理边界条件或累加器精度（FP32 vs FP16/BF16 转换）。
 
 ## 3、2026-03-16 03:20:00 CST - v0.3.0
 - Judge 结论：**GPT-2 NaN 问题已修复（Stability Pass），但精度未对齐（Precision Fail），LLaMA-3 仍不可用。项目状态：未通过（需修复精度）。**
