@@ -147,6 +147,10 @@ void ParamAndGradBucketGroup::RegisterGradReady(const std::shared_ptr<Tensor> &p
     }
 }
 
+void ParamAndGradBucketGroup::SetIsLastMicrobatch(bool is_last_microbatch) {
+    is_last_microbatch_ = is_last_microbatch;
+}
+
 void ParamAndGradBucketGroup::StartGradSync() {
     if (!collective_pg_) {
         LOG(FATAL) << "ParamAndGradBucketGroup: StartGradSync() called with null collective_pg_.";

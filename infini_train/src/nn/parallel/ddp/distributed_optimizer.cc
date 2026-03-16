@@ -91,6 +91,10 @@ void DistributedOptimizer::FinishGradSync() {
     for (auto &group : bucket_groups_) { group->FinishGradSync(); }
 }
 
+void DistributedOptimizer::SetIsLastMicrobatch(bool is_last_microbatch) {
+    for (auto &group : bucket_groups_) { group->SetIsLastMicrobatch(is_last_microbatch); }
+}
+
 void DistributedOptimizer::StartParamSync(bool force_sync) {
     for (auto &group : bucket_groups_) { group->StartParamSync(force_sync); }
 }

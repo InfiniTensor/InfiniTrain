@@ -2,6 +2,7 @@
 
 #include <map>
 #include <memory>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -24,7 +25,11 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
                                                  const DistributedDataParallelConfig ddp_config)
     : ddp_config_(ddp_config),
       ddp_pg_(ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(rank.GlobalRank()))) {
+    std::unordered_set<Tensor *> seen_params;
     for (auto &param : module->Parameters()) {
+        if (!param || !seen_params.insert(param.get()).second) {
+            continue;
+        }
         auto device = param->GetDevice();
         CHECK_EQ(device.index(), rank.thread_rank()) << "All parameters must be on the same device as the module";
         if (!ddp_config.gradient_bucketing_enabled && !ddp_config.use_distributed_optimizer) {
@@ -130,7 +135,11 @@ void DistributedDataParallel::RegisterBackwardHooks() {
     };
 
     auto &module = modules_.at(kModuleName);
+    std::unordered_set<Tensor *> seen_params;
     for (auto &param : module->Parameters()) {
+        if (!param || !seen_params.insert(param.get()).second) {
+            continue;
+        }
         if (!param->requires_grad()) {
             continue;
         }

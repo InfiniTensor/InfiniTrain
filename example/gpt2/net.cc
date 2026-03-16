@@ -112,7 +112,19 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     if (FLAGS_flash) {
         // cuDNN SDPA path: causal masking should be enabled by `is_causal=true`.
         // Do not pass the 0/1 tril mask as additive bias (it is not -inf mask).
-        y = nn::function::ScaledDotProductAttention(q, k, v, nullptr, 0.0, true, std::nullopt, false);
+        auto q_flash = q;
+        auto k_flash = k;
+        auto v_flash = v;
+        if (q->Dtype() == DataType::kFLOAT32) {
+            q_flash = std::make_shared<Tensor>(q->To(DataType::kBFLOAT16));
+            k_flash = std::make_shared<Tensor>(k->To(DataType::kBFLOAT16));
+            v_flash = std::make_shared<Tensor>(v->To(DataType::kBFLOAT16));
+        }
+        y = nn::function::ScaledDotProductAttention(q_flash, k_flash, v_flash, nullptr, 0.0, true, std::nullopt,
+                                                    false);
+        if (y->Dtype() != q->Dtype()) {
+            y = std::make_shared<Tensor>(y->To(q->Dtype()));
+        }
         // ensure expected layout: (B, h_l, T, Dh) -> (B, T, h_l, Dh) -> (B, T, local_C)
         y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
     } else {

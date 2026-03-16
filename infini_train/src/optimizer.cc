@@ -25,10 +25,14 @@ void SGD::Step() {
             LOG(INFO) << "Skipping param with null grad.";
             continue;
         }
+        auto grad = param->grad();
+        if (grad->Dtype() != param->Dtype()) {
+            grad = std::make_shared<Tensor>(grad->To(param->Dtype()));
+        }
         auto device = param->GetDevice();
         core::DeviceGuard guard(device);
         auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
-        kernel.Call<void>(param->grad(), -learning_rate_, param);
+        kernel.Call<void>(grad, -learning_rate_, param);
     }
 }
 
@@ -53,10 +57,13 @@ void Adam::Step() {
 
     for (size_t i = 0; i < params_.size(); ++i) {
         auto &param = params_[i];
-        const auto &grad = param->grad();
+        auto grad = param->grad();
         if (!grad) {
             LOG(INFO) << "Skipping param with null grad.";
             continue;
+        }
+        if (grad->Dtype() != param->Dtype()) {
+            grad = std::make_shared<Tensor>(grad->To(param->Dtype()));
         }
         auto &m = m_[i];
         auto &v = v_[i];

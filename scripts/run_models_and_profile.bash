@@ -17,13 +17,19 @@ read_var() {
     jq -r --arg k "$key" '.variables[$k] // empty' "$CONFIG_FILE"
 }
 
-BUILD_DIR="$(read_var BUILD_DIR)";              : "${BUILD_DIR:=../build}"
-LOG_DIR="$(read_var LOG_DIR)";                  : "${LOG_DIR:=logs}"
-PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_logs}"
-COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
-FLASH="$(read_var FLASH)";                      : "${FLASH:=}"
+BUILD_DIR="$(read_var BUILD_DIR)";                  : "${BUILD_DIR:=../build}"
+LOG_DIR="$(read_var LOG_DIR)";                      : "${LOG_DIR:=logs}"
+PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";      : "${PROFILE_LOG_DIR:=./profile_logs}"
+COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";      : "${COMPARE_LOG_DIR:=}"
+FLASH="$(read_var FLASH)";                          : "${FLASH:=}"
 
+# --- 关键修改 1: 初始化大容量分区的绝对路径临时目录 ---
+# 先确保 build 目录存在，以便获取其绝对路径
 mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
+# 获取绝对路径，防止 CMake 切换目录后找不到相对路径
+export CUSTOM_TMP="$(readlink -f "$BUILD_DIR")/tmp_cache"
+mkdir -p "$CUSTOM_TMP"
+export TMPDIR="$CUSTOM_TMP"
 
 # export custom PATHs
 export BUILD_DIR LOG_DIR PROFILE_LOG_DIR
@@ -35,11 +41,16 @@ done < <(jq -r '.variables | to_entries[] | "\(.key)=\(.value)"' "$CONFIG_FILE")
 # Global variable to save the last cmake command
 LAST_CMAKE_CMD=""
 
-# Clean the build directory
+# --- 关键修改 2: 在清理函数中重新创建临时目录 ---
 clean_build_dir() {
     echo -e "\033[1;31m[CLEAN] Removing all contents in: ${BUILD_DIR}\033[0m"
-    mkdir -p "$BUILD_DIR"
+    # 删除 build 下所有内容（这会删掉旧的 tmp_cache）
     rm -rf "${BUILD_DIR:?}/"*
+    # 重新创建 build 目录
+    mkdir -p "$BUILD_DIR"
+    # 核心：必须重新创建 TMPDIR 目录，否则编译器的路径会失效
+    mkdir -p "$TMPDIR"
+    echo -e "\033[1;34m[TMP] Re-created temp space at: $TMPDIR\033[0m"
 }
 
 # Run a command and log output
@@ -53,38 +64,27 @@ run_and_log() {
 
     echo -e "\033[1;32m============================================================\033[0m"
     echo -e "\033[1;36m[$timestamp] [Running] ${log_name}\033[0m"
-    
-    # Print the command being executed
     echo -e "\033[1;33mCommand:\033[0m $cmd"
-
-    # Print the most recent CMake command
     if [[ -n "$LAST_CMAKE_CMD" ]]; then
         echo -e "\033[1;34mLast CMake Command:\033[0m $LAST_CMAKE_CMD"
     fi
-
     echo -e "\033[1;33mLog file:\033[0m $log_path"
-
-    # Notify if profiling mode is enabled
     if [[ "$is_profile" == "yes" ]]; then
         echo -e "\033[1;35m[PROFILE MODE ON] Profiling logs will be saved to: ${PROFILE_LOG_DIR}\033[0m"
     fi
-
     echo -e "\033[1;32m============================================================\033[0m"
 
     pushd "$BUILD_DIR" > /dev/null
 
-    # Write the last cmake command into the log file if available
     if [[ -n "$LAST_CMAKE_CMD" ]]; then
         echo "[LAST_CMAKE] $LAST_CMAKE_CMD" > "$log_path"
     else
-        # If no cmake command has been run yet, clear the log
         > "$log_path"
     fi
 
-    # Write the current run command to the log
     echo "[COMMAND] $cmd" >> "$log_path"
 
-    # Run the command and append both stdout and stderr to the log file
+    # 执行命令并重定向输出
     if ! eval "$cmd" >> "$log_path" 2>&1; then
         echo -e "\033[1;31m============================================================\033[0m"
         echo -e "\033[1;31m[ERROR] Command failed: ${cmd}\033[0m"
@@ -98,39 +98,29 @@ run_and_log() {
 
     popd > /dev/null
 
-    # If profiling is enabled, move profiling files to the target directory
     if [[ "$is_profile" == "yes" ]]; then
         move_profile_logs "$log_name"
     fi
 }
 
-
 # Move profiling output logs
 move_profile_logs() {
     local prefix="$1"
-
-    # Move *.report.rankN files
     for report_file in "${BUILD_DIR}"/*.report.rank*; do
         if [[ -f "$report_file" ]]; then
-            local base_name
-            base_name=$(basename "$report_file")
+            local base_name=$(basename "$report_file")
             mv "$report_file" "${PROFILE_LOG_DIR}/${prefix}_${base_name}"
-            echo "Moved $base_name to ${PROFILE_LOG_DIR}/${prefix}_${base_name}"
         fi
     done
-
-    # Move *.records.log.rankN files
     for record_file in "${BUILD_DIR}"/*.records.log.rank*; do
         if [[ -f "$record_file" ]]; then
-            local base_name
-            base_name=$(basename "$record_file")
+            local base_name=$(basename "$record_file")
             mv "$record_file" "${PROFILE_LOG_DIR}/${prefix}_${base_name}"
-            echo "Moved $base_name to ${PROFILE_LOG_DIR}/${prefix}_${base_name}"
         fi
     done
 }
 
-# Build "--key value" arg string from tests[i].args (shell-escaped)
+# Build args string
 args_string_for_test() {
     local idx="$1"
     jq -r --argjson i "$idx" '
@@ -151,11 +141,10 @@ for ((id=0; id<num_builds; ++id)); do
 
     LAST_CMAKE_CMD="$build_cmake"
 
-    # always clean before another build
+    # 调用修改后的清理函数
     clean_build_dir
     run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no"
 
-    # profile flag for runs
     profile_flag="no"
     log_suffix=""
     if [[ "$build_profile" == "true" ]]; then
@@ -166,45 +155,28 @@ for ((id=0; id<num_builds; ++id)); do
     for ((ti=0; ti<num_tests; ++ti)); do
         test_id=$(jq -r ".tests[$ti].id" "$CONFIG_FILE")
         arg_str="$(args_string_for_test "$ti")"
-
         global_flash_arg=""
         if [[ -n "$FLASH" ]]; then
-            global_flash_arg="--flash ${FLASH}"
+            global_flash_arg="--flash=${FLASH}"
         fi
 
-        # gpt2
-        gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${global_flash_arg} ${arg_str}"
+        gpt2_cmd="./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${global_flash_arg} ${arg_str}"
         run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag"
 
-        # llama3
-        llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${global_flash_arg} ${arg_str}"
+        llama3_cmd="./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${global_flash_arg} ${arg_str}"
         run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag"
     done
 done
 
 echo -e "\n\033[1;32mAll done.\033[0m"
 
-# Run comparison scripts if COMPARE_LOG_DIR is set
+# Comparison part
 if [[ -n "$COMPARE_LOG_DIR" ]]; then
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-    echo -e "\n\033[1;36m============================================================\033[0m"
-    echo -e "\033[1;36m[Comparison] Comparing logs with: ${COMPARE_LOG_DIR}\033[0m"
-    echo -e "\033[1;36m============================================================\033[0m"
-
-    # Run compare_loss.py
-    echo -e "\n\033[1;33m[Running] compare_loss.py\033[0m"
+    echo -e "\n\033[1;36m[Comparison] Comparing logs...\033[0m"
     python3 "${SCRIPT_DIR}/compare_loss.py" "$COMPARE_LOG_DIR" "$LOG_DIR" || true
-
-    # Run compare_tps.py
-    echo -e "\n\033[1;33m[Running] compare_tps.py\033[0m"
     python3 "${SCRIPT_DIR}/compare_tps.py" "$COMPARE_LOG_DIR" "$LOG_DIR" || true
-
     echo -e "\n\033[1;32mComparison completed.\033[0m"
 else
-    echo -e "\n\033[1;33m============================================================\033[0m"
-    echo -e "\033[1;33m[WARNING] COMPARE_LOG_DIR is not set. Skipping comparison.\033[0m"
-    echo -e "\033[1;33m         To enable comparison, set 'variables.COMPARE_LOG_DIR' in ${CONFIG_FILE}\033[0m"
-    echo -e "\033[1;33m         or export COMPARE_LOG_DIR=/path/to/baseline_logs before running.\033[0m"
-    echo -e "\033[1;33m============================================================\033[0m"
+    echo -e "\n\033[1;33m[WARNING] COMPARE_LOG_DIR is not set. Skipping comparison.\033[0m"
 fi

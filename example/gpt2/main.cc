@@ -141,6 +141,7 @@ void Train(const nn::parallel::Rank &rank) {
 
     if (rank.IsParallel()) {
         device = Device(Device::DeviceType::kCUDA, rank.thread_rank());
+        //
         auto *pg_factory = ProcessGroupFactory::Instance(device.type());
 
         if (ddp_world_size > 1) {
@@ -323,6 +324,10 @@ void Train(const nn::parallel::Rank &rank) {
             }
 
             for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
+                if (auto dist_optimizer = std::dynamic_pointer_cast<nn::parallel::DistributedOptimizer>(optimizer)) {
+                    dist_optimizer->SetIsLastMicrobatch(micro_step == grad_accum_steps - 1);
+                }
+
                 // enable autocast for the current step
                 infini_train::AutocastGuard autocast_guard(device.type(), dtype);
 
