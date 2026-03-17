@@ -2,6 +2,7 @@ import requests
 import json
 import time
 import os
+import sys
 import argparse
 import glob
 import re
@@ -14,6 +15,10 @@ META_COLS=7
 HEADER_ROWS=5
 HEADER_COLS="W"
 
+# Retry settings
+REQUEST_RETRY_TIMES=3
+REQUEST_RETRY_DELAY=10
+
 class FeishuSheetHandler:
     """Feishu Sheet Handler for retrieving and writing sheet data"""
 
@@ -25,13 +30,36 @@ class FeishuSheetHandler:
         self.token_expire_time = 0
         self.get_access_token()
 
+    def _request_with_timeout_retry(self, request_func, request_name):
+        """Retry request when ReadTimeout happens."""
+        for attempt in range(REQUEST_RETRY_TIMES):
+            try:
+                return request_func()
+            except requests.exceptions.ReadTimeout:
+                if attempt == REQUEST_RETRY_TIMES - 1:
+                    print(
+                        f"FATAL: HTTP timeout after {REQUEST_RETRY_TIMES} attempts while handling "
+                        f"{request_name}. Please manually revert the Feishu sheet to a previous version."
+                    )
+                    sys.exit(1)
+                print(
+                    f"{request_name} timed out on attempt "
+                    f"{attempt + 1}/{REQUEST_RETRY_TIMES}, retry after {REQUEST_RETRY_DELAY}s"
+                )
+                time.sleep(REQUEST_RETRY_DELAY)
+
     def get_access_token(self):
         """Get and cache tenant_access_token"""
         if self.access_token and time.time() < self.token_expire_time:
             return self.access_token
 
         url = f"{self.base_url}/auth/v3/tenant_access_token/internal"
-        resp = requests.post(url, json={"app_id": self.app_id, "app_secret": self.app_secret}, timeout=10)
+        resp = self._request_with_timeout_retry(
+            lambda: requests.post(url, json={"app_id": self.app_id, "app_secret": self.app_secret}, timeout=10),
+            "Get access token"
+        )
+        if resp is None:
+            return None
         if resp.status_code != 200:
             print("Failed to get token: HTTP error", resp.status_code)
             return None
@@ -57,7 +85,12 @@ class FeishuSheetHandler:
         }
 
         url = f"{self.base_url}{endpoint}"
-        resp = requests.request(method, url, headers=headers, timeout=15, **kwargs)
+        resp = self._request_with_timeout_retry(
+            lambda: requests.request(method, url, headers=headers, timeout=15, **kwargs),
+            f"{method} {endpoint}"
+        )
+        if resp is None:
+            return None
 
         if resp.status_code != 200:
             print(f"Request failed: HTTP {resp.status_code}")
@@ -226,6 +259,47 @@ class FeishuSheetHandler:
         return (dt - base_date).days + 2
 
 
+def normalize_tag_spreadsheet_configs(config):
+    """Normalize config into a list of tag-specific spreadsheet mappings."""
+    tag_configs = config.get("TAG_SPREADSHEET_CONFIGS")
+    if tag_configs is not None:
+        if not isinstance(tag_configs, list) or not tag_configs:
+            print("TAG_SPREADSHEET_CONFIGS must be a non-empty list")
+            return None
+
+        normalized = []
+        for item in tag_configs:
+            if not isinstance(item, dict):
+                print("Each TAG_SPREADSHEET_CONFIGS item must be a JSON object")
+                return None
+
+            tag = item.get("tag")
+            model_tokens = item.get("MODEL_SPREADSHEET_TOKEN")
+            if not tag:
+                print("Each TAG_SPREADSHEET_CONFIGS item must contain a non-empty tag")
+                return None
+            if not isinstance(model_tokens, dict) or not model_tokens:
+                print(f"MODEL_SPREADSHEET_TOKEN for tag={tag} must be a non-empty dictionary")
+                return None
+
+            normalized.append({
+                "tag": tag,
+                "MODEL_SPREADSHEET_TOKEN": model_tokens
+            })
+
+        return normalized
+
+    legacy_tokens = config.get("MODEL_SPREADSHEET_TOKEN")
+    if isinstance(legacy_tokens, dict) and legacy_tokens:
+        return [{
+            "tag": "basic",
+            "MODEL_SPREADSHEET_TOKEN": legacy_tokens
+        }]
+
+    print("Config file must contain TAG_SPREADSHEET_CONFIGS or MODEL_SPREADSHEET_TOKEN")
+    return None
+
+
 def load_config(config_file):
     """Load configuration from JSON file"""
     if not os.path.exists(config_file):
@@ -239,16 +313,17 @@ def load_config(config_file):
         print(f"Config file {config_file} is not valid JSON file")
         return None
 
-    required_keys = ["APP_ID", "APP_SECRET", "MODEL_SPREADSHEET_TOKEN"]
+    required_keys = ["APP_ID", "APP_SECRET"]
     for key in required_keys:
         if key not in config:
             print(f"Config file missing required key: {key}")
             return None
 
-    if not isinstance(config["MODEL_SPREADSHEET_TOKEN"], dict) or not config["MODEL_SPREADSHEET_TOKEN"]:
-        print("MODEL_SPREADSHEET_TOKEN must be a non-empty dictionary")
+    tag_configs = normalize_tag_spreadsheet_configs(config)
+    if not tag_configs:
         return None
 
+    config["TAG_SPREADSHEET_CONFIGS"] = tag_configs
     return config
 
 def parse_command_args(log_content: str, start_flag="--dtype"):
@@ -376,9 +451,9 @@ def parse_profile_report(profile_content):
         return merged_df.head(5).iloc[:, :16]
     return None
 
-def discover_testcases(model_name: str, log_dir="logs"):
+def discover_testcases(model_name: str, tag: str, log_dir="logs"):
     """Get all test case id from local log dir"""
-    pattern = os.path.join(log_dir, f"{model_name}_*.log")
+    pattern = os.path.join(log_dir, tag, f"{model_name}_*.log")
     files = glob.glob(pattern)
     testcases = []
     prefix = f"{model_name}_"
@@ -409,12 +484,13 @@ def get_git_commit_id():
         return "unknown"
 
 
-def get_model_data(model_name, sheet_title):
+def get_model_data(model_name, sheet_title, tag, log_dir="logs", profile_log_dir="profile_logs"):
     """Construct 2D list for writing to Feishu"""
-    log_file_path = f"logs/{model_name}_{sheet_title}.log"
-    profile_file_path = f"profile_logs/{model_name}_{sheet_title}_profile_{model_name}.report.rank0"
+    log_file_path = os.path.join(log_dir, tag, f"{model_name}_{sheet_title}.log")
+    profile_file_path = os.path.join(profile_log_dir, tag, f"{model_name}_{sheet_title}_profile_{model_name}.report.rank0")
 
     avg_latency, avg_throughput, peak_used_max, peak_reserved_max = None, None, None, None
+    cmd_args = None
 
     # Read training log
     if os.path.exists(log_file_path):
@@ -436,12 +512,14 @@ def get_model_data(model_name, sheet_title):
         print(f"Performance report does not exist: {profile_file_path}")
 
     if report_df is None:
-        return []
+        return cmd_args, []
 
     # Insert $META_COLS empty columns at the front
     new_data = [["" for _ in range(META_COLS)] for _ in range(5)]
-    new_df = pd.DataFrame(new_data, index=report_df.index)
+    new_df = pd.DataFrame(new_data, index=report_df.index, dtype=object)
     combined_df = pd.concat([new_df, report_df], axis=1)
+    # Ensure all columns can hold mixed types
+    combined_df = combined_df.astype(object)
 
     # Fill first row's first $META_COLS columns with info
     combined_df.iloc[0, 0] = FeishuSheetHandler.convert_to_feishu_date(datetime.now().date())
@@ -470,65 +548,69 @@ def main():
         return
 
     print(f"Successfully loaded config file: {args.config_file}")
-    print(f"Found {len(config['MODEL_SPREADSHEET_TOKEN'])} models to process")
+    print(f"Found {len(config['TAG_SPREADSHEET_CONFIGS'])} tag configs to process")
 
     handler = FeishuSheetHandler(
         app_id=config["APP_ID"],
         app_secret=config["APP_SECRET"]
     )
 
-    for model_name, spreadsheet_token in config["MODEL_SPREADSHEET_TOKEN"].items():
-        print(f"\n=== Start processing {model_name} ===")
-        model_name = model_name.lower()
+    for tag_config in config["TAG_SPREADSHEET_CONFIGS"]:
+        tag = tag_config["tag"]
+        print(f"\n=== Start processing tag={tag} ===")
 
-        testcases = discover_testcases(model_name)
-        if not testcases:
-            print(f"No local testcases found under logs/ for model={model_name}, skipping")
-            continue
-        print(f"Discovered {len(testcases)} local testcases: {testcases}")
+        for model_name, spreadsheet_token in tag_config["MODEL_SPREADSHEET_TOKEN"].items():
+            print(f"\n--- Processing model={model_name} tag={tag} ---")
+            model_name = model_name.lower()
 
-        remote_sheets = handler.get_all_sheet_ids(spreadsheet_token)
-        remote_by_title = {s["title"]: s["sheet_id"] for s in remote_sheets}
-
-        if "模板" not in remote_by_title:
-            print(f"No template sheets retrieved for {model_name}, skipping")
-            continue
-        template_sheet_id = remote_by_title["模板"]
-
-        sort_sheets = False
-
-        for testcase in testcases:
-            print("\n-------")
-            sheet_id = remote_by_title.get(testcase)
-            write_cmd = False
-
-            if not sheet_id:
-                print(f"Sheet for '{testcase}' not found, creating from template...")
-                sheet_id = handler.create_sheet_for_testcase(spreadsheet_token, sheet_title=testcase, template_sheet_id=template_sheet_id)
-                if not sheet_id:
-                    print(f"Failed to create sheet '{testcase}', skipping")
-                    continue
-                remote_by_title[testcase] = sheet_id
-                sort_sheets = True
-                write_cmd = True
-                print(f"Created sheet '{testcase}' with id={sheet_id}")
-            
-            print(f"Processing testcase '{testcase}' -> sheet_id={sheet_id}")
-
-            cmd_args, sheet_data = get_model_data(model_name=model_name, sheet_title=testcase)
-
-            if not sheet_data:
-                print("No valid data generated, skipping")
+            testcases = discover_testcases(model_name, tag)
+            if not testcases:
+                print(f"No local testcases found under logs/{tag}/ for model={model_name}, skipping")
                 continue
+            print(f"Discovered {len(testcases)} local testcases: {testcases}")
 
-            if write_cmd and cmd_args:
-                handler.write_cmd_args_to_header(spreadsheet_token, cmd_args, sheet_id)
+            remote_sheets = handler.get_all_sheet_ids(spreadsheet_token)
+            remote_by_title = {s["title"]: s["sheet_id"] for s in remote_sheets}
 
-            if handler.prepend_data(spreadsheet_token, sheet_id, sheet_data):
-                handler.post_process(spreadsheet_token, sheet_id)
+            if "模板" not in remote_by_title:
+                print(f"No template sheets retrieved for model={model_name}, tag={tag}, skipping")
+                continue
+            template_sheet_id = remote_by_title["模板"]
 
-        if sort_sheets:
-            handler.sort_sheets_by_title(spreadsheet_token, "模板")
+            sort_sheets = False
+
+            for testcase in testcases:
+                print("\n-------")
+                sheet_id = remote_by_title.get(testcase)
+                write_cmd = False
+
+                if not sheet_id:
+                    print(f"Sheet for '{testcase}' not found, creating from template...")
+                    sheet_id = handler.create_sheet_for_testcase(spreadsheet_token, sheet_title=testcase, template_sheet_id=template_sheet_id)
+                    if not sheet_id:
+                        print(f"Failed to create sheet '{testcase}', skipping")
+                        continue
+                    remote_by_title[testcase] = sheet_id
+                    sort_sheets = True
+                    write_cmd = True
+                    print(f"Created sheet '{testcase}' with id={sheet_id}")
+
+                print(f"Processing testcase '{testcase}' -> sheet_id={sheet_id}")
+
+                cmd_args, sheet_data = get_model_data(model_name=model_name, sheet_title=testcase, tag=tag)
+
+                if not sheet_data:
+                    print("No valid data generated, skipping")
+                    continue
+
+                if write_cmd and cmd_args:
+                    handler.write_cmd_args_to_header(spreadsheet_token, cmd_args, sheet_id)
+
+                if handler.prepend_data(spreadsheet_token, sheet_id, sheet_data):
+                    handler.post_process(spreadsheet_token, sheet_id)
+
+            if sort_sheets:
+                handler.sort_sheets_by_title(spreadsheet_token, "模板")
 
     print("\n=== All models and sheets processed ===")
 

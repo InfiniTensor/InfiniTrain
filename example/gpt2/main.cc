@@ -17,6 +17,7 @@
 #include "infini_train/include/checkpoint.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
@@ -90,6 +91,14 @@ DEFINE_bool(use_llmc_checkpoint_io, false,
 DEFINE_string(
     precision_check, "",
     "precision check config: level=N,format=simple|table,output_md5=true|false,output_path=PATH,baseline=PATH");
+
+// LoRA parameters
+DEFINE_int32(lora_rank, 0, "LoRA rank (0 = disabled)");
+DEFINE_double(lora_alpha, 16.0, "LoRA alpha scaling factor");
+DEFINE_string(lora_target_modules, "c_attn,c_proj",
+              "LoRA target modules (comma-separated: c_attn,c_proj,c_fc,c_fc2,mlp.c_proj)");
+DEFINE_string(lora_save_path, "", "Path to save LoRA weights after training");
+DEFINE_string(lora_load_path, "", "Path to load LoRA weights from");
 
 using namespace infini_train;
 
@@ -192,6 +201,7 @@ void Train(const nn::parallel::Rank &rank) {
     // init the model, either from scratch or from OpenAI pretrained checkpoint
     GPT2Config model_config;
     std::shared_ptr<nn::Module> model = nullptr;
+
     if (!FLAGS_llmc_filepath.empty()) {
         model = GPT2::FromLLMC(FLAGS_llmc_filepath);
     } else if (kModelToConfigs.count(FLAGS_model)) {
@@ -207,6 +217,29 @@ void Train(const nn::parallel::Rank &rank) {
 
     utils::PrecisionChecker::BuildNameMap(model.get());
 
+    // Get chunk size before wrapping with LoRA (needed for PipelineParallel)
+    auto gpt2_model = std::dynamic_pointer_cast<GPT2>(model);
+    CHECK(gpt2_model) << "GPT2 example expects GPT2 model.";
+
+    // Apply LoRA using GetLoRAModel (in-place injection)
+    bool lora_enabled = FLAGS_lora_rank > 0;
+    if (lora_enabled) {
+        nn::lora::LoRAConfig lora_config{FLAGS_lora_rank, static_cast<float>(FLAGS_lora_alpha), 0.0f,
+                                         nn::lora::ParseLoRATargetModules(FLAGS_lora_target_modules)};
+
+        // GetLoRAModel: in-place injection, modifies module tree directly
+        model = nn::lora::GetLoRAModel(model, lora_config);
+
+        // Load LoRA weights if specified
+        if (!FLAGS_lora_load_path.empty()) {
+            LOG(INFO) << "Loading LoRA weights from: " << FLAGS_lora_load_path;
+            nn::lora::LoadLoRAWeights(model, FLAGS_lora_load_path);
+        }
+
+        // Print LoRA summary
+        nn::lora::PrintLoRASummary(model, rank.GlobalRank());
+    }
+
     // select the data type
     // TODO(lzm): change to solely rely on the weight file info for determining the dtype when autocast is supported
     DataType dtype;
@@ -220,15 +253,24 @@ void Train(const nn::parallel::Rank &rank) {
 
     auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
 
+    // Create optimizer - use GetLoRAParameters if LoRA is enabled
+    std::vector<std::shared_ptr<Tensor>> params_to_optimize;
+    if (lora_enabled) {
+        params_to_optimize = nn::lora::GetLoRAParameters(model);
+        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " LoRA parameters";
+    } else {
+        params_to_optimize = model->Parameters();
+        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " model parameters";
+    }
+
     if (pp_world_size > 1) {
         // NOTE(dcj): To ensure that the tensor shapes at the pipeline stage boundaries remain correct
         // when sequence parallelism (SP) is enabled, we need to divide by sp_world_size.
         auto shapes = std::vector<std::vector<int64_t>>{
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
-        model = std::make_shared<nn::parallel::PipelineParallel>(
-            model, pp_world_size, num_micro_batches, shapes, pp_rank, device,
-            std::dynamic_pointer_cast<GPT2>(model)->GetChunkSize());
+        model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
+                                                                 pp_rank, device, gpt2_model->GetChunkSize());
         if (ddp_world_size > 1) {
             auto ddp_config
                 = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
@@ -276,10 +318,10 @@ void Train(const nn::parallel::Rank &rank) {
         auto model_chunks = (pp_world_size > 1)
                               ? *(dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks())
                               : std::vector<std::shared_ptr<nn::Module>>{model};
-        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, model->Parameters(),
+        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, params_to_optimize,
                                                                          model_chunks, ddp_world_size, ddp_rank);
     } else {
-        optimizer = optimizer_creator(model->Parameters());
+        optimizer = optimizer_creator(params_to_optimize);
     }
 
     auto train_iter = train_loader.begin();
@@ -519,6 +561,12 @@ void Train(const nn::parallel::Rank &rank) {
         final_dir /= std::format("rank_{:06d}", rank.GlobalRank());
     }
     save_checkpoint(final_dir, FLAGS_num_iteration, false);
+    // Save LoRA weights if enabled and path specified
+    if (lora_enabled && !FLAGS_lora_save_path.empty()) {
+        LOG(INFO) << "Saving LoRA weights to: " << FLAGS_lora_save_path;
+        nn::lora::SaveLoRAWeights(model, FLAGS_lora_save_path);
+    }
+
 #ifdef PROFILE_MODE
     Profiler::Instance().Report("gpt2.report", Profiler::SortBy::DeviceTimePercentage);
     Profiler::Instance().PrintRecords("gpt2.records.log");
