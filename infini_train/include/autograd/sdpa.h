@@ -18,12 +18,8 @@ public:
     static constexpr char kType[] = "ScaledDotProductAttentionFunction";
 
     ScaledDotProductAttention(const std::shared_ptr<Tensor> &attn_mask, double dropout_p, bool is_causal,
-                             std::optional<double> scale, bool enable_gqa)
-        : Function(kType),
-          attn_mask_(attn_mask),
-          dropout_p_(dropout_p),
-          is_causal_(is_causal),
-          scale_(scale),
+                              std::optional<double> scale, bool enable_gqa)
+        : Function(kType), attn_mask_(attn_mask), dropout_p_(dropout_p), is_causal_(is_causal), scale_(scale),
           enable_gqa_(enable_gqa) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;

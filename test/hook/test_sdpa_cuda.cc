@@ -24,14 +24,12 @@ float MaxAbsDiffCPU(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tens
     const float *pa = static_cast<const float *>(a_cpu->DataPtr());
     const float *pb = static_cast<const float *>(b_cpu->DataPtr());
     float m = 0.0f;
-    for (size_t i = 0; i < a_cpu->NumElements(); ++i) {
-        m = std::max(m, std::abs(pa[i] - pb[i]));
-    }
+    for (size_t i = 0; i < a_cpu->NumElements(); ++i) { m = std::max(m, std::abs(pa[i] - pb[i])); }
     return m;
 }
 
 std::shared_ptr<Tensor> ReferenceSDPA(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
-                                     const std::shared_ptr<Tensor> &v, bool is_causal) {
+                                      const std::shared_ptr<Tensor> &v, bool is_causal) {
     const auto &q_shape = q->Dims();
     CHECK_EQ(q_shape.size(), 4);
     const int64_t T = q_shape[2];

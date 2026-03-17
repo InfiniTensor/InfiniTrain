@@ -227,7 +227,7 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
         // FlashAttention path (placeholder): use unified SDPA API.
         // q/k/v: (B, H_local, T, D)
         auto y = nn::function::ScaledDotProductAttention(q, k, v, /*attn_mask=*/mask,
-                                                      /*dropout_p=*/0.0, /*is_causal=*/false);
+                                                         /*dropout_p=*/0.0, /*is_causal=*/false);
         y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
         y = (*modules_[kCProjLayerName])({y})[0];
         return {y};

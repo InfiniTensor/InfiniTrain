@@ -1,19 +1,19 @@
 #include "infini_train/include/nn/functional.h"
 
-#include <cstdint>
-#include <optional>
-#include <limits>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "infini_train/include/autograd/activations.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/misc.h"
 #include "infini_train/include/autograd/reduction.h"
+#include "infini_train/include/autograd/sdpa.h"
 #include "infini_train/include/autograd/softmax.h"
 #include "infini_train/include/autograd/transform.h"
-#include "infini_train/include/autograd/sdpa.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/tensor.h"
 
@@ -84,7 +84,6 @@ std::shared_ptr<Tensor> Sigmoid(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<autograd::Sigmoid>()->Apply({input})[0];
 }
 
-
 namespace {
 std::shared_ptr<Tensor> RepeatHeads(const std::shared_ptr<Tensor> &x, int64_t n_rep) {
     // x: (B, H, T, D)
@@ -104,10 +103,11 @@ std::shared_ptr<Tensor> MakeCausalMask(int64_t T, Device device) {
 }
 } // namespace
 
-std::shared_ptr<Tensor> ScaledDotProductAttention(
-    const std::shared_ptr<Tensor> &query, const std::shared_ptr<Tensor> &key,
-    const std::shared_ptr<Tensor> &value, const std::shared_ptr<Tensor> &attn_mask,
-    double dropout_p, bool is_causal, std::optional<double> scale, bool enable_gqa) {
+std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &query,
+                                                  const std::shared_ptr<Tensor> &key,
+                                                  const std::shared_ptr<Tensor> &value,
+                                                  const std::shared_ptr<Tensor> &attn_mask, double dropout_p,
+                                                  bool is_causal, std::optional<double> scale, bool enable_gqa) {
     CHECK(query != nullptr);
     CHECK(key != nullptr);
     CHECK(value != nullptr);

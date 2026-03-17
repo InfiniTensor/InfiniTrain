@@ -34,8 +34,8 @@ std::shared_ptr<Tensor> MakeCausalMask(int64_t t, Device device) {
 }
 } // namespace
 
-std::vector<std::shared_ptr<Tensor>> ScaledDotProductAttention::Forward(
-    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>>
+ScaledDotProductAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 3);
     const auto &query = input_tensors[0];
     const auto &key = input_tensors[1];
@@ -110,9 +110,9 @@ std::vector<std::shared_ptr<Tensor>> ScaledDotProductAttention::Forward(
 #ifdef USE_CUDA
     if (query->GetDevice().IsCUDA() && query->Dtype() == DataType::kFLOAT32 && k_used->Dtype() == DataType::kFLOAT32
         && v_used->Dtype() == DataType::kFLOAT32) {
-        out = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({Device::DeviceType::kCUDA, "SdpaForward"},
-                                                                  query, k_used, v_used, attn_mask_, is_causal_,
-                                                                  static_cast<float>(scale_value_));
+        out = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({Device::DeviceType::kCUDA, "SdpaForward"}, query,
+                                                                   k_used, v_used, attn_mask_, is_causal_,
+                                                                   static_cast<float>(scale_value_));
     }
 #endif
     if (out == nullptr) {
@@ -133,13 +133,13 @@ std::vector<std::shared_ptr<Tensor>> ScaledDotProductAttention::Forward(
 }
 
 void ScaledDotProductAttention::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                                            const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+                                             const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
     (void)input_tensors;
     (void)output_tensors;
 }
 
-std::vector<std::shared_ptr<Tensor>> ScaledDotProductAttention::Backward(
-    const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+std::vector<std::shared_ptr<Tensor>>
+ScaledDotProductAttention::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_out = grad_outputs[0];
 
@@ -165,10 +165,11 @@ std::vector<std::shared_ptr<Tensor>> ScaledDotProductAttention::Backward(
 #ifdef USE_CUDA
     if (query->GetDevice().IsCUDA() && query->Dtype() == DataType::kFLOAT32 && k_used->Dtype() == DataType::kFLOAT32
         && v_used->Dtype() == DataType::kFLOAT32 && grad_out->Dtype() == DataType::kFLOAT32) {
-        auto [gq, gk, gv] = Dispatcher::Instance()
-                              .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
-                                  {Device::DeviceType::kCUDA, "SdpaBackward"}, query, k_used, v_used, grad_out, attn_mask_,
-                                  is_causal_, static_cast<float>(scale_value_));
+        auto [gq, gk, gv]
+            = Dispatcher::Instance()
+                  .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+                      {Device::DeviceType::kCUDA, "SdpaBackward"}, query, k_used, v_used, grad_out, attn_mask_,
+                      is_causal_, static_cast<float>(scale_value_));
         grad_q = gq;
         grad_k_used = gk;
         grad_v_used = gv;

@@ -53,16 +53,12 @@ __device__ __forceinline__ bool IsMasked(const MaskInfo &m, int64_t B, int64_t H
 }
 
 __device__ __forceinline__ float WarpReduceSum(float val) {
-    for (int offset = 16; offset > 0; offset >>= 1) {
-        val += __shfl_down_sync(0xffffffff, val, offset);
-    }
+    for (int offset = 16; offset > 0; offset >>= 1) { val += __shfl_down_sync(0xffffffff, val, offset); }
     return val;
 }
 
 __device__ __forceinline__ float WarpReduceMax(float val) {
-    for (int offset = 16; offset > 0; offset >>= 1) {
-        val = fmaxf(val, __shfl_down_sync(0xffffffff, val, offset));
-    }
+    for (int offset = 16; offset > 0; offset >>= 1) { val = fmaxf(val, __shfl_down_sync(0xffffffff, val, offset)); }
     return val;
 }
 
@@ -71,8 +67,8 @@ __device__ __forceinline__ float WarpReduceMax(float val) {
 // q,k,v: (B,H,T,D) float32 contiguous
 // out:   (B,H,T,D) float32
 __global__ void SdpaForwardKernel(const float *__restrict__ q, const float *__restrict__ k, const float *__restrict__ v,
-                                 MaskInfo mask, bool is_causal, float scale, float *__restrict__ out,
-                                 int64_t B, int64_t H, int64_t T, int64_t D) {
+                                  MaskInfo mask, bool is_causal, float scale, float *__restrict__ out, int64_t B,
+                                  int64_t H, int64_t T, int64_t D) {
     const int warp_id = threadIdx.x / 32;
     const int lane = threadIdx.x % 32;
     const int num_warps = blockDim.x / 32;
@@ -90,9 +86,7 @@ __global__ void SdpaForwardKernel(const float *__restrict__ q, const float *__re
     extern __shared__ float smem[];
     float *out_acc = smem; // size D
 
-    for (int64_t d = threadIdx.x; d < D; d += blockDim.x) {
-        out_acc[d] = 0.0f;
-    }
+    for (int64_t d = threadIdx.x; d < D; d += blockDim.x) { out_acc[d] = 0.0f; }
     __syncthreads();
 
     __shared__ float warp_max[8];
@@ -113,9 +107,7 @@ __global__ void SdpaForwardKernel(const float *__restrict__ q, const float *__re
         const float *k_row = k + (((b * H + h) * T + j) * D);
 
         float dot = 0.0f;
-        for (int64_t d = lane; d < D; d += 32) {
-            dot += q_row[d] * k_row[d];
-        }
+        for (int64_t d = lane; d < D; d += 32) { dot += q_row[d] * k_row[d]; }
         dot = WarpReduceSum(dot);
         if (lane == 0) {
             const float score = dot * scale;
@@ -159,9 +151,7 @@ __global__ void SdpaForwardKernel(const float *__restrict__ q, const float *__re
         const float *v_row = v + (((b * H + h) * T + j) * D);
 
         float dot = 0.0f;
-        for (int64_t d = lane; d < D; d += 32) {
-            dot += q_row[d] * k_row[d];
-        }
+        for (int64_t d = lane; d < D; d += 32) { dot += q_row[d] * k_row[d]; }
         dot = WarpReduceSum(dot);
 
         float p = 0.0f;
@@ -172,9 +162,7 @@ __global__ void SdpaForwardKernel(const float *__restrict__ q, const float *__re
         }
         p = __shfl_sync(0xffffffff, p, 0);
 
-        for (int64_t d = lane; d < D; d += 32) {
-            atomicAdd(&out_acc[d], p * v_row[d]);
-        }
+        for (int64_t d = lane; d < D; d += 32) { atomicAdd(&out_acc[d], p * v_row[d]); }
     }
 
     if (lane == 0) {
@@ -197,15 +185,13 @@ __global__ void SdpaForwardKernel(const float *__restrict__ q, const float *__re
     const float inv = (row_sum > 0.0f) ? (1.0f / row_sum) : 0.0f;
 
     float *out_row = out + (((b * H + h) * T + i) * D);
-    for (int64_t d = threadIdx.x; d < D; d += blockDim.x) {
-        out_row[d] = out_acc[d] * inv;
-    }
+    for (int64_t d = threadIdx.x; d < D; d += blockDim.x) { out_row[d] = out_acc[d] * inv; }
 }
 
-__global__ void SdpaBackwardKernel(const float *__restrict__ q, const float *__restrict__ k, const float *__restrict__ v,
-                                  const float *__restrict__ grad_out, MaskInfo mask, bool is_causal, float scale,
-                                  float *__restrict__ grad_q, float *__restrict__ grad_k, float *__restrict__ grad_v,
-                                  int64_t B, int64_t H, int64_t T, int64_t D) {
+__global__ void SdpaBackwardKernel(const float *__restrict__ q, const float *__restrict__ k,
+                                   const float *__restrict__ v, const float *__restrict__ grad_out, MaskInfo mask,
+                                   bool is_causal, float scale, float *__restrict__ grad_q, float *__restrict__ grad_k,
+                                   float *__restrict__ grad_v, int64_t B, int64_t H, int64_t T, int64_t D) {
     const int warp_id = threadIdx.x / 32;
     const int lane = threadIdx.x % 32;
     const int num_warps = blockDim.x / 32;
@@ -235,9 +221,7 @@ __global__ void SdpaBackwardKernel(const float *__restrict__ q, const float *__r
         const float *q_row = q + (((b * H + h) * T + i) * D);
         const float *k_row = k + (((b * H + h) * T + j) * D);
         float dot = 0.0f;
-        for (int64_t d = lane; d < D; d += 32) {
-            dot += q_row[d] * k_row[d];
-        }
+        for (int64_t d = lane; d < D; d += 32) { dot += q_row[d] * k_row[d]; }
         dot = WarpReduceSum(dot);
         if (lane == 0) {
             local_max = fmaxf(local_max, dot * scale);
@@ -273,9 +257,7 @@ __global__ void SdpaBackwardKernel(const float *__restrict__ q, const float *__r
         const float *q_row = q + (((b * H + h) * T + i) * D);
         const float *k_row = k + (((b * H + h) * T + j) * D);
         float dot = 0.0f;
-        for (int64_t d = lane; d < D; d += 32) {
-            dot += q_row[d] * k_row[d];
-        }
+        for (int64_t d = lane; d < D; d += 32) { dot += q_row[d] * k_row[d]; }
         dot = WarpReduceSum(dot);
         if (lane == 0) {
             local_sum += __expf(dot * scale - row_max);
@@ -351,9 +333,7 @@ __global__ void SdpaBackwardKernel(const float *__restrict__ q, const float *__r
 
     // grad_q init
     float *gq_row = grad_q + (((b * H + h) * T + i) * D);
-    for (int64_t d = threadIdx.x; d < D; d += blockDim.x) {
-        gq_row[d] = 0.0f;
-    }
+    for (int64_t d = threadIdx.x; d < D; d += blockDim.x) { gq_row[d] = 0.0f; }
     __syncthreads();
 
     // second pass: accumulate grads
@@ -399,8 +379,8 @@ __global__ void SdpaBackwardKernel(const float *__restrict__ q, const float *__r
 }
 
 std::shared_ptr<Tensor> SdpaForward(const std::shared_ptr<Tensor> &query, const std::shared_ptr<Tensor> &key,
-                                   const std::shared_ptr<Tensor> &value, const std::shared_ptr<Tensor> &attn_mask,
-                                   bool is_causal, float scale) {
+                                    const std::shared_ptr<Tensor> &value, const std::shared_ptr<Tensor> &attn_mask,
+                                    bool is_causal, float scale) {
     CHECK(query->Dtype() == DataType::kFLOAT32);
     CHECK(key->Dtype() == DataType::kFLOAT32);
     CHECK(value->Dtype() == DataType::kFLOAT32);
@@ -425,18 +405,17 @@ std::shared_ptr<Tensor> SdpaForward(const std::shared_ptr<Tensor> &query, const 
 
     auto mask_info = MakeMaskInfo(attn_mask);
 
-    SdpaForwardKernel<<<blocks, threads, shmem, cuda_stream>>>(static_cast<const float *>(query->DataPtr()),
-                                                              static_cast<const float *>(key->DataPtr()),
-                                                              static_cast<const float *>(value->DataPtr()),
-                                                              mask_info, is_causal, scale,
-                                                              static_cast<float *>(out->DataPtr()), B, H, T, D);
+    SdpaForwardKernel<<<blocks, threads, shmem, cuda_stream>>>(
+        static_cast<const float *>(query->DataPtr()), static_cast<const float *>(key->DataPtr()),
+        static_cast<const float *>(value->DataPtr()), mask_info, is_causal, scale, static_cast<float *>(out->DataPtr()),
+        B, H, T, D);
     return out;
 }
 
 std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
-SdpaBackward(const std::shared_ptr<Tensor> &query, const std::shared_ptr<Tensor> &key, const std::shared_ptr<Tensor> &value,
-            const std::shared_ptr<Tensor> &grad_out, const std::shared_ptr<Tensor> &attn_mask,
-            bool is_causal, float scale) {
+SdpaBackward(const std::shared_ptr<Tensor> &query, const std::shared_ptr<Tensor> &key,
+             const std::shared_ptr<Tensor> &value, const std::shared_ptr<Tensor> &grad_out,
+             const std::shared_ptr<Tensor> &attn_mask, bool is_causal, float scale) {
     CHECK(query->Dtype() == DataType::kFLOAT32);
     CHECK(key->Dtype() == DataType::kFLOAT32);
     CHECK(value->Dtype() == DataType::kFLOAT32);
@@ -466,27 +445,21 @@ SdpaBackward(const std::shared_ptr<Tensor> &query, const std::shared_ptr<Tensor>
 
     auto mask_info = MakeMaskInfo(attn_mask);
 
-    SdpaBackwardKernel<<<blocks, threads, 0, cuda_stream>>>(static_cast<const float *>(query->DataPtr()),
-                                                           static_cast<const float *>(key->DataPtr()),
-                                                           static_cast<const float *>(value->DataPtr()),
-                                                           static_cast<const float *>(grad_out->DataPtr()),
-                                                           mask_info, is_causal, scale,
-                                                           static_cast<float *>(grad_q->DataPtr()),
-                                                           static_cast<float *>(grad_k->DataPtr()),
-                                                           static_cast<float *>(grad_v->DataPtr()),
-                                                           B, H, T, D);
+    SdpaBackwardKernel<<<blocks, threads, 0, cuda_stream>>>(
+        static_cast<const float *>(query->DataPtr()), static_cast<const float *>(key->DataPtr()),
+        static_cast<const float *>(value->DataPtr()), static_cast<const float *>(grad_out->DataPtr()), mask_info,
+        is_causal, scale, static_cast<float *>(grad_q->DataPtr()), static_cast<float *>(grad_k->DataPtr()),
+        static_cast<float *>(grad_v->DataPtr()), B, H, T, D);
 
     return {grad_q, grad_k, grad_v};
 }
 
-
-
 // Wrappers to keep REGISTER_KERNEL lines short (some environments hard-wrap long lines when writing).
 static std::shared_ptr<Tensor> SdpaForwardKernelEntry(const std::shared_ptr<Tensor> &query,
-                                                     const std::shared_ptr<Tensor> &key,
-                                                     const std::shared_ptr<Tensor> &value,
-                                                     const std::shared_ptr<Tensor> &attn_mask,
-                                                     bool is_causal, float scale) {
+                                                      const std::shared_ptr<Tensor> &key,
+                                                      const std::shared_ptr<Tensor> &value,
+                                                      const std::shared_ptr<Tensor> &attn_mask, bool is_causal,
+                                                      float scale) {
     return infini_train::kernels::cuda::SdpaForward(query, key, value, attn_mask, is_causal, scale);
 }
 

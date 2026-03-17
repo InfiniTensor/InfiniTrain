@@ -30,9 +30,7 @@ float MaxAbsDiff(const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor>
     const auto *pb = static_cast<const float *>(b_cpu->DataPtr());
 
     float max_diff = 0.0f;
-    for (size_t i = 0; i < a_cpu->NumElements(); ++i) {
-        max_diff = std::max(max_diff, std::abs(pa[i] - pb[i]));
-    }
+    for (size_t i = 0; i < a_cpu->NumElements(); ++i) { max_diff = std::max(max_diff, std::abs(pa[i] - pb[i])); }
     return max_diff;
 }
 
@@ -45,24 +43,15 @@ int main(int argc, char **argv) {
     const std::vector<int64_t> dims = {1, 1, 4, 2};
 
     const float q_data[] = {
-        0.1f, 0.2f,
-        0.3f, 0.4f,
-        0.5f, 0.6f,
-        0.7f, 0.8f,
+        0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f,
     };
 
     const float k_data[] = {
-        0.2f, 0.1f,
-        0.4f, 0.3f,
-        0.6f, 0.5f,
-        0.8f, 0.7f,
+        0.2f, 0.1f, 0.4f, 0.3f, 0.6f, 0.5f, 0.8f, 0.7f,
     };
 
     const float v_data[] = {
-        1.0f, 0.0f,
-        0.0f, 1.0f,
-        1.0f, 1.0f,
-        0.5f, 0.5f,
+        1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.5f, 0.5f,
     };
 
     auto q = std::make_shared<Tensor>(q_data, dims, DataType::kFLOAT32, Device());
@@ -83,7 +72,7 @@ int main(int argc, char **argv) {
 
     // API under test
     auto y = fn::ScaledDotProductAttention(q, k, v, /*attn_mask=*/nullptr,
-                                          /*dropout_p=*/0.0, /*is_causal=*/true);
+                                           /*dropout_p=*/0.0, /*is_causal=*/true);
 
     const float diff = MaxAbsDiff(y, y_ref);
     std::cout << "MaxAbsDiff = " << diff << std::endl;
