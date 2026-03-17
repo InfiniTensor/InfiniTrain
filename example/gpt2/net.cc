@@ -14,6 +14,7 @@
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
+#include "infini_train/include/autograd/ScaledDotProductAttention.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
@@ -105,18 +106,31 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     q = q->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
     v = v->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
 
-    // (B, h_l, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
-    // (1, 1, T, T)
-    auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
-    // (1, 1, T, T) -> eq 0 -> (1, 1, T, T) -> masked_fill -> (B, h_l, T, T)
-    att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
-    // (B, h_l, T, T)
-    att = nn::function::Softmax(att, -1);
-    // (B, h_l, T, Dh)
-    auto y = att->Matmul(v);
-    // (B, h_l, T, Dh) -> (B, T, h_l, Dh) -> (B, T, local_C)
-    y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
+    std::shared_ptr<Tensor> y = nullptr;
+    if (config_.flash) {
+        // FlashAttention expects (B, T, H, D)
+        auto q_flash = q->Transpose(1, 2);
+        auto k_flash = k->Transpose(1, 2);
+        auto v_flash = v->Transpose(1, 2);
+        auto y_flash = std::make_shared<autograd::ScaledDotProductAttention>(
+                           /*attn_mask=*/nullptr, /*dropout_p=*/0, /*is_causal=*/true,
+                           /*scale=*/1.0 / std::sqrt(static_cast<double>(head_dim)), /*enable_gqa=*/false)
+                           ->Apply({q_flash, k_flash, v_flash})[0];
+        y = y_flash->Contiguous()->View({B, T, local_C});
+    } else {
+        // (B, h_l, T, T)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
+        // (1, 1, T, T)
+        auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
+        // (1, 1, T, T) -> eq 0 -> (1, 1, T, T) -> masked_fill -> (B, h_l, T, T)
+        att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
+        // (B, h_l, T, T)
+        att = nn::function::Softmax(att, -1);
+        // (B, h_l, T, Dh)
+        y = att->Matmul(v);
+        // (B, h_l, T, Dh) -> (B, T, h_l, Dh) -> (B, T, local_C)
+        y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
+    }
 
     // Get full tensor
     // (B, T, local_C) -> RowParallelLinear(n_embd, n_embd) -> (B, T, C)
@@ -356,7 +370,7 @@ std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::
 }
 } // namespace
 
-std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
+std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath, bool flash) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -384,7 +398,8 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
                                                         .original_vocab_size = vocab_size,
                                                         .n_layer = n_layer,
                                                         .n_head = n_head,
-                                                        .n_embd = n_embd});
+                                                        .n_embd = n_embd,
+                                                        .flash = flash});
 
     LOG(INFO) << "magic: " << magic << " version: " << version << " block_size: " << block_size
               << " vocab_size: " << vocab_size << " n_layer: " << n_layer << " n_head: " << n_head

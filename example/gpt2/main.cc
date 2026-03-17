@@ -72,6 +72,7 @@ DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
+DEFINE_bool(flash, false, "Whether to enable FlashAttention in CausalSelfAttention");
 
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
@@ -191,11 +192,16 @@ void Train(const nn::parallel::Rank &rank) {
     std::shared_ptr<nn::Module> model = nullptr;
 
     if (!FLAGS_llmc_filepath.empty()) {
-        model = GPT2::FromLLMC(FLAGS_llmc_filepath);
+        LOG(INFO) << "Rank " << rank.GlobalRank() << ": Loading GPT2 from LLMC file: " << FLAGS_llmc_filepath;
+        model = GPT2::FromLLMC(FLAGS_llmc_filepath, FLAGS_flash);
     } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
+        model_config.flash = FLAGS_flash;
         model = std::make_shared<GPT2>(model_config);
     } else {
+        if (FLAGS_flash) {
+            LOG(WARNING) << "--flash is ignored when loading GPT2 from pretrained checkpoint.";
+        }
         model = GPT2::FromPretrained(kStrToModelType.at(FLAGS_model));
     }
 
