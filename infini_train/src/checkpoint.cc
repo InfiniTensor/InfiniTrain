@@ -86,8 +86,7 @@ template <typename T> T ExtractNumberField(const std::string &content, const std
 
 void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Module &model, const Optimizer &optimizer,
                       const TrainerState &state, const CheckpointOptions &options) {
-    CHECK(options.format == "bin" || options.format == "pth")
-        << "Unsupported checkpoint format: " << options.format;
+    CHECK(options.format == "bin" || options.format == "pth") << "Unsupported checkpoint format: " << options.format;
     std::filesystem::create_directories(checkpoint_dir);
     LOG(ERROR) << "[CKPT] Save begin: dir=" << checkpoint_dir << ", format=" << options.format
                << ", global_step=" << state.global_step;
@@ -149,12 +148,11 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module *m
     }
 
     *state = LoadTrainerState(checkpoint_dir / "trainer_state.json");
-    LOG(ERROR) << "[CKPT] Load done: global_step=" << state->global_step << ", data_batch_idx="
-               << state->data_batch_idx << ", data_batch_stride=" << state->data_batch_stride
-               << ", best_loss=" << state->best_loss << ", last_lr=" << state->last_lr
-               << ", optimizer_type=" << state->optimizer_type
-               << ", topology(ddp,tp,sp,pp)=(" << state->ddp_size << "," << state->tp_size << ","
-               << state->sp_size << "," << state->pp_size << ")";
+    LOG(ERROR) << "[CKPT] Load done: global_step=" << state->global_step << ", data_batch_idx=" << state->data_batch_idx
+               << ", data_batch_stride=" << state->data_batch_stride << ", best_loss=" << state->best_loss
+               << ", last_lr=" << state->last_lr << ", optimizer_type=" << state->optimizer_type
+               << ", topology(ddp,tp,sp,pp)=(" << state->ddp_size << "," << state->tp_size << "," << state->sp_size
+               << "," << state->pp_size << ")";
 }
 
 void Checkpoint::SaveStateDictBinary(const std::filesystem::path &path,
@@ -178,9 +176,7 @@ void Checkpoint::SaveStateDictBinary(const std::filesystem::path &path,
         const auto &dims = tensor->Dims();
         uint32_t ndim = static_cast<uint32_t>(dims.size());
         ofs.write(reinterpret_cast<const char *>(&ndim), sizeof(ndim));
-        for (const auto dim : dims) {
-            ofs.write(reinterpret_cast<const char *>(&dim), sizeof(dim));
-        }
+        for (const auto dim : dims) { ofs.write(reinterpret_cast<const char *>(&dim), sizeof(dim)); }
 
         Tensor cpu_tensor = tensor->To(Device());
         uint64_t bytes = static_cast<uint64_t>(cpu_tensor.SizeInBytes());
@@ -189,7 +185,8 @@ void Checkpoint::SaveStateDictBinary(const std::filesystem::path &path,
     }
 }
 
-std::unordered_map<std::string, std::shared_ptr<Tensor>> Checkpoint::LoadStateDictBinary(const std::filesystem::path &path) {
+std::unordered_map<std::string, std::shared_ptr<Tensor>>
+Checkpoint::LoadStateDictBinary(const std::filesystem::path &path) {
     std::ifstream ifs(path, std::ios::binary);
     CHECK(ifs.is_open()) << "Failed to open checkpoint file: " << path;
 
@@ -214,9 +211,7 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Checkpoint::LoadStateDi
         uint32_t ndim = 0;
         ifs.read(reinterpret_cast<char *>(&ndim), sizeof(ndim));
         std::vector<int64_t> dims(ndim);
-        for (uint32_t d = 0; d < ndim; ++d) {
-            ifs.read(reinterpret_cast<char *>(&dims[d]), sizeof(dims[d]));
-        }
+        for (uint32_t d = 0; d < ndim; ++d) { ifs.read(reinterpret_cast<char *>(&dims[d]), sizeof(dims[d])); }
 
         uint64_t bytes = 0;
         ifs.read(reinterpret_cast<char *>(&bytes), sizeof(bytes));

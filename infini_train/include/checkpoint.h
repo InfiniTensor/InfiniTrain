@@ -49,11 +49,11 @@ public:
                      TrainerState *state, const CheckpointLoadOptions &options = {});
 
 private:
-    static void SaveStateDictBinary(
-        const std::filesystem::path &path,
-        const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict);
+    static void SaveStateDictBinary(const std::filesystem::path &path,
+                                    const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict);
 
-    static std::unordered_map<std::string, std::shared_ptr<Tensor>> LoadStateDictBinary(const std::filesystem::path &path);
+    static std::unordered_map<std::string, std::shared_ptr<Tensor>>
+    LoadStateDictBinary(const std::filesystem::path &path);
 
     static void SaveTrainerState(const std::filesystem::path &path, const TrainerState &state);
     static TrainerState LoadTrainerState(const std::filesystem::path &path);
