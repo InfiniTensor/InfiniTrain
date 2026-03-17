@@ -201,6 +201,11 @@ link_infini_train_exe(test_hook)
 add_executable(test_precision_check test/hook/test_precision_check.cc)
 link_infini_train_exe(test_precision_check)
 
+add_executable(test_sdpa test/hook/test_sdpa.cc)
+link_infini_train_exe(test_sdpa)
+
+add_executable(test_sdpa_cuda test/hook/test_sdpa_cuda.cc)
+link_infini_train_exe(test_sdpa_cuda)
+
 add_executable(test_lora test/lora/test_lora.cc)
 link_infini_train_exe(test_lora)
-
