@@ -61,6 +61,8 @@ public:
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
 
+    virtual void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict);
+
     // operator() calls hooks and Forward
     std::vector<std::shared_ptr<Tensor>> operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
 

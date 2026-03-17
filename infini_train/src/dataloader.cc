@@ -78,6 +78,8 @@ bool operator==(const DataLoaderIterator &lhs, const DataLoaderIterator &rhs) {
     return lhs.batch_idx_ == rhs.batch_idx_;
 }
 
+size_t DataLoaderIterator::BatchIndex() const { return batch_idx_; }
+
 DataLoader::DataLoader(const std::shared_ptr<Dataset> &dataset, size_t batch_size)
     : dataset_(dataset), batch_size_(batch_size), max_batch_idx_((dataset_->Size() + batch_size_ - 1) / batch_size_) {}
 
@@ -85,6 +87,10 @@ DataLoaderIterator DataLoader::begin() const { return DataLoaderIterator(*datase
 
 DataLoaderIterator DataLoader::end() const {
     return DataLoaderIterator(*dataset_, batch_size_, max_batch_idx_, max_batch_idx_);
+}
+
+DataLoaderIterator DataLoader::IteratorAtBatchIndex(size_t batch_idx) const {
+    return DataLoaderIterator(*dataset_, batch_size_, std::min(batch_idx, max_batch_idx_), max_batch_idx_);
 }
 
 DistributedDataLoader::DistributedDataLoader(const std::shared_ptr<Dataset> &dataset, size_t batch_size,
@@ -97,5 +103,10 @@ DataLoaderIterator DistributedDataLoader::begin() const {
 
 DataLoaderIterator DistributedDataLoader::end() const {
     return DataLoaderIterator(*dataset_, batch_size_, max_batch_idx_, max_batch_idx_, ddp_rank_, ddp_world_size_);
+}
+
+DataLoaderIterator DistributedDataLoader::IteratorAtBatchIndex(size_t batch_idx) const {
+    return DataLoaderIterator(*dataset_, batch_size_, std::min(batch_idx, max_batch_idx_), max_batch_idx_, ddp_rank_,
+                              ddp_world_size_);
 }
 } // namespace infini_train
