@@ -1,18 +1,18 @@
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <limits>
 #include <memory>
 #include <optional>
-#include <algorithm>
 #include <unordered_set>
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
-#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/checkpoint.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
@@ -339,7 +339,8 @@ void Train(const nn::parallel::Rank &rank) {
         }
     }
 
-    auto save_checkpoint = [&](const std::filesystem::path &save_dir, int64_t global_step, bool prune_step_checkpoints) {
+    auto save_checkpoint = [&](const std::filesystem::path &save_dir, int64_t global_step,
+                               bool prune_step_checkpoints) {
         const auto ckpt_start = std::chrono::high_resolution_clock::now();
 
         TrainerState state;
@@ -374,8 +375,7 @@ void Train(const nn::parallel::Rank &rank) {
                 const auto root = std::filesystem::path(FLAGS_checkpoint_dir);
                 if (std::filesystem::exists(root)) {
                     for (const auto &entry : std::filesystem::directory_iterator(root)) {
-                        if (entry.is_directory()
-                            && entry.path().filename().string().starts_with("checkpoint_step_")) {
+                        if (entry.is_directory() && entry.path().filename().string().starts_with("checkpoint_step_")) {
                             ckpts.push_back(entry.path());
                         }
                     }

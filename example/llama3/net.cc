@@ -1,8 +1,8 @@
 #include "example/llama3/net.h"
 
 #include <cmath>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -758,10 +758,8 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
 }
 
 void LLaMA3::SaveAsLLMC(const std::string &filepath) const {
-    CHECK_EQ(nn::parallel::global::GetTensorParallelSize(), 1)
-        << "SaveAsLLMC currently supports TP=1 only.";
-    CHECK_EQ(nn::parallel::global::GetPipelineParallelSize(), 1)
-        << "SaveAsLLMC currently supports PP=1 only.";
+    CHECK_EQ(nn::parallel::global::GetTensorParallelSize(), 1) << "SaveAsLLMC currently supports TP=1 only.";
+    CHECK_EQ(nn::parallel::global::GetPipelineParallelSize(), 1) << "SaveAsLLMC currently supports PP=1 only.";
 
     std::ofstream ofs(filepath, std::ios::binary);
     CHECK(ofs.is_open()) << "Failed to open model file for write: " << filepath;
@@ -789,7 +787,8 @@ void LLaMA3::SaveAsLLMC(const std::string &filepath) const {
     header[13] = static_cast<int32_t>(config_.max_gen_batch_size);
     header[14] = 1; // version_major
     header[15] = 0; // version_minor
-    ofs.write(reinterpret_cast<const char *>(header.data()), static_cast<std::streamsize>(header.size() * sizeof(int32_t)));
+    ofs.write(reinterpret_cast<const char *>(header.data()),
+              static_cast<std::streamsize>(header.size() * sizeof(int32_t)));
 
     const auto state_dict = StateDict();
     auto get_tensor = [&](const std::string &name) -> std::shared_ptr<Tensor> {
@@ -810,8 +809,8 @@ void LLaMA3::SaveAsLLMC(const std::string &filepath) const {
                                              nn::parallel::VocabParallelEmbedding::kParamWeightName)));
 
     for (int idx = 0; idx < config_.n_layer; ++idx) {
-        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}", kTransformerLayerName, LLaMA3Chunk::kHLayerName,
-                                                 idx, Block::kLn1LayerName, RMSNorm::kParamWeightName)));
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}", kTransformerLayerName, LLaMA3Chunk::kHLayerName, idx,
+                                                 Block::kLn1LayerName, RMSNorm::kParamWeightName)));
     }
     for (int idx = 0; idx < config_.n_layer; ++idx) {
         write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, LLaMA3Chunk::kHLayerName,
@@ -824,8 +823,8 @@ void LLaMA3::SaveAsLLMC(const std::string &filepath) const {
                                                  nn::parallel::RowParallelLinear::kParamWeightName)));
     }
     for (int idx = 0; idx < config_.n_layer; ++idx) {
-        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}", kTransformerLayerName, LLaMA3Chunk::kHLayerName,
-                                                 idx, Block::kLn2LayerName, RMSNorm::kParamWeightName)));
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}", kTransformerLayerName, LLaMA3Chunk::kHLayerName, idx,
+                                                 Block::kLn2LayerName, RMSNorm::kParamWeightName)));
     }
     for (int idx = 0; idx < config_.n_layer; ++idx) {
         write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, LLaMA3Chunk::kHLayerName,
@@ -843,10 +842,10 @@ void LLaMA3::SaveAsLLMC(const std::string &filepath) const {
                                                  nn::parallel::RowParallelLinear::kParamWeightName)));
     }
 
-    write_tensor_fp32(get_tensor(std::format("{}.{}.{}", kTransformerLayerName, LLaMA3LastStage::kLnFLayerName,
-                                             RMSNorm::kParamWeightName)));
-    write_tensor_fp32(get_tensor(std::format("{}.{}", LLaMA3LastStage::kLMHeadLayerName,
-                                             nn::parallel::ColumnParallelLinear::kParamWeightName)));
+    write_tensor_fp32(get_tensor(
+        std::format("{}.{}.{}", kTransformerLayerName, LLaMA3LastStage::kLnFLayerName, RMSNorm::kParamWeightName)));
+    write_tensor_fp32(get_tensor(
+        std::format("{}.{}", LLaMA3LastStage::kLMHeadLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)));
 
     ofs.flush();
     CHECK(ofs.good()) << "Failed to flush model file: " << filepath;
