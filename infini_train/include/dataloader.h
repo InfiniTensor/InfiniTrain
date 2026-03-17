@@ -24,6 +24,8 @@ public:
     friend bool operator!=(const DataLoaderIterator &lhs, const DataLoaderIterator &rhs);
     friend bool operator==(const DataLoaderIterator &lhs, const DataLoaderIterator &rhs);
 
+    size_t BatchIndex() const;
+
 private:
     const Dataset *dataset_ = nullptr; // not owned
     size_t batch_size_ = 0;
@@ -39,6 +41,7 @@ public:
 
     virtual DataLoaderIterator begin() const;
     virtual DataLoaderIterator end() const;
+    virtual DataLoaderIterator IteratorAtBatchIndex(size_t batch_idx) const;
 
 protected:
     std::shared_ptr<Dataset> dataset_;
@@ -53,6 +56,7 @@ public:
 
     DataLoaderIterator begin() const override;
     DataLoaderIterator end() const override;
+    DataLoaderIterator IteratorAtBatchIndex(size_t batch_idx) const override;
 
 private:
     size_t ddp_rank_ = 0;

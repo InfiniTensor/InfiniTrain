@@ -28,6 +28,10 @@ public:
 
     void ZeroGrad(bool set_to_none = true) override;
 
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
+
+    void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
+
     void StartGradSync();
     void FinishGradSync();
 
