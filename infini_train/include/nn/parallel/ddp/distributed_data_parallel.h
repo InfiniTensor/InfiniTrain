@@ -11,6 +11,7 @@ class Tensor;
 class Device;
 namespace nn::parallel {
 class DistributedDataParallelConfig;
+class Rank;
 } // namespace nn::parallel
 } // namespace infini_train
 
@@ -18,7 +19,7 @@ namespace infini_train::nn::parallel {
 
 class DistributedDataParallel : public nn::Module {
 public:
-    DistributedDataParallel(std::shared_ptr<nn::Module> module, int thread_rank,
+    DistributedDataParallel(std::shared_ptr<nn::Module> module, const Rank &rank,
                             DistributedDataParallelConfig ddp_config);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;

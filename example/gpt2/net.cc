@@ -321,6 +321,11 @@ GPT2::GPT2(const GPT2Config &config)
     modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
 
     // FIXME(jym): Assigning the parameter values of wte to LMHead, which is not real tying operation
+    // TODO: Implement real GPT-2 weight tying: make lm_head.weight share the exact same Parameter/Tensor (same
+    // shared_ptr/storage) as transformer.wte.weight (pointer aliasing, not value copy), and ensure the tie is applied
+    // after loading weights so it won't be overwritten. Also fix GPT2::FromLLMC() loading logic to respect weight tying
+    // (do not create/load a separate lm_head.weight tensor; load once into the tied weight) so parameter counting
+    // matches PyTorch/PEFT.
     if (nn::parallel::global::GetPipelineParallelSize() == 1) {
         // https://paperswithcode.com/method/weight-tying
         *mutable_module(kTransformerLayerName)
