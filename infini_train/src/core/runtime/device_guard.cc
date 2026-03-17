@@ -1,4 +1,4 @@
-#include "infini_train/include/core/device_guard.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 
 #include <format>
 #include <memory>
@@ -6,8 +6,7 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/core/blas_handle.h"
-#include "infini_train/include/core/stream.h"
+#include "infini_train/include/core/runtime/runtime_common.h"
 
 namespace infini_train::core {
 
@@ -22,6 +21,55 @@ int DeviceGuardImpl::DeviceCount() const {
 Stream *DeviceGuardImpl::GetStream(Device) const {
     LOG(FATAL) << "DeviceGuardImpl::GetStream is not implemented.";
     return nullptr; // unreachable
+}
+
+Stream *DeviceGuardImpl::CreateStream(Device) const {
+    LOG(FATAL) << "DeviceGuardImpl::CreateStream is not implemented.";
+    return nullptr; // unreachable
+}
+
+Stream *DeviceGuardImpl::CreateStreamWithPriority(Device, int) const {
+    LOG(FATAL) << "DeviceGuardImpl::CreateStreamWithPriority is not implemented.";
+    return nullptr; // unreachable
+}
+
+void DeviceGuardImpl::DestroyStream(Stream *) const {
+    LOG(FATAL) << "DeviceGuardImpl::DestroyStream is not implemented.";
+}
+
+void DeviceGuardImpl::GetStreamPriorityRange(int *, int *) const {
+    LOG(FATAL) << "DeviceGuardImpl::GetStreamPriorityRange is not implemented.";
+}
+
+void DeviceGuardImpl::EventCreate(Event **) const { LOG(FATAL) << "DeviceGuardImpl::EventCreate is not implemented."; }
+
+void DeviceGuardImpl::EventCreateWithFlags(Event **, EventFlag) const {
+    LOG(FATAL) << "DeviceGuardImpl::EventCreateWithFlags is not implemented.";
+}
+
+void DeviceGuardImpl::EventDestroy(Event *) const { LOG(FATAL) << "DeviceGuardImpl::EventDestroy is not implemented."; }
+
+void DeviceGuardImpl::EventRecord(Event *, Stream *) const {
+    LOG(FATAL) << "DeviceGuardImpl::EventRecord is not implemented.";
+}
+
+void DeviceGuardImpl::StreamWaitEvent(Stream *, Event *, uint32_t) const {
+    LOG(FATAL) << "DeviceGuardImpl::StreamWaitEvent is not implemented.";
+}
+
+RuntimeStatus DeviceGuardImpl::EventSynchronize(Event *) const {
+    LOG(FATAL) << "DeviceGuardImpl::EventSynchronize is not implemented.";
+    return RuntimeStatus::kError; // unreachable
+}
+
+RuntimeStatus DeviceGuardImpl::EventQuery(Event *) const {
+    LOG(FATAL) << "DeviceGuardImpl::EventQuery is not implemented.";
+    return RuntimeStatus::kError; // unreachable
+}
+
+float DeviceGuardImpl::EventElapsedTime(Event *, Event *) const {
+    LOG(FATAL) << "DeviceGuardImpl::EventElapsedTime is not implemented.";
+    return 0.0f; // unreachable
 }
 
 void DeviceGuardImpl::SynchronizeDevice(Device) const {

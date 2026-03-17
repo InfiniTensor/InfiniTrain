@@ -6,12 +6,16 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/device.h"
 
 namespace infini_train {
+namespace core {
+class Event;
+}
 
 inline thread_local int g_profiling_depth = 0;
 
@@ -80,20 +84,18 @@ private:
     void ReportGroupedByRank(std::function<std::ostream &(int64_t)> get_os, SortBy sort_by) const;
     void PrintRecordsGroupedByRank(std::function<std::ostream &(int64_t)> get_os) const;
 
-    std::mutex mtx_;
+    mutable std::mutex mtx_;
     std::vector<KernelCallRecord> call_records_;
     std::string current_tag_ = "Untagged";
 
     // thread-local tracking
     thread_local static inline std::map<std::string, std::chrono::high_resolution_clock::time_point> cpu_timing_map_;
 
-#ifdef USE_CUDA
     struct EventPair {
-        void *start;
-        void *stop;
+        core::Event *start = nullptr;
+        core::Event *stop = nullptr;
     };
 
-    thread_local static inline std::map<std::string, EventPair> cuda_timing_map_;
-#endif
+    thread_local static inline std::map<std::string, EventPair> device_timing_map_;
 };
 } // namespace infini_train

@@ -198,8 +198,8 @@ GPT2FirstStage::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>>
     auto sequence_parallel_enabled = nn::parallel::global::GetSequenceParallelEnabled();
     int tp_rank = 0;
     if (tp_world_size > 1) {
-        auto tp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
-            nn::parallel::GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+        auto tp_group = nn::parallel::ProcessGroupFactory::Instance(device.type())
+                            ->Get(nn::parallel::GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
         tp_rank = tp_group->GetGroupRank(device.Rank().GlobalRank());
     }
     int64_t t_local = sequence_parallel_enabled ? x1->Dims()[1] / tp_world_size : x1->Dims()[1];
@@ -712,6 +712,115 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
         ifs.seekg(ln_f_w_bytes + ln_f_b_bytes, std::ios::cur);
     }
     return local_gpt2;
+}
+
+void GPT2::SaveAsLLMC(const std::string &filepath) const {
+    CHECK_EQ(nn::parallel::global::GetTensorParallelSize(), 1)
+        << "SaveAsLLMC currently supports TP=1 only.";
+    CHECK_EQ(nn::parallel::global::GetPipelineParallelSize(), 1)
+        << "SaveAsLLMC currently supports PP=1 only.";
+
+    std::ofstream ofs(filepath, std::ios::binary);
+    CHECK(ofs.is_open()) << "Failed to open model file for write: " << filepath;
+
+    std::vector<int32_t> header(256, 0);
+    header[0] = kHeaderMagic;
+    header[1] = kHeaderFP32Version;
+    header[2] = static_cast<int32_t>(config_.block_size);
+    header[3] = static_cast<int32_t>(config_.original_vocab_size);
+    header[4] = static_cast<int32_t>(config_.n_layer);
+    header[5] = static_cast<int32_t>(config_.n_head);
+    header[6] = static_cast<int32_t>(config_.n_embd);
+    header[7] = static_cast<int32_t>(config_.vocab_size);
+    ofs.write(reinterpret_cast<const char *>(header.data()), static_cast<std::streamsize>(header.size() * sizeof(int32_t)));
+
+    const auto state_dict = StateDict();
+    auto get_tensor = [&](const std::string &name) -> std::shared_ptr<Tensor> {
+        CHECK(state_dict.contains(name)) << "Missing tensor in GPT2 state_dict: " << name;
+        return state_dict.at(name);
+    };
+
+    auto write_tensor_fp32 = [&](const std::shared_ptr<Tensor> &tensor) {
+        Tensor cpu = tensor->To(Device());
+        if (cpu.Dtype() != DataType::kFLOAT32) {
+            cpu = cpu.To(DataType::kFLOAT32);
+        }
+        const auto bytes = static_cast<std::streamsize>(cpu.SizeInBytes());
+        ofs.write(reinterpret_cast<const char *>(cpu.DataPtr()), bytes);
+    };
+
+    // transformer.wte.weight
+    write_tensor_fp32(get_tensor(std::format("{}.{}.{}", kTransformerLayerName, GPT2FirstStage::kWTELayerName,
+                                             nn::parallel::VocabParallelEmbedding::kParamWeightName)));
+
+    // transformer.wpe.weight
+    write_tensor_fp32(get_tensor(std::format("{}.{}.{}", kTransformerLayerName, GPT2FirstStage::kWPELayerName,
+                                             nn::Embedding::kParamWeightName)));
+
+    for (int idx = 0; idx < config_.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}", kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                                 idx, Block::kLn1LayerName, nn::LayerNorm::kParamWeightName)));
+    }
+    for (int idx = 0; idx < config_.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}", kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                                 idx, Block::kLn1LayerName, nn::LayerNorm::kParamBiasName)));
+    }
+    for (int idx = 0; idx < config_.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                                 idx, Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName,
+                                                 nn::parallel::ColumnParallelLinear::kParamWeightName)));
+    }
+    for (int idx = 0; idx < config_.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                                 idx, Block::kAttnLayerName, CausalSelfAttention::kCAttnLayerName,
+                                                 nn::parallel::ColumnParallelLinear::kParamBiasName)));
+    }
+    for (int idx = 0; idx < config_.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                                 idx, Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName,
+                                                 nn::parallel::RowParallelLinear::kParamWeightName)));
+    }
+    for (int idx = 0; idx < config_.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                                 idx, Block::kAttnLayerName, CausalSelfAttention::kCProjLayerName,
+                                                 nn::parallel::RowParallelLinear::kParamBiasName)));
+    }
+    for (int idx = 0; idx < config_.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}", kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                                 idx, Block::kLn2LayerName, nn::LayerNorm::kParamWeightName)));
+    }
+    for (int idx = 0; idx < config_.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}", kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                                 idx, Block::kLn2LayerName, nn::LayerNorm::kParamBiasName)));
+    }
+    for (int idx = 0; idx < config_.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                                 idx, Block::kMlpLayerName, MLP::kCFcLayerName,
+                                                 nn::parallel::ColumnParallelLinear::kParamWeightName)));
+    }
+    for (int idx = 0; idx < config_.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                                 idx, Block::kMlpLayerName, MLP::kCFcLayerName,
+                                                 nn::parallel::ColumnParallelLinear::kParamBiasName)));
+    }
+    for (int idx = 0; idx < config_.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                                 idx, Block::kMlpLayerName, MLP::kCProjLayerName,
+                                                 nn::parallel::RowParallelLinear::kParamWeightName)));
+    }
+    for (int idx = 0; idx < config_.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}.{}", kTransformerLayerName, GPT2Chunk::kHLayerName,
+                                                 idx, Block::kMlpLayerName, MLP::kCProjLayerName,
+                                                 nn::parallel::RowParallelLinear::kParamBiasName)));
+    }
+
+    write_tensor_fp32(get_tensor(std::format("{}.{}.{}", kTransformerLayerName, GPT2LastStage::kLnFLayerName,
+                                             nn::LayerNorm::kParamWeightName)));
+    write_tensor_fp32(get_tensor(std::format("{}.{}.{}", kTransformerLayerName, GPT2LastStage::kLnFLayerName,
+                                             nn::LayerNorm::kParamBiasName)));
+
+    ofs.flush();
+    CHECK(ofs.good()) << "Failed to flush model file: " << filepath;
 }
 
 int GPT2::GetChunkSize() const { return stage_info_.layer_ranges_per_chunk.size(); }
