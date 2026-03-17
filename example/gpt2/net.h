@@ -141,6 +141,7 @@ public:
 
     static std::shared_ptr<GPT2> FromPretrained(ModelType model_type);
     static std::shared_ptr<GPT2> FromLLMC(const std::string &filepath);
+    void SaveAsLLMC(const std::string &filepath) const;
 
     int GetChunkSize() const;
 
