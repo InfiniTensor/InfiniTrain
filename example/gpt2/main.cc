@@ -73,6 +73,8 @@ DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 
+// flash attention
+DEFINE_bool(flash, false, "Use FlashAttention for self-attention");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 // precision check
@@ -191,9 +193,10 @@ void Train(const nn::parallel::Rank &rank) {
     std::shared_ptr<nn::Module> model = nullptr;
 
     if (!FLAGS_llmc_filepath.empty()) {
-        model = GPT2::FromLLMC(FLAGS_llmc_filepath);
+        model = GPT2::FromLLMC(FLAGS_llmc_filepath, FLAGS_flash);
     } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
+        model_config.flash = FLAGS_flash;
         model = std::make_shared<GPT2>(model_config);
     } else {
         model = GPT2::FromPretrained(kStrToModelType.at(FLAGS_model));
@@ -203,6 +206,8 @@ void Train(const nn::parallel::Rank &rank) {
 
     utils::PrecisionChecker::BuildNameMap(model.get());
 
+    if (FLAGS_flash && FLAGS_dtype != kDtypeBF16) {
+        LOG(FATAL) << "--flash=true requires --dtype=bfloat16 (FlashAttention only supports bfloat16)";
     // Get chunk size before wrapping with LoRA (needed for PipelineParallel)
     auto gpt2_model = std::dynamic_pointer_cast<GPT2>(model);
     CHECK(gpt2_model) << "GPT2 example expects GPT2 model.";
