@@ -1,10 +1,10 @@
 {
     "variables": {
         "BUILD_DIR": "../build",
-        "GPT2_INPUT_BIN": "../../data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin",
-        "GPT2_LLMC_FILEPATH": "../../data/llmc/gpt2/gpt2_124M.bin",
-        "LLAMA3_INPUT_BIN": "../../data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
-        "LLAMA3_LLMC_FILEPATH": "../../data/llmc/llama3/llama3.2_1B_fp32.bin",
+        "GPT2_INPUT_BIN": "/data/shared/InfiniTrain-dev/data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin",
+        "GPT2_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/gpt2/gpt2_124M.bin",
+        "LLAMA3_INPUT_BIN": "/data/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
+        "LLAMA3_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_fp32.bin",
         "PROFILE_LOG_DIR": "./profile_logs",
         "LOG_DIR": "./logs",
         "COMPARE_LOG_DIR": ""
@@ -300,6 +300,229 @@
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
                         "use_distributed_optimizer": true
+                    }
+                }
+            ]
+        },
+        {
+            "tag": "lora",
+            "tests": [
+                {
+                    "id": "1_lora",
+                    "args": {
+                        "dtype": "float32",
+                        "lora_rank": 8,
+                        "lora_alpha": 16.0,
+                        "lora_target_modules": "c_attn,attn.c_proj"
+                    }
+                },
+                {
+                    "id": "1_lora_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "lora_rank": 8,
+                        "lora_alpha": 16.0,
+                        "lora_target_modules": "c_attn,attn.c_proj"
+                    }
+                },
+                {
+                    "id": "2_lora",
+                    "args": {
+                        "dtype": "float32",
+                        "num_iteration": 10,
+                        "batch_size": 80,
+                        "total_batch_size": 5120,
+                        "lora_rank": 8,
+                        "lora_alpha": 16.0,
+                        "lora_target_modules": "c_attn,attn.c_proj"
+                    }
+                },
+                {
+                    "id": "2_lora_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 10,
+                        "batch_size": 80,
+                        "total_batch_size": 5120,
+                        "lora_rank": 8,
+                        "lora_alpha": 16.0,
+                        "lora_target_modules": "c_attn,attn.c_proj"
+                    }
+                },
+                {
+                    "id": "3_lora",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "lora_rank": 8,
+                        "lora_alpha": 16.0,
+                        "lora_target_modules": "c_attn,attn.c_proj"
+                    }
+                },
+                {
+                    "id": "3_lora_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "lora_rank": 8,
+                        "lora_alpha": 16.0,
+                        "lora_target_modules": "c_attn,attn.c_proj"
+                    }
+                },
+                {
+                    "id": "4_lora",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "lora_rank": 4,
+                        "lora_alpha": 8.0,
+                        "lora_target_modules": "c_attn,c_fc,c_proj"
+                    }
+                },
+                {
+                    "id": "4_lora_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "lora_rank": 16,
+                        "lora_alpha": 32.0,
+                        "lora_target_modules": "c_attn,c_fc,c_proj"
+                    }
+                },
+                {
+                    "id": "5_lora",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "lora_rank": 4,
+                        "lora_alpha": 8.0,
+                        "lora_target_modules": "attn.c_proj,c_fc,c_proj"
+                    }
+                },
+                {
+                    "id": "5_lora_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "lora_rank": 16,
+                        "lora_alpha": 32.0,
+                        "lora_target_modules": "attn.c_proj,c_fc,c_proj"
+                    }
+                },
+                {
+                    "id": "6_lora",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 8,
+                        "lora_rank": 4,
+                        "lora_alpha": 8.0,
+                        "lora_target_modules": "c_attn,attn.c_proj,c_fc"
+                    }
+                },
+                {
+                    "id": "6_lora_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 8,
+                        "lora_rank": 16,
+                        "lora_alpha": 32.0,
+                        "lora_target_modules": "c_attn,attn.c_proj,c_fc"
+                    }
+                },
+                {
+                    "id": "7_lora",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 4,
+                        "virtual_pipeline_parallel": 2,
+                        "lora_rank": 4,
+                        "lora_alpha": 8.0,
+                        "lora_target_modules": "c_attn,c_proj"
+                    }
+                },
+                {
+                    "id": "7_lora_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 4,
+                        "virtual_pipeline_parallel": 2,
+                        "lora_rank": 16,
+                        "lora_alpha": 32.0,
+                        "lora_target_modules": "c_attn,c_proj"
+                    }
+                },
+                {
+                    "id": "8_lora",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "lora_rank": 4,
+                        "lora_alpha": 8.0,
+                        "lora_target_modules": "c_fc,c_proj"
+                    }
+                },
+                {
+                    "id": "8_lora_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "lora_rank": 16,
+                        "lora_alpha": 32.0,
+                        "lora_target_modules": "c_fc,c_proj"
                     }
                 }
             ]
