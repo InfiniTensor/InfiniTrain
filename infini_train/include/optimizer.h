@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace infini_train {
@@ -20,6 +22,10 @@ public:
     virtual void ZeroGrad(bool set_to_none = true);
 
     virtual void Step() = 0;
+
+    virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const { return {}; }
+
+    virtual void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {}
 
 protected:
     std::vector<std::shared_ptr<Tensor>> params_;
@@ -48,6 +54,10 @@ public:
          float beta2 = 0.999, float eps = 1e-8);
 
     void Step() override;
+
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
+
+    void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
 
     static OptimizerCreator Create(float learning_rate = 1e-3, float beta1 = 0.9, float beta2 = 0.999,
                                    float eps = 1e-8) {

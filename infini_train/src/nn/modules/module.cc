@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -20,6 +21,21 @@
 #endif
 
 namespace infini_train::nn {
+
+namespace {
+std::string DimsToString(const std::vector<int64_t> &dims) {
+    std::ostringstream oss;
+    oss << "[";
+    for (size_t i = 0; i < dims.size(); ++i) {
+        if (i > 0) {
+            oss << ", ";
+        }
+        oss << dims[i];
+    }
+    oss << "]";
+    return oss.str();
+}
+} // namespace
 
 Module::Module() : Module(kUndefinedType) {}
 
@@ -145,6 +161,21 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() con
         for (auto &[sub_name, param] : module->StateDict()) { state.emplace(name + "." + sub_name, param); }
     }
     return state;
+}
+
+void Module::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
+    auto expected = StateDict();
+    for (const auto &[name, dst] : expected) {
+        CHECK(state_dict.contains(name)) << "Missing tensor in state dict: " << name;
+        const auto &src = state_dict.at(name);
+        CHECK(dst->Dims() == src->Dims())
+            << "Shape mismatch for tensor: " << name << ", expected=" << DimsToString(dst->Dims())
+            << ", got=" << DimsToString(src->Dims());
+        CHECK(dst->Dtype() == src->Dtype())
+            << "Dtype mismatch for tensor: " << name << ", expected=" << kDataTypeToDesc.at(dst->Dtype())
+            << ", got=" << kDataTypeToDesc.at(src->Dtype());
+        dst->CopyFrom(src);
+    }
 }
 
 std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
