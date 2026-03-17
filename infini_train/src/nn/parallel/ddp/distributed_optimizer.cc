@@ -128,4 +128,14 @@ void DistributedOptimizer::Step() {
     FinishParamSync(/*skip_next_bucket_dispatch=*/true);
 }
 
+std::unordered_map<std::string, std::shared_ptr<Tensor>> DistributedOptimizer::StateDict() const {
+    CHECK(base_optimizer_) << "DistributedOptimizer: base optimizer is null.";
+    return base_optimizer_->StateDict();
+}
+
+void DistributedOptimizer::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
+    CHECK(base_optimizer_) << "DistributedOptimizer: base optimizer is null.";
+    base_optimizer_->LoadStateDict(state_dict);
+}
+
 } // namespace infini_train::nn::parallel

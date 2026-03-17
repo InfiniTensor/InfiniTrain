@@ -344,4 +344,107 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
 
     return llama3;
 }
+
+void SaveAsLLMC(const std::shared_ptr<nn::TransformerModel> &model, const std::string &filepath) {
+    CHECK_EQ(nn::parallel::global::GetTensorParallelSize(), 1) << "SaveAsLLMC currently supports TP=1 only.";
+    CHECK_EQ(nn::parallel::global::GetPipelineParallelSize(), 1) << "SaveAsLLMC currently supports PP=1 only.";
+
+    std::ofstream ofs(filepath, std::ios::binary);
+    CHECK(ofs.is_open()) << "Failed to open model file for write: " << filepath;
+
+    auto pack_float = [](float value) -> int32_t {
+        int32_t bits = 0;
+        std::memcpy(&bits, &value, sizeof(float));
+        return bits;
+    };
+
+    auto config = model->Config();
+    std::vector<int32_t> header(256, 0);
+    header[0] = kLLaMA3Magic;
+    header[1] = kLLaMA3FP32Version;
+    header[2] = static_cast<int32_t>(config.block_size);
+    header[3] = static_cast<int32_t>(config.vocab_size);
+    header[4] = static_cast<int32_t>(config.n_layer);
+    header[5] = static_cast<int32_t>(config.n_head);
+    header[6] = static_cast<int32_t>(config.n_kv_head);
+    header[7] = static_cast<int32_t>(config.n_embd);
+    header[8] = pack_float(config.ffn_dim_multiplier.value_or(0.0f));
+    header[9] = static_cast<int32_t>(config.multiple_of);
+    header[10] = pack_float(config.norm_eps);
+    header[11] = pack_float(config.rope_theta);
+    header[12] = static_cast<int32_t>(config.use_scaled_rope ? 1 : 0);
+    header[13] = static_cast<int32_t>(config.max_gen_batch_size);
+    header[14] = 1; // version_major
+    header[15] = 0; // version_minor
+    ofs.write(reinterpret_cast<const char *>(header.data()),
+              static_cast<std::streamsize>(header.size() * sizeof(int32_t)));
+
+    const auto state_dict = model->StateDict();
+    auto get_tensor = [&](const std::string &name) -> std::shared_ptr<Tensor> {
+        CHECK(state_dict.contains(name)) << "Missing tensor in LLaMA3 state_dict: " << name;
+        return state_dict.at(name);
+    };
+
+    auto write_tensor_fp32 = [&](const std::shared_ptr<Tensor> &tensor) {
+        Tensor cpu = tensor->To(Device());
+        if (cpu.Dtype() != DataType::kFLOAT32) {
+            cpu = cpu.To(DataType::kFLOAT32);
+        }
+        const auto bytes = static_cast<std::streamsize>(cpu.SizeInBytes());
+        ofs.write(reinterpret_cast<const char *>(cpu.DataPtr()), bytes);
+    };
+
+    write_tensor_fp32(get_tensor(std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                             nn::TransformerFirstStage::kWTELayerName,
+                                             nn::parallel::VocabParallelEmbedding::kParamWeightName)));
+
+    for (int idx = 0; idx < config.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                                 nn::TransformerChunk::kHLayerName, idx,
+                                                 nn::TransformerLayer::kLn1LayerName, nn::RMSNorm::kParamWeightName)));
+    }
+    for (int idx = 0; idx < config.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format(
+            "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName, idx,
+            nn::TransformerLayer::kAttnLayerName, nn::CausalSelfAttention::kCAttnLayerName,
+            nn::parallel::ColumnParallelLinear::kParamWeightName)));
+    }
+    for (int idx = 0; idx < config.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(
+            std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                        nn::TransformerChunk::kHLayerName, idx, nn::TransformerLayer::kAttnLayerName,
+                        nn::CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)));
+    }
+    for (int idx = 0; idx < config.n_layer; ++idx) {
+        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                                 nn::TransformerChunk::kHLayerName, idx,
+                                                 nn::TransformerLayer::kLn2LayerName, nn::RMSNorm::kParamWeightName)));
+    }
+    for (int idx = 0; idx < config.n_layer; ++idx) {
+        write_tensor_fp32(
+            get_tensor(std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                   nn::TransformerChunk::kHLayerName, idx, nn::TransformerLayer::kMlpLayerName,
+                                   nn::MLP::kCFcLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)));
+    }
+    for (int idx = 0; idx < config.n_layer; ++idx) {
+        write_tensor_fp32(
+            get_tensor(std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                   nn::TransformerChunk::kHLayerName, idx, nn::TransformerLayer::kMlpLayerName,
+                                   nn::MLP::kCFc2LayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)));
+    }
+    for (int idx = 0; idx < config.n_layer; ++idx) {
+        write_tensor_fp32(
+            get_tensor(std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                   nn::TransformerChunk::kHLayerName, idx, nn::TransformerLayer::kMlpLayerName,
+                                   nn::MLP::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)));
+    }
+
+    write_tensor_fp32(get_tensor(std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                             nn::TransformerLastStage::kLnFLayerName, nn::RMSNorm::kParamWeightName)));
+    write_tensor_fp32(get_tensor(std::format("{}.{}", nn::TransformerLastStage::kLMHeadLayerName,
+                                             nn::parallel::ColumnParallelLinear::kParamWeightName)));
+
+    ofs.flush();
+    CHECK(ofs.good()) << "Failed to flush model file: " << filepath;
+}
 } // namespace llama3
