@@ -67,6 +67,8 @@ public:
     virtual StateDict State() const;
     virtual void LoadState(const StateDict &state);
 
+    bool SharesOptimizerWith(const std::shared_ptr<Optimizer> &opt) const ;
+
 protected:
     virtual float GetClosedFormLR() const = 0;
     virtual float GetChainedFormLR() const;

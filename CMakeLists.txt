@@ -221,3 +221,6 @@ target_link_libraries(test_sequential_lr infini_train)
 
 add_executable(test_chained_lr test/lr_scheduler/test_chained_lr.cc)
 target_link_libraries(test_chained_lr infini_train)
+
+add_executable(test_lr_scheduler_validation test/lr_scheduler/test_lr_scheduler_validation.cc)
+target_link_libraries(test_lr_scheduler_validation infini_train)
