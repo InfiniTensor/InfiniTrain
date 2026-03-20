@@ -224,3 +224,6 @@ link_infini_train_exe(test_sequential_lr)
 
 add_executable(test_chained_lr test/lr_scheduler/test_chained_lr.cc)
 link_infini_train_exe(test_chained_lr)
+
+add_executable(test_lr_scheduler_validation test/lr_scheduler/test_lr_scheduler_validation.cc)
+link_infini_train_exe(test_lr_scheduler_validation)

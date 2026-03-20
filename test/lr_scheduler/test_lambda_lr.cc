@@ -14,7 +14,7 @@ void TestIdentityLambda() {
                                             .type = "lambda",
                                             .lambda_fn = [](int64_t) { return 1.0f; },
                                         });
-    // 构造器内 Step() → last_step_=0, lr = 0.1 * 1.0 = 0.1
+    // Step() → last_step_=0, lr = 0.1 * 1.0 = 0.1
     ASSERT_TRUE(sched->LastStep() == 0);
     ASSERT_FLOAT_NEAR(sched->GetLR(), kBaseLR, kEps);
     ASSERT_FLOAT_NEAR(opt->GetLearningRate(), kBaseLR, kEps);
