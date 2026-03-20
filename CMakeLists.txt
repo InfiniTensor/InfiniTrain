@@ -204,3 +204,5 @@ link_infini_train_exe(test_precision_check)
 add_executable(test_lora test/lora/test_lora.cc)
 link_infini_train_exe(test_lora)
 
+add_executable(test_transformer_spec test/transformer_spec/test_transformer_spec.cc)
+link_infini_train_exe(test_transformer_spec)
