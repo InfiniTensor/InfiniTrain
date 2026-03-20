@@ -103,7 +103,7 @@ void TestLinearDecay() {
     ASSERT_FLOAT_EQ(opt->GetLearningRate(), 0.05f);
 }
 
-// T4: State → LoadState 
+// T4: State → LoadState
 void TestStateRoundTrip() {
     std::cout << "[T4] TestStateRoundTrip" << std::endl;
     constexpr int64_t kTotalSteps = 20;

@@ -84,8 +84,8 @@ void TestSequentialLRRejectsMismatchedOptimizer() {
                                               .step_gamma = 0.5f,
                                           });
 
-        auto sched = LRScheduler::Create<SequentialLR>(
-            opt1, std::vector<std::shared_ptr<LRScheduler>>{s1, s2}, std::vector<int64_t>{1});
+        auto sched = LRScheduler::Create<SequentialLR>(opt1, std::vector<std::shared_ptr<LRScheduler>>{s1, s2},
+                                                       std::vector<int64_t>{1});
         (void)sched;
     }));
 }

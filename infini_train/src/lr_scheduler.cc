@@ -90,9 +90,7 @@ void LRScheduler::InitialStep() {
     is_initial_ = false;
 }
 
-void LRScheduler::ApplyLR(float lr) {
-    optimizer_->SetLearningRate(lr);
-}
+void LRScheduler::ApplyLR(float lr) { optimizer_->SetLearningRate(lr); }
 
 float LRScheduler::GetChainedFormLR() const { return GetClosedFormLR(); }
 
@@ -129,9 +127,9 @@ namespace lr_schedulers {
 
 ConstantLR::ConstantLR(std::shared_ptr<Optimizer> optimizer, float factor, int total_iters, int64_t last_step)
     : LRScheduler(std::move(optimizer), last_step), factor_(factor), total_iters_(total_iters) {
-        CHECK_GE(factor_, 0.0f) << "ConstantLR: factor must be >= 0.";
-        CHECK_LE(factor_, 1.0f) << "ConstantLR: factor must be <= 1.";
-    }
+    CHECK_GE(factor_, 0.0f) << "ConstantLR: factor must be >= 0.";
+    CHECK_LE(factor_, 1.0f) << "ConstantLR: factor must be <= 1.";
+}
 
 float ConstantLR::GetClosedFormLR() const { return last_step_ < total_iters_ ? base_lr_ * factor_ : base_lr_; }
 
@@ -171,12 +169,12 @@ LinearLR::LinearLR(std::shared_ptr<Optimizer> optimizer, float start_factor, flo
                    int64_t last_step)
     : LRScheduler(std::move(optimizer), last_step), start_factor_(start_factor), end_factor_(end_factor),
       total_iters_(total_iters) {
-        CHECK_GT(start_factor_, 0.0f) << "LinearLR: start_factor must be > 0.";
-        CHECK_LE(start_factor_, 1.0f) << "LinearLR: start_factor must be <= 1.";
-        CHECK_GE(end_factor_, 0.0f) << "LinearLR: end_factor must be >= 0.";
-        CHECK_LE(end_factor_, 1.0f) << "LinearLR: end_factor must be <= 1.";
-                CHECK_GT(total_iters_, 0) << "LinearLR: total_iters must be > 0.";
-      }
+    CHECK_GT(start_factor_, 0.0f) << "LinearLR: start_factor must be > 0.";
+    CHECK_LE(start_factor_, 1.0f) << "LinearLR: start_factor must be <= 1.";
+    CHECK_GE(end_factor_, 0.0f) << "LinearLR: end_factor must be >= 0.";
+    CHECK_LE(end_factor_, 1.0f) << "LinearLR: end_factor must be <= 1.";
+    CHECK_GT(total_iters_, 0) << "LinearLR: total_iters must be > 0.";
+}
 
 float LinearLR::GetClosedFormLR() const {
     if (last_step_ >= total_iters_) {
@@ -210,8 +208,8 @@ float LinearLR::GetChainedFormLR() const {
 
 LambdaLR::LambdaLR(std::shared_ptr<Optimizer> optimizer, std::function<float(int64_t)> lr_lambda, int64_t last_step)
     : LRScheduler(std::move(optimizer), last_step), lr_lambda_(std::move(lr_lambda)) {
-        CHECK(lr_lambda_) << "LambdaLR: lr_lambda must not be null.";
-    }
+    CHECK(lr_lambda_) << "LambdaLR: lr_lambda must not be null.";
+}
 
 float LambdaLR::GetClosedFormLR() const { return base_lr_ * lr_lambda_(last_step_); }
 
@@ -233,7 +231,6 @@ SequentialLR::SequentialLR(std::shared_ptr<Optimizer> optimizer, std::vector<std
     for (size_t i = 1; i < milestones_.size(); ++i) {
         CHECK_GT(milestones_[i], milestones_[i - 1]) << "Milestones must be strictly increasing.";
     }
-
 }
 
 void SequentialLR::InitialStep() {
@@ -266,7 +263,6 @@ void SequentialLR::Step() {
     } else {
         scheduler->Step();
     }
-
 }
 
 StateDict SequentialLR::State() const {
@@ -313,8 +309,7 @@ ChainedScheduler::ChainedScheduler(std::shared_ptr<Optimizer> optimizer,
     }
 }
 
-void ChainedScheduler::InitialStep() {
-}
+void ChainedScheduler::InitialStep() {}
 
 void ChainedScheduler::Step() {
     ++last_step_;
