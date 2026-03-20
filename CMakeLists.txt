@@ -4,6 +4,7 @@ option(USE_CUDA "Support NVIDIA CUDA" OFF)
 option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
 option(USE_NCCL "Build project for distributed running" ON)
+option(USE_NVTX "Enable NVTX profiling" OFF)
 
 project(infini_train VERSION 0.5.0 LANGUAGES CXX)
 
@@ -39,6 +40,10 @@ include_directories(${PROJECT_SOURCE_DIR})
 
 if(PROFILE_MODE)
   add_compile_definitions(PROFILE_MODE=1)
+endif()
+
+if(USE_NVTX)
+  add_compile_definitions(USE_NVTX)
 endif()
 
 # ------------------------------------------------------------------------------

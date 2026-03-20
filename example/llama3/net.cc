@@ -13,6 +13,7 @@
 
 #include "glog/logging.h"
 
+#include "example/common/nvtx.h"
 #include "example/common/utils.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
@@ -123,6 +124,7 @@ std::shared_ptr<Tensor> PrecomputeFreqsCis(int64_t dim, int64_t end, float theta
 } // namespace
 
 std::vector<std::shared_ptr<Tensor>> SwiGLU::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
+    NVTX_RANGE("SwiGLU");
     return {x[0] * nn::function::Sigmoid(x[0])};
 }
 
@@ -133,9 +135,19 @@ RMSNorm::RMSNorm(int64_t dim, float eps, infini_train::Device device) : Cloneabl
 }
 
 std::vector<std::shared_ptr<Tensor>> RMSNorm::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    // broadcasted Mul([4, 64, 2048] * [4, 64, 1])
-    auto norm = x[0] * nn::function::Rsqrt(nn::function::Mean(nn::function::Pow(x[0], 2), -1, true) + eps_);
-    return {norm * parameters_[kParamWeightName]};
+    NVTX_RANGE("RMSNorm");
+    auto input = x[0];
+    auto input_dtype = input->Dtype();
+    // Compute entirely in fp32 (like PyTorch), then cast back once — avoids per-op autocast CastKernel overhead
+    if (input_dtype != DataType::kFLOAT32) {
+        input = std::make_shared<Tensor>(input->To(DataType::kFLOAT32));
+    }
+    auto norm = input * nn::function::Rsqrt(nn::function::Mean(nn::function::Pow(input, 2), -1, true) + eps_);
+    auto result = norm * parameters_[kParamWeightName]; // both fp32, no cast
+    if (result->Dtype() != input_dtype) {
+        result = std::make_shared<Tensor>(result->To(input_dtype));
+    }
+    return {result};
 }
 
 CausalSelfAttention::CausalSelfAttention(const LLaMA3Config &config)
@@ -202,41 +214,54 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
     // -> RoPE on q, k
     // q: (B, T, H_local, D)
     // k: (B, T, KV_local, D)
-    std::tie(q, k) = ApplyRotaryEmbedding(q, k, freqs_cis);
+    std::shared_ptr<Tensor> y;
+    {
+        NVTX_RANGE("AttentionForward");
+        {
+            NVTX_RANGE("RoPE");
+            std::tie(q, k) = ApplyRotaryEmbedding(q, k, freqs_cis);
+        }
 
-    // TODO(zbl): use kv cache during inference
-    // if (use_kv_) { ... }
+        // TODO(zbl): use kv cache during inference
+        // if (use_kv_) { ... }
 
-    // align n_head in GQA
-    // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
-    k = RepeatKV(k, n_rep_);
-    v = RepeatKV(v, n_rep_);
+        // align n_head in GQA
+        // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
+        {
+            NVTX_RANGE("RepeatKV");
+            k = RepeatKV(k, n_rep_);
+            v = RepeatKV(v, n_rep_);
+        }
 
-    // (B, T, H_local, D) -> (B, H_local, T, D)
-    q = q->Transpose(1, 2);
-    k = k->Transpose(1, 2);
-    v = v->Transpose(1, 2);
+        // (B, T, H_local, D) -> (B, H_local, T, D)
+        q = q->Transpose(1, 2);
+        k = k->Transpose(1, 2);
+        v = v->Transpose(1, 2);
 
-    // TODO(zbl): support flash attention later
-    // if (flash_) { ... }
+        // TODO(zbl): support flash attention later
+        // if (flash_) { ... }
 
-    // manual implementation of attention
-    // this materializes the large (T,T) matrix for all the queries and keys
+        // manual implementation of attention
+        // this materializes the large (T,T) matrix for all the queries and keys
 
-    // q: (B, H_local, T, D)
-    // k: (B, H_local, T, D) -> (B, H_local, D, T)
-    // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
-    if (mask) {
-        // mask: (1, 1, T, T)
-        att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+        // q: (B, H_local, T, D)
+        // k: (B, H_local, T, D) -> (B, H_local, D, T)
+        // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
+        if (mask) {
+            // mask: (1, 1, T, T)
+            att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+        }
+        // (B, H_local, T, T)
+        {
+            NVTX_RANGE("Softmax");
+            att = nn::function::Softmax(att, -1);
+        }
+        // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
+        y = att->Matmul(v);
+        // (B, H_local, T, D) -> Transpose(1, 2) -> (B, T, H_local, D) -> (B, T, C_local)
+        y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
     }
-    // (B, H_local, T, T)
-    att = nn::function::Softmax(att, -1);
-    // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
-    auto y = att->Matmul(v);
-    // (B, H_local, T, D) -> Transpose(1, 2) -> (B, T, H_local, D) -> (B, T, C_local)
-    y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
     // output projection
     // (B, T, C_local) -> RowParallelLinear(C, C) -> (B, T, C)
     y = (*modules_[kCProjLayerName])({y})[0];
@@ -329,6 +354,7 @@ LLaMA3FirstStage::LLaMA3FirstStage(const LLaMA3Config &config) : CloneableModule
 }
 
 std::vector<std::shared_ptr<Tensor>> LLaMA3FirstStage::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
+    NVTX_RANGE("Embedding");
     return (*modules_[LLaMA3FirstStage::kWTELayerName])(x);
 }
 
@@ -360,8 +386,12 @@ std::vector<std::shared_ptr<Tensor>> LLaMA3Chunk::Forward(const std::vector<std:
     auto freqs_view = buffers_[kFreqsCisName]->Slice(0, start_pos, start_pos + t, 1);
 
     // TODO(lzm): add dtype support for nn::function::Ones later
-    std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(x1->GetDevice()));
-    std::shared_ptr<Tensor> mask = nn::function::Triu(ones, 1)->View({1, 1, t, t});
+    std::shared_ptr<Tensor> mask;
+    {
+        NVTX_RANGE("BuildMask");
+        std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(x1->GetDevice()));
+        mask = nn::function::Triu(ones, 1)->View({1, 1, t, t});
+    }
 
     std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 
@@ -386,6 +416,7 @@ LLaMA3LastStage::LLaMA3LastStage(const LLaMA3Config &config) : CloneableModule(k
 }
 
 std::vector<std::shared_ptr<Tensor>> LLaMA3LastStage::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
+    NVTX_RANGE("LMHead");
     // (bs, seq_len, n_embd) -> RMSNorm -> (bs, seq_len, n_embd)
     auto x1 = (*modules_[kLnFLayerName])(x);
 

@@ -126,13 +126,7 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto grad_input = std::make_shared<Tensor>(input_dims, promoted_type, grad_output->GetDevice());
     auto grad_other = std::make_shared<Tensor>(other_dims, promoted_type, grad_output->GetDevice());
 
-    DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
-        promoted_type,
-        [=]<typename T>() {
-            grad_input->Fill<T>(0);
-            grad_other->Fill<T>(0);
-        },
-        "CUDA MatmulBackward");
+    // No Fill(0) needed: cuBLAS beta=0.0f means C is fully overwritten, never read.
 
     auto device = input_promoted->GetDevice();
     const float alpha = 1.0f, beta = 0.0f;
@@ -353,17 +347,10 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto grad_weight = std::make_shared<Tensor>(weight_dims, promoted_type, grad_output->GetDevice());
     std::shared_ptr<Tensor> grad_bias = nullptr;
 
-    auto initialize_gradients = [&](auto zero_value, DataType dtype) {
-        using T = decltype(zero_value);
-        grad_input->Fill<T>(zero_value);
-        grad_weight->Fill<T>(zero_value);
-        if (bias) {
-            grad_bias = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, dtype, grad_output->GetDevice());
-            grad_bias->Fill<T>(zero_value);
-        }
-    };
-    DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
-        promoted_type, [=]<typename T>() { initialize_gradients(T(0), promoted_type); }, "CUDA LinearBackward");
+    // No Fill(0) needed: cuBLAS beta=0.0f fully overwrites output, and ReduceColumnsKernel assigns directly.
+    if (bias) {
+        grad_bias = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, promoted_type, grad_output->GetDevice());
+    }
 
     auto device = input_promoted->GetDevice();
     const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(

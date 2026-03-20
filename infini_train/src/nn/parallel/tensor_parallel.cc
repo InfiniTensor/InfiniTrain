@@ -1,5 +1,9 @@
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 
+#ifdef USE_NVTX
+#include <nvtx3/nvToolsExt.h>
+#endif
+
 #include <memory>
 #include <vector>
 
@@ -435,6 +439,9 @@ VocabParallelEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>> &inpu
 
 std::vector<std::shared_ptr<Tensor>>
 VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+#ifdef USE_NVTX
+    nvtxRangePushA("CrossEntropy");
+#endif
     CHECK_EQ(input_tensors.size(), 2) << kType << " expects {logits, target}";
     // NOTE(zbl): CrossEntropy originally requires FP32 in autocast context. Here we explicitly upcast logits to FP32
     //            at the beginning of the forward pass, in alignment with Megatron-LM's behavior. Ref:
@@ -538,6 +545,9 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     // 8. Save for backward
     saved_tensors_ = {softmax_local, target_mask, masked_target, valid_mask_local};
 
+#ifdef USE_NVTX
+    nvtxRangePop();
+#endif
     return {loss};
 }
 

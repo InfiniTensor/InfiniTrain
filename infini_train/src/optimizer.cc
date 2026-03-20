@@ -1,5 +1,9 @@
 #include "infini_train/include/optimizer.h"
 
+#ifdef USE_NVTX
+#include <nvtx3/nvToolsExt.h>
+#endif
+
 #include <vector>
 
 #include "infini_train/include/core/runtime/device_guard.h"
@@ -11,7 +15,13 @@ namespace infini_train {
 Optimizer::Optimizer(const std::vector<std::shared_ptr<Tensor>> &params) : params_(params) {}
 
 void Optimizer::ZeroGrad(bool set_to_none) {
+#ifdef USE_NVTX
+    nvtxRangePushA("ZeroGrad");
+#endif
     for (auto param : params_) { param->ZeroGrad(set_to_none); }
+#ifdef USE_NVTX
+    nvtxRangePop();
+#endif
 }
 
 namespace optimizers {
@@ -20,6 +30,9 @@ SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate
     : Optimizer(params), learning_rate_(learning_rate) {}
 
 void SGD::Step() {
+#ifdef USE_NVTX
+    nvtxRangePushA("SGD::Step");
+#endif
     for (auto param : params_) {
         if (!param->grad()) {
             LOG(INFO) << "Skipping param with null grad.";
@@ -30,6 +43,9 @@ void SGD::Step() {
         auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
         kernel.Call<void>(param->grad(), -learning_rate_, param);
     }
+#ifdef USE_NVTX
+    nvtxRangePop();
+#endif
 }
 
 Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate, float beta1, float beta2, float eps)
@@ -49,6 +65,9 @@ Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_ra
 }
 
 void Adam::Step() {
+#ifdef USE_NVTX
+    nvtxRangePushA("Adam::Step");
+#endif
     ++t_;
 
     for (size_t i = 0; i < params_.size(); ++i) {
@@ -66,6 +85,9 @@ void Adam::Step() {
         auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGrad"});
         kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
     }
+#ifdef USE_NVTX
+    nvtxRangePop();
+#endif
 }
 } // namespace optimizers
 } // namespace infini_train
