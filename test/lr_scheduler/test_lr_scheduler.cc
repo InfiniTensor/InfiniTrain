@@ -103,7 +103,7 @@ void TestLinearDecay() {
     ASSERT_FLOAT_EQ(opt->GetLearningRate(), 0.05f);
 }
 
-// T4: State → LoadState 往返一致性。
+// T4: State → LoadState
 void TestStateRoundTrip() {
     std::cout << "[T4] TestStateRoundTrip" << std::endl;
     constexpr int64_t kTotalSteps = 20;
@@ -115,7 +115,7 @@ void TestStateRoundTrip() {
     StateDict saved = sched->State();
 
     ASSERT_TRUE(saved.count("last_step") == 1);
-    ASSERT_TRUE(saved.count("current_lr") == 1);
+    ASSERT_TRUE(saved.count("recover_lr") == 1);
     ASSERT_TRUE(saved.count("base_lr") == 1);
 
     auto opt2 = MakeDummyOptimizer(kBaseLR);
