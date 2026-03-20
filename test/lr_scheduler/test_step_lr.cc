@@ -18,7 +18,7 @@ void TestWithinFirstPeriod() {
     auto sched = CreateLRScheduler(opt, config);
     for (int i = 0; i < 2; ++i) {
         sched->Step();
-        ASSERT_FLOAT_EQ(sched->GetLR(), kBaseLR); // last_step 1,2 → 指数 0
+        ASSERT_FLOAT_EQ(sched->GetLR(), kBaseLR); // last_step 1,2 → 0.1^0=1 → lr=0.1
     }
 }
 
