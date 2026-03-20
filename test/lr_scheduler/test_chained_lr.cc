@@ -7,7 +7,7 @@ using namespace infini_train::lr_schedulers;
 namespace {
 constexpr float kBaseLR = 0.1f;
 }
-// TC1: 单子调度器退化
+
 void TestSingleScheduler() {
     std::cout << "[TC1] TestSingleScheduler" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
@@ -23,7 +23,7 @@ void TestSingleScheduler() {
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.1f, kEps);
 }
 
-// TC2: StepLR + LambdaLR 乘法叠加
+// TC2: StepLR + LambdaLR
 void TestMultiplicativeChain() {
     std::cout << "[TC2] TestMultiplicativeChain" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
@@ -53,7 +53,7 @@ void TestMultiplicativeChain() {
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.07f, kEps);
 }
 
-// TC3: ConstantLR + StepLR 叠加 (无穿插声明)
+// TC3: ConstantLR + StepLR
 void TestConstantPlusStep() {
     std::cout << "[TC3] TestConstantPlusStep" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
@@ -86,7 +86,7 @@ void TestConstantPlusStep() {
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.01f, kEps);
 }
 
-// TC4: ConstantLR + StepLR 叠加（有穿插声明）
+// TC4: ConstantLR + StepLR (with extra unused scheduler）
 void TestConstantPlusStepDLC() {
     std::cout << "[TC4] TestConstantPlusStepDLC" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
@@ -129,7 +129,7 @@ void TestConstantPlusStepDLC() {
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.02f, kEps);
 }
 
-// TC5: State/LoadState 往返
+// TC5: State/LoadState
 void TestStateRoundTrip() {
     std::cout << "[TC5] TestStateRoundTrip" << std::endl;
     auto opt = MakeDummyOptimizer(kBaseLR);
@@ -152,7 +152,7 @@ void TestStateRoundTrip() {
     ASSERT_FLOAT_NEAR(sched2->GetLR(), sched->GetLR(), kEps);
 }
 
-// TC6: resume 一致性
+// TC6: resume consistency (load state at step K, then step N-K, should match directly stepping to N)
 void TestResumeConsistency() {
     std::cout << "[TC6] TestResumeConsistency" << std::endl;
     constexpr int kN = 10, kK = 4;
