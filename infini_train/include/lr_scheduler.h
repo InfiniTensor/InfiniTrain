@@ -74,7 +74,7 @@ protected:
 
     std::shared_ptr<Optimizer> optimizer_;
     int64_t last_step_;
-    float current_lr_;
+    float recover_lr_;
     float base_lr_;
     bool is_initial_ = false;
 };
@@ -155,7 +155,7 @@ public:
     void LoadState(const StateDict &state) override;
 
 protected:
-    float GetClosedFormLR() const override { return current_lr_; }
+    float GetClosedFormLR() const override { return base_lr_; } // FIXME: SequentialLR should not have a closed-form LR, but we need to implement this pure virtual function.
     void UndoChildInitialSteps();
 
 private:
@@ -176,7 +176,7 @@ public:
     void LoadState(const StateDict &state) override;
 
 protected:
-    float GetClosedFormLR() const override { return current_lr_; }
+    float GetClosedFormLR() const override { return base_lr_; } // FIXME: ChainedScheduler should not have a closed-form LR, but we need to implement this pure virtual function.
 
 private:
     std::vector<std::shared_ptr<LRScheduler>> schedulers_;
