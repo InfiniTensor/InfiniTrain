@@ -582,28 +582,10 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
             = [](const auto &...ts) { return std::make_tuple(static_cast<const T *>(ts ? ts->DataPtr() : nullptr)...); };
         auto [input_a_ptr, input_b_ptr] = extract_ptrs(inputs...);
 
-        constexpr int VecSize = kVecSize<T>;
-        // Use vectorized kernel if all pointers are 16-byte aligned and numel is large enough
-        const bool can_vectorize
-            = (num_elements >= static_cast<size_t>(VecSize))
-              && (reinterpret_cast<uintptr_t>(output_a_ptr) % (sizeof(T) * VecSize) == 0)
-              && (reinterpret_cast<uintptr_t>(output_b_ptr) % (sizeof(T) * VecSize) == 0)
-              && (reinterpret_cast<uintptr_t>(grad_output_ptr) % (sizeof(T) * VecSize) == 0)
-              && (!input_a_ptr || reinterpret_cast<uintptr_t>(input_a_ptr) % (sizeof(T) * VecSize) == 0)
-              && (!input_b_ptr || reinterpret_cast<uintptr_t>(input_b_ptr) % (sizeof(T) * VecSize) == 0);
-
-        if (can_vectorize) {
-            const size_t num_vecs = num_elements / VecSize;
-            dim3 block_dims(std::min(static_cast<size_t>(256), std::min(num_vecs, static_cast<size_t>(1024))));
-            dim3 grid_dims(std::min(CEIL_DIV(num_vecs, block_dims.x), static_cast<size_t>(65535)));
-            BinaryBackwardKernelNoBroadcastVectorized<T, VecSize><<<grid_dims, block_dims, 0, stream>>>(
-                output_a_ptr, output_b_ptr, fun_a, fun_b, num_elements, grad_output_ptr, input_a_ptr, input_b_ptr);
-        } else {
-            dim3 block_dims(std::min(BLOCK_SIZE, static_cast<size_t>(1024)));
-            dim3 grid_dims(std::min(CEIL_DIV(num_elements, block_dims.x), static_cast<size_t>(65535)));
-            BinaryBackwardKernelNoBroadcastFast<<<grid_dims, block_dims, 0, stream>>>(
-                output_a_ptr, output_b_ptr, fun_a, fun_b, num_elements, grad_output_ptr, input_a_ptr, input_b_ptr);
-        }
+        dim3 block_dims(std::min(BLOCK_SIZE, static_cast<size_t>(1024)));
+        dim3 grid_dims(std::min(CEIL_DIV(num_elements, block_dims.x), static_cast<size_t>(65535)));
+        BinaryBackwardKernelNoBroadcastFast<<<grid_dims, block_dims, 0, stream>>>(
+            output_a_ptr, output_b_ptr, fun_a, fun_b, num_elements, grad_output_ptr, input_a_ptr, input_b_ptr);
         return;
     }
 
