@@ -5,3 +5,9 @@ build/
 *.log
 *.report.rank*
 *.records.log.rank*
+CPackConfig.cmake
+CPackSourceConfig.cmake
+__pycache__/
+.trae/
+
+!cuda-report/**/*.log

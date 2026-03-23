@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace infini_train {
@@ -182,5 +183,27 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &inputs
 // Returns:
 //   Concatenation of the input tensors.
 std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim = 0);
+
+// Computes scaled dot product attention on query, key and value tensors, using
+// an optional attention mask if passed, and applying dropout if a probability
+// greater than 0.0 is specified.
+//
+// Args:
+//   query: The query tensor.
+//   key: The key tensor.
+//   value: The value tensor.
+//   attn_mask: The attention mask tensor (optional).
+//   dropout_p: The dropout probability (default 0.0).
+//   is_causal: Whether to apply causal masking (default false).
+//   scale: The scaling factor (optional).
+//
+// Returns:
+//   A tensor containing the result of the attention computation.
+std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &query,
+                                                  const std::shared_ptr<Tensor> &key,
+                                                  const std::shared_ptr<Tensor> &value,
+                                                  const std::shared_ptr<Tensor> &attn_mask = nullptr,
+                                                  double dropout_p = 0.0, bool is_causal = false,
+                                                  std::optional<double> scale = std::nullopt);
 
 } // namespace infini_train::nn::function
