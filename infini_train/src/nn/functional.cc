@@ -2,8 +2,10 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
+#include "infini_train/include/autograd/ScaledDotProductAttention.h"
 #include "infini_train/include/autograd/activations.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/misc.h"
@@ -78,5 +80,14 @@ std::shared_ptr<Tensor> Softmax(const std::shared_ptr<Tensor> &input, int64_t di
 
 std::shared_ptr<Tensor> Sigmoid(const std::shared_ptr<Tensor> &input) {
     return std::make_shared<autograd::Sigmoid>()->Apply({input})[0];
+}
+
+std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &query,
+                                                  const std::shared_ptr<Tensor> &key,
+                                                  const std::shared_ptr<Tensor> &value,
+                                                  const std::shared_ptr<Tensor> &attn_mask, int64_t dropout_p,
+                                                  bool is_causal, std::optional<double> scale, bool enable_gqa) {
+    return std::make_shared<autograd::ScaledDotProductAttention>(attn_mask, dropout_p, is_causal, scale, enable_gqa)
+        ->Apply({query, key, value})[0];
 }
 } // namespace infini_train::nn::function
