@@ -171,8 +171,7 @@ void Train(const nn::parallel::Rank &rank) {
     nn::TransformerConfig model_config = nn::TransformerConfig::LLaMA3();
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        auto llama3_model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
-        model = llama3_model;
+        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
     } else {
         model = std::make_shared<LLaMA3>(model_config);
     }

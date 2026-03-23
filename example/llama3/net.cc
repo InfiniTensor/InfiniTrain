@@ -75,6 +75,12 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     llama3_config.n_head = n_head;
     llama3_config.n_kv_head = n_kv_head;
     llama3_config.n_embd = n_embd;
+    llama3_config.ffn_dim_multiplier = ffn_dim_multiplier;
+    llama3_config.multiple_of = multiple_of;
+    llama3_config.rope_theta = rope_theta;
+    llama3_config.use_scaled_rope = static_cast<bool>(use_scaled_rope);
+    llama3_config.norm_eps = norm_eps;
+    llama3_config.max_gen_batch_size = max_gen_bs;
     auto llama3 = std::make_shared<LLaMA3>(llama3_config);
 
     // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========

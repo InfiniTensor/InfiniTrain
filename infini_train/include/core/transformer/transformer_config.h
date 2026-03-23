@@ -20,8 +20,7 @@ enum class NormType {
     kRMSNorm    // RMSNorm (LLaMA3 style)
 };
 
-class TransformerConfig {
-public:
+struct TransformerConfig {
     static constexpr char kGPT2Name[] = "GPT2";
     static constexpr char kLLaMA3Name[] = "LLaMA3";
 
@@ -61,7 +60,26 @@ public:
     bool flash = false;             // flash attention
     int64_t max_gen_batch_size = 4; // max batch size during inference
 
-    static TransformerConfig GPT2() { return {}; }
+    static TransformerConfig GPT2() {
+        return {.model_type = kGPT2Name,
+                .block_size = 1024,
+                .vocab_size = 50304,
+                .original_vocab_size = 50257,
+                .n_layer = 12,
+                .n_head = 12,
+                .n_kv_head = 12,
+                .n_embd = 768,
+                .attention_type = AttentionType::kStandard,
+                .activation_type = MLPType::kGELU,
+                .norm_type = NormType::kLayerNorm,
+                .use_bias = true,
+                .use_gqa = false,
+                .use_rope = false,
+                .tie_weights = true,
+                .ffn_expansion_ratio = 4.0f,
+                .ffn_dim_multiplier = std::nullopt,
+                .multiple_of = 1};
+    }
 
     static TransformerConfig LLaMA3() {
         return {.model_type = kLLaMA3Name,
@@ -77,7 +95,10 @@ public:
                 .use_bias = false,
                 .use_gqa = true,
                 .use_rope = true,
-                .tie_weights = false};
+                .tie_weights = false,
+                .ffn_expansion_ratio = 4.0f,
+                .ffn_dim_multiplier = 1.5f,
+                .multiple_of = 256};
     }
 };
 } // namespace infini_train::nn

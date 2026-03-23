@@ -192,8 +192,7 @@ void Train(const nn::parallel::Rank &rank) {
     std::shared_ptr<nn::Module> model = nullptr;
 
     if (!FLAGS_llmc_filepath.empty()) {
-        auto gpt2_model = GPT2::FromLLMC(FLAGS_llmc_filepath);
-        model = gpt2_model;
+        model = GPT2::FromLLMC(FLAGS_llmc_filepath);
     } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
         model = std::make_shared<GPT2>(model_config);
