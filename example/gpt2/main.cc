@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "example/common/utils.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
@@ -87,8 +88,6 @@ DEFINE_string(checkpoint_dir, "./checkpoints", "root directory used to store che
 DEFINE_uint32(max_checkpoint_keep, 3, "max number of checkpoint steps to keep");
 DEFINE_bool(save_optimizer_state, true, "whether optimizer state is persisted in checkpoints");
 DEFINE_string(checkpoint_format, "bin", "checkpoint format: bin|pth");
-DEFINE_bool(use_llmc_checkpoint_io, false,
-            "whether to use GPT2 LLMC model.bin callback for checkpoint save/load when format=bin");
 // precision check
 DEFINE_string(
     precision_check, "",
@@ -331,44 +330,15 @@ void Train(const nn::parallel::Rank &rank) {
 
     int start_step = 0;
     float best_loss = std::numeric_limits<float>::infinity();
-    if (!FLAGS_resume_from.empty()) {
-        std::filesystem::path resume_dir = FLAGS_resume_from;
-        if (rank.IsParallel()) {
-            const auto rank_dir = resume_dir / std::format("rank_{:06d}", rank.GlobalRank());
-            if (std::filesystem::exists(rank_dir)) {
-                resume_dir = rank_dir;
-            }
-        }
-
-        TrainerState state;
-        CheckpointLoadOptions load_options;
-        load_options.load_optimizer_state = true;
-        if (FLAGS_use_llmc_checkpoint_io) {
-            load_options.model_bin_loader = [](nn::Module *target_model, const std::filesystem::path &model_path) {
-                auto loaded_model = gpt2::LoadFromLLMC(model_path.string());
-                target_model->LoadStateDict(loaded_model->StateDict());
-            };
-        }
-        Checkpoint::Load(resume_dir, model.get(), optimizer.get(), &state, load_options);
-        start_step = static_cast<int>(state.global_step);
-        best_loss = state.best_loss;
-        if (state.data_batch_stride != static_cast<int64_t>(ddp_world_size) && rank.IsMainRank()) {
-            LOG(WARNING) << std::format("Checkpoint data_batch_stride {} mismatches current ddp_world_size {}. "
-                                        "Proceeding with recorded data_batch_idx {}.",
-                                        state.data_batch_stride, ddp_world_size, state.data_batch_idx);
-        }
-        saved_data_batch_idx = static_cast<size_t>(std::max<int64_t>(state.data_batch_idx, 0));
-        train_iter = train_loader.IteratorAtBatchIndex(saved_data_batch_idx);
-        if (rank.IsMainRank()) {
-            LOG(INFO) << std::format(
-                "Resume training from step {} with best_loss {:.6f}, last_lr {:.3e}, data_batch_idx {}",
-                state.global_step, state.best_loss, state.last_lr, state.data_batch_idx);
-            LOG(INFO) << std::format("Checkpoint model I/O mode during resume: {}",
-                                     FLAGS_use_llmc_checkpoint_io ? "llmc-callback" : "native-state-dict");
-        }
-    }
-
-    LOG(INFO) << "start training";
+    TrainerState state;
+    CheckpointLoadOptions load_options;
+    load_options.load_optimizer_state = true;
+    load_options.model_bin_loader = [](nn::Module *target_model, const std::filesystem::path &model_path) {
+        auto loaded_model = gpt2::LoadFromLLMC(model_path.string());
+        target_model->LoadStateDict(loaded_model->StateDict());
+    };
+    std::tie(start_step, best_loss, saved_data_batch_idx) = infini_train::ResumeFromCheckpoint(
+        FLAGS_resume_from, rank, model, optimizer, train_loader, state, train_iter, load_options);
 
     auto save_checkpoint = [&](const std::filesystem::path &save_dir, int64_t global_step,
                                bool prune_step_checkpoints) {
@@ -390,11 +360,9 @@ void Train(const nn::parallel::Rank &rank) {
         CheckpointOptions options;
         options.format = FLAGS_checkpoint_format;
         options.save_optimizer_state = FLAGS_save_optimizer_state;
-        if (FLAGS_use_llmc_checkpoint_io) {
-            options.model_bin_writer = [&](const nn::Module &, const std::filesystem::path &model_path) {
-                gpt2::SaveAsLLMC(llmc_model, model_path.string());
-            };
-        }
+        options.model_bin_writer = [&](const nn::Module &, const std::filesystem::path &model_path) {
+            gpt2::SaveAsLLMC(llmc_model, model_path.string());
+        };
         Checkpoint::Save(save_dir, *model, *optimizer, state, options);
 
         const auto ckpt_end = std::chrono::high_resolution_clock::now();

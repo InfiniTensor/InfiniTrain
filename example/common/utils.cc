@@ -1,5 +1,10 @@
 #include "example/common/utils.h"
 
+#include "gflags/gflags.h"
+#include "gflags/gflags_declare.h"
+#include "glog/logging.h"
+#include "infini_train/include/nn/parallel/global.h"
+
 namespace infini_train {
 
 float ConvertBF16ToFloat(void *ptr) {
@@ -59,6 +64,55 @@ void ReadVectorShardFloat(std::ifstream &ifs, float *dst, int64_t len, int64_t s
     ifs.seekg(base + std::streamoff(start * sizeof(float)));
     ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(cnt * sizeof(float)));
     ifs.seekg(base + std::streamoff(len * sizeof(float)));
+}
+
+std::tuple<int, float, size_t> ResumeFromCheckpoint(
+    const fLS::clstring &flag_resume_root, // resume from this checkpoint directory
+    const nn::parallel::Rank &rank,        // rank info for distributed training
+    std::shared_ptr<nn::Module> model,     // model to be loaded with checkpoint state
+    std::shared_ptr<Optimizer> optimizer,  // some optimizer may not have state, but others may have
+    DistributedDataLoader &train_loader,   // distributed dataloader to be resumed
+    TrainerState &state,                   // trainer state to be loaded from checkpoint
+    DataLoaderIterator
+        &train_iter, // dataloader iterator to be set to the correct position according to checkpoint state
+    CheckpointLoadOptions model_bin_loader) {
+    int global_step = 0;
+    float best_loss = std::numeric_limits<float>::infinity();
+    size_t data_batch_idx = 0;
+
+    int ddp_world_size = nn::parallel::global::GetDataParallelSize();
+
+    if (flag_resume_root.empty()) {
+        LOG(INFO) << "No checkpoint specified for resume. Starting training from scratch.";
+        return {global_step, best_loss, data_batch_idx};
+    }
+
+    std::filesystem::path resume_dir = flag_resume_root;
+    if (rank.IsParallel()) {
+        const auto rank_dir = resume_dir / std::format("rank_{:06d}", rank.GlobalRank());
+        if (std::filesystem::exists(rank_dir)) {
+            resume_dir = rank_dir;
+        }
+    }
+
+    Checkpoint::Load(resume_dir, model.get(), optimizer.get(), &state, model_bin_loader);
+
+    global_step = static_cast<int>(state.global_step);
+    best_loss = state.best_loss;
+    if (state.data_batch_stride != static_cast<int64_t>(ddp_world_size) && rank.IsMainRank()) {
+        LOG(WARNING) << std::format("Checkpoint data_batch_stride {} mismatches current ddp_world_size {}. "
+                                    "Proceeding with recorded data_batch_idx {}.",
+                                    state.data_batch_stride, ddp_world_size, state.data_batch_idx);
+    }
+    data_batch_idx = static_cast<size_t>(std::max<int64_t>(state.data_batch_idx, 0));
+    train_iter = train_loader.IteratorAtBatchIndex(data_batch_idx);
+    if (rank.IsMainRank()) {
+        LOG(INFO) << std::format(
+            "Resume training from step {} with best_loss {:.6f}, last_lr {:.3e}, data_batch_idx {}", state.global_step,
+            state.best_loss, state.last_lr, state.data_batch_idx);
+    }
+
+    return {global_step, best_loss, data_batch_idx};
 }
 
 } // namespace infini_train
