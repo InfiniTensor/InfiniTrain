@@ -203,3 +203,9 @@ link_infini_train_exe(test_precision_check)
 
 add_executable(test_lora test/lora/test_lora.cc)
 link_infini_train_exe(test_lora)
+
+add_executable(test_flash_layout test/flash_attn/test_flash_layout.cc)
+link_infini_train_exe(test_flash_layout)
+
+add_executable(test_flash_precision test/flash_attn/test_flash_precision.cc)
+link_infini_train_exe(test_flash_precision)
