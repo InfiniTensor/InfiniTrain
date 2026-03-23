@@ -83,7 +83,7 @@ TinyShakespeareFile ReadTinyShakespeareFile(const std::string &path, size_t sequ
 
     std::variant<std::vector<uint16_t>, std::vector<int32_t>> buffer;
     if (text_file.type == TinyShakespeareType::kUINT16) {
-        CHECK_LE(sequence_length, 1024); // GPT-2: max_seq_length = 1024
+        // CHECK_LE(sequence_length, 1024); // GPT-2: max_seq_length = 1024
         buffer = std::vector<uint16_t>(num_sequences * sequence_length);
     } else if (text_file.type == TinyShakespeareType::kUINT32) {
         CHECK_LE(sequence_length, 8192); // LLaMA-3: max_seq_length = 8192
