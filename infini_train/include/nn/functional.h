@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace infini_train {
@@ -182,5 +183,23 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &inputs
 // Returns:
 //   Concatenation of the input tensors.
 std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim = 0);
+
+// Scaled dot-product attention (PyTorch-like API).
+//
+// Expected tensor layout (current InfiniTrain examples):
+//   query/key/value: (B, H, T, D)
+//
+// Semantics:
+// - If attn_mask is provided: positions where mask is non-zero are masked.
+// - If is_causal is true: applies a causal (upper-triangular) mask.
+// - If scale is not provided: uses 1 / sqrt(D).
+// - If enable_gqa is true and key/value have fewer heads than query, key/value
+//   will be repeated along the head dimension.
+std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &query,
+                                                  const std::shared_ptr<Tensor> &key,
+                                                  const std::shared_ptr<Tensor> &value,
+                                                  const std::shared_ptr<Tensor> &attn_mask = nullptr,
+                                                  double dropout_p = 0.0, bool is_causal = false,
+                                                  std::optional<double> scale = std::nullopt, bool enable_gqa = false);
 
 } // namespace infini_train::nn::function
