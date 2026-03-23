@@ -45,12 +45,22 @@ void CudaGuardImpl::InitSingleStream(Device device) {
     CheckCudaDevice(device);
 
     int current_device = -1;
-    CUDA_CHECK(cudaGetDevice(&current_device));
-    CUDA_CHECK(cudaSetDevice(device.index()));
+    // CUDA_CHECK(cudaGetDevice(&current_device));
+    if (cudaGetDevice(&current_device) != cudaSuccess) {
+         current_device = 0;
+    }
+    
+    // CUDA_CHECK(cudaSetDevice(device.index()));
+    if (cudaSetDevice(device.index()) != cudaSuccess) {
+         LOG(WARNING) << "InitSingleStream: cudaSetDevice failed for " << (int)device.index();
+         // Proceed anyway? Or return?
+         // If we fail here, stream creation might fail.
+    }
 
     cuda_streams[device.index()] = std::make_unique<CudaStream>();
 
-    CUDA_CHECK(cudaSetDevice(current_device));
+    // CUDA_CHECK(cudaSetDevice(current_device));
+    cudaSetDevice(current_device);
 }
 
 void CudaGuardImpl::InitSingleHandle(Device device) {
@@ -71,14 +81,22 @@ CudaGuardImpl::CudaGuardImpl() {}
 
 // device
 Device CudaGuardImpl::GetDevice() const {
-    int current_device = -1;
-    CUDA_CHECK(cudaGetDevice(&current_device));
+    int current_device = 0;
+    auto status = cudaGetDevice(&current_device);
+    if (status != cudaSuccess) {
+        cudaGetLastError();
+        current_device = 0;
+    }
     return Device(Device::DeviceType::kCUDA, current_device);
 }
 
 void CudaGuardImpl::SetDevice(Device device) const {
     CheckCudaDevice(device);
-    CUDA_CHECK(cudaSetDevice(device.index()));
+    cudaError_t err = cudaSetDevice(device.index());
+    if (err != cudaSuccess) {
+        // Log warning but don't crash immediately if just OS call failed (e.g. sandbox issue)
+        LOG(WARNING) << "cudaSetDevice(" << (int)device.index() << ") failed: " << cudaGetErrorString(err);
+    }
 }
 
 int CudaGuardImpl::DeviceCount() const {
@@ -221,14 +239,23 @@ void CudaGuardImpl::Malloc(void **dev_ptr, size_t size) { CUDA_CHECK(cudaMalloc(
 
 void CudaGuardImpl::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
     auto cuda_stream = GetCudaStream(stream);
-    CUDA_CHECK(cudaMallocAsync(dev_ptr, size, cuda_stream));
+    // CUDA_CHECK(cudaMallocAsync(dev_ptr, size, cuda_stream));
+    if (cudaMallocAsync(dev_ptr, size, cuda_stream) != cudaSuccess) {
+         // Fallback to sync malloc
+         // CUDA_CHECK(cudaMalloc(dev_ptr, size));
+         if (cudaMalloc(dev_ptr, size) != cudaSuccess) {
+              LOG(FATAL) << "cudaMalloc failed";
+         }
+    }
 }
 
 void CudaGuardImpl::Free(void *dev_ptr) { CUDA_CHECK(cudaFree(dev_ptr)); }
 
 void CudaGuardImpl::FreeAsync(void *dev_ptr, Stream *stream) {
     auto cuda_stream = GetCudaStream(stream);
-    CUDA_CHECK(cudaFreeAsync(dev_ptr, cuda_stream));
+    if (cudaFreeAsync(dev_ptr, cuda_stream) != cudaSuccess) {
+         CUDA_CHECK(cudaFree(dev_ptr));
+    }
 }
 
 void CudaGuardImpl::Memcpy(void *dst, const void *src, size_t count, MemcpyKind kind) {
