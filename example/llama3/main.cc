@@ -11,7 +11,6 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
@@ -73,16 +72,13 @@ DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
+//------modify-start------------------------------------------
+DEFINE_bool(flash, false, "enable fused scaled-dot-product attention (BF16 only)");
+//---------modify-end-----------------------------------------
 // precision check
 DEFINE_string(
     precision_check, "",
     "precision check config: level=N,format=simple|table,output_md5=true|false,output_path=PATH,baseline=PATH");
-// LoRA parameters
-DEFINE_int32(lora_rank, 0, "LoRA rank (0 = disabled)");
-DEFINE_double(lora_alpha, 16.0, "LoRA alpha scaling factor");
-DEFINE_string(lora_target_modules, "c_attn,c_proj,c_fc,c_fc2", "LoRA target modules (comma-separated)");
-DEFINE_string(lora_save_path, "", "Path to save LoRA weights after training");
-DEFINE_string(lora_load_path, "", "Path to load LoRA weights from");
 
 using namespace infini_train;
 
@@ -168,6 +164,9 @@ void Train(const nn::parallel::Rank &rank) {
     // ManualSeed(42);
 
     LLaMA3Config model_config = LLaMA3Config();
+    //------modify-start------------------------------------------
+    model_config.flash = FLAGS_flash;
+    //---------modify-end-----------------------------------------
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
         model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
@@ -178,25 +177,6 @@ void Train(const nn::parallel::Rank &rank) {
     model->To(device);
 
     utils::PrecisionChecker::BuildNameMap(model.get());
-
-    // Apply LoRA using GetLoRAModel (in-place injection)
-    bool lora_enabled = FLAGS_lora_rank > 0;
-    if (lora_enabled) {
-        nn::lora::LoRAConfig lora_config{FLAGS_lora_rank, static_cast<float>(FLAGS_lora_alpha), 0.0f,
-                                         nn::lora::ParseLoRATargetModules(FLAGS_lora_target_modules)};
-
-        // GetLoRAModel: in-place injection, modifies module tree directly
-        model = nn::lora::GetLoRAModel(model, lora_config);
-
-        // Load LoRA weights if specified
-        if (!FLAGS_lora_load_path.empty()) {
-            LOG(INFO) << "Loading LoRA weights from: " << FLAGS_lora_load_path;
-            nn::lora::LoadLoRAWeights(model, FLAGS_lora_load_path);
-        }
-
-        // Print LoRA summary
-        nn::lora::PrintLoRASummary(model, rank.GlobalRank());
-    }
 
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": Model loaded to device.";
 
@@ -263,23 +243,14 @@ void Train(const nn::parallel::Rank &rank) {
     auto optimizer_creator = optimizers::Adam::Create(FLAGS_learning_rate);
     std::shared_ptr<Optimizer> optimizer = nullptr;
 
-    std::vector<std::shared_ptr<Tensor>> params_to_optimize;
-    if (lora_enabled) {
-        params_to_optimize = nn::lora::GetLoRAParameters(model);
-        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " LoRA parameters";
-    } else {
-        params_to_optimize = model->Parameters();
-        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " model parameters";
-    }
-
     if (FLAGS_use_distributed_optimizer) {
         auto model_chunks = (pp_world_size > 1)
                               ? *(dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks())
                               : std::vector<std::shared_ptr<nn::Module>>{model};
-        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, params_to_optimize,
+        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, model->Parameters(),
                                                                          model_chunks, ddp_world_size, ddp_rank);
     } else {
-        optimizer = optimizer_creator(params_to_optimize);
+        optimizer = optimizer_creator(model->Parameters());
     }
 
     auto train_iter = train_loader.begin();
@@ -405,13 +376,6 @@ void Train(const nn::parallel::Rank &rank) {
             }
         }
     }
-
-    // Save LoRA weights if enabled and path specified
-    if (lora_enabled && !FLAGS_lora_save_path.empty()) {
-        LOG(INFO) << "Saving LoRA weights to: " << FLAGS_lora_save_path;
-        nn::lora::SaveLoRAWeights(model, FLAGS_lora_save_path);
-    }
-
 #ifdef PROFILE_MODE
     Profiler::Instance().Report("llama3.report", Profiler::SortBy::DeviceTimePercentage);
     Profiler::Instance().PrintRecords("llama3.records.log");

@@ -11,7 +11,12 @@
 #include <tuple>
 #include <vector>
 
+#include "gflags/gflags.h"
 #include "glog/logging.h"
+//------modify-start------------------------------------------
+// NOTE: --flash is a global gflags option defined in main.cc.
+DECLARE_bool(flash);
+//---------modify-end-----------------------------------------
 
 #include "example/common/utils.h"
 #include "infini_train/include/device.h"
@@ -104,6 +109,26 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     k = k->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
     q = q->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
     v = v->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
+
+    //------modify-start------------------------------------------
+    // FlashAttention path (BF16 on CUDA only).
+    if (FLAGS_flash && q->GetDevice().type() == Device::DeviceType::kCUDA && q->Dtype() == DataType::kBFLOAT16) {
+        // cudnn SDPA expects a standard (B, H, T, D) layout; enforce contiguous strides.
+        q = q->Contiguous();
+        k = k->Contiguous();
+        v = v->Contiguous();
+
+        // (B, h_l, T, D) -> (B, h_l, T, D)
+        auto y = nn::function::ScaledDotProductAttention(q, k, v, /*attn_mask=*/nullptr, /*dropout_p=*/0.0,
+                                                         /*is_causal=*/true);
+        // (B, h_l, T, D) -> (B, T, h_l, D) -> (B, T, local_C)
+        y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
+
+        // output projection
+        y = (*modules_[kCProjLayerName])({y})[0];
+        return {y};
+    }
+    //---------modify-end-----------------------------------------
 
     // (B, h_l, T, T)
     auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
@@ -307,11 +332,6 @@ GPT2::GPT2(const GPT2Config &config)
     modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
 
     // FIXME(jym): Assigning the parameter values of wte to LMHead, which is not real tying operation
-    // TODO: Implement real GPT-2 weight tying: make lm_head.weight share the exact same Parameter/Tensor (same
-    // shared_ptr/storage) as transformer.wte.weight (pointer aliasing, not value copy), and ensure the tie is applied
-    // after loading weights so it won't be overwritten. Also fix GPT2::FromLLMC() loading logic to respect weight tying
-    // (do not create/load a separate lm_head.weight tensor; load once into the tied weight) so parameter counting
-    // matches PyTorch/PEFT.
     if (nn::parallel::global::GetPipelineParallelSize() == 1) {
         // https://paperswithcode.com/method/weight-tying
         *mutable_module(kTransformerLayerName)
