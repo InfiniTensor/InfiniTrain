@@ -20,101 +20,101 @@ Device::DeviceType CpuGuardImpl::Type() const { return Device::DeviceType::kCPU;
 void CpuGuardImpl::SetDevice(Device device) const {
     // No-op for CPU
     CHECK(device.type() == Device::DeviceType::kCPU);
-    LOG(WARNING) << "CpuGuardImpl::SetDevice is not supported. "
-                    "The call is ignored.";
+    VLOG(3) << "CpuGuardImpl::SetDevice is not supported. "
+               "The call is ignored.";
 }
 
 int CpuGuardImpl::DeviceCount() const { return 1; }
 
 Stream *CpuGuardImpl::GetStream(Device device) const {
     CHECK(device.type() == Device::DeviceType::kCPU);
-    LOG(WARNING) << "CpuGuardImpl::GetStream is not supported. "
-                    "Return nullptr.";
+    VLOG(3) << "CpuGuardImpl::GetStream is not supported. "
+               "Return nullptr.";
     return nullptr;
 }
 
 Stream *CpuGuardImpl::CreateStream(Device device) const {
     CHECK(device.type() == Device::DeviceType::kCPU);
-    LOG(WARNING) << "CpuGuardImpl::CreateStream is not supported. "
-                    "Return nullptr.";
+    VLOG(3) << "CpuGuardImpl::CreateStream is not supported. "
+               "Return nullptr.";
     return nullptr;
 }
 
 Stream *CpuGuardImpl::CreateStreamWithPriority(Device device, int priority) const {
     CHECK(device.type() == Device::DeviceType::kCPU);
-    LOG(WARNING) << "CpuGuardImpl::CreateStreamWithPriority is not supported. "
-                    "Return nullptr.";
+    VLOG(3) << "CpuGuardImpl::CreateStreamWithPriority is not supported. "
+               "Return nullptr.";
     return nullptr;
 }
 
 void CpuGuardImpl::DestroyStream(Stream *stream) const {
-    LOG(WARNING) << "CpuGuardImpl::DestroyStream is not supported. "
-                    "The call is ignored.";
+    VLOG(3) << "CpuGuardImpl::DestroyStream is not supported. "
+               "The call is ignored.";
 }
 
 void CpuGuardImpl::GetStreamPriorityRange(int *low, int *high) const {
     *low = 0;
     *high = 0;
-    LOG(WARNING) << "CpuGuardImpl::GetStreamPriorityRange is not supported. "
-                    "Return range [0, 0].";
+    VLOG(3) << "CpuGuardImpl::GetStreamPriorityRange is not supported. "
+               "Return range [0, 0].";
 }
 
 void CpuGuardImpl::EventCreate(Event **event) const {
     CHECK_NOTNULL(event);
-    LOG(WARNING) << "CpuGuardImpl::EventCreate is not supported. Returning nullptr event.";
+    VLOG(3) << "CpuGuardImpl::EventCreate is not supported. Returning nullptr event.";
     *event = nullptr;
 }
 
 void CpuGuardImpl::EventCreateWithFlags(Event **event, EventFlag flags) const {
     CHECK_NOTNULL(event);
-    LOG(WARNING) << "CpuGuardImpl::EventCreateWithFlags is not supported. Returning nullptr event.";
+    VLOG(3) << "CpuGuardImpl::EventCreateWithFlags is not supported. Returning nullptr event.";
     *event = nullptr;
 }
 
 void CpuGuardImpl::EventDestroy(Event *event) const {
-    LOG(WARNING) << "CpuGuardImpl::EventDestroy is not supported. The call is ignored.";
+    VLOG(3) << "CpuGuardImpl::EventDestroy is not supported. The call is ignored.";
 }
 
 void CpuGuardImpl::EventRecord(Event *event, Stream *stream) const {
-    LOG(WARNING) << "CpuGuardImpl::EventRecord is not supported. The call is ignored.";
+    VLOG(3) << "CpuGuardImpl::EventRecord is not supported. The call is ignored.";
 }
 
 void CpuGuardImpl::StreamWaitEvent(Stream *stream, Event *event, uint32_t flags) const {
-    LOG(WARNING) << "CpuGuardImpl::StreamWaitEvent is not supported. The call is ignored.";
+    VLOG(3) << "CpuGuardImpl::StreamWaitEvent is not supported. The call is ignored.";
 }
 
 RuntimeStatus CpuGuardImpl::EventSynchronize(Event *event) const {
-    LOG(WARNING) << "CpuGuardImpl::EventSynchronize is not supported. Returning kError.";
+    VLOG(3) << "CpuGuardImpl::EventSynchronize is not supported. Returning kError.";
     return RuntimeStatus::kError;
 }
 
 RuntimeStatus CpuGuardImpl::EventQuery(Event *event) const {
-    LOG(WARNING) << "CpuGuardImpl::EventQuery is not supported. Returning kError.";
+    VLOG(3) << "CpuGuardImpl::EventQuery is not supported. Returning kError.";
     return RuntimeStatus::kError;
 }
 
 float CpuGuardImpl::EventElapsedTime(Event *start_event, Event *stop_event) const {
-    LOG(WARNING) << "CpuGuardImpl::EventElapsedTime is not supported. Returning 0.";
+    VLOG(3) << "CpuGuardImpl::EventElapsedTime is not supported. Returning 0.";
     return 0.0f;
 }
 
 void CpuGuardImpl::SynchronizeDevice(Device device) const {
     // No-op for CPU
     CHECK(device.type() == Device::DeviceType::kCPU);
-    LOG(WARNING) << "CpuGuardImpl::SynchronizeDevice is not supported. "
-                    "The call is ignored.";
+    VLOG(3) << "CpuGuardImpl::SynchronizeDevice is not supported. "
+               "The call is ignored.";
 }
 
 void CpuGuardImpl::SynchronizeStream(Stream *) const {
     // No-op for CPU
-    LOG(WARNING) << "CpuGuardImpl::SynchronizeStream is not supported. "
-                    "The call is ignored.";
+    VLOG(3) << "CpuGuardImpl::SynchronizeStream is not supported. "
+               "The call is ignored.";
 }
 
 BlasHandle *CpuGuardImpl::GetBlasHandle(Device device) const {
     CHECK(device.type() == Device::DeviceType::kCPU);
-    LOG(WARNING) << "CpuGuardImpl::GetBlasHandle is not supported. "
-                    "Return nullptr.";
+    VLOG(3) << "CpuGuardImpl::GetBlasHandle is not supported. "
+               "Return nullptr.";
     return nullptr;
 }
 
@@ -123,12 +123,12 @@ void CpuGuardImpl::Malloc(void **dev_ptr, size_t size) { *dev_ptr = std::malloc(
 void CpuGuardImpl::Free(void *dev_ptr) { std::free(dev_ptr); }
 
 void CpuGuardImpl::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
-    LOG(WARNING) << "CpuGuardImpl::MallocAsync is not supported. Falling back to blocking Malloc()";
+    VLOG(3) << "CpuGuardImpl::MallocAsync is not supported. Falling back to blocking Malloc()";
     Malloc(dev_ptr, size);
 }
 
 void CpuGuardImpl::FreeAsync(void *dev_ptr, Stream *stream) {
-    LOG(WARNING) << "CpuGuardImpl::FreeAsync is not supported. Falling back to blocking Free()";
+    VLOG(3) << "CpuGuardImpl::FreeAsync is not supported. Falling back to blocking Free()";
     Free(dev_ptr);
 }
 
@@ -140,21 +140,21 @@ void CpuGuardImpl::Memcpy(void *dst, const void *src, size_t count, MemcpyKind k
 }
 
 void CpuGuardImpl::MemcpyAsync(void *dst, const void *src, size_t count, MemcpyKind kind, Stream *stream) {
-    LOG(WARNING) << "CpuGuardImpl::MemcpyAsync is not supported. Falling back to blocking Memcpy()";
+    VLOG(3) << "CpuGuardImpl::MemcpyAsync is not supported. Falling back to blocking Memcpy()";
     Memcpy(dst, src, count, kind);
 }
 
 void CpuGuardImpl::ResetMemPoolHighWatermarks(Device device) const {
     // No-op for CPU
     CHECK(device.type() == Device::DeviceType::kCPU);
-    LOG(WARNING) << "CpuGuardImpl::ResetMemPoolHighWatermarks is not supported. "
-                    "The call is ignored.";
+    VLOG(3) << "CpuGuardImpl::ResetMemPoolHighWatermarks is not supported. "
+               "The call is ignored.";
 }
 
 std::pair<size_t, size_t> CpuGuardImpl::GetMemPoolPeakMB(Device device) const {
     CHECK(device.type() == Device::DeviceType::kCPU);
-    LOG(WARNING) << "CpuGuardImpl::GetMemPoolPeakMB is not supported. "
-                    "Return {0, 0}.";
+    VLOG(3) << "CpuGuardImpl::GetMemPoolPeakMB is not supported. "
+               "Return {0, 0}.";
     return {0, 0};
 }
 
