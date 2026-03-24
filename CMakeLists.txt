@@ -77,6 +77,12 @@ if(USE_CUDA)
   find_package(CUDAToolkit REQUIRED)
   include_directories(${CUDAToolkit_INCLUDE_DIRS})
 
+  # ========== cuDNN 库 ==========
+  find_library(CUDNN_LIBRARY cudnn REQUIRED)
+  message(STATUS "Found cuDNN at: ${CUDNN_LIBRARY}")
+  # ========================================
+
+
   # CUDA compilation options
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
@@ -84,6 +90,9 @@ if(USE_CUDA)
   file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
 
   add_library(infini_train_cuda_kernels STATIC ${CUDA_KERNELS})
+  target_include_directories(infini_train_cuda_kernels PUBLIC 
+    ${PROJECT_SOURCE_DIR}/third_party/cudnn-frontend/include)
+
   set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "75;80;90")
 
   target_link_libraries(infini_train_cuda_kernels
@@ -92,6 +101,8 @@ if(USE_CUDA)
       CUDA::cudart
       CUDA::cublas
       CUDA::cuda_driver
+      CUDA::nvrtc
+      ${CUDNN_LIBRARY}
   )
 
   if(USE_NCCL)

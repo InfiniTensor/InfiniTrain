@@ -84,6 +84,8 @@ DEFINE_string(lora_target_modules, "c_attn,c_proj,c_fc,c_fc2", "LoRA target modu
 DEFINE_string(lora_save_path, "", "Path to save LoRA weights after training");
 DEFINE_string(lora_load_path, "", "Path to load LoRA weights from");
 
+DEFINE_bool(flash, false, "Whether to enable flash attention");
+
 using namespace infini_train;
 
 namespace {
@@ -170,8 +172,9 @@ void Train(const nn::parallel::Rank &rank) {
     LLaMA3Config model_config = LLaMA3Config();
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
+        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath, FLAGS_flash);
     } else {
+        model_config.flash = FLAGS_flash;
         model = std::make_shared<LLaMA3>(model_config);
     }
 

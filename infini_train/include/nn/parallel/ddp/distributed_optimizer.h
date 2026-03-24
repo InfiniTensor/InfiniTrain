@@ -31,6 +31,9 @@ public:
     void StartGradSync();
     void FinishGradSync();
 
+    // Forward microbatch boundary info to bucket groups.
+    void SetIsLastMicrobatch(bool is_last_microbatch);
+
     void StartParamSync(bool force_sync = false);
     void FinishParamSync(bool skip_next_bucket_dispatch = false);
 
