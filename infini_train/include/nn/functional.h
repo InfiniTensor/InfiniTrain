@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
+#include <optional>
 
 namespace infini_train {
 class Tensor;

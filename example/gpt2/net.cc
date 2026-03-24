@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "glog/logging.h"
+#include "gflags/gflags.h"
 
 #include "example/common/utils.h"
 #include "infini_train/include/device.h"
@@ -105,24 +106,63 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     q = q->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
     v = v->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
 
-    // (B, h_l, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
-    // (1, 1, T, T)
-    auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
-    // (1, 1, T, T) -> eq 0 -> (1, 1, T, T) -> masked_fill -> (B, h_l, T, T)
-    att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
-    // (B, h_l, T, T)
-    att = nn::function::Softmax(att, -1);
-    // (B, h_l, T, Dh)
-    auto y = att->Matmul(v);
-    // (B, h_l, T, Dh) -> (B, T, h_l, Dh) -> (B, T, local_C)
-    y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
+    auto Flag_flash = config_.flash;
+    const bool use_flash_sdpa = Flag_flash && q->Dtype() == DataType::kBFLOAT16;
+    static bool logged_attention_path = false;
+    if (!logged_attention_path) {
+        LOG(ERROR) << "[GPT2][AttentionPath] flash_flag=" << Flag_flash
+                   << ", q_dtype=" << kDataTypeToDesc.at(q->Dtype())
+                   << ", selected=" << (use_flash_sdpa ? "cuDNN_SDPA_flash" : "matmul_softmax_fallback");
+        logged_attention_path = true;
+    }
 
-    // Get full tensor
-    // (B, T, local_C) -> RowParallelLinear(n_embd, n_embd) -> (B, T, C)
-    y = (*modules_[kCProjLayerName])({y})[0];
-    // (B, T, C) == (bs, seq_len, n_embd)
-    return {y};
+    std::shared_ptr<infini_train::Tensor> y;
+
+    if (Flag_flash) {
+        // cuDNN SDPA path: causal masking should be enabled by `is_causal=true`.
+        // Do not pass the 0/1 tril mask as additive bias (it is not -inf mask).
+        auto q_flash = q;
+        auto k_flash = k;
+        auto v_flash = v;
+        if (q->Dtype() != DataType::kBFLOAT16) {
+            q_flash = std::make_shared<Tensor>(q->To(DataType::kBFLOAT16));
+            k_flash = std::make_shared<Tensor>(k->To(DataType::kBFLOAT16));
+            v_flash = std::make_shared<Tensor>(v->To(DataType::kBFLOAT16));
+        }
+        y = nn::function::ScaledDotProductAttention(q_flash, k_flash, v_flash, nullptr, 0.0, true, std::nullopt,
+                                                    false);
+        
+        if (y->Dtype() != q->Dtype()) {
+            y = std::make_shared<Tensor>(y->To(q->Dtype()));
+        }
+        // ensure expected layout: (B, h_l, T, Dh) -> (B, T, h_l, Dh) -> (B, T, local_C)
+        y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
+
+        // Get full tensor
+        // (B, T, local_C) -> RowParallelLinear(n_embd, n_embd) -> (B, T, C)
+        y = (*modules_[kCProjLayerName])({y})[0];
+        // (B, T, C) == (bs, seq_len, n_embd)
+        return {y};
+    } else {
+        // (B, h_l, T, T)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
+        // (1, 1, T, T)
+        auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
+        // (1, 1, T, T) -> eq 0 -> (1, 1, T, T) -> masked_fill -> (B, h_l, T, T)
+        att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
+        // (B, h_l, T, T)
+        att = nn::function::Softmax(att, -1);
+        // (B, h_l, T, Dh)
+        auto y = att->Matmul(v);
+        // (B, h_l, T, Dh) -> (B, T, h_l, Dh) -> (B, T, local_C)
+        y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
+        
+        // Get full tensor
+        // (B, T, local_C) -> RowParallelLinear(n_embd, n_embd) -> (B, T, C)
+        y = (*modules_[kCProjLayerName])({y})[0];
+        // (B, T, C) == (bs, seq_len, n_embd)
+        return {y};
+    }
 }
 
 MLP::MLP(const GPT2Config &config) : CloneableModule(kType) {
@@ -356,7 +396,7 @@ std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::
 }
 } // namespace
 
-std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
+std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath, bool flash) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -384,7 +424,8 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
                                                         .original_vocab_size = vocab_size,
                                                         .n_layer = n_layer,
                                                         .n_head = n_head,
-                                                        .n_embd = n_embd});
+                                                        .n_embd = n_embd,
+                                                        .flash = flash});
 
     LOG(INFO) << "magic: " << magic << " version: " << version << " block_size: " << block_size
               << " vocab_size: " << vocab_size << " n_layer: " << n_layer << " n_head: " << n_head

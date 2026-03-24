@@ -80,6 +80,9 @@ DEFINE_string(
     precision_check, "",
     "precision check config: level=N,format=simple|table,output_md5=true|false,output_path=PATH,baseline=PATH");
 
+//Flash attention parameters    
+DEFINE_bool(flash, false, "Whether to enable flash attention");
+
 // LoRA parameters
 DEFINE_int32(lora_rank, 0, "LoRA rank (0 = disabled)");
 DEFINE_double(lora_alpha, 16.0, "LoRA alpha scaling factor");
@@ -189,16 +192,17 @@ void Train(const nn::parallel::Rank &rank) {
     // init the model, either from scratch or from OpenAI pretrained checkpoint
     GPT2Config model_config;
     std::shared_ptr<nn::Module> model = nullptr;
-
     if (!FLAGS_llmc_filepath.empty()) {
-        model = GPT2::FromLLMC(FLAGS_llmc_filepath);
+        model = GPT2::FromLLMC(FLAGS_llmc_filepath, FLAGS_flash);
     } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
+        model_config.flash = FLAGS_flash;
         model = std::make_shared<GPT2>(model_config);
     } else {
         model = GPT2::FromPretrained(kStrToModelType.at(FLAGS_model));
+        model_config.flash = FLAGS_flash;
     }
-
+    
     model->To(device);
 
     utils::PrecisionChecker::BuildNameMap(model.get());
