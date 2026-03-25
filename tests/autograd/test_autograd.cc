@@ -18,7 +18,7 @@
 
 using namespace infini_train;
 
-class AutogradTest : public ::testing::Test {
+class AutogradTestBase : public ::testing::Test {
 protected:
     static void SetUpTestSuite() {
         nn::parallel::global::GlobalEnv::Instance().Init(1, 1, false, 1, 1);
@@ -38,7 +38,12 @@ protected:
     }
 };
 
-TEST_F(AutogradTest, AddForward) {
+class AutogradForwardTest : public AutogradTestBase {};
+class AutogradBackwardTest : public AutogradTestBase {};
+class AutogradCudaTest : public AutogradTestBase {};
+class AutogradDistributedTest : public AutogradTestBase {};
+
+TEST_F(AutogradForwardTest, AddForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto b = createTensor({2, 3}, 2.0f);
     auto add_fn = std::make_shared<autograd::Add>();
@@ -47,7 +52,7 @@ TEST_F(AutogradTest, AddForward) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 3}));
 }
 
-TEST_F(AutogradTest, AddBackward) {
+TEST_F(AutogradBackwardTest, AddBackward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto b = createTensor({2, 3}, 2.0f);
     auto add_fn = std::make_shared<autograd::Add>();
@@ -57,7 +62,7 @@ TEST_F(AutogradTest, AddBackward) {
     EXPECT_EQ(grad_inputs.size(), 2);
 }
 
-TEST_F(AutogradTest, SubForward) {
+TEST_F(AutogradForwardTest, SubForward) {
     auto a = createTensor({2, 3}, 5.0f);
     auto b = createTensor({2, 3}, 3.0f);
     auto sub_fn = std::make_shared<autograd::Sub>();
@@ -65,7 +70,7 @@ TEST_F(AutogradTest, SubForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, MulForward) {
+TEST_F(AutogradForwardTest, MulForward) {
     auto a = createTensor({2, 3}, 2.0f);
     auto b = createTensor({2, 3}, 3.0f);
     auto mul_fn = std::make_shared<autograd::Mul>();
@@ -73,7 +78,7 @@ TEST_F(AutogradTest, MulForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, MulBackward) {
+TEST_F(AutogradBackwardTest, MulBackward) {
     auto a = createTensor({2, 3}, 2.0f);
     auto b = createTensor({2, 3}, 3.0f);
     auto mul_fn = std::make_shared<autograd::Mul>();
@@ -83,7 +88,7 @@ TEST_F(AutogradTest, MulBackward) {
     EXPECT_EQ(grad_inputs.size(), 2);
 }
 
-TEST_F(AutogradTest, DivForward) {
+TEST_F(AutogradForwardTest, DivForward) {
     auto a = createTensor({2, 3}, 6.0f);
     auto b = createTensor({2, 3}, 2.0f);
     auto div_fn = std::make_shared<autograd::Div>();
@@ -91,77 +96,77 @@ TEST_F(AutogradTest, DivForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, NegForward) {
+TEST_F(AutogradForwardTest, NegForward) {
     auto a = createTensor({2, 3}, 5.0f);
     auto neg_fn = std::make_shared<autograd::Neg>();
     auto result = neg_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, SinForward) {
+TEST_F(AutogradForwardTest, SinForward) {
     auto a = createTensor({2, 3}, 0.0f);
     auto sin_fn = std::make_shared<autograd::Sin>();
     auto result = sin_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, CosForward) {
+TEST_F(AutogradForwardTest, CosForward) {
     auto a = createTensor({2, 3}, 0.0f);
     auto cos_fn = std::make_shared<autograd::Cos>();
     auto result = cos_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, TanhForward) {
+TEST_F(AutogradForwardTest, TanhForward) {
     auto a = createTensor({2, 3}, 0.0f);
     auto tanh_fn = std::make_shared<autograd::Tanh>();
     auto result = tanh_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, ExpForward) {
+TEST_F(AutogradForwardTest, ExpForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto exp_fn = std::make_shared<autograd::Exp>();
     auto result = exp_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, LogForward) {
+TEST_F(AutogradForwardTest, LogForward) {
     auto a = createTensor({2, 3}, 2.0f);
     auto log_fn = std::make_shared<autograd::Log>();
     auto result = log_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, ReciprocalForward) {
+TEST_F(AutogradForwardTest, ReciprocalForward) {
     auto a = createTensor({2, 3}, 2.0f);
     auto reciprocal_fn = std::make_shared<autograd::Reciprocal>();
     auto result = reciprocal_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, PowForward) {
+TEST_F(AutogradForwardTest, PowForward) {
     auto a = createTensor({2, 3}, 2.0f);
     auto pow_fn = std::make_shared<autograd::Pow>(2.0f);
     auto result = pow_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, RsqrtForward) {
+TEST_F(AutogradForwardTest, RsqrtForward) {
     auto a = createTensor({2, 3}, 4.0f);
     auto rsqrt_fn = std::make_shared<autograd::Rsqrt>();
     auto result = rsqrt_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, SigmoidForward) {
+TEST_F(AutogradForwardTest, SigmoidForward) {
     auto a = createTensor({2, 3}, 0.0f);
     auto sigmoid_fn = std::make_shared<autograd::Sigmoid>();
     auto result = sigmoid_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, MatmulForward) {
+TEST_F(AutogradForwardTest, MatmulForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto b = createTensor({3, 4}, 1.0f);
     auto matmul_fn = std::make_shared<autograd::Matmul>();
@@ -170,35 +175,35 @@ TEST_F(AutogradTest, MatmulForward) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
 }
 
-TEST_F(AutogradTest, SumForward) {
+TEST_F(AutogradForwardTest, SumForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto sum_fn = std::make_shared<autograd::Sum>(1, false);
     auto result = sum_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, MeanForward) {
+TEST_F(AutogradForwardTest, MeanForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto mean_fn = std::make_shared<autograd::Mean>(1, false);
     auto result = mean_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, MaxForward) {
+TEST_F(AutogradForwardTest, MaxForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto max_fn = std::make_shared<autograd::Max>(1, false);
     auto result = max_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, MinForward) {
+TEST_F(AutogradForwardTest, MinForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto min_fn = std::make_shared<autograd::Min>(1, false);
     auto result = min_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, SoftmaxForward) {
+TEST_F(AutogradForwardTest, SoftmaxForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto softmax_fn = std::make_shared<autograd::Softmax>(1);
     auto result = softmax_fn->Apply({a});
@@ -206,7 +211,7 @@ TEST_F(AutogradTest, SoftmaxForward) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 3}));
 }
 
-TEST_F(AutogradTest, LayerNormForward) {
+TEST_F(AutogradForwardTest, LayerNormForward) {
     auto a = createTensor({2, 3, 4}, 1.0f);
     auto weight = createTensor({4}, 1.0f);
     auto bias = createTensor({4}, 0.0f);
@@ -215,7 +220,7 @@ TEST_F(AutogradTest, LayerNormForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, LinearForward) {
+TEST_F(AutogradForwardTest, LinearForward) {
     auto input = createTensor({2, 3}, 1.0f);
     auto weight = createTensor({4, 3}, 1.0f);
     auto bias = createTensor({4}, 0.0f);
@@ -225,7 +230,7 @@ TEST_F(AutogradTest, LinearForward) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
 }
 
-TEST_F(AutogradTest, TransposeForward) {
+TEST_F(AutogradForwardTest, TransposeForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto transpose_fn = std::make_shared<autograd::Transpose>(0, 1);
     auto result = transpose_fn->Apply({a});
@@ -233,7 +238,7 @@ TEST_F(AutogradTest, TransposeForward) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{3, 2}));
 }
 
-TEST_F(AutogradTest, SliceForward) {
+TEST_F(AutogradForwardTest, SliceForward) {
     auto a = createTensor({4, 4}, 1.0f);
     auto slice_fn = std::make_shared<autograd::Slice>(
         std::vector<int64_t>{1, 1},
@@ -243,14 +248,14 @@ TEST_F(AutogradTest, SliceForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, SplitForward) {
+TEST_F(AutogradForwardTest, SplitForward) {
     auto a = createTensor({4, 4}, 1.0f);
     auto split_fn = std::make_shared<autograd::Split>(2, 0);
     auto result = split_fn->Apply({a});
     EXPECT_EQ(result.size(), 2);
 }
 
-TEST_F(AutogradTest, ConcatForward) {
+TEST_F(AutogradForwardTest, ConcatForward) {
     auto a = createTensor({2, 2}, 1.0f);
     auto b = createTensor({2, 2}, 2.0f);
     auto concat_fn = std::make_shared<autograd::Concat>(0);
@@ -259,7 +264,7 @@ TEST_F(AutogradTest, ConcatForward) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{4, 2}));
 }
 
-TEST_F(AutogradTest, StackForward) {
+TEST_F(AutogradForwardTest, StackForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto b = createTensor({2, 3}, 2.0f);
     auto stack_fn = std::make_shared<autograd::Stack>(0);
@@ -268,21 +273,21 @@ TEST_F(AutogradTest, StackForward) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 2, 3}));
 }
 
-TEST_F(AutogradTest, TrilForward) {
+TEST_F(AutogradForwardTest, TrilForward) {
     auto a = createTensor({3, 3}, 1.0f);
     auto tril_fn = std::make_shared<autograd::Tril>(0);
     auto result = tril_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, TriuForward) {
+TEST_F(AutogradForwardTest, TriuForward) {
     auto a = createTensor({3, 3}, 1.0f);
     auto triu_fn = std::make_shared<autograd::Triu>(0);
     auto result = triu_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, OuterForward) {
+TEST_F(AutogradForwardTest, OuterForward) {
     auto a = createTensor({3}, 1.0f);
     auto b = createTensor({4}, 1.0f);
     auto outer_fn = std::make_shared<autograd::Outer>();
@@ -291,21 +296,21 @@ TEST_F(AutogradTest, OuterForward) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{3, 4}));
 }
 
-TEST_F(AutogradTest, AddScalarForward) {
+TEST_F(AutogradForwardTest, AddScalarForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto add_scalar_fn = std::make_shared<autograd::AddScalar>(2.0f);
     auto result = add_scalar_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, MulScalarForward) {
+TEST_F(AutogradForwardTest, MulScalarForward) {
     auto a = createTensor({2, 3}, 2.0f);
     auto mul_scalar_fn = std::make_shared<autograd::MulScalar>(3.0f);
     auto result = mul_scalar_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, LtForward) {
+TEST_F(AutogradForwardTest, LtForward) {
     auto a = createTensor({2, 3}, 5.0f);
     auto b = createTensor({2, 3}, 3.0f);
     auto lt_fn = std::make_shared<autograd::Lt>();
@@ -313,7 +318,7 @@ TEST_F(AutogradTest, LtForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, LeForward) {
+TEST_F(AutogradForwardTest, LeForward) {
     auto a = createTensor({2, 3}, 3.0f);
     auto b = createTensor({2, 3}, 3.0f);
     auto le_fn = std::make_shared<autograd::Le>();
@@ -321,7 +326,7 @@ TEST_F(AutogradTest, LeForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, GtForward) {
+TEST_F(AutogradForwardTest, GtForward) {
     auto a = createTensor({2, 3}, 5.0f);
     auto b = createTensor({2, 3}, 3.0f);
     auto gt_fn = std::make_shared<autograd::Gt>();
@@ -329,7 +334,7 @@ TEST_F(AutogradTest, GtForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, GeForward) {
+TEST_F(AutogradForwardTest, GeForward) {
     auto a = createTensor({2, 3}, 3.0f);
     auto b = createTensor({2, 3}, 3.0f);
     auto ge_fn = std::make_shared<autograd::Ge>();
@@ -337,7 +342,7 @@ TEST_F(AutogradTest, GeForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, EqualsForward) {
+TEST_F(AutogradForwardTest, EqualsForward) {
     auto a = createTensor({2, 3}, 3.0f);
     auto b = createTensor({2, 3}, 3.0f);
     auto eq_fn = std::make_shared<autograd::Equals>();
@@ -345,7 +350,7 @@ TEST_F(AutogradTest, EqualsForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, AndForward) {
+TEST_F(AutogradForwardTest, AndForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto b = createTensor({2, 3}, 1.0f);
     auto and_fn = std::make_shared<autograd::And>();
@@ -353,7 +358,7 @@ TEST_F(AutogradTest, AndForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, OrForward) {
+TEST_F(AutogradForwardTest, OrForward) {
     auto a = createTensor({2, 3}, 0.0f);
     auto b = createTensor({2, 3}, 1.0f);
     auto or_fn = std::make_shared<autograd::Or>();
@@ -361,7 +366,7 @@ TEST_F(AutogradTest, OrForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, NoOpForward) {
+TEST_F(AutogradForwardTest, NoOpForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto noop_fn = std::make_shared<autograd::NoOp>(std::vector<int64_t>{2, 3});
     auto result = noop_fn->Apply({a});
@@ -374,7 +379,7 @@ TEST_F(AutogradTest, NoOpForward) {
 // ============================================================================
 
 #ifdef USE_CUDA
-TEST_F(AutogradTest, AddForwardCUDA) {
+TEST_F(AutogradCudaTest, AddForwardCUDA) {
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
@@ -393,7 +398,7 @@ TEST_F(AutogradTest, AddForwardCUDA) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 3}));
 }
 
-TEST_F(AutogradTest, MatmulForwardCUDA) {
+TEST_F(AutogradCudaTest, MatmulForwardCUDA) {
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
@@ -412,7 +417,7 @@ TEST_F(AutogradTest, MatmulForwardCUDA) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
 }
 
-TEST_F(AutogradTest, SumForwardCUDA) {
+TEST_F(AutogradCudaTest, SumForwardCUDA) {
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
@@ -424,7 +429,7 @@ TEST_F(AutogradTest, SumForwardCUDA) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradTest, SoftmaxForwardCUDA) {
+TEST_F(AutogradCudaTest, SoftmaxForwardCUDA) {
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
@@ -437,7 +442,7 @@ TEST_F(AutogradTest, SoftmaxForwardCUDA) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 3}));
 }
 
-TEST_F(AutogradTest, LinearForwardCUDA) {
+TEST_F(AutogradCudaTest, LinearForwardCUDA) {
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                           Device(Device::DeviceType::kCUDA, 0));
     input->set_requires_grad(true);
@@ -468,7 +473,10 @@ TEST_F(AutogradTest, LinearForwardCUDA) {
 // ============================================================================
 
 #ifdef USE_NCCL
-TEST_F(AutogradTest, AllReduceDistributed) {
+TEST_F(AutogradDistributedTest, AllReduceDistributed) {
+    REQUIRE_CUDA();
+    REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
@@ -479,7 +487,10 @@ TEST_F(AutogradTest, AllReduceDistributed) {
     EXPECT_TRUE(a->requires_grad());
 }
 
-TEST_F(AutogradTest, AllGatherDistributed) {
+TEST_F(AutogradDistributedTest, AllGatherDistributed) {
+    REQUIRE_CUDA();
+    REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{4, 4}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
@@ -490,7 +501,10 @@ TEST_F(AutogradTest, AllGatherDistributed) {
     EXPECT_EQ(a->Dims(), (std::vector<int64_t>{4, 4}));
 }
 
-TEST_F(AutogradTest, ReduceScatterDistributed) {
+TEST_F(AutogradDistributedTest, ReduceScatterDistributed) {
+    REQUIRE_CUDA();
+    REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 8}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
@@ -501,7 +515,10 @@ TEST_F(AutogradTest, ReduceScatterDistributed) {
     EXPECT_EQ(a->Dims(), (std::vector<int64_t>{2, 8}));
 }
 
-TEST_F(AutogradTest, DistributedMatmul) {
+TEST_F(AutogradDistributedTest, DistributedMatmul) {
+    REQUIRE_CUDA();
+    REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 4}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
@@ -516,7 +533,10 @@ TEST_F(AutogradTest, DistributedMatmul) {
     EXPECT_TRUE(result[0]->IsCUDA());
 }
 
-TEST_F(AutogradTest, DistributedLinear) {
+TEST_F(AutogradDistributedTest, DistributedLinear) {
+    REQUIRE_CUDA();
+    REQUIRE_DISTRIBUTED();
+    REQUIRE_NCCL();
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                            Device(Device::DeviceType::kCUDA, 0));
     input->set_requires_grad(true);

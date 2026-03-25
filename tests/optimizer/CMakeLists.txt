@@ -1,27 +1,22 @@
+# ============================================================================
 # Optimizer tests
+# ============================================================================
+# 重构版本：使用 infini_train_add_test 宏简化配置
+#
+# 新增测试只需 1 行：
+#   infini_train_add_test(test_name SOURCES test_name.cc LABELS cpu)
+# ============================================================================
 
-add_executable(test_optimizer
-  test_optimizer.cc
-)
-target_link_libraries(test_optimizer
-  PRIVATE
-    GTest::gtest
-    GTest::gtest_main
-)
-target_include_directories(test_optimizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../common)
+# -----------------------------------------------------------------------------
+# Optimizer tests
+# -----------------------------------------------------------------------------
+infini_train_add_test(test_optimizer_creation SOURCES test_optimizer_creation.cc LABELS cpu)
+infini_train_add_test(test_optimizer_step SOURCES test_optimizer_step.cc LABELS cpu)
+infini_train_add_test(test_optimizer_cuda SOURCES test_optimizer_cuda.cc LABELS cuda)
+infini_train_add_test(test_optimizer_distributed SOURCES test_optimizer_distributed.cc LABELS cuda distributed)
 
-target_link_libraries(test_optimizer PRIVATE
-  "-Wl,--whole-archive"
-  infini_train
-  infini_train_cpu_kernels
-  "-Wl,--no-whole-archive"
-)
-
-add_test(NAME optimizer_cpu COMMAND test_optimizer)
-set_tests_properties(optimizer_cpu PROPERTIES LABELS "cpu")
-
-add_test(NAME optimizer_cuda COMMAND test_optimizer --gtest_filter=OptimizerTest.*CUDA)
-set_tests_properties(optimizer_cuda PROPERTIES LABELS "cuda")
-
-add_test(NAME optimizer_distributed COMMAND test_optimizer --gtest_filter=OptimizerTest.*Distributed)
-set_tests_properties(optimizer_distributed PROPERTIES LABELS "cuda;distributed")
+# -----------------------------------------------------------------------------
+# Legacy combined tests
+# 注意：使用 gtest_discover_tests，所有 TEST_F 都会被自动发现
+# -----------------------------------------------------------------------------
+infini_train_add_test(test_optimizer_legacy SOURCES test_optimizer.cc LABELS cpu cuda distributed)
