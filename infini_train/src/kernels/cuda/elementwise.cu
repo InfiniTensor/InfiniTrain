@@ -860,10 +860,11 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
 
     auto a_dtype = a_promoted ? a_promoted->Dtype() : dtype;
     auto b_dtype = b_promoted ? b_promoted->Dtype() : dtype;
+    // Compute dtype determined by saved tensors (forward compute dtype), not grad_output
     DataType promoted_type
-        = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-            {a_dtype, b_dtype, dtype},
-            [=]<typename Ta, typename Tb, typename Tgrad>() { return DataTypeMap_v<WidestType_t<Ta, Tb, Tgrad>>; },
+        = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
+            {a_dtype, b_dtype},
+            [=]<typename Ta, typename Tb>() { return DataTypeMap_v<WidestType_t<Ta, Tb>>; },
             "CUDA BinaryBackward");
 
     CHECK(a_num_elements >= b_num_elements && a_num_elements % b_num_elements == 0);

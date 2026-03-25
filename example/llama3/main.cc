@@ -353,7 +353,7 @@ void Train(const nn::parallel::Rank &rank) {
                 loss = loss / grad_accum_steps;
 
                 // disable autocast for the current step (backward is not under autocast)
-                // autocast_guard.Disable();
+                autocast_guard.Disable();
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
 
