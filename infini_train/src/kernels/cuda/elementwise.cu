@@ -15,6 +15,13 @@ namespace {
 using namespace infini_train::common::cuda;
 constexpr int kWarpSize = 32;
 
+// Aligned vector type for vectorized loads/stores (128-bit).
+template <typename T, int N> struct __align__(sizeof(T) * N) aligned_vector { T val[N]; };
+
+// Elements per vectorized load/store: 128-bit / sizeof(T).
+// float → 4, bf16/half → 8, double → 2.
+template <typename T> constexpr int kVecSize = 16 / sizeof(T);
+
 template <typename T, typename Func>
 __global__ void UnaryForwardKernel(T *output, Func fn, size_t num_elements, size_t offset, const T *input) {
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x + offset;
@@ -36,6 +43,18 @@ __device__ inline int64_t CalcOffset(int64_t idx, int ndim, const int64_t *strid
     return offset;
 }
 
+inline bool ShapesEqual(const std::vector<int64_t> &a, const std::vector<int64_t> &b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (a[i] != b[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
 template <typename T, typename Func>
 __global__ void BinaryForwardKernel(T *output, Func fn, int ndim, const int64_t *a_strides, const int64_t *a_shape,
                                     const int64_t *b_strides, const int64_t *b_shape, const int64_t *out_strides,
@@ -51,6 +70,98 @@ __global__ void BinaryForwardKernel(T *output, Func fn, int ndim, const int64_t 
     output[idx] = fn(a[a_offset], b[b_offset]);
 }
 
+// Fast path: no broadcast, contiguous tensors — skip CalcOffset entirely
+template <typename T, typename Func>
+__global__ void BinaryForwardKernelNoBroadcast(T *__restrict__ output, Func fn, const T *__restrict__ a,
+                                               const T *__restrict__ b, size_t num_elements) {
+    const size_t grid_stride = static_cast<size_t>(gridDim.x) * blockDim.x;
+    for (size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; idx < num_elements;
+         idx += grid_stride) {
+        output[idx] = fn(a[idx], b[idx]);
+    }
+}
+
+// Fast path backward: no broadcast, contiguous — skip CalcOffset entirely
+template <typename T, typename FuncA, typename FuncB>
+__global__ void BinaryBackwardKernelNoBroadcastFast(T *__restrict__ outA, T *__restrict__ outB, FuncA fn_a, FuncB fn_b,
+                                                    size_t numel, const T *__restrict__ grad_out,
+                                                    const T *__restrict__ inA, const T *__restrict__ inB) {
+    const size_t grid_stride = static_cast<size_t>(gridDim.x) * blockDim.x;
+    for (size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; idx < numel; idx += grid_stride) {
+        const T a = inA ? inA[idx] : T(0);
+        const T b = inB ? inB[idx] : T(0);
+        outA[idx] = Mul<T>(grad_out[idx], fn_a(a, b));
+        outB[idx] = Mul<T>(grad_out[idx], fn_b(a, b));
+    }
+}
+
+// Vectorized fast path backward: no broadcast, contiguous.
+// Each thread processes VecSize elements using 128-bit loads/stores.
+template <typename T, int VecSize, typename FuncA, typename FuncB>
+__global__ void BinaryBackwardKernelNoBroadcastVectorized(T *__restrict__ outA, T *__restrict__ outB, FuncA fn_a,
+                                                          FuncB fn_b, size_t numel, const T *__restrict__ grad_out,
+                                                          const T *__restrict__ inA, const T *__restrict__ inB) {
+    using VecT = aligned_vector<T, VecSize>;
+    const size_t num_vecs = numel / VecSize;
+    const size_t grid_stride = static_cast<size_t>(gridDim.x) * blockDim.x;
+
+    for (size_t vid = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; vid < num_vecs; vid += grid_stride) {
+        const size_t base = vid * VecSize;
+
+        // 128-bit vectorized loads
+        VecT g_vec = *reinterpret_cast<const VecT *>(&grad_out[base]);
+        VecT a_vec, b_vec;
+        if (inA) {
+            a_vec = *reinterpret_cast<const VecT *>(&inA[base]);
+        } else {
+#pragma unroll
+            for (int i = 0; i < VecSize; ++i) { a_vec.val[i] = T(0); }
+        }
+        if (inB) {
+            b_vec = *reinterpret_cast<const VecT *>(&inB[base]);
+        } else {
+#pragma unroll
+            for (int i = 0; i < VecSize; ++i) { b_vec.val[i] = T(0); }
+        }
+
+        // Element-wise computation
+        VecT outA_vec, outB_vec;
+#pragma unroll
+        for (int i = 0; i < VecSize; ++i) {
+            outA_vec.val[i] = Mul<T>(g_vec.val[i], fn_a(a_vec.val[i], b_vec.val[i]));
+            outB_vec.val[i] = Mul<T>(g_vec.val[i], fn_b(a_vec.val[i], b_vec.val[i]));
+        }
+
+        // 128-bit vectorized stores
+        *reinterpret_cast<VecT *>(&outA[base]) = outA_vec;
+        *reinterpret_cast<VecT *>(&outB[base]) = outB_vec;
+    }
+
+    // Handle tail elements (numel % VecSize != 0)
+    const size_t tail_start = num_vecs * VecSize;
+    for (size_t idx = tail_start + static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; idx < numel;
+         idx += grid_stride) {
+        const T a = inA ? inA[idx] : T(0);
+        const T b = inB ? inB[idx] : T(0);
+        outA[idx] = Mul<T>(grad_out[idx], fn_a(a, b));
+        outB[idx] = Mul<T>(grad_out[idx], fn_b(a, b));
+    }
+}
+
+// Helper to choose optimal block size based on tensor size
+inline size_t ChooseBlockSize(size_t num_elements) {
+    if (num_elements < 1024) {
+        return 64;
+    }
+    if (num_elements < 65536) {
+        return 128;
+    }
+    if (num_elements < 1048576) {
+        return 256;
+    }
+    return 512;
+}
+
 // launch the given kernel function with the given output and inputs
 template <size_t BLOCK_SIZE, typename T, typename Kernel, typename... Inputs>
 void LaunchKernel(Kernel &&kernel, const std::shared_ptr<Tensor> &output, const Inputs &...inputs) {
@@ -59,7 +170,9 @@ void LaunchKernel(Kernel &&kernel, const std::shared_ptr<Tensor> &output, const 
     auto input_ptrs = extract_ptrs(inputs...);
 
     const size_t num_elements = output->NumElements();
-    dim3 block_dims(std::min(BLOCK_SIZE, static_cast<size_t>(1024)));
+    // Use dynamic block size based on tensor size for better occupancy
+    size_t block_size = std::min(ChooseBlockSize(num_elements), static_cast<size_t>(1024));
+    dim3 block_dims(block_size);
     dim3 grid_dims(CEIL_DIV(num_elements, block_dims.x));
     const size_t step = grid_dims.x * block_dims.x;
 
@@ -95,46 +208,59 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
         const auto &a_dims = input_a->Dims();
         const auto &b_dims = input_b->Dims();
         const auto &out_dims = output->Dims();
-        int ndim = out_dims.size();
 
-        std::vector<int64_t> a_shape(ndim, 1), b_shape(ndim, 1), out_shape(ndim, 1);
-        std::copy_backward(a_dims.begin(), a_dims.end(), a_shape.end());
-        std::copy_backward(b_dims.begin(), b_dims.end(), b_shape.end());
-        std::copy_backward(out_dims.begin(), out_dims.end(), out_shape.end());
+        // Fast path: no broadcast — skip cudaMalloc/Memcpy/CalcOffset
+        if (ShapesEqual(a_dims, out_dims) && ShapesEqual(b_dims, out_dims)) {
+            const size_t num_elements = output->NumElements();
+            const T *a_ptr = static_cast<const T *>(input_a->DataPtr());
+            const T *b_ptr = static_cast<const T *>(input_b->DataPtr());
+            dim3 block_dims(std::min(BLOCK_SIZE, static_cast<size_t>(1024)));
+            dim3 grid_dims(std::min(CEIL_DIV(num_elements, block_dims.x), static_cast<size_t>(65535)));
+            BinaryForwardKernelNoBroadcast<<<grid_dims, block_dims, 0, cuda_stream>>>(output_ptr, func, a_ptr, b_ptr,
+                                                                                      num_elements);
+        } else {
+            // Broadcast path: full stride computation
+            int ndim = out_dims.size();
 
-        auto a_stride_host = ComputeStrides(a_shape);
-        auto b_stride_host = ComputeStrides(b_shape);
-        auto out_stride_host = ComputeStrides(out_shape);
+            std::vector<int64_t> a_shape(ndim, 1), b_shape(ndim, 1), out_shape(ndim, 1);
+            std::copy_backward(a_dims.begin(), a_dims.end(), a_shape.end());
+            std::copy_backward(b_dims.begin(), b_dims.end(), b_shape.end());
+            std::copy_backward(out_dims.begin(), out_dims.end(), out_shape.end());
 
-        int64_t *device_buffer;
-        cudaMallocAsync(&device_buffer, 5 * ndim * sizeof(int64_t), cuda_stream);
+            auto a_stride_host = ComputeStrides(a_shape);
+            auto b_stride_host = ComputeStrides(b_shape);
+            auto out_stride_host = ComputeStrides(out_shape);
 
-        int64_t *device_a_strides, *device_b_strides, *device_out_strides, *device_a_shape, *device_b_shape;
-        device_a_strides = device_buffer + ndim * 0;
-        device_b_strides = device_buffer + ndim * 1;
-        device_out_strides = device_buffer + ndim * 2;
-        device_a_shape = device_buffer + ndim * 3;
-        device_b_shape = device_buffer + ndim * 4;
+            int64_t *device_buffer;
+            cudaMallocAsync(&device_buffer, 5 * ndim * sizeof(int64_t), cuda_stream);
 
-        std::vector<int64_t> host_buffer;
-        host_buffer.insert(host_buffer.end(), a_stride_host.begin(), a_stride_host.end());
-        host_buffer.insert(host_buffer.end(), b_stride_host.begin(), b_stride_host.end());
-        host_buffer.insert(host_buffer.end(), out_stride_host.begin(), out_stride_host.end());
-        host_buffer.insert(host_buffer.end(), a_shape.begin(), a_shape.end());
-        host_buffer.insert(host_buffer.end(), b_shape.begin(), b_shape.end());
+            int64_t *device_a_strides, *device_b_strides, *device_out_strides, *device_a_shape, *device_b_shape;
+            device_a_strides = device_buffer + ndim * 0;
+            device_b_strides = device_buffer + ndim * 1;
+            device_out_strides = device_buffer + ndim * 2;
+            device_a_shape = device_buffer + ndim * 3;
+            device_b_shape = device_buffer + ndim * 4;
 
-        cudaMemcpyAsync(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice,
-                        cuda_stream);
+            std::vector<int64_t> host_buffer;
+            host_buffer.insert(host_buffer.end(), a_stride_host.begin(), a_stride_host.end());
+            host_buffer.insert(host_buffer.end(), b_stride_host.begin(), b_stride_host.end());
+            host_buffer.insert(host_buffer.end(), out_stride_host.begin(), out_stride_host.end());
+            host_buffer.insert(host_buffer.end(), a_shape.begin(), a_shape.end());
+            host_buffer.insert(host_buffer.end(), b_shape.begin(), b_shape.end());
 
-        LaunchKernel<BLOCK_SIZE, T>(
-            [&](dim3 grid, dim3 block, size_t offset, const T *a_ptr, const T *b_ptr) {
-                BinaryForwardKernel<<<grid, block, 0, cuda_stream>>>(
-                    output_ptr, func, ndim, device_a_strides, device_a_shape, device_b_strides, device_b_shape,
-                    device_out_strides, a_ptr, b_ptr, output->NumElements());
-            },
-            output, inputs...);
+            cudaMemcpyAsync(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice,
+                            cuda_stream);
 
-        cudaFreeAsync(device_buffer, cuda_stream);
+            LaunchKernel<BLOCK_SIZE, T>(
+                [&](dim3 grid, dim3 block, size_t offset, const T *a_ptr, const T *b_ptr) {
+                    BinaryForwardKernel<<<grid, block, 0, cuda_stream>>>(
+                        output_ptr, func, ndim, device_a_strides, device_a_shape, device_b_strides, device_b_shape,
+                        device_out_strides, a_ptr, b_ptr, output->NumElements());
+                },
+                output, inputs...);
+
+            cudaFreeAsync(device_buffer, cuda_stream);
+        }
     } else {
         static_assert(sizeof...(inputs) == 1 || sizeof...(inputs) == 2,
                       "LaunchForward currently only supports unary and binary operations.");
@@ -153,18 +279,6 @@ __global__ void UnaryBackwardKernel(T *output, Func fn, size_t num_elements, siz
 }
 
 enum class BF16Path { NoBroadcast, TwoPassHist, BlockReduce };
-
-inline bool ShapesEqual(const std::vector<int64_t> &a, const std::vector<int64_t> &b) {
-    if (a.size() != b.size()) {
-        return false;
-    }
-    for (size_t i = 0; i < a.size(); ++i) {
-        if (a[i] != b[i]) {
-            return false;
-        }
-    }
-    return true;
-}
 
 // Lightweight and stable selector for bf16/half execution paths.
 inline BF16Path DecideBF16Path(const std::vector<int64_t> &b_shape, const std::vector<int64_t> &out_shape,
@@ -526,6 +640,41 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     const T *grad_output_ptr = static_cast<const T *>(grad_output->DataPtr());
 
     const auto &out_dims = grad_output->Dims();
+    const size_t num_elements = grad_output->NumElements();
+
+    // Fast path: no broadcast — skip cudaMalloc/Memcpy/CalcOffset
+    if (ShapesEqual(a_dims, b_dims) && ShapesEqual(a_dims, out_dims)) {
+        auto extract_ptrs = [](const auto &...ts) {
+            return std::make_tuple(static_cast<const T *>(ts ? ts->DataPtr() : nullptr)...);
+        };
+        auto [input_a_ptr, input_b_ptr] = extract_ptrs(inputs...);
+
+        constexpr int VecSize = kVecSize<T>;
+        // Use vectorized kernel if all pointers are 16-byte aligned and numel is large enough
+        const bool can_vectorize
+            = (num_elements >= static_cast<size_t>(VecSize))
+           && (reinterpret_cast<uintptr_t>(output_a_ptr) % (sizeof(T) * VecSize) == 0)
+           && (reinterpret_cast<uintptr_t>(output_b_ptr) % (sizeof(T) * VecSize) == 0)
+           && (reinterpret_cast<uintptr_t>(grad_output_ptr) % (sizeof(T) * VecSize) == 0)
+           && (!input_a_ptr || reinterpret_cast<uintptr_t>(input_a_ptr) % (sizeof(T) * VecSize) == 0)
+           && (!input_b_ptr || reinterpret_cast<uintptr_t>(input_b_ptr) % (sizeof(T) * VecSize) == 0);
+
+        if (can_vectorize) {
+            const size_t num_vecs = num_elements / VecSize;
+            dim3 block_dims(std::min(static_cast<size_t>(256), std::min(num_vecs, static_cast<size_t>(1024))));
+            dim3 grid_dims(std::min(CEIL_DIV(num_vecs, block_dims.x), static_cast<size_t>(65535)));
+            BinaryBackwardKernelNoBroadcastVectorized<T, VecSize><<<grid_dims, block_dims, 0, stream>>>(
+                output_a_ptr, output_b_ptr, fun_a, fun_b, num_elements, grad_output_ptr, input_a_ptr, input_b_ptr);
+        } else {
+            dim3 block_dims(std::min(BLOCK_SIZE, static_cast<size_t>(1024)));
+            dim3 grid_dims(std::min(CEIL_DIV(num_elements, block_dims.x), static_cast<size_t>(65535)));
+            BinaryBackwardKernelNoBroadcastFast<<<grid_dims, block_dims, 0, stream>>>(
+                output_a_ptr, output_b_ptr, fun_a, fun_b, num_elements, grad_output_ptr, input_a_ptr, input_b_ptr);
+        }
+        return;
+    }
+
+    // Broadcast path: full stride computation
     int ndim = out_dims.size();
 
     std::vector<int64_t> a_shape(ndim, 1), b_shape(ndim, 1), out_shape(ndim, 1);
@@ -555,8 +704,6 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     host_buffer.insert(host_buffer.end(), b_shape.begin(), b_shape.end());
 
     cudaMemcpyAsync(device_buffer, host_buffer.data(), 5 * ndim * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
-
-    const size_t num_elements = grad_output->NumElements();
 
     if constexpr (std::is_same_v<T, float>) {
         LaunchKernel<BLOCK_SIZE, T>(
@@ -649,20 +796,11 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
     auto output = std::make_shared<Tensor>(grad_output->Dims(), promoted_type, grad_output->GetDevice());
 
     switch (promoted_type) {
-        DISPATCH_CASE(WRAP({
-                          output->Fill<float>(0.0f);
-                          LaunchBackward<256, float>(unary_fn, output, grad_output_promoted, a_promoted);
-                      }),
+        DISPATCH_CASE(WRAP({ LaunchBackward<256, float>(unary_fn, output, grad_output_promoted, a_promoted); }),
                       DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP({
-                          output->Fill<nv_bfloat16>(0);
-                          LaunchBackward<256, nv_bfloat16>(unary_fn, output, grad_output_promoted, a_promoted);
-                      }),
+        DISPATCH_CASE(WRAP({ LaunchBackward<256, nv_bfloat16>(unary_fn, output, grad_output_promoted, a_promoted); }),
                       DataType::kBFLOAT16)
-        DISPATCH_CASE(WRAP({
-                          output->Fill<int64_t>(0);
-                          LaunchBackward<256, int64_t>(unary_fn, output, grad_output_promoted, a_promoted);
-                      }),
+        DISPATCH_CASE(WRAP({ LaunchBackward<256, int64_t>(unary_fn, output, grad_output_promoted, a_promoted); }),
                       DataType::kINT64)
     default:
         LOG_LOC(FATAL, "CUDA unary backward: 'Unsupported data type'");
@@ -718,11 +856,10 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
 
     auto a_dtype = a_promoted ? a_promoted->Dtype() : dtype;
     auto b_dtype = b_promoted ? b_promoted->Dtype() : dtype;
-    DataType promoted_type
-        = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-            {a_dtype, b_dtype, dtype},
-            [=]<typename Ta, typename Tb, typename Tgrad>() { return DataTypeMap_v<WidestType_t<Ta, Tb, Tgrad>>; },
-            "CUDA BinaryBackward");
+    // Compute dtype determined by saved tensors (forward compute dtype), not grad_output
+    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
+        {a_dtype, b_dtype}, [=]<typename Ta, typename Tb>() { return DataTypeMap_v<WidestType_t<Ta, Tb>>; },
+        "CUDA BinaryBackward");
 
     CHECK(a_num_elements >= b_num_elements && a_num_elements % b_num_elements == 0);
 
@@ -743,17 +880,25 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     auto grad_a = std::make_shared<Tensor>(a_dims, promoted_type, device);
     auto grad_b = std::make_shared<Tensor>(b_dims, promoted_type, device);
 
+    // Only Fill(0) when broadcast is needed (atomicAdd requires zero-init).
+    // The no-broadcast fast path writes every element directly.
+    const bool needs_broadcast = !ShapesEqual(a_dims, b_dims) || !ShapesEqual(a_dims, grad_output->Dims());
+
     switch (promoted_type) {
         DISPATCH_CASE(WRAP({
-                          grad_a->Fill<float>(0.0f);
-                          grad_b->Fill<float>(0.0f);
+                          if (needs_broadcast) {
+                              grad_a->Fill<float>(0.0f);
+                              grad_b->Fill<float>(0.0f);
+                          }
                           LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
                                                      a_promoted, b_promoted);
                       }),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
-                          grad_a->Fill<nv_bfloat16>(0);
-                          grad_b->Fill<nv_bfloat16>(0);
+                          if (needs_broadcast) {
+                              grad_a->Fill<nv_bfloat16>(0);
+                              grad_b->Fill<nv_bfloat16>(0);
+                          }
                           LaunchBackward<256, nv_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims,
                                                            grad_output_promoted, a_promoted, b_promoted);
                       }),
