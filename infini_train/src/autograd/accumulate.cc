@@ -26,6 +26,11 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
     core::DeviceGuard guard(device);
 
     if (grad_output) {
+        // Cast grad to match parameter dtype (e.g. bf16 grad -> fp32 param under autocast)
+        if (grad_output->Dtype() != tensor_->Dtype()) {
+            grad_output = std::make_shared<Tensor>(grad_output->To(tensor_->Dtype()));
+        }
+
         if (grad) {
             if (tensor_->ConsumeGradOverwriteFlag()) {
                 // If the tensor is marked to overrite its current grad on next grad update

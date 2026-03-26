@@ -80,19 +80,20 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
     auto other_dtype = other->Dtype();
     auto grad_output_dtype = grad_output->Dtype();
 
-    DataType promoted_type
-        = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-            {input_dtype, other_dtype, grad_output_dtype},
-            [=]<typename Tin, typename To, typename Tgrad>() { return DataTypeMap_v<WidestType_t<Tin, To, Tgrad>>; },
-            "CUDA OuterBackward");
+    // Compute dtype determined by saved tensors (forward compute dtype), not grad_output
+    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
+        {input_dtype, other_dtype}, [=]<typename Tin, typename To>() { return DataTypeMap_v<WidestType_t<Tin, To>>; },
+        "CUDA OuterBackward");
 
     auto input_promoted = input_dtype == promoted_type ? input : std::make_shared<Tensor>(input->To(promoted_type));
     auto other_promoted = other_dtype == promoted_type ? other : std::make_shared<Tensor>(other->To(promoted_type));
     auto grad_output_promoted
         = grad_output_dtype == promoted_type ? grad_output : std::make_shared<Tensor>(grad_output->To(promoted_type));
 
-    auto grad_input = std::make_shared<Tensor>(std::vector<int64_t>{M}, promoted_type, grad_output->GetDevice());
-    auto grad_other = std::make_shared<Tensor>(std::vector<int64_t>{N}, promoted_type, grad_output->GetDevice());
+    // For bf16 compute, output in fp32 to preserve accumulation precision (matches PyTorch behavior)
+    auto output_dtype = (promoted_type == DataType::kBFLOAT16) ? DataType::kFLOAT32 : promoted_type;
+    auto grad_input = std::make_shared<Tensor>(std::vector<int64_t>{M}, output_dtype, grad_output->GetDevice());
+    auto grad_other = std::make_shared<Tensor>(std::vector<int64_t>{N}, output_dtype, grad_output->GetDevice());
 
     DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
         promoted_type,
@@ -140,7 +141,7 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
                 // B = grad_output.T[N, M]
                 CUBLAS_CHECK(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, 1, M, N, &alpha, other_promoted->DataPtr(),
                                           CUDA_R_16BF, 1, grad_output_promoted->DataPtr(), CUDA_R_16BF, N, &beta,
-                                          grad_input->DataPtr(), CUDA_R_16BF, 1, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));
+                                          grad_input->DataPtr(), CUDA_R_32F, 1, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));
                 // grad_other[N, 1] = grad_output.T[N, M] × input[M, 1]
                 // grad_other.T[1, N] = input.T[1, M] × grad_output[M, N]
                 // C = grad_other.T[1, N]
@@ -148,7 +149,7 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
                 // B = grad_output.T[N, M]
                 CUBLAS_CHECK(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_T, 1, N, M, &alpha, input_promoted->DataPtr(),
                                           CUDA_R_16BF, 1, grad_output_promoted->DataPtr(), CUDA_R_16BF, N, &beta,
-                                          grad_other->DataPtr(), CUDA_R_16BF, 1, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));
+                                          grad_other->DataPtr(), CUDA_R_32F, 1, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));
             }),
             DataType::kBFLOAT16)
     }
