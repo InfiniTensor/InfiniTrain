@@ -17,10 +17,16 @@ std::vector<std::shared_ptr<Tensor>> Linear::Forward(const std::vector<std::shar
 }
 
 void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                          const std::vector<std::shared_ptr<Tensor>> &) {
+                          const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
     const auto &input = input_tensors[0];
     const auto &weight = input_tensors[1];
-    saved_tensors_ = {input, weight};
+    // Cast saved tensors to forward compute dtype (output dtype) so backward
+    // computes in the same precision as forward, matching PyTorch's behavior.
+    auto compute_dtype = output_tensors[0]->Dtype();
+    saved_tensors_ = {
+        input->Dtype() == compute_dtype ? input : std::make_shared<Tensor>(input->To(compute_dtype)),
+        weight->Dtype() == compute_dtype ? weight : std::make_shared<Tensor>(weight->To(compute_dtype)),
+    };
     bias_ = input_tensors.size() == 3;
     out_features_ = weight->Dims()[0];
 }
@@ -39,6 +45,5 @@ std::vector<std::shared_ptr<Tensor>> Linear::Backward(const std::vector<std::sha
                   {device, "LinearBackward"}, input, weight, true, out_features_, grad_output, bias_);
     return bias_ ? std::vector<std::shared_ptr<Tensor>>{grad_input, grad_weight, grad_bias}
                  : std::vector<std::shared_ptr<Tensor>>{grad_input, grad_weight};
-    ;
 }
 } // namespace infini_train::autograd
