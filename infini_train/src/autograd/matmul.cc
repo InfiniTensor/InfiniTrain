@@ -20,7 +20,13 @@ void Matmul::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
     const auto &input1 = input_tensors[0];
     const auto &input2 = input_tensors[1];
     const auto &output = output_tensors[0];
-    saved_tensors_ = {input1, input2};
+    // Cast saved tensors to forward compute dtype (output dtype) so backward
+    // computes in the same precision as forward, matching PyTorch's behavior.
+    auto compute_dtype = output->Dtype();
+    saved_tensors_ = {
+        input1->Dtype() == compute_dtype ? input1 : std::make_shared<Tensor>(input1->To(compute_dtype)),
+        input2->Dtype() == compute_dtype ? input2 : std::make_shared<Tensor>(input2->To(compute_dtype)),
+    };
     out_features_ = output->Dims()[0];
 }
 

@@ -390,6 +390,11 @@ std::vector<std::shared_ptr<Tensor>> Add::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
+    // Fast path: no broadcast — grad_a and grad_b are both just grad_output
+    if (a_dims_ == b_dims_) {
+        return {grad_output, grad_output};
+    }
+
     auto device = grad_output->GetDevice().type();
     auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
         {device, "AddBackward"}, grad_output, a_dims_, b_dims_);
