@@ -8,11 +8,15 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/core/models/decode_only_transformer/layer_specs.h"
+#include "infini_train/include/core/transformer/activations/gelu.h"
+#include "infini_train/include/core/transformer/activations/swiglu.h"
+#include "infini_train/include/core/transformer/norms/layer_norm.h"
+#include "infini_train/include/core/transformer/norms/rms_norm.h"
 #include "infini_train/include/core/transformer/spec_utils.h"
-#include "infini_train/include/core/transformer/transformer_block.h"
 #include "infini_train/include/core/transformer/transformer_builders.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/core/transformer/transformer_layer.h"
+#include "infini_train/include/core/transformer/transformer_model.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
@@ -26,10 +30,10 @@ namespace nn = infini_train::nn;
 
 // ========== GPT2 Model Definition ==========
 // Uses LayerNorm, GELU activation, standard multi-head attention
-class GPT2 : public nn::TransformerLayer {
+class GPT2 : public nn::TransformerModel {
 public:
     static constexpr char kType[] = "GPT2";
-    static constexpr char kTransformerLayerName[] = "transformer";
+    static constexpr char kTransformerModelName[] = "transformer";
 
     enum class ModelType : int8_t {
         kGPT2,
@@ -39,7 +43,7 @@ public:
     };
 
     explicit GPT2(const nn::TransformerConfig &config)
-        : TransformerLayer(config, BuildGPT2Spec(config)),
+        : TransformerModel(config, BuildGPT2Spec(config)),
           stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
               config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
               nn::parallel::global::GetVirtualPipelineParallelSize())) {}
@@ -55,10 +59,10 @@ private:
 
 // ========== LLaMA3 Model Definition ==========
 // Uses RMSNorm, SwiGLU activation, GQA attention, RoPE positional encoding
-class LLaMA3 : public nn::TransformerLayer {
+class LLaMA3 : public nn::TransformerModel {
 public:
     static constexpr char kType[] = "LLaMA3";
-    static constexpr char kTransformerLayerName[] = "transformer";
+    static constexpr char kTransformerModelName[] = "transformer";
 
     enum class ModelType : int8_t {
         // TODO(zbl): more model type from huggingface
@@ -70,7 +74,7 @@ public:
     };
 
     explicit LLaMA3(const nn::TransformerConfig &config)
-        : TransformerLayer(config, BuildLLaMA3Spec(config)),
+        : TransformerModel(config, BuildLLaMA3Spec(config)),
           stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
               config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
               nn::parallel::global::GetVirtualPipelineParallelSize())) {}

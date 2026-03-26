@@ -35,7 +35,7 @@ ModuleSpec BuildAttentionSpec(const TransformerConfig &config);
 // Build MLP spec (supports GELU and SwiGLU)
 ModuleSpec BuildMLPSpec(const TransformerConfig &config);
 
-// Build TransformerBlock spec
+// Build TransformerLayer spec
 ModuleSpec BuildTransformerBlockSpec(const TransformerConfig &config);
 
 // Build VocabParallelEmbedding spec for token embeddings

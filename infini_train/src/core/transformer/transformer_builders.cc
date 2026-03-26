@@ -5,9 +5,15 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/core/transformer/activations/gelu.h"
+#include "infini_train/include/core/transformer/activations/swiglu.h"
+#include "infini_train/include/core/transformer/attention/causal_self_attention.h"
+#include "infini_train/include/core/transformer/mlp.h"
+#include "infini_train/include/core/transformer/norms/layer_norm.h"
+#include "infini_train/include/core/transformer/norms/rms_norm.h"
 #include "infini_train/include/core/transformer/spec_utils.h"
-#include "infini_train/include/core/transformer/transformer_block.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
+#include "infini_train/include/core/transformer/transformer_layer.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
@@ -124,19 +130,19 @@ ModuleSpec BuildMLPSpec(const TransformerConfig &config) {
 }
 
 ModuleSpec BuildTransformerBlockSpec(const TransformerConfig &config) {
-    ModuleSpec spec(typeid(TransformerBlock));
+    ModuleSpec spec(typeid(TransformerLayer));
 
     // LayerNorm 1 (before attention)
-    spec.with_submodule(TransformerBlock::kLn1LayerName, BuildNormSpec(config));
+    spec.with_submodule(TransformerLayer::kLn1LayerName, BuildNormSpec(config));
 
     // CausalSelfAttention
-    spec.with_submodule(TransformerBlock::kAttnLayerName, BuildAttentionSpec(config));
+    spec.with_submodule(TransformerLayer::kAttnLayerName, BuildAttentionSpec(config));
 
     // LayerNorm 2 (before MLP)
-    spec.with_submodule(TransformerBlock::kLn2LayerName, BuildNormSpec(config));
+    spec.with_submodule(TransformerLayer::kLn2LayerName, BuildNormSpec(config));
 
     // MLP
-    spec.with_submodule(TransformerBlock::kMlpLayerName, BuildMLPSpec(config));
+    spec.with_submodule(TransformerLayer::kMlpLayerName, BuildMLPSpec(config));
 
     return spec;
 }

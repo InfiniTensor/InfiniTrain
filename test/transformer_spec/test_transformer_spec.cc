@@ -6,10 +6,16 @@
 #include "infini_train/include/core/models/decode_only_transformer/layer_specs.h"
 #include "infini_train/include/core/models/decode_only_transformer/model.h"
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/core/transformer/activations/gelu.h"
+#include "infini_train/include/core/transformer/activations/swiglu.h"
+#include "infini_train/include/core/transformer/attention/causal_self_attention.h"
+#include "infini_train/include/core/transformer/mlp.h"
+#include "infini_train/include/core/transformer/norms/layer_norm.h"
+#include "infini_train/include/core/transformer/norms/rms_norm.h"
 #include "infini_train/include/core/transformer/spec_utils.h"
-#include "infini_train/include/core/transformer/transformer_block.h"
 #include "infini_train/include/core/transformer/transformer_builders.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
+#include "infini_train/include/core/transformer/transformer_layer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/src/core/runtime/cpu/cpu_guard_impl.h"
@@ -36,8 +42,8 @@ void test_module_registry() {
         all_registered = false;
     }
 
-    if (!nn::ModuleRegistry::Instance().Has(typeid(nn::TransformerBlock))) {
-        std::cout << "FAIL: TransformerBlock not registered" << std::endl;
+    if (!nn::ModuleRegistry::Instance().Has(typeid(nn::TransformerLayer))) {
+        std::cout << "FAIL: TransformerLayer not registered" << std::endl;
         all_registered = false;
     }
 
@@ -106,7 +112,7 @@ void test_gpt2_spec() {
         test_passed = false;
     }
 
-    if (!spec.submodules_.contains(nn::TransformerBlock::kType)) {
+    if (!spec.submodules_.contains(nn::TransformerLayer::kType)) {
         std::cout << "FAIL: GPT2 spec missing 'block'" << std::endl;
         test_passed = false;
     }
@@ -178,7 +184,7 @@ void test_llama3_spec() {
         test_passed = false;
     }
 
-    if (!spec.submodules_.contains(nn::TransformerBlock::kType)) {
+    if (!spec.submodules_.contains(nn::TransformerLayer::kType)) {
         std::cout << "FAIL: LLaMA3 spec missing 'block'" << std::endl;
         test_passed = false;
     }

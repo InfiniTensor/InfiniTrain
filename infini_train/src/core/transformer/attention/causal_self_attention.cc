@@ -1,4 +1,4 @@
-#include "infini_train/include/core/transformer/transformer_block.h"
+#include "infini_train/include/core/transformer/attention/causal_self_attention.h"
 
 #include <cmath>
 #include <memory>
@@ -8,9 +8,8 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/core/transformer/spec_utils.h"
-#include "infini_train/include/core/transformer/transformer_builders.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
-#include "infini_train/include/core/transformer/transformer_layer.h"
+#include "infini_train/include/core/transformer/transformer_model.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/normalization.h"
@@ -18,31 +17,8 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
+
 namespace infini_train::nn {
-
-RMSNorm::RMSNorm(int64_t dim, float eps, infini_train::Device device) : CloneableModule(kType), eps_(eps) {
-    parameters_[kParamWeightName]
-        = std::make_shared<Tensor>(std::vector<int64_t>{dim}, DataType::kFLOAT32, device)->RequiresGrad();
-    nn::init::Ones(parameters_[kParamWeightName]);
-}
-
-std::vector<std::shared_ptr<Tensor>> RMSNorm::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    // broadcasted Mul([4, 64, 2048] * [4, 64, 1])
-    auto norm = x[0] * nn::function::Rsqrt(nn::function::Mean(nn::function::Pow(x[0], 2), -1, true) + eps_);
-    return {norm * parameters_[kParamWeightName]};
-}
-
-std::vector<std::shared_ptr<infini_train::Tensor>>
-NewGELU::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
-    auto &input = x[0];
-    return {0.5 * input
-            * (1.0 + nn::function::Tanh(std::sqrt(2.0 / M_PI) * (input + 0.044715 * nn::function::Pow(input, 3.0))))};
-}
-
-std::vector<std::shared_ptr<infini_train::Tensor>>
-SwiGLU::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
-    return {x[0] * nn::function::Sigmoid(x[0])};
-}
 
 CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config, const ModuleSpec &spec)
     : CloneableModule(kType), config_(config) {
@@ -271,163 +247,4 @@ CausalSelfAttention::ForwardWithRoPE(const std::vector<std::shared_ptr<infini_tr
     return {y};
 }
 
-MLP::MLP(const TransformerConfig &config, const ModuleSpec &spec) : CloneableModule(kType) {
-    // c_fc: ColumnParallel (input full, output parallel)
-    modules_[kCFcLayerName] = build_module(config, spec.submodules_.at(kCFcLayerName));
-
-    // For SwiGLU, add second projection
-    if (spec.submodules_.contains(kCFc2LayerName)) {
-        modules_[kCFc2LayerName] = build_module(config, spec.submodules_.at(kCFc2LayerName));
-    }
-
-    // Activation: check for GELU or SwiGLU
-    if (spec.submodules_.contains(kGeluLayerName)) {
-        modules_[kGeluLayerName] = build_module(config, spec.submodules_.at(kGeluLayerName));
-    } else if (spec.submodules_.contains(kSiluLayerName)) {
-        modules_[kSiluLayerName] = build_module(config, spec.submodules_.at(kSiluLayerName));
-    }
-
-    // c_proj: RowParallel (input parallel, output full)
-    modules_[kCProjLayerName] = build_module(config, spec.submodules_.at(kCProjLayerName));
-}
-
-std::vector<std::shared_ptr<infini_train::Tensor>>
-MLP::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
-    // Check if this is SwiGLU (has second projection and SiLU)
-    bool is_swiglu = modules_.count(kCFc2LayerName) > 0 && modules_.count(kSiluLayerName) > 0;
-
-    if (is_swiglu) {
-        // SwiGLU forward pass
-        // (B, T, C) -> ColumnParallelLinear(C, hidden_dim) -> (B, T, hidden_dim)
-        auto x1 = (*modules_[kCFcLayerName])(x)[0];
-        // (B, T, C) -> ColumnParallelLinear(C, hidden_dim) -> (B, T, hidden_dim)
-        auto x2 = (*modules_[kCFc2LayerName])(x)[0];
-        // (B, T, hidden_dim) -> SiLU -> (B, T, hidden_dim)
-        x2 = (*modules_[kSiluLayerName])({x2})[0];
-        // (B, T, hidden_dim) -> element-wise mul -> (B, T, hidden_dim)
-        auto x3 = x1 * x2;
-        // (B, T, hidden_dim) -> RowParallelLinear(hidden_dim, C) -> (B, T, C)
-        auto x4 = (*modules_[kCProjLayerName])({x3});
-        return x4;
-    } else {
-        // GELU forward pass (standard)
-        // (B, T, C) -> ColumnParallelLinear(C, 4*C) -> (B, T, 4*C_local)
-        auto x1 = (*modules_[kCFcLayerName])(x);
-        // (B, T, 4*C_local) -> GELU -> (B, T, 4*C_local)
-        auto x2 = (*modules_[kGeluLayerName])(x1);
-        // (B, T, 4*C_local) -> RowParallelLinear(4*C, C) -> (B, T, C)
-        auto x3 = (*modules_[kCProjLayerName])(x2);
-        return x3;
-    }
-}
-
-TransformerBlock::TransformerBlock(const nn::TransformerConfig &config, const ModuleSpec &spec)
-    : CloneableModule(kType), attention_type_(config.attention_type) {
-    modules_[kLn1LayerName] = build_module(config, spec.submodules_.at(kLn1LayerName));
-    modules_[kAttnLayerName] = build_module(config, spec.submodules_.at(kAttnLayerName));
-    modules_[kLn2LayerName] = build_module(config, spec.submodules_.at(kLn2LayerName));
-    modules_[kMlpLayerName] = build_module(config, spec.submodules_.at(kMlpLayerName));
-}
-
-std::vector<std::shared_ptr<infini_train::Tensor>>
-TransformerBlock::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
-    // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd)
-    auto ln1_out = (*modules_[kLn1LayerName])({x[0]})[0];
-
-    std::shared_ptr<infini_train::Tensor> x1;
-    // Build attention input
-    if (attention_type_ == AttentionType::kRoPE) {
-        // LLaMA3: {ln1_out, freqs_cis, start_pos, mask}
-        const auto freqs_cis = x.size() > 1 ? x[1] : nullptr;
-        const auto start_pos = x.size() > 2 ? x[2] : nullptr;
-        const auto mask = x.size() > 3 ? x[3] : nullptr;
-        auto attn_out = (*modules_[kAttnLayerName])({ln1_out, freqs_cis, start_pos, mask})[0];
-        x1 = x[0] + attn_out;
-    } else {
-        // GPT2: {ln1_out}
-        auto attn_out = (*modules_[kAttnLayerName])({ln1_out})[0];
-        x1 = x[0] + attn_out;
-    }
-
-    // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd) -> MLP -> (bs, seq_len, n_embd)
-    // -> Add -> (bs, seq_len, n_embd)
-    auto x2 = x1 + (*modules_[kMlpLayerName])((*modules_[kLn2LayerName])({x1}))[0];
-
-    // (bs, seq_len, n_embd)
-    return {x2};
-}
-
-// ========== Module Registration using REGISTER_MODULE macro ==========
-REGISTER_MODULE(CausalSelfAttention);
-REGISTER_MODULE(MLP);
-REGISTER_MODULE(TransformerBlock);
-
-// NewGELU
-REGISTER_MODULE_CUSTOM(NewGELU,
-                       [](const TransformerConfig &config, const ModuleSpec &) { return std::make_shared<NewGELU>(); });
-
-// SwiGLU
-REGISTER_MODULE_CUSTOM(SwiGLU,
-                       [](const TransformerConfig &config, const ModuleSpec &) { return std::make_shared<SwiGLU>(); });
-
-// LayerNorm registration with custom config
-REGISTER_MODULE_CUSTOM(LayerNorm, [](const TransformerConfig &config, const ModuleSpec &spec) {
-    auto normalized_shape
-        = GetOptionalParam<std::vector<int64_t>>(spec, kNormalizedShape, std::vector<int64_t>{config.n_embd});
-    return std::make_shared<LayerNorm>(normalized_shape);
-});
-
-// RMSNorm registration with custom config
-REGISTER_MODULE_CUSTOM(RMSNorm, [](const TransformerConfig &config, const ModuleSpec &spec) {
-    int64_t dim = GetOptionalParam<int64_t>(spec, kDim, config.n_embd);
-    float eps = GetOptionalParam<float>(spec, kEps, 1e-5f);
-    return std::make_shared<RMSNorm>(dim, eps);
-});
-
-// Embedding registration with params from spec
-REGISTER_MODULE_CUSTOM(Embedding, [](const TransformerConfig &config, const ModuleSpec &spec) {
-    int num_embeddings = GetRequiredParam<int>(spec, kNumEmbeddings);
-    int embedding_dim = GetRequiredParam<int>(spec, kEmbeddingDim);
-    return std::make_shared<Embedding>(num_embeddings, embedding_dim);
-});
-
-namespace parallel {
-// ColumnParallelLinear registration with params from spec
-REGISTER_MODULE_CUSTOM(ColumnParallelLinear, [](const TransformerConfig &config, const ModuleSpec &spec) {
-    int in = GetRequiredParam<int>(spec, kInFeatures);
-    int out = GetRequiredParam<int>(spec, kOutFeatures);
-    bool bias = GetOptionalParam<bool>(spec, kBias, true);
-    return std::make_shared<ColumnParallelLinear>(
-        /*in_features=*/in,
-        /*out_features=*/out,
-        /*bias=*/bias,
-        /*gather_output=*/false,
-        /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false,
-        /*sequence_parallel=*/global::GetSequenceParallelEnabled());
-});
-
-// RowParallelLinear registration with params from spec
-REGISTER_MODULE_CUSTOM(RowParallelLinear, [](const TransformerConfig &config, const ModuleSpec &spec) {
-    int in = GetRequiredParam<int>(spec, kInFeatures);
-    int out = GetRequiredParam<int>(spec, kOutFeatures);
-    bool bias = GetOptionalParam<bool>(spec, kBias, true);
-    return std::make_shared<RowParallelLinear>(
-        /*in_features=*/in,
-        /*out_features=*/out,
-        /*bias=*/bias,
-        /*reduce_output=*/true,
-        /*input_is_parallel=*/true,
-        /*skip_bias_add=*/false,
-        /*sequence_parallel=*/global::GetSequenceParallelEnabled());
-});
-
-// VocabParallelEmbedding registration with params from spec
-REGISTER_MODULE_CUSTOM(VocabParallelEmbedding, [](const TransformerConfig &config, const ModuleSpec &spec) {
-    int num_embeddings = GetRequiredParam<int>(spec, kNumEmbeddings);
-    int embedding_dim = GetRequiredParam<int>(spec, kEmbeddingDim);
-    return std::make_shared<VocabParallelEmbedding>(num_embeddings, embedding_dim,
-                                                    /*reduce_scatter_embeddings=*/global::GetSequenceParallelEnabled());
-});
-} // namespace parallel
 } // namespace infini_train::nn

@@ -6,7 +6,7 @@
 #include "infini_train/include/core/transformer/spec_utils.h"
 #include "infini_train/include/core/transformer/transformer_builders.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
-#include "infini_train/include/core/transformer/transformer_layer.h"
+#include "infini_train/include/core/transformer/transformer_model.h"
 
 namespace infini_train::nn {
 
@@ -24,7 +24,7 @@ ModuleSpec BuildGPT2Spec(const TransformerConfig &config) {
 
     // ===== Transformer Block =====
     ModuleSpec block = BuildTransformerBlockSpec(gpt2_config);
-    spec.with_submodule(TransformerBlock::kType, block);
+    spec.with_submodule(TransformerLayer::kType, block);
 
     // ===== Last Stage =====
     ModuleSpec last_stage;
@@ -49,7 +49,7 @@ ModuleSpec BuildLLaMA3Spec(const TransformerConfig &config) {
 
     // ===== Transformer Block =====
     ModuleSpec block = BuildTransformerBlockSpec(llama3_config);
-    spec.with_submodule(TransformerBlock::kType, block);
+    spec.with_submodule(TransformerLayer::kType, block);
 
     // ===== Last Stage =====
     ModuleSpec last_stage;
