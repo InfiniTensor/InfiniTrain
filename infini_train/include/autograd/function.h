@@ -47,6 +47,7 @@ public:
 
 protected:
     std::vector<std::shared_ptr<Tensor>> saved_tensors_;
+    std::vector<bool> needs_input_grad_;
 
 private:
     std::vector<std::pair<std::shared_ptr<Function>, int>> next_functions_;
