@@ -13,6 +13,10 @@ template <typename HookType> class HookHandleImpl;
 
 namespace infini_train::autograd {
 
+// TODO(dcj): Function currently holds both the autograd graph wiring (next_functions_, dependencies, etc.)
+// and the per-op context (saved_tensors_, needs_input_grad_). These should be split into a separate
+// AutogradContext class (like PyTorch's ctx), so Function only defines Forward/Backward and context
+// is passed explicitly. This was simplified during the initial autograd implementation.
 class Function : public std::enable_shared_from_this<Function> {
 public:
     template <typename HookType> using FunctionHookHandleImpl = infini_train::HookHandleImpl<HookType>;
@@ -47,6 +51,7 @@ public:
 
 protected:
     std::vector<std::shared_ptr<Tensor>> saved_tensors_;
+    std::vector<bool> needs_input_grad_;
 
 private:
     std::vector<std::pair<std::shared_ptr<Function>, int>> next_functions_;
