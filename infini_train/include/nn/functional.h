@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace infini_train {
@@ -9,6 +10,30 @@ class Tensor;
 }
 
 namespace infini_train::nn::function {
+
+// Computes the scaled dot product attention.
+//
+// Ref: PyTorch scaled_dot_product_attention.
+//
+// Args:
+//   query: Query tensor; shape (N, ..., L, E).
+//   key: Key tensor; shape (N, ..., S, E).
+//   value: Value tensor; shape (N, ..., S, E).
+//   attn_mask: Optional additive-style mask tensor using framework convention;
+//              shape must be broadcastable to (N, ..., L, S).
+//   dropout_p: Dropout probability; defaults to 0.0.
+//   is_causal: If true, applies a causal mask to the attention window.
+//   scale: Scaling factor applied prior to softmax. Defaults to 1 / sqrt(E).
+//   enable_gqa: If true, enables Grouped Query Attention support.
+//
+// Returns:
+//   Attention output tensor; shape (N, ..., L, E).
+std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &query,
+                                                  const std::shared_ptr<Tensor> &key,
+                                                  const std::shared_ptr<Tensor> &value,
+                                                  const std::shared_ptr<Tensor> &attn_mask = nullptr,
+                                                  double dropout_p = 0.0, bool is_causal = false,
+                                                  std::optional<double> scale = std::nullopt, bool enable_gqa = false);
 
 // Returns the lower triangular part of a 2D tensor or a batch of matrices.
 //

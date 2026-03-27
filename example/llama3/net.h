@@ -23,6 +23,9 @@ struct LLaMA3Config {
     int64_t n_kv_head = 8;       // Num of Key/Value heads（< n_head if using GQA）
     int64_t n_embd = 2048;       // Hidden size
 
+    // Attention config
+    bool use_flash_attention = false;
+    
     // FFN config
     std::optional<float> ffn_dim_multiplier = 1.5f; // FFN dim multiplier
     int64_t multiple_of = 256;                      // FFN dims must be multiple of this number
@@ -179,7 +182,7 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
     static std::shared_ptr<LLaMA3> FromPretrained(ModelType model_type);
-    static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath);
+    static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath, bool use_flash_attention = false);
 
     int GetChunkSize() const { return stage_info_.layer_ranges_per_chunk.size(); }
 

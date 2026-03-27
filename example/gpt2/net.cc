@@ -105,16 +105,27 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     q = q->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
     v = v->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
 
-    // (B, h_l, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
-    // (1, 1, T, T)
-    auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
-    // (1, 1, T, T) -> eq 0 -> (1, 1, T, T) -> masked_fill -> (B, h_l, T, T)
-    att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
-    // (B, h_l, T, T)
-    att = nn::function::Softmax(att, -1);
-    // (B, h_l, T, Dh)
-    auto y = att->Matmul(v);
+    std::shared_ptr<infini_train::Tensor> y;
+
+    const bool is_flash_dtype = q->Dtype() == DataType::kFLOAT32 || q->Dtype() == DataType::kBFLOAT16;
+    const bool short_mha_shape = (T <= 128 && head_dim <= 64);
+    const bool can_use_flash_kernel = config_.use_flash_attention && !short_mha_shape && q->GetDevice().IsCUDA()
+                                   && is_flash_dtype && k->Dtype() == q->Dtype() && v->Dtype() == q->Dtype();
+
+    if (can_use_flash_kernel) {
+        y = nn::function::ScaledDotProductAttention(q, k, v, nullptr, 0.0, true);
+    } else {
+        // (B, h_l, T, T)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
+        // (1, 1, T, T)
+        auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
+        // (1, 1, T, T) -> eq 0 -> (1, 1, T, T) -> masked_fill -> (B, h_l, T, T)
+        att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
+        // (B, h_l, T, T)
+        att = nn::function::Softmax(att, -1);
+        // (B, h_l, T, Dh)
+        y = att->Matmul(v);
+    }
     // (B, h_l, T, Dh) -> (B, T, h_l, Dh) -> (B, T, local_C)
     y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
 
@@ -198,8 +209,8 @@ GPT2FirstStage::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>>
     auto sequence_parallel_enabled = nn::parallel::global::GetSequenceParallelEnabled();
     int tp_rank = 0;
     if (tp_world_size > 1) {
-        auto tp_group = nn::parallel::ProcessGroupFactory::Instance(device.type())
-                            ->Get(nn::parallel::GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+        auto tp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
+            nn::parallel::GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
         tp_rank = tp_group->GetGroupRank(device.Rank().GlobalRank());
     }
     int64_t t_local = sequence_parallel_enabled ? x1->Dims()[1] / tp_world_size : x1->Dims()[1];
@@ -307,11 +318,6 @@ GPT2::GPT2(const GPT2Config &config)
     modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
 
     // FIXME(jym): Assigning the parameter values of wte to LMHead, which is not real tying operation
-    // TODO: Implement real GPT-2 weight tying: make lm_head.weight share the exact same Parameter/Tensor (same
-    // shared_ptr/storage) as transformer.wte.weight (pointer aliasing, not value copy), and ensure the tie is applied
-    // after loading weights so it won't be overwritten. Also fix GPT2::FromLLMC() loading logic to respect weight tying
-    // (do not create/load a separate lm_head.weight tensor; load once into the tied weight) so parameter counting
-    // matches PyTorch/PEFT.
     if (nn::parallel::global::GetPipelineParallelSize() == 1) {
         // https://paperswithcode.com/method/weight-tying
         *mutable_module(kTransformerLayerName)
@@ -356,7 +362,7 @@ std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::
 }
 } // namespace
 
-std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
+std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath, bool use_flash_attention) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -384,7 +390,8 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
                                                         .original_vocab_size = vocab_size,
                                                         .n_layer = n_layer,
                                                         .n_head = n_head,
-                                                        .n_embd = n_embd});
+                                                        .n_embd = n_embd,
+                                                        .use_flash_attention = use_flash_attention});
 
     LOG(INFO) << "magic: " << magic << " version: " << version << " block_size: " << block_size
               << " vocab_size: " << vocab_size << " n_layer: " << n_layer << " n_head: " << n_head
