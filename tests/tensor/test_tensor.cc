@@ -24,11 +24,7 @@ protected:
     }
 
     static void FillSequential(const std::shared_ptr<Tensor>& tensor, float start = 0.0f) {
-        auto* data = static_cast<float*>(tensor->DataPtr());
-        auto n = Numel(tensor);
-        for (size_t i = 0; i < n; ++i) {
-            data[i] = start + static_cast<float>(i);
-        }
+        infini_train::test::FillSequentialTensor(tensor, start);
     }
 };
 
@@ -94,7 +90,7 @@ TEST_F(TensorCreateTest, CreatesTensorOnCUDA) {
     auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                            Device(Device::DeviceType::kCUDA, 0));
     EXPECT_NE(tensor, nullptr);
-    EXPECT_TRUE(tensor->IsCUDA());
+    EXPECT_TRUE(tensor->GetDevice().IsCUDA());
     EXPECT_EQ(tensor->Dims(), (std::vector<int64_t>{2, 3}));
     EXPECT_EQ(tensor->Dtype(), DataType::kFLOAT32);
 #endif
@@ -146,7 +142,7 @@ TEST_F(TensorCopyTest, CopiesCPUToCUDA) {
     FillSequential(cpu_tensor, 0.0f);
     cuda_tensor->CopyFrom(cpu_tensor);
 
-    EXPECT_TRUE(cuda_tensor->IsCUDA());
+    EXPECT_TRUE(cuda_tensor->GetDevice().IsCUDA());
 #endif
 }
 
@@ -161,7 +157,7 @@ TEST_F(TensorCopyTest, CopiesCUDAtoCUDA) {
 
     target->CopyFrom(source);
 
-    EXPECT_TRUE(target->IsCUDA());
+    EXPECT_TRUE(target->GetDevice().IsCUDA());
 #endif
 }
 
@@ -177,9 +173,9 @@ TEST_F(TensorOpTest, MatmulCUDAAllocatesOutputs) {
     EXPECT_NE(a->DataPtr(), nullptr);
     EXPECT_NE(b->DataPtr(), nullptr);
     EXPECT_NE(c->DataPtr(), nullptr);
-    EXPECT_TRUE(a->IsCUDA());
-    EXPECT_TRUE(b->IsCUDA());
-    EXPECT_TRUE(c->IsCUDA());
+    EXPECT_TRUE(a->GetDevice().IsCUDA());
+    EXPECT_TRUE(b->GetDevice().IsCUDA());
+    EXPECT_TRUE(c->GetDevice().IsCUDA());
 #endif
 }
 
@@ -218,10 +214,9 @@ TEST_F(TensorDistributedTest, AllReduce) {
                                            Device(Device::DeviceType::kCUDA, 0));
     tensor->set_requires_grad(true);
 
-    auto* data = static_cast<float*>(tensor->DataPtr());
-    for (int i = 0; i < 6; ++i) data[i] = 1.0f;
+    infini_train::test::FillConstantTensor(tensor, 1.0f);
 
-    EXPECT_TRUE(tensor->IsCUDA());
+    EXPECT_TRUE(tensor->GetDevice().IsCUDA());
     EXPECT_TRUE(tensor->requires_grad());
 #endif
 }
@@ -235,7 +230,7 @@ TEST_F(TensorDistributedTest, AllGather) {
                                            Device(Device::DeviceType::kCUDA, 0));
     tensor->set_requires_grad(true);
 
-    EXPECT_TRUE(tensor->IsCUDA());
+    EXPECT_TRUE(tensor->GetDevice().IsCUDA());
     EXPECT_EQ(tensor->Dims(), (std::vector<int64_t>{4, 4}));
 #endif
 }
@@ -249,7 +244,7 @@ TEST_F(TensorDistributedTest, ReduceScatter) {
                                            Device(Device::DeviceType::kCUDA, 0));
     tensor->set_requires_grad(true);
 
-    EXPECT_TRUE(tensor->IsCUDA());
+    EXPECT_TRUE(tensor->GetDevice().IsCUDA());
     EXPECT_EQ(tensor->Dims(), (std::vector<int64_t>{2, 8}));
 #endif
 }

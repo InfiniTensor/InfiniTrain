@@ -22,7 +22,7 @@ TEST_F(OptimizerDistributedTest, DistributedSGD) {
     auto optimizer = std::make_shared<optimizers::SGD>(params, 0.01);
 
     EXPECT_NE(optimizer, nullptr);
-    EXPECT_TRUE(param->IsCUDA());
+    EXPECT_TRUE(param->GetDevice().IsCUDA());
 #endif
 }
 
@@ -37,7 +37,7 @@ TEST_F(OptimizerDistributedTest, DistributedAdam) {
     auto optimizer = std::make_shared<optimizers::Adam>(params, 0.001);
 
     EXPECT_NE(optimizer, nullptr);
-    EXPECT_TRUE(param->IsCUDA());
+    EXPECT_TRUE(param->GetDevice().IsCUDA());
 #endif
 }
 

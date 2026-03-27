@@ -55,6 +55,52 @@ inline bool HasDistributedSupport() {
     return HasCudaRuntime() && HasNCCL() && GetCudaDeviceCount() >= 2;
 }
 
+inline void FillSequentialTensor(const std::shared_ptr<Tensor>& tensor, float start = 0.0f) {
+    size_t size = 1;
+    for (auto dim : tensor->Dims()) {
+        size *= static_cast<size_t>(dim);
+    }
+
+    if (tensor->GetDevice().IsCUDA()) {
+        auto cpu_tensor = std::make_shared<Tensor>(tensor->Dims(), tensor->Dtype(),
+                                                   Device(Device::DeviceType::kCPU, 0));
+        auto* cpu_data = static_cast<float*>(cpu_tensor->DataPtr());
+        for (size_t i = 0; i < size; ++i) {
+            cpu_data[i] = start + static_cast<float>(i);
+        }
+        tensor->CopyFrom(cpu_tensor);
+        return;
+    }
+
+    auto* data = static_cast<float*>(tensor->DataPtr());
+    for (size_t i = 0; i < size; ++i) {
+        data[i] = start + static_cast<float>(i);
+    }
+}
+
+inline void FillConstantTensor(const std::shared_ptr<Tensor>& tensor, float value) {
+    size_t size = 1;
+    for (auto dim : tensor->Dims()) {
+        size *= static_cast<size_t>(dim);
+    }
+
+    if (tensor->GetDevice().IsCUDA()) {
+        auto cpu_tensor = std::make_shared<Tensor>(tensor->Dims(), tensor->Dtype(),
+                                                   Device(Device::DeviceType::kCPU, 0));
+        auto* cpu_data = static_cast<float*>(cpu_tensor->DataPtr());
+        for (size_t i = 0; i < size; ++i) {
+            cpu_data[i] = value;
+        }
+        tensor->CopyFrom(cpu_tensor);
+        return;
+    }
+
+    auto* data = static_cast<float*>(tensor->DataPtr());
+    for (size_t i = 0; i < size; ++i) {
+        data[i] = value;
+    }
+}
+
 #define REQUIRE_CUDA()                                                                                                  \
     do {                                                                                                                \
         if (!infini_train::test::HasCudaRuntime()) {                                                                    \
@@ -106,12 +152,7 @@ protected:
     }
 
     void fillTensor(std::shared_ptr<Tensor> tensor, float value) {
-        auto data = static_cast<float*>(tensor->DataPtr());
-        size_t size = 1;
-        for (auto dim : tensor->Dims()) size *= dim;
-        for (size_t i = 0; i < size; ++i) {
-            data[i] = value + static_cast<float>(i);
-        }
+        FillSequentialTensor(tensor, value);
     }
 };
 
@@ -140,12 +181,7 @@ protected:
         auto tensor = std::make_shared<Tensor>(shape, DataType::kFLOAT32,
                                                Device(device, device_id));
         tensor->set_requires_grad(true);
-        auto data = static_cast<float*>(tensor->DataPtr());
-        size_t size = 1;
-        for (auto dim : shape) size *= dim;
-        for (size_t i = 0; i < size; ++i) {
-            data[i] = value + static_cast<float>(i);
-        }
+        FillSequentialTensor(tensor, value);
         return tensor;
     }
 };
