@@ -12,14 +12,7 @@ using namespace infini_train;
 class TensorCopyTest : public infini_train::test::TensorTestBase {};
 
 static void FillSequential(const std::shared_ptr<Tensor>& tensor, float start = 0.0f) {
-    auto* data = static_cast<float*>(tensor->DataPtr());
-    size_t n = 1;
-    for (auto dim : tensor->Dims()) {
-        n *= static_cast<size_t>(dim);
-    }
-    for (size_t i = 0; i < n; ++i) {
-        data[i] = start + static_cast<float>(i);
-    }
+    infini_train::test::FillSequentialTensor(tensor, start);
 }
 
 TEST_F(TensorCopyTest, CopiesCPUToCPU) {
@@ -48,7 +41,7 @@ TEST_F(TensorCopyTest, CopiesCPUToCUDA) {
     FillSequential(cpu_tensor, 0.0f);
     cuda_tensor->CopyFrom(cpu_tensor);
 
-    EXPECT_TRUE(cuda_tensor->IsCUDA());
+    EXPECT_TRUE(cuda_tensor->GetDevice().IsCUDA());
 #endif
 }
 
@@ -63,7 +56,7 @@ TEST_F(TensorCopyTest, CopiesCUDAtoCUDA) {
 
     target->CopyFrom(source);
 
-    EXPECT_TRUE(target->IsCUDA());
+    EXPECT_TRUE(target->GetDevice().IsCUDA());
 #endif
 }
 
@@ -78,8 +71,8 @@ TEST_F(TensorCopyTest, CopiesCUDAtoCPU) {
     FillSequential(cuda_tensor, 1.0f);
     cpu_tensor->CopyFrom(cuda_tensor);
 
-    EXPECT_FALSE(cpu_tensor->IsCUDA());
-    EXPECT_TRUE(cpu_tensor->IsCPU());
+    EXPECT_FALSE(cpu_tensor->GetDevice().IsCUDA());
+    EXPECT_TRUE(cpu_tensor->GetDevice().IsCPU());
 #endif
 }
 
@@ -108,6 +101,7 @@ TEST_F(TensorCopyTest, CopiesPreservesDataType) {
 
 TEST_F(TensorCopyTest, CopiesWithDifferentDeviceId) {
     REQUIRE_CUDA();
+    REQUIRE_MIN_GPUS(2);
 #if defined(USE_CUDA)
     auto source = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                            Device(Device::DeviceType::kCUDA, 0));

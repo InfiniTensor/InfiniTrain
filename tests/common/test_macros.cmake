@@ -74,13 +74,8 @@ macro(infini_train_add_test)
     ${glog_SOURCE_DIR}/src
   )
   
-  # 5. 链接项目库（whole-archive 方式解决静态库符号依赖）
-  target_link_libraries(${ARG_TEST_NAME} PRIVATE
-    "-Wl,--whole-archive"
-      infini_train
-      infini_train_cpu_kernels
-    "-Wl,--no-whole-archive"
-  )
+  # 5. 链接项目库（复用框架链接策略，包含 CUDA/静态库依赖处理）
+  link_infini_train_exe(${ARG_TEST_NAME})
   
   # 6. 使用 gtest_discover_tests 自动发现测试用例
   #    这会自动为每个 TEST_F() 创建一个 ctest 测试

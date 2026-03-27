@@ -22,7 +22,7 @@ TEST_F(OptimizerCUDATest, SGDCreationCUDA) {
     auto optimizer = std::make_shared<optimizers::SGD>(params, 0.01);
 
     EXPECT_NE(optimizer, nullptr);
-    EXPECT_TRUE(param->IsCUDA());
+    EXPECT_TRUE(param->GetDevice().IsCUDA());
 #endif
 }
 
@@ -37,7 +37,7 @@ TEST_F(OptimizerCUDATest, AdamCreationCUDA) {
     auto optimizer = std::make_shared<optimizers::Adam>(params, 0.001);
 
     EXPECT_NE(optimizer, nullptr);
-    EXPECT_TRUE(param->IsCUDA());
+    EXPECT_TRUE(param->GetDevice().IsCUDA());
 #endif
 }
 
@@ -52,7 +52,7 @@ TEST_F(OptimizerCUDATest, ZeroGradCUDA) {
     auto optimizer = std::make_shared<optimizers::SGD>(params, 0.01);
 
     optimizer->ZeroGrad();
-    EXPECT_TRUE(param->IsCUDA());
+    EXPECT_TRUE(param->GetDevice().IsCUDA());
 #endif
 }
 
@@ -80,14 +80,13 @@ TEST_F(OptimizerCUDATest, AdamStepCUDA) {
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                           Device(Device::DeviceType::kCUDA, 0));
     param->set_requires_grad(true);
-    auto* data = static_cast<float*>(param->DataPtr());
-    for (int i = 0; i < 6; ++i) data[i] = 1.0f;
+    infini_train::test::FillConstantTensor(param, 1.0f);
 
     std::vector<std::shared_ptr<Tensor>> params = {param};
     auto optimizer = std::make_shared<optimizers::Adam>(params, 0.001);
 
     optimizer->ZeroGrad();
     optimizer->Step();
-    EXPECT_TRUE(param->IsCUDA());
+    EXPECT_TRUE(param->GetDevice().IsCUDA());
 #endif
 }
