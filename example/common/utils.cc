@@ -1,5 +1,8 @@
 #include "example/common/utils.h"
 
+#include <algorithm>
+#include <chrono>
+
 #include "gflags/gflags.h"
 #include "gflags/gflags_declare.h"
 #include "glog/logging.h"
@@ -66,53 +69,91 @@ void ReadVectorShardFloat(std::ifstream &ifs, float *dst, int64_t len, int64_t s
     ifs.seekg(base + std::streamoff(len * sizeof(float)));
 }
 
-std::tuple<int, float, size_t> ResumeFromCheckpoint(
-    const fLS::clstring &flag_resume_root, // resume from this checkpoint directory
-    const nn::parallel::Rank &rank,        // rank info for distributed training
-    std::shared_ptr<nn::Module> model,     // model to be loaded with checkpoint state
-    std::shared_ptr<Optimizer> optimizer,  // some optimizer may not have state, but others may have
-    DistributedDataLoader &train_loader,   // distributed dataloader to be resumed
-    TrainerState &state,                   // trainer state to be loaded from checkpoint
-    DataLoaderIterator
-        &train_iter, // dataloader iterator to be set to the correct position according to checkpoint state
-    CheckpointLoadOptions model_bin_loader) {
-    int global_step = 0;
-    float best_loss = std::numeric_limits<float>::infinity();
-    size_t data_batch_idx = 0;
-
+ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &args) {
+    ResumeFromCheckpointResult result;
     int ddp_world_size = nn::parallel::global::GetDataParallelSize();
 
-    if (flag_resume_root.empty()) {
+    if (args.resume_root.empty()) {
         LOG(INFO) << "No checkpoint specified for resume. Starting training from scratch.";
-        return {global_step, best_loss, data_batch_idx};
+        return result;
     }
 
-    std::filesystem::path resume_dir = flag_resume_root;
-    if (rank.IsParallel()) {
-        const auto rank_dir = resume_dir / std::format("rank_{:06d}", rank.GlobalRank());
+    std::filesystem::path resume_dir = args.resume_root;
+    if (args.rank.IsParallel()) {
+        const auto rank_dir = resume_dir / std::format("rank_{:06d}", args.rank.GlobalRank());
         if (std::filesystem::exists(rank_dir)) {
             resume_dir = rank_dir;
         }
     }
 
-    Checkpoint::Load(resume_dir, model.get(), optimizer.get(), &state, model_bin_loader);
+    Checkpoint::Load(resume_dir, args.model.get(), args.optimizer.get(), &args.state, args.load_options);
 
-    global_step = static_cast<int>(state.global_step);
-    best_loss = state.best_loss;
-    if (state.data_batch_stride != static_cast<int64_t>(ddp_world_size) && rank.IsMainRank()) {
+    result.global_step = static_cast<int>(args.state.global_step);
+    result.best_loss = args.state.best_loss;
+    if (args.state.data_batch_stride != static_cast<int64_t>(ddp_world_size) && args.rank.IsMainRank()) {
         LOG(WARNING) << std::format("Checkpoint data_batch_stride {} mismatches current ddp_world_size {}. "
                                     "Proceeding with recorded data_batch_idx {}.",
-                                    state.data_batch_stride, ddp_world_size, state.data_batch_idx);
+                                    args.state.data_batch_stride, ddp_world_size, args.state.data_batch_idx);
     }
-    data_batch_idx = static_cast<size_t>(std::max<int64_t>(state.data_batch_idx, 0));
-    train_iter = train_loader.IteratorAtBatchIndex(data_batch_idx);
-    if (rank.IsMainRank()) {
+    result.data_batch_idx = static_cast<size_t>(std::max<int64_t>(args.state.data_batch_idx, 0));
+    args.train_iter = args.train_loader.IteratorAtBatchIndex(result.data_batch_idx);
+    if (args.rank.IsMainRank()) {
         LOG(INFO) << std::format(
-            "Resume training from step {} with best_loss {:.6f}, last_lr {:.3e}, data_batch_idx {}", state.global_step,
-            state.best_loss, state.last_lr, state.data_batch_idx);
+            "Resume training from step {} with best_loss {:.6f}, last_lr {:.3e}, data_batch_idx {}",
+            args.state.global_step, args.state.best_loss, args.state.last_lr, args.state.data_batch_idx);
     }
 
-    return {global_step, best_loss, data_batch_idx};
+    return result;
+}
+
+void SaveCheckpoint(const SaveCheckpointArgs &args) {
+    const auto ckpt_start = std::chrono::high_resolution_clock::now();
+
+    TrainerState state;
+    state.global_step = args.global_step;
+    state.data_batch_idx = static_cast<int64_t>(args.data_batch_idx);
+    state.data_batch_stride = args.ddp_size;
+    state.best_loss = args.best_loss;
+    state.last_lr = args.last_lr;
+    state.optimizer_type = args.optimizer_type;
+    state.checkpoint_format = args.checkpoint_format;
+    state.ddp_size = args.ddp_size;
+    state.tp_size = args.tp_size;
+    state.sp_size = args.sp_size;
+    state.pp_size = args.pp_size;
+
+    CheckpointOptions options;
+    options.format = args.checkpoint_format;
+    options.save_optimizer_state = args.save_optimizer_state;
+    options.model_bin_writer = args.model_bin_writer;
+    Checkpoint::Save(args.save_dir, args.model, args.optimizer, state, options);
+
+    const auto ckpt_end = std::chrono::high_resolution_clock::now();
+    const double ckpt_ms = std::chrono::duration<double, std::milli>(ckpt_end - ckpt_start).count();
+
+    if (!args.rank.IsMainRank()) {
+        return;
+    }
+
+    LOG(INFO) << std::format("Checkpoint saved at: {} ({:.2f} ms)", args.save_dir.string(), ckpt_ms);
+
+    if (!args.prune_step_checkpoints) {
+        return;
+    }
+
+    std::vector<std::filesystem::path> ckpts;
+    if (std::filesystem::exists(args.checkpoint_root_dir)) {
+        for (const auto &entry : std::filesystem::directory_iterator(args.checkpoint_root_dir)) {
+            if (entry.is_directory() && entry.path().filename().string().starts_with("checkpoint_step_")) {
+                ckpts.push_back(entry.path());
+            }
+        }
+        std::sort(ckpts.begin(), ckpts.end());
+        while (ckpts.size() > args.max_checkpoint_keep) {
+            std::filesystem::remove_all(ckpts.front());
+            ckpts.erase(ckpts.begin());
+        }
+    }
 }
 
 } // namespace infini_train
