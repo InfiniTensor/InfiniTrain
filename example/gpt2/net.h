@@ -19,6 +19,7 @@ struct GPT2Config {
     int64_t n_layer = 12;
     int64_t n_head = 12;
     int64_t n_embd = 768;
+    bool use_flash_attention = false;
 };
 
 class NewGELU : public infini_train::nn::CloneableModule<NewGELU> {
@@ -140,7 +141,7 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
     static std::shared_ptr<GPT2> FromPretrained(ModelType model_type);
-    static std::shared_ptr<GPT2> FromLLMC(const std::string &filepath);
+    static std::shared_ptr<GPT2> FromLLMC(const std::string &filepath, bool use_flash_attention = false);
 
     int GetChunkSize() const;
 

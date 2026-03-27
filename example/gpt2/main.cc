@@ -63,6 +63,8 @@ DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 // memory management
 DEFINE_string(device, "cuda", "device type (cpu/cuda), useless if using parallel training mode");
+// flash attention
+DEFINE_bool(flash, false, "Whether to enable FlashAttention");
 // parallel
 DEFINE_int32(
     nthread_per_process, 1,
@@ -191,9 +193,10 @@ void Train(const nn::parallel::Rank &rank) {
     std::shared_ptr<nn::Module> model = nullptr;
 
     if (!FLAGS_llmc_filepath.empty()) {
-        model = GPT2::FromLLMC(FLAGS_llmc_filepath);
+        model = GPT2::FromLLMC(FLAGS_llmc_filepath, FLAGS_flash);
     } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
+        model_config.use_flash_attention = FLAGS_flash;
         model = std::make_shared<GPT2>(model_config);
     } else {
         model = GPT2::FromPretrained(kStrToModelType.at(FLAGS_model));
@@ -313,7 +316,7 @@ void Train(const nn::parallel::Rank &rank) {
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(
-              std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
+                                    std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": start training";
