@@ -121,7 +121,7 @@ TEST_F(HookTest, BasicModuleHooksCUDA) {
     auto outputs = (*module)(inputs);
 
     EXPECT_EQ(outputs.size(), 1);
-    EXPECT_TRUE(outputs[0]->IsCUDA());
+    EXPECT_TRUE(outputs[0]->GetDevice().IsCUDA());
 #endif
 }
 
@@ -166,7 +166,7 @@ TEST_F(HookTest, DistributedModuleHooks) {
     auto outputs = (*module)(inputs);
 
     EXPECT_EQ(outputs.size(), 1);
-    EXPECT_TRUE(outputs[0]->IsCUDA());
+    EXPECT_TRUE(outputs[0]->GetDevice().IsCUDA());
 #endif
 }
 

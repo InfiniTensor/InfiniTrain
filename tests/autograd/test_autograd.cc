@@ -15,6 +15,7 @@
 #include "infini_train/include/autograd/linear.h"
 #include "infini_train/include/autograd/outer.h"
 #include "infini_train/include/autograd/misc.h"
+#include "test_utils.h"
 
 using namespace infini_train;
 
@@ -380,17 +381,16 @@ TEST_F(AutogradForwardTest, NoOpForward) {
 
 #ifdef USE_CUDA
 TEST_F(AutogradCudaTest, AddForwardCUDA) {
+    REQUIRE_CUDA();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
-    auto a_data = static_cast<float*>(a->DataPtr());
-    for (int i = 0; i < 6; ++i) a_data[i] = 1.0f;
+    infini_train::test::FillConstantTensor(a, 1.0f);
 
     auto b = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     b->set_requires_grad(true);
-    auto b_data = static_cast<float*>(b->DataPtr());
-    for (int i = 0; i < 6; ++i) b_data[i] = 2.0f;
+    infini_train::test::FillConstantTensor(b, 2.0f);
 
     auto add_fn = std::make_shared<autograd::Add>();
     auto result = add_fn->Apply({a, b});
@@ -399,17 +399,16 @@ TEST_F(AutogradCudaTest, AddForwardCUDA) {
 }
 
 TEST_F(AutogradCudaTest, MatmulForwardCUDA) {
+    REQUIRE_CUDA();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
-    auto a_data = static_cast<float*>(a->DataPtr());
-    for (int i = 0; i < 6; ++i) a_data[i] = 1.0f;
+    infini_train::test::FillConstantTensor(a, 1.0f);
 
     auto b = std::make_shared<Tensor>(std::vector<int64_t>{3, 4}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     b->set_requires_grad(true);
-    auto b_data = static_cast<float*>(b->DataPtr());
-    for (int i = 0; i < 12; ++i) b_data[i] = 1.0f;
+    infini_train::test::FillConstantTensor(b, 1.0f);
 
     auto matmul_fn = std::make_shared<autograd::Matmul>();
     auto result = matmul_fn->Apply({a, b});
@@ -418,11 +417,11 @@ TEST_F(AutogradCudaTest, MatmulForwardCUDA) {
 }
 
 TEST_F(AutogradCudaTest, SumForwardCUDA) {
+    REQUIRE_CUDA();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
-    auto a_data = static_cast<float*>(a->DataPtr());
-    for (int i = 0; i < 6; ++i) a_data[i] = 1.0f;
+    infini_train::test::FillConstantTensor(a, 1.0f);
 
     auto sum_fn = std::make_shared<autograd::Sum>(1, false);
     auto result = sum_fn->Apply({a});
@@ -430,11 +429,11 @@ TEST_F(AutogradCudaTest, SumForwardCUDA) {
 }
 
 TEST_F(AutogradCudaTest, SoftmaxForwardCUDA) {
+    REQUIRE_CUDA();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
-    auto a_data = static_cast<float*>(a->DataPtr());
-    for (int i = 0; i < 6; ++i) a_data[i] = 1.0f;
+    infini_train::test::FillConstantTensor(a, 1.0f);
 
     auto softmax_fn = std::make_shared<autograd::Softmax>(1);
     auto result = softmax_fn->Apply({a});
@@ -443,23 +442,21 @@ TEST_F(AutogradCudaTest, SoftmaxForwardCUDA) {
 }
 
 TEST_F(AutogradCudaTest, LinearForwardCUDA) {
+    REQUIRE_CUDA();
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                           Device(Device::DeviceType::kCUDA, 0));
     input->set_requires_grad(true);
-    auto input_data = static_cast<float*>(input->DataPtr());
-    for (int i = 0; i < 6; ++i) input_data[i] = 1.0f;
+    infini_train::test::FillConstantTensor(input, 1.0f);
 
     auto weight = std::make_shared<Tensor>(std::vector<int64_t>{4, 3}, DataType::kFLOAT32,
                                             Device(Device::DeviceType::kCUDA, 0));
     weight->set_requires_grad(true);
-    auto weight_data = static_cast<float*>(weight->DataPtr());
-    for (int i = 0; i < 12; ++i) weight_data[i] = 1.0f;
+    infini_train::test::FillConstantTensor(weight, 1.0f);
 
     auto bias = std::make_shared<Tensor>(std::vector<int64_t>{4}, DataType::kFLOAT32,
                                           Device(Device::DeviceType::kCUDA, 0));
     bias->set_requires_grad(true);
-    auto bias_data = static_cast<float*>(bias->DataPtr());
-    for (int i = 0; i < 4; ++i) bias_data[i] = 0.0f;
+    infini_train::test::FillConstantTensor(bias, 0.0f);
 
     auto linear_fn = std::make_shared<autograd::Linear>();
     auto result = linear_fn->Apply({input, weight, bias});
@@ -480,10 +477,9 @@ TEST_F(AutogradDistributedTest, AllReduceDistributed) {
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
-    auto a_data = static_cast<float*>(a->DataPtr());
-    for (int i = 0; i < 6; ++i) a_data[i] = 1.0f;
+    infini_train::test::FillConstantTensor(a, 1.0f);
 
-    EXPECT_TRUE(a->IsCUDA());
+    EXPECT_TRUE(a->GetDevice().IsCUDA());
     EXPECT_TRUE(a->requires_grad());
 }
 
@@ -494,10 +490,9 @@ TEST_F(AutogradDistributedTest, AllGatherDistributed) {
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{4, 4}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
-    auto a_data = static_cast<float*>(a->DataPtr());
-    for (int i = 0; i < 16; ++i) a_data[i] = 1.0f;
+    infini_train::test::FillConstantTensor(a, 1.0f);
 
-    EXPECT_TRUE(a->IsCUDA());
+    EXPECT_TRUE(a->GetDevice().IsCUDA());
     EXPECT_EQ(a->Dims(), (std::vector<int64_t>{4, 4}));
 }
 
@@ -508,10 +503,9 @@ TEST_F(AutogradDistributedTest, ReduceScatterDistributed) {
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 8}, DataType::kFLOAT32,
                                        Device(Device::DeviceType::kCUDA, 0));
     a->set_requires_grad(true);
-    auto a_data = static_cast<float*>(a->DataPtr());
-    for (int i = 0; i < 16; ++i) a_data[i] = 1.0f;
+    infini_train::test::FillConstantTensor(a, 1.0f);
 
-    EXPECT_TRUE(a->IsCUDA());
+    EXPECT_TRUE(a->GetDevice().IsCUDA());
     EXPECT_EQ(a->Dims(), (std::vector<int64_t>{2, 8}));
 }
 
@@ -530,7 +524,7 @@ TEST_F(AutogradDistributedTest, DistributedMatmul) {
     auto result = matmul_fn->Apply({a, b});
 
     EXPECT_EQ(result.size(), 1);
-    EXPECT_TRUE(result[0]->IsCUDA());
+    EXPECT_TRUE(result[0]->GetDevice().IsCUDA());
 }
 
 TEST_F(AutogradDistributedTest, DistributedLinear) {
@@ -552,6 +546,6 @@ TEST_F(AutogradDistributedTest, DistributedLinear) {
 
     EXPECT_EQ(result.size(), 1);
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
-    EXPECT_TRUE(result[0]->IsCUDA());
+    EXPECT_TRUE(result[0]->GetDevice().IsCUDA());
 }
 #endif // USE_NCCL

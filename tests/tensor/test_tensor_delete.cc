@@ -96,7 +96,7 @@ TEST_F(TensorDeleteTest, ReleaseMemoryOnCUDA) {
         auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{100, 100}, DataType::kFLOAT32,
                                                Device(Device::DeviceType::kCUDA, 0));
         tensor->set_requires_grad(true);
-        EXPECT_TRUE(tensor->IsCUDA());
+        EXPECT_TRUE(tensor->GetDevice().IsCUDA());
         weak_tensor = tensor;
     }
     EXPECT_TRUE(weak_tensor.expired());

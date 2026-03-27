@@ -67,7 +67,7 @@ TEST_F(TensorCreateTest, CreatesTensorOnCUDA) {
     auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32,
                                            Device(Device::DeviceType::kCUDA, 0));
     EXPECT_NE(tensor, nullptr);
-    EXPECT_TRUE(tensor->IsCUDA());
+    EXPECT_TRUE(tensor->GetDevice().IsCUDA());
     EXPECT_EQ(tensor->Dims(), (std::vector<int64_t>{2, 3}));
     EXPECT_EQ(tensor->Dtype(), DataType::kFLOAT32);
 #endif
