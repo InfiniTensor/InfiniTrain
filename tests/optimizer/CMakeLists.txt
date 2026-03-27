@@ -1,22 +1,39 @@
-# ============================================================================
-# Optimizer tests
-# ============================================================================
-# 重构版本：使用 infini_train_add_test 宏简化配置
-#
-# 新增测试只需 1 行：
-#   infini_train_add_test(test_name SOURCES test_name.cc LABELS cpu)
-# ============================================================================
+# ==========================================================================
+# Optimizer tests (single binary)
+# ==========================================================================
 
-# -----------------------------------------------------------------------------
-# Optimizer tests
-# -----------------------------------------------------------------------------
-infini_train_add_test(test_optimizer_creation SOURCES test_optimizer_creation.cc LABELS cpu)
-infini_train_add_test(test_optimizer_step SOURCES test_optimizer_step.cc LABELS cpu)
-infini_train_add_test(test_optimizer_cuda SOURCES test_optimizer_cuda.cc LABELS cuda)
-infini_train_add_test(test_optimizer_distributed SOURCES test_optimizer_distributed.cc LABELS cuda distributed)
+# 注意：test_optimizer.cc 为 legacy 组合测试，内容与拆分文件重复，故未纳入此二进制
 
-# -----------------------------------------------------------------------------
-# Legacy combined tests
-# 注意：使用 gtest_discover_tests，所有 TEST_F 都会被自动发现
-# -----------------------------------------------------------------------------
-infini_train_add_test(test_optimizer_legacy SOURCES test_optimizer.cc LABELS cpu cuda distributed)
+set(OPTIMIZER_TEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+set(OPTIMIZER_TEST_SOURCES
+  ${OPTIMIZER_TEST_DIR}/test_optimizer_creation.cc
+  ${OPTIMIZER_TEST_DIR}/test_optimizer_step.cc
+  ${OPTIMIZER_TEST_DIR}/test_optimizer_cuda.cc
+  ${OPTIMIZER_TEST_DIR}/test_optimizer_distributed.cc
+)
+
+add_executable(test_optimizer ${OPTIMIZER_TEST_SOURCES})
+target_compile_options(test_optimizer PRIVATE -Wno-error)
+link_infini_train_exe(test_optimizer)
+target_link_libraries(test_optimizer PRIVATE GTest::gtest GTest::gtest_main)
+target_include_directories(test_optimizer PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../common
+  ${glog_SOURCE_DIR}/src
+)
+
+include(GoogleTest)
+gtest_discover_tests(test_optimizer
+  EXTRA_ARGS --gtest_output=xml:%T.xml
+  TEST_FILTER "-OptimizerCUDATest.*:OptimizerDistributedTest.*"
+  PROPERTIES LABELS "cpu"
+)
+gtest_discover_tests(test_optimizer
+  EXTRA_ARGS --gtest_output=xml:%T.xml
+  TEST_FILTER "OptimizerCUDATest.*"
+  PROPERTIES LABELS "cuda"
+)
+gtest_discover_tests(test_optimizer
+  EXTRA_ARGS --gtest_output=xml:%T.xml
+  TEST_FILTER "OptimizerDistributedTest.*"
+  PROPERTIES LABELS "distributed"
+)
