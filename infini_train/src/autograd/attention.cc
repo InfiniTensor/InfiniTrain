@@ -17,10 +17,9 @@ ScaledDotProductAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &i
 
     auto device = query->GetDevice().type();
     auto [output, lse, rng_seed, rng_offset]
-        = Dispatcher::Instance()
-              .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, uint64_t, uint64_t>>(
-                  {device, "FlashAttentionForward"}, query, key, value, attn_mask, dropout_p_, is_causal_, scale_,
-                  enable_gqa_);
+        = Dispatcher::Instance().Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, uint64_t, uint64_t>>(
+            {device, "FlashAttentionForward"}, query, key, value, attn_mask, dropout_p_, is_causal_, scale_,
+            enable_gqa_);
     lse_ = lse;
     rng_seed_ = rng_seed;
     rng_offset_ = rng_offset;

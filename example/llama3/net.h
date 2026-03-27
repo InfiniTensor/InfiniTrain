@@ -25,7 +25,7 @@ struct LLaMA3Config {
 
     // Attention config
     bool use_flash_attention = false;
-    
+
     // FFN config
     std::optional<float> ffn_dim_multiplier = 1.5f; // FFN dim multiplier
     int64_t multiple_of = 256;                      // FFN dims must be multiple of this number
