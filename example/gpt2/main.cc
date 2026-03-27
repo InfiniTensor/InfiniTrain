@@ -343,58 +343,46 @@ void Train(const nn::parallel::Rank &rank) {
         auto loaded_model = GPT2::FromLLMC(model_path.string());
         target_model->LoadStateDict(loaded_model->StateDict());
     };
-    std::tie(start_step, best_loss, saved_data_batch_idx) = infini_train::ResumeFromCheckpoint(
-        FLAGS_resume_from, rank, model, optimizer, train_loader, state, train_iter, load_options);
+    const auto resume_result = infini_train::ResumeFromCheckpoint({
+        .resume_root = FLAGS_resume_from,
+        .rank = rank,
+        .model = model,
+        .optimizer = optimizer,
+        .train_loader = train_loader,
+        .state = state,
+        .train_iter = train_iter,
+        .load_options = load_options,
+    });
+    start_step = resume_result.global_step;
+    best_loss = resume_result.best_loss;
+    saved_data_batch_idx = resume_result.data_batch_idx;
 
-    auto save_checkpoint = [&](const std::filesystem::path &save_dir, int64_t global_step,
-                               bool prune_step_checkpoints) {
-        const auto ckpt_start = std::chrono::high_resolution_clock::now();
-
-        TrainerState state;
-        state.global_step = global_step;
-        state.data_batch_idx = saved_data_batch_idx;
-        state.data_batch_stride = ddp_world_size;
-        state.best_loss = best_loss;
-        state.last_lr = FLAGS_learning_rate;
-        state.optimizer_type = "SGD";
-        state.checkpoint_format = FLAGS_checkpoint_format;
-        state.ddp_size = ddp_world_size;
-        state.tp_size = tp_world_size;
-        state.sp_size = sp_world_size;
-        state.pp_size = pp_world_size;
-
-        CheckpointOptions options;
-        options.format = FLAGS_checkpoint_format;
-        options.save_optimizer_state = FLAGS_save_optimizer_state;
-        options.model_bin_writer = [&](const nn::Module &, const std::filesystem::path &model_path) {
-            llmc_model->SaveAsLLMC(model_path.string());
-        };
-        Checkpoint::Save(save_dir, *model, *optimizer, state, options);
-
-        const auto ckpt_end = std::chrono::high_resolution_clock::now();
-        const double ckpt_ms = std::chrono::duration<double, std::milli>(ckpt_end - ckpt_start).count();
-
-        if (rank.IsMainRank()) {
-            LOG(INFO) << std::format("Checkpoint saved at: {} ({:.2f} ms)", save_dir.string(), ckpt_ms);
-
-            if (prune_step_checkpoints) {
-                std::vector<std::filesystem::path> ckpts;
-                const auto root = std::filesystem::path(FLAGS_checkpoint_dir);
-                if (std::filesystem::exists(root)) {
-                    for (const auto &entry : std::filesystem::directory_iterator(root)) {
-                        if (entry.is_directory() && entry.path().filename().string().starts_with("checkpoint_step_")) {
-                            ckpts.push_back(entry.path());
-                        }
-                    }
-                    std::sort(ckpts.begin(), ckpts.end());
-                    while (ckpts.size() > FLAGS_max_checkpoint_keep) {
-                        std::filesystem::remove_all(ckpts.front());
-                        ckpts.erase(ckpts.begin());
-                    }
-                }
-            }
-        }
-    };
+    auto save_checkpoint
+        = [&](const std::filesystem::path &save_dir, int64_t global_step, bool prune_step_checkpoints) {
+              infini_train::SaveCheckpoint({
+                  .save_dir = save_dir,
+                  .global_step = global_step,
+                  .data_batch_idx = saved_data_batch_idx,
+                  .best_loss = best_loss,
+                  .last_lr = FLAGS_learning_rate,
+                  .optimizer_type = "SGD",
+                  .checkpoint_format = FLAGS_checkpoint_format,
+                  .ddp_size = ddp_world_size,
+                  .tp_size = tp_world_size,
+                  .sp_size = sp_world_size,
+                  .pp_size = pp_world_size,
+                  .save_optimizer_state = FLAGS_save_optimizer_state,
+                  .prune_step_checkpoints = prune_step_checkpoints,
+                  .checkpoint_root_dir = FLAGS_checkpoint_dir,
+                  .max_checkpoint_keep = FLAGS_max_checkpoint_keep,
+                  .rank = rank,
+                  .model = *model,
+                  .optimizer = *optimizer,
+                  .model_bin_writer
+                  = [&](const nn::Module &,
+                        const std::filesystem::path &model_path) { llmc_model->SaveAsLLMC(model_path.string()); },
+              });
+          };
 
     for (int step = start_step; step < FLAGS_num_iteration + 1; ++step) {
         // Reset precision check counters at start of each iteration for file overwrite
