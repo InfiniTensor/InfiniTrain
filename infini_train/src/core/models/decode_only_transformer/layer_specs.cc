@@ -6,7 +6,7 @@
 #include "infini_train/include/core/transformer/spec_utils.h"
 #include "infini_train/include/core/transformer/transformer_builders.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
-#include "infini_train/include/core/transformer/transformer_layer.h"
+#include "infini_train/include/core/transformer/transformer_model.h"
 
 namespace infini_train::nn {
 
@@ -17,21 +17,21 @@ ModuleSpec BuildGPT2Spec(const TransformerConfig &config) {
 
     // ===== First Stage =====
     ModuleSpec first_stage;
-    first_stage.with_submodule(TransformerFirstStage::kWTELayerName, BuildVocabEmbeddingSpec(gpt2_config))
-        .with_submodule(TransformerFirstStage::kWPELayerName,
-                        BuildPositionEmbeddingSpec(gpt2_config.block_size, gpt2_config.n_embd));
-    spec.with_submodule(TransformerFirstStage::kType, first_stage);
+    first_stage.WithSubmodule(TransformerFirstStage::kWTELayerName, BuildVocabEmbeddingSpec(gpt2_config))
+        .WithSubmodule(TransformerFirstStage::kWPELayerName,
+                       BuildPositionEmbeddingSpec(gpt2_config.block_size, gpt2_config.n_embd));
+    spec.WithSubmodule(TransformerFirstStage::kType, first_stage);
 
-    // ===== Transformer Block =====
-    ModuleSpec block = BuildTransformerBlockSpec(gpt2_config);
-    spec.with_submodule(TransformerBlock::kType, block);
+    // ===== Transformer Layer =====
+    ModuleSpec block = BuildTransformerLayerSpec(gpt2_config);
+    spec.WithSubmodule(TransformerLayer::kType, block);
 
     // ===== Last Stage =====
     ModuleSpec last_stage;
-    last_stage.with_submodule(TransformerLastStage::kLnFLayerName, BuildNormSpec(gpt2_config))
-        .with_submodule(TransformerLastStage::kLMHeadLayerName,
-                        BuildOutputProjSpec(gpt2_config, gpt2_config.vocab_size, false));
-    spec.with_submodule(TransformerLastStage::kType, last_stage);
+    last_stage.WithSubmodule(TransformerLastStage::kLnFLayerName, BuildNormSpec(gpt2_config))
+        .WithSubmodule(TransformerLastStage::kLMHeadLayerName,
+                       BuildOutputProjSpec(gpt2_config, gpt2_config.vocab_size, false));
+    spec.WithSubmodule(TransformerLastStage::kType, last_stage);
 
     return spec;
 }
@@ -44,19 +44,19 @@ ModuleSpec BuildLLaMA3Spec(const TransformerConfig &config) {
     // ===== First Stage =====
     ModuleSpec first_stage;
     // LLaMA3 only has token embedding, no position embedding (uses RoPE)
-    first_stage.with_submodule(TransformerFirstStage::kWTELayerName, BuildVocabEmbeddingSpec(llama3_config));
-    spec.with_submodule(TransformerFirstStage::kType, first_stage);
+    first_stage.WithSubmodule(TransformerFirstStage::kWTELayerName, BuildVocabEmbeddingSpec(llama3_config));
+    spec.WithSubmodule(TransformerFirstStage::kType, first_stage);
 
-    // ===== Transformer Block =====
-    ModuleSpec block = BuildTransformerBlockSpec(llama3_config);
-    spec.with_submodule(TransformerBlock::kType, block);
+    // ===== Transformer Layer =====
+    ModuleSpec block = BuildTransformerLayerSpec(llama3_config);
+    spec.WithSubmodule(TransformerLayer::kType, block);
 
     // ===== Last Stage =====
     ModuleSpec last_stage;
-    last_stage.with_submodule(TransformerLastStage::kLnFLayerName, BuildNormSpec(llama3_config))
-        .with_submodule(TransformerLastStage::kLMHeadLayerName,
-                        BuildOutputProjSpec(llama3_config, llama3_config.vocab_size, false));
-    spec.with_submodule(TransformerLastStage::kType, last_stage);
+    last_stage.WithSubmodule(TransformerLastStage::kLnFLayerName, BuildNormSpec(llama3_config))
+        .WithSubmodule(TransformerLastStage::kLMHeadLayerName,
+                       BuildOutputProjSpec(llama3_config, llama3_config.vocab_size, false));
+    spec.WithSubmodule(TransformerLastStage::kType, last_stage);
 
     return spec;
 }

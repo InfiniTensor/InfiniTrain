@@ -22,21 +22,12 @@ struct ModuleSpec {
 
     explicit ModuleSpec(std::type_index m) : module_(m) {}
 
-    ModuleSpec &with_param(const std::string &key, std::any value) {
-        params_[key] = std::move(value);
-        return *this;
-    }
+    ModuleSpec &WithParam(const std::string &key, std::any value);
 
-    ModuleSpec &with_submodule(const std::string &name, ModuleSpec spec) {
-        submodules_[name] = std::move(spec);
-        return *this;
-    }
+    ModuleSpec &WithSubmodule(const std::string &name, ModuleSpec spec);
 
     ModuleSpec &
-    with_build(std::function<std::shared_ptr<Module>(const TransformerConfig &, const ModuleSpec &)> build_fn) {
-        build = std::move(build_fn);
-        return *this;
-    }
+    WithBuild(std::function<std::shared_ptr<Module>(const TransformerConfig &, const ModuleSpec &)> build_fn);
 
     std::type_index module_{typeid(void)};
     std::unordered_map<std::string, std::any> params_;
@@ -49,28 +40,24 @@ using ModuleCreator = std::function<std::shared_ptr<Module>(const TransformerCon
 class ModuleRegistry {
 public:
     static ModuleRegistry &Instance() {
-        static ModuleRegistry inst;
-        return inst;
+        static ModuleRegistry instance;
+        return instance;
     }
 
     void Register(std::type_index type, ModuleCreator creator);
 
     ModuleCreator Get(std::type_index type) const;
 
-    bool Has(std::type_index type) const { return registry_.contains(type); }
+    bool Has(std::type_index type) const;
 
-    std::unordered_set<std::type_index> RegisteredTypes() const {
-        std::unordered_set<std::type_index> types;
-        for (const auto &[type, _] : registry_) { types.insert(type); }
-        return types;
-    }
+    std::unordered_set<std::type_index> RegisteredTypes() const;
 
 private:
     std::unordered_map<std::type_index, ModuleCreator> registry_;
 };
 
 // Register a module type with automatic creator inference
-#define REGISTER_MODULE(ModuleClass)                                                                                   \
+#define INFINI_TRAIN_REGISTER_MODULE(ModuleClass)                                                                      \
     namespace {                                                                                                        \
     struct ModuleClass##Registry {                                                                                     \
         ModuleClass##Registry() {                                                                                      \
@@ -84,7 +71,7 @@ private:
     }
 
 // Register a module type with custom creator function
-#define REGISTER_MODULE_CUSTOM(ModuleClass, CreatorFunc)                                                               \
+#define INFINI_TRAIN_REGISTER_MODULE_CUSTOM(ModuleClass, CreatorFunc)                                                  \
     namespace {                                                                                                        \
     struct ModuleClass##Registry {                                                                                     \
         ModuleClass##Registry() { ModuleRegistry::Instance().Register(typeid(ModuleClass), CreatorFunc); }             \
@@ -93,7 +80,7 @@ private:
     }
 
 // Get a required parameter from ModuleSpec
-template <typename T> inline T GetRequiredParam(const ModuleSpec &spec, const std::string &key) {
+template <typename T> T GetRequiredParam(const ModuleSpec &spec, const std::string &key) {
     CHECK(spec.params_.contains(key)) << "Missing required parameter: " << key;
 
     const T *value = std::any_cast<T>(&spec.params_.at(key));
@@ -102,15 +89,5 @@ template <typename T> inline T GetRequiredParam(const ModuleSpec &spec, const st
     return *value;
 }
 
-// Get an optional parameter from ModuleSpec with default value
-template <typename T> inline T GetOptionalParam(const ModuleSpec &spec, const std::string &key, T default_value) {
-    if (!spec.params_.contains(key)) {
-        return default_value;
-    }
-
-    const T *value = std::any_cast<T>(&spec.params_.at(key));
-    return value ? *value : default_value;
-}
-
-std::shared_ptr<Module> build_module(const TransformerConfig &config, const ModuleSpec &spec);
+std::shared_ptr<Module> BuildModule(const TransformerConfig &config, const ModuleSpec &spec);
 } // namespace infini_train::nn

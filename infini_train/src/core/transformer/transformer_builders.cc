@@ -6,10 +6,13 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/core/transformer/spec_utils.h"
-#include "infini_train/include/core/transformer/transformer_block.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
+#include "infini_train/include/nn/modules/activations.h"
+#include "infini_train/include/nn/modules/causal_self_attention.h"
+#include "infini_train/include/nn/modules/mlp.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
+#include "infini_train/include/nn/modules/transformer.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 
 namespace infini_train::nn {
@@ -19,11 +22,13 @@ ModuleSpec BuildNormSpec(const TransformerConfig &config) {
     switch (config.norm_type) {
     case NormType::kLayerNorm:
         spec = ModuleSpec(typeid(LayerNorm));
-        spec.with_param(kNormalizedShape, std::vector<int64_t>{config.n_embd});
+        spec.WithParam(kDim, static_cast<int>(config.n_embd))
+            .WithParam(kEps, config.norm_eps)
+            .WithParam(kNormalizedShape, std::vector<int64_t>{config.n_embd});
         break;
     case NormType::kRMSNorm:
         spec = ModuleSpec(typeid(RMSNorm));
-        spec.with_param(kDim, static_cast<int>(config.n_embd)).with_param(kEps, config.norm_eps);
+        spec.WithParam(kDim, static_cast<int>(config.n_embd)).WithParam(kEps, config.norm_eps);
         break;
     default:
         LOG(FATAL) << "Unsupported norm type";
@@ -48,17 +53,17 @@ ModuleSpec BuildAttentionSpec(const TransformerConfig &config) {
 
     // Build c_attn (QKV projection)
     ModuleSpec c_attn_spec(typeid(parallel::ColumnParallelLinear));
-    c_attn_spec.with_param(kInFeatures, static_cast<int>(config.n_embd))
-        .with_param(kOutFeatures, static_cast<int>(qkv_out))
-        .with_param(kBias, config.use_bias);
-    spec.with_submodule(CausalSelfAttention::kCAttnLayerName, c_attn_spec);
+    c_attn_spec.WithParam(kInFeatures, static_cast<int>(config.n_embd))
+        .WithParam(kOutFeatures, static_cast<int>(qkv_out))
+        .WithParam(kBias, config.use_bias);
+    spec.WithSubmodule(CausalSelfAttention::kCAttnLayerName, c_attn_spec);
 
     // Build c_proj (output projection)
     ModuleSpec c_proj_spec(typeid(parallel::RowParallelLinear));
-    c_proj_spec.with_param(kInFeatures, static_cast<int>(config.n_embd))
-        .with_param(kOutFeatures, static_cast<int>(config.n_embd))
-        .with_param(kBias, config.use_bias);
-    spec.with_submodule(CausalSelfAttention::kCProjLayerName, c_proj_spec);
+    c_proj_spec.WithParam(kInFeatures, static_cast<int>(config.n_embd))
+        .WithParam(kOutFeatures, static_cast<int>(config.n_embd))
+        .WithParam(kBias, config.use_bias);
+    spec.WithSubmodule(CausalSelfAttention::kCProjLayerName, c_proj_spec);
 
     return spec;
 }
@@ -87,26 +92,26 @@ ModuleSpec BuildMLPSpec(const TransformerConfig &config) {
 
     // Build c_fc (input projection)
     ModuleSpec c_fc_spec(typeid(parallel::ColumnParallelLinear));
-    c_fc_spec.with_param(kInFeatures, static_cast<int>(config.n_embd))
-        .with_param(kOutFeatures, static_cast<int>(ffn_hidden))
-        .with_param(kBias, config.use_bias);
-    spec.with_submodule(MLP::kCFcLayerName, c_fc_spec);
+    c_fc_spec.WithParam(kInFeatures, static_cast<int>(config.n_embd))
+        .WithParam(kOutFeatures, static_cast<int>(ffn_hidden))
+        .WithParam(kBias, config.use_bias);
+    spec.WithSubmodule(MLP::kCFcLayerName, c_fc_spec);
 
     // Build activation based on config
     switch (config.activation_type) {
     case MLPType::kGELU: {
-        spec.with_submodule(MLP::kGeluLayerName, ModuleSpec(typeid(NewGELU)));
+        spec.WithSubmodule(MLP::kGeluLayerName, ModuleSpec(typeid(NewGELU)));
         break;
     }
     case MLPType::kSwiGLU: {
         // Add second projection for SwiGLU
         ModuleSpec c_fc2_spec(typeid(parallel::ColumnParallelLinear));
-        c_fc2_spec.with_param(kInFeatures, static_cast<int>(config.n_embd))
-            .with_param(kOutFeatures, static_cast<int>(ffn_hidden))
-            .with_param(kBias, config.use_bias);
-        spec.with_submodule(MLP::kCFc2LayerName, c_fc2_spec);
+        c_fc2_spec.WithParam(kInFeatures, static_cast<int>(config.n_embd))
+            .WithParam(kOutFeatures, static_cast<int>(ffn_hidden))
+            .WithParam(kBias, config.use_bias);
+        spec.WithSubmodule(MLP::kCFc2LayerName, c_fc2_spec);
 
-        spec.with_submodule(MLP::kSiluLayerName, ModuleSpec(typeid(SwiGLU)));
+        spec.WithSubmodule(MLP::kSiluLayerName, ModuleSpec(typeid(SwiGLU)));
         break;
     }
     default:
@@ -115,51 +120,51 @@ ModuleSpec BuildMLPSpec(const TransformerConfig &config) {
 
     // Build c_proj (output projection)
     ModuleSpec c_proj_spec(typeid(parallel::RowParallelLinear));
-    c_proj_spec.with_param(kInFeatures, static_cast<int>(ffn_hidden))
-        .with_param(kOutFeatures, static_cast<int>(config.n_embd))
-        .with_param(kBias, config.use_bias);
-    spec.with_submodule(MLP::kCProjLayerName, c_proj_spec);
+    c_proj_spec.WithParam(kInFeatures, static_cast<int>(ffn_hidden))
+        .WithParam(kOutFeatures, static_cast<int>(config.n_embd))
+        .WithParam(kBias, config.use_bias);
+    spec.WithSubmodule(MLP::kCProjLayerName, c_proj_spec);
 
     return spec;
 }
 
-ModuleSpec BuildTransformerBlockSpec(const TransformerConfig &config) {
-    ModuleSpec spec(typeid(TransformerBlock));
+ModuleSpec BuildTransformerLayerSpec(const TransformerConfig &config) {
+    ModuleSpec spec(typeid(TransformerLayer));
 
     // LayerNorm 1 (before attention)
-    spec.with_submodule(TransformerBlock::kLn1LayerName, BuildNormSpec(config));
+    spec.WithSubmodule(TransformerLayer::kLn1LayerName, BuildNormSpec(config));
 
     // CausalSelfAttention
-    spec.with_submodule(TransformerBlock::kAttnLayerName, BuildAttentionSpec(config));
+    spec.WithSubmodule(TransformerLayer::kAttnLayerName, BuildAttentionSpec(config));
 
     // LayerNorm 2 (before MLP)
-    spec.with_submodule(TransformerBlock::kLn2LayerName, BuildNormSpec(config));
+    spec.WithSubmodule(TransformerLayer::kLn2LayerName, BuildNormSpec(config));
 
     // MLP
-    spec.with_submodule(TransformerBlock::kMlpLayerName, BuildMLPSpec(config));
+    spec.WithSubmodule(TransformerLayer::kMlpLayerName, BuildMLPSpec(config));
 
     return spec;
 }
 
 ModuleSpec BuildVocabEmbeddingSpec(const TransformerConfig &config) {
     ModuleSpec spec(typeid(parallel::VocabParallelEmbedding));
-    spec.with_param(kNumEmbeddings, static_cast<int>(config.vocab_size))
-        .with_param(kEmbeddingDim, static_cast<int>(config.n_embd));
+    spec.WithParam(kNumEmbeddings, static_cast<int>(config.vocab_size))
+        .WithParam(kEmbeddingDim, static_cast<int>(config.n_embd));
     return spec;
 }
 
 ModuleSpec BuildPositionEmbeddingSpec(int64_t num_embeddings, int64_t embedding_dim) {
     ModuleSpec spec(typeid(Embedding));
-    spec.with_param(kNumEmbeddings, static_cast<int>(num_embeddings))
-        .with_param(kEmbeddingDim, static_cast<int>(embedding_dim));
+    spec.WithParam(kNumEmbeddings, static_cast<int>(num_embeddings))
+        .WithParam(kEmbeddingDim, static_cast<int>(embedding_dim));
     return spec;
 }
 
 ModuleSpec BuildOutputProjSpec(const TransformerConfig &config, int64_t output_size, bool use_bias) {
     ModuleSpec spec(typeid(parallel::ColumnParallelLinear));
-    spec.with_param(kInFeatures, static_cast<int>(config.n_embd))
-        .with_param(kOutFeatures, static_cast<int>(output_size))
-        .with_param(kBias, use_bias);
+    spec.WithParam(kInFeatures, static_cast<int>(config.n_embd))
+        .WithParam(kOutFeatures, static_cast<int>(output_size))
+        .WithParam(kBias, use_bias);
     return spec;
 }
 
