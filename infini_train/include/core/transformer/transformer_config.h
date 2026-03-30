@@ -40,7 +40,6 @@ struct TransformerConfig {
 
     bool use_bias = true;    // Linear layers bias (GPT2: true, LLaMA3: false)
     bool use_gqa = false;    // Grouped Query Attention
-    bool use_rope = false;   // Rotary Position Embedding
     bool tie_weights = true; // Tie embedding and lm_head weights
 
     // FFN config
@@ -74,7 +73,6 @@ struct TransformerConfig {
                 .norm_type = NormType::kLayerNorm,
                 .use_bias = true,
                 .use_gqa = false,
-                .use_rope = false,
                 .tie_weights = true,
                 .ffn_expansion_ratio = 4.0f,
                 .ffn_dim_multiplier = std::nullopt,
@@ -94,7 +92,6 @@ struct TransformerConfig {
                 .norm_type = NormType::kRMSNorm,
                 .use_bias = false,
                 .use_gqa = true,
-                .use_rope = true,
                 .tie_weights = false,
                 .ffn_expansion_ratio = 4.0f,
                 .ffn_dim_multiplier = 1.5f,

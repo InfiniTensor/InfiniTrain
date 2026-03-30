@@ -16,4 +16,20 @@ public:
     Sigmoid() : CloneableModule(kType) {}
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 };
+
+class NewGELU : public CloneableModule<NewGELU> {
+public:
+    static constexpr char kType[] = "NewGELU";
+    NewGELU() : CloneableModule(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &x) override;
+};
+
+class SwiGLU : public CloneableModule<SwiGLU> {
+public:
+    static constexpr char kType[] = "SwiGLU";
+    SwiGLU() : CloneableModule(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &x) override;
+};
 } // namespace infini_train::nn

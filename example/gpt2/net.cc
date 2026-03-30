@@ -12,10 +12,12 @@
 
 #include "example/common/utils.h"
 #include "infini_train/include/core/models/decode_only_transformer/model.h"
-#include "infini_train/include/core/transformer/transformer_block.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
+#include "infini_train/include/nn/modules/causal_self_attention.h"
+#include "infini_train/include/nn/modules/mlp.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
+#include "infini_train/include/nn/modules/transformer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
@@ -133,7 +135,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     // local: (vocab_size_per_partition, n_embd)
     if (is_first_stage) {
         auto &transformer_wte_weight
-            = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, nn::TransformerFirstStage::kWTELayerName,
+            = state_dict[std::format("{}.{}.{}", GPT2::kTransformerModelName, nn::TransformerFirstStage::kWTELayerName,
                                      nn::parallel::VocabParallelEmbedding::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(transformer_wte_weight->DataPtr()), model_vocab_size, n_embd,
                                 v_start, vpp);
@@ -155,7 +157,7 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     if (is_first_stage) {
         // transformer.wpe.weight
         auto &transformer_wpe_weight
-            = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, nn::TransformerFirstStage::kWPELayerName,
+            = state_dict[std::format("{}.{}.{}", GPT2::kTransformerModelName, nn::TransformerFirstStage::kWPELayerName,
                                      nn::Embedding::kParamWeightName)];
         ReadMatrixAllFloat(ifs, static_cast<float *>(transformer_wpe_weight->DataPtr()), block_size, n_embd);
     } else {
@@ -168,9 +170,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor
-                = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName,
+                = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerModelName,
                                          nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                         nn::TransformerBlock::kLn1LayerName, nn::LayerNorm::kParamWeightName)];
+                                         nn::TransformerLayer::kLn1LayerName, nn::LayerNorm::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
             ++local_layer_index;
         } else {
@@ -183,9 +185,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                                  nn::TransformerBlock::kLn1LayerName, nn::LayerNorm::kParamBiasName)];
+                                                  nn::TransformerLayer::kLn1LayerName, nn::LayerNorm::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
             ++local_layer_index;
         } else {
@@ -199,8 +201,8 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, nn::TransformerChunk::kHLayerName,
-                std::to_string(local_layer_index), nn::TransformerBlock::kAttnLayerName,
+                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerModelName, nn::TransformerChunk::kHLayerName,
+                std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
                 nn::CausalSelfAttention::kCAttnLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
             // NOTE(zbl): In the .bin model file, Q/K/V is concated along last dim,
             //            i.e. [Q|K|V].T = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn].T
@@ -242,8 +244,8 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, nn::TransformerChunk::kHLayerName,
-                std::to_string(local_layer_index), nn::TransformerBlock::kAttnLayerName,
+                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerModelName, nn::TransformerChunk::kHLayerName,
+                std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
                 nn::CausalSelfAttention::kCAttnLayerName, nn::parallel::ColumnParallelLinear::kParamBiasName)];
             // NOTE(zbl): Same as c_attn.weight, the bias for Q/K/V is concated
             //            i.e. [Q|K|V] = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn]
@@ -284,8 +286,8 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, nn::TransformerChunk::kHLayerName,
-                std::to_string(local_layer_index), nn::TransformerBlock::kAttnLayerName,
+                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerModelName, nn::TransformerChunk::kHLayerName,
+                std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
                 nn::CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];
             ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, n_embd, tp_rank * in_pp,
                                     in_pp);
@@ -301,8 +303,8 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName, nn::TransformerChunk::kHLayerName,
-                std::to_string(local_layer_index), nn::TransformerBlock::kAttnLayerName,
+                "{}.{}.{}.{}.{}.{}", GPT2::kTransformerModelName, nn::TransformerChunk::kHLayerName,
+                std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
                 nn::CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
             ++local_layer_index;
@@ -317,9 +319,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor
-                = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName,
+                = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerModelName,
                                          nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                         nn::TransformerBlock::kLn2LayerName, nn::LayerNorm::kParamWeightName)];
+                                         nn::TransformerLayer::kLn2LayerName, nn::LayerNorm::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
             ++local_layer_index;
         } else {
@@ -332,9 +334,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", GPT2::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                                  nn::TransformerBlock::kLn2LayerName, nn::LayerNorm::kParamBiasName)];
+                                                  nn::TransformerLayer::kLn2LayerName, nn::LayerNorm::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
             ++local_layer_index;
         } else {
@@ -347,9 +349,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                                  nn::TransformerBlock::kMlpLayerName, nn::MLP::kCFcLayerName,
+                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, n_embd, fc_start, fc_pp);
             ++local_layer_index;
@@ -363,9 +365,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                                  nn::TransformerBlock::kMlpLayerName, nn::MLP::kCFcLayerName,
+                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamBiasName)];
             ReadVectorShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, fc_start, fc_pp);
             ++local_layer_index;
@@ -379,9 +381,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                                  nn::TransformerBlock::kMlpLayerName, nn::MLP::kCProjLayerName,
+                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCProjLayerName,
                                                   nn::parallel::RowParallelLinear::kParamWeightName)];
             ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, fc_out, tp_rank * in4_pp,
                                     in4_pp);
@@ -396,9 +398,9 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerLayerName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", GPT2::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                                  nn::TransformerBlock::kMlpLayerName, nn::MLP::kCProjLayerName,
+                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCProjLayerName,
                                                   nn::parallel::RowParallelLinear::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
             ++local_layer_index;
@@ -411,12 +413,12 @@ std::shared_ptr<GPT2> GPT2::FromLLMC(const std::string &filepath) {
     if (is_last_stage) {
         // transformer.ln_f.weight
         auto &transformer_ln_f_weight
-            = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, nn::TransformerLastStage::kLnFLayerName,
+            = state_dict[std::format("{}.{}.{}", GPT2::kTransformerModelName, nn::TransformerLastStage::kLnFLayerName,
                                      nn::LayerNorm::kParamWeightName)];
         ReadVectorAllFloat(ifs, static_cast<float *>(transformer_ln_f_weight->DataPtr()), n_embd);
         // transformer.ln_f.bias
         auto &transformer_ln_f_bias
-            = state_dict[std::format("{}.{}.{}", GPT2::kTransformerLayerName, nn::TransformerLastStage::kLnFLayerName,
+            = state_dict[std::format("{}.{}.{}", GPT2::kTransformerModelName, nn::TransformerLastStage::kLnFLayerName,
                                      nn::LayerNorm::kParamBiasName)];
         ReadVectorAllFloat(ifs, static_cast<float *>(transformer_ln_f_bias->DataPtr()), n_embd);
     } else {

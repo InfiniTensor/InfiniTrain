@@ -1,8 +1,8 @@
 #pragma once
 
 #include "infini_train/include/core/transformer/spec_utils.h"
-#include "infini_train/include/core/transformer/transformer_block.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/modules/transformer.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 
 namespace infini_train::nn {
@@ -61,21 +61,20 @@ private:
     ModuleSpec spec_;
 };
 
-class TransformerLayer : public infini_train::nn::CloneableModule<TransformerLayer> {
+class TransformerModel : public infini_train::nn::CloneableModule<TransformerModel> {
 public:
     static constexpr char kType[] = "Transformer";
-    static constexpr char kTransformerLayerName[] = "transformer";
+    static constexpr char kTransformerModelName[] = "transformer";
 
-    explicit TransformerLayer(const TransformerConfig config, const ModuleSpec &spec = {});
+    explicit TransformerModel(const TransformerConfig config, const ModuleSpec &spec = {});
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    const TransformerConfig &GetConfig() const { return config_; }
-
-    const TransformerConfig config_;
+    const TransformerConfig &Config() const { return config_; }
 
 private:
+    const TransformerConfig config_;
     const infini_train::nn::parallel::StageInfo stage_info_;
     ModuleSpec spec_;
 };

@@ -1,4 +1,4 @@
-#include "infini_train/include/core/transformer/transformer_layer.h"
+#include "infini_train/include/core/transformer/transformer_model.h"
 
 #include <cmath>
 #include <map>
@@ -8,13 +8,13 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/core/transformer/spec_utils.h"
-#include "infini_train/include/core/transformer/transformer_block.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
+#include "infini_train/include/nn/modules/transformer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
@@ -28,12 +28,12 @@ namespace infini_train::nn {
 TransformerFirstStage::TransformerFirstStage(const TransformerConfig &config, const ModuleSpec &spec)
     : CloneableModule(kType), config_(config), spec_(spec) {
     // Build token embedding (required for all models)
-    modules_[kWTELayerName] = build_module(config, spec.submodules_.at(kWTELayerName));
+    modules_[kWTELayerName] = BuildModule(config, spec.submodules_.at(kWTELayerName));
 
     // Build position embedding only for models that use absolute position encoding
     // LLaMA3 use RoPE, so they don't need position embedding
-    if (config_.attention_type == AttentionType::kStandard) {
-        modules_[kWPELayerName] = build_module(config, spec.submodules_.at(kWPELayerName));
+    if (spec.submodules_.contains(kWPELayerName)) {
+        modules_[kWPELayerName] = BuildModule(config, spec.submodules_.at(kWPELayerName));
     }
 }
 
@@ -48,7 +48,7 @@ std::vector<std::shared_ptr<Tensor>> TransformerFirstStage::Forward(const std::v
     auto tok_emb = (*modules_[kWTELayerName])({x1});
 
     // Add position embedding only for models that use absolute position encoding
-    if (config_.attention_type == AttentionType::kStandard) {
+    if (modules_.contains(kWPELayerName)) {
         // (T_local)
         // NOTE(zbl): Slice pos sequence when SP is enabled
         auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
@@ -79,7 +79,7 @@ TransformerChunk::TransformerChunk(const TransformerConfig &config, int start_la
     : CloneableModule(kType), config_(config), spec_(spec) {
     std::vector<std::shared_ptr<nn::Module>> h;
     for (int64_t i = start_layer; i < end_layer; ++i) {
-        auto layer = std::make_shared<TransformerBlock>(config, spec);
+        auto layer = std::make_shared<TransformerLayer>(config, spec);
         h.push_back(layer);
     }
     modules_[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
@@ -153,8 +153,8 @@ TransformerLastStage::TransformerLastStage(const TransformerConfig &config, cons
     CHECK(spec.submodules_.contains(kLnFLayerName)) << "TransformerLastStage spec missing submodule: " << kLnFLayerName;
     CHECK(spec.submodules_.contains(kLMHeadLayerName))
         << "TransformerLastStage spec missing submodule: " << kLMHeadLayerName;
-    modules_[kLnFLayerName] = build_module(config, spec.submodules_.at(kLnFLayerName));
-    modules_[kLMHeadLayerName] = build_module(config, spec.submodules_.at(kLMHeadLayerName));
+    modules_[kLnFLayerName] = BuildModule(config, spec.submodules_.at(kLnFLayerName));
+    modules_[kLMHeadLayerName] = BuildModule(config, spec.submodules_.at(kLMHeadLayerName));
 }
 
 std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
@@ -166,7 +166,7 @@ std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(const std::ve
     return (*modules_[kLMHeadLayerName])(x1);
 }
 
-TransformerLayer::TransformerLayer(const TransformerConfig config, const ModuleSpec &spec
+TransformerModel::TransformerModel(const TransformerConfig config, const ModuleSpec &spec
                                    /*, const std::unordered_map<std::string, std::any> &params*/)
     : CloneableModule(kType), config_(config), spec_(spec),
       stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
@@ -197,7 +197,7 @@ TransformerLayer::TransformerLayer(const TransformerConfig config, const ModuleS
         for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
             const auto [start_layer, end_layer] = stage_info_.layer_ranges_per_chunk[chunk_idx];
             auto chunk = std::make_shared<TransformerChunk>(config_, start_layer, end_layer,
-                                                            spec_.submodules_.at(TransformerBlock::kType));
+                                                            spec_.submodules_.at(TransformerLayer::kType));
             start_layer_to_layer_size_and_chunk[start_layer] = std::make_pair(end_layer - start_layer, chunk);
         }
         std::vector<std::shared_ptr<nn::Module>> h;
@@ -221,7 +221,7 @@ TransformerLayer::TransformerLayer(const TransformerConfig config, const ModuleS
         modules_[TransformerLastStage::kLMHeadLayerName]
             = modules_[kPPLastStageName]->mutable_module(TransformerLastStage::kLMHeadLayerName);
     }
-    modules_[kTransformerLayerName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
+    modules_[kTransformerModelName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
 
     // FIXME(jym): Assigning the parameter values of wte to LMHead, which is not real tying operation
     // TODO: Implement real GPT-2 weight tying: make lm_head.weight share the exact same Parameter/Tensor (same
@@ -231,7 +231,7 @@ TransformerLayer::TransformerLayer(const TransformerConfig config, const ModuleS
     // matches PyTorch/PEFT.
     if (config_.tie_weights && nn::parallel::global::GetPipelineParallelSize() == 1) {
         // https://paperswithcode.com/method/weight-tying
-        *mutable_module(kTransformerLayerName)
+        *mutable_module(kTransformerModelName)
              ->mutable_module(TransformerFirstStage::kWTELayerName)
              ->mutable_parameter(nn::parallel::VocabParallelEmbedding::kParamWeightName)
             = module(TransformerLastStage::kLMHeadLayerName)
@@ -239,7 +239,7 @@ TransformerLayer::TransformerLayer(const TransformerConfig config, const ModuleS
     }
 }
 
-std::vector<std::shared_ptr<Tensor>> TransformerLayer::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
+std::vector<std::shared_ptr<Tensor>> TransformerModel::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     auto x1 = (*modules_[kPPFirstStageName])(x);
     for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
         x1 = (*modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)])(x1);
