@@ -19,38 +19,37 @@
 
 namespace infini_train::nn {
 TransformerLayer::TransformerLayer(const nn::TransformerConfig &config, const ModuleSpec &spec)
-    : CloneableModule(kType), attention_type_(config.attention_type) {
+    : CloneableModule(kType) {
     modules_[kLn1LayerName] = BuildModule(config, spec.submodules_.at(kLn1LayerName));
     modules_[kAttnLayerName] = BuildModule(config, spec.submodules_.at(kAttnLayerName));
     modules_[kLn2LayerName] = BuildModule(config, spec.submodules_.at(kLn2LayerName));
     modules_[kMlpLayerName] = BuildModule(config, spec.submodules_.at(kMlpLayerName));
 }
 
-std::vector<std::shared_ptr<infini_train::Tensor>>
-TransformerLayer::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
+std::vector<std::shared_ptr<Tensor>> TransformerLayer::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd)
     auto ln1_out = (*modules_[kLn1LayerName])({x[0]})[0];
 
-    std::shared_ptr<infini_train::Tensor> x1;
-    // Build attention input
-    if (attention_type_ == AttentionType::kRoPE) {
-        // LLaMA3: {ln1_out, freqs_cis, start_pos, mask}
-        const auto freqs_cis = x.size() > 1 ? x[1] : nullptr;
-        const auto start_pos = x.size() > 2 ? x[2] : nullptr;
-        const auto mask = x.size() > 3 ? x[3] : nullptr;
-        auto attn_out = (*modules_[kAttnLayerName])({ln1_out, freqs_cis, start_pos, mask})[0];
-        x1 = x[0] + attn_out;
-    } else {
-        // GPT2: {ln1_out}
-        auto attn_out = (*modules_[kAttnLayerName])({ln1_out})[0];
-        x1 = x[0] + attn_out;
+    std::vector<std::shared_ptr<Tensor>> attn_input = {ln1_out};
+    if (x.size() > 1) {
+        attn_input.push_back(x[1]); // freqs_cis
+    }
+    if (x.size() > 2) {
+        attn_input.push_back(x[2]); // start_pos
+    }
+    if (x.size() > 3) {
+        attn_input.push_back(x[3]); // mask
     }
 
-    // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd) -> MLP -> (bs, seq_len, n_embd)
-    // -> Add -> (bs, seq_len, n_embd)
+    auto attn_out = (*modules_[kAttnLayerName])(attn_input)[0];
+    auto x1 = x[0] + attn_out;
+
+    // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd) -> MLP -> (bs, seq_len, n_embd) -> Add -> (bs,
+    // seq_len, n_embd)
     auto x2 = x1 + (*modules_[kMlpLayerName])((*modules_[kLn2LayerName])({x1}))[0];
 
     // (bs, seq_len, n_embd)
     return {x2};
 }
+
 } // namespace infini_train::nn

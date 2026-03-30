@@ -19,9 +19,6 @@ public:
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
-
-private:
-    AttentionType attention_type_ = AttentionType::kStandard;
 };
 
 } // namespace infini_train::nn

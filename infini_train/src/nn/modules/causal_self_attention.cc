@@ -52,7 +52,7 @@ void CausalSelfAttention::SetupAttention(const TransformerConfig &config) {
     local_n_head_ = n_head_ / tp_world_size;
 
     // For GQA, set n_kv_head and n_rep
-    if (config.use_gqa && config.n_kv_head < config.n_head) {
+    if (config.UseGQA()) {
         CHECK_EQ(config.n_head % config.n_kv_head, 0) << "n_head must be divisible by n_kv_head for GQA";
         CHECK_EQ(config.n_kv_head % tp_world_size, 0) << "n_kv_head must be divisible by TP world size for GQA";
 

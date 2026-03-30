@@ -39,7 +39,6 @@ struct TransformerConfig {
     NormType norm_type = NormType::kLayerNorm;               // Normalization type
 
     bool use_bias = true;    // Linear layers bias (GPT2: true, LLaMA3: false)
-    bool use_gqa = false;    // Grouped Query Attention
     bool tie_weights = true; // Tie embedding and lm_head weights
 
     // FFN config
@@ -59,6 +58,8 @@ struct TransformerConfig {
     bool flash = false;             // flash attention
     int64_t max_gen_batch_size = 4; // max batch size during inference
 
+    bool UseGQA() const { return n_kv_head < n_head; }
+
     static TransformerConfig GPT2() {
         return {.model_type = kGPT2Name,
                 .block_size = 1024,
@@ -72,7 +73,6 @@ struct TransformerConfig {
                 .activation_type = MLPType::kGELU,
                 .norm_type = NormType::kLayerNorm,
                 .use_bias = true,
-                .use_gqa = false,
                 .tie_weights = true,
                 .ffn_expansion_ratio = 4.0f,
                 .ffn_dim_multiplier = std::nullopt,
@@ -91,7 +91,6 @@ struct TransformerConfig {
                 .activation_type = MLPType::kSwiGLU,
                 .norm_type = NormType::kRMSNorm,
                 .use_bias = false,
-                .use_gqa = true,
                 .tie_weights = false,
                 .ffn_expansion_ratio = 4.0f,
                 .ffn_dim_multiplier = 1.5f,
