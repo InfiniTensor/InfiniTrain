@@ -26,9 +26,11 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
     core::DeviceGuard guard(device);
 
     if (grad_output) {
-        // Cast grad to match parameter dtype (e.g. bf16 grad -> fp32 param under autocast)
         if (grad_output->Dtype() != tensor_->Dtype()) {
-            grad_output = std::make_shared<Tensor>(grad_output->To(tensor_->Dtype()));
+            LOG(WARNING) << "AccumulateGrad: grad dtype (" << kDataTypeToDesc.at(grad_output->Dtype())
+                         << ") does not match parameter dtype (" << kDataTypeToDesc.at(tensor_->Dtype())
+                         << "). This indicates a dtype mismatch in the autograd graph (e.g. autocast "
+                            "running before autograd). The grad is not cast and will be used as-is.";
         }
 
         if (grad) {

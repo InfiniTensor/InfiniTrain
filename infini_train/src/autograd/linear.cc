@@ -22,6 +22,14 @@ void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
     const auto &weight = input_tensors[1];
     // Cast saved tensors to forward compute dtype (output dtype) so backward
     // computes in the same precision as forward, matching PyTorch's behavior.
+
+    // FIXME: An extra cast (input/weight -> compute_dtype) is performed here because
+    // autocast runs before autograd. The correct approach is to adjust the ordering or
+    // integration of autocast and autograd so that autograd receives already-cast tensors,
+    // avoiding the redundant cast.
+
+    // FIXME: compute_dtype is not necessarily the dtype of output_tensor; it should be
+    // determined by autocast, not derived from output_tensors[0]->Dtype().
     auto compute_dtype = output_tensors[0]->Dtype();
     saved_tensors_ = {
         input->Dtype() == compute_dtype ? input : std::make_shared<Tensor>(input->To(compute_dtype)),

@@ -22,6 +22,14 @@ void Matmul::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
     const auto &output = output_tensors[0];
     // Cast saved tensors to forward compute dtype (output dtype) so backward
     // computes in the same precision as forward, matching PyTorch's behavior.
+
+    // FIXME: An extra cast (input1/input2 -> compute_dtype) is performed here because
+    // autocast runs before autograd. The correct approach is to adjust the ordering or
+    // integration of autocast and autograd so that autograd receives already-cast tensors,
+    // avoiding the redundant cast.
+
+    // FIXME: compute_dtype is not necessarily the dtype of output_tensor; it should be
+    // determined by autocast, not derived from output->Dtype().
     auto compute_dtype = output->Dtype();
     saved_tensors_ = {
         input1->Dtype() == compute_dtype ? input1 : std::make_shared<Tensor>(input1->To(compute_dtype)),
