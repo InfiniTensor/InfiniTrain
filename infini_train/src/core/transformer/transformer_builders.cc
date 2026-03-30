@@ -41,7 +41,7 @@ ModuleSpec BuildAttentionSpec(const TransformerConfig &config) {
 
     // Calculate QKV output dimension based on attention type and GQA
     int64_t qkv_out;
-    if (config.use_gqa && config.n_kv_head < config.n_head) {
+    if (config.UseGQA()) {
         // GQA style (LLaMA3 with GQA enabled)
         int64_t head_dim = config.n_embd / config.n_head;
         // qkv_out = config.n_embd + 2 * config.n_kv_head * head_dim;
