@@ -22,6 +22,8 @@ public:
     Linear(int64_t in_features, int64_t out_features, bool bias = true, Device device = Device());
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
+    bool has_bias() const { return bias_; }
+
 private:
     void ResetParameters();
     bool bias_ = true;
