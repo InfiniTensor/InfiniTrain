@@ -12,14 +12,6 @@ class Tensor;
 
 namespace infini_train::autograd {
 
-struct LinearMeta {
-    bool transpose = false;
-    bool has_bias = false;
-    int64_t in_features = 0;
-    int64_t out_features = 0;
-    std::vector<int64_t> input_dims;
-};
-
 struct LinearGradFlags {
     bool input = false;
     bool weight = false;
@@ -38,6 +30,10 @@ public:
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
 private:
-    LinearMeta meta_;
+    bool transpose_ = false;
+    bool bias_ = false;
+    int64_t in_features_ = 0;
+    int64_t out_features_ = 0;
+    std::vector<int64_t> input_dims_;
 };
 } // namespace infini_train::autograd
