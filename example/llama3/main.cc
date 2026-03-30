@@ -62,6 +62,8 @@ DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 // memory management
 DEFINE_string(device, "cuda", "device type (cpu/cuda), useless if using parallel training mode");
+// flash attention
+DEFINE_bool(flash, false, "Whether to enable FlashAttention");
 // parallel
 DEFINE_int32(
     nthread_per_process, 1,
@@ -168,9 +170,10 @@ void Train(const nn::parallel::Rank &rank) {
     // ManualSeed(42);
 
     LLaMA3Config model_config = LLaMA3Config();
+    model_config.use_flash_attention = FLAGS_flash;
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
+        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath, FLAGS_flash);
     } else {
         model = std::make_shared<LLaMA3>(model_config);
     }

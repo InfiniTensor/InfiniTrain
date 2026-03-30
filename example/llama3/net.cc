@@ -207,34 +207,69 @@ std::vector<std::shared_ptr<Tensor>> CausalSelfAttention::Forward(const std::vec
     // TODO(zbl): use kv cache during inference
     // if (use_kv_) { ... }
 
-    // align n_head in GQA
-    // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
-    k = RepeatKV(k, n_rep_);
-    v = RepeatKV(v, n_rep_);
-
     // (B, T, H_local, D) -> (B, H_local, T, D)
     q = q->Transpose(1, 2);
-    k = k->Transpose(1, 2);
-    v = v->Transpose(1, 2);
 
     // TODO(zbl): support flash attention later
-    // if (flash_) { ... }
+    std::shared_ptr<Tensor> y;
 
-    // manual implementation of attention
-    // this materializes the large (T,T) matrix for all the queries and keys
-
-    // q: (B, H_local, T, D)
-    // k: (B, H_local, T, D) -> (B, H_local, D, T)
-    // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
-    if (mask) {
-        // mask: (1, 1, T, T)
-        att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+    auto q_flash_candidate = q;
+    auto k_flash_candidate = k;
+    auto v_flash_candidate = v;
+    if (config_.use_flash_attention && q->GetDevice().IsCUDA()) {
+        const DataType target_dtype = v->Dtype();
+        if (q_flash_candidate->Dtype() != target_dtype) {
+            q_flash_candidate = std::make_shared<Tensor>(q_flash_candidate->To(target_dtype));
+        }
+        if (k_flash_candidate->Dtype() != target_dtype) {
+            k_flash_candidate = std::make_shared<Tensor>(k_flash_candidate->To(target_dtype));
+        }
     }
-    // (B, H_local, T, T)
-    att = nn::function::Softmax(att, -1);
-    // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
-    auto y = att->Matmul(v);
+
+    const bool is_flash_dtype
+        = q_flash_candidate->Dtype() == DataType::kFLOAT32 || q_flash_candidate->Dtype() == DataType::kBFLOAT16;
+    const bool can_use_flash_kernel = config_.use_flash_attention && q_flash_candidate->GetDevice().IsCUDA()
+                                   && is_flash_dtype && k_flash_candidate->Dtype() == q_flash_candidate->Dtype()
+                                   && v_flash_candidate->Dtype() == q_flash_candidate->Dtype();
+
+    if (can_use_flash_kernel) {
+        // Flash path keeps native GQA shape (k/v on KV_local heads) to avoid RepeatKV expansion.
+        auto k_flash = k_flash_candidate->Transpose(1, 2);
+        auto v_flash = v_flash_candidate->Transpose(1, 2);
+
+        // Training mask in this model is standard causal Triu; prefer causal fast-path with null attn_mask.
+        const bool use_causal_fast_path = (mask != nullptr && start_pos == nullptr);
+        const auto &attn_mask = use_causal_fast_path ? nullptr : mask;
+        const bool is_causal = (mask == nullptr) || use_causal_fast_path;
+
+        y = nn::function::ScaledDotProductAttention(q_flash_candidate, k_flash, v_flash, attn_mask, 0.0, is_causal,
+                                                    std::nullopt, n_rep_ > 1);
+    } else {
+        // align n_head in GQA
+        // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
+        k = RepeatKV(k, n_rep_);
+        v = RepeatKV(v, n_rep_);
+
+        // (B, T, H_local, D) -> (B, H_local, T, D)
+        k = k->Transpose(1, 2);
+        v = v->Transpose(1, 2);
+
+        // manual implementation of attention
+        // this materializes the large (T,T) matrix for all the queries and keys
+
+        // q: (B, H_local, T, D)
+        // k: (B, H_local, T, D) -> (B, H_local, D, T)
+        // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
+        if (mask) {
+            // mask: (1, 1, T, T)
+            att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+        }
+        // (B, H_local, T, T)
+        att = nn::function::Softmax(att, -1);
+        // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
+        y = att->Matmul(v);
+    }
     // (B, H_local, T, D) -> Transpose(1, 2) -> (B, T, H_local, D) -> (B, T, C_local)
     y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
     // output projection
@@ -457,7 +492,7 @@ constexpr int32_t kLLaMA3Magic = 20240803;
 constexpr int32_t kLLaMA3FP32Version = 3;
 } // namespace
 
-std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
+std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath, bool use_flash_attention) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -491,6 +526,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
                                                         .n_head = n_head,
                                                         .n_kv_head = n_kv_head,
                                                         .n_embd = n_embd,
+                                                        .use_flash_attention = use_flash_attention,
                                                         .ffn_dim_multiplier = ffn_dim_multiplier,
                                                         .multiple_of = multiple_of,
                                                         .rope_theta = rope_theta,
