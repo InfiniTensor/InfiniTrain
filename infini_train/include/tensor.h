@@ -138,6 +138,10 @@ public:
 
     std::shared_ptr<Tensor> View(const std::vector<int64_t> &dims);
     std::shared_ptr<Tensor> Contiguous();
+    // FIXME: Currently returns true unconditionally. Requires stride tracking in the Tensor
+    // class before this can be implemented correctly. The guard in elementwise.cu ensures
+    // non-contiguous tensors fall back to the broadcast path until this is resolved.
+    bool IsContiguous() const;
     std::shared_ptr<Tensor> Flatten(int64_t start = 0, int64_t end = -1);
     std::shared_ptr<Tensor> Squeeze(int64_t dim);
     std::shared_ptr<Tensor> Unsqueeze(int64_t dim);

@@ -209,8 +209,11 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
         const auto &b_dims = input_b->Dims();
         const auto &out_dims = output->Dims();
 
-        // Fast path: no broadcast — skip cudaMalloc/Memcpy/CalcOffset
-        if (ShapesEqual(a_dims, out_dims) && ShapesEqual(b_dims, out_dims)) {
+        // Fast path: no broadcast, contiguous — skip cudaMalloc/Memcpy/CalcOffset.
+        // The IsContiguous() guards ensure non-contiguous tensors fall back to the broadcast
+        // path, keeping the fast path correct when non-contiguous support is added later.
+        if (ShapesEqual(a_dims, out_dims) && ShapesEqual(b_dims, out_dims) && input_a->IsContiguous()
+            && input_b->IsContiguous()) {
             const size_t num_elements = output->NumElements();
             const T *a_ptr = static_cast<const T *>(input_a->DataPtr());
             const T *b_ptr = static_cast<const T *>(input_b->DataPtr());
@@ -642,8 +645,10 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     const auto &out_dims = grad_output->Dims();
     const size_t num_elements = grad_output->NumElements();
 
-    // Fast path: no broadcast — skip cudaMalloc/Memcpy/CalcOffset
-    if (ShapesEqual(a_dims, b_dims) && ShapesEqual(a_dims, out_dims)) {
+    // Fast path: no broadcast, contiguous — skip cudaMalloc/Memcpy/CalcOffset.
+    // The IsContiguous() guard ensures non-contiguous grad_output falls back to the broadcast
+    // path, keeping the fast path correct when non-contiguous support is added later.
+    if (ShapesEqual(a_dims, b_dims) && ShapesEqual(a_dims, out_dims) && grad_output->IsContiguous()) {
         auto extract_ptrs = [](const auto &...ts) {
             return std::make_tuple(static_cast<const T *>(ts ? ts->DataPtr() : nullptr)...);
         };
