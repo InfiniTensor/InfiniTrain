@@ -324,14 +324,10 @@ __global__ void ReduceColumnsKernel(const T *__restrict__ input, T *__restrict__
 }
 
 std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
-LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
-               infini_train::autograd::LinearMeta meta, const std::shared_ptr<Tensor> &grad_output,
+LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight, bool transpose,
+               int64_t in_features, int64_t out_features, const std::vector<int64_t> &input_dims,
+               const std::shared_ptr<Tensor> &grad_output, bool bias,
                infini_train::autograd::LinearGradFlags grad_flags) {
-    const auto &input_dims = meta.input_dims;
-    const auto in_features = meta.in_features;
-    const auto out_features = meta.out_features;
-    const auto transpose = meta.transpose;
-    const auto bias = meta.has_bias;
     const auto compute_grad_input = grad_flags.input;
     const auto compute_grad_weight = grad_flags.weight;
     const auto compute_grad_bias = grad_flags.bias;
@@ -339,7 +335,7 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     CHECK_GE(input_dims.size(), 2);
     const int64_t bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
 
-    std::vector<int64_t> weight_dims
+    const std::vector<int64_t> weight_dims
         = transpose ? std::vector<int64_t>{out_features, in_features} : std::vector<int64_t>{in_features, out_features};
 
     auto dtype = grad_output->Dtype();
