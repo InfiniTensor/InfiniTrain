@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -10,6 +11,13 @@ class Tensor;
 }
 
 namespace infini_train::autograd {
+
+struct LinearGradFlags {
+    bool input = false;
+    bool weight = false;
+    bool bias = false;
+};
+
 class Linear : public Function {
 public:
     static constexpr char kType[] = "LinearFunction";
@@ -22,7 +30,10 @@ public:
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
 private:
+    bool transpose_ = false;
+    bool bias_ = false;
+    int64_t in_features_ = 0;
     int64_t out_features_ = 0;
-    bool bias_ = true;
+    std::vector<int64_t> input_dims_;
 };
 } // namespace infini_train::autograd

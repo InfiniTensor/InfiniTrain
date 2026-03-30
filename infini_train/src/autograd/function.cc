@@ -36,6 +36,16 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         }
     }
 
+    // Populate needs_input_grad_ before Forward/SetupContext so that
+    // SetupContext can use it for saved-tensor pruning.
+    // Must be done before NoGradGuard since it checks GradMode.
+    if (autograd::GradMode::IsEnabled()) {
+        needs_input_grad_.resize(input_tensors.size());
+        for (size_t idx = 0; idx < input_tensors.size(); ++idx) {
+            needs_input_grad_[idx] = input_tensors[idx]->requires_grad();
+        }
+    }
+
     std::vector<std::shared_ptr<Tensor>> output_tensors;
     {
         autograd::NoGradGuard no_grad;
@@ -129,6 +139,7 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
 
         saved_tensors_.clear();
         grad_outputs_.clear();
+        needs_input_grad_.clear();
         grad_outputs_reached_ = 0;
         dependencies_reached_ = 0;
 
