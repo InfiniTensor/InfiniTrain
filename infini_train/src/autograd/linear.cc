@@ -35,20 +35,17 @@ void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
         input->Dtype() == compute_dtype ? input : std::make_shared<Tensor>(input->To(compute_dtype)),
         weight->Dtype() == compute_dtype ? weight : std::make_shared<Tensor>(weight->To(compute_dtype)),
     };
-    bias_ = input_tensors.size() == 3;
-    out_features_ = weight->Dims()[0];
-
     bool need_input = needs_input_grad_.size() > 0 && needs_input_grad_[0];
     bool need_weight = needs_input_grad_.size() > 1 && needs_input_grad_[1];
 
     // grad_input needs weight, grad_weight needs input
     saved_tensors_ = {need_weight ? input : nullptr, need_input ? weight : nullptr};
 
-    meta_ = {.transpose = true,
-             .has_bias = input_tensors.size() == 3,
-             .in_features = weight->Dims()[1],
-             .out_features = weight->Dims()[0],
-             .input_dims = input->Dims()};
+    transpose_ = true;
+    bias_ = input_tensors.size() == 3;
+    in_features_ = weight->Dims()[1];
+    out_features_ = weight->Dims()[0];
+    input_dims_ = input->Dims();
 }
 
 std::vector<std::shared_ptr<Tensor>> Linear::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
@@ -61,14 +58,18 @@ std::vector<std::shared_ptr<Tensor>> Linear::Backward(const std::vector<std::sha
     CHECK(!needs_input_grad_.empty()) << "needs_input_grad_ not populated in Linear::Backward";
     LinearGradFlags grad_flags = {.input = needs_input_grad_[0],
                                   .weight = needs_input_grad_.size() > 1 && needs_input_grad_[1],
-                                  .bias = meta_.has_bias && needs_input_grad_.size() > 2 && needs_input_grad_[2]};
+                                  .bias = bias_ && needs_input_grad_.size() > 2 && needs_input_grad_[2]};
 
     auto device = grad_output->GetDevice().type();
     auto [grad_input, grad_weight, grad_bias]
         = Dispatcher::Instance()
               .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
-                  {device, "LinearBackward"}, input, weight, true, out_features_, grad_output, bias_);
-    return bias_ ? std::vector<std::shared_ptr<Tensor>>{grad_input, grad_weight, grad_bias}
-                 : std::vector<std::shared_ptr<Tensor>>{grad_input, grad_weight};
+                  {device, "LinearBackward"}, input, weight, transpose_, in_features_, out_features_, input_dims_,
+                  grad_output, bias_, grad_flags);
+    if (bias_) {
+        return {grad_input, grad_weight, grad_bias};
+    } else {
+        return {grad_input, grad_weight};
+    }
 }
 } // namespace infini_train::autograd
