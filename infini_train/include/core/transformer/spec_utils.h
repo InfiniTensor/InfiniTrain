@@ -84,8 +84,8 @@ template <typename T> T GetRequiredParam(const ModuleSpec &spec, const std::stri
     CHECK(spec.params_.contains(key)) << "Missing required parameter: " << key;
 
     const T *value = std::any_cast<T>(&spec.params_.at(key));
-    CHECK(value) << "Parameter type mismatch for key '" << key << "': expected " << typeid(T).name() << ", got "
-                 << spec.params_.at(key).type().name();
+    CHECK(value) << std::format("Parameter type mismatch for key '{}': expected {}, got {}", key, typeid(T).name(),
+                                spec.params_.at(key).type().name());
     return *value;
 }
 
