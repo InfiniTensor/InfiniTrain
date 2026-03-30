@@ -316,7 +316,7 @@ void Train(const nn::parallel::Rank &rank) {
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(
-                                    std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
+              std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": start training";
