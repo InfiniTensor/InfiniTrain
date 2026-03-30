@@ -398,6 +398,11 @@ std::shared_ptr<Tensor> Tensor::Contiguous() {
     return std::make_shared<autograd::NoOp>(dims_)->Apply({shared_from_this()})[0];
 }
 
+// FIXME: Requires stride tracking in the Tensor class before this can be implemented
+// correctly. Currently always returns true as a placeholder. The contiguous guard in
+// elementwise.cu ensures non-contiguous tensors fall back to the broadcast path.
+bool Tensor::IsContiguous() const { return true; }
+
 std::shared_ptr<Tensor> Tensor::Flatten(int64_t start, int64_t end) {
     auto ndim = dims_.size();
     auto start_dim = start >= 0 ? start : start + ndim;
