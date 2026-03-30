@@ -25,4 +25,17 @@ private:
 
     const float eps_ = 1e-5f;
 };
+
+class RMSNorm : public CloneableModule<RMSNorm> {
+public:
+    static constexpr char kType[] = "RMSNorm";
+    static constexpr char kParamWeightName[] = "weight";
+
+    explicit RMSNorm(int64_t dim, float eps = 1e-6f, Device device = Device());
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &x) override;
+
+private:
+    float eps_ = 1e-5f;
+};
 } // namespace infini_train::nn
