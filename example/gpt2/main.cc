@@ -107,11 +107,11 @@ const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
     {"d36", {.block_size = 1024, .vocab_size = 50257, .n_layer = 36, .n_head = 20, .n_embd = 1280}},
     {"d48", {.block_size = 1024, .vocab_size = 50257, .n_layer = 48, .n_head = 25, .n_embd = 1600}},
 };
-const std::unordered_map<std::string, GPT2::ModelType> kStrToModelType = {
-    {"gpt2", GPT2::ModelType::kGPT2},
-    {"gpt2-medium", GPT2::ModelType::kGPT2Medium},
-    {"gpt2-large", GPT2::ModelType::kGPT2Large},
-    {"gpt2-xl", GPT2::ModelType::kGPT2XL},
+const std::unordered_map<std::string, DecoderOnlyTransformer::ModelType> kStrToModelType = {
+    {"gpt2", DecoderOnlyTransformer::ModelType::kGPT2},
+    {"gpt2-medium", DecoderOnlyTransformer::ModelType::kGPT2Medium},
+    {"gpt2-large", DecoderOnlyTransformer::ModelType::kGPT2Large},
+    {"gpt2-xl", DecoderOnlyTransformer::ModelType::kGPT2XL},
 };
 
 } // namespace
@@ -192,12 +192,12 @@ void Train(const nn::parallel::Rank &rank) {
     std::shared_ptr<nn::Module> model = nullptr;
 
     if (!FLAGS_llmc_filepath.empty()) {
-        model = GPT2::FromLLMC(FLAGS_llmc_filepath);
+        model = DecoderOnlyTransformer::FromLLMC_GPT2(FLAGS_llmc_filepath);
     } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
-        model = std::make_shared<GPT2>(model_config);
+        model = std::make_shared<DecoderOnlyTransformer>(model_config);
     } else {
-        model = GPT2::FromPretrained(kStrToModelType.at(FLAGS_model));
+        model = DecoderOnlyTransformer::FromPretrained(kStrToModelType.at(FLAGS_model));
     }
 
     model->To(device);
@@ -205,7 +205,7 @@ void Train(const nn::parallel::Rank &rank) {
     utils::PrecisionChecker::BuildNameMap(model.get());
 
     // Get chunk size before wrapping with LoRA (needed for PipelineParallel)
-    auto gpt2_model = std::dynamic_pointer_cast<GPT2>(model);
+    auto gpt2_model = std::dynamic_pointer_cast<DecoderOnlyTransformer>(model);
     CHECK(gpt2_model) << "GPT2 example expects GPT2 model.";
 
     // Apply LoRA using GetLoRAModel (in-place injection)

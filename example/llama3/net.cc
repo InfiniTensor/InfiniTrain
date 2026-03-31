@@ -18,6 +18,7 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/causal_self_attention.h"
 #include "infini_train/include/nn/modules/mlp.h"
+#include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 
@@ -31,18 +32,12 @@ constexpr int kRandomSeed = 42;
 static std::mt19937 gen{kRandomSeed};
 } // namespace
 
-std::shared_ptr<LLaMA3> LLaMA3::FromPretrained(ModelType model_type) {
-    // TODO(zbl): implement this later
-    LOG(FATAL) << "Not implemented yet";
-    return nullptr;
-}
-
 namespace {
 constexpr int32_t kLLaMA3Magic = 20240803;
 constexpr int32_t kLLaMA3FP32Version = 3;
 } // namespace
 
-std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
+std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(const std::string &filepath) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -83,7 +78,7 @@ std::shared_ptr<LLaMA3> LLaMA3::FromLLMC(const std::string &filepath) {
     llama3_config.use_scaled_rope = static_cast<bool>(use_scaled_rope);
     llama3_config.norm_eps = norm_eps;
     llama3_config.max_gen_batch_size = max_gen_bs;
-    auto llama3 = std::make_shared<LLaMA3>(llama3_config);
+    auto llama3 = std::make_shared<DecoderOnlyTransformer>(llama3_config);
 
     // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
     int pp_size = nn::parallel::global::GetPipelineParallelSize();

@@ -171,9 +171,9 @@ void Train(const nn::parallel::Rank &rank) {
     nn::TransformerConfig model_config = nn::TransformerConfig::LLaMA3();
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        model = LLaMA3::FromLLMC(FLAGS_llmc_filepath);
+        model = DecoderOnlyTransformer::FromLLMC_LLaMA3(FLAGS_llmc_filepath);
     } else {
-        model = std::make_shared<LLaMA3>(model_config);
+        model = std::make_shared<DecoderOnlyTransformer>(model_config);
     }
 
     model->To(device);
@@ -220,7 +220,7 @@ void Train(const nn::parallel::Rank &rank) {
 
         model = std::make_shared<nn::parallel::PipelineParallel>(
             model, pp_world_size, num_micro_batches, shapes, pp_rank, device,
-            std::dynamic_pointer_cast<LLaMA3>(model)->GetChunkSize());
+            std::dynamic_pointer_cast<DecoderOnlyTransformer>(model)->GetChunkSize());
         if (ddp_world_size > 1) {
             auto ddp_config
                 = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
