@@ -3,32 +3,24 @@
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
-#include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/core/models/decode_only_transformer/layer_specs.h"
 #include "infini_train/include/core/transformer/spec_utils.h"
-#include "infini_train/include/core/transformer/transformer_builders.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/core/transformer/transformer_model.h"
-#include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/modules/normalization.h"
-#include "infini_train/include/nn/modules/sparse.h"
-#include "infini_train/include/nn/modules/transformer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
-#include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
 
-// ========== GPT2 Model Definition ==========
-// Uses LayerNorm, GELU activation, standard multi-head attention
-class GPT2 : public nn::TransformerModel {
+class DecoderOnlyTransformer : public nn::TransformerModel {
 public:
-    static constexpr char kType[] = "GPT2";
+public:
+    static constexpr char kType[] = "DecoderOnlyTransformer";
     static constexpr char kTransformerModelName[] = "transformer";
 
     enum class ModelType : int8_t {
@@ -36,31 +28,6 @@ public:
         kGPT2Medium,
         kGPT2Large,
         kGPT2XL,
-    };
-
-    explicit GPT2(const nn::TransformerConfig &config)
-        : TransformerModel(config, BuildGPT2Spec(config)),
-          stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
-              Config().n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
-              nn::parallel::global::GetVirtualPipelineParallelSize())) {}
-
-    static std::shared_ptr<GPT2> FromPretrained(ModelType model_type);
-    static std::shared_ptr<GPT2> FromLLMC(const std::string &filepath);
-
-    int GetChunkSize() const;
-
-private:
-    const infini_train::nn::parallel::StageInfo stage_info_;
-};
-
-// ========== LLaMA3 Model Definition ==========
-// Uses RMSNorm, SwiGLU activation, GQA attention, RoPE positional encoding
-class LLaMA3 : public nn::TransformerModel {
-public:
-    static constexpr char kType[] = "LLaMA3";
-    static constexpr char kTransformerModelName[] = "transformer";
-
-    enum class ModelType : int8_t {
         // TODO(zbl): more model type from huggingface
         kLLaMA3_1_8B,
         kLLaMA3_1_70B,
@@ -69,17 +36,26 @@ public:
         kLLaMA3_3_70B,
     };
 
-    explicit LLaMA3(const nn::TransformerConfig &config)
-        : TransformerModel(config, BuildLLaMA3Spec(config)),
+    explicit DecoderOnlyTransformer(const nn::TransformerConfig &config)
+        : TransformerModel(config, BuildModelSpec(config)),
           stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
               Config().n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
               nn::parallel::global::GetVirtualPipelineParallelSize())) {}
 
-    static std::shared_ptr<LLaMA3> FromPretrained(ModelType model_type);
-    static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath);
+    static std::shared_ptr<DecoderOnlyTransformer> FromPretrained(ModelType model_type);
 
-    int GetChunkSize() const { return stage_info_.layer_ranges_per_chunk.size(); }
+    static std::shared_ptr<DecoderOnlyTransformer> FromLLMC_GPT2(const std::string &filepath);
+    static std::shared_ptr<DecoderOnlyTransformer> FromLLMC_LLaMA3(const std::string &filepath);
+    static void LoadWeightsFromLLMC(const std::string &filepath, DecoderOnlyTransformer *model,
+                                    const std::string &weight_prefix);
+
+    int GetChunkSize() const;
 
 private:
+    static nn::ModuleSpec BuildModelSpec(const nn::TransformerConfig &config) {
+        return (config.model_type == nn::TransformerConfig::kGPT2Name) ? BuildGPT2Spec(config)
+                                                                       : BuildLLaMA3Spec(config);
+    }
+
     const infini_train::nn::parallel::StageInfo stage_info_;
 };
