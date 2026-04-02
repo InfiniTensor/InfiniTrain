@@ -32,10 +32,20 @@ CudaEvent::~CudaEvent() {
 
 cudaEvent_t CudaEvent::cuda_event() const { return event_; }
 
-CudaStream::CudaStream() { CUDA_CHECK(cudaStreamCreate(&stream_)); }
+CudaStream::CudaStream() {
+    cudaError_t err = cudaStreamCreate(&stream_);
+    if (err != cudaSuccess) {
+         LOG(WARNING) << "cudaStreamCreate failed: " << cudaGetErrorString(err) << ". Using default stream.";
+         stream_ = 0;
+    }
+}
 
 CudaStream::CudaStream(int priority) {
-    CUDA_CHECK(cudaStreamCreateWithPriority(&stream_, cudaStreamNonBlocking, priority));
+    cudaError_t err = cudaStreamCreateWithPriority(&stream_, cudaStreamNonBlocking, priority);
+    if (err != cudaSuccess) {
+         LOG(WARNING) << "cudaStreamCreateWithPriority failed: " << cudaGetErrorString(err) << ". Using default stream.";
+         stream_ = 0;
+    }
 }
 
 CudaStream::~CudaStream() {

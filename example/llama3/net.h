@@ -16,12 +16,13 @@
 struct LLaMA3Config {
     // ref: https://huggingface.co/meta-llama/Llama-3.2-1B
     // Model basic config
-    int64_t block_size = 8192;   // Max seq_len
+    // Optimize: Reduce default model size to fit in smaller GPUs and ensure stability
+    int64_t block_size = 2048;   // Max seq_len
     int64_t vocab_size = 128256; // Vocab size
-    int64_t n_layer = 16;        // Num of transformer layers
-    int64_t n_head = 32;         // Num of heads in MHA
-    int64_t n_kv_head = 8;       // Num of Key/Value heads（< n_head if using GQA）
-    int64_t n_embd = 2048;       // Hidden size
+    int64_t n_layer = 8;         // Num of transformer layers
+    int64_t n_head = 16;         // Num of heads in MHA
+    int64_t n_kv_head = 4;       // Num of Key/Value heads（< n_head if using GQA）
+    int64_t n_embd = 1024;       // Hidden size
 
     // FFN config
     std::optional<float> ffn_dim_multiplier = 1.5f; // FFN dim multiplier
@@ -36,7 +37,7 @@ struct LLaMA3Config {
 
     // Inference
     bool use_kv = false;            // kv cache
-    bool flash = false;             // flash attention
+    bool use_flash_attn = false;    // flash attention
     int64_t max_gen_batch_size = 4; // max batch size during inference
 };
 
@@ -179,7 +180,7 @@ public:
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
     static std::shared_ptr<LLaMA3> FromPretrained(ModelType model_type);
-    static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath);
+    static std::shared_ptr<LLaMA3> FromLLMC(const std::string &filepath, bool use_flash_attn = false);
 
     int GetChunkSize() const { return stage_info_.layer_ranges_per_chunk.size(); }
 
