@@ -32,21 +32,30 @@ def compare_files(file1, file2, threshold):
     tps2 = {k: v for k, v in tps2.items() if k > 1}
 
     if not tps1 or not tps2:
-        return 0, 1, ["  No valid steps found (after excluding step 1)"], 0, 0, 0
+        return 0, True, ["  No valid steps found (after excluding step 1)"], 0, 0, 0, 0, 0
 
     # Calculate averages
     avg1 = sum(tps1.values()) / len(tps1)
     avg2 = sum(tps2.values()) / len(tps2)
 
-    # Calculate relative error
-    rel_error = abs(avg1 - avg2) / max(avg1, avg2) if max(avg1, avg2) > 0 else 0
+    # Calculate signed relative change: positive means dir1 faster, negative means dir1 slower
+    signed_change = (avg1 - avg2) / avg2 if avg2 > 0 else 0
 
-    mismatches = []
-    if rel_error > threshold:
-        mismatches.append(f"  Average tok/s: {avg1:.2f} vs {avg2:.2f} ✗ (error: {rel_error*100:.2f}%, threshold: {threshold*100:.2f}%)")
-        mismatches.append(f"  Steps compared: {len(tps1)} vs {len(tps2)} (excluding step 1)")
+    messages = []
+    failed = False
+    if abs(signed_change) > threshold:
+        sign = "+" if signed_change >= 0 else ""
+        if signed_change < 0:
+            # dir1 slower than dir2 -> failure
+            label = "✗ SLOWER"
+            failed = True
+        else:
+            # dir1 faster than dir2 -> pass but notify
+            label = "↑ FASTER"
+        messages.append(f"  Average tok/s: {avg1:.2f} vs {avg2:.2f} {label} ({sign}{signed_change*100:.1f}%, threshold: ±{threshold*100:.0f}%)")
+        messages.append(f"  Steps compared: {len(tps1)} vs {len(tps2)} (excluding step 1)")
 
-    return 1, len(mismatches), mismatches, avg1, avg2, rel_error
+    return 1, failed, messages, avg1, avg2, signed_change, len(tps1), len(tps2)
 
 def main():
     parser = ArgumentParser(description='Compare tok/s between two log directories')
@@ -72,37 +81,64 @@ def main():
     if only_in_1 or only_in_2:
         print()
 
-    total_mismatches = 0
-    total_files = 0
-    passed_files = 0
+    improvements = []  # (name, avg1, avg2, signed_change)
+    regressions = []
+    normal = []
 
     for name in sorted(common):
-        total_files += 1
-        total_comparisons, num_mismatches, mismatches, avg1, avg2, rel_error = compare_files(files1[name], files2[name], args.threshold)
-
-        if mismatches:
-            print(f"Comparing {name}:")
-            for msg in mismatches:
-                print(msg)
-            total_mismatches += num_mismatches
+        _, failed, messages, avg1, avg2, signed_change, steps1, steps2 = compare_files(files1[name], files2[name], args.threshold)
+        if failed:
+            regressions.append((name, avg1, avg2, signed_change, steps1, steps2))
+        elif messages:
+            improvements.append((name, avg1, avg2, signed_change, steps1, steps2))
         else:
-            passed_files += 1
-            # Only print details when verbose mode is enabled
-            if args.verbose:
-                print(f"Comparing {name}:")
-                print(f"  Average tok/s: {avg1:.2f} vs {avg2:.2f} ✓ (error: {rel_error*100:.2f}%, threshold: {args.threshold*100:.2f}%)")
-                print(f"  Steps compared: {len([k for k in parse_log(files1[name]) if k > 1])} (excluding step 1)")
+            normal.append((name, avg1, avg2, signed_change, steps1, steps2))
 
-        # Print separator when there are mismatches or verbose mode
-        if mismatches or args.verbose:
+    pct = f"{args.threshold*100:.0f}%"
+
+    if improvements:
+        print(f"{'=' * 50}")
+        print(f"Large improvements (>{pct})")
+        print(f"{'=' * 50}")
+        for name, avg1, avg2, signed_change, steps1, steps2 in improvements:
+            sign = "+" if signed_change >= 0 else ""
+            print(f"[PASS] {name}")
+            print(f"  average tok/s: {avg1:.2f} vs {avg2:.2f}  ({sign}{signed_change*100:.1f}%)")
+            print(f"  effective steps: {steps1} vs {steps2} (step > 1)")
             print()
 
-    print("=" * 50)
-    print(f"Overall Summary:")
-    print(f"  {passed_files}/{total_files} test cases passed (threshold: {args.threshold*100:.0f}%)")
-    print("=" * 50)
+    if regressions:
+        print(f"{'=' * 50}")
+        print(f"FAILED regressions (>{pct})")
+        print(f"{'=' * 50}")
+        for name, avg1, avg2, signed_change, steps1, steps2 in regressions:
+            sign = "+" if signed_change >= 0 else ""
+            print(f"[FAIL] {name}")
+            print(f"  average tok/s: {avg1:.2f} vs {avg2:.2f}  ({sign}{signed_change*100:.1f}%)")
+            print(f"  effective steps: {steps1} vs {steps2} (step > 1)")
+            print()
 
-    sys.exit(1 if total_mismatches > 0 else 0)
+    if args.verbose and normal:
+        print(f"{'=' * 50}")
+        print(f"Within threshold (<={pct})")
+        print(f"{'=' * 50}")
+        for name, avg1, avg2, signed_change, steps1, steps2 in normal:
+            sign = "+" if signed_change >= 0 else ""
+            print(f"[PASS] {name}")
+            print(f"  tok/s: {avg1:.2f} vs {avg2:.2f}  ({sign}{signed_change*100:.1f}%)")
+            print()
+
+    total = len(improvements) + len(regressions) + len(normal)
+    passed = len(improvements) + len(normal)
+    print(f"{'=' * 50}")
+    print(f"Summary: {passed}/{total} test cases passed")
+    print(f"failed regressions : {len(regressions)}")
+    print(f"large improvements : {len(improvements)}")
+    print(f"within threshold   : {len(normal)}")
+    print(f"total cases        : {total}")
+    print(f"{'=' * 50}")
+
+    sys.exit(1 if regressions else 0)
 
 if __name__ == '__main__':
     main()
