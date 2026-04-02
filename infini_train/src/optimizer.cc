@@ -8,16 +8,32 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
-Optimizer::Optimizer(const std::vector<std::shared_ptr<Tensor>> &params) : params_(params) {}
+Optimizer::Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate)
+    : params_(params), learning_rate_(learning_rate) {}
 
 void Optimizer::ZeroGrad(bool set_to_none) {
     for (auto param : params_) { param->ZeroGrad(set_to_none); }
 }
 
+void Optimizer::SetLearningRate(float lr) { learning_rate_ = lr; }
+
+float Optimizer::GetLearningRate() const { return learning_rate_; }
+
+float Optimizer::GetInitialLearningRate() const {
+    CHECK(initial_lr_set_) << "Optimizer: initial_learning_rate not set. "
+                              "Use with an LRScheduler first.";
+    return initial_learning_rate_;
+}
+
+void Optimizer::SetInitialLearningRate(float lr) {
+    if (!initial_lr_set_) {
+        initial_learning_rate_ = lr;
+        initial_lr_set_ = true;
+    }
+}
 namespace optimizers {
 
-SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate)
-    : Optimizer(params), learning_rate_(learning_rate) {}
+SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate) : Optimizer(params, learning_rate) {}
 
 void SGD::Step() {
     for (auto param : params_) {
@@ -33,7 +49,7 @@ void SGD::Step() {
 }
 
 Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate, float beta1, float beta2, float eps)
-    : Optimizer(params), t_(0), learning_rate_(learning_rate), beta1_(beta1), beta2_(beta2), eps_(eps) {
+    : Optimizer(params, learning_rate), t_(0), beta1_(beta1), beta2_(beta2), eps_(eps) {
 
     for (const auto &param : params_) {
         m_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
