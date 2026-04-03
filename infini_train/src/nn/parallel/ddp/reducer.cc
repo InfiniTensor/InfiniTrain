@@ -18,7 +18,7 @@ namespace {
 void CopyGradToBucket(const std::shared_ptr<Tensor> &grad, const std::shared_ptr<Tensor> &flat,
                       size_t dst_elem_offset) {
     CHECK(grad && flat);
-    const size_t element_size_in_bytes = kDataTypeToSize.at(grad->Dtype());
+    const size_t element_size_in_bytes = DTypeSize(grad->Dtype());
     const size_t bytes = grad->NumElements() * element_size_in_bytes;
     char *dst = static_cast<char *>(flat->DataPtr()) + dst_elem_offset * element_size_in_bytes;
     const void *src = grad->DataPtr();
@@ -33,7 +33,7 @@ void CopyGradToBucket(const std::shared_ptr<Tensor> &grad, const std::shared_ptr
 void CopyBucketToGrad(const std::shared_ptr<Tensor> &flat, const std::shared_ptr<Tensor> &grad,
                       size_t src_elem_offset) {
     CHECK(grad && flat);
-    const size_t element_size_in_bytes = kDataTypeToSize.at(grad->Dtype());
+    const size_t element_size_in_bytes = DTypeSize(grad->Dtype());
     const size_t bytes = grad->NumElements() * element_size_in_bytes;
     const char *src = static_cast<const char *>(flat->DataPtr()) + src_elem_offset * element_size_in_bytes;
     void *dst = grad->DataPtr();
@@ -48,7 +48,7 @@ void CopyBucketToGrad(const std::shared_ptr<Tensor> &flat, const std::shared_ptr
 std::shared_ptr<Tensor> MakeGradView(const std::shared_ptr<Tensor> &contents, size_t offset_elems,
                                      const std::vector<int64_t> &dims) {
     // Return a view of contents (same chunk of memory)
-    auto view = std::make_shared<Tensor>(*contents, offset_elems * kDataTypeToSize.at(contents->Dtype()), dims);
+    auto view = std::make_shared<Tensor>(*contents, offset_elems * DTypeSize(contents->Dtype()), dims);
     return view;
 }
 } // namespace
@@ -118,7 +118,7 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
         }
         auto &state = it->second;
 
-        const size_t element_size_in_bytes = kDataTypeToSize.at(tensor->Dtype());
+        const size_t element_size_in_bytes = DTypeSize(tensor->Dtype());
         const size_t bytes = tensor->NumElements() * element_size_in_bytes;
         const size_t cap = bucket_size_limits[state.limit_idx];
 

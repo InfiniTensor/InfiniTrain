@@ -1,13 +1,22 @@
 #include "glog/logging.h"
 
+#include "infini_train/include/common/cpu/common_cpu.h"
 #include "infini_train/include/dispatcher.h"
+#include "infini_train/include/dtype_dispatch.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/cpu/cpu_dispatch.h"
+
 namespace infini_train::kernels::cpu {
-void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
-    // FIXME(zbl): support other data types
-    auto data = reinterpret_cast<float *>(tensor->DataPtr());
-    std::fill(data, data + tensor->NumElements(), *(static_cast<float *>(value_ptr)));
+void Fill(std::shared_ptr<Tensor> tensor, double value) {
+    core::cpu::DispatchCpuFunc<INFINI_ALL_TYPES>(
+        tensor->Dtype(),
+        [=]<typename T>() {
+            auto data = reinterpret_cast<T *>(tensor->DataPtr());
+            T casted_value = common::cpu::Cast<T>(value);
+            std::fill(data, data + tensor->NumElements(), casted_value);
+        },
+        "CPU Fill");
 }
 } // namespace infini_train::kernels::cpu
 

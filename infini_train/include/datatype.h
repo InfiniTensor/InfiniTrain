@@ -212,11 +212,35 @@ enum class DataType : int8_t {
     kFLOAT64,
 };
 
-inline const std::unordered_map<DataType, size_t> kDataTypeToSize = {
-    {DataType::kUINT8, 1},    {DataType::kINT8, 1},    {DataType::kUINT16, 2},  {DataType::kINT16, 2},
-    {DataType::kUINT32, 4},   {DataType::kINT32, 4},   {DataType::kUINT64, 8},  {DataType::kINT64, 8},
-    {DataType::kBFLOAT16, 2}, {DataType::kFLOAT16, 2}, {DataType::kFLOAT32, 4}, {DataType::kFLOAT64, 8},
-};
+constexpr size_t DTypeSize(DataType data_type) {
+    switch (data_type) {
+    case DataType::kUINT8:
+        return 1;
+    case DataType::kINT8:
+        return 1;
+    case DataType::kUINT16:
+        return 2;
+    case DataType::kINT16:
+        return 2;
+    case DataType::kUINT32:
+        return 4;
+    case DataType::kINT32:
+        return 4;
+    case DataType::kUINT64:
+        return 8;
+    case DataType::kINT64:
+        return 8;
+    case DataType::kBFLOAT16:
+        return 2;
+    case DataType::kFLOAT16:
+        return 2;
+    case DataType::kFLOAT32:
+        return 4;
+    case DataType::kFLOAT64:
+        return 8;
+    }
+    return 0; // unreachable
+}
 
 inline const std::unordered_map<DataType, std::string> kDataTypeToDesc = {
     {DataType::kUINT8, "uint8"},   {DataType::kINT8, "int8"},     {DataType::kUINT16, "uint16"},
@@ -261,12 +285,23 @@ DEFINE_DEFAULT_DATA_TYPE_MAPPING(kUINT32, uint32_t)
 DEFINE_DEFAULT_DATA_TYPE_MAPPING(kINT32, int32_t)
 DEFINE_DEFAULT_DATA_TYPE_MAPPING(kUINT64, uint64_t)
 DEFINE_DEFAULT_DATA_TYPE_MAPPING(kINT64, int64_t)
-DEFINE_DEFAULT_DATA_TYPE_MAPPING(kBFLOAT16, BF16)
-DEFINE_DEFAULT_DATA_TYPE_MAPPING(kFLOAT16, FP16)
 DEFINE_DEFAULT_DATA_TYPE_MAPPING(kFLOAT32, float)
 DEFINE_DEFAULT_DATA_TYPE_MAPPING(kFLOAT64, double)
 
 #undef DEFINE_DEFAULT_DATA_TYPE_MAPPING
+
+// ---------------------------------------------------------------------------
+// Low-precision types: reverse mapping ONLY (DataTypeMap).
+// TypeMap<kFLOAT16> / TypeMap<kBFLOAT16> are intentionally NOT defined here.
+// Backend TypeMaps must explicitly provide these mappings; the default TypeMap
+// will static_assert at compile time if dispatch reaches an unmapped dtype.
+// ---------------------------------------------------------------------------
+template <> struct DataTypeMap<FP16> {
+    static constexpr DataType value = DataType::kFLOAT16;
+};
+template <> struct DataTypeMap<BF16> {
+    static constexpr DataType value = DataType::kBFLOAT16;
+};
 
 // -----------------------------------------------------------------------------
 // Type traits extensions (framework fallback scalar semantics)
@@ -364,5 +399,59 @@ template <typename... Ts> struct WidestType {
 
 // Convenience alias
 template <typename... Ts> using WidestType_t = typename WidestType<Ts...>::type;
+
+// =============================================================================
+// DataType-level promotion  (pure enum → enum, no concrete/backend types)
+// =============================================================================
+// These facilities replace `DataTypeMap_v<WidestType_t<Ta, Tb>>` in CUDA
+// kernels, so that backend kernels never need to know about __half /
+// __nv_bfloat16 at promotion time.
+//
+// Rules (priority order):
+//   1. FP16 + BF16 → FLOAT32   (neither is a lossless superset of the other)
+//   2. Any float dominates any integer → keep the float type
+//   3. Same category (float-float or int-int) → wider byte size wins
+// =============================================================================
+
+/// Returns true for floating-point DataTypes (FP16, BF16, FP32, FP64).
+constexpr bool IsFloatingPointDType(DataType dt) {
+    return dt == DataType::kFLOAT16 || dt == DataType::kBFLOAT16 || dt == DataType::kFLOAT32
+        || dt == DataType::kFLOAT64;
+}
+
+/// Binary DataType promotion.  Safe to call in both host and device code.
+constexpr DataType PromoteDataTypes(DataType a, DataType b) {
+    if (a == b) {
+        return a;
+    }
+
+    // Rule 1: FP16 ↔ BF16 — no lossless path, promote to FP32
+    if ((a == DataType::kFLOAT16 && b == DataType::kBFLOAT16)
+        || (a == DataType::kBFLOAT16 && b == DataType::kFLOAT16)) {
+        return DataType::kFLOAT32;
+    }
+
+    const bool a_fp = IsFloatingPointDType(a);
+    const bool b_fp = IsFloatingPointDType(b);
+
+    // Rule 2: float beats integer
+    if (a_fp && !b_fp) {
+        return a;
+    }
+    if (b_fp && !a_fp) {
+        return b;
+    }
+
+    // Rule 3: same category — wider wins
+    return DTypeSize(a) >= DTypeSize(b) ? a : b;
+}
+
+/// Compile-time binary promotion: DataTypePromotion<A, B>::value
+template <DataType A, DataType B> struct DataTypePromotion {
+    static constexpr DataType value = PromoteDataTypes(A, B);
+};
+
+/// Convenience variable template
+template <DataType A, DataType B> inline constexpr DataType DataTypePromotion_v = DataTypePromotion<A, B>::value;
 
 } // namespace infini_train

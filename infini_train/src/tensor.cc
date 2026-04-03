@@ -50,13 +50,13 @@ size_t TensorBuffer::Size() const { return size_; }
 // Tensor implementation
 Tensor::Tensor(const std::vector<int64_t> &dims, DataType dtype, Device device) : dims_(dims), dtype_(dtype) {
     num_elements_ = std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>());
-    buffer_ = std::make_shared<TensorBuffer>(device, kDataTypeToSize.at(dtype) * num_elements_);
+    buffer_ = std::make_shared<TensorBuffer>(device, DTypeSize(dtype) * num_elements_);
 }
 
 Tensor::Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &dims)
     : buffer_(tensor.buffer_), offset_(tensor.offset_ + offset), dims_(dims),
       num_elements_(std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>())), dtype_(tensor.dtype_) {
-    CHECK_LE(offset_ + kDataTypeToSize.at(dtype_) * num_elements_, buffer_->Size());
+    CHECK_LE(offset_ + DTypeSize(dtype_) * num_elements_, buffer_->Size());
 }
 
 Tensor::Tensor(const float *data, const std::vector<int64_t> &dims, DataType dtype, Device device)
@@ -65,7 +65,7 @@ Tensor::Tensor(const float *data, const std::vector<int64_t> &dims, DataType dty
     // TODO(dcj): support more datatype
     CHECK(dtype == DataType::kFLOAT32);
 
-    buffer_ = std::make_shared<TensorBuffer>(device, kDataTypeToSize.at(dtype) * num_elements_);
+    buffer_ = std::make_shared<TensorBuffer>(device, DTypeSize(dtype) * num_elements_);
 
     core::DeviceGuard guard(device);
     auto *impl = core::GetDeviceGuardImpl(device.type());
@@ -96,7 +96,7 @@ void *Tensor::DataPtr() { return reinterpret_cast<uint8_t *>(buffer_->DataPtr())
 
 const void *Tensor::DataPtr() const { return reinterpret_cast<const uint8_t *>(buffer_->DataPtr()) + offset_; }
 
-size_t Tensor::SizeInBytes() const { return kDataTypeToSize.at(dtype_) * num_elements_; }
+size_t Tensor::SizeInBytes() const { return DTypeSize(dtype_) * num_elements_; }
 
 const std::vector<int64_t> &Tensor::Dims() const { return dims_; }
 
@@ -107,16 +107,8 @@ DataType Tensor::Dtype() const { return dtype_; }
 void Tensor::Fill(double value) {
     auto device = GetDevice();
     core::DeviceGuard guard(device);
-
-    uint64_t storage = 0;
-
-    DispatchFunc<INFINI_ALL_TYPES>(Dtype(), [&storage, value]<typename TargetT>() {
-        TargetT casted_value = common::cpu::Cast<TargetT>(static_cast<float>(value));
-        std::memcpy((void *)(&storage), &casted_value, sizeof(TargetT));
-    });
-
     auto kernel = Dispatcher::Instance().GetKernel({device.type(), "Fill"});
-    kernel.Call<void>(shared_from_this(), static_cast<void *>(&storage));
+    kernel.Call<void>(shared_from_this(), value);
 }
 
 Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> Tensor::EigenMatrix() {
