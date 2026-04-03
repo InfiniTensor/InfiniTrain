@@ -5,7 +5,7 @@
 #include "infini_train/include/dtype_dispatch.h"
 #include "infini_train/include/tensor.h"
 
-#include "infini_train/src/core/cpu/cpu_dispatch.h"
+#include "infini_train/src/core/runtime/cpu/cpu_dispatch.h"
 
 namespace infini_train::kernels::cpu {
 
