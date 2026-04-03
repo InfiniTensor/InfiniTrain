@@ -1,4 +1,4 @@
-#include "infini_train/include/core/transformer/transformer_model.h"
+#include "infini_train/include/nn/modules/transformer.h"
 
 #include <cmath>
 #include <map>

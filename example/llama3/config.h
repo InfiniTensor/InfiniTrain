@@ -2,9 +2,10 @@
 
 #include "infini_train/include/core/transformer/transformer_config.h"
 
-namespace infini_train::nn::llama3 {
+namespace nn = infini_train::nn;
+namespace llama3 {
 inline nn::TransformerConfig LLaMA3Config() {
-    return {.model_type = ModelType::kLLaMA3,
+    return {.model_type = nn::ModelType::kLLaMA3,
             .block_size = 8192,
             .vocab_size = 128256,
             .original_vocab_size = 128256,
@@ -21,4 +22,4 @@ inline nn::TransformerConfig LLaMA3Config() {
             .ffn_dim_multiplier = 1.5f,
             .multiple_of = 256};
 }
-} // namespace infini_train::nn::llama3
+} // namespace llama3

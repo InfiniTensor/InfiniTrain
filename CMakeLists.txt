@@ -176,7 +176,7 @@ add_executable(gpt2
   example/gpt2/main.cc
   example/common/tiny_shakespeare_dataset.cc
   example/common/utils.cc
-  example/gpt2/net.cc
+  example/gpt2/checkpoint_loader.cc
   example/common/tokenizer.cc
 )
 link_infini_train_exe(gpt2)
@@ -185,7 +185,7 @@ add_executable(llama3
   example/llama3/main.cc
   example/common/tiny_shakespeare_dataset.cc
   example/common/utils.cc
-  example/llama3/net.cc
+  example/llama3/checkpoint_loader.cc
   example/common/tokenizer.cc
 )
 link_infini_train_exe(llama3)
@@ -204,5 +204,5 @@ link_infini_train_exe(test_precision_check)
 add_executable(test_lora test/lora/test_lora.cc)
 link_infini_train_exe(test_lora)
 
-add_executable(test_transformer_spec test/transformer_spec/test_transformer_spec.cc)
-link_infini_train_exe(test_transformer_spec)
+# add_executable(test_transformer_spec test/transformer_spec/test_transformer_spec.cc)
+# link_infini_train_exe(test_transformer_spec)

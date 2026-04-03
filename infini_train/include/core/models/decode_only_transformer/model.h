@@ -9,7 +9,7 @@
 #include "infini_train/include/core/models/decode_only_transformer/layer_specs.h"
 #include "infini_train/include/core/transformer/transformer_builders.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
-#include "infini_train/include/core/transformer/transformer_model.h"
+#include "infini_train/include/nn/modules/transformer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 

@@ -9,11 +9,11 @@
 
 #include "infini_train/include/core/transformer/spec_utils.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
-#include "infini_train/include/core/transformer/transformer_model.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
+#include "infini_train/include/nn/modules/transformer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"

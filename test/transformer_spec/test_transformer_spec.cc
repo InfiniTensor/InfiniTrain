@@ -5,8 +5,7 @@
 #include "example/gpt2/config.h"
 #include "example/llama3/config.h"
 #include "infini_train/include/core/models/decode_only_transformer/layer_specs.h"
-#include "infini_train/include/core/models/decode_only_transformer/model.h"
-#include "infini_train/include/core/runtime/device_guard.h"
+
 #include "infini_train/include/core/transformer/spec_utils.h"
 #include "infini_train/include/core/transformer/transformer_builders.h"
 #include "infini_train/include/nn/modules/activations.h"
@@ -18,7 +17,6 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
-#include "infini_train/src/core/runtime/cpu/cpu_guard_impl.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
@@ -227,7 +225,7 @@ void test_gpt2_instantiation() {
     config.n_embd = 768;
 
     try {
-        auto model = std::make_shared<DecoderOnlyTransformer>(config);
+        auto model = std::make_shared<TransformerModel>(config);
 
         if (model == nullptr) {
             std::cout << "FAIL: Failed to create GPT2 model" << std::endl;
@@ -251,7 +249,7 @@ void test_llama3_instantiation() {
     nn::TransformerConfig config = nn::llama3::LLaMA3Config();
 
     try {
-        auto model = std::make_shared<DecoderOnlyTransformer>(config);
+        auto model = std::make_shared<TransformerModel>(config);
 
         if (model == nullptr) {
             std::cout << "FAIL: Failed to create LLaMA3 model" << std::endl;
@@ -280,7 +278,7 @@ void test_dimensions() {
     config.n_embd = 768;
 
     try {
-        auto model = std::make_shared<DecoderOnlyTransformer>(config);
+        auto model = std::make_shared<TransformerModel>(config);
 
         // Create input tensor (batch, seq_len)
         std::vector<int64_t> input_shape = {2, 64};
