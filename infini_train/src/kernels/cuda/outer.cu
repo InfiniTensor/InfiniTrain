@@ -82,9 +82,7 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
     auto grad_output_dtype = grad_output->Dtype();
 
     // Compute dtype determined by saved tensors (forward compute dtype), not grad_output
-    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-        {input_dtype, other_dtype}, [=]<typename Tin, typename To>() { return DataTypeMap_v<WidestType_t<Tin, To>>; },
-        "CUDA OuterBackward");
+    DataType promoted_type = PromoteDataTypes(input_dtype, other_dtype);
 
     auto input_promoted = input_dtype == promoted_type ? input : std::make_shared<Tensor>(input->To(promoted_type));
     auto other_promoted = other_dtype == promoted_type ? other : std::make_shared<Tensor>(other->To(promoted_type));

@@ -187,10 +187,7 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
                                         const std::shared_ptr<Tensor> &output, int64_t dim) {
     auto grad_output_dtype = grad_output->Dtype();
     auto output_dtype = output->Dtype();
-    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-        {grad_output_dtype, output_dtype},
-        [=]<typename Tgrad, typename Tout>() { return DataTypeMap_v<WidestType_t<Tgrad, Tout>>; },
-        "CUDA SoftmaxBackward");
+    DataType promoted_type = PromoteDataTypes(grad_output_dtype, output_dtype);
 
     auto grad_output_promoted
         = grad_output_dtype == promoted_type ? grad_output : std::make_shared<Tensor>(grad_output->To(promoted_type));
