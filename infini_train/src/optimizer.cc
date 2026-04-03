@@ -1,5 +1,6 @@
 #include "infini_train/include/optimizer.h"
 
+#include <format>
 #include <vector>
 
 #include "infini_train/include/core/runtime/device_guard.h"
@@ -66,6 +67,34 @@ void Adam::Step() {
         auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGrad"});
         kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
     }
+}
+
+std::unordered_map<std::string, std::shared_ptr<Tensor>> Adam::StateDict() const {
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> state;
+    for (size_t i = 0; i < m_.size(); ++i) {
+        state.emplace(std::format("adam.m.{}", i), m_[i]);
+        state.emplace(std::format("adam.v.{}", i), v_[i]);
+    }
+
+    auto t_tensor = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kINT64, Device());
+    *static_cast<int64_t *>(t_tensor->DataPtr()) = t_;
+    state.emplace("adam.t", t_tensor);
+    return state;
+}
+
+void Adam::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
+    for (size_t i = 0; i < m_.size(); ++i) {
+        const auto m_key = std::format("adam.m.{}", i);
+        const auto v_key = std::format("adam.v.{}", i);
+        CHECK(state_dict.contains(m_key)) << "Missing optimizer state: " << m_key;
+        CHECK(state_dict.contains(v_key)) << "Missing optimizer state: " << v_key;
+        m_[i]->CopyFrom(state_dict.at(m_key));
+        v_[i]->CopyFrom(state_dict.at(v_key));
+    }
+
+    CHECK(state_dict.contains("adam.t")) << "Missing optimizer state: adam.t";
+    const Tensor t_cpu = state_dict.at("adam.t")->To(Device());
+    t_ = *static_cast<const int64_t *>(t_cpu.DataPtr());
 }
 } // namespace optimizers
 } // namespace infini_train
