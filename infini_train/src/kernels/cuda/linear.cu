@@ -93,11 +93,7 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto input_dtype = input->Dtype();
     auto other_dtype = other->Dtype();
     auto grad_output_dtype = grad_output->Dtype();
-    DataType promoted_type
-        = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-            {input_dtype, other_dtype, grad_output_dtype},
-            [=]<typename Tin, typename To, typename Tgrad>() { return DataTypeMap_v<WidestType_t<Tin, To, Tgrad>>; },
-            "CUDA MatmulBackward");
+    DataType promoted_type = PromoteDataTypes(PromoteDataTypes(input_dtype, other_dtype), grad_output_dtype);
 
     auto input_promoted = input_dtype == promoted_type ? input : std::make_shared<Tensor>(input->To(promoted_type));
     auto other_promoted = other_dtype == promoted_type ? other : std::make_shared<Tensor>(other->To(promoted_type));
@@ -329,11 +325,7 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto dtype = grad_output->Dtype();
     auto input_dtype = input->Dtype();
     auto weight_dtype = weight->Dtype();
-    DataType promoted_type
-        = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-            {input_dtype, weight_dtype, dtype},
-            [=]<typename Tin, typename Tw, typename Tgrad>() { return DataTypeMap_v<WidestType_t<Tin, Tw, Tgrad>>; },
-            "CUDA LinearBackward");
+    DataType promoted_type = PromoteDataTypes(PromoteDataTypes(input_dtype, weight_dtype), dtype);
 
     auto input_promoted = input_dtype == promoted_type ? input : std::make_shared<Tensor>(input->To(promoted_type));
     auto weight_promoted = weight_dtype == promoted_type ? weight : std::make_shared<Tensor>(weight->To(promoted_type));

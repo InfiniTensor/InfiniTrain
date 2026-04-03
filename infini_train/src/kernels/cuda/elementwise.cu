@@ -639,9 +639,7 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
                                       Func unary_fn) {
     auto dtype = grad_output->Dtype();
     auto a_dtype = a ? a->Dtype() : dtype;
-    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-        {dtype, a_dtype}, [=]<typename Tgrad, typename Ta>() { return DataTypeMap_v<WidestType_t<Tgrad, Ta>>; },
-        "CUDA UnaryBackward");
+    DataType promoted_type = PromoteDataTypes(dtype, a_dtype);
 
     auto grad_output_promoted
         = dtype == promoted_type ? grad_output : std::make_shared<Tensor>(grad_output->To(promoted_type));
@@ -677,9 +675,7 @@ std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const st
     auto a_dtype = a->Dtype();
     auto b_dtype = b->Dtype();
 
-    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-        {a_dtype, b_dtype}, [=]<typename Ta, typename Tb>() { return DataTypeMap_v<WidestType_t<Ta, Tb>>; },
-        "CUDA BinaryForward");
+    DataType promoted_type = PromoteDataTypes(a_dtype, b_dtype);
 
     auto a_promoted = a_dtype == promoted_type ? a : std::make_shared<Tensor>(a->To(promoted_type));
     auto b_promoted = b_dtype == promoted_type ? b : std::make_shared<Tensor>(b->To(promoted_type));
@@ -718,11 +714,7 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
 
     auto a_dtype = a_promoted ? a_promoted->Dtype() : dtype;
     auto b_dtype = b_promoted ? b_promoted->Dtype() : dtype;
-    DataType promoted_type
-        = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-            {a_dtype, b_dtype, dtype},
-            [=]<typename Ta, typename Tb, typename Tgrad>() { return DataTypeMap_v<WidestType_t<Ta, Tb, Tgrad>>; },
-            "CUDA BinaryBackward");
+    DataType promoted_type = PromoteDataTypes(PromoteDataTypes(a_dtype, b_dtype), dtype);
 
     CHECK(a_num_elements >= b_num_elements && a_num_elements % b_num_elements == 0);
 

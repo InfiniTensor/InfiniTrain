@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <memory>
 
+#include "infini_train/include/common/cpu/common_cpu.h"
 #include "infini_train/include/core/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
@@ -19,7 +20,7 @@ template <typename T> __global__ void FillKernel(T *data, T value, size_t size) 
 }
 
 // TODO(dcj): refactor Fill kernel with elementwise template
-void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
+void Fill(std::shared_ptr<Tensor> tensor, double value) {
     const int num_tokens = tensor->NumElements();
     const int threads_per_block = 256;
     const int num_blocks = (num_tokens + threads_per_block - 1) / threads_per_block;
@@ -31,8 +32,9 @@ void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
     core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
         tensor->Dtype(),
         [=]<typename T>() {
-            FillKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
-                static_cast<T *>(tensor->DataPtr()), *(static_cast<T *>(value_ptr)), tensor->NumElements());
+            T casted_value = common::cpu::Cast<T>(value);
+            FillKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(static_cast<T *>(tensor->DataPtr()),
+                                                                             casted_value, tensor->NumElements());
         },
         "CUDA Fill");
 }

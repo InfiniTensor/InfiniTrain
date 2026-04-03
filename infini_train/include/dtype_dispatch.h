@@ -204,14 +204,38 @@ template <typename T, typename... Ts> inline constexpr bool IsTypeInList = (std:
 template <template <DataType> class TypeMap, DataType DType> using MappedType_t = typename TypeMap<DType>::type;
 
 // -----------------------------------------------------------------------------
+// Detection trait: does TypeMap<DType> have a nested `type` alias?
+// Returns false (instead of a hard error) when the primary template is
+// undefined or the specialization intentionally omits `type`.
+// -----------------------------------------------------------------------------
+namespace detail {
+template <template <DataType> class TypeMap, DataType DType, typename = void> struct HasMappedType : std::false_type {};
+
+template <template <DataType> class TypeMap, DataType DType>
+struct HasMappedType<TypeMap, DType, std::void_t<typename TypeMap<DType>::type>> : std::true_type {};
+} // namespace detail
+
+template <template <DataType> class TypeMap, DataType DType>
+inline constexpr bool HasMappedType_v = detail::HasMappedType<TypeMap, DType>::value;
+
+// -----------------------------------------------------------------------------
 // Generic single-dtype dispatch by custom type map
+// -----------------------------------------------------------------------------
+// Membership is checked by DataType (not by mapped C++ type) to avoid
+// premature instantiation of TypeMap<DType> for every AllowedDType.
+// After confirming DType is in the allowed set, a static_assert verifies
+// that TypeMap actually provides a mapping; only then is MappedType_t used.
 // -----------------------------------------------------------------------------
 template <template <DataType> class TypeMap, DataType... AllowedDTypes, typename Functor, typename... Args>
 auto DispatchByTypeMap(DataType dtype, Functor &&func, std::string_view context_identifier = "", Args &&...args) {
     switch (dtype) {
 #define CASE_FOR_TYPE(DType)                                                                                           \
     case DType: {                                                                                                      \
-        if constexpr (IsTypeInList<MappedType_t<TypeMap, DType>, MappedType_t<TypeMap, AllowedDTypes>...>) {           \
+        if constexpr (IsDataTypeInList_v<DType, DataTypeList<AllowedDTypes...>>) {                                     \
+            static_assert(HasMappedType_v<TypeMap, DType>,                                                             \
+                          "TypeMap does not provide explicit mapping for this dtype. "                                 \
+                          "If this is a backend dispatch, register the dtype in the backend TypeMap; "                 \
+                          "if this is DispatchFunc, the dtype is not supported by the default TypeMap.");              \
             return std::forward<Functor>(func).template operator()<MappedType_t<TypeMap, DType>>(                      \
                 std::forward<Args>(args)...);                                                                          \
         } else {                                                                                                       \
@@ -257,6 +281,10 @@ struct TypeMapDispatcher {
 #define CASE_FOR_TYPE(DType)                                                                                           \
     case DType:                                                                                                        \
         if constexpr (IsDataTypeInList_v<DType, CurrentList>) {                                                        \
+            static_assert(HasMappedType_v<TypeMap, DType>,                                                             \
+                          "TypeMap does not provide explicit mapping for this dtype. "                                 \
+                          "If this is a backend dispatch, register the dtype in the backend TypeMap; "                 \
+                          "if this is DispatchFunc, the dtype is not supported by the default TypeMap.");              \
             using T = MappedType_t<TypeMap, DType>;                                                                    \
             return TypeMapDispatcher<TypeMap, Index + 1, AllowedListTuple, ResolvedTypes..., T>::call(                 \
                 dtypes, std::forward<Functor>(func), context_identifier, std::forward<Args>(args)...);                 \
@@ -308,6 +336,10 @@ auto DispatchByTypeMap(const std::vector<DataType> &dtypes, Functor &&func, std:
 
 // -----------------------------------------------------------------------------
 // Default framework dispatch using TypeMap
+// -----------------------------------------------------------------------------
+// TypeMap only covers standard types (int/uint/float32/float64).
+// Low-precision types (FP16/BF16) are intentionally unmapped — use a
+// backend-specific dispatch (DispatchCudaFunc, DispatchCpuFunc, …) instead.
 // -----------------------------------------------------------------------------
 template <DataType... AllowedDTypes, typename Functor, typename... Args>
 auto DispatchFunc(DataType dtype, Functor &&func, std::string_view context_identifier = "", Args &&...args) {
