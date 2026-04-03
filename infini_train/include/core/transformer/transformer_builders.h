@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
 
 #include "infini_train/include/core/transformer/spec_utils.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
@@ -35,9 +34,6 @@ ModuleSpec BuildAttentionSpec(const TransformerConfig &config);
 // Build MLP spec (supports GELU and SwiGLU)
 ModuleSpec BuildMLPSpec(const TransformerConfig &config);
 
-// Build TransformerLayer spec
-ModuleSpec BuildTransformerLayerSpec(const TransformerConfig &config);
-
 // Build VocabParallelEmbedding spec for token embeddings
 ModuleSpec BuildVocabEmbeddingSpec(const TransformerConfig &config);
 
@@ -46,5 +42,14 @@ ModuleSpec BuildPositionEmbeddingSpec(int64_t num_embeddings, int64_t embedding_
 
 // Build ColumnParallelLinear spec for output projection (lm_head)
 ModuleSpec BuildOutputProjSpec(const TransformerConfig &config, int64_t output_size, bool use_bias);
+
+// Build TransformerFirstStage spec
+ModuleSpec BuildFirstStageSpec(const TransformerConfig &config);
+
+// Build TransformerLayer spec
+ModuleSpec BuildTransformerLayerSpec(const TransformerConfig &config);
+
+// Build TransformerLastStage spec
+ModuleSpec BuildLastStageSpec(const TransformerConfig &config);
 
 } // namespace infini_train::nn

@@ -4,9 +4,7 @@
 #include "infini_train/include/core/transformer/transformer_config.h"
 
 namespace infini_train::nn {
-// Build GPT2 model spec: LayerNorm + GELU + standard attention
-ModuleSpec BuildGPT2Spec(const TransformerConfig &config);
 
-// Build LLaMA3 model spec: RMSNorm + SwiGLU + RoPE + GQA
-ModuleSpec BuildLLaMA3Spec(const TransformerConfig &config);
+ModuleSpec BuildDecoderOnlyTransformerSpec(const TransformerConfig &config, ModuleSpec first_stage, ModuleSpec chunk,
+                                           ModuleSpec last_stage);
 } // namespace infini_train::nn

@@ -2,7 +2,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <map>
 #include <memory>
 #include <random>
 #include <string>
@@ -12,15 +11,14 @@
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
+#include "example/llama3/config.h"
 #include "infini_train/include/core/models/decode_only_transformer/model.h"
-#include "infini_train/include/core/transformer/spec_utils.h"
-#include "infini_train/include/core/transformer/transformer_config.h"
-#include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/causal_self_attention.h"
 #include "infini_train/include/nn/modules/mlp.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
+#include "infini_train/include/tensor.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
@@ -65,7 +63,7 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
     const auto version_major = BytesToType<int32_t>(header, 56);
     const auto version_minor = BytesToType<int32_t>(header, 60);
 
-    nn::TransformerConfig llama3_config = nn::TransformerConfig::LLaMA3();
+    nn::TransformerConfig llama3_config = nn::llama3::LLaMA3Config();
     llama3_config.block_size = block_size;
     llama3_config.vocab_size = vocab_size;
     llama3_config.n_layer = n_layer;

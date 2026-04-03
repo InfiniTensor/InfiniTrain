@@ -1,14 +1,14 @@
 #include <iostream>
-#include <memory>
 
 #include "glog/logging.h"
 
+#include "example/gpt2/config.h"
+#include "example/llama3/config.h"
 #include "infini_train/include/core/models/decode_only_transformer/layer_specs.h"
 #include "infini_train/include/core/models/decode_only_transformer/model.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/core/transformer/spec_utils.h"
 #include "infini_train/include/core/transformer/transformer_builders.h"
-#include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/activations.h"
 #include "infini_train/include/nn/modules/causal_self_attention.h"
 #include "infini_train/include/nn/modules/mlp.h"
@@ -89,7 +89,7 @@ void test_gpt2_spec() {
     std::cout << "\n=== Test 2: GPT2 Spec Building ===" << std::endl;
 
     // Create GPT2 configuration
-    nn::TransformerConfig config = nn::TransformerConfig::GPT2();
+    nn::TransformerConfig config = nn::gpt2::GPT2Config();
     config.block_size = 1024;
     config.vocab_size = 50257;
     config.n_layer = 12;
@@ -97,7 +97,8 @@ void test_gpt2_spec() {
     config.n_embd = 768;
 
     // Build GPT2 spec
-    nn::ModuleSpec spec = nn::BuildGPT2Spec(config);
+    nn::ModuleSpec spec = nn::BuildDecoderOnlyTransformerSpec(
+        config, nn::BuildFirstStageSpec(config), nn::BuildTransformerLayerSpec(config), nn::BuildLastStageSpec(config));
 
     // Verify spec structure
     bool test_passed = true;
@@ -158,7 +159,7 @@ void test_llama3_spec() {
     std::cout << "\n=== Test 3: LLaMA3 Spec Building ===" << std::endl;
 
     // Create LLaMA3 configuration
-    nn::TransformerConfig config = nn::TransformerConfig::LLaMA3();
+    nn::TransformerConfig config = nn::llama3::LLaMA3Config();
     config.block_size = 8192;
     config.vocab_size = 128256;
     config.n_layer = 32;
@@ -169,7 +170,8 @@ void test_llama3_spec() {
     config.multiple_of = 256;
 
     // Build LLaMA3 spec
-    nn::ModuleSpec spec = nn::BuildLLaMA3Spec(config);
+    nn::ModuleSpec spec = nn::BuildDecoderOnlyTransformerSpec(
+        config, nn::BuildFirstStageSpec(config), nn::BuildTransformerLayerSpec(config), nn::BuildLastStageSpec(config));
 
     // Verify spec structure
     bool test_passed = true;
@@ -217,7 +219,7 @@ void test_llama3_spec() {
 void test_gpt2_instantiation() {
     std::cout << "\n=== Test 4: GPT2 Model Instantiation ===" << std::endl;
 
-    nn::TransformerConfig config = nn::TransformerConfig::GPT2();
+    nn::TransformerConfig config = nn::gpt2::GPT2Config();
     config.block_size = 1024;
     config.vocab_size = 50257;
     config.n_layer = 12;
@@ -246,7 +248,7 @@ void test_gpt2_instantiation() {
 void test_llama3_instantiation() {
     std::cout << "\n=== Test 5: LLaMA3 Model Instantiation ===" << std::endl;
 
-    nn::TransformerConfig config = nn::TransformerConfig::LLaMA3();
+    nn::TransformerConfig config = nn::llama3::LLaMA3Config();
 
     try {
         auto model = std::make_shared<DecoderOnlyTransformer>(config);
@@ -270,7 +272,7 @@ void test_llama3_instantiation() {
 void test_dimensions() {
     std::cout << "\n=== Test 6: Dimension Validation ===" << std::endl;
 
-    nn::TransformerConfig config = nn::TransformerConfig::GPT2();
+    nn::TransformerConfig config = nn::gpt2::GPT2Config();
     config.block_size = 1024;
     config.vocab_size = 50257;
     config.n_layer = 12;

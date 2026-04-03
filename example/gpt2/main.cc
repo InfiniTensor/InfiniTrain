@@ -12,7 +12,6 @@
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/core/models/decode_only_transformer/model.h"
 #include "infini_train/include/core/runtime/device_guard.h"
-#include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
@@ -37,6 +36,7 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
+#include "example/gpt2/config.h"
 
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
@@ -188,7 +188,7 @@ void Train(const nn::parallel::Rank &rank) {
     // ManualSeed(42);
 
     // init the model, either from scratch or from OpenAI pretrained checkpoint
-    nn::TransformerConfig model_config = nn::TransformerConfig::GPT2();
+    nn::TransformerConfig model_config = nn::gpt2::GPT2Config();
     std::shared_ptr<nn::Module> model = nullptr;
 
     if (!FLAGS_llmc_filepath.empty()) {

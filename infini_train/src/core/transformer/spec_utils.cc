@@ -1,7 +1,6 @@
 #include "infini_train/include/core/transformer/spec_utils.h"
 
 #include <any>
-#include <stdexcept>
 #include <string>
 #include <typeindex>
 
@@ -63,5 +62,4 @@ std::shared_ptr<Module> BuildModule(const TransformerConfig &config, const Modul
 
     return module;
 }
-
 } // namespace infini_train::nn

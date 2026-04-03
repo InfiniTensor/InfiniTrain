@@ -11,8 +11,8 @@
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
+#include "example/gpt2/config.h"
 #include "infini_train/include/core/models/decode_only_transformer/model.h"
-#include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/causal_self_attention.h"
 #include "infini_train/include/nn/modules/mlp.h"
 #include "infini_train/include/nn/modules/normalization.h"
@@ -21,6 +21,7 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
+#include "infini_train/include/tensor.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
@@ -76,7 +77,7 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_GPT2(co
     // NOTE(zbl): vocab_size needs to be padded to multiple of TP size
     const auto model_vocab_size = tp_size > 1 ? padded_vocab_size : vocab_size;
 
-    nn::TransformerConfig gpt2_config = nn::TransformerConfig::GPT2();
+    nn::TransformerConfig gpt2_config = nn::gpt2::GPT2Config();
     gpt2_config.block_size = block_size;
     gpt2_config.vocab_size = model_vocab_size;
     gpt2_config.original_vocab_size = vocab_size;

@@ -1,30 +1,32 @@
 #pragma once
+
 #include <cstdint>
 #include <optional>
-#include <string>
 
 namespace infini_train::nn {
 
+enum class ModelType {
+    kGPT2,   // GPT-2
+    kLLaMA3, // LLaMA3
+};
+
 enum class AttentionType {
-    kStandard, // Standard attention (GPT2 style, no RoPE)
-    kRoPE      // Rotary Position Embedding (LLaMA3 style)
+    kStandard, // Standard attention
+    kRoPE      // Rotary Position Embedding
 };
 
 enum class MLPType {
-    kGELU,  // GELU activation (GPT2 style)
-    kSwiGLU // SwiGLU activation (LLaMA3 style)
+    kGELU,  // GELU activation
+    kSwiGLU // SwiGLU activation
 };
 
 enum class NormType {
-    kLayerNorm, // LayerNorm (GPT2 style)
-    kRMSNorm    // RMSNorm (LLaMA3 style)
+    kLayerNorm, // LayerNorm
+    kRMSNorm    // RMSNorm
 };
 
 struct TransformerConfig {
-    static constexpr char kGPT2Name[] = "GPT2";
-    static constexpr char kLLaMA3Name[] = "LLaMA3";
-
-    std::string model_type = "";
+    ModelType model_type = ModelType::kGPT2;
 
     int64_t block_size = 1024;           // Max seq_len
     int64_t vocab_size = 50304;          // Vocab size
@@ -59,42 +61,5 @@ struct TransformerConfig {
     int64_t max_gen_batch_size = 4; // max batch size during inference
 
     bool UseGQA() const { return n_kv_head < n_head; }
-
-    static TransformerConfig GPT2() {
-        return {.model_type = kGPT2Name,
-                .block_size = 1024,
-                .vocab_size = 50304,
-                .original_vocab_size = 50257,
-                .n_layer = 12,
-                .n_head = 12,
-                .n_kv_head = 12,
-                .n_embd = 768,
-                .attention_type = AttentionType::kStandard,
-                .activation_type = MLPType::kGELU,
-                .norm_type = NormType::kLayerNorm,
-                .use_bias = true,
-                .tie_weights = true,
-                .ffn_expansion_ratio = 4.0f,
-                .ffn_dim_multiplier = std::nullopt,
-                .multiple_of = 1};
-    }
-
-    static TransformerConfig LLaMA3() {
-        return {.model_type = kLLaMA3Name,
-                .block_size = 8192,
-                .vocab_size = 128256,
-                .n_layer = 16,
-                .n_head = 32,
-                .n_kv_head = 8,
-                .n_embd = 2048,
-                .attention_type = AttentionType::kRoPE,
-                .activation_type = MLPType::kSwiGLU,
-                .norm_type = NormType::kRMSNorm,
-                .use_bias = false,
-                .tie_weights = false,
-                .ffn_expansion_ratio = 4.0f,
-                .ffn_dim_multiplier = 1.5f,
-                .multiple_of = 256};
-    }
 };
 } // namespace infini_train::nn

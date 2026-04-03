@@ -7,12 +7,11 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/core/models/decode_only_transformer/layer_specs.h"
-#include "infini_train/include/core/transformer/spec_utils.h"
+#include "infini_train/include/core/transformer/transformer_builders.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/core/transformer/transformer_model.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
-#include "infini_train/include/tensor.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
@@ -37,7 +36,9 @@ public:
     };
 
     explicit DecoderOnlyTransformer(const nn::TransformerConfig &config)
-        : TransformerModel(config, BuildModelSpec(config)),
+        : TransformerModel(config, nn::BuildDecoderOnlyTransformerSpec(config, nn::BuildFirstStageSpec(config),
+                                                                       nn::BuildTransformerLayerSpec(config),
+                                                                       nn::BuildLastStageSpec(config))),
           stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
               Config().n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
               nn::parallel::global::GetVirtualPipelineParallelSize())) {}
@@ -52,10 +53,5 @@ public:
     int GetChunkSize() const;
 
 private:
-    static nn::ModuleSpec BuildModelSpec(const nn::TransformerConfig &config) {
-        return (config.model_type == nn::TransformerConfig::kGPT2Name) ? BuildGPT2Spec(config)
-                                                                       : BuildLLaMA3Spec(config);
-    }
-
     const infini_train::nn::parallel::StageInfo stage_info_;
 };
