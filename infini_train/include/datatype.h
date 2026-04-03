@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
 
 namespace infini_train {
@@ -303,110 +302,9 @@ template <> struct DataTypeMap<BF16> {
     static constexpr DataType value = DataType::kBFLOAT16;
 };
 
-// -----------------------------------------------------------------------------
-// Type traits extensions (framework fallback scalar semantics)
-// -----------------------------------------------------------------------------
-template <typename T> struct is_floating_point_ext : std::is_floating_point<T> {};
-
-template <typename T> struct is_arithmetic_ext : std::is_arithmetic<T> {};
-
-template <> struct is_floating_point_ext<BF16> : std::true_type {};
-template <> struct is_arithmetic_ext<BF16> : std::true_type {};
-
-template <> struct is_floating_point_ext<FP16> : std::true_type {};
-template <> struct is_arithmetic_ext<FP16> : std::true_type {};
-
-// -----------------------------------------------------------------------------
-// Promotion helpers (framework-level WidestType)
-// -----------------------------------------------------------------------------
-namespace detail {
-
-template <typename T1, typename T2> struct LargerType {
-    static constexpr size_t size1 = sizeof(T1);
-    static constexpr size_t size2 = sizeof(T2);
-    using type = std::conditional_t<(size1 >= size2), T1, T2>;
-};
-
-template <> struct LargerType<BF16, FP16> {
-    using type = float;
-};
-
-template <> struct LargerType<FP16, BF16> {
-    using type = float;
-};
-
-/**
- * @brief Finds the first type in a parameter pack that satisfies the given predicate.
- * If no type matches, returns the last type in the pack (base case).
- */
-template <template <typename> class Predicate, typename... Ts> struct FirstMatchingType;
-
-template <template <typename> class Predicate, typename T> struct FirstMatchingType<Predicate, T> {
-    using type = T;
-};
-
-template <template <typename> class Predicate, typename T, typename... Ts>
-struct FirstMatchingType<Predicate, T, Ts...> {
-    using type = std::conditional_t<Predicate<T>::value, T, typename FirstMatchingType<Predicate, Ts...>::type>;
-};
-
-/**
- * @brief Recursively finds the widest type among those that satisfy a predicate.
- * Types not satisfying the predicate are ignored and don't affect the current maximum.
- */
-template <template <typename> class Predicate, typename CurrentMax, typename... Ts> struct WidestTypeImpl;
-
-template <template <typename> class Predicate, typename CurrentMax> struct WidestTypeImpl<Predicate, CurrentMax> {
-    using type = CurrentMax;
-};
-
-template <template <typename> class Predicate, typename CurrentMax, typename T, typename... Ts>
-struct WidestTypeImpl<Predicate, CurrentMax, T, Ts...> {
-    using new_max = std::conditional_t<Predicate<T>::value, typename LargerType<CurrentMax, T>::type, CurrentMax>;
-    using type = typename WidestTypeImpl<Predicate, new_max, Ts...>::type;
-};
-
-template <template <typename> class Predicate, typename... Ts> struct MaxTypeBySizeWithPredicate {
-    using first = typename FirstMatchingType<Predicate, Ts...>::type;
-    using type = typename WidestTypeImpl<Predicate, first, Ts...>::type;
-};
-
-} // namespace detail
-
-/**
- * @brief Finds the widest/largest type according to a PyTorch-like dtype promotion rule among a pack of arithmetic
- * types.
- *
- * - If floating-point types are present, selects the largest floating-point type;
- * - Otherwise selects the largest integral type.
- * - If multiple integral types have the same size, precedence follows the list order.
- *
- * Note:
- * - FP16/BF16 are treated as floating-point.
- * - Mixed FP16 and BF16 promotes to float (32-bit).
- */
-template <typename... Ts> struct WidestType {
-    static_assert(sizeof...(Ts) > 0, "At least one type is required");
-    static_assert((is_arithmetic_ext<Ts>::value && ...),
-                  "All types must be arithmetic or framework floating-point types (FP16/BF16)");
-
-    static constexpr bool has_float = (is_floating_point_ext<Ts>::value || ...);
-
-    using type =
-        typename std::conditional_t<has_float, detail::MaxTypeBySizeWithPredicate<is_floating_point_ext, Ts...>,
-                                    detail::MaxTypeBySizeWithPredicate<std::is_integral, Ts...>>::type;
-};
-
-// Convenience alias
-template <typename... Ts> using WidestType_t = typename WidestType<Ts...>::type;
-
 // =============================================================================
 // DataType-level promotion  (pure enum → enum, no concrete/backend types)
 // =============================================================================
-// These facilities replace `DataTypeMap_v<WidestType_t<Ta, Tb>>` in CUDA
-// kernels, so that backend kernels never need to know about __half /
-// __nv_bfloat16 at promotion time.
-//
 // Rules (priority order):
 //   1. FP16 + BF16 → FLOAT32   (neither is a lossless superset of the other)
 //   2. Any float dominates any integer → keep the float type

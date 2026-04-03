@@ -861,8 +861,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     switch (promoted_type) {
         DISPATCH_CASE(WRAP({
                           if (needs_broadcast) {
-                              grad_a->Fill<float>(0.0f);
-                              grad_b->Fill<float>(0.0f);
+                              grad_a->Fill(0.0f);
+                              grad_b->Fill(0.0f);
                           }
                           LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
                                                      a_promoted, b_promoted);
@@ -870,8 +870,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
                           if (needs_broadcast) {
-                              grad_a->Fill<nv_bfloat16>(0);
-                              grad_b->Fill<nv_bfloat16>(0);
+                              grad_a->Fill(0.0f);
+                              grad_b->Fill(0.0f);
                           }
                           LaunchBackward<256, nv_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims,
                                                            grad_output_promoted, a_promoted, b_promoted);
