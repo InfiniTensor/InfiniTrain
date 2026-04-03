@@ -1,6 +1,8 @@
 #!/bin/bash
 
 set -e
+export TMPDIR=/data/shared/$USER_tmp
+mkdir -p $TMPDIR
 set -o pipefail
 
 usage() {

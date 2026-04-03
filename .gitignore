@@ -5,3 +5,4 @@ build/
 *.log
 *.report.rank*
 *.records.log.rank*
+*.md

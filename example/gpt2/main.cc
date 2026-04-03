@@ -79,6 +79,8 @@ DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)")
 DEFINE_string(
     precision_check, "",
     "precision check config: level=N,format=simple|table,output_md5=true|false,output_path=PATH,baseline=PATH");
+// flash attention
+DEFINE_bool(flash, false, "Enable FlashAttention for CausalSelfAttention");
 
 // LoRA parameters
 DEFINE_int32(lora_rank, 0, "LoRA rank (0 = disabled)");
@@ -188,12 +190,14 @@ void Train(const nn::parallel::Rank &rank) {
 
     // init the model, either from scratch or from OpenAI pretrained checkpoint
     GPT2Config model_config;
+    model_config.flash = FLAGS_flash;
     std::shared_ptr<nn::Module> model = nullptr;
 
     if (!FLAGS_llmc_filepath.empty()) {
-        model = GPT2::FromLLMC(FLAGS_llmc_filepath);
+        model = GPT2::FromLLMC(FLAGS_llmc_filepath, FLAGS_flash);
     } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
+        model_config.flash = FLAGS_flash;
         model = std::make_shared<GPT2>(model_config);
     } else {
         model = GPT2::FromPretrained(kStrToModelType.at(FLAGS_model));

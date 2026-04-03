@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace infini_train {
@@ -182,5 +183,26 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &inputs
 // Returns:
 //   Concatenation of the input tensors.
 std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim = 0);
+
+// Computes scaled dot-product attention using fused FlashAttention kernel.
+//
+// This function is compatible with PyTorch's torch.nn.functional.scaled_dot_product_attention.
+// When is_causal is true, a causal (lower-triangular) mask is applied.
+//
+// Args:
+//   query:     [B, H_q, N, d] query tensor.
+//   key:       [B, H_kv, N, d] key tensor (H_kv <= H_q for GQA).
+//   value:     [B, H_kv, N, d] value tensor.
+//   is_causal: Apply causal attention mask (default false).
+//   dropout_p: Dropout probability on attention weights (default 0.0).
+//   scale:     Scaling factor for QK^T. Defaults to 1/sqrt(d) if not provided.
+//
+// Returns:
+//   Attention output tensor [B, H_q, N, d].
+std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &query,
+                                                  const std::shared_ptr<Tensor> &key,
+                                                  const std::shared_ptr<Tensor> &value, bool is_causal = false,
+                                                  float dropout_p = 0.0f,
+                                                  std::optional<float> scale = std::nullopt);
 
 } // namespace infini_train::nn::function

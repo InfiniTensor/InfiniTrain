@@ -80,8 +80,16 @@ if(USE_CUDA)
   # CUDA compilation options
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
+  # FlashAttention-2 support (optional)
+  option(USE_FLASH_ATTN "Enable FlashAttention-2 support" OFF)
+
   # Only compile CUDA kernels / cuda sources here (your original used src/*.cu)
   file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
+
+  # When FlashAttention is disabled, exclude flash_attention.cu from framework kernels
+  if(NOT USE_FLASH_ATTN)
+    list(FILTER CUDA_KERNELS EXCLUDE REGEX ".*flash_attention\\.cu$")
+  endif()
 
   add_library(infini_train_cuda_kernels STATIC ${CUDA_KERNELS})
   set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "75;80;90")
@@ -93,6 +101,37 @@ if(USE_CUDA)
       CUDA::cublas
       CUDA::cuda_driver
   )
+
+  # Build FlashAttention-2 as a separate static library when enabled
+  if(USE_FLASH_ATTN)
+    add_compile_definitions(USE_FLASH_ATTN=1)
+    message(STATUS "FlashAttention-2 support enabled")
+
+    # FlashAttention-2 source files
+    file(GLOB FLASH_ATTN_SRCS
+      ${PROJECT_SOURCE_DIR}/third_party/flash-attention/csrc/flash_attn/src/*.cu)
+
+    add_library(flash_attn STATIC ${FLASH_ATTN_SRCS})
+    set_target_properties(flash_attn PROPERTIES CUDA_ARCHITECTURES "80;90")
+
+    target_include_directories(flash_attn PUBLIC
+      ${PROJECT_SOURCE_DIR}/third_party/flash-attention/csrc/flash_attn
+      ${PROJECT_SOURCE_DIR}/third_party/flash-attention/csrc/flash_attn/src
+      ${PROJECT_SOURCE_DIR}/third_party/cutlass/include
+    )
+
+    target_compile_options(flash_attn PRIVATE
+      $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --expt-extended-lambda -O2>)
+
+    # Let the framework kernel find flash_attn headers
+    target_include_directories(infini_train_cuda_kernels PUBLIC
+      ${PROJECT_SOURCE_DIR}/third_party/flash-attention/csrc/flash_attn
+      ${PROJECT_SOURCE_DIR}/third_party/flash-attention/csrc/flash_attn/src
+      ${PROJECT_SOURCE_DIR}/third_party/cutlass/include
+    )
+
+    target_link_libraries(infini_train_cuda_kernels PUBLIC flash_attn)
+  endif()
 
   if(USE_NCCL)
     message(STATUS "Add USE_NCCL, use NCCL with CUDA")
@@ -139,15 +178,28 @@ endif()
 # ------------------------------------------------------------------------------
 function(link_infini_train_exe target_name)
   if(USE_CUDA)
-    target_link_libraries(${target_name} PRIVATE
-      "-Wl,--start-group"
-      "-Wl,--whole-archive"
-        infini_train
-        infini_train_cpu_kernels
-        infini_train_cuda_kernels
-      "-Wl,--no-whole-archive"
-      "-Wl,--end-group"
-    )
+    if(USE_FLASH_ATTN)
+      target_link_libraries(${target_name} PRIVATE
+        "-Wl,--start-group"
+        "-Wl,--whole-archive"
+          infini_train
+          infini_train_cpu_kernels
+          infini_train_cuda_kernels
+          flash_attn
+        "-Wl,--no-whole-archive"
+        "-Wl,--end-group"
+      )
+    else()
+      target_link_libraries(${target_name} PRIVATE
+        "-Wl,--start-group"
+        "-Wl,--whole-archive"
+          infini_train
+          infini_train_cpu_kernels
+          infini_train_cuda_kernels
+        "-Wl,--no-whole-archive"
+        "-Wl,--end-group"
+      )
+    endif()
   else()
     target_link_libraries(${target_name} PRIVATE
       "-Wl,--start-group"
