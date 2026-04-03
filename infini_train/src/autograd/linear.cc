@@ -31,15 +31,15 @@ void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
     // FIXME: compute_dtype is not necessarily the dtype of output_tensor; it should be
     // determined by autocast, not derived from output_tensors[0]->Dtype().
     auto compute_dtype = output_tensors[0]->Dtype();
-    saved_tensors_ = {
-        input->Dtype() == compute_dtype ? input : std::make_shared<Tensor>(input->To(compute_dtype)),
-        weight->Dtype() == compute_dtype ? weight : std::make_shared<Tensor>(weight->To(compute_dtype)),
-    };
     bool need_input = needs_input_grad_.size() > 0 && needs_input_grad_[0];
     bool need_weight = needs_input_grad_.size() > 1 && needs_input_grad_[1];
 
+    auto cast = [&](const std::shared_ptr<Tensor> &t) {
+        return t->Dtype() == compute_dtype ? t : std::make_shared<Tensor>(t->To(compute_dtype));
+    };
+
     // grad_input needs weight, grad_weight needs input
-    saved_tensors_ = {need_weight ? input : nullptr, need_input ? weight : nullptr};
+    saved_tensors_ = {need_weight ? cast(input) : nullptr, need_input ? cast(weight) : nullptr};
 
     transpose_ = true;
     bias_ = input_tensors.size() == 3;
@@ -61,6 +61,7 @@ std::vector<std::shared_ptr<Tensor>> Linear::Backward(const std::vector<std::sha
                                   .bias = bias_ && needs_input_grad_.size() > 2 && needs_input_grad_[2]};
 
     auto device = grad_output->GetDevice().type();
+    // TODO: skip autograd graph construction entirely when no input requires grad
     auto [grad_input, grad_weight, grad_bias]
         = Dispatcher::Instance()
               .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
