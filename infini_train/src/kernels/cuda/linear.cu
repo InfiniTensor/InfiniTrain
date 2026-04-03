@@ -335,8 +335,8 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto dtype = grad_output->Dtype();
 
     // For type promotion, use available tensors
-    DataType input_dtype = input ? input->Dtype() : dtype;
-    DataType weight_dtype = weight ? weight->Dtype() : dtype;
+    DataType input_dtype = input ? input->Dtype() : (weight ? weight->Dtype() : dtype);
+    DataType weight_dtype = weight ? weight->Dtype() : (input ? input->Dtype() : dtype);
     // Compute dtype determined by saved tensors (forward compute dtype), not grad_output
     DataType compute_dtype = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
         {input_dtype, weight_dtype}, [=]<typename Tin, typename Tw>() { return DataTypeMap_v<WidestType_t<Tin, Tw>>; },
@@ -361,7 +361,8 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     }
     // No Fill(0) needed: cuBLAS beta=0.0f fully overwrites output, and ReduceColumnsKernel assigns directly.
     if (compute_grad_bias && bias) {
-        grad_bias = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, output_dtype, grad_output->GetDevice());
+        grad_bias
+            = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, output_dtype, grad_output->GetDevice());
     }
 
     auto device = grad_output->GetDevice();
