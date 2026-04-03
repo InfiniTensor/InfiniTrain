@@ -2,7 +2,6 @@
 
 #include "infini_train/include/core/transformer/spec_utils.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/modules/transformer.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 
 namespace infini_train::nn {

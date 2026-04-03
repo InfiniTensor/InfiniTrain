@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <memory>
-#include <tuple>
 #include <vector>
 
 #include "glog/logging.h"
@@ -18,7 +17,6 @@
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
-#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
 // ========== Module Registration using INFINI_TRAIN_REGISTER_MODULE macro ==========
@@ -36,6 +34,7 @@ INFINI_TRAIN_REGISTER_MODULE_CUSTOM(SwiGLU, [](const TransformerConfig &config, 
     return std::make_shared<SwiGLU>();
 });
 
+// RMSNorm
 INFINI_TRAIN_REGISTER_MODULE_CUSTOM(RMSNorm, [](const TransformerConfig &config, const ModuleSpec &spec) {
     int64_t dim = GetRequiredParam<int>(spec, kDim);
     float eps = GetRequiredParam<float>(spec, kEps);

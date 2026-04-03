@@ -1,12 +1,12 @@
 #include "infini_train/include/core/transformer/transformer_builders.h"
 
 #include <cmath>
-#include <memory>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/core/transformer/spec_utils.h"
 #include "infini_train/include/core/transformer/transformer_config.h"
+#include "infini_train/include/core/transformer/transformer_model.h"
 #include "infini_train/include/nn/modules/activations.h"
 #include "infini_train/include/nn/modules/causal_self_attention.h"
 #include "infini_train/include/nn/modules/mlp.h"
@@ -128,24 +128,6 @@ ModuleSpec BuildMLPSpec(const TransformerConfig &config) {
     return spec;
 }
 
-ModuleSpec BuildTransformerLayerSpec(const TransformerConfig &config) {
-    ModuleSpec spec(typeid(TransformerLayer));
-
-    // LayerNorm 1 (before attention)
-    spec.WithSubmodule(TransformerLayer::kLn1LayerName, BuildNormSpec(config));
-
-    // CausalSelfAttention
-    spec.WithSubmodule(TransformerLayer::kAttnLayerName, BuildAttentionSpec(config));
-
-    // LayerNorm 2 (before MLP)
-    spec.WithSubmodule(TransformerLayer::kLn2LayerName, BuildNormSpec(config));
-
-    // MLP
-    spec.WithSubmodule(TransformerLayer::kMlpLayerName, BuildMLPSpec(config));
-
-    return spec;
-}
-
 ModuleSpec BuildVocabEmbeddingSpec(const TransformerConfig &config) {
     ModuleSpec spec(typeid(parallel::VocabParallelEmbedding));
     spec.WithParam(kNumEmbeddings, static_cast<int>(config.vocab_size))
@@ -168,4 +150,41 @@ ModuleSpec BuildOutputProjSpec(const TransformerConfig &config, int64_t output_s
     return spec;
 }
 
+ModuleSpec BuildFirstStageSpec(const TransformerConfig &config) {
+    ModuleSpec spec(typeid(TransformerFirstStage));
+    spec.WithSubmodule(TransformerFirstStage::kWTELayerName, BuildVocabEmbeddingSpec(config));
+
+    if (config.activation_type == MLPType::kGELU) {
+        spec.WithSubmodule(TransformerFirstStage::kWPELayerName,
+                           BuildPositionEmbeddingSpec(config.block_size, config.n_embd));
+    }
+
+    return spec;
+}
+
+ModuleSpec BuildTransformerLayerSpec(const TransformerConfig &config) {
+    ModuleSpec spec(typeid(TransformerLayer));
+
+    // LayerNorm 1 (before attention)
+    spec.WithSubmodule(TransformerLayer::kLn1LayerName, BuildNormSpec(config));
+
+    // CausalSelfAttention
+    spec.WithSubmodule(TransformerLayer::kAttnLayerName, BuildAttentionSpec(config));
+
+    // LayerNorm 2 (before MLP)
+    spec.WithSubmodule(TransformerLayer::kLn2LayerName, BuildNormSpec(config));
+
+    // MLP
+    spec.WithSubmodule(TransformerLayer::kMlpLayerName, BuildMLPSpec(config));
+
+    return spec;
+}
+
+ModuleSpec BuildLastStageSpec(const TransformerConfig &config) {
+    ModuleSpec spec(typeid(TransformerLastStage));
+    spec.WithSubmodule(TransformerLastStage::kLnFLayerName, BuildNormSpec(config))
+        .WithSubmodule(TransformerLastStage::kLMHeadLayerName, BuildOutputProjSpec(config, config.vocab_size, false));
+
+    return spec;
+}
 } // namespace infini_train::nn
