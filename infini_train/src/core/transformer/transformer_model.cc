@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <map>
-#include <tuple>
 #include <vector>
 
 #include "glog/logging.h"
@@ -19,9 +18,6 @@
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
-#include "third_party/glog/src/glog/logging.h"
-
-using namespace infini_train;
 
 namespace infini_train::nn {
 

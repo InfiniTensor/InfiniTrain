@@ -10,7 +10,6 @@
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/core/models/decode_only_transformer/model.h"
 #include "infini_train/include/core/runtime/device_guard.h"
-#include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
@@ -36,6 +35,7 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
+#include "example/llama3/config.h"
 
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
@@ -168,7 +168,7 @@ void Train(const nn::parallel::Rank &rank) {
     // rng / reproducibility
     // ManualSeed(42);
 
-    nn::TransformerConfig model_config = nn::TransformerConfig::LLaMA3();
+    nn::TransformerConfig model_config = nn::llama3::LLaMA3Config();
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
         model = DecoderOnlyTransformer::FromLLMC_LLaMA3(FLAGS_llmc_filepath);
