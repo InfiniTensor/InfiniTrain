@@ -70,6 +70,9 @@ public:
     // When all params in a bucket group are ready, will call StartGradSync()
     void RegisterGradReady(const std::shared_ptr<Tensor> &parameter);
 
+    // Mark whether current backward corresponds to the last microbatch in a gradient accumulation window.
+    void SetIsLastMicrobatch(bool is_last_microbatch);
+
     // Start grad reduce
     void StartGradSync();
 
