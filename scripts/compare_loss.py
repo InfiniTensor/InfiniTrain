@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # Usage:
 # python tools/compare_loss.py \
-#   /data/shared/InfiniTrain-dev/logs/202511_a800/20260105/feature/add_1F1B_f2a383a/logs \
-#   /data/shared/InfiniTrain-dev/logs/202511_a800/20251223/feature/tp-pp-split-stream/logs \
+#   /path/to/baseline/logs \
+#   /path/to/test/logs \
 #   --threshold-fp32 1e-5 --threshold-bf16 1e-2
 
 import re
@@ -50,8 +50,8 @@ def compare_files(file1, file2, threshold):
 
 def main():
     parser = ArgumentParser(description='Compare training loss between two log directories')
-    parser.add_argument('dir1', type=Path, help='First log directory')
-    parser.add_argument('dir2', type=Path, help='Second log directory')
+    parser.add_argument('dir1', type=Path, help='Baseline log directory')
+    parser.add_argument('dir2', type=Path, help='Test log directory')
     parser.add_argument('--threshold', type=float, help='Loss difference threshold (deprecated, use --threshold-fp32 and --threshold-bf16)')
     parser.add_argument('--threshold-fp32', type=float, default=1e-5, help='Loss difference threshold for fp32 (default: 1e-5)')
     parser.add_argument('--threshold-bf16', type=float, default=1e-2, help='Loss difference threshold for bfloat16 (default: 1e-2)')
@@ -63,6 +63,10 @@ def main():
         args.threshold_fp32 = args.threshold
         args.threshold_bf16 = args.threshold
 
+    print(f"Baseline: {args.dir1.resolve()}")
+    print(f"Test:     {args.dir2.resolve()}")
+    print()
+
     files1, duplicates1 = collect_log_files(args.dir1)
     files2, duplicates2 = collect_log_files(args.dir2)
     exit_if_duplicate_logs(args.dir1, duplicates1)
@@ -73,9 +77,9 @@ def main():
     common = set(files1.keys()) & set(files2.keys())
 
     if only_in_1:
-        print(f"Files only in {args.dir1.resolve()}: {', '.join(sorted(only_in_1))}")
+        print(f"Files only in baseline: {', '.join(sorted(only_in_1))}")
     if only_in_2:
-        print(f"Files only in {args.dir2.resolve()}: {', '.join(sorted(only_in_2))}")
+        print(f"Files only in test: {', '.join(sorted(only_in_2))}")
     if only_in_1 or only_in_2:
         print()
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # Usage:
 # python tools/compare_tps.py \
-#   /path/to/logs/dir1 \
-#   /path/to/logs/dir2 \
+#   /path/to/baseline/logs \
+#   /path/to/test/logs \
 #   --threshold 0.20
 
 import re
@@ -38,32 +38,36 @@ def compare_files(file1, file2, threshold):
     avg1 = sum(tps1.values()) / len(tps1)
     avg2 = sum(tps2.values()) / len(tps2)
 
-    # Calculate signed relative change: positive means dir1 faster, negative means dir1 slower
-    signed_change = (avg1 - avg2) / avg2 if avg2 > 0 else 0
+    # Calculate signed relative change of test vs baseline: positive means test faster, negative means test slower
+    signed_change = (avg2 - avg1) / avg1 if avg1 > 0 else 0
 
     messages = []
     failed = False
     if abs(signed_change) > threshold:
         sign = "+" if signed_change >= 0 else ""
         if signed_change < 0:
-            # dir1 slower than dir2 -> failure
+            # test slower than baseline -> failure
             label = "✗ SLOWER"
             failed = True
         else:
-            # dir1 faster than dir2 -> pass but notify
+            # test faster than baseline -> pass but notify
             label = "↑ FASTER"
-        messages.append(f"  Average tok/s: {avg1:.2f} vs {avg2:.2f} {label} ({sign}{signed_change*100:.1f}%, threshold: ±{threshold*100:.0f}%)")
+        messages.append(f"  Average tok/s: {avg1:.2f} (baseline) vs {avg2:.2f} (test) {label} ({sign}{signed_change*100:.1f}%, threshold: ±{threshold*100:.0f}%)")
         messages.append(f"  Steps compared: {len(tps1)} vs {len(tps2)} (excluding step 1)")
 
     return 1, failed, messages, avg1, avg2, signed_change, len(tps1), len(tps2)
 
 def main():
     parser = ArgumentParser(description='Compare tok/s between two log directories')
-    parser.add_argument('dir1', type=Path, help='First log directory')
-    parser.add_argument('dir2', type=Path, help='Second log directory')
+    parser.add_argument('dir1', type=Path, help='Baseline log directory')
+    parser.add_argument('dir2', type=Path, help='Test log directory')
     parser.add_argument('--threshold', type=float, default=0.20, help='Relative error threshold (default: 0.20 = 20%%)')
     parser.add_argument('--verbose', action='store_true', help='Print detailed output for all files, including passed ones')
     args = parser.parse_args()
+
+    print(f"Baseline: {args.dir1.resolve()}")
+    print(f"Test:     {args.dir2.resolve()}")
+    print()
 
     files1, duplicates1 = collect_log_files(args.dir1)
     files2, duplicates2 = collect_log_files(args.dir2)
@@ -75,9 +79,9 @@ def main():
     common = set(files1.keys()) & set(files2.keys())
 
     if only_in_1:
-        print(f"Files only in {args.dir1.resolve()}: {', '.join(sorted(only_in_1))}")
+        print(f"Files only in baseline: {', '.join(sorted(only_in_1))}")
     if only_in_2:
-        print(f"Files only in {args.dir2.resolve()}: {', '.join(sorted(only_in_2))}")
+        print(f"Files only in test: {', '.join(sorted(only_in_2))}")
     if only_in_1 or only_in_2:
         print()
 
