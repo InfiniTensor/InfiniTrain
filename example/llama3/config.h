@@ -1,11 +1,11 @@
 #pragma once
 
-#include "infini_train/include/core/transformer/transformer_config.h"
+#include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
-namespace infini_train::nn::llama3 {
+namespace nn = infini_train::nn;
+namespace llama3 {
 inline nn::TransformerConfig LLaMA3Config() {
-    return {.model_type = ModelType::kLLaMA3,
-            .block_size = 8192,
+    return {.block_size = 8192,
             .vocab_size = 128256,
             .original_vocab_size = 128256,
             .n_layer = 16,
@@ -21,4 +21,4 @@ inline nn::TransformerConfig LLaMA3Config() {
             .ffn_dim_multiplier = 1.5f,
             .multiple_of = 256};
 }
-} // namespace infini_train::nn::llama3
+} // namespace llama3

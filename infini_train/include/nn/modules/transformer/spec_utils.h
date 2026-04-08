@@ -11,7 +11,7 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/core/transformer/transformer_config.h"
+#include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
 namespace infini_train::nn {
 

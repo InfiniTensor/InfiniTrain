@@ -8,13 +8,13 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
-#include "infini_train/include/core/models/decode_only_transformer/model.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
@@ -35,6 +35,7 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
+#include "example/llama3/checkpoint_loader.h"
 #include "example/llama3/config.h"
 
 // I/O
@@ -168,12 +169,12 @@ void Train(const nn::parallel::Rank &rank) {
     // rng / reproducibility
     // ManualSeed(42);
 
-    nn::TransformerConfig model_config = nn::llama3::LLaMA3Config();
+    nn::TransformerConfig model_config = llama3::LLaMA3Config();
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        model = DecoderOnlyTransformer::FromLLMC_LLaMA3(FLAGS_llmc_filepath);
+        model = llama3::LoadFromLLMC(FLAGS_llmc_filepath);
     } else {
-        model = std::make_shared<DecoderOnlyTransformer>(model_config);
+        model = std::make_shared<nn::TransformerModel>(model_config);
     }
 
     model->To(device);
@@ -218,9 +219,8 @@ void Train(const nn::parallel::Rank &rank) {
         auto shapes = std::vector<std::vector<int64_t>>{
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
-        model = std::make_shared<nn::parallel::PipelineParallel>(
-            model, pp_world_size, num_micro_batches, shapes, pp_rank, device,
-            std::dynamic_pointer_cast<DecoderOnlyTransformer>(model)->GetChunkSize());
+        model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
+                                                                 pp_rank, device, llama3::GetChunkSize());
         if (ddp_world_size > 1) {
             auto ddp_config
                 = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};

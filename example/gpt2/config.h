@@ -1,11 +1,11 @@
 #pragma once
 
-#include "infini_train/include/core/transformer/transformer_config.h"
+#include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
-namespace infini_train::nn::gpt2 {
+namespace nn = infini_train::nn;
+namespace gpt2 {
 inline nn::TransformerConfig GPT2Config() {
-    return {.model_type = ModelType::kGPT2,
-            .block_size = 1024,
+    return {.block_size = 1024,
             .vocab_size = 50304,
             .original_vocab_size = 50257,
             .n_layer = 12,
@@ -22,4 +22,4 @@ inline nn::TransformerConfig GPT2Config() {
             .multiple_of = 1};
 }
 
-} // namespace infini_train::nn::gpt2
+} // namespace gpt2

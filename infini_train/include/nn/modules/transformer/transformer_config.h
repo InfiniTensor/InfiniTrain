@@ -26,8 +26,6 @@ enum class NormType {
 };
 
 struct TransformerConfig {
-    ModelType model_type = ModelType::kGPT2;
-
     int64_t block_size = 1024;           // Max seq_len
     int64_t vocab_size = 50304;          // Vocab size
     int64_t original_vocab_size = 50257; // Original vocab size before padding

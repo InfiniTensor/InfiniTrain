@@ -2,9 +2,9 @@
 
 #include <vector>
 
-#include "infini_train/include/core/transformer/spec_utils.h"
-#include "infini_train/include/core/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/modules/transformer/spec_utils.h"
+#include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
 namespace infini_train::nn {
 class MLP : public infini_train::nn::CloneableModule<MLP> {

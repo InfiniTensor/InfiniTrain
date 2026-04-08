@@ -1,3 +1,5 @@
+#include "example/llama3/checkpoint_loader.h"
+
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -12,11 +14,12 @@
 
 #include "example/common/utils.h"
 #include "example/llama3/config.h"
-#include "infini_train/include/core/models/decode_only_transformer/model.h"
-#include "infini_train/include/nn/modules/causal_self_attention.h"
-#include "infini_train/include/nn/modules/mlp.h"
 #include "infini_train/include/nn/modules/normalization.h"
-#include "infini_train/include/nn/modules/transformer.h"
+#include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
+#include "infini_train/include/nn/modules/transformer/layer_specs.h"
+#include "infini_train/include/nn/modules/transformer/mlp.h"
+#include "infini_train/include/nn/modules/transformer/transformer.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
@@ -35,7 +38,18 @@ constexpr int32_t kLLaMA3Magic = 20240803;
 constexpr int32_t kLLaMA3FP32Version = 3;
 } // namespace
 
-std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(const std::string &filepath) {
+namespace llama3 {
+
+int GetChunkSize() {
+    nn::TransformerConfig llama3_config = llama3::LLaMA3Config();
+
+    auto stage_info = nn::parallel::PipelineParallel::GetStageInfo(
+        llama3_config.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
+        nn::parallel::global::GetVirtualPipelineParallelSize());
+    return stage_info.layer_ranges_per_chunk.size();
+}
+
+std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -63,7 +77,7 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
     const auto version_major = BytesToType<int32_t>(header, 56);
     const auto version_minor = BytesToType<int32_t>(header, 60);
 
-    nn::TransformerConfig llama3_config = nn::llama3::LLaMA3Config();
+    nn::TransformerConfig llama3_config = llama3::LLaMA3Config();
     llama3_config.block_size = block_size;
     llama3_config.vocab_size = vocab_size;
     llama3_config.n_layer = n_layer;
@@ -76,7 +90,10 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
     llama3_config.use_scaled_rope = static_cast<bool>(use_scaled_rope);
     llama3_config.norm_eps = norm_eps;
     llama3_config.max_gen_batch_size = max_gen_bs;
-    auto llama3 = std::make_shared<DecoderOnlyTransformer>(llama3_config);
+    auto llama3 = std::make_shared<nn::TransformerModel>(
+        llama3_config,
+        nn::BuildTransformerSpec(llama3_config, nn::BuildFirstStageSpec(llama3_config),
+                                 nn::BuildTransformerLayerSpec(llama3_config), nn::BuildLastStageSpec(llama3_config)));
 
     // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
@@ -164,7 +181,8 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
     // ========== Read Sharded Params ==========
     // transformer.wte.weight : (vocab_size, n_embd) -> local tp_rank: rows of [v_start : v_start+vpp)
     if (is_first_stage) {
-        auto &wte = state_dict[std::format("{}.{}.{}", kTransformerModelName, nn::TransformerFirstStage::kWTELayerName,
+        auto &wte = state_dict[std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                           nn::TransformerFirstStage::kWTELayerName,
                                            nn::parallel::VocabParallelEmbedding::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(wte->DataPtr()),
                                 /*rows=*/vocab_size, /*cols=*/n_embd,
@@ -178,7 +196,7 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
     int local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", kTransformerModelName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                                   nn::TransformerLayer::kLn1LayerName, nn::RMSNorm::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
@@ -195,7 +213,7 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
             auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", kTransformerModelName, nn::TransformerChunk::kHLayerName,
+                "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
                 std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
                 nn::CausalSelfAttention::kCAttnLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
 
@@ -235,7 +253,7 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
             auto &tensor = state_dict[std::format(
-                "{}.{}.{}.{}.{}.{}", kTransformerModelName, nn::TransformerChunk::kHLayerName,
+                "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
                 std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
                 nn::CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];
             ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
@@ -252,7 +270,7 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", kTransformerModelName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                                   nn::TransformerLayer::kLn2LayerName, nn::RMSNorm::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
@@ -267,10 +285,10 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
-            auto &tensor
-                = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerModelName, nn::TransformerChunk::kHLayerName,
-                                         std::to_string(local_layer_index), nn::TransformerLayer::kMlpLayerName,
-                                         nn::MLP::kCFcLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
+                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
+                                                  nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                     /*rows=*/fc_out, /*cols=*/n_embd,
                                     /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
@@ -285,7 +303,7 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerModelName,
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                                   nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFc2LayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
@@ -303,10 +321,10 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
-            auto &tensor
-                = state_dict[std::format("{}.{}.{}.{}.{}.{}", kTransformerModelName, nn::TransformerChunk::kHLayerName,
-                                         std::to_string(local_layer_index), nn::TransformerLayer::kMlpLayerName,
-                                         nn::MLP::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
+                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCProjLayerName,
+                                                  nn::parallel::RowParallelLinear::kParamWeightName)];
             ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                     /*rows=*/n_embd, /*cols=*/fc_out,
                                     /*col_start=*/tp_rank * in_fc_pp, /*col_cnt=*/in_fc_pp);
@@ -322,8 +340,8 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
     {
         if (is_last_stage) {
             auto &ln_f
-                = state_dict[std::format("{}.{}.{}", kTransformerModelName, nn::TransformerLastStage::kLnFLayerName,
-                                         nn::RMSNorm::kParamWeightName)];
+                = state_dict[std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                         nn::TransformerLastStage::kLnFLayerName, nn::RMSNorm::kParamWeightName)];
             auto &lm_head = state_dict[std::format("{}.{}", nn::TransformerLastStage::kLMHeadLayerName,
                                                    nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(ln_f->DataPtr()), n_embd);
@@ -339,3 +357,4 @@ std::shared_ptr<DecoderOnlyTransformer> DecoderOnlyTransformer::FromLLMC_LLaMA3(
 
     return llama3;
 }
+} // namespace llama3
