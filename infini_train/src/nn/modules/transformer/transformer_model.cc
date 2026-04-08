@@ -1,4 +1,4 @@
-#include "infini_train/include/core/transformer/transformer_model.h"
+#include "infini_train/include/nn/modules/transformer/transformer.h"
 
 #include <cmath>
 #include <map>
@@ -6,14 +6,15 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/core/transformer/spec_utils.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
-#include "infini_train/include/nn/modules/transformer.h"
+#include "infini_train/include/nn/modules/transformer/spec_utils.h"
+#include "infini_train/include/nn/modules/transformer/transformer.h"
+#include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
@@ -120,30 +121,6 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
     return {x1};
 }
 
-// Add RoPE helper method to TransformerChunk
-std::shared_ptr<Tensor> TransformerChunk::PrecomputeFreqsCis(int64_t dim, int64_t end, float theta, bool use_scaled,
-                                                             infini_train::Device device) {
-    auto dtype = DataType::kFLOAT32;
-    CHECK_GE(dim, 2) << "dim must be >= 2 for slicing";
-
-    auto arange = nn::init::Arange(0, dim, dtype, device)->Slice(0, 0, dim, 2);
-    auto freqs = 1.0f / nn::function::Pow(theta, arange / float(dim));
-    // TODO(zbl): use_scaled
-    // if (use_scaled) {
-    //     freqs = ApplyScaling(freqs, 8192.0f);
-    // }
-    auto t = nn::init::Arange(0, end, dtype, device);
-    // (end, dim / 2)
-    auto freqs_outer = t->Outer(freqs);
-    auto cos = nn::function::Cos(freqs_outer);
-    auto sin = nn::function::Sin(freqs_outer);
-    // NOTE(zbl): torch script uses cis expression, here use stack
-    // (end, dim / 2, 2)
-    auto freqs_cis = nn::function::Stack(std::vector<std::shared_ptr<Tensor>>{cos, sin}, -1)->Contiguous();
-
-    return freqs_cis;
-}
-
 TransformerLastStage::TransformerLastStage(const TransformerConfig &config, const ModuleSpec &spec)
     : CloneableModule(kType), config_(config), spec_(spec) {
     CHECK(spec.submodules_.contains(kLnFLayerName)) << "TransformerLastStage spec missing submodule: " << kLnFLayerName;
@@ -162,8 +139,7 @@ std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(const std::ve
     return (*modules_[kLMHeadLayerName])(x1);
 }
 
-TransformerModel::TransformerModel(const TransformerConfig config, const ModuleSpec &spec
-                                   /*, const std::unordered_map<std::string, std::any> &params*/)
+TransformerModel::TransformerModel(const TransformerConfig config, const ModuleSpec &spec)
     : CloneableModule(kType), config_(config), spec_(spec),
       stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
           config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,

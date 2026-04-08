@@ -1,4 +1,4 @@
-#include "infini_train/include/nn/modules/mlp.h"
+#include "infini_train/include/nn/modules/transformer/mlp.h"
 
 #include <cmath>
 #include <memory>
@@ -6,13 +6,13 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/core/transformer/spec_utils.h"
-#include "infini_train/include/core/transformer/transformer_config.h"
-#include "infini_train/include/core/transformer/transformer_model.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
+#include "infini_train/include/nn/modules/transformer/spec_utils.h"
+#include "infini_train/include/nn/modules/transformer/transformer.h"
+#include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
