@@ -98,62 +98,17 @@ enum class DataType : int8_t {
     kFLOAT64,
 };
 
-size_t DTypeSize(DataType data_type);
-
-extern const std::unordered_map<DataType, std::string> kDataTypeToDesc;
-
-// -----------------------------------------------------------------------------
-// Compile-time type mapping infrastructure
-// -----------------------------------------------------------------------------
-// Baseline framework scalar/storage mapping.
-// This is the single source of truth for:
-//   - framework DataType -> C++ type mapping
-//   - CPU default type mapping
-//   - backend type-map fallback for dtypes without backend-native overrides
-template <DataType DType> struct TypeMap;
-
-template <DataType DType> using TypeMap_t = typename TypeMap<DType>::type;
-
-// -----------------------------------------------------------------------------
-// Compile-time reverse mapping: framework C++ type -> DataType
-// -----------------------------------------------------------------------------
-template <typename T> struct DataTypeMap;
-
-template <typename T> inline constexpr DataType DataTypeMap_v = DataTypeMap<T>::value;
-
-// Macro to define baseline mapping + reverse mapping
-#define DEFINE_DEFAULT_DATA_TYPE_MAPPING(ENUM_VALUE, CPP_TYPE)                                                         \
-    template <> struct TypeMap<DataType::ENUM_VALUE> {                                                                 \
-        using type = CPP_TYPE;                                                                                         \
-    };                                                                                                                 \
-    template <> struct DataTypeMap<CPP_TYPE> {                                                                         \
-        static constexpr DataType value = DataType::ENUM_VALUE;                                                        \
-    };
-
-DEFINE_DEFAULT_DATA_TYPE_MAPPING(kUINT8, uint8_t)
-DEFINE_DEFAULT_DATA_TYPE_MAPPING(kINT8, int8_t)
-DEFINE_DEFAULT_DATA_TYPE_MAPPING(kUINT16, uint16_t)
-DEFINE_DEFAULT_DATA_TYPE_MAPPING(kINT16, int16_t)
-DEFINE_DEFAULT_DATA_TYPE_MAPPING(kUINT32, uint32_t)
-DEFINE_DEFAULT_DATA_TYPE_MAPPING(kINT32, int32_t)
-DEFINE_DEFAULT_DATA_TYPE_MAPPING(kUINT64, uint64_t)
-DEFINE_DEFAULT_DATA_TYPE_MAPPING(kINT64, int64_t)
-DEFINE_DEFAULT_DATA_TYPE_MAPPING(kFLOAT32, float)
-DEFINE_DEFAULT_DATA_TYPE_MAPPING(kFLOAT64, double)
-
-#undef DEFINE_DEFAULT_DATA_TYPE_MAPPING
-
-// ---------------------------------------------------------------------------
-// Low-precision types: reverse mapping ONLY (DataTypeMap).
-// TypeMap<kFLOAT16> / TypeMap<kBFLOAT16> are intentionally NOT defined here.
-// Backend TypeMaps must explicitly provide these mappings; the default TypeMap
-// will static_assert at compile time if dispatch reaches an unmapped dtype.
-// ---------------------------------------------------------------------------
-template <> struct DataTypeMap<FP16> {
-    static constexpr DataType value = DataType::kFLOAT16;
+inline const std::unordered_map<DataType, size_t> kDataTypeToSize = {
+    {DataType::kUINT8, 1},    {DataType::kINT8, 1},    {DataType::kUINT16, 2},  {DataType::kINT16, 2},
+    {DataType::kUINT32, 4},   {DataType::kINT32, 4},   {DataType::kUINT64, 8},  {DataType::kINT64, 8},
+    {DataType::kBFLOAT16, 2}, {DataType::kFLOAT16, 2}, {DataType::kFLOAT32, 4}, {DataType::kFLOAT64, 8},
 };
-template <> struct DataTypeMap<BF16> {
-    static constexpr DataType value = DataType::kBFLOAT16;
+
+inline const std::unordered_map<DataType, std::string> kDataTypeToDesc = {
+    {DataType::kUINT8, "uint8"},   {DataType::kINT8, "int8"},     {DataType::kUINT16, "uint16"},
+    {DataType::kINT16, "int16"},   {DataType::kUINT32, "uint32"}, {DataType::kINT32, "int32"},
+    {DataType::kUINT64, "uint64"}, {DataType::kINT64, "int64"},   {DataType::kBFLOAT16, "bf16"},
+    {DataType::kFLOAT16, "fp16"},  {DataType::kFLOAT32, "fp32"},  {DataType::kFLOAT64, "fp64"},
 };
 
 // =============================================================================

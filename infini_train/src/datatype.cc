@@ -164,46 +164,6 @@ BF16 &BF16::operator++() {
 }
 
 // -----------------------------------------------------------------------------
-// DataType metadata
-// -----------------------------------------------------------------------------
-size_t DTypeSize(DataType data_type) {
-    switch (data_type) {
-    case DataType::kUINT8:
-        return 1;
-    case DataType::kINT8:
-        return 1;
-    case DataType::kUINT16:
-        return 2;
-    case DataType::kINT16:
-        return 2;
-    case DataType::kUINT32:
-        return 4;
-    case DataType::kINT32:
-        return 4;
-    case DataType::kUINT64:
-        return 8;
-    case DataType::kINT64:
-        return 8;
-    case DataType::kBFLOAT16:
-        return 2;
-    case DataType::kFLOAT16:
-        return 2;
-    case DataType::kFLOAT32:
-        return 4;
-    case DataType::kFLOAT64:
-        return 8;
-    }
-    return 0; // unreachable
-}
-
-const std::unordered_map<DataType, std::string> kDataTypeToDesc = {
-    {DataType::kUINT8, "uint8"},   {DataType::kINT8, "int8"},     {DataType::kUINT16, "uint16"},
-    {DataType::kINT16, "int16"},   {DataType::kUINT32, "uint32"}, {DataType::kINT32, "int32"},
-    {DataType::kUINT64, "uint64"}, {DataType::kINT64, "int64"},   {DataType::kBFLOAT16, "bf16"},
-    {DataType::kFLOAT16, "fp16"},  {DataType::kFLOAT32, "fp32"},  {DataType::kFLOAT64, "fp64"},
-};
-
-// -----------------------------------------------------------------------------
 // DataType-level promotion
 // -----------------------------------------------------------------------------
 bool IsFloatingPointDType(DataType dt) {
@@ -234,7 +194,7 @@ DataType PromoteDataTypes(DataType a, DataType b) {
     }
 
     // Rule 3: same category — wider wins
-    return DTypeSize(a) >= DTypeSize(b) ? a : b;
+    return kDataTypeToSize.at(a) >= kDataTypeToSize.at(b) ? a : b;
 }
 
 } // namespace infini_train

@@ -234,8 +234,7 @@ auto DispatchByTypeMap(DataType dtype, Functor &&func, std::string_view context_
         if constexpr (IsDataTypeInList_v<DType, DataTypeList<AllowedDTypes...>>) {                                     \
             static_assert(HasMappedType_v<TypeMap, DType>,                                                             \
                           "TypeMap does not provide explicit mapping for this dtype. "                                 \
-                          "If this is a backend dispatch, register the dtype in the backend TypeMap; "                 \
-                          "if this is DispatchFunc, the dtype is not supported by the default TypeMap.");              \
+                          "Register the dtype in the backend TypeMap (e.g., CpuTypeMap / CudaTypeMap).");              \
             return std::forward<Functor>(func).template operator()<MappedType_t<TypeMap, DType>>(                      \
                 std::forward<Args>(args)...);                                                                          \
         } else {                                                                                                       \
@@ -283,8 +282,7 @@ struct TypeMapDispatcher {
         if constexpr (IsDataTypeInList_v<DType, CurrentList>) {                                                        \
             static_assert(HasMappedType_v<TypeMap, DType>,                                                             \
                           "TypeMap does not provide explicit mapping for this dtype. "                                 \
-                          "If this is a backend dispatch, register the dtype in the backend TypeMap; "                 \
-                          "if this is DispatchFunc, the dtype is not supported by the default TypeMap.");              \
+                          "Register the dtype in the backend TypeMap (e.g., CpuTypeMap / CudaTypeMap).");              \
             using T = MappedType_t<TypeMap, DType>;                                                                    \
             return TypeMapDispatcher<TypeMap, Index + 1, AllowedListTuple, ResolvedTypes..., T>::call(                 \
                 dtypes, std::forward<Functor>(func), context_identifier, std::forward<Args>(args)...);                 \
@@ -332,26 +330,6 @@ auto DispatchByTypeMap(const std::vector<DataType> &dtypes, Functor &&func, std:
     using AllowedListTuple = std::tuple<AllowedTypeLists...>;
     return detail::TypeMapDispatcher<TypeMap, 0, AllowedListTuple>::call(
         dtypes, std::forward<Functor>(func), context_identifier, std::forward<Args>(args)...);
-}
-
-// -----------------------------------------------------------------------------
-// Default framework dispatch using TypeMap
-// -----------------------------------------------------------------------------
-// TypeMap only covers standard types (int/uint/float32/float64).
-// Low-precision types (FP16/BF16) are intentionally unmapped — use a
-// backend-specific dispatch (DispatchCudaFunc, DispatchCpuFunc, …) instead.
-// -----------------------------------------------------------------------------
-template <DataType... AllowedDTypes, typename Functor, typename... Args>
-auto DispatchFunc(DataType dtype, Functor &&func, std::string_view context_identifier = "", Args &&...args) {
-    return DispatchByTypeMap<TypeMap, AllowedDTypes...>(dtype, std::forward<Functor>(func), context_identifier,
-                                                        std::forward<Args>(args)...);
-}
-
-template <typename... AllowedTypeLists, typename Functor, typename... Args>
-auto DispatchFunc(const std::vector<DataType> &dtypes, Functor &&func, std::string_view context_identifier = "",
-                  Args &&...args) {
-    return DispatchByTypeMap<TypeMap, AllowedTypeLists...>(dtypes, std::forward<Functor>(func), context_identifier,
-                                                           std::forward<Args>(args)...);
 }
 
 } // namespace infini_train
