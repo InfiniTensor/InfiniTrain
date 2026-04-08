@@ -36,7 +36,7 @@ std::shared_ptr<Tensor> AllocateFlatBuffer(size_t num_elements, DataType data_ty
 
 std::shared_ptr<Tensor> GetBufferView(const std::shared_ptr<Tensor> buffer, size_t start_in_elements,
                                       const std::vector<int64_t> &dims) {
-    return std::make_shared<Tensor>(*buffer, start_in_elements * DTypeSize(buffer->Dtype()), dims);
+    return std::make_shared<Tensor>(*buffer, start_in_elements * kDataTypeToSize.at(buffer->Dtype()), dims);
 };
 
 std::vector<std::shared_ptr<Tensor>> ShardBuffer(const std::shared_ptr<Tensor> buffer, size_t ddp_world_size) {
@@ -451,7 +451,7 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
         // Remap param/grad pointers
         if (param_buffer_) {
             // FIXME(zbl): change tensor buffer
-            param->SetData(*param_buffer_, param_start_index * DTypeSize(param_buffer_->Dtype()), true);
+            param->SetData(*param_buffer_, param_start_index * kDataTypeToSize.at(param_buffer_->Dtype()), true);
         }
 
         auto grad_view = GetBufferView(grad_buffer_, param_start_index, param->Dims());

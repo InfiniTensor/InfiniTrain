@@ -8,8 +8,6 @@
 
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/device.h"
-// FIXEM(dcj): should not include this
-#include "infini_train/include/dtype_dispatch.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
 #endif

@@ -64,8 +64,8 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads() {
                 const size_t piece_numel = local_end - local_start;
                 CHECK_GT(piece_numel, 0);
 
-                const size_t param_piece_offset_bytes = local_start * DTypeSize(bucket_param->Dtype());
-                const size_t grad_piece_offset_bytes = local_start * DTypeSize(bucket_grad->Dtype());
+                const size_t param_piece_offset_bytes = local_start * kDataTypeToSize.at(bucket_param->Dtype());
+                const size_t grad_piece_offset_bytes = local_start * kDataTypeToSize.at(bucket_grad->Dtype());
 
                 auto param_piece = std::make_shared<Tensor>(*bucket_param, param_piece_offset_bytes,
                                                             std::vector<int64_t>{static_cast<int64_t>(piece_numel)});

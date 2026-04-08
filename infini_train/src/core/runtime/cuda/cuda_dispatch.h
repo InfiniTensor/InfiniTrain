@@ -1,10 +1,10 @@
 #pragma once
 
-#include <cuda_bf16.h>
-#include <cuda_fp16.h>
-
 #include <utility>
 #include <vector>
+
+#include <cuda_bf16.h>
+#include <cuda_fp16.h>
 
 #include "infini_train/include/core/backend_type_map.h"
 #include "infini_train/include/dtype_dispatch.h"
