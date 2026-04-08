@@ -10,21 +10,21 @@
 #include "infini_train/include/dtype_dispatch.h"
 
 // -----------------------------------------------------------------------------
-// CUDA NativeScalar specializations: FP16 -> __half, BF16 -> __nv_bfloat16
+// CUDA low-precision BackendTypeMap specializations:
+//   FP16 -> __half, BF16 -> __nv_bfloat16
 // -----------------------------------------------------------------------------
 namespace infini_train::core {
-template <> struct NativeScalar<Device::DeviceType::kCUDA, infini_train::FP16> {
+template <> struct BackendTypeMap<Device::DeviceType::kCUDA, DataType::kFLOAT16> {
     using type = __half;
 };
 
-template <> struct NativeScalar<Device::DeviceType::kCUDA, infini_train::BF16> {
+template <> struct BackendTypeMap<Device::DeviceType::kCUDA, DataType::kBFLOAT16> {
     using type = __nv_bfloat16;
 };
 } // namespace infini_train::core
 
 // Register all standard (non-low-precision) dtypes for the CUDA backend.
-// FP16/BF16 are handled above via NativeScalar specializations +
-// BackendTypeMap partial specializations in backend_type_map.h.
+// FP16/BF16 are registered explicitly above with their CUDA-native scalar types.
 INFINI_REGISTER_STANDARD_BACKEND_TYPES(infini_train::Device::DeviceType::kCUDA)
 
 namespace infini_train::core::cuda {
@@ -38,7 +38,7 @@ template <DataType DType> struct CudaTypeMap;
 
 // Register all supported dtypes by delegating to BackendTypeMap<kCUDA, DType>.
 // Standard types come from INFINI_REGISTER_STANDARD_BACKEND_TYPES above;
-// FP16/BF16 come from BackendTypeMap partial specializations + NativeScalar.
+// FP16/BF16 come from the explicit BackendTypeMap specializations above.
 #define INFINI_REGISTER_CUDA_TYPEMAP(DTYPE)                                                                            \
     template <>                                                                                                        \
     struct CudaTypeMap<DataType::DTYPE>                                                                                \

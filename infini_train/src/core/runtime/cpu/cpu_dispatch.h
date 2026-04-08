@@ -7,22 +7,22 @@
 #include "infini_train/include/dtype_dispatch.h"
 
 // -----------------------------------------------------------------------------
-// CPU NativeScalar specializations: FP16 -> FP16, BF16 -> BF16
+// CPU low-precision BackendTypeMap specializations:
+//   FP16 -> infini_train::FP16, BF16 -> infini_train::BF16
 // CPU uses the framework wrapper types directly (host-side conversion).
 // -----------------------------------------------------------------------------
 namespace infini_train::core {
-template <> struct NativeScalar<Device::DeviceType::kCPU, infini_train::FP16> {
+template <> struct BackendTypeMap<Device::DeviceType::kCPU, DataType::kFLOAT16> {
     using type = infini_train::FP16;
 };
 
-template <> struct NativeScalar<Device::DeviceType::kCPU, infini_train::BF16> {
+template <> struct BackendTypeMap<Device::DeviceType::kCPU, DataType::kBFLOAT16> {
     using type = infini_train::BF16;
 };
 } // namespace infini_train::core
 
 // Register all standard (non-low-precision) dtypes for the CPU backend.
-// FP16/BF16 are handled above via NativeScalar specializations +
-// BackendTypeMap partial specializations in backend_type_map.h.
+// FP16/BF16 are registered explicitly above.
 INFINI_REGISTER_STANDARD_BACKEND_TYPES(infini_train::Device::DeviceType::kCPU)
 
 namespace infini_train::core::cpu {
