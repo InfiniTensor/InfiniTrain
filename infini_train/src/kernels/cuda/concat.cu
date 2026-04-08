@@ -90,6 +90,7 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
     const int64_t num_inputs = static_cast<int64_t>(inputs.size());
     const int64_t K_total = out_dims[dim];
 
+    // offsets records the sum of Ks
     // offsets[i] = sum_{j < i} K_j
     std::vector<int64_t> host_offsets(num_inputs + 1, 0);
     for (int64_t i = 0; i < num_inputs; ++i) { host_offsets[i + 1] = host_offsets[i] + Ks[i]; }
