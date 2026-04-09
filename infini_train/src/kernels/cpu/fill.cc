@@ -1,6 +1,5 @@
 #include "glog/logging.h"
 
-#include "infini_train/include/common/cpu/common_cpu.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/dtype_dispatch.h"
 #include "infini_train/include/tensor.h"
@@ -8,12 +7,12 @@
 #include "infini_train/src/core/runtime/cpu/cpu_dispatch.h"
 
 namespace infini_train::kernels::cpu {
-void Fill(std::shared_ptr<Tensor> tensor, double value) {
+void Fill(std::shared_ptr<Tensor> tensor, Scalar scalar) {
     core::cpu::DispatchCpuFunc<INFINI_ALL_TYPES>(
         tensor->Dtype(),
         [=]<typename T>() {
             auto data = reinterpret_cast<T *>(tensor->DataPtr());
-            T casted_value = common::cpu::Cast<T>(value);
+            const T casted_value = scalar.to<T>();
             std::fill(data, data + tensor->NumElements(), casted_value);
         },
         "CPU Fill");

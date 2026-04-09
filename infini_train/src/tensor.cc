@@ -18,12 +18,10 @@
 #include "infini_train/include/autograd/outer.h"
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/transform.h"
-#include "infini_train/include/common/cpu/common_cpu.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
-#include "infini_train/include/dtype_dispatch.h"
 #include "infini_train/include/nn/init.h"
 
 namespace infini_train {
@@ -104,7 +102,7 @@ size_t Tensor::NumElements() const { return num_elements_; }
 
 DataType Tensor::Dtype() const { return dtype_; }
 
-void Tensor::Fill(double value) {
+void Tensor::Fill(Scalar value) {
     auto device = GetDevice();
     core::DeviceGuard guard(device);
     auto kernel = Dispatcher::Instance().GetKernel({device.type(), "Fill"});
