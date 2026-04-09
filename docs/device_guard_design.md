@@ -1,32 +1,7 @@
 # Device Guard Design
-device 注册初版基建 pr：https://github.com/InfiniTensor/InfiniTrain/pull/103
+Device 注册机制是 InfiniTrain 面向多硬件后端的统一运行时抽象与插件化接入基础设施。
 
-## 1. 设计背景与目标
-
-### 1.1 背景
-
-InfiniTrain 需要长期支持：
-
-- 多种设备类型（CPU/CUDA/国产芯片）
-- 多种运行时能力（stream、memory、blas、通信等）
-- 在不侵入上层逻辑的前提下进行后端扩展与替换
-
-在实际工程中，如果设备相关逻辑散落在框架各个模块，会导致：
-
-- `#ifdef USE_CUDA/USE_MUSA/...` 泛滥
-- 新硬件接入需要修改大量框架核心代码
-- 设备切换与资源管理缺乏统一语义
-
-### 1.2 设计目标
-
-InfiniTrain 的 device 注册机制设计目标是：
-
-1. 统一抽象：将所有与设备相关的运行时行为抽象到一个统一接口中。
-2. 后端可插拔：新设备后端可通过注册机制接入，无需修改框架核心逻辑。
-3. RAII 语义清晰：设备切换、资源恢复具备严格的作用域。
-4. 最小上层侵入：上层模块（Tensor/Autograd/Module）只感知 DeviceGuard/DeviceGuardImpl，不感知具体后端实现。
-
-## 2. 核心组件
+## 1. 核心组件
 
 InfiniTrain 的 device 机制由三类核心组件构成：
 
@@ -54,7 +29,7 @@ InfiniTrain 的 device 机制由三类核心组件构成：
 | DeviceGuard     | 管理 “当前在哪个 device 上” 的上下文语义（RAII），语义与 device index 绑定；负责 device 的保存/切换/恢复，并将具体 runtime 操作转发给对应的 DeviceGuardImpl。 |
 | DeviceGuardImpl | 管理 “在该类 device 上如何执行 runtime 操作”，语义与 device type 绑定；对外提供 设备管理查询、stream、blas、同步、内存 等运行时能力接口。 |
 
-### 2.1 DeviceGuardImpl：运行时能力抽象（对外暴露）
+### 1.1 DeviceGuardImpl：运行时能力抽象（对外暴露）
 
 DeviceGuardImpl 是 InfiniTrain 中 device runtime 能力的统一抽象接口，并且是框架内部对外暴露的能力接口，封装了所有与 device 相关的行为（待补充 event 相关接口）：
 
@@ -112,7 +87,7 @@ virtual void ResetMemPoolHighWatermarks(Device device) const;
 virtual std::pair<size_t, size_t> GetMemPoolPeakMB(Device device) const;
 ```
 
-### 2.2 DeviceGuard：RAII 前端接口
+### 1.2 DeviceGuard：RAII 前端接口
 
 DeviceGuard 是设备上下文的 RAII 管理器，其职责严格限定为：
 
@@ -133,7 +108,7 @@ DeviceGuard 不直接提供任何运行时能力接口。
 // 离开作用域后，自动恢复进入前的 device
 ```
 
-### 2.3 DeviceGuardImplRegistry：全局注册表
+### 1.3 DeviceGuardImplRegistry：全局注册表
 
 `DeviceGuardImplRegistry`是 InfiniTrain 中用于管理 device runtime 后端实现的全局注册表，采用 singleton 模式，生命周期覆盖整个进程。
 
@@ -143,9 +118,9 @@ DeviceGuard 不直接提供任何运行时能力接口。
 std::unordered_map<Device::DeviceType, std::unique_ptr<DeviceGuardImpl>> impls_;
 ```
 
-## 3. Runtime Capability 获取与使用范式
+## 2. Runtime Capability 获取与使用范式
 
-### 3.1 获取入口
+### 2.1 获取入口
 
 ```C++
 DeviceGuardImpl* GetDeviceGuardImpl(Device::DeviceType type);
@@ -154,7 +129,7 @@ DeviceGuardImpl* GetDeviceGuardImpl(Device::DeviceType type);
 - 返回指定`DeviceType`的 DeviceGuardImpl
 - 若未注册对应 backend，直接报错
 
-### 3.2 推荐使用模式（标准范式）
+### 2.2 推荐使用模式（标准范式）
 
 ```C++
 auto device = tensor->GetDevice();
@@ -184,9 +159,9 @@ std::vector<float> buffer(num_elements);
 }  // <-- DeviceGuard 在此处析构，device 上下文被恢复
 ```
 
-## 4. Backend 注册机制（静态注册）
+## 3. Backend 注册机制（静态注册）
 
-### 4.1 注册宏
+### 3.1 注册宏
 
 ```C++
 #define INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL(device_type, class_impl)                                               \
@@ -198,7 +173,7 @@ std::vector<float> buffer(num_elements);
 
 采用静态变量 + lambda 在程序启动阶段完成注册。
 
-### 4.2 使用示例（CUDA Backend）
+### 3.2 使用示例（CUDA Backend）
 
 ```C++
 class CudaGuardImpl : public DeviceGuardImpl {

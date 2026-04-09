@@ -29,35 +29,7 @@ INFINI_REGISTER_STANDARD_BACKEND_TYPES(infini_train::Device::DeviceType::kCUDA)
 
 namespace infini_train::core::cuda {
 
-// -----------------------------------------------------------------------------
-// CudaTypeMap: DataType -> CUDA native scalar type
-// Primary template intentionally undefined — no default fallback.
-// Each dtype is explicitly registered below.
-// -----------------------------------------------------------------------------
-template <DataType DType> struct CudaTypeMap;
-
-// Register all supported dtypes by delegating to BackendTypeMap<kCUDA, DType>.
-// Standard types come from INFINI_REGISTER_STANDARD_BACKEND_TYPES above;
-// FP16/BF16 come from the explicit BackendTypeMap specializations above.
-#define INFINI_REGISTER_CUDA_TYPEMAP(DTYPE)                                                                            \
-    template <>                                                                                                        \
-    struct CudaTypeMap<DataType::DTYPE>                                                                                \
-        : infini_train::core::BackendTypeMap<Device::DeviceType::kCUDA, DataType::DTYPE> {};
-
-INFINI_REGISTER_CUDA_TYPEMAP(kUINT8)
-INFINI_REGISTER_CUDA_TYPEMAP(kINT8)
-INFINI_REGISTER_CUDA_TYPEMAP(kUINT16)
-INFINI_REGISTER_CUDA_TYPEMAP(kINT16)
-INFINI_REGISTER_CUDA_TYPEMAP(kUINT32)
-INFINI_REGISTER_CUDA_TYPEMAP(kINT32)
-INFINI_REGISTER_CUDA_TYPEMAP(kUINT64)
-INFINI_REGISTER_CUDA_TYPEMAP(kINT64)
-INFINI_REGISTER_CUDA_TYPEMAP(kFLOAT32)
-INFINI_REGISTER_CUDA_TYPEMAP(kFLOAT64)
-INFINI_REGISTER_CUDA_TYPEMAP(kFLOAT16)
-INFINI_REGISTER_CUDA_TYPEMAP(kBFLOAT16)
-
-#undef INFINI_REGISTER_CUDA_TYPEMAP
+template <DataType DType> struct CudaTypeMap : BackendTypeMap<Device::DeviceType::kCUDA, DType> {};
 
 // -----------------------------------------------------------------------------
 // CUDA dispatch helpers
