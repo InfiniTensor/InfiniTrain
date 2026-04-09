@@ -27,32 +27,7 @@ INFINI_REGISTER_STANDARD_BACKEND_TYPES(infini_train::Device::DeviceType::kCPU)
 
 namespace infini_train::core::cpu {
 
-// -----------------------------------------------------------------------------
-// CpuTypeMap: DataType -> CPU native scalar type
-// Primary template intentionally undefined — no default fallback.
-// Each dtype is explicitly registered below.
-// -----------------------------------------------------------------------------
-template <DataType DType> struct CpuTypeMap;
-
-#define INFINI_REGISTER_CPU_TYPEMAP(DTYPE)                                                                             \
-    template <>                                                                                                        \
-    struct CpuTypeMap<DataType::DTYPE>                                                                                 \
-        : infini_train::core::BackendTypeMap<Device::DeviceType::kCPU, DataType::DTYPE> {};
-
-INFINI_REGISTER_CPU_TYPEMAP(kUINT8)
-INFINI_REGISTER_CPU_TYPEMAP(kINT8)
-INFINI_REGISTER_CPU_TYPEMAP(kUINT16)
-INFINI_REGISTER_CPU_TYPEMAP(kINT16)
-INFINI_REGISTER_CPU_TYPEMAP(kUINT32)
-INFINI_REGISTER_CPU_TYPEMAP(kINT32)
-INFINI_REGISTER_CPU_TYPEMAP(kUINT64)
-INFINI_REGISTER_CPU_TYPEMAP(kINT64)
-INFINI_REGISTER_CPU_TYPEMAP(kFLOAT32)
-INFINI_REGISTER_CPU_TYPEMAP(kFLOAT64)
-INFINI_REGISTER_CPU_TYPEMAP(kFLOAT16)
-INFINI_REGISTER_CPU_TYPEMAP(kBFLOAT16)
-
-#undef INFINI_REGISTER_CPU_TYPEMAP
+template <DataType DType> struct CpuTypeMap : BackendTypeMap<Device::DeviceType::kCPU, DType> {};
 
 // -----------------------------------------------------------------------------
 // CPU dispatch helpers

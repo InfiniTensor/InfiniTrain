@@ -118,6 +118,8 @@ inline const std::unordered_map<DataType, std::string> kDataTypeToDesc = {
 //   1. FP16 + BF16 → FLOAT32   (neither is a lossless superset of the other)
 //   2. Any float dominates any integer → keep the float type
 //   3. Same category (float-float or int-int) → wider byte size wins
+//      - If multiple integral types have the same size, the precedence follows the list order (i.e., the first type
+//        that has the widest size will be selected)
 // =============================================================================
 
 /// Returns true for floating-point DataTypes (FP16, BF16, FP32, FP64).
