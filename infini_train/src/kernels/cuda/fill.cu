@@ -1,7 +1,6 @@
 #include <cstddef>
 #include <memory>
 
-#include "infini_train/include/common/cpu/common_cpu.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
@@ -20,7 +19,7 @@ template <typename T> __global__ void FillKernel(T *data, T value, size_t size) 
 }
 
 // TODO(dcj): refactor Fill kernel with elementwise template
-void Fill(std::shared_ptr<Tensor> tensor, double value) {
+void Fill(std::shared_ptr<Tensor> tensor, Scalar scalar) {
     const int num_tokens = tensor->NumElements();
     const int threads_per_block = 256;
     const int num_blocks = (num_tokens + threads_per_block - 1) / threads_per_block;
@@ -32,7 +31,7 @@ void Fill(std::shared_ptr<Tensor> tensor, double value) {
     core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
         tensor->Dtype(),
         [=]<typename T>() {
-            T casted_value = common::cpu::Cast<T>(value);
+            const T casted_value = scalar.to<T>();
             FillKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(static_cast<T *>(tensor->DataPtr()),
                                                                              casted_value, tensor->NumElements());
         },

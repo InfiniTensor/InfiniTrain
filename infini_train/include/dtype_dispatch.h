@@ -17,7 +17,7 @@
 
 #define LOG_UNSUPPORTED_DTYPE(DTYPE, CONTEXT_IDENTIFIER)                                                               \
     LOG_LOC(FATAL, std::string(CONTEXT_IDENTIFIER)                                                                     \
-                       + ": Unsupported data type: " + kDataTypeToDesc.at(static_cast<infini_train::DataType>(dtype)))
+                       + ": Unsupported data type: " + kDataTypeToDesc.at(static_cast<infini_train::DataType>(DTYPE)))
 
 // Helper macros to count the number of arguments
 #define PP_NARG(...) PP_NARG_(__VA_ARGS__, PP_RSEQ_N())
