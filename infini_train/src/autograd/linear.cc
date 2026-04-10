@@ -56,17 +56,29 @@ std::vector<std::shared_ptr<Tensor>> Linear::Backward(const std::vector<std::sha
     const auto &grad_output = grad_outputs[0];
 
     CHECK(!needs_input_grad_.empty()) << "needs_input_grad_ not populated in Linear::Backward";
-    LinearGradFlags grad_flags = {.input = needs_input_grad_[0],
-                                  .weight = needs_input_grad_.size() > 1 && needs_input_grad_[1],
-                                  .bias = bias_ && needs_input_grad_.size() > 2 && needs_input_grad_[2]};
+    bool need_grad_input = needs_input_grad_[0];
+    bool need_grad_weight = needs_input_grad_.size() > 1 && needs_input_grad_[1];
+    bool need_grad_bias = bias_ && needs_input_grad_.size() > 2 && needs_input_grad_[2];
 
     auto device = grad_output->GetDevice().type();
-    // TODO: skip autograd graph construction entirely when no input requires grad
-    auto [grad_input, grad_weight, grad_bias]
-        = Dispatcher::Instance()
-              .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
-                  {device, "LinearBackward"}, input, weight, transpose_, in_features_, out_features_, input_dims_,
-                  grad_output, bias_, grad_flags);
+
+    std::shared_ptr<Tensor> grad_input = nullptr;
+    std::shared_ptr<Tensor> grad_weight = nullptr;
+    std::shared_ptr<Tensor> grad_bias = nullptr;
+
+    if (need_grad_input) {
+        grad_input = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+            {device, "LinearBackwardInput"}, weight, grad_output, transpose_, in_features_, out_features_, input_dims_);
+    }
+    if (need_grad_weight) {
+        grad_weight = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+            {device, "LinearBackwardWeight"}, input, grad_output, transpose_, in_features_, out_features_);
+    }
+    if (need_grad_bias) {
+        grad_bias = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "LinearBackwardBias"}, grad_output,
+                                                                         out_features_);
+    }
+
     if (bias_) {
         return {grad_input, grad_weight, grad_bias};
     } else {
