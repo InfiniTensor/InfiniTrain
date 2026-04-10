@@ -204,3 +204,26 @@ link_infini_train_exe(test_precision_check)
 add_executable(test_lora test/lora/test_lora.cc)
 link_infini_train_exe(test_lora)
 
+add_executable(test_lr_scheduler test/lr_scheduler/test_lr_scheduler.cc)
+link_infini_train_exe(test_lr_scheduler)
+
+add_executable(test_constant_lr test/lr_scheduler/test_constant_lr.cc)
+link_infini_train_exe(test_constant_lr)
+
+add_executable(test_step_lr test/lr_scheduler/test_step_lr.cc)
+link_infini_train_exe(test_step_lr)
+
+add_executable(test_linear_lr test/lr_scheduler/test_linear_lr.cc)
+link_infini_train_exe(test_linear_lr)
+
+add_executable(test_lambda_lr test/lr_scheduler/test_lambda_lr.cc)
+link_infini_train_exe(test_lambda_lr)
+
+add_executable(test_sequential_lr test/lr_scheduler/test_sequential_lr.cc)
+link_infini_train_exe(test_sequential_lr)
+
+add_executable(test_chained_lr test/lr_scheduler/test_chained_lr.cc)
+link_infini_train_exe(test_chained_lr)
+
+add_executable(test_lr_scheduler_validation test/lr_scheduler/test_lr_scheduler_validation.cc)
+link_infini_train_exe(test_lr_scheduler_validation)
