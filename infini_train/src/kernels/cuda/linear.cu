@@ -80,112 +80,141 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
     return output;
 }
 
-std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
-MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &other,
-               const std::shared_ptr<Tensor> &grad_output) {
+std::shared_ptr<Tensor> MatmulBackwardInput1(const std::shared_ptr<Tensor> &other,
+                                             const std::shared_ptr<Tensor> &grad_output,
+                                             const std::vector<int64_t> &input_dims) {
     /*
        grad_input[*, m, k] = grad_output[*, m, n] * other[*, k, n]^T
-       grad_other[*, k, n] = input[*, m, k]^T * grad_output[*, m, n]
     */
 
-    auto input_dtype = input->Dtype();
-    auto other_dtype = other->Dtype();
-    auto grad_output_dtype = grad_output->Dtype();
-    // Compute dtype determined by saved tensors (forward compute dtype), not grad_output
-    DataType compute_dtype = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-        {input_dtype, other_dtype}, [=]<typename Tin, typename To>() { return DataTypeMap_v<WidestType_t<Tin, To>>; },
-        "CUDA MatmulBackward");
-
-    auto input_promoted = input_dtype == compute_dtype ? input : std::make_shared<Tensor>(input->To(compute_dtype));
-    auto other_promoted = other_dtype == compute_dtype ? other : std::make_shared<Tensor>(other->To(compute_dtype));
-    auto grad_output_promoted
-        = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
-
-    const auto &input_dims = input->Dims();
     const auto &other_dims = other->Dims();
     const auto &grad_output_dims = grad_output->Dims();
 
-    CHECK_GE(input_dims.size(), 2);
-    CHECK_EQ(input_dims.size(), other_dims.size());
-    CHECK_EQ(input_dims.size(), grad_output_dims.size());
+    CHECK_GE(other_dims.size(), 2);
+    CHECK_EQ(other_dims.size(), grad_output_dims.size());
 
-    const int64_t m = input_dims[input_dims.size() - 2];
-    const int64_t k = input_dims[input_dims.size() - 1];
+    const int64_t m = grad_output_dims[grad_output_dims.size() - 2];
+    const int64_t k = other_dims[other_dims.size() - 2];
     const int64_t n = other_dims[other_dims.size() - 1];
     CHECK_EQ(k, other_dims[other_dims.size() - 2]);
     CHECK_EQ(m, grad_output_dims[grad_output_dims.size() - 2]);
     CHECK_EQ(n, grad_output_dims[grad_output_dims.size() - 1]);
 
-    const int64_t bs = std::accumulate(input_dims.rbegin() + 2, input_dims.rend(), 1, std::multiplies<int64_t>{});
-    for (int64_t i = 0; i < input_dims.size() - 2; ++i) {
-        CHECK_EQ(input_dims[i], other_dims[i]) << "Batch dims must match";
-        CHECK_EQ(input_dims[i], grad_output_dims[i]) << "Batch dims must match";
+    const int64_t bs
+        = std::accumulate(grad_output_dims.rbegin() + 2, grad_output_dims.rend(), 1, std::multiplies<int64_t>{});
+    for (int64_t i = 0; i < grad_output_dims.size() - 2; ++i) {
+        CHECK_EQ(grad_output_dims[i], other_dims[i]) << "Batch dims must match";
     }
 
-    // For bf16 compute, output in fp32 to preserve accumulation precision (matches PyTorch behavior)
+    auto compute_dtype = other->Dtype();
+    auto grad_output_dtype = grad_output->Dtype();
+    auto grad_output_promoted
+        = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
+
+    // For bf16 compute, output in fp32 to preserve accumulation precision.
     auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
     auto grad_input = std::make_shared<Tensor>(input_dims, output_dtype, grad_output->GetDevice());
-    auto grad_other = std::make_shared<Tensor>(other_dims, output_dtype, grad_output->GetDevice());
 
     // No Fill(0) needed: cuBLAS beta=0.0f means C is fully overwritten, never read.
 
-    auto device = input_promoted->GetDevice();
+    auto device = grad_output->GetDevice();
     const float alpha = 1.0f, beta = 0.0f;
     cublasHandle_t handle = dynamic_cast<infini_train::core::cuda::CudaBlasHandle *>(
                                 infini_train::core::GetDeviceGuardImpl(device.type())->GetBlasHandle(device))
                                 ->cublas_handle();
 
-    {
-        // cuBLAS is colmun-major
-        // grad_input = grad_output * other.T --> grad_input.T = other * grad_output.T
-        // C = A.T * B ==> grad_input.T[*, k, m] = other[*, k, n] * grad_output.T[*, n, m]
-        // C = grad_input.T[*, k, m]
-        // A = other.T[*, n, k]
-        // B = grad_output.T[*, n, m]
-        const int lda = n, ldb = n, ldc = k;
-        const int64_t stride_a = k * n;
-        const int64_t stride_b = n * m;
-        const int64_t stride_c = m * k;
-        switch (compute_dtype) {
-            DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
-                              handle, CUBLAS_OP_T, CUBLAS_OP_N, k, m, n, &alpha, other_promoted->DataPtr(), CUDA_R_32F,
-                              lda, stride_a, grad_output_promoted->DataPtr(), CUDA_R_32F, ldb, stride_b, &beta,
-                              grad_input->DataPtr(), CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
-                          DataType::kFLOAT32)
-            DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
-                              handle, CUBLAS_OP_T, CUBLAS_OP_N, k, m, n, &alpha, other_promoted->DataPtr(), CUDA_R_16BF,
-                              lda, stride_a, grad_output_promoted->DataPtr(), CUDA_R_16BF, ldb, stride_b, &beta,
-                              grad_input->DataPtr(), CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
-                          DataType::kBFLOAT16)
-        }
+    // cuBLAS is colmun-major
+    // grad_input = grad_output * other.T --> grad_input.T = other * grad_output.T
+    // C = A.T * B ==> grad_input.T[*, k, m] = other[*, k, n] * grad_output.T[*, n, m]
+    // C = grad_input.T[*, k, m]
+    // A = other.T[*, n, k]
+    // B = grad_output.T[*, n, m]
+    const int lda = n, ldb = n, ldc = k;
+    const int64_t stride_a = k * n;
+    const int64_t stride_b = n * m;
+    const int64_t stride_c = m * k;
+    switch (compute_dtype) {
+        DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
+                          handle, CUBLAS_OP_T, CUBLAS_OP_N, k, m, n, &alpha, other->DataPtr(), CUDA_R_32F, lda,
+                          stride_a, grad_output_promoted->DataPtr(), CUDA_R_32F, ldb, stride_b, &beta,
+                          grad_input->DataPtr(), CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
+                      DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
+                          handle, CUBLAS_OP_T, CUBLAS_OP_N, k, m, n, &alpha, other->DataPtr(), CUDA_R_16BF, lda,
+                          stride_a, grad_output_promoted->DataPtr(), CUDA_R_16BF, ldb, stride_b, &beta,
+                          grad_input->DataPtr(), CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
+                      DataType::kBFLOAT16)
     }
 
-    {
-        // cuBLAS is colmun-major
-        // grad_other = input.T * grad_output --> grad_other.T =  grad_output.T * input
-        // C = A * B.T ==> grad_other.T[*, n, k] = grad_output.T[*, n, m] * input[*, m, k]
-        // C = grad_other.T[*, n, k]
-        // A = grad_output.T[*, n, m]
-        // B = input.T[*, k, m]
-        const int lda = n, ldb = k, ldc = n;
-        const int64_t stride_a = n * m;
-        const int64_t stride_b = k * m;
-        const int64_t stride_c = n * k;
-        switch (compute_dtype) {
-            DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
-                              handle, CUBLAS_OP_N, CUBLAS_OP_T, n, k, m, &alpha, grad_output_promoted->DataPtr(),
-                              CUDA_R_32F, lda, stride_a, input_promoted->DataPtr(), CUDA_R_32F, ldb, stride_b, &beta,
-                              grad_other->DataPtr(), CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
-                          DataType::kFLOAT32)
-            DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
-                              handle, CUBLAS_OP_N, CUBLAS_OP_T, n, k, m, &alpha, grad_output_promoted->DataPtr(),
-                              CUDA_R_16BF, lda, stride_a, input_promoted->DataPtr(), CUDA_R_16BF, ldb, stride_b, &beta,
-                              grad_other->DataPtr(), CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
-                          DataType::kBFLOAT16)
-        }
+    return grad_input;
+}
+
+std::shared_ptr<Tensor> MatmulBackwardInput2(const std::shared_ptr<Tensor> &input1,
+                                             const std::shared_ptr<Tensor> &grad_output,
+                                             const std::vector<int64_t> &other_dims) {
+    /*
+       grad_other[*, k, n] = input[*, m, k]^T * grad_output[*, m, n]
+    */
+
+    const auto &input_dims = input1->Dims();
+    const auto &grad_output_dims = grad_output->Dims();
+    CHECK_GE(input_dims.size(), 2);
+    CHECK_EQ(input_dims.size(), grad_output_dims.size());
+
+    const int64_t m = input_dims[input_dims.size() - 2];
+    const int64_t k = input_dims[input_dims.size() - 1];
+    const int64_t n = grad_output_dims[grad_output_dims.size() - 1];
+    CHECK_EQ(m, grad_output_dims[grad_output_dims.size() - 2]);
+    CHECK_EQ(n, grad_output_dims[grad_output_dims.size() - 1]);
+    CHECK_EQ(input_dims[input_dims.size() - 1], other_dims[other_dims.size() - 2]);
+
+    const int64_t bs = std::accumulate(input_dims.rbegin() + 2, input_dims.rend(), 1, std::multiplies<int64_t>{});
+    for (int64_t i = 0; i < input_dims.size() - 2; ++i) {
+        CHECK_EQ(input_dims[i], grad_output_dims[i]) << "Batch dims must match";
+        CHECK_EQ(input_dims[i], other_dims[i]) << "Batch dims must match";
     }
 
-    return {grad_input, grad_other};
+    auto compute_dtype = input1->Dtype();
+    auto grad_output_dtype = grad_output->Dtype();
+    auto grad_output_promoted
+        = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
+
+    // For bf16 compute, output in fp32 to preserve accumulation precision.
+    auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
+    auto grad_other = std::make_shared<Tensor>(other_dims, output_dtype, grad_output->GetDevice());
+
+    // No Fill(0) needed: cuBLAS beta=0.0f means C is fully overwritten, never read.
+
+    auto device = grad_output->GetDevice();
+    const float alpha = 1.0f, beta = 0.0f;
+    cublasHandle_t handle = dynamic_cast<infini_train::core::cuda::CudaBlasHandle *>(
+                                infini_train::core::GetDeviceGuardImpl(device.type())->GetBlasHandle(device))
+                                ->cublas_handle();
+
+    // cuBLAS is colmun-major
+    // grad_other = input.T * grad_output --> grad_other.T = grad_output.T * input
+    // C = A * B.T ==> grad_other.T[*, n, k] = grad_output.T[*, n, m] * input[*, m, k]
+    // C = grad_other.T[*, n, k]
+    // A = grad_output.T[*, n, m]
+    // B = input.T[*, k, m]
+    const int lda = n, ldb = k, ldc = n;
+    const int64_t stride_a = n * m;
+    const int64_t stride_b = k * m;
+    const int64_t stride_c = n * k;
+    switch (compute_dtype) {
+        DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
+                          handle, CUBLAS_OP_N, CUBLAS_OP_T, n, k, m, &alpha, grad_output_promoted->DataPtr(),
+                          CUDA_R_32F, lda, stride_a, input1->DataPtr(), CUDA_R_32F, ldb, stride_b, &beta,
+                          grad_other->DataPtr(), CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
+                      DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(CUBLAS_CHECK(cublasGemmStridedBatchedEx(
+                          handle, CUBLAS_OP_N, CUBLAS_OP_T, n, k, m, &alpha, grad_output_promoted->DataPtr(),
+                          CUDA_R_16BF, lda, stride_a, input1->DataPtr(), CUDA_R_16BF, ldb, stride_b, &beta,
+                          grad_other->DataPtr(), CUDA_R_32F, ldc, stride_c, bs, CUDA_R_32F, CUBLAS_GEMM_DEFAULT));),
+                      DataType::kBFLOAT16)
+    }
+
+    return grad_other;
 }
 
 template <typename T> __global__ void BiasCopyKernel(T *output, const T *bias, int bs, int out_features) {
@@ -328,7 +357,7 @@ std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weigh
     auto grad_output_promoted
         = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
 
-    // For bf16 compute, accumulate in fp32 to preserve precision (matches PyTorch behavior).
+    // For bf16 compute, accumulate in fp32 to preserve precision.
     auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
     // No Fill(0) needed: cuBLAS beta=0.0f fully overwrites output.
     auto grad_input = std::make_shared<Tensor>(input_dims, output_dtype, grad_output->GetDevice());
@@ -391,7 +420,7 @@ std::shared_ptr<Tensor> LinearBackwardWeight(const std::shared_ptr<Tensor> &inpu
     auto grad_output_promoted
         = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
 
-    // For bf16 compute, accumulate in fp32 to preserve precision (matches PyTorch behavior).
+    // For bf16 compute, accumulate in fp32 to preserve precision.
     auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
     const std::vector<int64_t> weight_dims
         = transpose ? std::vector<int64_t>{out_features, in_features} : std::vector<int64_t>{in_features, out_features};
@@ -452,7 +481,7 @@ std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_o
     const int64_t bs = std::accumulate(dims.rbegin() + 1, dims.rend(), 1, std::multiplies<int64_t>{});
 
     auto compute_dtype = grad_output->Dtype();
-    // For bf16 compute, accumulate in fp32 to preserve precision (matches PyTorch behavior).
+    // For bf16 compute, accumulate in fp32 to preserve precision.
     auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
     auto grad_bias
         = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, output_dtype, grad_output->GetDevice());
@@ -488,7 +517,8 @@ std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_o
     REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_LINEAR_KERNEL(MatmulForward)
-REGISTER_CUDA_LINEAR_KERNEL(MatmulBackward)
+REGISTER_CUDA_LINEAR_KERNEL(MatmulBackwardInput1)
+REGISTER_CUDA_LINEAR_KERNEL(MatmulBackwardInput2)
 REGISTER_CUDA_LINEAR_KERNEL(LinearForward)
 REGISTER_CUDA_LINEAR_KERNEL(LinearBackwardInput)
 REGISTER_CUDA_LINEAR_KERNEL(LinearBackwardWeight)
