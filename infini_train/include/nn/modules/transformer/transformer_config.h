@@ -38,8 +38,11 @@ struct TransformerConfig {
     MLPType activation_type = MLPType::kGELU;                // MLP activation type
     NormType norm_type = NormType::kLayerNorm;               // Normalization type
 
-    bool use_bias = true;    // Linear layers bias (GPT2: true, LLaMA3: false)
-    bool tie_weights = true; // Tie embedding and lm_head weights
+    bool add_bias_linear = true; // Whether to add learnable bias to all Linear layers in the Transformer block,
+                                 // including: attention QKV projection, attention output projection, MLP FC layers (and
+                                 // SwiGLU second projection), and MLP output projection.
+    bool add_bias_lm_head = false; // Whether to add bias to the LM head (output embedding).
+    bool tie_weights = true;       // Tie embedding and lm_head weights
 
     // FFN config
     float ffn_expansion_ratio = 4.0f;               // MLP output: n_embd * ffn_expansion_ratio
@@ -58,6 +61,7 @@ struct TransformerConfig {
     bool flash = false;             // flash attention
     int64_t max_gen_batch_size = 4; // max batch size during inference
 
-    bool UseGQA() const { return n_kv_head < n_head; }
+    bool UseGQA() const;
+    int GetChunkSize() const;
 };
 } // namespace infini_train::nn

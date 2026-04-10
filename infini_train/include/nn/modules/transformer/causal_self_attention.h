@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/modules/transformer/spec_utils.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
 namespace infini_train::nn {
@@ -18,7 +17,7 @@ public:
 
     static constexpr char kParamBiasName[] = "bias";
 
-    explicit CausalSelfAttention(const TransformerConfig &config, const ModuleSpec &spec = {});
+    explicit CausalSelfAttention(const TransformerConfig &config);
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;

@@ -17,7 +17,6 @@
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
-#include "infini_train/include/nn/modules/transformer/layer_specs.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/parallel/global.h"
@@ -56,14 +55,6 @@ std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::
 } // namespace
 
 namespace gpt2 {
-int GetChunkSize() {
-    nn::TransformerConfig gpt2_config = GPT2Config();
-
-    auto stage_info = nn::parallel::PipelineParallel::GetStageInfo(
-        gpt2_config.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
-        nn::parallel::global::GetVirtualPipelineParallelSize());
-    return stage_info.layer_ranges_per_chunk.size();
-}
 
 std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) {
     if (!std::filesystem::exists(filepath)) {
@@ -96,10 +87,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     gpt2_config.n_layer = n_layer;
     gpt2_config.n_head = n_head;
     gpt2_config.n_embd = n_embd;
-    auto local_gpt2 = std::make_shared<nn::TransformerModel>(
-        gpt2_config,
-        nn::BuildTransformerSpec(gpt2_config, nn::BuildFirstStageSpec(gpt2_config),
-                                 nn::BuildTransformerLayerSpec(gpt2_config), nn::BuildLastStageSpec(gpt2_config)));
+    auto local_gpt2 = std::make_shared<nn::TransformerModel>(gpt2_config);
 
     LOG(INFO) << "magic: " << magic << " version: " << version << " block_size: " << block_size
               << " vocab_size: " << vocab_size << " n_layer: " << n_layer << " n_head: " << n_head
@@ -436,6 +424,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         size_t ln_f_b_bytes = n_embd * sizeof(float);
         ifs.seekg(ln_f_w_bytes + ln_f_b_bytes, std::ios::cur);
     }
+
     return local_gpt2;
 }
 } // namespace gpt2

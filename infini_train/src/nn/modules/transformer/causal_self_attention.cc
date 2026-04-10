@@ -11,8 +11,6 @@
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
-#include "infini_train/include/nn/modules/transformer/spec_utils.h"
-#include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
@@ -20,17 +18,29 @@
 
 namespace infini_train::nn {
 
-CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config, const ModuleSpec &spec)
-    : CloneableModule(kType), config_(config) {
+CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config) : CloneableModule(kType), config_(config) {
     SetupAttention(config);
 
-    CHECK(spec.submodules_.contains(kCAttnLayerName))
-        << "CausalSelfAttention spec missing submodule: " << kCAttnLayerName;
-    CHECK(spec.submodules_.contains(kCProjLayerName))
-        << "CausalSelfAttention spec missing submodule: " << kCProjLayerName;
-    // Build submodules from spec
-    modules_[kCAttnLayerName] = BuildModule(config, spec.submodules_.at(kCAttnLayerName));
-    modules_[kCProjLayerName] = BuildModule(config, spec.submodules_.at(kCProjLayerName));
+    int64_t qkv_dim = (config.n_head + 2 * n_kv_head_) * head_dim_;
+    // qkv: ColumnParallel (do not gather output)
+    modules_[kCAttnLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
+        /*in_features=*/n_embd_,
+        /*out_features=*/qkv_dim,
+        /*bias=*/config_.add_bias_linear,
+        /*gather_output=*/false,
+        /*input_is_parallel=*/false,
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+
+    // proj: RowParallel (input is parallel and output is full)
+    modules_[kCProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(
+        /*in_features=*/n_embd_,
+        /*out_features=*/n_embd_,
+        /*bias=*/config_.add_bias_linear,
+        /*reduce_output=*/true,
+        /*input_is_parallel=*/true,
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 
     // For standard attention (GPT2 style), precompute causal mask
     if (config_.attention_type == AttentionType::kStandard) {

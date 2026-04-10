@@ -16,7 +16,6 @@
 #include "example/llama3/config.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
-#include "infini_train/include/nn/modules/transformer/layer_specs.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/parallel/global.h"
@@ -39,15 +38,6 @@ constexpr int32_t kLLaMA3FP32Version = 3;
 } // namespace
 
 namespace llama3 {
-
-int GetChunkSize() {
-    nn::TransformerConfig llama3_config = llama3::LLaMA3Config();
-
-    auto stage_info = nn::parallel::PipelineParallel::GetStageInfo(
-        llama3_config.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
-        nn::parallel::global::GetVirtualPipelineParallelSize());
-    return stage_info.layer_ranges_per_chunk.size();
-}
 
 std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) {
     if (!std::filesystem::exists(filepath)) {
@@ -90,10 +80,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     llama3_config.use_scaled_rope = static_cast<bool>(use_scaled_rope);
     llama3_config.norm_eps = norm_eps;
     llama3_config.max_gen_batch_size = max_gen_bs;
-    auto llama3 = std::make_shared<nn::TransformerModel>(
-        llama3_config,
-        nn::BuildTransformerSpec(llama3_config, nn::BuildFirstStageSpec(llama3_config),
-                                 nn::BuildTransformerLayerSpec(llama3_config), nn::BuildLastStageSpec(llama3_config)));
+    auto llama3 = std::make_shared<nn::TransformerModel>(llama3_config);
 
     // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
