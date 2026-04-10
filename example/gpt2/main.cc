@@ -250,7 +250,7 @@ void Train(const nn::parallel::Rank &rank) {
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
         model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
-                                                                 pp_rank, device, gpt2::GetChunkSize());
+                                                                 pp_rank, device, model_config.GetChunkSize());
         if (ddp_world_size > 1) {
             auto ddp_config
                 = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
@@ -370,6 +370,7 @@ void Train(const nn::parallel::Rank &rank) {
                 y = std::make_shared<Tensor>(y->To(device));
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start forward";
+
                 // (bs, seq_len, vocab_size)
                 auto logits = (*model)({x, y})[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish model forward, start loss forward";

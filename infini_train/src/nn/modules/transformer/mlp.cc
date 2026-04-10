@@ -8,34 +8,71 @@
 
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
+#include "infini_train/include/nn/modules/activations.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
-#include "infini_train/include/nn/modules/transformer/spec_utils.h"
-#include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
 
-MLP::MLP(const TransformerConfig &config, const ModuleSpec &spec) : CloneableModule(kType) {
+MLP::MLP(const TransformerConfig &config) : CloneableModule(kType) {
+    // Compute hidden dimension
+    // Base dimension: n_embd * ffn_expansion_ratio
+    int64_t ffn_hidden = static_cast<int64_t>(config.n_embd * config.ffn_expansion_ratio);
+
+    // Apply SwiGLU adjustment
+    if (config.activation_type == MLPType::kSwiGLU) {
+        ffn_hidden = int(2 * ffn_hidden) / 3; // SwiGLU intermediate
+    }
+
+    // Apply multiplier
+    if (config.ffn_dim_multiplier.has_value()) {
+        ffn_hidden
+            = static_cast<int64_t>(std::llround(static_cast<double>(ffn_hidden) * config.ffn_dim_multiplier.value()));
+    }
+
+    // Round up to multiple_of
+    int64_t before_round = ffn_hidden;
+    ffn_hidden = (ffn_hidden + config.multiple_of - 1) / config.multiple_of * config.multiple_of;
+
     // c_fc: ColumnParallel (input full, output parallel)
-    modules_[kCFcLayerName] = BuildModule(config, spec.submodules_.at(kCFcLayerName));
+    modules_[kCFcLayerName] = std::make_shared<parallel::ColumnParallelLinear>(
+        /*in_features=*/config.n_embd, /*out_features=*/ffn_hidden,
+        /*bias=*/config.add_bias_linear,
+        /*gather_output=*/false,
+        /*input_is_parallel=*/false,
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/parallel::global::GetSequenceParallelEnabled());
 
     // For SwiGLU, add second projection
-    if (spec.submodules_.contains(kCFc2LayerName)) {
-        modules_[kCFc2LayerName] = BuildModule(config, spec.submodules_.at(kCFc2LayerName));
+    if (config.activation_type == MLPType::kSwiGLU) {
+        modules_[kCFc2LayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
+            /*in_features=*/config.n_embd, /*out_features=*/ffn_hidden,
+            /*bias=*/config.add_bias_linear,
+            /*gather_output=*/false,
+            /*input_is_parallel=*/false,
+            /*skip_bias_add=*/false,
+            /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
     }
 
     // Activation: check for GELU or SwiGLU
-    if (spec.submodules_.contains(kGeluLayerName)) {
-        modules_[kGeluLayerName] = BuildModule(config, spec.submodules_.at(kGeluLayerName));
-    } else if (spec.submodules_.contains(kSiluLayerName)) {
-        modules_[kSiluLayerName] = BuildModule(config, spec.submodules_.at(kSiluLayerName));
+    if (config.activation_type == MLPType::kGELU) {
+        modules_[kGeluLayerName] = std::make_shared<NewGELU>();
+    } else if (config.activation_type == MLPType::kSwiGLU) {
+        modules_[kSiluLayerName] = std::make_shared<SwiGLU>();
     }
 
     // c_proj: RowParallel (input parallel, output full)
-    modules_[kCProjLayerName] = BuildModule(config, spec.submodules_.at(kCProjLayerName));
+    modules_[kCProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(
+        /*in_features=*/ffn_hidden, /*out_features=*/config.n_embd,
+        /*bias=*/config.add_bias_linear,
+        /*reduce_output=*/true,
+        /*input_is_parallel=*/true,
+        /*skip_bias_add=*/false,
+        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
