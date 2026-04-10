@@ -65,9 +65,11 @@ template <typename DST, typename SRC> __host__ __device__ DST Cast(SRC &&x) {
     // Fallback for all other conversions
     if constexpr (std::is_same_v<DST_base, __maca_bfloat16> || std::is_same_v<DST_base, __half>
                   || std::is_same_v<SRC_base, __maca_bfloat16> || std::is_same_v<SRC_base, __half>) {
-        return (DST)(static_cast<float>(std::forward<SRC>(x)));;
+        return (DST)(static_cast<float>(std::forward<SRC>(x)));
+        ;
     } else {
-        return static_cast<DST>(std::forward<SRC>(x));;
+        return static_cast<DST>(std::forward<SRC>(x));
+        ;
     }
 }
 

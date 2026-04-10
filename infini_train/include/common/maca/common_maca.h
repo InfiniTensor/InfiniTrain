@@ -1,8 +1,8 @@
 #pragma once
 
+#include <mcblas/mcblas.h>
 #include <mcr/mc_runtime.h>
 #include <mcr/mc_runtime_api.h>
-#include <mcblas/mcblas.h>
 
 #ifdef USE_MCCL
 #include <mccl.h>
