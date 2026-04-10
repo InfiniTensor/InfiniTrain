@@ -88,7 +88,8 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
 // Default autocast data types for each device type
 inline constexpr std::array<DataType, static_cast<size_t>(Device::DeviceType::kCount)> kDeviceDefaultDtype = {
     DataType::kBFLOAT16, // CPU
-    DataType::kFLOAT16,  // CUDA.
+    DataType::kFLOAT16,  // CUDA
+    DataType::kFLOAT16,  // MACA
 };
 
 // Thread-local context to track autocast state

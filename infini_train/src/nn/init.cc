@@ -10,6 +10,9 @@
 #ifdef USE_CUDA
 #include <cuda_runtime_api.h>
 #endif
+#ifdef USE_MACA
+#include <mcr/mc_runtime_api.h>
+#endif
 #ifdef USE_OMP
 #include <omp.h>
 #endif
@@ -217,6 +220,9 @@ std::shared_ptr<Tensor> Arange(int64_t start, int64_t end, DataType dtype, Devic
 #ifdef USE_CUDA
         ARANGE_CASE(DataType::kBFLOAT16, nv_bfloat16)
         ARANGE_CASE(DataType::kFLOAT16, half)
+#elif defined(USE_MACA)
+        ARANGE_CASE(DataType::kBFLOAT16, __maca_bfloat16)
+        ARANGE_CASE(DataType::kFLOAT16, __half)
 #endif
 
         ARANGE_CASE(DataType::kFLOAT32, float)

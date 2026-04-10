@@ -111,7 +111,21 @@ template <typename T> void Tensor::Fill(T value) {
     uint64_t storage = 0;
 
     DispatchFunc<INFINI_ALL_TYPES>(Dtype(), [&storage, value]<typename TargetT>() {
-        TargetT casted_value = static_cast<TargetT>(value);
+        // Route fp16/bf16 casts through float on real device backends: MACA's
+        // __half / __maca_bfloat16 have ambiguous constructors from integer or
+        // double, so the direct static_cast<TargetT>(value) fails to compile
+        // for Fill<int>(0) etc. CUDA has the same hazard for some versions.
+        TargetT casted_value;
+#if defined(USE_CUDA) || defined(USE_MACA)
+        if constexpr (std::is_same_v<TargetT, TypeMap_t<DataType::kBFLOAT16>>
+                      || std::is_same_v<TargetT, TypeMap_t<DataType::kFLOAT16>>) {
+            casted_value = static_cast<TargetT>(static_cast<float>(value));
+        } else {
+            casted_value = static_cast<TargetT>(value);
+        }
+#else
+        casted_value = static_cast<TargetT>(value);
+#endif
         std::memcpy((void *)(&storage), &casted_value, sizeof(TargetT));
     });
 
@@ -132,6 +146,10 @@ template void Tensor::Fill<double>(double);
 #ifdef USE_CUDA
 template void Tensor::Fill<nv_bfloat16>(nv_bfloat16);
 template void Tensor::Fill<half>(half);
+#endif
+#ifdef USE_MACA
+template void Tensor::Fill<__maca_bfloat16>(__maca_bfloat16);
+template void Tensor::Fill<__half>(__half);
 #endif
 
 Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> Tensor::EigenMatrix() {

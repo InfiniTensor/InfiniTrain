@@ -7,6 +7,10 @@
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #endif
+#ifdef USE_MACA
+#include <common/maca_bfloat16.h>
+#include <common/maca_fp16.h>
+#endif
 
 namespace infini_train {
 enum class DataType : int8_t {
@@ -82,6 +86,9 @@ DEFINE_DATA_TYPE_MAPPING(kFLOAT64, double)
 #ifdef USE_CUDA
 DEFINE_DATA_TYPE_MAPPING(kBFLOAT16, nv_bfloat16)
 DEFINE_DATA_TYPE_MAPPING(kFLOAT16, half)
+#elif defined(USE_MACA)
+DEFINE_DATA_TYPE_MAPPING(kBFLOAT16, __maca_bfloat16)
+DEFINE_DATA_TYPE_MAPPING(kFLOAT16, __half)
 #else
 // Non-CUDA fallbacks
 template <> struct TypeMap<DataType::kBFLOAT16> {
@@ -109,6 +116,14 @@ template <> struct is_arithmetic_ext<__nv_bfloat16> : std::true_type {};
 template <> struct is_floating_point_ext<__half> : std::true_type {};
 template <> struct is_arithmetic_ext<__half> : std::true_type {};
 #endif
+// Specializations for MACA types. USE_CUDA and USE_MACA are mutually exclusive
+// at build time, so there is no ODR conflict on __half between the two SDKs.
+#ifdef USE_MACA
+template <> struct is_floating_point_ext<__maca_bfloat16> : std::true_type {};
+template <> struct is_arithmetic_ext<__maca_bfloat16> : std::true_type {};
+template <> struct is_floating_point_ext<__half> : std::true_type {};
+template <> struct is_arithmetic_ext<__half> : std::true_type {};
+#endif
 
 namespace {
 template <typename T1, typename T2> struct LargerType {
@@ -124,6 +139,15 @@ template <> struct LargerType<__nv_bfloat16, __half> {
 };
 
 template <> struct LargerType<__half, __nv_bfloat16> {
+    using type = float;
+};
+#endif
+#ifdef USE_MACA
+template <> struct LargerType<__maca_bfloat16, __half> {
+    using type = float;
+};
+
+template <> struct LargerType<__half, __maca_bfloat16> {
     using type = float;
 };
 #endif
