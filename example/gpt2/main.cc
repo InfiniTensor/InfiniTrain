@@ -16,6 +16,7 @@
 #include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
@@ -35,7 +36,8 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
-#include "example/gpt2/net.h"
+#include "example/gpt2/checkpoint_loader.h"
+#include "example/gpt2/config.h"
 
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
@@ -100,17 +102,11 @@ constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 
 //
-const std::unordered_map<std::string, GPT2Config> kModelToConfigs = {
+const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
     {"d12", {.block_size = 1024, .vocab_size = 50257, .n_layer = 12, .n_head = 12, .n_embd = 768}},
     {"d24", {.block_size = 1024, .vocab_size = 50257, .n_layer = 24, .n_head = 16, .n_embd = 1024}},
     {"d36", {.block_size = 1024, .vocab_size = 50257, .n_layer = 36, .n_head = 20, .n_embd = 1280}},
     {"d48", {.block_size = 1024, .vocab_size = 50257, .n_layer = 48, .n_head = 25, .n_embd = 1600}},
-};
-const std::unordered_map<std::string, GPT2::ModelType> kStrToModelType = {
-    {"gpt2", GPT2::ModelType::kGPT2},
-    {"gpt2-medium", GPT2::ModelType::kGPT2Medium},
-    {"gpt2-large", GPT2::ModelType::kGPT2Large},
-    {"gpt2-xl", GPT2::ModelType::kGPT2XL},
 };
 
 } // namespace
@@ -187,16 +183,14 @@ void Train(const nn::parallel::Rank &rank) {
     // ManualSeed(42);
 
     // init the model, either from scratch or from OpenAI pretrained checkpoint
-    GPT2Config model_config;
+    nn::TransformerConfig model_config = gpt2::GPT2Config();
     std::shared_ptr<nn::Module> model = nullptr;
 
     if (!FLAGS_llmc_filepath.empty()) {
-        model = GPT2::FromLLMC(FLAGS_llmc_filepath);
+        model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath);
     } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
-        model = std::make_shared<GPT2>(model_config);
-    } else {
-        model = GPT2::FromPretrained(kStrToModelType.at(FLAGS_model));
+        model = std::make_shared<nn::TransformerModel>(model_config);
     }
 
     model->To(device);
@@ -204,7 +198,7 @@ void Train(const nn::parallel::Rank &rank) {
     utils::PrecisionChecker::BuildNameMap(model.get());
 
     // Get chunk size before wrapping with LoRA (needed for PipelineParallel)
-    auto gpt2_model = std::dynamic_pointer_cast<GPT2>(model);
+    auto gpt2_model = std::dynamic_pointer_cast<nn::TransformerModel>(model);
     CHECK(gpt2_model) << "GPT2 example expects GPT2 model.";
 
     // Apply LoRA using GetLoRAModel (in-place injection)
@@ -256,7 +250,7 @@ void Train(const nn::parallel::Rank &rank) {
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
         model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
-                                                                 pp_rank, device, gpt2_model->GetChunkSize());
+                                                                 pp_rank, device, model_config.GetChunkSize());
         if (ddp_world_size > 1) {
             auto ddp_config
                 = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
@@ -376,6 +370,7 @@ void Train(const nn::parallel::Rank &rank) {
                 y = std::make_shared<Tensor>(y->To(device));
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start forward";
+
                 // (bs, seq_len, vocab_size)
                 auto logits = (*model)({x, y})[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish model forward, start loss forward";
