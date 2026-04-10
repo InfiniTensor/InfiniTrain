@@ -31,10 +31,17 @@ void Matmul::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
     // FIXME: compute_dtype is not necessarily the dtype of output_tensor; it should be
     // determined by autocast, not derived from output->Dtype().
     auto compute_dtype = output->Dtype();
-    saved_tensors_ = {
-        input1->Dtype() == compute_dtype ? input1 : std::make_shared<Tensor>(input1->To(compute_dtype)),
-        input2->Dtype() == compute_dtype ? input2 : std::make_shared<Tensor>(input2->To(compute_dtype)),
+
+    // grad_input1 = grad_output @ input2^T, so input2 is needed
+    // grad_input2 = grad_output^T @ input1, so input1 is needed
+    bool need_grad_input1 = needs_input_grad_.size() > 0 && needs_input_grad_[0];
+    bool need_grad_input2 = needs_input_grad_.size() > 1 && needs_input_grad_[1];
+
+    auto cast = [&](const std::shared_ptr<Tensor> &t) {
+        return t->Dtype() == compute_dtype ? t : std::make_shared<Tensor>(t->To(compute_dtype));
     };
+
+    saved_tensors_ = {need_grad_input2 ? cast(input1) : nullptr, need_grad_input1 ? cast(input2) : nullptr};
     out_features_ = output->Dims()[0];
 }
 
@@ -45,10 +52,24 @@ std::vector<std::shared_ptr<Tensor>> Matmul::Backward(const std::vector<std::sha
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
+    CHECK(!needs_input_grad_.empty()) << "needs_input_grad_ not populated in Matmul::Backward";
+    bool need_grad_input1 = needs_input_grad_.size() > 0 && needs_input_grad_[0];
+    bool need_grad_input2 = needs_input_grad_.size() > 1 && needs_input_grad_[1];
+
     auto device = input1->GetDevice().type();
-    auto [grad_input1, grad_input2]
-        = Dispatcher::Instance().Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
-            {device, "MatmulBackward"}, input1, input2, grad_output);
+
+    std::shared_ptr<Tensor> grad_input1 = nullptr;
+    std::shared_ptr<Tensor> grad_input2 = nullptr;
+
+    if (need_grad_input1) {
+        grad_input1 = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MatmulBackwardInput1"}, input2,
+                                                                           grad_output, input1->Dims());
+    }
+    if (need_grad_input2) {
+        grad_input2 = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MatmulBackwardInput2"}, input1,
+                                                                           grad_output, input2->Dims());
+    }
+
     return {grad_input1, grad_input2};
 }
 } // namespace infini_train::autograd
