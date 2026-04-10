@@ -5,7 +5,6 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/autograd/linear.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
@@ -146,62 +145,55 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     return output;
 }
 
-// TODO(dcj): support linear without bias later
-std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
-LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight, bool transpose,
-               int64_t in_features, int64_t out_features, const std::vector<int64_t> &input_dims,
-               const std::shared_ptr<Tensor> &grad_output, bool bias,
-               infini_train::autograd::LinearGradFlags grad_flags) {
+std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weight,
+                                            const std::shared_ptr<Tensor> &grad_output, bool transpose,
+                                            int64_t in_features, int64_t out_features,
+                                            const std::vector<int64_t> &input_dims) {
     /*
     transpose: grad_input = grad_output * weight
     grad_input[*, in_features] = grad_output[*, out_features] * weight[out_features, in_features]
-    grad_weight[out_features, in_features] = grad_output[*, out_features]^T * input[*, in_features]
-    grad_bias[out_features] = grad_output[*, out_features].sum(axis=0)
 
     !transpose: grad_input = grad_output * weight^T
     grad_input[*, in_features] = grad_output[_, out_features] * weight[in_features, out_features]^T
-    grad_weight[in_features, out_features] = input[*, in_features]^T * grad_output[*, out_features]
-    grad_bias[out_features] = grad_output[*, out_features].sum(axis=0)
     */
-    const auto compute_grad_input = grad_flags.input;
-    const auto compute_grad_weight = grad_flags.weight;
-    const auto compute_grad_bias = grad_flags.bias;
-
     CHECK_GE(input_dims.size(), 2);
+    auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32);
+    if (transpose) {
+        grad_input->EigenMatrix() = grad_output->EigenMatrix() * weight->EigenMatrix();
+    } else {
+        grad_input->EigenMatrix() = grad_output->EigenMatrix() * weight->EigenMatrix().transpose();
+    }
+    return grad_input;
+}
 
+std::shared_ptr<Tensor> LinearBackwardWeight(const std::shared_ptr<Tensor> &input,
+                                             const std::shared_ptr<Tensor> &grad_output, bool transpose,
+                                             int64_t in_features, int64_t out_features) {
+    /*
+    transpose:
+    grad_weight[out_features, in_features] = grad_output[*, out_features]^T * input[*, in_features]
+
+    !transpose:
+    grad_weight[in_features, out_features] = input[*, in_features]^T * grad_output[*, out_features]
+    */
     std::vector<int64_t> weight_dims
         = transpose ? std::vector<int64_t>{out_features, in_features} : std::vector<int64_t>{in_features, out_features};
-
-    std::shared_ptr<Tensor> grad_input = nullptr;
-    std::shared_ptr<Tensor> grad_weight = nullptr;
-    std::shared_ptr<Tensor> grad_bias = nullptr;
-
-    if (compute_grad_input) {
-        CHECK(weight != nullptr) << "compute_grad_input=true but weight is nullptr (selective save mismatch)";
-        grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32);
-        if (transpose) {
-            grad_input->EigenMatrix() = grad_output->EigenMatrix() * weight->EigenMatrix();
-        } else {
-            grad_input->EigenMatrix() = grad_output->EigenMatrix() * weight->EigenMatrix().transpose();
-        }
+    auto grad_weight = std::make_shared<Tensor>(weight_dims, DataType::kFLOAT32);
+    if (transpose) {
+        grad_weight->EigenMatrix() = grad_output->EigenMatrix().transpose() * input->EigenMatrix();
+    } else {
+        grad_weight->EigenMatrix() = input->EigenMatrix().transpose() * grad_output->EigenMatrix();
     }
+    return grad_weight;
+}
 
-    if (compute_grad_weight) {
-        CHECK(input != nullptr) << "compute_grad_weight=true but input is nullptr (selective save mismatch)";
-        grad_weight = std::make_shared<Tensor>(weight_dims, DataType::kFLOAT32);
-        if (transpose) {
-            grad_weight->EigenMatrix() = grad_output->EigenMatrix().transpose() * input->EigenMatrix();
-        } else {
-            grad_weight->EigenMatrix() = input->EigenMatrix().transpose() * grad_output->EigenMatrix();
-        }
-    }
-
-    if (compute_grad_bias && bias) {
-        grad_bias = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, DataType::kFLOAT32);
-        grad_bias->EigenVector() = grad_output->EigenMatrix().colwise().sum();
-    }
-
-    return {grad_input, grad_weight, grad_bias};
+std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_output, int64_t out_features) {
+    /*
+    grad_bias[out_features] = grad_output[*, out_features].sum(axis=0)
+    */
+    auto grad_bias = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, DataType::kFLOAT32);
+    grad_bias->EigenVector() = grad_output->EigenMatrix().colwise().sum();
+    return grad_bias;
 }
 } // namespace infini_train::kernels::cpu
 
@@ -211,6 +203,8 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
 REGISTER_CPU_LINEAR_KERNEL(MatmulForward)
 REGISTER_CPU_LINEAR_KERNEL(MatmulBackward)
 REGISTER_CPU_LINEAR_KERNEL(LinearForward)
-REGISTER_CPU_LINEAR_KERNEL(LinearBackward)
+REGISTER_CPU_LINEAR_KERNEL(LinearBackwardInput)
+REGISTER_CPU_LINEAR_KERNEL(LinearBackwardWeight)
+REGISTER_CPU_LINEAR_KERNEL(LinearBackwardBias)
 
 #undef REGISTER_CPU_LINEAR_KERNEL
