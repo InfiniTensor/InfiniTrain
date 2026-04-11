@@ -12,6 +12,7 @@
 
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/scalar.h"
 
 namespace infini_train {
 namespace autograd {
@@ -78,8 +79,7 @@ public:
     size_t NumElements() const;
     DataType Dtype() const;
 
-    // TODO(dcj): use scalar class later
-    template <typename T> void Fill(T value);
+    void Fill(Scalar value);
 
     Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> EigenMatrix();
     Eigen::Map<Eigen::Matrix<float, 1, Eigen::Dynamic, Eigen::RowMajor>> EigenVector();

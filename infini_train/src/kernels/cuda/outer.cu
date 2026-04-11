@@ -11,6 +11,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/runtime/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::kernels::cuda {
@@ -81,9 +82,7 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
     auto grad_output_dtype = grad_output->Dtype();
 
     // Compute dtype determined by saved tensors (forward compute dtype), not grad_output
-    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-        {input_dtype, other_dtype}, [=]<typename Tin, typename To>() { return DataTypeMap_v<WidestType_t<Tin, To>>; },
-        "CUDA OuterBackward");
+    DataType promoted_type = PromoteDataTypes(input_dtype, other_dtype);
 
     auto input_promoted = input_dtype == promoted_type ? input : std::make_shared<Tensor>(input->To(promoted_type));
     auto other_promoted = other_dtype == promoted_type ? other : std::make_shared<Tensor>(other->To(promoted_type));
@@ -95,11 +94,11 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
     auto grad_input = std::make_shared<Tensor>(std::vector<int64_t>{M}, output_dtype, grad_output->GetDevice());
     auto grad_other = std::make_shared<Tensor>(std::vector<int64_t>{N}, output_dtype, grad_output->GetDevice());
 
-    DispatchFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
+    core::cuda::DispatchCudaFunc<DataType::kFLOAT32, DataType::kBFLOAT16>(
         promoted_type,
         [=]<typename T>() {
-            grad_input->Fill<T>(0);
-            grad_other->Fill<T>(0);
+            grad_input->Fill(0.0);
+            grad_other->Fill(0.0);
         },
         "CUDA OuterBackward");
 

@@ -28,8 +28,8 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
     auto output = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen, embed_dim}, DataType::kFLOAT32);
     auto mean = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32);
     auto rstd = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, max_seqlen}, DataType::kFLOAT32);
-    mean->Fill<float>(0.0f);
-    rstd->Fill<float>(0.0f);
+    mean->Fill(0.0);
+    rstd->Fill(0.0);
 
     for (int b = 0; b < batch_size; ++b) {
         for (int t = 0; t < max_seqlen; ++t) {
@@ -84,9 +84,9 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     auto grad_weight = std::make_shared<Tensor>(weight->Dims(), DataType::kFLOAT32);
     auto grad_bias = std::make_shared<Tensor>(bias->Dims(), DataType::kFLOAT32);
 
-    grad_input->Fill<float>(0.0f);
-    grad_weight->Fill<float>(0.0f);
-    grad_bias->Fill<float>(0.0f);
+    grad_input->Fill(0.0);
+    grad_weight->Fill(0.0);
+    grad_bias->Fill(0.0);
 
     for (int b = 0; b < batch_size; ++b) {
         for (int t = 0; t < max_seqlen; ++t) {

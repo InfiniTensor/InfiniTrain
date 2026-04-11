@@ -40,7 +40,7 @@ public:
 
 void RunModelForwardBackward(const std::shared_ptr<nn::Module> &model) {
     auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32);
-    x->Fill<float>(2.0f);
+    x->Fill(2.0f);
     x->RequiresGrad();
 
     std::vector<std::shared_ptr<Tensor>> inputs = {x};
@@ -55,11 +55,11 @@ void TestFunctionLevel(const std::string &config_str) {
     std::cout << "========================================" << std::endl;
 
     auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32);
-    x->Fill<float>(2.0f);
+    x->Fill(2.0f);
     x->RequiresGrad();
 
     auto y = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32);
-    y->Fill<float>(3.0f);
+    y->Fill(3.0f);
     y->RequiresGrad();
 
     auto z = x->Mul(y);
@@ -87,7 +87,7 @@ void TestSimpleFormat() {
     std::cout << "========================================" << std::endl;
 
     auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32);
-    x->Fill<float>(2.0f);
+    x->Fill(2.0f);
     x->RequiresGrad();
 
     auto y = x->Mul(x);
@@ -104,7 +104,7 @@ void TestMd5Format() {
     std::cout << "========================================" << std::endl;
 
     auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32);
-    x->Fill<float>(2.0f);
+    x->Fill(2.0f);
     x->RequiresGrad();
 
     auto y = x->Mul(x);

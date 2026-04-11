@@ -85,8 +85,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
 
     auto grad_a = std::make_shared<Tensor>(a_dims, DataType::kFLOAT32);
     auto grad_b = std::make_shared<Tensor>(b_dims, DataType::kFLOAT32);
-    grad_a->Fill<float>(0.0f);
-    grad_b->Fill<float>(0.0f);
+    grad_a->Fill(0.0);
+    grad_b->Fill(0.0);
 
     int ndim = a_dims.size();
     auto out_strides = ComputeStrides(a_dims);

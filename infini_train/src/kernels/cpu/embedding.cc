@@ -41,7 +41,7 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
     CHECK_EQ(*grad_output->Dims().rbegin(), embedding_dim);
 
     auto grad_weight = std::make_shared<Tensor>(weight_dims, DataType::kFLOAT32);
-    grad_weight->Fill<float>(0.0f);
+    grad_weight->Fill(0.0);
 
     for (int i = 0; i < input->NumElements(); ++i) {
         int idx = static_cast<int>(static_cast<const int64_t *>(input->DataPtr())[i]);
