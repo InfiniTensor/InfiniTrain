@@ -5,19 +5,14 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
+#include "test_utils.h"
 
 using namespace infini_train;
 
-class PrecisionCheckTest : public ::testing::Test {
-protected:
-    static void SetUpTestSuite() {
-        nn::parallel::global::GlobalEnv::Instance().Init(1, 1, false, 1, 1);
-    }
-};
+class PrecisionCheckTest : public infini_train::test::InfiniTrainTest {};
 
 class SimpleModel : public nn::Module {
 public:

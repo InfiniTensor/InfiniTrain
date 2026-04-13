@@ -4,7 +4,7 @@ option(USE_CUDA "Support NVIDIA CUDA" OFF)
 option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
 option(USE_NCCL "Build project for distributed running" ON)
-option(BUILD_TEST "Build InfiniTrain tests" ON)
+option(BUILD_TEST "Build InfiniTrain tests" OFF)
 
 project(infini_train VERSION 0.5.0 LANGUAGES CXX)
 
@@ -16,17 +16,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ------------------------------------------------------------------------------
-# GoogleTest (FetchContent)
+# GoogleTest (submodule)
 # ------------------------------------------------------------------------------
 if(BUILD_TEST)
-  include(FetchContent)
-  FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG v1.14.0
-  )
+  if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/googletest/CMakeLists.txt)
+    message(FATAL_ERROR "googletest submodule not found at third_party/googletest. "
+      "Run: git submodule update --init third_party/googletest")
+  endif()
   set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-  FetchContent_MakeAvailable(googletest)
+  add_subdirectory(third_party/googletest)
   enable_testing()
 endif()
 
