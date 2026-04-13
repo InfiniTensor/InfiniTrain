@@ -9,9 +9,9 @@
 
 using namespace infini_train;
 
-class AutogradLinearForwardTest : public infini_train::test::AutogradTestBase {};
+class AutogradLinearForwardTest : public infini_train::test::AutogradTestBaseP {};
 
-TEST_F(AutogradLinearForwardTest, LinearForward) {
+TEST_P(AutogradLinearForwardTest, LinearForward) {
     auto input = createTensor({2, 3}, 1.0f);
     auto weight = createTensor({4, 3}, 1.0f);
     auto bias = createTensor({4}, 0.0f);
@@ -21,7 +21,7 @@ TEST_F(AutogradLinearForwardTest, LinearForward) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
 }
 
-TEST_F(AutogradLinearForwardTest, LinearNoBias) {
+TEST_P(AutogradLinearForwardTest, LinearNoBias) {
     auto input = createTensor({2, 3}, 1.0f);
     auto weight = createTensor({4, 3}, 1.0f);
     auto linear_fn = std::make_shared<autograd::Linear>();
@@ -30,7 +30,7 @@ TEST_F(AutogradLinearForwardTest, LinearNoBias) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
 }
 
-TEST_F(AutogradLinearForwardTest, LinearBatch) {
+TEST_P(AutogradLinearForwardTest, LinearBatch) {
     auto input = createTensor({32, 128}, 1.0f);
     auto weight = createTensor({64, 128}, 1.0f);
     auto bias = createTensor({64}, 0.0f);
@@ -39,3 +39,5 @@ TEST_F(AutogradLinearForwardTest, LinearBatch) {
     EXPECT_EQ(result.size(), 1);
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{32, 64}));
 }
+
+INFINI_TRAIN_REGISTER_TEST(AutogradLinearForwardTest);

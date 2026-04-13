@@ -10,9 +10,9 @@
 
 using namespace infini_train;
 
-class AutogradElementwiseBackwardTest : public infini_train::test::AutogradTestBase {};
+class AutogradElementwiseBackwardTest : public infini_train::test::AutogradTestBaseP {};
 
-TEST_F(AutogradElementwiseBackwardTest, AddBackward) {
+TEST_P(AutogradElementwiseBackwardTest, AddBackward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto b = createTensor({2, 3}, 2.0f);
     auto add_fn = std::make_shared<autograd::Add>();
@@ -22,7 +22,7 @@ TEST_F(AutogradElementwiseBackwardTest, AddBackward) {
     EXPECT_EQ(grad_inputs.size(), 2);
 }
 
-TEST_F(AutogradElementwiseBackwardTest, SubBackward) {
+TEST_P(AutogradElementwiseBackwardTest, SubBackward) {
     auto a = createTensor({2, 3}, 5.0f);
     auto b = createTensor({2, 3}, 3.0f);
     auto sub_fn = std::make_shared<autograd::Sub>();
@@ -32,7 +32,7 @@ TEST_F(AutogradElementwiseBackwardTest, SubBackward) {
     EXPECT_EQ(grad_inputs.size(), 2);
 }
 
-TEST_F(AutogradElementwiseBackwardTest, MulBackward) {
+TEST_P(AutogradElementwiseBackwardTest, MulBackward) {
     auto a = createTensor({2, 3}, 2.0f);
     auto b = createTensor({2, 3}, 3.0f);
     auto mul_fn = std::make_shared<autograd::Mul>();
@@ -42,7 +42,7 @@ TEST_F(AutogradElementwiseBackwardTest, MulBackward) {
     EXPECT_EQ(grad_inputs.size(), 2);
 }
 
-TEST_F(AutogradElementwiseBackwardTest, DivBackward) {
+TEST_P(AutogradElementwiseBackwardTest, DivBackward) {
     auto a = createTensor({2, 3}, 6.0f);
     auto b = createTensor({2, 3}, 2.0f);
     auto div_fn = std::make_shared<autograd::Div>();
@@ -52,7 +52,7 @@ TEST_F(AutogradElementwiseBackwardTest, DivBackward) {
     EXPECT_EQ(grad_inputs.size(), 2);
 }
 
-TEST_F(AutogradElementwiseBackwardTest, NegBackward) {
+TEST_P(AutogradElementwiseBackwardTest, NegBackward) {
     auto a = createTensor({2, 3}, 5.0f);
     auto neg_fn = std::make_shared<autograd::Neg>();
     auto result = neg_fn->Apply({a});
@@ -61,7 +61,7 @@ TEST_F(AutogradElementwiseBackwardTest, NegBackward) {
     EXPECT_EQ(grad_inputs.size(), 1);
 }
 
-TEST_F(AutogradElementwiseBackwardTest, SinBackward) {
+TEST_P(AutogradElementwiseBackwardTest, SinBackward) {
     auto a = createTensor({2, 3}, 0.0f);
     auto sin_fn = std::make_shared<autograd::Sin>();
     auto result = sin_fn->Apply({a});
@@ -70,7 +70,7 @@ TEST_F(AutogradElementwiseBackwardTest, SinBackward) {
     EXPECT_EQ(grad_inputs.size(), 1);
 }
 
-TEST_F(AutogradElementwiseBackwardTest, CosBackward) {
+TEST_P(AutogradElementwiseBackwardTest, CosBackward) {
     auto a = createTensor({2, 3}, 0.0f);
     auto cos_fn = std::make_shared<autograd::Cos>();
     auto result = cos_fn->Apply({a});
@@ -79,7 +79,7 @@ TEST_F(AutogradElementwiseBackwardTest, CosBackward) {
     EXPECT_EQ(grad_inputs.size(), 1);
 }
 
-TEST_F(AutogradElementwiseBackwardTest, TanhBackward) {
+TEST_P(AutogradElementwiseBackwardTest, TanhBackward) {
     auto a = createTensor({2, 3}, 0.0f);
     auto tanh_fn = std::make_shared<autograd::Tanh>();
     auto result = tanh_fn->Apply({a});
@@ -88,7 +88,7 @@ TEST_F(AutogradElementwiseBackwardTest, TanhBackward) {
     EXPECT_EQ(grad_inputs.size(), 1);
 }
 
-TEST_F(AutogradElementwiseBackwardTest, ExpBackward) {
+TEST_P(AutogradElementwiseBackwardTest, ExpBackward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto exp_fn = std::make_shared<autograd::Exp>();
     auto result = exp_fn->Apply({a});
@@ -97,7 +97,7 @@ TEST_F(AutogradElementwiseBackwardTest, ExpBackward) {
     EXPECT_EQ(grad_inputs.size(), 1);
 }
 
-TEST_F(AutogradElementwiseBackwardTest, LogBackward) {
+TEST_P(AutogradElementwiseBackwardTest, LogBackward) {
     auto a = createTensor({2, 3}, 2.0f);
     auto log_fn = std::make_shared<autograd::Log>();
     auto result = log_fn->Apply({a});
@@ -106,7 +106,7 @@ TEST_F(AutogradElementwiseBackwardTest, LogBackward) {
     EXPECT_EQ(grad_inputs.size(), 1);
 }
 
-TEST_F(AutogradElementwiseBackwardTest, ReciprocalBackward) {
+TEST_P(AutogradElementwiseBackwardTest, ReciprocalBackward) {
     auto a = createTensor({2, 3}, 2.0f);
     auto reciprocal_fn = std::make_shared<autograd::Reciprocal>();
     auto result = reciprocal_fn->Apply({a});
@@ -115,7 +115,7 @@ TEST_F(AutogradElementwiseBackwardTest, ReciprocalBackward) {
     EXPECT_EQ(grad_inputs.size(), 1);
 }
 
-TEST_F(AutogradElementwiseBackwardTest, PowBackward) {
+TEST_P(AutogradElementwiseBackwardTest, PowBackward) {
     auto a = createTensor({2, 3}, 2.0f);
     auto pow_fn = std::make_shared<autograd::Pow>(2.0f);
     auto result = pow_fn->Apply({a});
@@ -124,7 +124,7 @@ TEST_F(AutogradElementwiseBackwardTest, PowBackward) {
     EXPECT_EQ(grad_inputs.size(), 1);
 }
 
-TEST_F(AutogradElementwiseBackwardTest, RsqrtBackward) {
+TEST_P(AutogradElementwiseBackwardTest, RsqrtBackward) {
     auto a = createTensor({2, 3}, 4.0f);
     auto rsqrt_fn = std::make_shared<autograd::Rsqrt>();
     auto result = rsqrt_fn->Apply({a});
@@ -132,3 +132,5 @@ TEST_F(AutogradElementwiseBackwardTest, RsqrtBackward) {
     auto grad_inputs = rsqrt_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 1);
 }
+
+INFINI_TRAIN_REGISTER_TEST(AutogradElementwiseBackwardTest);

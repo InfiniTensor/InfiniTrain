@@ -5,19 +5,14 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
+#include "test_utils.h"
 
 using namespace infini_train;
 
-class PrecisionCheckTest : public ::testing::Test {
-protected:
-    static void SetUpTestSuite() {
-        nn::parallel::global::GlobalEnv::Instance().Init(1, 1, false, 1, 1);
-    }
-};
+class PrecisionCheckTest : public infini_train::test::InfiniTrainTestP {};
 
 class SimpleModel : public nn::Module {
 public:
@@ -31,8 +26,8 @@ public:
     }
 };
 
-TEST_F(PrecisionCheckTest, SimpleFormat) {
-    auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32);
+TEST_P(PrecisionCheckTest, SimpleFormat) {
+    auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
     x->Fill<float>(2.0f);
     x->RequiresGrad();
 
@@ -43,10 +38,10 @@ TEST_F(PrecisionCheckTest, SimpleFormat) {
     EXPECT_NE(x->DataPtr(), nullptr);
 }
 
-TEST_F(PrecisionCheckTest, ModuleForwardBackward) {
+TEST_P(PrecisionCheckTest, ModuleForwardBackward) {
     auto model = std::make_shared<SimpleModel>();
 
-    auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32);
+    auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
     x->Fill<float>(2.0f);
     x->RequiresGrad();
 
@@ -58,11 +53,11 @@ TEST_F(PrecisionCheckTest, ModuleForwardBackward) {
     EXPECT_TRUE(x->requires_grad());
 }
 
-TEST_F(PrecisionCheckTest, MultiIteration) {
+TEST_P(PrecisionCheckTest, MultiIteration) {
     auto model = std::make_shared<SimpleModel>();
 
     for (int i = 0; i < 3; ++i) {
-        auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32);
+        auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
         x->Fill<float>(2.0f);
         x->RequiresGrad();
 
@@ -74,3 +69,5 @@ TEST_F(PrecisionCheckTest, MultiIteration) {
 
     SUCCEED();
 }
+
+INFINI_TRAIN_REGISTER_TEST(PrecisionCheckTest);

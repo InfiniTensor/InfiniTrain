@@ -17,9 +17,19 @@
 using namespace infini_train;
 using namespace infini_train::nn::lora;
 
-class LoRATest : public infini_train::test::InfiniTrainTest {};
+class LoRATest : public infini_train::test::InfiniTrainTestP {};
 
-TEST_F(LoRATest, LoRAConfigScaling) {
+// Helper: sum tensor values on any device by copying to CPU if needed.
+static float TensorSum(const std::shared_ptr<Tensor> &t) {
+    if (t->GetDevice().IsCPU()) {
+        return t->EigenMatrix().sum();
+    }
+    auto cpu = std::make_shared<Tensor>(t->Dims(), t->Dtype(), Device(Device::DeviceType::kCPU, 0));
+    cpu->CopyFrom(t);
+    return cpu->EigenMatrix().sum();
+}
+
+TEST_P(LoRATest, LoRAConfigScaling) {
     LoRAConfig config;
     config.rank = 8;
     config.alpha = 16.0f;
@@ -28,7 +38,7 @@ TEST_F(LoRATest, LoRAConfigScaling) {
     EXPECT_EQ(config.Scaling(), expected_scaling);
 }
 
-TEST_F(LoRATest, LoRAConfigShouldApply) {
+TEST_P(LoRATest, LoRAConfigShouldApply) {
     LoRAConfig config;
     config.rank = 8;
     config.alpha = 16.0f;
@@ -40,8 +50,8 @@ TEST_F(LoRATest, LoRAConfigShouldApply) {
     EXPECT_FALSE(config.ShouldApplyLoRA("random_layer"));
 }
 
-TEST_F(LoRATest, LoRALinearFromModel) {
-    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true);
+TEST_P(LoRATest, LoRALinearFromModel) {
+    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true, GetDevice());
 
     LoRAConfig config;
     config.rank = 4;
@@ -74,8 +84,8 @@ TEST_F(LoRATest, LoRALinearFromModel) {
     EXPECT_EQ(params.size(), 2);
 }
 
-TEST_F(LoRATest, LoRALinearForward) {
-    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true);
+TEST_P(LoRATest, LoRALinearForward) {
+    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true, GetDevice());
 
     LoRAConfig config;
     config.rank = 4;
@@ -84,7 +94,7 @@ TEST_F(LoRATest, LoRALinearForward) {
 
     auto model = GetLoRAModel(base_linear, config);
 
-    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 10, 64}, DataType::kFLOAT32);
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 10, 64}, DataType::kFLOAT32, GetDevice());
 
     auto output = (*model)({input})[0];
 
@@ -94,8 +104,8 @@ TEST_F(LoRATest, LoRALinearForward) {
     EXPECT_EQ(output->Dims()[2], 128);
 }
 
-TEST_F(LoRATest, LoRALinearMerge) {
-    auto base_linear = std::make_shared<nn::Linear>(32, 64, /*bias=*/false);
+TEST_P(LoRATest, LoRALinearMerge) {
+    auto base_linear = std::make_shared<nn::Linear>(32, 64, /*bias=*/false, GetDevice());
 
     LoRAConfig config;
     config.rank = 4;
@@ -107,11 +117,11 @@ TEST_F(LoRATest, LoRALinearMerge) {
     auto *lora_linear = dynamic_cast<LoRALinear *>(model.get());
     ASSERT_NE(lora_linear, nullptr);
 
-    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 5, 32}, DataType::kFLOAT32);
-    input->EigenMatrix().setRandom();
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 5, 32}, DataType::kFLOAT32, GetDevice());
+    infini_train::test::FillSequentialTensor(input, 1.0f);
 
     auto output_before = (*model)({input})[0];
-    float output_before_sum = output_before->EigenMatrix().sum();
+    float output_before_sum = TensorSum(output_before);
 
     EXPECT_FALSE(lora_linear->IsMerged());
     MergeLoRAWeights(model);
@@ -123,7 +133,7 @@ TEST_F(LoRATest, LoRALinearMerge) {
     EXPECT_FALSE(lora_B->requires_grad());
 
     auto output_merged = (*model)({input})[0];
-    float output_merged_sum = output_merged->EigenMatrix().sum();
+    float output_merged_sum = TensorSum(output_merged);
     EXPECT_NEAR(std::abs(output_before_sum - output_merged_sum), 0.0f, 1e-3);
 
     UnmergeLoRAWeights(model);
@@ -135,8 +145,8 @@ TEST_F(LoRATest, LoRALinearMerge) {
     EXPECT_EQ(output_before->Dims(), output_unmerged->Dims());
 }
 
-TEST_F(LoRATest, LoRAUtils) {
-    auto base_linear = std::make_shared<nn::Linear>(32, 64, /*bias=*/true);
+TEST_P(LoRATest, LoRAUtils) {
+    auto base_linear = std::make_shared<nn::Linear>(32, 64, /*bias=*/true, GetDevice());
 
     LoRAConfig config;
     config.rank = 4;
@@ -157,7 +167,7 @@ TEST_F(LoRATest, LoRAUtils) {
     EXPECT_EQ(total, expected_total);
 }
 
-TEST_F(LoRATest, ParseLoRATargetModules) {
+TEST_P(LoRATest, ParseLoRATargetModules) {
     auto modules = ParseLoRATargetModules("c_attn");
     EXPECT_EQ(modules.size(), 1);
     EXPECT_TRUE(modules.count("c_attn"));
@@ -175,7 +185,7 @@ TEST_F(LoRATest, ParseLoRATargetModules) {
     EXPECT_EQ(modules.size(), 2);
 }
 
-TEST_F(LoRATest, ShouldApplyLoRAEdgeCases) {
+TEST_P(LoRATest, ShouldApplyLoRAEdgeCases) {
     {
         LoRAConfig config{8, 16.0f, 0.0f, ParseLoRATargetModules("c_attn,attn.c_proj")};
         EXPECT_TRUE(config.ShouldApplyLoRA("attn.c_proj"));
@@ -196,8 +206,8 @@ TEST_F(LoRATest, ShouldApplyLoRAEdgeCases) {
     }
 }
 
-TEST_F(LoRATest, FreezeUnfreeze) {
-    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true);
+TEST_P(LoRATest, FreezeUnfreeze) {
+    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true, GetDevice());
 
     LoRAConfig config;
     config.rank = 4;
@@ -238,8 +248,8 @@ TEST_F(LoRATest, FreezeUnfreeze) {
     EXPECT_EQ(after_unfreeze, expected_unfreeze);
 }
 
-TEST_F(LoRATest, LoRAStateDict) {
-    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true);
+TEST_P(LoRATest, LoRAStateDict) {
+    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true, GetDevice());
 
     LoRAConfig config;
     config.rank = 4;
@@ -265,8 +275,8 @@ TEST_F(LoRATest, LoRAStateDict) {
     EXPECT_EQ(state_dict.at("lora_B")->Dims()[1], config.rank);
 }
 
-TEST_F(LoRATest, GetLoRAModel) {
-    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true);
+TEST_P(LoRATest, GetLoRAModel) {
+    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true, GetDevice());
 
     LoRAConfig config;
     config.rank = 4;
@@ -281,9 +291,7 @@ TEST_F(LoRATest, GetLoRAModel) {
     EXPECT_EQ(lora_params.size(), 2);
 
     int64_t total_elements = 0;
-    for (const auto &t : lora_params) {
-        total_elements += t->NumElements();
-    }
+    for (const auto &t : lora_params) { total_elements += t->NumElements(); }
     int64_t expected_elements = config.rank * 64 + 128 * config.rank;
     EXPECT_EQ(total_elements, expected_elements);
 
@@ -296,8 +304,8 @@ TEST_F(LoRATest, GetLoRAModel) {
     EXPECT_TRUE(lora_mod->LoRAParameters()[0]->requires_grad());
 }
 
-TEST_F(LoRATest, MergeAndUnload) {
-    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true);
+TEST_P(LoRATest, MergeAndUnload) {
+    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true, GetDevice());
     LoRAConfig config;
     config.rank = 4;
     config.alpha = 8.0f;
@@ -306,10 +314,10 @@ TEST_F(LoRATest, MergeAndUnload) {
 
     EXPECT_NE(dynamic_cast<LoRALinear *>(model.get()), nullptr);
 
-    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 5, 64}, DataType::kFLOAT32);
-    input->EigenMatrix().setRandom();
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 5, 64}, DataType::kFLOAT32, GetDevice());
+    infini_train::test::FillSequentialTensor(input, 1.0f);
     auto output_before = (*model)({input})[0];
-    float output_before_sum = output_before->EigenMatrix().sum();
+    float output_before_sum = TensorSum(output_before);
 
     auto unloaded_model = MergeAndUnload(model);
     EXPECT_NE(unloaded_model, nullptr);
@@ -322,10 +330,10 @@ TEST_F(LoRATest, MergeAndUnload) {
     }
 
     auto output_after = (*unloaded_model)({input})[0];
-    float output_after_sum = output_after->EigenMatrix().sum();
+    float output_after_sum = TensorSum(output_after);
     EXPECT_NEAR(std::abs(output_before_sum - output_after_sum), 0.0f, 1e-3);
 
-    for (const auto &param : unloaded_model->Parameters()) {
-        EXPECT_TRUE(param->requires_grad());
-    }
+    for (const auto &param : unloaded_model->Parameters()) { EXPECT_TRUE(param->requires_grad()); }
 }
+
+INFINI_TRAIN_REGISTER_TEST(LoRATest);

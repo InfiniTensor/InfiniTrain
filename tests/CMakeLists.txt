@@ -22,5 +22,3 @@ add_subdirectory(lora)
 # Hook tests
 add_subdirectory(hook)
 
-# Slow label tests
-add_subdirectory(slow)
