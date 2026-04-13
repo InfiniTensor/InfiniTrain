@@ -9,9 +9,9 @@
 
 using namespace infini_train;
 
-class AutogradMatmulBackwardTest : public infini_train::test::AutogradTestBase {};
+class AutogradMatmulBackwardTest : public infini_train::test::AutogradTestBaseP {};
 
-TEST_F(AutogradMatmulBackwardTest, MatmulBackward) {
+TEST_P(AutogradMatmulBackwardTest, MatmulBackward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto b = createTensor({3, 4}, 1.0f);
     auto matmul_fn = std::make_shared<autograd::Matmul>();
@@ -21,7 +21,7 @@ TEST_F(AutogradMatmulBackwardTest, MatmulBackward) {
     EXPECT_EQ(grad_inputs.size(), 2);
 }
 
-TEST_F(AutogradMatmulBackwardTest, MatmulBackwardSquare) {
+TEST_P(AutogradMatmulBackwardTest, MatmulBackwardSquare) {
     auto a = createTensor({3, 3}, 2.0f);
     auto b = createTensor({3, 3}, 3.0f);
     auto matmul_fn = std::make_shared<autograd::Matmul>();
@@ -31,7 +31,7 @@ TEST_F(AutogradMatmulBackwardTest, MatmulBackwardSquare) {
     EXPECT_EQ(grad_inputs.size(), 2);
 }
 
-TEST_F(AutogradMatmulBackwardTest, MatmulBackwardDifferentShapes) {
+TEST_P(AutogradMatmulBackwardTest, MatmulBackwardDifferentShapes) {
     auto a = createTensor({3, 4}, 1.5f);
     auto b = createTensor({4, 2}, 2.5f);
     auto matmul_fn = std::make_shared<autograd::Matmul>();
@@ -40,3 +40,5 @@ TEST_F(AutogradMatmulBackwardTest, MatmulBackwardDifferentShapes) {
     auto grad_inputs = matmul_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 2);
 }
+
+INFINI_TRAIN_REGISTER_TEST(AutogradMatmulBackwardTest);

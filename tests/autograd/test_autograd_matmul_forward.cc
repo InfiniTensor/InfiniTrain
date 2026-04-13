@@ -9,9 +9,9 @@
 
 using namespace infini_train;
 
-class AutogradMatmulForwardTest : public infini_train::test::AutogradTestBase {};
+class AutogradMatmulForwardTest : public infini_train::test::AutogradTestBaseP {};
 
-TEST_F(AutogradMatmulForwardTest, MatmulForward) {
+TEST_P(AutogradMatmulForwardTest, MatmulForward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto b = createTensor({3, 4}, 1.0f);
     auto matmul_fn = std::make_shared<autograd::Matmul>();
@@ -20,7 +20,7 @@ TEST_F(AutogradMatmulForwardTest, MatmulForward) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
 }
 
-TEST_F(AutogradMatmulForwardTest, MatmulDifferentShapes) {
+TEST_P(AutogradMatmulForwardTest, MatmulDifferentShapes) {
     auto a = createTensor({3, 4}, 1.0f);
     auto b = createTensor({4, 2}, 1.0f);
     auto matmul_fn = std::make_shared<autograd::Matmul>();
@@ -29,7 +29,7 @@ TEST_F(AutogradMatmulForwardTest, MatmulDifferentShapes) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{3, 2}));
 }
 
-TEST_F(AutogradMatmulForwardTest, MatmulBatch) {
+TEST_P(AutogradMatmulForwardTest, MatmulBatch) {
     auto a = createTensor({2, 3, 4}, 1.0f);
     auto b = createTensor({2, 4, 5}, 1.0f);
     auto matmul_fn = std::make_shared<autograd::Matmul>();
@@ -38,7 +38,7 @@ TEST_F(AutogradMatmulForwardTest, MatmulBatch) {
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 3, 5}));
 }
 
-TEST_F(AutogradMatmulForwardTest, MatmulSquare) {
+TEST_P(AutogradMatmulForwardTest, MatmulSquare) {
     auto a = createTensor({3, 3}, 1.0f);
     auto b = createTensor({3, 3}, 1.0f);
     auto matmul_fn = std::make_shared<autograd::Matmul>();
@@ -46,3 +46,5 @@ TEST_F(AutogradMatmulForwardTest, MatmulSquare) {
     EXPECT_EQ(result.size(), 1);
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{3, 3}));
 }
+
+INFINI_TRAIN_REGISTER_TEST(AutogradMatmulForwardTest);

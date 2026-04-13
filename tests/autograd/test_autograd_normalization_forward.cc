@@ -9,9 +9,9 @@
 
 using namespace infini_train;
 
-class AutogradNormalizationForwardTest : public infini_train::test::AutogradTestBase {};
+class AutogradNormalizationForwardTest : public infini_train::test::AutogradTestBaseP {};
 
-TEST_F(AutogradNormalizationForwardTest, LayerNormForward) {
+TEST_P(AutogradNormalizationForwardTest, LayerNormForward) {
     auto a = createTensor({2, 3, 4}, 1.0f);
     auto weight = createTensor({4}, 1.0f);
     auto bias = createTensor({4}, 0.0f);
@@ -20,7 +20,7 @@ TEST_F(AutogradNormalizationForwardTest, LayerNormForward) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradNormalizationForwardTest, LayerNormZeroBias) {
+TEST_P(AutogradNormalizationForwardTest, LayerNormZeroBias) {
     auto a = createTensor({2, 3, 4}, 1.0f);
     auto weight = createTensor({4}, 1.0f);
     auto bias = createTensor({4}, 0.0f);
@@ -29,7 +29,7 @@ TEST_F(AutogradNormalizationForwardTest, LayerNormZeroBias) {
     EXPECT_EQ(result.size(), 1);
 }
 
-TEST_F(AutogradNormalizationForwardTest, LayerNormThreeDim) {
+TEST_P(AutogradNormalizationForwardTest, LayerNormThreeDim) {
     auto a = createTensor({2, 1, 4}, 1.0f);
     auto weight = createTensor({4}, 1.0f);
     auto bias = createTensor({4}, 0.0f);
@@ -38,3 +38,5 @@ TEST_F(AutogradNormalizationForwardTest, LayerNormThreeDim) {
     EXPECT_EQ(result.size(), 1);
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 1, 4}));
 }
+
+INFINI_TRAIN_REGISTER_TEST(AutogradNormalizationForwardTest);

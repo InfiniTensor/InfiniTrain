@@ -1,13 +1,13 @@
 # ============================================================================
-# InfiniTrain 测试宏
+# InfiniTrain Test Macros
 # ============================================================================
-# 提供统一的测试配置接口，降低接入成本
+# Unified test configuration interface to reduce boilerplate.
 #
-# 使用方法：
-#   1. 在 tests/CMakeLists.txt 中 include 此文件
-#   2. 使用 infini_train_add_test 宏注册测试
+# Usage:
+#   1. Include this file in tests/CMakeLists.txt
+#   2. Use infini_train_add_test macro to register tests
 #
-# 示例：
+# Examples:
 #   infini_train_add_test(
 #     test_tensor_create
 #     SOURCES test_tensor_create.cc
@@ -17,76 +17,125 @@
 
 include_guard(GLOBAL)
 
-# 获取 test_macros.cmake 所在目录（tests/common/）
+# Path to this file's directory (tests/common/)
 set(TEST_MACROS_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 # -----------------------------------------------------------------------------
-# 加载 GoogleTest 模块（提供 gtest_discover_tests）
+# Load GoogleTest module (provides gtest_discover_tests)
 # -----------------------------------------------------------------------------
 include(GoogleTest)
 
 # -----------------------------------------------------------------------------
-# infini_train_add_test - 测试注册宏
+# infini_train_add_test - Test registration macro
 # -----------------------------------------------------------------------------
-# 功能：
-#   1. 创建可执行文件
-#   2. 配置编译选项、链接库和头文件路径
-#   3. 使用 gtest_discover_tests 自动发现测试用例
-#   4. 设置测试标签
+# Features:
+#   1. Create executable target
+#   2. Configure compile options, link libraries, and include paths
+#   3. Use gtest_discover_tests to auto-discover test cases
+#   4. Set test labels
 #
-# 参数：
-#   SOURCES: 源文件列表（必填）
-#   LABELS: 测试标签，如 "cpu" "cuda" "distributed"（可选，默认 "cpu"）
+# Arguments:
+#   SOURCES:    Source file list (required)
+#   LABELS:     Test labels, e.g. "cpu" "cuda" "distributed" (optional, default "cpu")
+#   TEST_FILTER: gtest test filter pattern (optional)
 #
-# 示例：
-#   # 简单测试（1行）
+# Examples:
+#   # Single-label test (one liner)
 #   infini_train_add_test(test_example SOURCES test_example.cc LABELS cpu)
 #
-#   # 多标签测试
-#   infini_train_add_test(test_cuda_example SOURCES test_cuda.cc LABELS cuda distributed)
+#   # Filter same binary by label suffix (one call per label)
+#   infini_train_add_test(test_example SOURCES test_example.cc LABELS cpu TEST_FILTER "-*CUDA*")
+#   infini_train_add_test(test_example_cuda SOURCES test_example.cc LABELS cuda TEST_FILTER "*CUDA*")
 # -----------------------------------------------------------------------------
 macro(infini_train_add_test)
-  cmake_parse_arguments(ARG "" "TEST_NAME" "SOURCES;LABELS" ${ARGN})
-  
+  cmake_parse_arguments(ARG "" "TEST_NAME;TEST_FILTER" "SOURCES;LABELS" ${ARGN})
+
   if(NOT ARG_TEST_NAME)
     set(ARG_TEST_NAME ${ARG_UNPARSED_ARGUMENTS})
   endif()
-  
+
   if(NOT ARG_SOURCES)
     message(FATAL_ERROR "infini_train_add_test: TEST_NAME and SOURCES are required")
   endif()
-  
-  # 1. 创建可执行文件
+
+  # 1. Create executable target
   add_executable(${ARG_TEST_NAME} ${ARG_SOURCES})
-  
-  # 2. 配置编译选项（禁用警告转错误，以便在宽松编译环境下运行）
+
+  # 2. Disable -Werror so tests can run under relaxed warning levels
   target_compile_options(${ARG_TEST_NAME} PRIVATE -Wno-error)
-  
-  # 3. 链接 Google Test
+
+  # 3. Link Google Test
   target_link_libraries(${ARG_TEST_NAME} PRIVATE
     GTest::gtest
     GTest::gtest_main
   )
-  
-  # 4. 添加头文件路径
-  target_include_directories(${ARG_TEST_NAME} PRIVATE 
+
+  # 4. Add include paths
+  target_include_directories(${ARG_TEST_NAME} PRIVATE
     ${TEST_MACROS_DIR}
     ${glog_SOURCE_DIR}/src
   )
-  
-  # 5. 链接项目库（复用框架链接策略，包含 CUDA/静态库依赖处理）
+
+  # 5. Link project library (reuses framework linking strategy)
   link_infini_train_exe(${ARG_TEST_NAME})
-  
-  # 6. 使用 gtest_discover_tests 自动发现测试用例
-  #    这会自动为每个 TEST_F() 创建一个 ctest 测试
+
+  # 6. Auto-discover gtest cases and register as ctest tests
   set(labels "cpu")
   if(ARG_LABELS)
     set(labels "${ARG_LABELS}")
   endif()
-  
-  gtest_discover_tests(${ARG_TEST_NAME}
-    # 自动将测试输出重定向到 XML（便于 CI 集成）
-    EXTRA_ARGS --gtest_output=xml:%T.xml
-    PROPERTIES LABELS "${labels}"
-  )
+
+  if(ARG_TEST_FILTER)
+    gtest_discover_tests(${ARG_TEST_NAME}
+      EXTRA_ARGS --gtest_output=xml:%T.xml
+      TEST_FILTER "${ARG_TEST_FILTER}"
+      PROPERTIES LABELS "${labels}"
+    )
+  else()
+    gtest_discover_tests(${ARG_TEST_NAME}
+      EXTRA_ARGS --gtest_output=xml:%T.xml
+      PROPERTIES LABELS "${labels}"
+    )
+  endif()
+endmacro()
+
+# -----------------------------------------------------------------------------
+# infini_train_add_test_suite - Register cpu/cuda/distributed targets in one call
+# -----------------------------------------------------------------------------
+# Calls infini_train_add_test three times (or fewer) with the correct
+# TEST_FILTER and LABELS derived from the label list.
+#
+# Arguments:
+#   <name>   Base name; each target is named <name>_<label>
+#   SOURCES  Source file list (required)
+#   LABELS   Subset of {cpu cuda distributed} (optional, default: all three)
+#
+# Examples:
+#   infini_train_add_test_suite(test_tensor SOURCES ${TENSOR_TEST_SOURCES})
+#   infini_train_add_test_suite(test_lora   SOURCES test_lora.cc LABELS cpu)
+# -----------------------------------------------------------------------------
+macro(infini_train_add_test_suite)
+  cmake_parse_arguments(SUITE "" "" "SOURCES;LABELS" ${ARGN})
+  set(_suite_name ${SUITE_UNPARSED_ARGUMENTS})
+
+  if(NOT SUITE_LABELS)
+    set(SUITE_LABELS cpu cuda distributed)
+  endif()
+
+  foreach(_label IN LISTS SUITE_LABELS)
+    if(_label STREQUAL "cpu")
+      set(_filter "CPU/*")
+    elseif(_label STREQUAL "cuda")
+      set(_filter "CUDA/*")
+    elseif(_label STREQUAL "distributed")
+      set(_filter "Distributed/*")
+    else()
+      message(FATAL_ERROR "infini_train_add_test_suite: unknown label '${_label}'")
+    endif()
+    infini_train_add_test(${_suite_name}_${_label}
+      SOURCES ${SUITE_SOURCES}
+      LABELS ${_label}
+      TEST_FILTER "${_filter}"
+    )
+  endforeach()
 endmacro()

@@ -9,9 +9,9 @@
 
 using namespace infini_train;
 
-class AutogradTransformBackwardTest : public infini_train::test::AutogradTestBase {};
+class AutogradTransformBackwardTest : public infini_train::test::AutogradTestBaseP {};
 
-TEST_F(AutogradTransformBackwardTest, TransposeBackward) {
+TEST_P(AutogradTransformBackwardTest, TransposeBackward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto transpose_fn = std::make_shared<autograd::Transpose>(0, 1);
     auto result = transpose_fn->Apply({a});
@@ -19,3 +19,5 @@ TEST_F(AutogradTransformBackwardTest, TransposeBackward) {
     auto grad_inputs = transpose_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 1);
 }
+
+INFINI_TRAIN_REGISTER_TEST(AutogradTransformBackwardTest);

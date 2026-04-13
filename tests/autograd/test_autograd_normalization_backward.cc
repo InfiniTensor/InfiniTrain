@@ -9,9 +9,9 @@
 
 using namespace infini_train;
 
-class AutogradNormalizationBackwardTest : public infini_train::test::AutogradTestBase {};
+class AutogradNormalizationBackwardTest : public infini_train::test::AutogradTestBaseP {};
 
-TEST_F(AutogradNormalizationBackwardTest, LayerNormBackward) {
+TEST_P(AutogradNormalizationBackwardTest, LayerNormBackward) {
     auto a = createTensor({2, 3, 4}, 1.0f);
     auto weight = createTensor({4}, 1.0f);
     auto bias = createTensor({4}, 0.0f);
@@ -22,7 +22,7 @@ TEST_F(AutogradNormalizationBackwardTest, LayerNormBackward) {
     EXPECT_EQ(grad_inputs.size(), 3);
 }
 
-TEST_F(AutogradNormalizationBackwardTest, LayerNormBackwardZeroBias) {
+TEST_P(AutogradNormalizationBackwardTest, LayerNormBackwardZeroBias) {
     auto a = createTensor({2, 3, 4}, 1.0f);
     auto weight = createTensor({4}, 1.0f);
     auto bias = createTensor({4}, 0.0f);
@@ -32,3 +32,5 @@ TEST_F(AutogradNormalizationBackwardTest, LayerNormBackwardZeroBias) {
     auto grad_inputs = layernorm_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 3);
 }
+
+INFINI_TRAIN_REGISTER_TEST(AutogradNormalizationBackwardTest);
