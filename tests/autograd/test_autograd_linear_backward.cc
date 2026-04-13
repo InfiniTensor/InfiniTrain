@@ -9,9 +9,9 @@
 
 using namespace infini_train;
 
-class AutogradLinearBackwardTest : public infini_train::test::AutogradTestBase {};
+class AutogradLinearBackwardTest : public infini_train::test::AutogradTestBaseP {};
 
-TEST_F(AutogradLinearBackwardTest, LinearBackward) {
+TEST_P(AutogradLinearBackwardTest, LinearBackward) {
     auto input = createTensor({2, 3}, 1.0f);
     auto weight = createTensor({4, 3}, 1.0f);
     auto bias = createTensor({4}, 0.0f);
@@ -22,7 +22,7 @@ TEST_F(AutogradLinearBackwardTest, LinearBackward) {
     EXPECT_EQ(grad_inputs.size(), 3);
 }
 
-TEST_F(AutogradLinearBackwardTest, LinearBackwardNoBias) {
+TEST_P(AutogradLinearBackwardTest, LinearBackwardNoBias) {
     auto input = createTensor({2, 3}, 1.0f);
     auto weight = createTensor({4, 3}, 1.0f);
     auto linear_fn = std::make_shared<autograd::Linear>();
@@ -31,3 +31,5 @@ TEST_F(AutogradLinearBackwardTest, LinearBackwardNoBias) {
     auto grad_inputs = linear_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 2);
 }
+
+INFINI_TRAIN_REGISTER_TEST(AutogradLinearBackwardTest);

@@ -9,9 +9,9 @@
 
 using namespace infini_train;
 
-class AutogradSoftmaxBackwardTest : public infini_train::test::AutogradTestBase {};
+class AutogradSoftmaxBackwardTest : public infini_train::test::AutogradTestBaseP {};
 
-TEST_F(AutogradSoftmaxBackwardTest, SoftmaxBackward) {
+TEST_P(AutogradSoftmaxBackwardTest, SoftmaxBackward) {
     auto a = createTensor({2, 3}, 1.0f);
     auto softmax_fn = std::make_shared<autograd::Softmax>(1);
     auto result = softmax_fn->Apply({a});
@@ -20,7 +20,7 @@ TEST_F(AutogradSoftmaxBackwardTest, SoftmaxBackward) {
     EXPECT_EQ(grad_inputs.size(), 1);
 }
 
-TEST_F(AutogradSoftmaxBackwardTest, SoftmaxBackwardDim0) {
+TEST_P(AutogradSoftmaxBackwardTest, SoftmaxBackwardDim0) {
     auto a = createTensor({4, 3}, 1.0f);
     auto softmax_fn = std::make_shared<autograd::Softmax>(0);
     auto result = softmax_fn->Apply({a});
@@ -28,3 +28,5 @@ TEST_F(AutogradSoftmaxBackwardTest, SoftmaxBackwardDim0) {
     auto grad_inputs = softmax_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 1);
 }
+
+INFINI_TRAIN_REGISTER_TEST(AutogradSoftmaxBackwardTest);
