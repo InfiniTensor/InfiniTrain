@@ -112,11 +112,11 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
             const T **device_input_ptrs = nullptr;
             int64_t *device_offsets = nullptr;
 
-            MACA_CHECK(mcMallocAsync(&device_input_ptrs, sizeof(T *) * num_inputs, stream));
+            MACA_CHECK(mcMallocAsync(reinterpret_cast<void **>(&device_input_ptrs), sizeof(T *) * num_inputs, stream));
             MACA_CHECK(mcMemcpyAsync(device_input_ptrs, host_input_ptrs.data(), sizeof(T *) * num_inputs,
                                        mcMemcpyHostToDevice, stream));
 
-            MACA_CHECK(mcMallocAsync(&device_offsets, sizeof(int64_t) * (num_inputs + 1), stream));
+            MACA_CHECK(mcMallocAsync(reinterpret_cast<void **>(&device_offsets), sizeof(int64_t) * (num_inputs + 1), stream));
             MACA_CHECK(mcMemcpyAsync(device_offsets, host_offsets.data(), sizeof(int64_t) * (num_inputs + 1),
                                        mcMemcpyHostToDevice, stream));
 
@@ -218,11 +218,11 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
             T **device_ptrs = nullptr;
             int64_t *device_offsets = nullptr;
 
-            MACA_CHECK(mcMallocAsync(&device_ptrs, sizeof(T *) * num_inputs, stream));
+            MACA_CHECK(mcMallocAsync(reinterpret_cast<void **>(&device_ptrs), sizeof(T *) * num_inputs, stream));
             MACA_CHECK(mcMemcpyAsync(device_ptrs, host_ptrs.data(), sizeof(T *) * num_inputs, mcMemcpyHostToDevice,
                                        stream));
 
-            MACA_CHECK(mcMallocAsync(&device_offsets, sizeof(int64_t) * (num_inputs + 1), stream));
+            MACA_CHECK(mcMallocAsync(reinterpret_cast<void **>(&device_offsets), sizeof(int64_t) * (num_inputs + 1), stream));
             MACA_CHECK(mcMemcpyAsync(device_offsets, host_offsets.data(), sizeof(int64_t) * (num_inputs + 1),
                                        mcMemcpyHostToDevice, stream));
 

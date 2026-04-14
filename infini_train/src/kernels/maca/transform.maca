@@ -252,7 +252,7 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
     // Allocate device memory for dims and strides
     // TODO(zbl): avoid using mcMalloc?
     int64_t *device_buffer;
-    mcMallocAsync(&device_buffer, 3 * ndim * sizeof(int64_t), stream);
+    mcMallocAsync(reinterpret_cast<void **>(&device_buffer), 3 * ndim * sizeof(int64_t), stream);
 
     int64_t *in_dims_dev = device_buffer;
     int64_t *in_strides_dev = device_buffer + ndim;

@@ -67,7 +67,7 @@ std::shared_ptr<Tensor> StackForward(const std::vector<std::shared_ptr<Tensor>> 
             for (const auto &t : inputs) { host_input_ptrs.push_back(static_cast<const T *>(t->DataPtr())); }
 
             const T **device_input_ptrs;
-            mcMallocAsync(&device_input_ptrs, sizeof(T *) * num_inputs, stream);
+            mcMallocAsync(reinterpret_cast<void **>(&device_input_ptrs), sizeof(T *) * num_inputs, stream);
             mcMemcpyAsync(device_input_ptrs, host_input_ptrs.data(), sizeof(T *) * num_inputs, mcMemcpyHostToDevice,
                             stream);
 
@@ -136,7 +136,7 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
             for (auto &t : grads) { host_ptrs.push_back(static_cast<T *>(t->DataPtr())); }
 
             T **device_ptrs;
-            mcMallocAsync(&device_ptrs, sizeof(T *) * num_inputs, stream);
+            mcMallocAsync(reinterpret_cast<void **>(&device_ptrs), sizeof(T *) * num_inputs, stream);
             mcMemcpyAsync(device_ptrs, host_ptrs.data(), sizeof(T *) * num_inputs, mcMemcpyHostToDevice, stream);
 
             StackBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(

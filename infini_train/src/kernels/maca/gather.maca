@@ -84,7 +84,7 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
     const int64_t gather_dim_size = in_dims[dim];
 
     int64_t *dev_buf = nullptr;
-    MACA_CHECK(mcMallocAsync(&dev_buf, (3 * num_dims) * sizeof(int64_t), stream));
+    MACA_CHECK(mcMallocAsync(reinterpret_cast<void **>(&dev_buf), (3 * num_dims) * sizeof(int64_t), stream));
     int64_t *out_dims_dev = dev_buf + 0 * num_dims;
     int64_t *in_strides_dev = dev_buf + 1 * num_dims;
     int64_t *out_strides_dev = dev_buf + 2 * num_dims;
@@ -193,7 +193,7 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
                              infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                              ->maca_stream();
 
-    MACA_CHECK(mcMallocAsync(&dev_buf, total_i64 * sizeof(int64_t), stream));
+    MACA_CHECK(mcMallocAsync(reinterpret_cast<void **>(&dev_buf), total_i64 * sizeof(int64_t), stream));
     int64_t *out_dims_dev = dev_buf;
     int64_t *in_strides_dev = out_dims_dev + n_out;
     int64_t *out_strides_dev = in_strides_dev + n_in_strides;
