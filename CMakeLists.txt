@@ -44,6 +44,46 @@ include_directories(${gflags_SOURCE_DIR}/include)
 # glog
 set(WITH_GFLAGS OFF CACHE BOOL "Disable glog finding system gflags" FORCE)
 set(WITH_GTEST OFF CACHE BOOL "Disable glog finding system gtest" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "Disable glog unit tests" FORCE)
+# Build glog as a static lib so its symbols are always visible at link time.
+# Under mxcc the default symbol visibility is hidden, which causes the shared
+# libglog.so to export no symbols and produces "undefined reference" errors.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build glog as static library" FORCE)
+
+# Under MACA/mxcc, cmake's feature-detection test compilations do not find
+# standard POSIX system headers (mxcc has a non-standard sysroot probe path).
+# Pre-set glog's HAVE_* cache variables so that glog skips its fallback type /
+# symbol definitions, which would otherwise conflict with the real system
+# headers during the actual build.
+if(USE_MACA)
+  set(HAVE_SYS_TYPES_H    1 CACHE INTERNAL "")
+  set(HAVE_UNISTD_H        1 CACHE INTERNAL "")
+  set(HAVE_DLFCN_H         1 CACHE INTERNAL "")
+  set(HAVE_GLOB_H          1 CACHE INTERNAL "")
+  set(HAVE_PWD_H           1 CACHE INTERNAL "")
+  set(HAVE_SYS_TIME_H      1 CACHE INTERNAL "")
+  set(HAVE_SYS_UTSNAME_H   1 CACHE INTERNAL "")
+  set(HAVE_SYS_WAIT_H      1 CACHE INTERNAL "")
+  set(HAVE_SYS_SYSCALL_H   1 CACHE INTERNAL "")
+  set(HAVE_SYSLOG_H        1 CACHE INTERNAL "")
+  set(HAVE_UCONTEXT_H      1 CACHE INTERNAL "")
+  # check_type_size() uses two internal variables: the size value and a sentinel
+  # "HAVE_HAVE_<VAR>" that marks the check as done. Pre-setting only the value
+  # is insufficient — the sentinel must also be set so the check skips entirely.
+  set(HAVE_MODE_T          4    CACHE INTERNAL "")  # 4 bytes on Linux
+  set(HAVE_HAVE_MODE_T     TRUE CACHE INTERNAL "")
+  set(HAVE_SSIZE_T         8    CACHE INTERNAL "")  # 8 bytes on 64-bit Linux
+  set(HAVE_HAVE_SSIZE_T    TRUE CACHE INTERNAL "")
+  set(HAVE_PREAD           1 CACHE INTERNAL "")
+  set(HAVE_PWRITE          1 CACHE INTERNAL "")
+  set(HAVE_POSIX_FADVISE   1 CACHE INTERNAL "")
+  set(HAVE_SIGACTION       1 CACHE INTERNAL "")
+  set(HAVE_SIGALTSTACK     1 CACHE INTERNAL "")
+  set(HAVE_FCNTL           1 CACHE INTERNAL "")
+  set(HAVE_DLADDR          1 CACHE INTERNAL "")
+  set(HAVE___CXA_DEMANGLE  1 CACHE INTERNAL "")
+endif()
+
 add_subdirectory(third_party/glog)
 include_directories(${glog_SOURCE_DIR}/src)
 

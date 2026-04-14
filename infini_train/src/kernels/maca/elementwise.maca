@@ -427,7 +427,7 @@ void BinaryBackwardBhistLaunch(FuncA fn_a, FuncB fn_b, T *outA, T *outB, const T
 
     // Workspace layout: [grid, K] floats.
     float *work = nullptr;
-    MACA_CHECK(mcMallocAsync(&work, static_cast<size_t>(grid) * static_cast<size_t>(K) * sizeof(float), stream));
+    MACA_CHECK(mcMallocAsync(reinterpret_cast<void **>(&work), static_cast<size_t>(grid) * static_cast<size_t>(K) * sizeof(float), stream));
 
     // Pass 1: per-block histogram accumulation.
     const size_t smem_bytes = static_cast<size_t>(K + (K >> 5)) * sizeof(float);
@@ -439,7 +439,7 @@ void BinaryBackwardBhistLaunch(FuncA fn_a, FuncB fn_b, T *outA, T *outB, const T
     int dev = 0;
     int sm_count = 0;
     MACA_CHECK(mcGetDevice(&dev));
-    MACA_CHECK(mcDeviceGetAttribute(&sm_count, mcDevAttrMultiProcessorCount, dev));
+    MACA_CHECK(mcDeviceGetAttribute(&sm_count, mcDeviceAttributeMultiProcessorCount, dev));
 
     const int RED_THREADS = 256;
     const int oneD_blocks = (K + RED_THREADS - 1) / RED_THREADS;
@@ -457,7 +457,7 @@ void BinaryBackwardBhistLaunch(FuncA fn_a, FuncB fn_b, T *outA, T *outB, const T
         // 2D tiling path: slice the workspace and accumulate using float atomics.
         constexpr int kTileHeight = 128; // rows per CTA; tune between 128 and 256 if needed
         float *outB_accum = nullptr;
-        MACA_CHECK(mcMallocAsync(&outB_accum, static_cast<size_t>(K) * sizeof(float), stream));
+        MACA_CHECK(mcMallocAsync(reinterpret_cast<void **>(&outB_accum), static_cast<size_t>(K) * sizeof(float), stream));
         MACA_CHECK(mcMemsetAsync(outB_accum, 0, static_cast<size_t>(K) * sizeof(float), stream));
 
         const dim3 rblock(RED_THREADS, 1, 1);

@@ -98,6 +98,7 @@ const std::unordered_set<std::string> kSupportedModels
     = {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "d12", "d24", "d36", "d48"};
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
+constexpr char kDeviceMACA[] = "maca";
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 
@@ -112,8 +113,9 @@ const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
-DEFINE_validator(device,
-                 [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_validator(device, [](const char *, const std::string &value) {
+    return value == kDeviceCPU || value == kDeviceCUDA || value == kDeviceMACA;
+});
 
 void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
@@ -169,7 +171,13 @@ void Train(const nn::parallel::Rank &rank) {
             nn::parallel::pp_rank = pp_rank;
         }
     } else {
-        device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
+        if (FLAGS_device == kDeviceCPU) {
+            device = Device();
+        } else if (FLAGS_device == kDeviceMACA) {
+            device = Device(Device::DeviceType::kMACA, 0);
+        } else {
+            device = Device(Device::DeviceType::kCUDA, 0);
+        }
     }
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration

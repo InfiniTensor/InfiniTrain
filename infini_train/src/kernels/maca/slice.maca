@@ -73,7 +73,7 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
                              infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                              ->maca_stream();
 
-    mcMallocAsync(&new_dims_dev,
+    mcMallocAsync(reinterpret_cast<void **>(&new_dims_dev),
                     (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
                     stream);
     starts_dev = new_dims_dev + ends.size();
@@ -167,7 +167,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     const auto &stream = dynamic_cast<infini_train::core::maca::MacaStream *>(
                              infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                              ->maca_stream();
-    mcMallocAsync(&new_dims_dev,
+    mcMallocAsync(reinterpret_cast<void **>(&new_dims_dev),
                     (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
                     stream);
     starts_dev = new_dims_dev + ends.size();
