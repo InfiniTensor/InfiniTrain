@@ -58,18 +58,18 @@ std::vector<std::shared_ptr<Tensor>> Matmul::Backward(const std::vector<std::sha
 
     auto device = input1->GetDevice().type();
 
-    std::shared_ptr<Tensor> grad_input1 = nullptr;
-    std::shared_ptr<Tensor> grad_input2 = nullptr;
+    std::shared_ptr<Tensor> grad_input = nullptr;
+    std::shared_ptr<Tensor> grad_other = nullptr;
 
     if (need_grad_input1) {
-        grad_input1 = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MatmulBackwardInput1"}, input2,
-                                                                           grad_output, input1->Dims());
+        grad_input = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MatmulBackwardInput"}, input2,
+                                                                          grad_output, input1->Dims());
     }
     if (need_grad_input2) {
-        grad_input2 = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MatmulBackwardInput2"}, input1,
-                                                                           grad_output, input2->Dims());
+        grad_other = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MatmulBackwardOther"}, input1,
+                                                                          grad_output, input2->Dims());
     }
 
-    return {grad_input1, grad_input2};
+    return {grad_input, grad_other};
 }
 } // namespace infini_train::autograd
