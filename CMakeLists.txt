@@ -9,22 +9,18 @@ option(USE_OMP "Use OpenMP as backend for Eigen" ON)
 option(USE_NCCL "Build project for distributed running on CUDA using NCCL" ON)
 option(USE_MCCL "Build project for distributed running on MACA using MCCL" ON)
 
-# ------------------------------------------------------------------------------
-# MACA toolchain override (must happen before project())
-# ------------------------------------------------------------------------------
-# When targeting MetaX MACA, the C/C++ compiler must be mxcc so that .maca
-# sources and device code can be compiled by the MACA toolchain.
+project(infini_train VERSION 0.5.0 LANGUAGES CXX)
+
+# Switch to mxcc after project() so that third-party libs (glog, gflags) are
+# configured with the host compiler and their feature-detection checks pass.
 if(USE_MACA)
   set(MACA_PATH $ENV{MACA_PATH})
   if(NOT MACA_PATH)
-    message(FATAL_ERROR "USE_MACA=ON but environment variable MACA_PATH is not set. "
-                        "Please export MACA_PATH (e.g. /opt/maca) before configuring.")
+    message(FATAL_ERROR "USE_MACA=ON but environment variable MACA_PATH is not set.")
   endif()
   set(CMAKE_C_COMPILER   "${MACA_PATH}/mxgpu_llvm/bin/mxcc")
   set(CMAKE_CXX_COMPILER "${MACA_PATH}/mxgpu_llvm/bin/mxcc")
 endif()
-
-project(infini_train VERSION 0.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -45,44 +41,7 @@ include_directories(${gflags_SOURCE_DIR}/include)
 set(WITH_GFLAGS OFF CACHE BOOL "Disable glog finding system gflags" FORCE)
 set(WITH_GTEST OFF CACHE BOOL "Disable glog finding system gtest" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "Disable glog unit tests" FORCE)
-# Build glog as a static lib so its symbols are always visible at link time.
-# Under mxcc the default symbol visibility is hidden, which causes the shared
-# libglog.so to export no symbols and produces "undefined reference" errors.
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build glog as static library" FORCE)
-
-# Under MACA/mxcc, cmake's feature-detection test compilations do not find
-# standard POSIX system headers (mxcc has a non-standard sysroot probe path).
-# Pre-set glog's HAVE_* cache variables so that glog skips its fallback type /
-# symbol definitions, which would otherwise conflict with the real system
-# headers during the actual build.
-if(USE_MACA)
-  set(HAVE_SYS_TYPES_H    1 CACHE INTERNAL "")
-  set(HAVE_UNISTD_H        1 CACHE INTERNAL "")
-  set(HAVE_DLFCN_H         1 CACHE INTERNAL "")
-  set(HAVE_GLOB_H          1 CACHE INTERNAL "")
-  set(HAVE_PWD_H           1 CACHE INTERNAL "")
-  set(HAVE_SYS_TIME_H      1 CACHE INTERNAL "")
-  set(HAVE_SYS_UTSNAME_H   1 CACHE INTERNAL "")
-  set(HAVE_SYS_WAIT_H      1 CACHE INTERNAL "")
-  set(HAVE_SYS_SYSCALL_H   1 CACHE INTERNAL "")
-  set(HAVE_SYSLOG_H        1 CACHE INTERNAL "")
-  set(HAVE_UCONTEXT_H      1 CACHE INTERNAL "")
-  # check_type_size() uses two internal variables: the size value and a sentinel
-  # "HAVE_HAVE_<VAR>" that marks the check as done. Pre-setting only the value
-  # is insufficient — the sentinel must also be set so the check skips entirely.
-  set(HAVE_MODE_T          4    CACHE INTERNAL "")  # 4 bytes on Linux
-  set(HAVE_HAVE_MODE_T     TRUE CACHE INTERNAL "")
-  set(HAVE_SSIZE_T         8    CACHE INTERNAL "")  # 8 bytes on 64-bit Linux
-  set(HAVE_HAVE_SSIZE_T    TRUE CACHE INTERNAL "")
-  set(HAVE_PREAD           1 CACHE INTERNAL "")
-  set(HAVE_PWRITE          1 CACHE INTERNAL "")
-  set(HAVE_POSIX_FADVISE   1 CACHE INTERNAL "")
-  set(HAVE_SIGACTION       1 CACHE INTERNAL "")
-  set(HAVE_SIGALTSTACK     1 CACHE INTERNAL "")
-  set(HAVE_FCNTL           1 CACHE INTERNAL "")
-  set(HAVE_DLADDR          1 CACHE INTERNAL "")
-  set(HAVE___CXA_DEMANGLE  1 CACHE INTERNAL "")
-endif()
 
 add_subdirectory(third_party/glog)
 include_directories(${glog_SOURCE_DIR}/src)

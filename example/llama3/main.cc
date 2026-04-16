@@ -93,13 +93,15 @@ namespace {
 const std::unordered_set<std::string> kSupportedModels = {"llama3"};
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
+constexpr char kDeviceMACA[] = "maca";
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
-DEFINE_validator(device,
-                 [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_validator(device, [](const char *, const std::string &value) {
+    return value == kDeviceCPU || value == kDeviceCUDA || value == kDeviceMACA;
+});
 
 void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
@@ -129,7 +131,9 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *pp_pg = nullptr;
 
     if (rank.IsParallel()) {
-        device = Device(Device::DeviceType::kCUDA, rank.thread_rank());
+        auto parallel_device_type
+            = (FLAGS_device == kDeviceMACA) ? Device::DeviceType::kMACA : Device::DeviceType::kCUDA;
+        device = Device(parallel_device_type, rank.thread_rank());
         auto *pg_factory = ProcessGroupFactory::Instance(device.type());
 
         if (ddp_world_size > 1) {
@@ -154,7 +158,13 @@ void Train(const nn::parallel::Rank &rank) {
             nn::parallel::pp_rank = pp_rank;
         }
     } else {
-        device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
+        if (FLAGS_device == kDeviceCPU) {
+            device = Device();
+        } else if (FLAGS_device == kDeviceMACA) {
+            device = Device(Device::DeviceType::kMACA, 0);
+        } else {
+            device = Device(Device::DeviceType::kCUDA, 0);
+        }
     }
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
