@@ -11,6 +11,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/runtime/maca/maca_dispatch.h"
 #include "infini_train/src/core/runtime/maca/maca_runtime_common.h"
 
 namespace infini_train::kernels::maca {
@@ -60,7 +61,7 @@ std::shared_ptr<Tensor> StackForward(const std::vector<std::shared_ptr<Tensor>> 
     int threads_per_block = 256;
     int num_blocks = (total + threads_per_block - 1) / threads_per_block;
 
-    DispatchFunc<INFINI_ALL_TYPES>(
+    core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
         dtype,
         [=]<typename T>() {
             std::vector<const T *> host_input_ptrs;
@@ -112,8 +113,8 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
     std::vector<std::shared_ptr<Tensor>> grads;
     for (int i = 0; i < num_inputs; ++i) {
         auto t = std::make_shared<Tensor>(base_dims, dtype, grad_output->GetDevice());
-        DispatchFunc<INFINI_ALL_TYPES>(
-            dtype, [=]<typename T>() { t->Fill<T>(0); }, "MACA StackBackward");
+        core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+            dtype, [=]<typename T>() { t->Fill(0); }, "MACA StackBackward");
         grads.push_back(t);
     }
 
@@ -129,7 +130,7 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
     int threads_per_block = 256;
     int num_blocks = (total + threads_per_block - 1) / threads_per_block;
 
-    DispatchFunc<INFINI_ALL_TYPES>(
+    core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
         dtype,
         [=]<typename T>() {
             std::vector<T *> host_ptrs;

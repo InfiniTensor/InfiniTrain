@@ -8,6 +8,7 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/runtime/maca/maca_dispatch.h"
 #include "infini_train/src/core/runtime/maca/maca_runtime_common.h"
 
 namespace infini_train::kernels::maca {
@@ -766,9 +767,7 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
                                       Func unary_fn) {
     auto dtype = grad_output->Dtype();
     auto a_dtype = a ? a->Dtype() : dtype;
-    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-        {dtype, a_dtype}, [=]<typename Tgrad, typename Ta>() { return DataTypeMap_v<WidestType_t<Tgrad, Ta>>; },
-        "MACA UnaryBackward");
+    DataType promoted_type = PromoteDataTypes(dtype, a_dtype);
 
     auto grad_output_promoted
         = dtype == promoted_type ? grad_output : std::make_shared<Tensor>(grad_output->To(promoted_type));
@@ -795,9 +794,7 @@ std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const st
     auto a_dtype = a->Dtype();
     auto b_dtype = b->Dtype();
 
-    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-        {a_dtype, b_dtype}, [=]<typename Ta, typename Tb>() { return DataTypeMap_v<WidestType_t<Ta, Tb>>; },
-        "MACA BinaryForward");
+    DataType promoted_type = PromoteDataTypes(a_dtype, b_dtype);
 
     auto a_promoted = a_dtype == promoted_type ? a : std::make_shared<Tensor>(a->To(promoted_type));
     auto b_promoted = b_dtype == promoted_type ? b : std::make_shared<Tensor>(b->To(promoted_type));
@@ -837,9 +834,7 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     auto a_dtype = a_promoted ? a_promoted->Dtype() : dtype;
     auto b_dtype = b_promoted ? b_promoted->Dtype() : dtype;
     // Compute dtype determined by saved tensors (forward compute dtype), not grad_output
-    DataType promoted_type = DispatchFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
-        {a_dtype, b_dtype}, [=]<typename Ta, typename Tb>() { return DataTypeMap_v<WidestType_t<Ta, Tb>>; },
-        "MACA BinaryBackward");
+    DataType promoted_type = PromoteDataTypes(a_dtype, b_dtype);
 
     CHECK(a_num_elements >= b_num_elements && a_num_elements % b_num_elements == 0);
 
@@ -867,8 +862,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     switch (promoted_type) {
         DISPATCH_CASE(WRAP({
                           if (needs_broadcast) {
-                              grad_a->Fill<float>(0.0f);
-                              grad_b->Fill<float>(0.0f);
+                              grad_a->Fill(0.0f);
+                              grad_b->Fill(0.0f);
                           }
                           LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
                                                      a_promoted, b_promoted);
@@ -876,8 +871,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
                           if (needs_broadcast) {
-                              grad_a->Fill<__maca_bfloat16>(0);
-                              grad_b->Fill<__maca_bfloat16>(0);
+                              grad_a->Fill(0);
+                              grad_b->Fill(0);
                           }
                           LaunchBackward<256, __maca_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims,
                                                            grad_output_promoted, a_promoted, b_promoted);
@@ -885,8 +880,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
                       DataType::kBFLOAT16)
         // FIXME(zbl): AtomicAdd does not support int64_t
         // DISPATCH_CASE(WRAP({
-        //                   grad_a->Fill<int64_t>(0);
-        //                   grad_b->Fill<int64_t>(0);
+        //                   grad_a->Fill(0);
+        //                   grad_b->Fill(0);
         //                   LaunchBackward<256, int64_t>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
         //                   b);
         //               }),
