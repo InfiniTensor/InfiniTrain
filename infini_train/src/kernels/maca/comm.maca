@@ -29,7 +29,7 @@ std::vector<std::shared_ptr<Tensor>> ReduceAddCoalesced(const std::vector<std::v
     std::vector<std::vector<std::shared_ptr<Tensor>>> to_destination_grads;
     for (int i = 0; i < grads[0].size(); ++i) {
         outputs.emplace_back(std::make_shared<Tensor>(grads[0][i]->Dims(), grads[0][i]->Dtype(), destination));
-        outputs[i]->Fill<float>(0.0);
+        outputs[i]->Fill(0.0);
     }
     for (int i = 0; i < grads.size(); ++i) {
         to_destination_grads.push_back(std::vector<std::shared_ptr<Tensor>>());

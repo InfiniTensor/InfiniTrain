@@ -1,6 +1,5 @@
 #!/bin/bash
 
-set -e
 set -o pipefail
 
 usage() {
@@ -70,14 +69,15 @@ BUILD_DIR="$(read_var BUILD_DIR)";              : "${BUILD_DIR:=../build}"
 LOG_DIR="$(read_var LOG_DIR)";                  : "${LOG_DIR:=logs}"
 PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_logs}"
 COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
-RUN_CTEST="$(read_var RUN_CTEST)";              : "${RUN_CTEST:=true}"
+RUN_CTEST="$(read_var RUN_CTEST)";                : "${RUN_CTEST:=true}"
 RUN_PROFILE_TEST="$(read_var RUN_PROFILE_TEST)";  : "${RUN_PROFILE_TEST:=true}"
-CKPT_ROOT_DIR="$(read_var CKPT_ROOT_DIR)";      : "${CKPT_ROOT_DIR:=/data1/ckpt}"
+CKPT_ROOT_DIR="$(read_var CKPT_ROOT_DIR)";        : "${CKPT_ROOT_DIR:=/data1/ckpt}"
 MIXTRAL_INPUT_BIN="$(read_var MIXTRAL_INPUT_BIN)";       : "${MIXTRAL_INPUT_BIN:=/data/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin}"
 MIXTRAL_LLMC_FILEPATH="$(read_var MIXTRAL_LLMC_FILEPATH)"; : "${MIXTRAL_LLMC_FILEPATH:=/data/shared/InfiniTrain-dev/data/llmc/mixtral/mixtral_megatron_export.bin}"
 GPT2_TEST_GROUPS="$(read_var GPT2_TEST_GROUPS)";          : "${GPT2_TEST_GROUPS:=basic,zero,lora,checkpoint}"
 LLAMA3_TEST_GROUPS="$(read_var LLAMA3_TEST_GROUPS)";      : "${LLAMA3_TEST_GROUPS:=basic,zero,lora,checkpoint}"
 MIXTRAL_TEST_GROUPS="$(read_var MIXTRAL_TEST_GROUPS)";    : "${MIXTRAL_TEST_GROUPS:=moe}"
+DEVICE_BACKEND="$(read_var DEVICE_BACKEND)";             : "${DEVICE_BACKEND:=cuda}"
 
 # export custom variables from config first. LOG_DIR/PROFILE_LOG_DIR are normalized below.
 while IFS="=" read -r k v; do
@@ -88,6 +88,8 @@ done < <(jq -r '.variables | to_entries[] | "\(.key)=\(.value)"' "$CONFIG_FILE")
 # Global variable to save the last cmake command
 LAST_CMAKE_CMD=""
 declare -A SELECTED_TAGS=()
+# Track test failures: array of "<log_name>: <cmd>"
+FAILED_TESTS=()
 
 RUN_STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
 RUN_ID="$(date '+%Y%m%d_%H%M%S')"
@@ -320,7 +322,9 @@ run_and_log() {
         echo ""
         echo "[ERROR] Last 20 lines of log:"
         tail -20 "$log_path"
-        exit 1
+        FAILED_TESTS+=("${log_name}: ${cmd}")
+        popd > /dev/null
+        return 1
     fi
 
     popd > /dev/null
@@ -511,19 +515,19 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
                 test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
                 if tag_enabled_for_model "$group_tag" "$GPT2_TEST_GROUPS"; then
                     gpt2_arg_str="$(args_string_for_test "$gi" "$ti" "gpt2" "$test_id")"
-                    gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
+                    gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device ${DEVICE_BACKEND} ${gpt2_arg_str}"
                     run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
 
                 if tag_enabled_for_model "$group_tag" "$LLAMA3_TEST_GROUPS"; then
                     llama3_arg_str="$(args_string_for_test "$gi" "$ti" "llama3" "$test_id")"
-                    llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
+                    llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device ${DEVICE_BACKEND} ${llama3_arg_str}"
                     run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
 
                 if tag_enabled_for_model "$group_tag" "$MIXTRAL_TEST_GROUPS"; then
                     mixtral_arg_str="$(args_string_for_test "$gi" "$ti" "mixtral" "$test_id")"
-                    mixtral_cmd="${prefix}./mixtral --input_bin ${MIXTRAL_INPUT_BIN} --llmc_filepath ${MIXTRAL_LLMC_FILEPATH} --device cuda ${mixtral_arg_str}"
+                    mixtral_cmd="${prefix}./mixtral --input_bin ${MIXTRAL_INPUT_BIN} --llmc_filepath ${MIXTRAL_LLMC_FILEPATH} --device ${DEVICE_BACKEND} ${mixtral_arg_str}"
                     run_and_log "$mixtral_cmd" "mixtral_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
             done
@@ -533,6 +537,17 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
         done
     done
 done
+
+if [[ ${#FAILED_TESTS[@]} -gt 0 ]]; then
+    echo -e "\n\033[1;31m============================================================\033[0m"
+    echo -e "\033[1;31m[SUMMARY] ${#FAILED_TESTS[@]} test(s) FAILED:\033[0m"
+    for f in "${FAILED_TESTS[@]}"; do
+        echo -e "\033[1;31m  - ${f}\033[0m"
+    done
+    echo -e "\033[1;31m============================================================\033[0m"
+else
+    echo -e "\n\033[1;32mAll tests PASSED.\033[0m"
+fi
 
 echo -e "\n\033[1;32mAll done.\033[0m"
 

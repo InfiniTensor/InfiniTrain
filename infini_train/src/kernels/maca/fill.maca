@@ -1,11 +1,14 @@
 #include <cstddef>
 #include <memory>
+#include <type_traits>
 
+#include "infini_train/include/common/maca/kernel_helper.cuh"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/src/core/runtime/maca/maca_dispatch.h"
 #include "infini_train/src/core/runtime/maca/maca_runtime_common.h"
 
 namespace infini_train::kernels::maca {
@@ -18,7 +21,7 @@ template <typename T> __global__ void FillKernel(T *data, T value, size_t size) 
 }
 
 // TODO(dcj): refactor Fill kernel with elementwise template
-void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
+void Fill(std::shared_ptr<Tensor> tensor, Scalar scalar) {
     const int num_tokens = tensor->NumElements();
     const int threads_per_block = 256;
     const int num_blocks = (num_tokens + threads_per_block - 1) / threads_per_block;
@@ -27,11 +30,21 @@ void Fill(std::shared_ptr<Tensor> tensor, void *value_ptr) {
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->maca_stream();
 
-    DispatchFunc<INFINI_ALL_TYPES>(
+    core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
         tensor->Dtype(),
         [=]<typename T>() {
-            FillKernel<T><<<num_blocks, threads_per_block, 0, maca_stream>>>(
-                static_cast<T *>(tensor->DataPtr()), *(static_cast<T *>(value_ptr)), tensor->NumElements());
+            // Scalar::to<T> relies on static_cast, which is ambiguous when T is a
+            // MACA native half/bf16 type constructed from integer scalars. Route
+            // half/bf16 through float via common::maca::Cast to guarantee a
+            // single-candidate conversion path.
+            T casted_value;
+            if constexpr (std::is_same_v<T, __maca_bfloat16> || std::is_same_v<T, __half>) {
+                casted_value = common::maca::Cast<T>(scalar.to<float>());
+            } else {
+                casted_value = scalar.to<T>();
+            }
+            FillKernel<T><<<num_blocks, threads_per_block, 0, maca_stream>>>(static_cast<T *>(tensor->DataPtr()),
+                                                                             casted_value, tensor->NumElements());
         },
         "MACA Fill");
 }
