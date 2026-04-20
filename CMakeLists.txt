@@ -190,6 +190,14 @@ add_executable(llama3
 )
 link_infini_train_exe(llama3)
 
+add_executable(qwen3
+  example/qwen3/main.cc
+  example/common/tiny_shakespeare_dataset.cc
+  example/common/utils.cc
+  example/qwen3/checkpoint_loader.cc
+  example/common/tokenizer.cc
+)
+link_infini_train_exe(qwen3)
 # Tools
 add_subdirectory(tools/infini_run)
 set_target_properties(infini_run PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
