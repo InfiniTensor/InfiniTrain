@@ -221,15 +221,17 @@ BlasHandle *MacaGuardImpl::GetBlasHandle(Device device) const {
 void MacaGuardImpl::Malloc(void **dev_ptr, size_t size) { MACA_CHECK(mcMalloc(dev_ptr, size)); }
 
 void MacaGuardImpl::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
-    auto maca_stream = GetMacaStream(stream);
-    MACA_CHECK(mcMallocAsync(dev_ptr, size, maca_stream));
+    // auto maca_stream = GetMacaStream(stream);
+    // MACA_CHECK(mcMallocAsync(dev_ptr, size, maca_stream));
+    Malloc(dev_ptr, size);
 }
 
 void MacaGuardImpl::Free(void *dev_ptr) { MACA_CHECK(mcFree(dev_ptr)); }
 
 void MacaGuardImpl::FreeAsync(void *dev_ptr, Stream *stream) {
-    auto maca_stream = GetMacaStream(stream);
-    MACA_CHECK(mcFreeAsync(dev_ptr, maca_stream));
+    // auto maca_stream = GetMacaStream(stream);
+    // MACA_CHECK(mcFreeAsync(dev_ptr, maca_stream));
+    Free(dev_ptr);
 }
 
 void MacaGuardImpl::Memcpy(void *dst, const void *src, size_t count, MemcpyKind kind) {
