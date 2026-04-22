@@ -2,8 +2,12 @@
 
 #include <array>
 #include <cstdlib>
+#include <fstream>
 #include <memory>
 #include <mutex>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #include "infini_train/include/common/maca/common_maca.h"
 #include "infini_train/include/core/runtime/runtime_common.h"
@@ -14,6 +18,47 @@
 namespace infini_train::core::maca {
 namespace {
 constexpr int kMaxGpus = 8;
+
+// Read /proc/self/cmdline and return --tensor_parallel value, or 1 if absent /
+// unparseable. Must be callable from static init (before main runs), so we
+// cannot use gflags here.
+int ReadTensorParallelFromCmdline() {
+    std::ifstream in("/proc/self/cmdline", std::ios::binary);
+    if (!in) {
+        return 1;
+    }
+    std::vector<std::string> args;
+    std::string cur;
+    char c;
+    while (in.get(c)) {
+        if (c == '\0') {
+            if (!cur.empty()) {
+                args.push_back(std::move(cur));
+                cur.clear();
+            }
+        } else {
+            cur.push_back(c);
+        }
+    }
+    if (!cur.empty()) {
+        args.push_back(std::move(cur));
+    }
+    for (size_t i = 0; i < args.size(); ++i) {
+        const auto &a = args[i];
+        std::string value;
+        if (a.rfind("--tensor_parallel=", 0) == 0) {
+            value = a.substr(std::string("--tensor_parallel=").size());
+        } else if (a == "--tensor_parallel" && i + 1 < args.size()) {
+            value = args[i + 1];
+        } else {
+            continue;
+        }
+        try {
+            return std::stoi(value);
+        } catch (...) { return 1; }
+    }
+    return 1;
+}
 
 static std::array<std::unique_ptr<MacaStream>, kMaxGpus> maca_streams;
 static std::array<std::unique_ptr<MacaBlasHandle>, kMaxGpus> maca_blas_handles;
@@ -83,6 +128,20 @@ MacaGuardImpl::MacaGuardImpl() {
     // just prior to mcInit(0).  Users can override by setting the env var
     // themselves before launch.
     setenv("MACA_LAUNCH_BLOCKING", "1", 0);
+
+    // When TP > 1 on MACA, disable both the MACA runtime P2P mapping and the
+    // MCCL-level P2P path to prevent multi-PG init deadlocks (threads
+    // concurrently creating both DP and TP comms hang in mcclCommInitAll).
+    // MACA_P2P_DISABLE alone is not sufficient for TP+SP / TP+SP+PP+VPP
+    // configurations — MCCL still establishes its own P2P buffers during init,
+    // so we must disable that too. Both must be set before mcInit(0); setenv
+    // from main() is too late because this ctor runs at static init. Peek at
+    // /proc/self/cmdline to keep single-card / DP-only / PP-only runs on the
+    // P2P fast path.
+    if (ReadTensorParallelFromCmdline() > 1) {
+        setenv("MACA_P2P_DISABLE", "1", 0);
+        setenv("MCCL_P2P_DISABLE", "1", 0);
+    }
 
     // The MACA runtime requires an explicit mcInit(0) before any other call.
     // CUDA has no equivalent; mirroring the DeviceManager ctor from 87390cd.
