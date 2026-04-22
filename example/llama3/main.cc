@@ -492,13 +492,6 @@ int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
-    // On MACA, when TP > 1 disable P2P to prevent MCCL communication-ordering
-    // deadlocks and P2P teardown crashes.  Must be set before any mcclCommInitAll
-    // call (i.e. before threads that create ProcessGroups are spawned).
-    if (FLAGS_device == kDeviceMACA && FLAGS_tensor_parallel > 1) {
-        setenv("MACA_P2P_DISABLE", "1", 1);
-    }
-
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
                                      FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
