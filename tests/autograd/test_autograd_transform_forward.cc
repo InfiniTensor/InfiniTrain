@@ -2,15 +2,15 @@
 
 #include <vector>
 
-#include "infini_train/include/tensor.h"
-#include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/autograd/transform.h"
 #include "infini_train/include/autograd/misc.h"
+#include "infini_train/include/autograd/transform.h"
+#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/tensor.h"
 #include "test_utils.h"
 
 using namespace infini_train;
 
-class AutogradTransformForwardTest : public infini_train::test::AutogradTestBaseP {};
+class AutogradTransformForwardTest : public infini_train::test::AutogradTestBase {};
 
 TEST_P(AutogradTransformForwardTest, TransposeForward) {
     auto a = createTensor({2, 3}, 1.0f);
@@ -22,10 +22,8 @@ TEST_P(AutogradTransformForwardTest, TransposeForward) {
 
 TEST_P(AutogradTransformForwardTest, SliceForward) {
     auto a = createTensor({4, 4}, 1.0f);
-    auto slice_fn = std::make_shared<autograd::Slice>(
-        std::vector<int64_t>{1, 1},
-        std::vector<int64_t>{3, 3},
-        std::vector<int64_t>{1, 1});
+    auto slice_fn = std::make_shared<autograd::Slice>(std::vector<int64_t>{1, 1}, std::vector<int64_t>{3, 3},
+                                                      std::vector<int64_t>{1, 1});
     auto result = slice_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
 }

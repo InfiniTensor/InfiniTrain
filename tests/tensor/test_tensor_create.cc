@@ -8,7 +8,7 @@
 
 using namespace infini_train;
 
-class TensorCreateTest : public infini_train::test::TensorTestBaseP {};
+class TensorCreateTest : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(TensorCreateTest, CreatesTensorWithShapeAndType) {
     auto tensor = createTensor({2, 3});

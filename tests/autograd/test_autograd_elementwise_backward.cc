@@ -1,16 +1,16 @@
 #include <gtest/gtest.h>
 
-#include <vector>
 #include <cmath>
+#include <vector>
 
-#include "infini_train/include/tensor.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/autograd/elementwise.h"
+#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/tensor.h"
 #include "test_utils.h"
 
 using namespace infini_train;
 
-class AutogradElementwiseBackwardTest : public infini_train::test::AutogradTestBaseP {};
+class AutogradElementwiseBackwardTest : public infini_train::test::AutogradTestBase {};
 
 TEST_P(AutogradElementwiseBackwardTest, AddBackward) {
     auto a = createTensor({2, 3}, 1.0f);

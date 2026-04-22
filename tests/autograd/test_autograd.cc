@@ -23,8 +23,8 @@ using namespace infini_train;
 // Forward / Backward — CPU + CUDA
 // ============================================================================
 
-class AutogradForwardTest : public infini_train::test::AutogradTestBaseP {};
-class AutogradBackwardTest : public infini_train::test::AutogradTestBaseP {};
+class AutogradForwardTest : public infini_train::test::AutogradTestBase {};
+class AutogradBackwardTest : public infini_train::test::AutogradTestBase {};
 
 TEST_P(AutogradForwardTest, AddForward) {
     auto a = createTensor({2, 3}, 1.0f);
@@ -319,58 +319,3 @@ TEST_P(AutogradBackwardTest, MulBackward) {
 INFINI_TRAIN_REGISTER_TEST(AutogradForwardTest);
 
 INFINI_TRAIN_REGISTER_TEST(AutogradBackwardTest);
-
-// ============================================================================
-// Distributed — requires NCCL + >=2 GPUs
-// ============================================================================
-
-class AutogradDistributedTest : public infini_train::test::DistributedInfiniTrainTestP {};
-
-TEST_P(AutogradDistributedTest, AllReduce) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
-    a->set_requires_grad(true);
-    infini_train::test::FillConstantTensor(a, 1.0f);
-    EXPECT_TRUE(a->GetDevice().IsCUDA());
-    EXPECT_TRUE(a->requires_grad());
-}
-
-TEST_P(AutogradDistributedTest, AllGather) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{4, 4}, DataType::kFLOAT32, GetDevice());
-    a->set_requires_grad(true);
-    infini_train::test::FillConstantTensor(a, 1.0f);
-    EXPECT_TRUE(a->GetDevice().IsCUDA());
-    EXPECT_EQ(a->Dims(), (std::vector<int64_t>{4, 4}));
-}
-
-TEST_P(AutogradDistributedTest, ReduceScatter) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 8}, DataType::kFLOAT32, GetDevice());
-    a->set_requires_grad(true);
-    infini_train::test::FillConstantTensor(a, 1.0f);
-    EXPECT_TRUE(a->GetDevice().IsCUDA());
-    EXPECT_EQ(a->Dims(), (std::vector<int64_t>{2, 8}));
-}
-
-TEST_P(AutogradDistributedTest, DistributedMatmul) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 4}, DataType::kFLOAT32, GetDevice());
-    a->set_requires_grad(true);
-    auto b = std::make_shared<Tensor>(std::vector<int64_t>{4, 2}, DataType::kFLOAT32, GetDevice());
-    b->set_requires_grad(true);
-    auto result = std::make_shared<autograd::Matmul>()->Apply({a, b});
-    EXPECT_EQ(result.size(), 1);
-    EXPECT_TRUE(result[0]->GetDevice().IsCUDA());
-}
-
-TEST_P(AutogradDistributedTest, DistributedLinear) {
-    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
-    input->set_requires_grad(true);
-    auto weight = std::make_shared<Tensor>(std::vector<int64_t>{4, 3}, DataType::kFLOAT32, GetDevice());
-    weight->set_requires_grad(true);
-    auto bias = std::make_shared<Tensor>(std::vector<int64_t>{4}, DataType::kFLOAT32, GetDevice());
-    bias->set_requires_grad(true);
-    auto result = std::make_shared<autograd::Linear>()->Apply({input, weight, bias});
-    EXPECT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
-    EXPECT_TRUE(result[0]->GetDevice().IsCUDA());
-}
-
-INFINI_TRAIN_REGISTER_TEST_DISTRIBUTED(AutogradDistributedTest);

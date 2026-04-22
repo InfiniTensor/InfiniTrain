@@ -12,7 +12,7 @@
 
 using namespace infini_train;
 
-class PrecisionCheckTest : public infini_train::test::InfiniTrainTestP {};
+class PrecisionCheckTest : public infini_train::test::InfiniTrainTest {};
 
 class SimpleModel : public nn::Module {
 public:
@@ -28,7 +28,7 @@ public:
 
 TEST_P(PrecisionCheckTest, SimpleFormat) {
     auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
-    x->Fill<float>(2.0f);
+    x->Fill(2.0f);
     x->RequiresGrad();
 
     auto y = x->Mul(x);
@@ -42,7 +42,7 @@ TEST_P(PrecisionCheckTest, ModuleForwardBackward) {
     auto model = std::make_shared<SimpleModel>();
 
     auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
-    x->Fill<float>(2.0f);
+    x->Fill(2.0f);
     x->RequiresGrad();
 
     std::vector<std::shared_ptr<Tensor>> inputs = {x};
@@ -58,7 +58,7 @@ TEST_P(PrecisionCheckTest, MultiIteration) {
 
     for (int i = 0; i < 3; ++i) {
         auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
-        x->Fill<float>(2.0f);
+        x->Fill(2.0f);
         x->RequiresGrad();
 
         std::vector<std::shared_ptr<Tensor>> inputs = {x};

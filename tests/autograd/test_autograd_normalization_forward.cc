@@ -2,14 +2,14 @@
 
 #include <vector>
 
-#include "infini_train/include/tensor.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/autograd/normalization.h"
+#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/tensor.h"
 #include "test_utils.h"
 
 using namespace infini_train;
 
-class AutogradNormalizationForwardTest : public infini_train::test::AutogradTestBaseP {};
+class AutogradNormalizationForwardTest : public infini_train::test::AutogradTestBase {};
 
 TEST_P(AutogradNormalizationForwardTest, LayerNormForward) {
     auto a = createTensor({2, 3, 4}, 1.0f);
