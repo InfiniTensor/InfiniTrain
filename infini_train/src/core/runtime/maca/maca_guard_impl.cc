@@ -1,6 +1,7 @@
 #include "infini_train/src/core/runtime/maca/maca_guard_impl.h"
 
 #include <array>
+#include <cstdlib>
 #include <memory>
 #include <mutex>
 
@@ -19,6 +20,12 @@ static std::array<std::unique_ptr<MacaBlasHandle>, kMaxGpus> maca_blas_handles;
 
 static std::array<std::once_flag, kMaxGpus> device_stream_flags;
 static std::array<std::once_flag, kMaxGpus> device_handle_flags;
+
+// Serialize host-side allocations across threads.  The MACA runtime/MCCL share
+// a process-wide virtual address pool; concurrent mcMalloc on multiple threads
+// can race with MCCL P2P buffer registration and produce "Writing to readonly
+// page" faults on peer-mapped buffers.
+static std::mutex g_malloc_mutex;
 
 inline void CheckMacaDevice(Device device) {
     CHECK(device.type() == Device::DeviceType::kMACA) << std::format(
@@ -67,6 +74,16 @@ void MacaGuardImpl::InitSingleHandle(Device device) {
 }
 
 MacaGuardImpl::MacaGuardImpl() {
+    // Force synchronous kernel launches on MACA before initializing the runtime.
+    // Multi-thread DDP races MCCL P2P buffer setup against concurrent user-tensor
+    // kernel launches; without launch-blocking, threads crash during init or
+    // step 0 with "Writing to readonly page" / xnack ATU faults on 64MB P2P
+    // buffers.  setenv() from main() is too late because mcInit(0) runs during
+    // static initialization (before main), so we setenv here in the ctor
+    // just prior to mcInit(0).  Users can override by setting the env var
+    // themselves before launch.
+    setenv("MACA_LAUNCH_BLOCKING", "1", 0);
+
     // The MACA runtime requires an explicit mcInit(0) before any other call.
     // CUDA has no equivalent; mirroring the DeviceManager ctor from 87390cd.
     MACA_CHECK(mcInit(0));
@@ -218,15 +235,23 @@ BlasHandle *MacaGuardImpl::GetBlasHandle(Device device) const {
 }
 
 // memory
-void MacaGuardImpl::Malloc(void **dev_ptr, size_t size) { MACA_CHECK(mcMalloc(dev_ptr, size)); }
+void MacaGuardImpl::Malloc(void **dev_ptr, size_t size) {
+    std::lock_guard<std::mutex> lock(g_malloc_mutex);
+    MACA_CHECK(mcMalloc(dev_ptr, size));
+}
 
 void MacaGuardImpl::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
-    // auto maca_stream = GetMacaStream(stream);
-    // MACA_CHECK(mcMallocAsync(dev_ptr, size, maca_stream));
+    // NOTE(dcj): mcMallocAsync uses a per-stream mempool on MACA and races with
+    // MCCL P2P buffer management under multi-thread DDP.  Use the synchronous
+    // mcMalloc path (serialized by g_malloc_mutex) so every buffer has a stable
+    // mapping by the time any kernel or MCCL op touches it.
     Malloc(dev_ptr, size);
 }
 
-void MacaGuardImpl::Free(void *dev_ptr) { MACA_CHECK(mcFree(dev_ptr)); }
+void MacaGuardImpl::Free(void *dev_ptr) {
+    std::lock_guard<std::mutex> lock(g_malloc_mutex);
+    MACA_CHECK(mcFree(dev_ptr));
+}
 
 void MacaGuardImpl::FreeAsync(void *dev_ptr, Stream *stream) {
     // auto maca_stream = GetMacaStream(stream);

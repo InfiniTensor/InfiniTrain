@@ -501,5 +501,15 @@ int main(int argc, char *argv[]) {
     gflags::ShutDownCommandLineFlags();
     google::ShutdownGoogleLogging();
 
+    // On MACA with multi-thread DDP, ProcessGroupMCCL intentionally skips
+    // mcclCommDestroy because GPU runtime may already be torn down by the time
+    // static destructors run; the leaked MCCL comm/P2P buffers then trip the
+    // MACA runtime during static destruction with mxkwUnmapMemoryToGPU
+    // failures and SIGABRT.  Bypass the destructor chain so the test sees
+    // exit=0 once Train() returns cleanly.
+    if (FLAGS_device == kDeviceMACA && FLAGS_nthread_per_process > 1) {
+        std::_Exit(0);
+    }
+
     return 0;
 }

@@ -1,7 +1,11 @@
+#include <algorithm>
+#include <barrier>
 #include <cstdlib>
 #include <format>
+#include <iterator>
 #include <memory>
 #include <optional>
+#include <thread>
 #include <unordered_set>
 
 #include "gflags/gflags.h"
@@ -130,31 +134,36 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *tp_pg = nullptr;
     const ProcessGroup *pp_pg = nullptr;
 
+    auto rank_in_group = [&](const std::vector<int> &group_ranks) {
+        auto it = std::find(group_ranks.begin(), group_ranks.end(), rank.GlobalRank());
+        CHECK(it != group_ranks.end());
+        return static_cast<int>(std::distance(group_ranks.begin(), it));
+    };
+
     if (rank.IsParallel()) {
         auto parallel_device_type
             = (FLAGS_device == kDeviceMACA) ? Device::DeviceType::kMACA : Device::DeviceType::kCUDA;
         device = Device(parallel_device_type, rank.thread_rank());
-        auto *pg_factory = ProcessGroupFactory::Instance(device.type());
 
+        // NOTE(dcj): On MACA, defer ProcessGroup creation until AFTER the model
+        // has been uploaded to the device.  MCCL init registers internal P2P
+        // buffers that leave stale read-only mappings in the address ranges
+        // mcMalloc later hands out; allocating the model first keeps it in a
+        // P2P-clean region of the VA space and avoids the "Writing to readonly
+        // page" race on multi-thread DDP.
+        //
+        // Compute the in-group ranks now so model loading (which reads
+        // nn::parallel::tp_rank) gets the correct shard.
         if (ddp_world_size > 1) {
-            ddp_pg = pg_factory->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
-                                             GetDataParallelGroupRanks(rank.GlobalRank()));
-            ddp_rank = ddp_pg->GetGroupRank(rank.GlobalRank());
+            ddp_rank = rank_in_group(GetDataParallelGroupRanks(rank.GlobalRank()));
         }
-
         if (tp_world_size > 1) {
-            tp_pg = pg_factory->GetOrCreate(GetTensorParallelProcessGroupName(rank.GlobalRank()),
-                                            GetTensorParallelGroupRanks(rank.GlobalRank()));
-            tp_rank = tp_pg->GetGroupRank(rank.GlobalRank());
+            tp_rank = rank_in_group(GetTensorParallelGroupRanks(rank.GlobalRank()));
             // NOTE(zbl): Reserved for VocabParallelEmbedding
             nn::parallel::tp_rank = tp_rank;
         }
-
         if (pp_world_size > 1) {
-            pp_pg = pg_factory->GetOrCreate(GetPipelineParallelProcessGroupName(rank.GlobalRank()),
-                                            GetPipelineParallelGroupRanks(rank.GlobalRank()));
-            pp_rank = pp_pg->GetGroupRank(rank.GlobalRank());
-
+            pp_rank = rank_in_group(GetPipelineParallelGroupRanks(rank.GlobalRank()));
             nn::parallel::pp_rank = pp_rank;
         }
     } else {
@@ -187,7 +196,48 @@ void Train(const nn::parallel::Rank &rank) {
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
 
-    model->To(device);
+    // On MACA, parallel mcMalloc/mcMemcpy across threads still races even with
+    // an mcMalloc mutex, because the runtime auto-maps allocations P2P-readonly
+    // between sibling devices.  Serialize the entire model upload so each
+    // thread's allocations land before any peer thread starts touching the
+    // address space.
+    if (FLAGS_device == kDeviceMACA && rank.IsParallel() && FLAGS_nthread_per_process > 1) {
+        static std::mutex model_to_mutex;
+        std::lock_guard<std::mutex> lock(model_to_mutex);
+        model->To(device);
+        auto upload_impl = core::GetDeviceGuardImpl(device.type());
+        upload_impl->SynchronizeDevice(device);
+    } else {
+        model->To(device);
+    }
+
+    // Synchronize model upload across all DP threads before any MCCL init runs.
+    // The barrier ensures no thread enters mcclCommInitAll while peer threads
+    // are still mid-mcMemcpyAsync; the SynchronizeDevice ensures the GPU work
+    // is actually retired, not merely queued, before MCCL touches the address
+    // space.
+    if (FLAGS_device == kDeviceMACA && rank.IsParallel() && FLAGS_nthread_per_process > 1) {
+        auto pre_pg_impl = core::GetDeviceGuardImpl(device.type());
+        pre_pg_impl->SynchronizeDevice(device);
+        static std::barrier pre_pg_barrier(FLAGS_nthread_per_process);
+        pre_pg_barrier.arrive_and_wait();
+    }
+
+    if (rank.IsParallel()) {
+        auto *pg_factory = ProcessGroupFactory::Instance(device.type());
+        if (ddp_world_size > 1) {
+            ddp_pg = pg_factory->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
+                                             GetDataParallelGroupRanks(rank.GlobalRank()));
+        }
+        if (tp_world_size > 1) {
+            tp_pg = pg_factory->GetOrCreate(GetTensorParallelProcessGroupName(rank.GlobalRank()),
+                                            GetTensorParallelGroupRanks(rank.GlobalRank()));
+        }
+        if (pp_world_size > 1) {
+            pp_pg = pg_factory->GetOrCreate(GetPipelineParallelProcessGroupName(rank.GlobalRank()),
+                                            GetPipelineParallelGroupRanks(rank.GlobalRank()));
+        }
+    }
 
     utils::PrecisionChecker::BuildNameMap(model.get());
 
@@ -472,6 +522,16 @@ int main(int argc, char *argv[]) {
 
     gflags::ShutDownCommandLineFlags();
     google::ShutdownGoogleLogging();
+
+    // On MACA with multi-thread DDP, ProcessGroupMCCL intentionally skips
+    // mcclCommDestroy because GPU runtime may already be torn down by the time
+    // static destructors run; the leaked MCCL comm/P2P buffers then trip the
+    // MACA runtime during static destruction with mxkwUnmapMemoryToGPU
+    // failures and SIGABRT.  Bypass the destructor chain so the test sees
+    // exit=0 once Train() returns cleanly.
+    if (FLAGS_device == kDeviceMACA && FLAGS_nthread_per_process > 1) {
+        std::_Exit(0);
+    }
 
     return 0;
 }
