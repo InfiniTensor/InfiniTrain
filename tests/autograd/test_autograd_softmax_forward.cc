@@ -2,14 +2,14 @@
 
 #include <vector>
 
-#include "infini_train/include/tensor.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/autograd/softmax.h"
+#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/tensor.h"
 #include "test_utils.h"
 
 using namespace infini_train;
 
-class AutogradSoftmaxForwardTest : public infini_train::test::AutogradTestBaseP {};
+class AutogradSoftmaxForwardTest : public infini_train::test::AutogradTestBase {};
 
 TEST_P(AutogradSoftmaxForwardTest, SoftmaxForward) {
     auto a = createTensor({2, 3}, 1.0f);

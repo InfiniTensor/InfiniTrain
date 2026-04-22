@@ -2,14 +2,14 @@
 
 #include <vector>
 
-#include "infini_train/include/tensor.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/autograd/linear.h"
+#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/tensor.h"
 #include "test_utils.h"
 
 using namespace infini_train;
 
-class AutogradLinearBackwardTest : public infini_train::test::AutogradTestBaseP {};
+class AutogradLinearBackwardTest : public infini_train::test::AutogradTestBase {};
 
 TEST_P(AutogradLinearBackwardTest, LinearBackward) {
     auto input = createTensor({2, 3}, 1.0f);

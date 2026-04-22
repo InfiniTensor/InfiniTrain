@@ -89,12 +89,13 @@ macro(infini_train_add_test)
     gtest_discover_tests(${ARG_TEST_NAME}
       EXTRA_ARGS --gtest_output=xml:%T.xml
       TEST_FILTER "${ARG_TEST_FILTER}"
-      PROPERTIES LABELS "${labels}"
+      DISCOVERY_TIMEOUT 10
+      PROPERTIES LABELS "${labels}" TIMEOUT 10
     )
   else()
     gtest_discover_tests(${ARG_TEST_NAME}
       EXTRA_ARGS --gtest_output=xml:%T.xml
-      PROPERTIES LABELS "${labels}"
+      PROPERTIES LABELS "${labels}" TIMEOUT 10
     )
   endif()
 endmacro()
@@ -108,7 +109,7 @@ endmacro()
 # Arguments:
 #   <name>   Base name; each target is named <name>_<label>
 #   SOURCES  Source file list (required)
-#   LABELS   Subset of {cpu cuda distributed} (optional, default: all three)
+#   LABELS   Subset of {cpu cuda} (optional, default: both)
 #
 # Examples:
 #   infini_train_add_test_suite(test_tensor SOURCES ${TENSOR_TEST_SOURCES})
@@ -119,19 +120,12 @@ macro(infini_train_add_test_suite)
   set(_suite_name ${SUITE_UNPARSED_ARGUMENTS})
 
   if(NOT SUITE_LABELS)
-    set(SUITE_LABELS cpu cuda distributed)
+    set(SUITE_LABELS cpu cuda)
   endif()
 
   foreach(_label IN LISTS SUITE_LABELS)
-    if(_label STREQUAL "cpu")
-      set(_filter "CPU/*")
-    elseif(_label STREQUAL "cuda")
-      set(_filter "CUDA/*")
-    elseif(_label STREQUAL "distributed")
-      set(_filter "Distributed/*")
-    else()
-      message(FATAL_ERROR "infini_train_add_test_suite: unknown label '${_label}'")
-    endif()
+    string(TOUPPER ${_label} _label_upper)
+    set(_filter "${_label_upper}/*")
     infini_train_add_test(${_suite_name}_${_label}
       SOURCES ${SUITE_SOURCES}
       LABELS ${_label}
