@@ -17,7 +17,7 @@
 using namespace infini_train;
 using namespace infini_train::nn::lora;
 
-class LoRATest : public infini_train::test::InfiniTrainTestP {};
+class LoRATest : public infini_train::test::InfiniTrainTest {};
 
 // Helper: sum tensor values on any device by copying to CPU if needed.
 static float TensorSum(const std::shared_ptr<Tensor> &t) {

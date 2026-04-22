@@ -22,3 +22,8 @@ add_subdirectory(lora)
 # Hook tests
 add_subdirectory(hook)
 
+# Dtype dispatch tests
+add_subdirectory(dtype)
+
+# Transformer architecture tests
+add_subdirectory(transformer)

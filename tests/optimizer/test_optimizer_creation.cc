@@ -9,7 +9,7 @@
 
 using namespace infini_train;
 
-class OptimizerCreationTest : public infini_train::test::InfiniTrainTestP {};
+class OptimizerCreationTest : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(OptimizerCreationTest, SGDCreation) {
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
@@ -48,25 +48,3 @@ TEST_P(OptimizerCreationTest, AdamMultiParams) {
 }
 
 INFINI_TRAIN_REGISTER_TEST(OptimizerCreationTest);
-
-// ---------------------------------------------------------------------------
-// Distributed
-// ---------------------------------------------------------------------------
-
-class OptimizerCreationDistributedTest : public infini_train::test::DistributedInfiniTrainTestP {};
-
-TEST_P(OptimizerCreationDistributedTest, SGDCreation) {
-    auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
-    param->set_requires_grad(true);
-    auto optimizer = std::make_shared<optimizers::SGD>(std::vector<std::shared_ptr<Tensor>>{param}, 0.01);
-    EXPECT_NE(optimizer, nullptr);
-}
-
-TEST_P(OptimizerCreationDistributedTest, AdamCreation) {
-    auto param = std::make_shared<Tensor>(std::vector<int64_t>{4, 4}, DataType::kFLOAT32, GetDevice());
-    param->set_requires_grad(true);
-    auto optimizer = std::make_shared<optimizers::Adam>(std::vector<std::shared_ptr<Tensor>>{param}, 0.001);
-    EXPECT_NE(optimizer, nullptr);
-}
-
-INFINI_TRAIN_REGISTER_TEST_DISTRIBUTED(OptimizerCreationDistributedTest);

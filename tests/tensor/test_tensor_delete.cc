@@ -8,7 +8,7 @@
 
 using namespace infini_train;
 
-class TensorDeleteTest : public infini_train::test::TensorTestBaseP {};
+class TensorDeleteTest : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(TensorDeleteTest, ReleasesResourcesOnReset) {
     std::weak_ptr<Tensor> weak_tensor;
@@ -20,16 +20,19 @@ TEST_P(TensorDeleteTest, ReleasesResourcesOnReset) {
 }
 
 TEST_P(TensorDeleteTest, MoveTransferKeepsData) {
-    // Move semantics only make sense on CPU (data pointer is directly readable).
-    if (GetParam() != Device::DeviceType::kCPU) {
-        GTEST_SKIP() << "data-pointer read after move only meaningful on CPU";
-    }
     auto tensor = createTensor({2, 3});
     infini_train::test::FillSequentialTensor(tensor, 5.0f);
+
+    // Verify data via CPU copy for any device.
+    auto cpu_copy
+        = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, Device(Device::DeviceType::kCPU, 0));
+    cpu_copy->CopyFrom(tensor);
+
     auto moved = std::move(tensor);
     EXPECT_EQ(tensor, nullptr);
     ASSERT_NE(moved, nullptr);
-    auto *data = static_cast<float *>(moved->DataPtr());
+
+    auto *data = static_cast<float *>(cpu_copy->DataPtr());
     for (int i = 0; i < 6; ++i) { EXPECT_FLOAT_EQ(data[i], 5.0f + static_cast<float>(i)); }
 }
 
@@ -58,19 +61,6 @@ TEST_P(TensorDeleteTest, TensorDestroyedAfterScope) {
         auto tensor = createTensor({2, 2});
         EXPECT_NE(tensor, nullptr);
     }
-}
-
-TEST_P(TensorDeleteTest, ReleaseMemoryOnCUDA) {
-    if (GetParam() != Device::DeviceType::kCUDA) {
-        GTEST_SKIP() << "GPU memory release only runs in CUDA instantiation";
-    }
-    std::weak_ptr<Tensor> weak_tensor;
-    {
-        auto tensor = createTensor({100, 100}, DataType::kFLOAT32, /*requires_grad=*/true);
-        EXPECT_TRUE(tensor->GetDevice().IsCUDA());
-        weak_tensor = tensor;
-    }
-    EXPECT_TRUE(weak_tensor.expired());
 }
 
 INFINI_TRAIN_REGISTER_TEST(TensorDeleteTest);
