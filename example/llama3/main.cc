@@ -196,20 +196,7 @@ void Train(const nn::parallel::Rank &rank) {
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
 
-    // On MACA, parallel mcMalloc/mcMemcpy across threads still races even with
-    // an mcMalloc mutex, because the runtime auto-maps allocations P2P-readonly
-    // between sibling devices.  Serialize the entire model upload so each
-    // thread's allocations land before any peer thread starts touching the
-    // address space.
-    if (FLAGS_device == kDeviceMACA && rank.IsParallel() && FLAGS_nthread_per_process > 1) {
-        static std::mutex model_to_mutex;
-        std::lock_guard<std::mutex> lock(model_to_mutex);
-        model->To(device);
-        auto upload_impl = core::GetDeviceGuardImpl(device.type());
-        upload_impl->SynchronizeDevice(device);
-    } else {
-        model->To(device);
-    }
+    model->To(device);
 
     // Synchronize model upload across all DP threads before any MCCL init runs.
     // The barrier ensures no thread enters mcclCommInitAll while peer threads

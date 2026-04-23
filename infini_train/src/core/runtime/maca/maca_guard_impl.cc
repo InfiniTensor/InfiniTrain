@@ -294,10 +294,7 @@ BlasHandle *MacaGuardImpl::GetBlasHandle(Device device) const {
 }
 
 // memory
-void MacaGuardImpl::Malloc(void **dev_ptr, size_t size) {
-    std::lock_guard<std::mutex> lock(g_malloc_mutex);
-    MACA_CHECK(mcMalloc(dev_ptr, size));
-}
+void MacaGuardImpl::Malloc(void **dev_ptr, size_t size) { MACA_CHECK(mcMalloc(dev_ptr, size)); }
 
 void MacaGuardImpl::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
     // NOTE(dcj): mcMallocAsync uses a per-stream mempool on MACA and races with
@@ -307,10 +304,7 @@ void MacaGuardImpl::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
     Malloc(dev_ptr, size);
 }
 
-void MacaGuardImpl::Free(void *dev_ptr) {
-    std::lock_guard<std::mutex> lock(g_malloc_mutex);
-    MACA_CHECK(mcFree(dev_ptr));
-}
+void MacaGuardImpl::Free(void *dev_ptr) { MACA_CHECK(mcFree(dev_ptr)); }
 
 void MacaGuardImpl::FreeAsync(void *dev_ptr, Stream *stream) {
     // auto maca_stream = GetMacaStream(stream);
@@ -331,6 +325,7 @@ void MacaGuardImpl::Memcpy(void *dst, const void *src, size_t count, MemcpyKind 
 }
 
 void MacaGuardImpl::MemcpyAsync(void *dst, const void *src, size_t count, MemcpyKind kind, Stream *stream) {
+    std::lock_guard<std::mutex> lock(g_malloc_mutex);
     auto maca_stream = GetMacaStream(stream);
 
     switch (kind) {

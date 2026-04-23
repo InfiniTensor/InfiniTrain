@@ -421,7 +421,7 @@ void Reducer::FinalizeBackward() {
     // AllReduce buffer races with MCCL P2P teardown and produces "Writing to
     // readonly page" faults.  Host blocking forces the bucket lifecycle to
     // serialize against the comm.
-    for (auto &work : works) { work->Synchronize(); }
+    for (auto &work : works) { work->WaitNonBlocking(); }
 
     // Write grad back and reset with mutex on
     {
