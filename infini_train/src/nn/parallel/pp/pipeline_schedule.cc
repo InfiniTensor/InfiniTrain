@@ -50,6 +50,13 @@ std::vector<std::shared_ptr<Tensor>> PipelineSchedule::ReceiveFromPrev(int peer_
         // FIXME(jym): The data type between stages is not float32, which will cause a crash
         auto tensor = std::make_shared<Tensor>(shapes[i], DataType::kFLOAT32, stage_->device());
         tensor->set_requires_grad(true);
+
+        // Mark as non-leaf to prevent the autograd engine from creating an AccumulateGrad
+        // for this tensor. Otherwise, IRecv's next_functions_ would hold AccumulateGrad,
+        // which holds a shared_ptr back to this tensor, forming a reference cycle:
+        //   tensor -> grad_fn_(IRecv) -> next_functions_ -> AccumulateGrad -> tensor
+        // This cycle prevents the autograd graph from being released after backward.
+        tensor->set_is_leaf(false);
         recv_tensors.push_back(tensor);
     }
 
