@@ -2,7 +2,7 @@
 
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
-namespace nn = infini_train::nn;
+namespace infini_train {
 namespace llama3 {
 inline nn::TransformerConfig LLaMA3Config() {
     return {.block_size = 8192,
@@ -23,3 +23,4 @@ inline nn::TransformerConfig LLaMA3Config() {
             .multiple_of = 256};
 }
 } // namespace llama3
+} // namespace infini_train

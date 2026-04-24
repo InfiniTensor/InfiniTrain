@@ -9,7 +9,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "example/common/utils.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
@@ -39,9 +38,9 @@
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
 
+#include "example/common/checkpoint_loader.h"
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
-#include "example/gpt2/checkpoint_loader.h"
 #include "example/gpt2/config.h"
 
 // I/O
@@ -87,7 +86,10 @@ DEFINE_string(resume_from, "", "checkpoint directory to resume from");
 DEFINE_string(checkpoint_dir, "./checkpoints", "root directory used to store checkpoints");
 DEFINE_uint32(max_checkpoint_keep, 3, "max number of checkpoint steps to keep");
 DEFINE_bool(save_optimizer_state, true, "whether optimizer state is persisted in checkpoints");
-DEFINE_string(checkpoint_format, "bin", "checkpoint format: bin|pth");
+DEFINE_string(checkpoint_format, "pth",
+              "checkpoint format: bin|pth. "
+              "'bin' generates model.bin/optimizer.bin (bin supports LLMC model format via callbacks); "
+              "'pth' generates model.pth/optimizer.pth (native StateDict binary).");
 // precision check
 DEFINE_string(
     precision_check, "",
