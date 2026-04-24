@@ -4,7 +4,7 @@
 
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
-namespace nn = infini_train::nn;
+namespace infini_train {
 namespace llama3 {
 inline nn::TransformerConfig LLaMA3Config() {
     return {.block_size = 8192,
@@ -45,3 +45,4 @@ inline void SanitizeLLaMA3Config(const nn::TransformerConfig &c) {
     CHECK_GT(c.multiple_of, 0);
 }
 } // namespace llama3
+} // namespace infini_train

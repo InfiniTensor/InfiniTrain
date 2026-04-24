@@ -194,7 +194,7 @@ add_executable(gpt2
   example/gpt2/main.cc
   example/common/tiny_shakespeare_dataset.cc
   example/common/utils.cc
-  example/gpt2/checkpoint_loader.cc
+  example/common/checkpoint_loader.cc
   example/common/tokenizer.cc
 )
 link_infini_train_exe(gpt2)
@@ -203,7 +203,7 @@ add_executable(llama3
   example/llama3/main.cc
   example/common/tiny_shakespeare_dataset.cc
   example/common/utils.cc
-  example/llama3/checkpoint_loader.cc
+  example/common/checkpoint_loader.cc
   example/common/tokenizer.cc
 )
 link_infini_train_exe(llama3)
