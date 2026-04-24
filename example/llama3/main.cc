@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <barrier>
 #include <cstdlib>
 #include <format>
 #include <iterator>
@@ -197,18 +196,6 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     model->To(device);
-
-    // Synchronize model upload across all DP threads before any MCCL init runs.
-    // The barrier ensures no thread enters mcclCommInitAll while peer threads
-    // are still mid-mcMemcpyAsync; the SynchronizeDevice ensures the GPU work
-    // is actually retired, not merely queued, before MCCL touches the address
-    // space.
-    if (FLAGS_device == kDeviceMACA && rank.IsParallel() && FLAGS_nthread_per_process > 1) {
-        auto pre_pg_impl = core::GetDeviceGuardImpl(device.type());
-        pre_pg_impl->SynchronizeDevice(device);
-        static std::barrier pre_pg_barrier(FLAGS_nthread_per_process);
-        pre_pg_barrier.arrive_and_wait();
-    }
 
     if (rank.IsParallel()) {
         auto *pg_factory = ProcessGroupFactory::Instance(device.type());

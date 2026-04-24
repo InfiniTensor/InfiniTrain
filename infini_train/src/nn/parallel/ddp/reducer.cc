@@ -415,12 +415,7 @@ void Reducer::FinalizeBackward() {
     }
 
     // Wait for works to be done with mutex off
-    // NOTE(dcj): Host-block until AllReduce completes on the device.  On MACA,
-    // a non-blocking stream wait lets the CPU race ahead into the next
-    // iteration's bucket rebuild, where mcMalloc/mcFree on a still-in-flight
-    // AllReduce buffer races with MCCL P2P teardown and produces "Writing to
-    // readonly page" faults.  Host blocking forces the bucket lifecycle to
-    // serialize against the comm.
+    // Note(zbl): Use non-blocking stream wait instead of sync on host
     for (auto &work : works) { work->WaitNonBlocking(); }
 
     // Write grad back and reset with mutex on
