@@ -123,13 +123,8 @@ macro(infini_train_add_test_suite)
   endif()
 
   foreach(_label IN LISTS SUITE_LABELS)
-    if(_label STREQUAL "cpu")
-      set(_filter "CPU/*")
-    elseif(_label STREQUAL "cuda")
-      set(_filter "CUDA/*")
-    else()
-      message(FATAL_ERROR "infini_train_add_test_suite: unknown label '${_label}'")
-    endif()
+    string(TOUPPER ${_label} _label_upper)
+    set(_filter "${_label_upper}/*")
     infini_train_add_test(${_suite_name}_${_label}
       SOURCES ${SUITE_SOURCES}
       LABELS ${_label}

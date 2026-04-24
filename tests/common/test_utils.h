@@ -42,7 +42,7 @@ inline void FillSequentialTensor(const std::shared_ptr<Tensor> &tensor, float st
     size_t size = 1;
     for (auto dim : tensor->Dims()) { size *= static_cast<size_t>(dim); }
 
-    if (tensor->GetDevice().IsCUDA()) {
+    if (!tensor->GetDevice().IsCPU()) {
         auto cpu_tensor
             = std::make_shared<Tensor>(tensor->Dims(), tensor->Dtype(), Device(Device::DeviceType::kCPU, 0));
         auto *cpu_data = static_cast<float *>(cpu_tensor->DataPtr());

@@ -254,8 +254,6 @@ inline std::vector<Device::DeviceType> MusaDeviceTypes() {
     do { if (GetParam() != infini_train::Device::DeviceType::kMUSA) { GTEST_SKIP() << "MUSA-only test"; } } while (0)
 ```
 
-3. `FillSequentialTensor` 中新增 MUSA 设备的 host→device copy 路径。
-
 ### 4.3 注册宏：新增 MUSA 实例
 
 ```cpp
@@ -270,14 +268,9 @@ inline std::vector<Device::DeviceType> MusaDeviceTypes() {
 
 ### 4.4 CMake 层：`test_macros.cmake`
 
-在 `infini_train_add_test_suite` 宏中新增 `musa` label 支持：
+将默认 label 列表从 `cpu cuda` 扩展为 `cpu cuda musa`（在 `infini_train_add_test_suite` 宏的第 122 行）。
 
-```cmake
-elseif(_label STREQUAL "musa")
-    set(_filter "MUSA/*")
-```
-
-并将默认 label 列表从 `cpu cuda` 扩展为 `cpu cuda musa`。
+filter 模式会自动推导为 `MUSA/*`，无需手动添加分支。
 
 ### 4.5 检查清单
 
