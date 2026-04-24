@@ -66,11 +66,13 @@ static std::array<std::unique_ptr<MacaBlasHandle>, kMaxGpus> maca_blas_handles;
 static std::array<std::once_flag, kMaxGpus> device_stream_flags;
 static std::array<std::once_flag, kMaxGpus> device_handle_flags;
 
-// Serialize host-side allocations across threads.  The MACA runtime/MCCL share
-// a process-wide virtual address pool; concurrent mcMalloc on multiple threads
-// can race with MCCL P2P buffer registration and produce "Writing to readonly
-// page" faults on peer-mapped buffers.
-static std::mutex g_malloc_mutex;
+// Serialize host-side MemcpyAsync across threads. On MACA, concurrent
+// mcMemcpyAsync from multiple threads during init-time bursts
+// (Module::To uploads, Adam state fills, ...) races with the runtime's
+// auto P2P peer-mapping and produces "readonly page" faults or
+// mcErrorInvalidValue. The lock is held only for the brief window of the
+// API call itself; actual GPU work remains async on the caller's stream.
+static std::mutex g_memcpy_mutex;
 
 inline void CheckMacaDevice(Device device) {
     CHECK(device.type() == Device::DeviceType::kMACA) << std::format(
@@ -127,19 +129,14 @@ MacaGuardImpl::MacaGuardImpl() {
     // static initialization (before main), so we setenv here in the ctor
     // just prior to mcInit(0).  Users can override by setting the env var
     // themselves before launch.
-    setenv("MACA_LAUNCH_BLOCKING", "1", 0);
+    // setenv("MACA_LAUNCH_BLOCKING", "1", 0);
 
-    // When TP > 1 on MACA, disable both the MACA runtime P2P mapping and the
-    // MCCL-level P2P path to prevent multi-PG init deadlocks (threads
-    // concurrently creating both DP and TP comms hang in mcclCommInitAll).
-    // MACA_P2P_DISABLE alone is not sufficient for TP+SP / TP+SP+PP+VPP
-    // configurations — MCCL still establishes its own P2P buffers during init,
-    // so we must disable that too. Both must be set before mcInit(0); setenv
-    // from main() is too late because this ctor runs at static init. Peek at
-    // /proc/self/cmdline to keep single-card / DP-only / PP-only runs on the
-    // P2P fast path.
+    // When TP > 1 on MACA, disable the MCCL-level P2P path to prevent multi-PG
+    // init deadlocks (threads concurrently creating both DP and TP comms hang
+    // in mcclCommInitAll). Must be set before mcInit(0); setenv from main() is
+    // too late because this ctor runs at static init. Peek at /proc/self/cmdline
+    // to keep single-card / DP-only / PP-only runs on the P2P fast path.
     if (ReadTensorParallelFromCmdline() > 1) {
-        setenv("MACA_P2P_DISABLE", "1", 0);
         setenv("MCCL_P2P_DISABLE", "1", 0);
     }
 
@@ -297,11 +294,17 @@ BlasHandle *MacaGuardImpl::GetBlasHandle(Device device) const {
 void MacaGuardImpl::Malloc(void **dev_ptr, size_t size) { MACA_CHECK(mcMalloc(dev_ptr, size)); }
 
 void MacaGuardImpl::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
-    // NOTE(dcj): mcMallocAsync uses a per-stream mempool on MACA and races with
-    // MCCL P2P buffer management under multi-thread DDP.  Use the synchronous
-    // mcMalloc path (serialized by g_malloc_mutex) so every buffer has a stable
-    // mapping by the time any kernel or MCCL op touches it.
+    // NOTE(dcj): mcMallocAsync with a per-stream mempool gives a big speedup
+    // (~2x on gpt2 DDP steady-state) vs synchronous mcMalloc, but under
+    // multi-thread DDP init bursts (e.g. llama3 1B with nthread=8 uploading
+    // hundreds of param tensors) it races with MACA's auto P2P peer-mapping
+    // and produces mcErrorInvalidValue on subsequent mcMemcpyAsync, or
+    // "readonly page" faults — no amount of mutex/stream-sync serialization
+    // around the alloc call suppresses this. Keep the synchronous path for
+    // correctness.
     Malloc(dev_ptr, size);
+    // auto maca_stream = GetMacaStream(stream);
+    // MACA_CHECK(mcMallocAsync(dev_ptr, size, maca_stream));
 }
 
 void MacaGuardImpl::Free(void *dev_ptr) { MACA_CHECK(mcFree(dev_ptr)); }
@@ -325,7 +328,7 @@ void MacaGuardImpl::Memcpy(void *dst, const void *src, size_t count, MemcpyKind 
 }
 
 void MacaGuardImpl::MemcpyAsync(void *dst, const void *src, size_t count, MemcpyKind kind, Stream *stream) {
-    std::lock_guard<std::mutex> lock(g_malloc_mutex);
+    std::lock_guard<std::mutex> lock(g_memcpy_mutex);
     auto maca_stream = GetMacaStream(stream);
 
     switch (kind) {
