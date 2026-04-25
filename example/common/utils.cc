@@ -1,5 +1,13 @@
 #include "example/common/utils.h"
 
+#include <algorithm>
+#include <chrono>
+
+#include "gflags/gflags.h"
+#include "gflags/gflags_declare.h"
+#include "glog/logging.h"
+#include "infini_train/include/nn/parallel/global.h"
+
 namespace infini_train {
 
 float ConvertBF16ToFloat(void *ptr) {
@@ -60,5 +68,4 @@ void ReadVectorShardFloat(std::ifstream &ifs, float *dst, int64_t len, int64_t s
     ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(cnt * sizeof(float)));
     ifs.seekg(base + std::streamoff(len * sizeof(float)));
 }
-
 } // namespace infini_train
