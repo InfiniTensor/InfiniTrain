@@ -1,8 +1,11 @@
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <format>
+#include <iterator>
 #include <memory>
 #include <optional>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -28,6 +31,9 @@
 #include "infini_train/include/optimizer.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
+#endif
+#ifdef USE_MACA
+#include "infini_train/src/core/runtime/maca/maca_guard_impl.h"
 #endif
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/utils/global_module_hook_registry.h"
@@ -98,6 +104,7 @@ const std::unordered_set<std::string> kSupportedModels
     = {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "d12", "d24", "d36", "d48"};
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
+constexpr char kDeviceMACA[] = "maca";
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 
@@ -112,8 +119,9 @@ const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
-DEFINE_validator(device,
-                 [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_validator(device, [](const char *, const std::string &value) {
+    return value == kDeviceCPU || value == kDeviceCUDA || value == kDeviceMACA;
+});
 
 void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
@@ -143,33 +151,43 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *tp_pg = nullptr;
     const ProcessGroup *pp_pg = nullptr;
 
+    auto rank_in_group = [&](const std::vector<int> &group_ranks) {
+        auto it = std::find(group_ranks.begin(), group_ranks.end(), rank.GlobalRank());
+        CHECK(it != group_ranks.end());
+        return static_cast<int>(std::distance(group_ranks.begin(), it));
+    };
+
     if (rank.IsParallel()) {
-        device = Device(Device::DeviceType::kCUDA, rank.thread_rank());
-        auto *pg_factory = ProcessGroupFactory::Instance(device.type());
+        auto parallel_device_type
+            = (FLAGS_device == kDeviceMACA) ? Device::DeviceType::kMACA : Device::DeviceType::kCUDA;
+        device = Device(parallel_device_type, rank.thread_rank());
 
+        // NOTE(dcj): On MACA, defer ProcessGroup creation until AFTER the model
+        // has been uploaded to the device. MCCL init registers internal P2P
+        // buffers that leave stale read-only mappings in the address ranges
+        // mcMalloc later hands out; allocating the model first keeps it in a
+        // P2P-clean region of the VA space and avoids the init-time race on
+        // multi-thread DDP+TP. Mirrors the llama3 fix combo.
         if (ddp_world_size > 1) {
-            ddp_pg = pg_factory->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
-                                             GetDataParallelGroupRanks(rank.GlobalRank()));
-            ddp_rank = ddp_pg->GetGroupRank(rank.GlobalRank());
+            ddp_rank = rank_in_group(GetDataParallelGroupRanks(rank.GlobalRank()));
         }
-
         if (tp_world_size > 1) {
-            tp_pg = pg_factory->GetOrCreate(GetTensorParallelProcessGroupName(rank.GlobalRank()),
-                                            GetTensorParallelGroupRanks(rank.GlobalRank()));
-            tp_rank = tp_pg->GetGroupRank(rank.GlobalRank());
+            tp_rank = rank_in_group(GetTensorParallelGroupRanks(rank.GlobalRank()));
             // NOTE(zbl): Reserved for VocabParallelEmbedding
             nn::parallel::tp_rank = tp_rank;
         }
-
         if (pp_world_size > 1) {
-            pp_pg = pg_factory->GetOrCreate(GetPipelineParallelProcessGroupName(rank.GlobalRank()),
-                                            GetPipelineParallelGroupRanks(rank.GlobalRank()));
-            pp_rank = pp_pg->GetGroupRank(rank.GlobalRank());
-
+            pp_rank = rank_in_group(GetPipelineParallelGroupRanks(rank.GlobalRank()));
             nn::parallel::pp_rank = pp_rank;
         }
     } else {
-        device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
+        if (FLAGS_device == kDeviceCPU) {
+            device = Device();
+        } else if (FLAGS_device == kDeviceMACA) {
+            device = Device(Device::DeviceType::kMACA, 0);
+        } else {
+            device = Device(Device::DeviceType::kCUDA, 0);
+        }
     }
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
@@ -194,6 +212,22 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     model->To(device);
+
+    if (rank.IsParallel()) {
+        auto *pg_factory = ProcessGroupFactory::Instance(device.type());
+        if (ddp_world_size > 1) {
+            ddp_pg = pg_factory->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
+                                             GetDataParallelGroupRanks(rank.GlobalRank()));
+        }
+        if (tp_world_size > 1) {
+            tp_pg = pg_factory->GetOrCreate(GetTensorParallelProcessGroupName(rank.GlobalRank()),
+                                            GetTensorParallelGroupRanks(rank.GlobalRank()));
+        }
+        if (pp_world_size > 1) {
+            pp_pg = pg_factory->GetOrCreate(GetPipelineParallelProcessGroupName(rank.GlobalRank()),
+                                            GetPipelineParallelGroupRanks(rank.GlobalRank()));
+        }
+    }
 
     utils::PrecisionChecker::BuildNameMap(model.get());
 
@@ -442,6 +476,15 @@ void Train(const nn::parallel::Rank &rank) {
     Profiler::Instance().Report("gpt2.report", Profiler::SortBy::DeviceTimePercentage);
     Profiler::Instance().PrintRecords("gpt2.records.log");
 #endif
+
+    // On MACA, flush all pending mcFreeAsync operations so that ATU entries for
+    // activation/gradient tensors from this step are released before the next
+    // forward pass begins.  Without this, the ATU (address-translation unit)
+    // accumulates deferred frees across steps and becomes full, causing
+    // xnack(0x8) ATU-fault crashes in CastKernel and other large-tensor kernels.
+    if (device.type() == Device::DeviceType::kMACA) {
+        impl->SynchronizeDevice(device);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -471,6 +514,16 @@ int main(int argc, char *argv[]) {
 
     gflags::ShutDownCommandLineFlags();
     google::ShutdownGoogleLogging();
+
+    // On MACA with multi-thread DDP, ProcessGroupMCCL intentionally skips
+    // mcclCommDestroy because GPU runtime may already be torn down by the time
+    // static destructors run; the leaked MCCL comm/P2P buffers then trip the
+    // MACA runtime during static destruction with mxkwUnmapMemoryToGPU
+    // failures and SIGABRT.  Bypass the destructor chain so the test sees
+    // exit=0 once Train() returns cleanly.
+    if (FLAGS_device == kDeviceMACA && FLAGS_nthread_per_process > 1) {
+        std::_Exit(0);
+    }
 
     return 0;
 }

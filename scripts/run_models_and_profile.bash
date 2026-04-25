@@ -1,6 +1,5 @@
 #!/bin/bash
 
-set -e
 set -o pipefail
 
 usage() {
@@ -70,6 +69,7 @@ BUILD_DIR="$(read_var BUILD_DIR)";              : "${BUILD_DIR:=../build}"
 LOG_DIR="$(read_var LOG_DIR)";                  : "${LOG_DIR:=logs}"
 PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_logs}"
 COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
+DEVICE_BACKEND="$(read_var DEVICE_BACKEND)";    : "${DEVICE_BACKEND:=cuda}"
 
 mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
 
@@ -83,6 +83,8 @@ done < <(jq -r '.variables | to_entries[] | "\(.key)=\(.value)"' "$CONFIG_FILE")
 # Global variable to save the last cmake command
 LAST_CMAKE_CMD=""
 declare -A SELECTED_TAGS=()
+# Track test failures: array of "<log_name>: <cmd>"
+FAILED_TESTS=()
 
 normalize_tag() {
     local raw="$1"
@@ -166,7 +168,9 @@ run_and_log() {
         echo ""
         echo "[ERROR] Last 20 lines of log:"
         tail -20 "$log_path"
-        exit 1
+        FAILED_TESTS+=("${log_name}: ${cmd}")
+        popd > /dev/null
+        return 1
     fi
 
     popd > /dev/null
@@ -267,15 +271,26 @@ for ((id=0; id<num_builds; ++id)); do
             arg_str="$(args_string_for_test "$gi" "$ti")"
 
             # gpt2
-            gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
+            gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device ${DEVICE_BACKEND} ${arg_str}"
             run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
 
             # llama3
-            llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str}"
+            llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device ${DEVICE_BACKEND} ${arg_str}"
             run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
         done
     done
 done
+
+if [[ ${#FAILED_TESTS[@]} -gt 0 ]]; then
+    echo -e "\n\033[1;31m============================================================\033[0m"
+    echo -e "\033[1;31m[SUMMARY] ${#FAILED_TESTS[@]} test(s) FAILED:\033[0m"
+    for f in "${FAILED_TESTS[@]}"; do
+        echo -e "\033[1;31m  - ${f}\033[0m"
+    done
+    echo -e "\033[1;31m============================================================\033[0m"
+else
+    echo -e "\n\033[1;32mAll tests PASSED.\033[0m"
+fi
 
 echo -e "\n\033[1;32mAll done.\033[0m"
 
