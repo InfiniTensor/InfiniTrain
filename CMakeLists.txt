@@ -4,6 +4,7 @@ option(USE_CUDA "Support NVIDIA CUDA" OFF)
 option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
 option(USE_NCCL "Build project for distributed running" ON)
+option(BUILD_TEST "Build InfiniTrain tests" OFF)
 
 project(infini_train VERSION 0.5.0 LANGUAGES CXX)
 
@@ -13,6 +14,19 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# ------------------------------------------------------------------------------
+# GoogleTest (submodule)
+# ------------------------------------------------------------------------------
+if(BUILD_TEST)
+  if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/googletest/CMakeLists.txt)
+    message(FATAL_ERROR "googletest submodule not found at third_party/googletest. "
+      "Run: git submodule update --init third_party/googletest")
+  endif()
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  add_subdirectory(third_party/googletest)
+  enable_testing()
+endif()
 
 # ------------------------------------------------------------------------------
 # Third-party deps
@@ -26,7 +40,9 @@ include_directories(${gflags_SOURCE_DIR}/include)
 set(WITH_GFLAGS OFF CACHE BOOL "Disable glog finding system gflags" FORCE)
 set(WITH_GTEST OFF CACHE BOOL "Disable glog finding system gtest" FORCE)
 add_subdirectory(third_party/glog)
+# add_compile_definitions(GLOG_USE_GLOG_EXPORT=1)
 include_directories(${glog_SOURCE_DIR}/src)
+# include_directories(${glog_BINARY_DIR}/glog)
 
 # eigen
 if(USE_OMP)
@@ -48,6 +64,10 @@ endif()
 # Framework core sources (*.cc), excluding cpu kernels (they are built separately)
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
 list(FILTER SRC EXCLUDE REGEX ".*kernels/cpu/.*")
+if(NOT USE_CUDA)
+  list(FILTER SRC EXCLUDE REGEX ".*runtime/cuda/.*")
+  list(FILTER SRC EXCLUDE REGEX ".*ccl/cuda/.*")
+endif()
 if(NOT USE_NCCL)
   list(FILTER SRC EXCLUDE REGEX ".*infini_train/src/core/ccl/cuda/.*")
 endif()
@@ -190,55 +210,8 @@ add_executable(llama3
 )
 link_infini_train_exe(llama3)
 
-# Tools
-add_subdirectory(tools/infini_run)
-set_target_properties(infini_run PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Tests
-add_executable(test_hook test/hook/test_hook.cc)
-link_infini_train_exe(test_hook)
-
-add_executable(test_precision_check test/hook/test_precision_check.cc)
-link_infini_train_exe(test_precision_check)
-
-add_executable(test_lora test/lora/test_lora.cc)
-link_infini_train_exe(test_lora)
-
-add_executable(test_transformer_architecture test/transformer/test_transformer_architecture.cc)
-link_infini_train_exe(test_transformer_architecture)
-
-add_executable(test_scalar test/dtype/test_scalar.cc)
-link_infini_train_exe(test_scalar)
-
-add_executable(test_dtype_dispatch test/dtype/test_dtype_dispatch.cc)
-link_infini_train_exe(test_dtype_dispatch)
-
-# Negative compile test: missing dtype registration must fail at compile time.
-set(DTYPE_DISPATCH_COMPILE_FAIL_SOURCE
-  ${PROJECT_SOURCE_DIR}/test/dtype/test_dtype_dispatch_compile_fail.cc)
-
-try_compile(DTYPE_DISPATCH_COMPILE_UNEXPECTEDLY_SUCCEEDED
-  ${CMAKE_BINARY_DIR}/CMakeFiles/try_compile_dtype_dispatch_missing_map
-  SOURCES ${DTYPE_DISPATCH_COMPILE_FAIL_SOURCE}
-  CMAKE_FLAGS
-    "-DCMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD}"
-    "-DCMAKE_CXX_STANDARD_REQUIRED=ON"
-    "-DCMAKE_CXX_EXTENSIONS=OFF"
-    "-DCMAKE_CXX_FLAGS=-I${PROJECT_SOURCE_DIR}"
-  OUTPUT_VARIABLE DTYPE_DISPATCH_TRY_COMPILE_OUTPUT
-)
-
-if(DTYPE_DISPATCH_COMPILE_UNEXPECTEDLY_SUCCEEDED)
-  message(FATAL_ERROR
-    "dtype dispatch compile-fail test unexpectedly succeeded.\n"
-    "Source: ${DTYPE_DISPATCH_COMPILE_FAIL_SOURCE}\n"
-    "Output:\n${DTYPE_DISPATCH_TRY_COMPILE_OUTPUT}")
+if(BUILD_TEST)
+  add_subdirectory(tests)
 endif()
-
-add_custom_target(test_dtype_dispatch_compile_fail
-  COMMAND ${CMAKE_COMMAND} -E echo
-    "dtype dispatch compile-fail check passed (missing dtype registration correctly fails to compile)."
-  VERBATIM
-)
-
-add_dependencies(test_dtype_dispatch test_dtype_dispatch_compile_fail)
