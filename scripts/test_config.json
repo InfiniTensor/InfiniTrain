@@ -212,6 +212,18 @@
                     }
                 },
                 {
+                    "id": "3_distopt_zero2",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "use_distributed_optimizer": true,
+                        "zero_stage": 2
+                    }
+                },
+                {
                     "id": "3_bfloat16_distopt",
                     "args": {
                         "dtype": "bfloat16",
@@ -220,6 +232,18 @@
                         "batch_size": 10,
                         "total_batch_size": 5120,
                         "use_distributed_optimizer": true
+                    }
+                },
+                {
+                    "id": "3_bfloat16_distopt_zero2",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "use_distributed_optimizer": true,
+                        "zero_stage": 2
                     }
                 },
                 {
@@ -235,6 +259,19 @@
                     }
                 },
                 {
+                    "id": "4_distopt_zero2",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "use_distributed_optimizer": true,
+                        "zero_stage": 2
+                    }
+                },
+                {
                     "id": "4_bfloat16_distopt",
                     "args": {
                         "dtype": "bfloat16",
@@ -244,6 +281,19 @@
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
                         "use_distributed_optimizer": true
+                    }
+                },
+                {
+                    "id": "4_bfloat16_distopt_zero2",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "use_distributed_optimizer": true,
+                        "zero_stage": 2
                     }
                 },
                 {
@@ -260,6 +310,20 @@
                     }
                 },
                 {
+                    "id": "5_distopt_zero2",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "use_distributed_optimizer": true,
+                        "zero_stage": 2
+                    }
+                },
+                {
                     "id": "5_bfloat16_distopt",
                     "args": {
                         "dtype": "bfloat16",
@@ -270,6 +334,20 @@
                         "tensor_parallel": 4,
                         "sequence_parallel": true,
                         "use_distributed_optimizer": true
+                    }
+                },
+                {
+                    "id": "5_bfloat16_distopt_zero2",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "use_distributed_optimizer": true,
+                        "zero_stage": 2
                     }
                 },
                 {
