@@ -70,4 +70,10 @@ void GemmCuda(const GemmParams &p) {
     }
 }
 
+void SgemvCuda(const SgemvParams &p) {
+    DCHECK(p.blas_handle != nullptr);
+    CUBLAS_CHECK(
+        cublasSgemv(p.blas_handle, p.trans, p.m, p.n, &p.alpha, p.A, p.lda, p.x, p.incx, &p.beta, p.y, p.incy));
+}
+
 } // namespace infini_train::kernels::cuda
