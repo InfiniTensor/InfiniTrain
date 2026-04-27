@@ -1,7 +1,5 @@
-#include <algorithm>
 #include <cstdlib>
 #include <format>
-#include <iterator>
 #include <memory>
 #include <optional>
 #include <thread>
@@ -133,36 +131,28 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *tp_pg = nullptr;
     const ProcessGroup *pp_pg = nullptr;
 
-    auto rank_in_group = [&](const std::vector<int> &group_ranks) {
-        auto it = std::find(group_ranks.begin(), group_ranks.end(), rank.GlobalRank());
-        CHECK(it != group_ranks.end());
-        return static_cast<int>(std::distance(group_ranks.begin(), it));
-    };
-
     if (rank.IsParallel()) {
         auto parallel_device_type
             = (FLAGS_device == kDeviceMACA) ? Device::DeviceType::kMACA : Device::DeviceType::kCUDA;
         device = Device(parallel_device_type, rank.thread_rank());
 
-        // NOTE(dcj): On MACA, defer ProcessGroup creation until AFTER the model
-        // has been uploaded to the device.  MCCL init registers internal P2P
-        // buffers that leave stale read-only mappings in the address ranges
-        // mcMalloc later hands out; allocating the model first keeps it in a
-        // P2P-clean region of the VA space and avoids the "Writing to readonly
-        // page" race on multi-thread DDP.
-        //
-        // Compute the in-group ranks now so model loading (which reads
-        // nn::parallel::tp_rank) gets the correct shard.
+        auto *pg_factory = ProcessGroupFactory::Instance(device.type());
         if (ddp_world_size > 1) {
-            ddp_rank = rank_in_group(GetDataParallelGroupRanks(rank.GlobalRank()));
+            ddp_pg = pg_factory->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
+                                             GetDataParallelGroupRanks(rank.GlobalRank()));
+            ddp_rank = ddp_pg->GetGroupRank(rank.GlobalRank());
         }
         if (tp_world_size > 1) {
-            tp_rank = rank_in_group(GetTensorParallelGroupRanks(rank.GlobalRank()));
+            tp_pg = pg_factory->GetOrCreate(GetTensorParallelProcessGroupName(rank.GlobalRank()),
+                                            GetTensorParallelGroupRanks(rank.GlobalRank()));
+            tp_rank = tp_pg->GetGroupRank(rank.GlobalRank());
             // NOTE(zbl): Reserved for VocabParallelEmbedding
             nn::parallel::tp_rank = tp_rank;
         }
         if (pp_world_size > 1) {
-            pp_rank = rank_in_group(GetPipelineParallelGroupRanks(rank.GlobalRank()));
+            pp_pg = pg_factory->GetOrCreate(GetPipelineParallelProcessGroupName(rank.GlobalRank()),
+                                            GetPipelineParallelGroupRanks(rank.GlobalRank()));
+            pp_rank = pp_pg->GetGroupRank(rank.GlobalRank());
             nn::parallel::pp_rank = pp_rank;
         }
     } else {
@@ -197,20 +187,9 @@ void Train(const nn::parallel::Rank &rank) {
 
     model->To(device);
 
-    if (rank.IsParallel()) {
-        auto *pg_factory = ProcessGroupFactory::Instance(device.type());
-        if (ddp_world_size > 1) {
-            ddp_pg = pg_factory->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
-                                             GetDataParallelGroupRanks(rank.GlobalRank()));
-        }
-        if (tp_world_size > 1) {
-            tp_pg = pg_factory->GetOrCreate(GetTensorParallelProcessGroupName(rank.GlobalRank()),
-                                            GetTensorParallelGroupRanks(rank.GlobalRank()));
-        }
-        if (pp_world_size > 1) {
-            pp_pg = pg_factory->GetOrCreate(GetPipelineParallelProcessGroupName(rank.GlobalRank()),
-                                            GetPipelineParallelGroupRanks(rank.GlobalRank()));
-        }
+    if (FLAGS_device == kDeviceMACA) {
+        auto impl = core::GetDeviceGuardImpl(device.type());
+        impl->SynchronizeDevice(device);
     }
 
     utils::PrecisionChecker::BuildNameMap(model.get());

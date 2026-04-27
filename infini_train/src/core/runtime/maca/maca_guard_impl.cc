@@ -129,7 +129,7 @@ MacaGuardImpl::MacaGuardImpl() {
     // static initialization (before main), so we setenv here in the ctor
     // just prior to mcInit(0).  Users can override by setting the env var
     // themselves before launch.
-    // setenv("MACA_LAUNCH_BLOCKING", "1", 0);
+    setenv("MACA_LAUNCH_BLOCKING", "1", 0);
 
     // When TP > 1 on MACA, disable the MCCL-level P2P path to prevent multi-PG
     // init deadlocks (threads concurrently creating both DP and TP comms hang
