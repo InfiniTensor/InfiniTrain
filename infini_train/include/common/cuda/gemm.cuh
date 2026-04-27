@@ -69,4 +69,28 @@ struct GemmParams {
  */
 void GemmCuda(const GemmParams &p);
 
+/**
+ * Parameter bundle for a single SGEMV call (fp32 only):
+ *   y = alpha * op(A) * x + beta * y
+ *
+ * op(A) is m_phys-by-n_phys when trans==N, or n_phys-by-m_phys when trans==T,
+ * where m_phys and n_phys are the physical (pre-transpose) row/col counts of A.
+ */
+struct SgemvParams {
+    cublasOperation_t trans = CUBLAS_OP_N;
+    int m = 0;
+    int n = 0;
+    const float *A = nullptr;
+    int lda = 0;
+    const float *x = nullptr;
+    int incx = 1;
+    float *y = nullptr;
+    int incy = 1;
+    float alpha = 1.0f;
+    float beta = 0.0f;
+    cublasHandle_t blas_handle = nullptr;
+};
+
+void SgemvCuda(const SgemvParams &p);
+
 } // namespace infini_train::kernels::cuda

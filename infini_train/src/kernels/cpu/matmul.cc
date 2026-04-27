@@ -74,7 +74,7 @@ std::shared_ptr<Tensor> MatmulBackwardInput(const std::shared_ptr<Tensor> &other
     }
 
     auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32);
-    grad_input->Fill<float>(0.0f);
+    grad_input->Fill(0.0f);
 
     for (int64_t b = 0; b < bs; ++b) {
         for (int64_t i = 0; i < m; ++i) {
@@ -116,7 +116,7 @@ std::shared_ptr<Tensor> MatmulBackwardOther(const std::shared_ptr<Tensor> &input
     }
 
     auto grad_other = std::make_shared<Tensor>(other_dims, DataType::kFLOAT32);
-    grad_other->Fill<float>(0.0f);
+    grad_other->Fill(0.0f);
 
     for (int64_t b = 0; b < bs; ++b) {
         for (int64_t i = 0; i < m; ++i) {

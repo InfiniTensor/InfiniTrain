@@ -97,24 +97,29 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
 
     switch (promoted_type) {
     case DataType::kFLOAT32: {
-        // fp32: use cublasSgemv (specialized matrix-vector kernel, more efficient than GEMM for this shape)
-        // cublasSgemv does not support bf16, so bf16 falls through to GemmCuda below.
-        float alpha = 1.0f, beta = 0.0f;
-        cublasHandle_t handle = GetCublasHandle(device);
-
         // grad_input[M] = grad_output[M, N] × other[N]
-        // y = grad_input[M], A = grad_output.T[N, M], x = other[N]
-        CUBLAS_CHECK(cublasSgemv(handle, CUBLAS_OP_T, N, M, &alpha,
-                                 static_cast<const float *>(grad_output_promoted->DataPtr()), N,
-                                 static_cast<const float *>(other_promoted->DataPtr()), 1, &beta,
-                                 static_cast<float *>(grad_input->DataPtr()), 1));
+        SgemvParams p_input;
+        p_input.trans = CUBLAS_OP_T;
+        p_input.m = static_cast<int>(N);
+        p_input.n = static_cast<int>(M);
+        p_input.A = static_cast<const float *>(grad_output_promoted->DataPtr());
+        p_input.lda = static_cast<int>(N);
+        p_input.x = static_cast<const float *>(other_promoted->DataPtr());
+        p_input.y = static_cast<float *>(grad_input->DataPtr());
+        p_input.blas_handle = GetCublasHandle(device);
+        SgemvCuda(p_input);
 
         // grad_other[N] = grad_output.T[N, M] × input[M]
-        // y = grad_other[N], A = grad_output.T[N, M], x = input[M]
-        CUBLAS_CHECK(cublasSgemv(handle, CUBLAS_OP_N, N, M, &alpha,
-                                 static_cast<const float *>(grad_output_promoted->DataPtr()), N,
-                                 static_cast<const float *>(input_promoted->DataPtr()), 1, &beta,
-                                 static_cast<float *>(grad_other->DataPtr()), 1));
+        SgemvParams p_other;
+        p_other.trans = CUBLAS_OP_N;
+        p_other.m = static_cast<int>(N);
+        p_other.n = static_cast<int>(M);
+        p_other.A = static_cast<const float *>(grad_output_promoted->DataPtr());
+        p_other.lda = static_cast<int>(N);
+        p_other.x = static_cast<const float *>(input_promoted->DataPtr());
+        p_other.y = static_cast<float *>(grad_other->DataPtr());
+        p_other.blas_handle = GetCublasHandle(device);
+        SgemvCuda(p_other);
         break;
     }
     case DataType::kBFLOAT16: {

@@ -11,6 +11,7 @@
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/runtime/cuda/cuda_dispatch.h"
 
 namespace infini_train::kernels::cuda {
 
@@ -76,40 +77,56 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
         output->Fill(0.0);
     }
 
-    // TODO(zbl): use cublasSgemv if possible for convenience and simplicity
-    //
-    // - if a is transposed:
-    // weight is [out_features, in_features] here
-    // output = input * weight.T --> output.T = weight * input.T
-    // C = output.T[out_features, bs]
-    // A = weight.T[in_features, out_features]
-    // B = input.T[in_features, bs]
-    //
-    // - if a is not transposed:
-    // output = input * weight --> output.T =  weight.T * input.T
-    // C = output.T[out_features, bs]
-    // A = weight.T[out_features, in_features]
-    // B = input.T[in_features, bs]
-    GemmParams p;
-    p.trans_a = transpose ? CUBLAS_OP_T : CUBLAS_OP_N;
-    p.trans_b = CUBLAS_OP_N;
-    p.m = static_cast<int>(out_features);
-    p.n = static_cast<int>(bs);
-    p.k = static_cast<int>(in_features);
-    p.A = weight->DataPtr();
-    p.lda = static_cast<int>(transpose ? in_features : out_features);
-    p.B = input->DataPtr();
-    p.ldb = static_cast<int>(in_features);
-    p.C = output->DataPtr();
-    p.ldc = static_cast<int>(out_features);
-    p.alpha = 1.0f;
-    p.beta = 1.0f; // bias already written into output; beta=1 accumulates
-    p.batch_count = 1;
-    p.input_dtype = dtype;
-    p.output_dtype = dtype;
-    p.blas_handle = GetCublasHandle(device);
+    // When bs==1 and fp32, use cublasSgemv (more efficient than GEMM for matrix-vector).
+    // cublasSgemv does not support bf16, so bf16 falls through to GemmCuda.
+    if (bs == 1 && dtype == DataType::kFLOAT32) {
+        SgemvParams p;
+        p.trans = transpose ? CUBLAS_OP_T : CUBLAS_OP_N;
+        p.m = static_cast<int>(transpose ? in_features : out_features);
+        p.n = static_cast<int>(transpose ? out_features : in_features);
+        p.A = static_cast<const float *>(weight->DataPtr());
+        p.lda = static_cast<int>(transpose ? in_features : out_features);
+        p.x = static_cast<const float *>(input->DataPtr());
+        p.y = static_cast<float *>(output->DataPtr());
+        p.alpha = 1.0f;
+        p.beta = 1.0f; // output already initialized with bias or zero above
+        p.blas_handle = GetCublasHandle(device);
+        SgemvCuda(p);
+    } else {
+        // cuBLAS is colmun-major
+        // - if a is transposed:
+        // weight is [out_features, in_features] here
+        // output = input * weight.T --> output.T = weight * input.T
+        // C = output.T[out_features, bs]
+        // A = weight.T[in_features, out_features]
+        // B = input.T[in_features, bs]
+        //
+        // - if a is not transposed:
+        // output = input * weight --> output.T =  weight.T * input.T
+        // C = output.T[out_features, bs]
+        // A = weight.T[out_features, in_features]
+        // B = input.T[in_features, bs]
+        GemmParams p;
+        p.trans_a = transpose ? CUBLAS_OP_T : CUBLAS_OP_N;
+        p.trans_b = CUBLAS_OP_N;
+        p.m = static_cast<int>(out_features);
+        p.n = static_cast<int>(bs);
+        p.k = static_cast<int>(in_features);
+        p.A = weight->DataPtr();
+        p.lda = static_cast<int>(transpose ? in_features : out_features);
+        p.B = input->DataPtr();
+        p.ldb = static_cast<int>(in_features);
+        p.C = output->DataPtr();
+        p.ldc = static_cast<int>(out_features);
+        p.alpha = 1.0f;
+        p.beta = 1.0f; // bias already written into output; beta=1 accumulates
+        p.batch_count = 1;
+        p.input_dtype = dtype;
+        p.output_dtype = dtype;
+        p.blas_handle = GetCublasHandle(device);
 
-    GemmCuda(p);
+        GemmCuda(p);
+    }
 
     return output;
 }
@@ -152,40 +169,56 @@ std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weigh
     // No Fill(0) needed: cuBLAS beta=0.0f fully overwrites output.
     auto grad_input = std::make_shared<Tensor>(input_dims, output_dtype, grad_output->GetDevice());
 
-    // TODO(zbl): use cublasSgemv if possible
-    // - if transpose:
-    // weight is [out_features, in_features] here
-    // d_input = d_output * weight --> d_input.T = weight.T * d_output.T
-    // C = d_input.T[in_features, bs]
-    // A = weight.T[in_features, out_features]
-    // B = d_output.T[out_features, bs]
-    //
-    // - if not transpose:
-    // weight is [in_features, out_features] here
-    // d_input = d_output * weight.T --> d_input.T = weight * d_output.T
-    // C = d_input.T[in_features, bs]
-    // A = weight.T[out_features, in_features]
-    // B = d_output.T[out_features, bs]
-    GemmParams p;
-    p.trans_a = transpose ? CUBLAS_OP_N : CUBLAS_OP_T;
-    p.trans_b = CUBLAS_OP_N;
-    p.m = static_cast<int>(in_features);
-    p.n = static_cast<int>(bs);
-    p.k = static_cast<int>(out_features);
-    p.A = weight->DataPtr();
-    p.lda = static_cast<int>(transpose ? in_features : out_features);
-    p.B = grad_output_promoted->DataPtr();
-    p.ldb = static_cast<int>(out_features);
-    p.C = grad_input->DataPtr();
-    p.ldc = static_cast<int>(in_features);
-    p.alpha = 1.0f;
-    p.beta = 0.0f;
-    p.batch_count = 1;
-    p.input_dtype = compute_dtype;
-    p.output_dtype = output_dtype;
-    p.blas_handle = GetCublasHandle(grad_output->GetDevice());
+    // When bs==1 and fp32, use cublasSgemv (more efficient than GEMM for matrix-vector).
+    // cublasSgemv does not support bf16, so bf16 falls through to GemmCuda.
+    if (bs == 1 && compute_dtype == DataType::kFLOAT32) {
+        SgemvParams p;
+        p.trans = transpose ? CUBLAS_OP_N : CUBLAS_OP_T;
+        p.m = static_cast<int>(transpose ? in_features : out_features);
+        p.n = static_cast<int>(transpose ? out_features : in_features);
+        p.A = static_cast<const float *>(weight->DataPtr());
+        p.lda = static_cast<int>(transpose ? in_features : out_features);
+        p.x = static_cast<const float *>(grad_output_promoted->DataPtr());
+        p.y = static_cast<float *>(grad_input->DataPtr());
+        p.alpha = 1.0f;
+        p.beta = 0.0f;
+        p.blas_handle = GetCublasHandle(grad_output->GetDevice());
+        SgemvCuda(p);
+    } else {
+        // - if transpose:
+        // weight is [out_features, in_features] here
+        // d_input = d_output * weight --> d_input.T = weight.T * d_output.T
+        // C = d_input.T[in_features, bs]
+        // A = weight.T[in_features, out_features]
+        // B = d_output.T[out_features, bs]
+        //
+        // - if not transpose:
+        // weight is [in_features, out_features] here
+        // d_input = d_output * weight.T --> d_input.T = weight * d_output.T
+        // C = d_input.T[in_features, bs]
+        // A = weight.T[out_features, in_features]
+        // B = d_output.T[out_features, bs]
+        GemmParams p;
+        p.trans_a = transpose ? CUBLAS_OP_N : CUBLAS_OP_T;
+        p.trans_b = CUBLAS_OP_N;
+        p.m = static_cast<int>(in_features);
+        p.n = static_cast<int>(bs);
+        p.k = static_cast<int>(out_features);
+        p.A = weight->DataPtr();
+        p.lda = static_cast<int>(transpose ? in_features : out_features);
+        p.B = grad_output_promoted->DataPtr();
+        p.ldb = static_cast<int>(out_features);
+        p.C = grad_input->DataPtr();
+        p.ldc = static_cast<int>(in_features);
+        p.alpha = 1.0f;
+        p.beta = 0.0f;
+        p.batch_count = 1;
+        p.input_dtype = compute_dtype;
+        p.output_dtype = output_dtype;
+        p.blas_handle = GetCublasHandle(grad_output->GetDevice());
 
-    GemmCuda(p);
+        GemmCuda(p);
+    }
 
     return grad_input;
 }
