@@ -13,7 +13,7 @@ Options:
 EOF
 }
 
-CONFIG_FILE="test_config.json"
+CONFIG_FILE="test_config_maca.json"
 ONLY_RUN_TAGS=""
 
 while [[ $# -gt 0 ]]; do
