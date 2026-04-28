@@ -126,39 +126,35 @@ LoRAColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &in
         << "Forward() on merged LoRA with requires_grad=true. Call UnmergeWeights() before training.";
 
     if (!merged_) {
-        // 1. Compute base output via parent class
-        auto base_result = ColumnParallelLinear::Forward(input_tensors);
-        auto base_output = base_result[0];
-
-        // 2. Compute LoRA output using the SAME input that base module uses
-        // Match base input path exactly: use direct input if input_is_parallel_ or sequence_parallel_,
-        // otherwise copy to TP region
-        auto lora_input = (input_is_parallel_ || sequence_parallel_)
-                            ? input_tensors[0]
-                            : parallel::CopyToTPRegionFunc(input_tensors[0])[0];
+        // Inline base + LoRA matmuls, add locally, then single collective op.
+        // This avoids 2 separate AllGather ops which cause floating-point divergence.
+        auto input = (input_is_parallel_ || sequence_parallel_) ? input_tensors[0]
+                                                                : parallel::CopyToTPRegionFunc(input_tensors[0])[0];
         if (sequence_parallel_) {
-            // Base uses GatherFromSPRegionFunc to gather sequence dimension
-            lora_input = parallel::GatherFromSPRegionFunc(lora_input)[0];
+            input = parallel::GatherFromSPRegionFunc(input)[0];
         }
 
-        // Compute LoRA: lora_A: [rank, in_features], lora_B: [out_per_partition, rank]
-        auto lora_proj = std::make_shared<autograd::Linear>()->Apply({lora_input, parameters_[kParamLoraAName]})[0];
+        // Base matmul (bias folded in when applicable, matching ColumnParallelLinear::Forward)
+        auto base_shard = std::make_shared<autograd::Linear>()->Apply(
+            (bias_ && !skip_bias_add_)
+                ? std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName),
+                                                       parameters_[kParamBiasName]}
+                : std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
+
+        // LoRA matmul (local)
+        // Wrap replicated lora_A through CopyToTPRegion so its gradient gets AllReduced in backward
+        auto lora_A = parallel::CopyToTPRegionFunc(parameters_[kParamLoraAName])[0];
+        auto lora_proj = std::make_shared<autograd::Linear>()->Apply({input, lora_A})[0];
         auto lora_output = std::make_shared<autograd::Linear>()->Apply({lora_proj, parameters_[kParamLoraBName]})[0];
 
-        // Match base output layout (gather if base gathers)
-        if (gather_output_) {
-            lora_output = parallel::GatherFromTPRegionFunc(lora_output)[0];
-        }
+        // Local add before collective
+        auto combined = base_shard->Add(lora_output->Mul(config_.Scaling()));
 
-        auto scaled_lora = lora_output->Mul(config_.Scaling());
+        // Single collective op
+        auto output = gather_output_ ? parallel::GatherFromTPRegionFunc(combined)[0] : combined;
 
-        // 3. Add LoRA contribution to base output
-        // Both should now have the same sequence dimension
-        auto output = base_output->Add(scaled_lora);
-
-        // Return in same format as base module
         return skip_bias_add_
-                 ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_[kParamBiasName] : nullptr}
+                 ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_.at(kParamBiasName) : nullptr}
                  : std::vector<std::shared_ptr<Tensor>>{output};
     }
 
@@ -321,42 +317,32 @@ LoRARowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input
         << "Forward() on merged LoRA with requires_grad=true. Call UnmergeWeights() before training.";
 
     if (!merged_) {
-        // Get effective input - match what base module uses
-        auto effective_input = input_tensors[0];
-        const int64_t in_dim = effective_input->Dims().back();
+        // Inline base + LoRA matmuls, add locally, then single collective op.
+        // This avoids 2 separate AllReduce ops which cause floating-point divergence.
+        auto input = input_is_parallel_ ? input_tensors[0] : parallel::ScatterToTPRegionFunc(input_tensors[0])[0];
 
-        if (!input_is_parallel_) {
-            // base would scatter; lora must match
-            effective_input = parallel::ScatterToTPRegionFunc(effective_input)[0];
-            CHECK_EQ(effective_input->Dims().back(), in_features_per_partition_);
-        } else {
-            // input_is_parallel_=true means caller promised shard input
-            CHECK_EQ(in_dim, in_features_per_partition_)
-                << "RowParallel expects sharded input when input_is_parallel_=true. "
-                << "Got full in_dim=" << in_dim << " (likely upstream gathered TP output).";
+        // Base matmul (no bias — RowParallel adds bias AFTER collective)
+        auto base_shard = std::make_shared<autograd::Linear>()->Apply({input, parameters_.at(kParamWeightName)})[0];
+
+        // LoRA matmul (local)
+        // Wrap replicated lora_B through CopyToTPRegion so its gradient gets AllReduced in backward
+        auto lora_proj = std::make_shared<autograd::Linear>()->Apply({input, parameters_[kParamLoraAName]})[0];
+        auto lora_B = parallel::CopyToTPRegionFunc(parameters_[kParamLoraBName])[0];
+        auto lora_output = std::make_shared<autograd::Linear>()->Apply({lora_proj, lora_B})[0];
+
+        // Local add before collective
+        auto combined = base_shard->Add(lora_output->Mul(config_.Scaling()));
+
+        // Single collective op
+        auto output = reduce_output_ ? (sequence_parallel_ ? parallel::ReduceScatterToSPRegionFunc(combined)[0]
+                                                           : parallel::ReduceFromTPRegionFunc(combined)[0])
+                                     : combined;
+
+        // Bias after collective (matching RowParallelLinear::Forward)
+        if (bias_ && !skip_bias_add_) {
+            output = output->Add(parameters_[kParamBiasName]);
         }
 
-        // 1) base output - use effective_input
-        auto base_result = RowParallelLinear::Forward({effective_input});
-        auto base_output = base_result[0];
-
-        // 2) lora branch uses the SAME effective_input
-        auto lora_proj
-            = std::make_shared<autograd::Linear>()->Apply({effective_input, parameters_[kParamLoraAName]})[0];
-        auto lora_output = std::make_shared<autograd::Linear>()->Apply({lora_proj, parameters_[kParamLoraBName]})[0];
-
-        // 3) apply same reduction as base
-        auto lora_out = lora_output;
-        if (reduce_output_) {
-            lora_out = sequence_parallel_ ? parallel::ReduceScatterToSPRegionFunc(lora_out)[0]
-                                          : parallel::ReduceFromTPRegionFunc(lora_out)[0];
-        }
-
-        auto scaled_lora = lora_out->Mul(config_.Scaling());
-        CHECK_EQ(base_output->NumElements(), scaled_lora->NumElements());
-        auto output = base_output->Add(scaled_lora);
-
-        // Return in same format as base module
         return skip_bias_add_
                  ? std::vector<std::shared_ptr<Tensor>>{output, bias_ ? parameters_[kParamBiasName] : nullptr}
                  : std::vector<std::shared_ptr<Tensor>>{output};
