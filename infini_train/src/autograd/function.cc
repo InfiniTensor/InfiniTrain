@@ -96,7 +96,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     return output_tensors;
 }
 
-void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int grad_output_idx) {
+void Function::BackwardPartial(std::shared_ptr<Tensor> grad_output, int grad_output_idx) {
     auto device = grad_output->GetDevice();
     core::DeviceGuard guard(device);
 
@@ -106,7 +106,7 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
         grad_outputs_.resize(1, nullptr);
     }
     if (!grad_outputs_.at(grad_output_idx)) {
-        grad_outputs_[grad_output_idx] = grad_output;
+        grad_outputs_[grad_output_idx] = std::move(grad_output);
         ++grad_outputs_reached_;
     } else {
         auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
@@ -144,13 +144,35 @@ void Function::BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int g
         dependencies_reached_ = 0;
 
         CHECK_EQ(grad_inputs.size(), next_functions_.size());
-        for (int idx = 0; idx < grad_inputs.size(); ++idx) {
-            auto &grad_input = grad_inputs[idx];
+        auto propagate_grad_input = [&](size_t idx) {
+            auto grad_input = std::move(grad_inputs[idx]);
             auto &[next_function, output_idx] = next_functions_[idx];
             if (grad_input && next_function) {
-                next_function->BackwardPartial(grad_input, output_idx);
+                next_function->BackwardPartial(std::move(grad_input), output_idx);
+            }
+            grad_inputs[idx].reset();
+        };
+
+        // Send leaf gradients out first. This recursive engine keeps the
+        // current function's full grad_inputs vector alive while traversing
+        // earlier inputs; for ops like Linear(input, weight, bias), visiting
+        // input first would retain weight/bias gradients across all preceding
+        // layers. PyTorch's non-recursive engine does not have that stack
+        // retention pattern, so flush AccumulateGrad edges before recursing
+        // into non-leaf activation edges.
+        for (size_t idx = 0; idx < grad_inputs.size(); ++idx) {
+            const auto &next_function = next_functions_[idx].first;
+            if (next_function && std::dynamic_pointer_cast<AccumulateGrad>(next_function)) {
+                propagate_grad_input(idx);
             }
         }
+        for (size_t idx = 0; idx < grad_inputs.size(); ++idx) {
+            const auto &next_function = next_functions_[idx].first;
+            if (next_function && !std::dynamic_pointer_cast<AccumulateGrad>(next_function)) {
+                propagate_grad_input(idx);
+            }
+        }
+        next_functions_.clear();
     }
 }
 
