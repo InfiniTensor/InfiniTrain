@@ -34,7 +34,7 @@ public:
     virtual std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) = 0;
 
     std::vector<std::shared_ptr<Tensor>> Apply(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
-    virtual void BackwardPartial(const std::shared_ptr<Tensor> &grad_output, int idx);
+    virtual void BackwardPartial(std::shared_ptr<Tensor> grad_output, int idx);
 
     void IncreaseDependenciesNumber();
 
