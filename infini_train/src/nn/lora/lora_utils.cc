@@ -15,6 +15,7 @@
 #include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
@@ -392,10 +393,30 @@ void LoadLoRAWeights(std::shared_ptr<Module> model, const std::string &filepath)
         auto cpu_tensor = std::make_shared<Tensor>(dims, DataType::kFLOAT32, Device(Device::DeviceType::kCPU, 0));
         file.read(reinterpret_cast<char *>(cpu_tensor->DataPtr()), num_elements * sizeof(float));
 
-        // Load into model
+        // Load into model, slicing sharded tensors by tp_rank if shapes differ
         auto it = model_state_dict.find(name);
         if (it != model_state_dict.end()) {
-            it->second->CopyFrom(cpu_tensor);
+            auto &dst = it->second;
+            const auto &dst_dims = dst->Dims();
+            if (dst_dims == dims) {
+                dst->CopyFrom(cpu_tensor);
+            } else {
+                // Determine which dim is sharded: find first dim where sizes differ
+                int shard_dim = -1;
+                for (int d = 0; d < static_cast<int>(dims.size()); ++d) {
+                    if (d < static_cast<int>(dst_dims.size()) && dst_dims[d] != dims[d]) {
+                        shard_dim = d;
+                        break;
+                    }
+                }
+                CHECK(shard_dim >= 0) << "LoadLoRAWeights: shape mismatch for " << name
+                                      << " but no differing dim found";
+                int tp_size = parallel::global::GetTensorParallelSize();
+                int64_t shard_size = dims[shard_dim] / tp_size;
+                int64_t start = parallel::tp_rank * shard_size;
+                auto sliced = cpu_tensor->Slice(shard_dim, start, start + shard_size);
+                dst->CopyFrom(sliced);
+            }
         } else {
             LOG(WARNING) << "LoRA parameter not found in model: " << name;
         }
