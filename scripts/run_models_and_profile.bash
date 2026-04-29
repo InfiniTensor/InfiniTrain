@@ -309,7 +309,8 @@ run_and_log() {
     echo "[GIT_BRANCH] $GIT_BRANCH" >> "$log_path"
     echo "[GIT_COMMIT] $GIT_COMMIT_FULL" >> "$log_path"
     echo "[GIT_COMMIT_SHORT] $GIT_COMMIT_SHORT" >> "$log_path"
-    echo "[COMMAND] $cmd" >> "$log_path"
+    local expanded_cmd="${cmd//\$LORA_WEIGHTS_DIR/$LORA_WEIGHTS_DIR}"
+    echo "[COMMAND] $expanded_cmd" >> "$log_path"
 
     # Run the command and append both stdout and stderr to the log file
     if ! eval "$cmd" >> "$log_path" 2>&1; then
@@ -510,12 +511,14 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
             for ((ti=0; ti<num_tests; ++ti)); do
                 test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
                 if tag_enabled_for_model "$group_tag" "$GPT2_TEST_GROUPS"; then
+                    LORA_WEIGHTS_DIR="$GPT2_LORA_WEIGHTS_DIR"
                     gpt2_arg_str="$(args_string_for_test "$gi" "$ti" "gpt2" "$test_id")"
                     gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
                     run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
 
                 if tag_enabled_for_model "$group_tag" "$LLAMA3_TEST_GROUPS"; then
+                    LORA_WEIGHTS_DIR="$LLAMA3_LORA_WEIGHTS_DIR"
                     llama3_arg_str="$(args_string_for_test "$gi" "$ti" "llama3" "$test_id")"
                     llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
                     run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
