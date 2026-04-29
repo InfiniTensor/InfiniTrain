@@ -11,6 +11,7 @@
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
@@ -89,22 +90,38 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<parallel::Col
 }
 
 void LoRAColumnParallelLinear::InitLoRAWeights() {
-    // LoRA weights stored directly in parameters_
-    // Following PEFT pattern conceptually:
-    // lora_A: [rank, in_features] - replicated
+    // lora_A: [rank, in_features] - replicated across TP ranks
     // lora_B: [out_features_per_partition, rank] - sharded like base weight
-
-    // lora_A: [rank, in_features]
     parameters_[kParamLoraAName]
         = std::make_shared<Tensor>(std::vector<int64_t>{config_.rank, in_features_}, DataType::kFLOAT32, device_)
               ->RequiresGrad();
-    if (config_.use_kaiming_a) {
-        init::KaimingUniform(parameters_[kParamLoraAName], config_.kaiming_a_param);
+
+    if (parallel::global::GetTensorParallelSize() > 1) {
+        const auto global_rank = device_.Rank().GlobalRank();
+        auto *tp_group = parallel::ProcessGroupFactory::Instance(device_.type())
+                             ->Get(parallel::GetTensorParallelProcessGroupName(global_rank));
+        const int tp_rank = tp_group->GetGroupRank(global_rank);
+
+        // Only TP rank 0 generates random values; others zero-init.
+        // AllReduce(sum) then broadcasts rank-0's values to all TP ranks.
+        if (tp_rank == 0) {
+            if (config_.use_kaiming_a) {
+                init::KaimingUniform(parameters_[kParamLoraAName], config_.kaiming_a_param);
+            } else {
+                init::Normal(parameters_[kParamLoraAName], 0.0f, 0.02f);
+            }
+        } else {
+            init::Zeros(parameters_[kParamLoraAName]);
+        }
+        tp_group->AllReduce(parameters_[kParamLoraAName]);
     } else {
-        init::Normal(parameters_[kParamLoraAName], 0.0f, 0.02f);
+        if (config_.use_kaiming_a) {
+            init::KaimingUniform(parameters_[kParamLoraAName], config_.kaiming_a_param);
+        } else {
+            init::Normal(parameters_[kParamLoraAName], 0.0f, 0.02f);
+        }
     }
 
-    // lora_B: [out_per_partition, rank] - sharded like base weight
     parameters_[kParamLoraBName]
         = std::make_shared<Tensor>(std::vector<int64_t>{out_features_per_partition_, config_.rank}, DataType::kFLOAT32,
                                    device_)
