@@ -21,8 +21,6 @@ int main() {
     // static_assert inside DispatchByTypeMap, failing this translation unit
     // before MappedType_t<TypeMap, kFLOAT16> is ever instantiated.
     DispatchByTypeMap<LowPrecisionMissingTypeMap, DataType::kFLOAT16>(
-        DataType::kFLOAT16,
-        []<typename T>() { (void)sizeof(T); },
-        "compile-fail: unregistered low-precision dtype");
+        DataType::kFLOAT16, []<typename T>() { (void)sizeof(T); }, "compile-fail: unregistered low-precision dtype");
     return 0;
 }

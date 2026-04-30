@@ -40,9 +40,7 @@ include_directories(${gflags_SOURCE_DIR}/include)
 set(WITH_GFLAGS OFF CACHE BOOL "Disable glog finding system gflags" FORCE)
 set(WITH_GTEST OFF CACHE BOOL "Disable glog finding system gtest" FORCE)
 add_subdirectory(third_party/glog)
-# add_compile_definitions(GLOG_USE_GLOG_EXPORT=1)
 include_directories(${glog_SOURCE_DIR}/src)
-# include_directories(${glog_BINARY_DIR}/glog)
 
 # eigen
 if(USE_OMP)
@@ -210,6 +208,9 @@ add_executable(llama3
 )
 link_infini_train_exe(llama3)
 
+# Tools
+add_subdirectory(tools/infini_run)
+set_target_properties(infini_run PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Tests
 if(BUILD_TEST)
