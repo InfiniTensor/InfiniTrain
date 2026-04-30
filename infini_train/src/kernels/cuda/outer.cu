@@ -38,26 +38,25 @@ std::shared_ptr<Tensor> OuterForward(const std::shared_ptr<Tensor> &input, const
     // output[M, N] = input[M, 1] * other.T[1, N]
     // output.T[N, M] = other[N, 1] * input.T[1, M]
     // This is a GEMM with k=1: C[N,M] = A[N,1] * B[1,M]
-    GemmParams p;
-    p.trans_a = CUBLAS_OP_N;
-    p.trans_b = CUBLAS_OP_N;
-    p.m = static_cast<int>(N);
-    p.n = static_cast<int>(M);
-    p.k = 1;
-    p.A = other->DataPtr();
-    p.lda = static_cast<int>(N);
-    p.B = input->DataPtr();
-    p.ldb = 1;
-    p.C = output->DataPtr();
-    p.ldc = static_cast<int>(N);
-    p.alpha = 1.0f;
-    p.beta = 0.0f;
-    p.batch_count = 1;
-    p.input_dtype = dtype;
-    p.output_dtype = dtype;
-    p.blas_handle = GetCublasHandle(device);
-
-    GemmCuda(p);
+    GemmCuda(GemmParams{
+        .trans_a = CUBLAS_OP_N,
+        .trans_b = CUBLAS_OP_N,
+        .m = static_cast<int>(N),
+        .n = static_cast<int>(M),
+        .k = 1,
+        .A = other->DataPtr(),
+        .lda = static_cast<int>(N),
+        .B = input->DataPtr(),
+        .ldb = 1,
+        .C = output->DataPtr(),
+        .ldc = static_cast<int>(N),
+        .alpha = 1.0f,
+        .beta = 0.0f,
+        .batch_count = 1,
+        .input_dtype = dtype,
+        .output_dtype = dtype,
+        .blas_handle = GetCublasHandle(device),
+    });
 
     return output;
 }
@@ -98,28 +97,28 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
     switch (promoted_type) {
     case DataType::kFLOAT32: {
         // grad_input[M] = grad_output[M, N] × other[N]
-        SgemvParams p_input;
-        p_input.trans = CUBLAS_OP_T;
-        p_input.m = static_cast<int>(N);
-        p_input.n = static_cast<int>(M);
-        p_input.A = static_cast<const float *>(grad_output_promoted->DataPtr());
-        p_input.lda = static_cast<int>(N);
-        p_input.x = static_cast<const float *>(other_promoted->DataPtr());
-        p_input.y = static_cast<float *>(grad_input->DataPtr());
-        p_input.blas_handle = GetCublasHandle(device);
-        SgemvCuda(p_input);
+        SgemvCuda(SgemvParams{
+            .trans = CUBLAS_OP_T,
+            .m = static_cast<int>(N),
+            .n = static_cast<int>(M),
+            .A = static_cast<const float *>(grad_output_promoted->DataPtr()),
+            .lda = static_cast<int>(N),
+            .x = static_cast<const float *>(other_promoted->DataPtr()),
+            .y = static_cast<float *>(grad_input->DataPtr()),
+            .blas_handle = GetCublasHandle(device),
+        });
 
         // grad_other[N] = grad_output.T[N, M] × input[M]
-        SgemvParams p_other;
-        p_other.trans = CUBLAS_OP_N;
-        p_other.m = static_cast<int>(N);
-        p_other.n = static_cast<int>(M);
-        p_other.A = static_cast<const float *>(grad_output_promoted->DataPtr());
-        p_other.lda = static_cast<int>(N);
-        p_other.x = static_cast<const float *>(input_promoted->DataPtr());
-        p_other.y = static_cast<float *>(grad_other->DataPtr());
-        p_other.blas_handle = GetCublasHandle(device);
-        SgemvCuda(p_other);
+        SgemvCuda(SgemvParams{
+            .trans = CUBLAS_OP_N,
+            .m = static_cast<int>(N),
+            .n = static_cast<int>(M),
+            .A = static_cast<const float *>(grad_output_promoted->DataPtr()),
+            .lda = static_cast<int>(N),
+            .x = static_cast<const float *>(input_promoted->DataPtr()),
+            .y = static_cast<float *>(grad_other->DataPtr()),
+            .blas_handle = GetCublasHandle(device),
+        });
         break;
     }
     case DataType::kBFLOAT16: {
@@ -128,48 +127,48 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> OuterBackward(const
         // grad_input[M] = grad_output[M, N] × other[N]
         // grad_input.T[1, M] = other.T[1, N] × grad_output.T[N, M]
         // C[1,M] = A[1,N] * B[N,M]
-        GemmParams p_input;
-        p_input.trans_a = CUBLAS_OP_N;
-        p_input.trans_b = CUBLAS_OP_N;
-        p_input.m = 1;
-        p_input.n = static_cast<int>(M);
-        p_input.k = static_cast<int>(N);
-        p_input.A = other_promoted->DataPtr();
-        p_input.lda = 1;
-        p_input.B = grad_output_promoted->DataPtr();
-        p_input.ldb = static_cast<int>(N);
-        p_input.C = grad_input->DataPtr();
-        p_input.ldc = 1;
-        p_input.alpha = 1.0f;
-        p_input.beta = 0.0f;
-        p_input.batch_count = 1;
-        p_input.input_dtype = promoted_type;
-        p_input.output_dtype = output_dtype;
-        p_input.blas_handle = GetCublasHandle(device);
-        GemmCuda(p_input);
+        GemmCuda(GemmParams{
+            .trans_a = CUBLAS_OP_N,
+            .trans_b = CUBLAS_OP_N,
+            .m = 1,
+            .n = static_cast<int>(M),
+            .k = static_cast<int>(N),
+            .A = other_promoted->DataPtr(),
+            .lda = 1,
+            .B = grad_output_promoted->DataPtr(),
+            .ldb = static_cast<int>(N),
+            .C = grad_input->DataPtr(),
+            .ldc = 1,
+            .alpha = 1.0f,
+            .beta = 0.0f,
+            .batch_count = 1,
+            .input_dtype = promoted_type,
+            .output_dtype = output_dtype,
+            .blas_handle = GetCublasHandle(device),
+        });
 
         // grad_other[N] = grad_output.T[N, M] × input[M]
         // grad_other.T[1, N] = input.T[1, M] × grad_output[M, N]
         // C[1,N] = A[1,M] * B[M,N]  (B stored as grad_output.T[N,M], so ldb=N, trans_b=T)
-        GemmParams p_other;
-        p_other.trans_a = CUBLAS_OP_N;
-        p_other.trans_b = CUBLAS_OP_T;
-        p_other.m = 1;
-        p_other.n = static_cast<int>(N);
-        p_other.k = static_cast<int>(M);
-        p_other.A = input_promoted->DataPtr();
-        p_other.lda = 1;
-        p_other.B = grad_output_promoted->DataPtr();
-        p_other.ldb = static_cast<int>(N);
-        p_other.C = grad_other->DataPtr();
-        p_other.ldc = 1;
-        p_other.alpha = 1.0f;
-        p_other.beta = 0.0f;
-        p_other.batch_count = 1;
-        p_other.input_dtype = promoted_type;
-        p_other.output_dtype = output_dtype;
-        p_other.blas_handle = GetCublasHandle(device);
-        GemmCuda(p_other);
+        GemmCuda(GemmParams{
+            .trans_a = CUBLAS_OP_N,
+            .trans_b = CUBLAS_OP_T,
+            .m = 1,
+            .n = static_cast<int>(N),
+            .k = static_cast<int>(M),
+            .A = input_promoted->DataPtr(),
+            .lda = 1,
+            .B = grad_output_promoted->DataPtr(),
+            .ldb = static_cast<int>(N),
+            .C = grad_other->DataPtr(),
+            .ldc = 1,
+            .alpha = 1.0f,
+            .beta = 0.0f,
+            .batch_count = 1,
+            .input_dtype = promoted_type,
+            .output_dtype = output_dtype,
+            .blas_handle = GetCublasHandle(device),
+        });
         break;
     }
     default:

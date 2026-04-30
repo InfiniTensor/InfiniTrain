@@ -23,5 +23,7 @@ public:
 
 private:
     int64_t out_features_ = 0;
+    std::vector<int64_t> input1_dims_;
+    std::vector<int64_t> input2_dims_;
 };
 } // namespace infini_train::autograd

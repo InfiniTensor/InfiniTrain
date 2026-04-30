@@ -42,6 +42,8 @@ void Matmul::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
     };
 
     saved_tensors_ = {need_grad_input2 ? cast(input1) : nullptr, need_grad_input1 ? cast(input2) : nullptr};
+    input1_dims_ = input1->Dims();
+    input2_dims_ = input2->Dims();
     out_features_ = output->Dims()[0];
 }
 
@@ -56,18 +58,20 @@ std::vector<std::shared_ptr<Tensor>> Matmul::Backward(const std::vector<std::sha
     bool need_grad_input1 = needs_input_grad_.size() > 0 && needs_input_grad_[0];
     bool need_grad_input2 = needs_input_grad_.size() > 1 && needs_input_grad_[1];
 
-    auto device = input1->GetDevice().type();
+    auto device = grad_output->GetDevice().type();
 
     std::shared_ptr<Tensor> grad_input = nullptr;
     std::shared_ptr<Tensor> grad_other = nullptr;
 
     if (need_grad_input1) {
+        CHECK(input2 != nullptr) << "input2 not saved but need_grad_input1 is true";
         grad_input = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MatmulBackwardInput"}, input2,
-                                                                          grad_output, input1->Dims());
+                                                                          grad_output, input1_dims_);
     }
     if (need_grad_input2) {
+        CHECK(input1 != nullptr) << "input1 not saved but need_grad_input2 is true";
         grad_other = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MatmulBackwardOther"}, input1,
-                                                                          grad_output, input2->Dims());
+                                                                          grad_output, input2_dims_);
     }
 
     return {grad_input, grad_other};
