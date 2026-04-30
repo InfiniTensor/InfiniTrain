@@ -29,6 +29,8 @@ if(DTYPE_DISPATCH_COMPILE_UNEXPECTEDLY_SUCCEEDED)
     "dtype dispatch compile-fail test unexpectedly succeeded.\n"
     "Source: ${DTYPE_DISPATCH_COMPILE_FAIL_SOURCE}\n"
     "Output:\n${DTYPE_DISPATCH_TRY_COMPILE_OUTPUT}")
+else()
+  message(STATUS "compile-fail output:\n${DTYPE_DISPATCH_TRY_COMPILE_OUTPUT}")
 endif()
 
 add_custom_target(test_dtype_dispatch_compile_fail

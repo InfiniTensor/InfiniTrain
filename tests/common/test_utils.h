@@ -103,7 +103,12 @@ inline void FillConstantTensor(const std::shared_ptr<Tensor> &tensor, float valu
 
 class InfiniTrainTest : public ::testing::TestWithParam<Device::DeviceType> {
 protected:
-    static void SetUpTestSuite() { nn::parallel::global::GlobalEnv::Instance().Init(1, 1, false, 1, 1); }
+    static void SetUpTestSuite() {
+        auto &env = nn::parallel::global::GlobalEnv::Instance();
+        if (!env.IsInitialized()) {
+            env.Init(1, 1, false, 1, 1);
+        }
+    }
     Device GetDevice() const { return Device(GetParam(), 0); }
     std::shared_ptr<Tensor> createTensor(const std::vector<int64_t> &shape, DataType dtype = DataType::kFLOAT32,
                                          bool requires_grad = false) {

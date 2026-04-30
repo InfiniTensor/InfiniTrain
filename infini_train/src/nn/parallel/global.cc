@@ -91,6 +91,11 @@ GlobalEnv &GlobalEnv::Instance() {
     return instance;
 }
 
+bool GlobalEnv::IsInitialized() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return initialized_;
+}
+
 void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
                      int pipeline_parallel_size, int virtual_pipeline_parallel_size) {
     std::lock_guard<std::mutex> lock(mutex_);
