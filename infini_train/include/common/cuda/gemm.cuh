@@ -1,24 +1,11 @@
 #pragma once
 
 #include <cublas_v2.h>
-#include <cuda_runtime_api.h>
 
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train::kernels::cuda {
-
-/**
- * Return the cuBLAS handle associated with the given device.
- * Shared by linear.cu, matmul.cu, and any future GEMM-using kernels.
- */
-cublasHandle_t GetCublasHandle(const Device &device);
-
-/**
- * Return the CUDA stream associated with the given device.
- * Shared by kernels that need to launch device-side code directly.
- */
-cudaStream_t GetCudaStream(const Device &device);
 
 /**
  * Parameter bundle for a single GEMM call:
@@ -56,8 +43,6 @@ struct GemmParams {
 
     DataType input_dtype;  // dtype of A and B
     DataType output_dtype; // dtype of C (may differ, e.g. bf16 in → fp32 out)
-
-    cublasHandle_t blas_handle = nullptr;
 };
 
 /**
@@ -67,7 +52,7 @@ struct GemmParams {
  * Uses CUBLAS_COMPUTE_32F for all input dtypes to ensure precision.
  * Aborts on cuBLAS error (via CUBLAS_CHECK / LOG(FATAL)).
  */
-void GemmCuda(const GemmParams &p);
+void GemmCuda(const Device &device, const GemmParams &p);
 
 /**
  * Parameter bundle for a single SGEMV call (fp32 only):
@@ -88,9 +73,8 @@ struct SgemvParams {
     int incy = 1;
     float alpha = 1.0f;
     float beta = 0.0f;
-    cublasHandle_t blas_handle = nullptr;
 };
 
-void SgemvCuda(const SgemvParams &p);
+void SgemvCuda(const Device &device, const SgemvParams &p);
 
 } // namespace infini_train::kernels::cuda

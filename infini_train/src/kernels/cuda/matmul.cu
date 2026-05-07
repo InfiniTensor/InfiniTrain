@@ -47,28 +47,27 @@ std::shared_ptr<Tensor> MatmulForward(const std::shared_ptr<Tensor> &input, cons
     // A = other.T[*, n, k]
     // B = input.T[*, k, m]
     // NOTE(zbl): the last cublasGemmAlgo_t param has no effect on GPU arch >= sm_80(Ampere)
-    GemmCuda(GemmParams{
-        .trans_a = CUBLAS_OP_N,
-        .trans_b = CUBLAS_OP_N,
-        .m = static_cast<int>(n),
-        .n = static_cast<int>(m),
-        .k = static_cast<int>(k),
-        .A = other->DataPtr(),
-        .lda = static_cast<int>(n),
-        .B = input->DataPtr(),
-        .ldb = static_cast<int>(k),
-        .C = output->DataPtr(),
-        .ldc = static_cast<int>(n),
-        .alpha = 1.0f,
-        .beta = 0.0f,
-        .batch_count = static_cast<int>(bs),
-        .stride_a = n * k,
-        .stride_b = k * m,
-        .stride_c = m * n,
-        .input_dtype = dtype,
-        .output_dtype = dtype,
-        .blas_handle = GetCublasHandle(device),
-    });
+    GemmCuda(device, GemmParams{
+                         .trans_a = CUBLAS_OP_N,
+                         .trans_b = CUBLAS_OP_N,
+                         .m = static_cast<int>(n),
+                         .n = static_cast<int>(m),
+                         .k = static_cast<int>(k),
+                         .A = other->DataPtr(),
+                         .lda = static_cast<int>(n),
+                         .B = input->DataPtr(),
+                         .ldb = static_cast<int>(k),
+                         .C = output->DataPtr(),
+                         .ldc = static_cast<int>(n),
+                         .alpha = 1.0f,
+                         .beta = 0.0f,
+                         .batch_count = static_cast<int>(bs),
+                         .stride_a = n * k,
+                         .stride_b = k * m,
+                         .stride_c = m * n,
+                         .input_dtype = dtype,
+                         .output_dtype = dtype,
+                     });
 
     return output;
 }
@@ -118,28 +117,27 @@ std::shared_ptr<Tensor> MatmulBackwardInput(const std::shared_ptr<Tensor> &other
     // C = grad_input.T[*, k, m]
     // A = other.T[*, n, k]
     // B = grad_output.T[*, n, m]
-    GemmCuda(GemmParams{
-        .trans_a = CUBLAS_OP_T,
-        .trans_b = CUBLAS_OP_N,
-        .m = static_cast<int>(k),
-        .n = static_cast<int>(m),
-        .k = static_cast<int>(n),
-        .A = other->DataPtr(),
-        .lda = static_cast<int>(n),
-        .B = grad_output_promoted->DataPtr(),
-        .ldb = static_cast<int>(n),
-        .C = grad_input->DataPtr(),
-        .ldc = static_cast<int>(k),
-        .alpha = 1.0f,
-        .beta = 0.0f,
-        .batch_count = static_cast<int>(bs),
-        .stride_a = k * n,
-        .stride_b = n * m,
-        .stride_c = m * k,
-        .input_dtype = compute_dtype,
-        .output_dtype = output_dtype,
-        .blas_handle = GetCublasHandle(device),
-    });
+    GemmCuda(device, GemmParams{
+                         .trans_a = CUBLAS_OP_T,
+                         .trans_b = CUBLAS_OP_N,
+                         .m = static_cast<int>(k),
+                         .n = static_cast<int>(m),
+                         .k = static_cast<int>(n),
+                         .A = other->DataPtr(),
+                         .lda = static_cast<int>(n),
+                         .B = grad_output_promoted->DataPtr(),
+                         .ldb = static_cast<int>(n),
+                         .C = grad_input->DataPtr(),
+                         .ldc = static_cast<int>(k),
+                         .alpha = 1.0f,
+                         .beta = 0.0f,
+                         .batch_count = static_cast<int>(bs),
+                         .stride_a = k * n,
+                         .stride_b = n * m,
+                         .stride_c = m * k,
+                         .input_dtype = compute_dtype,
+                         .output_dtype = output_dtype,
+                     });
 
     return grad_input;
 }
@@ -188,28 +186,27 @@ std::shared_ptr<Tensor> MatmulBackwardOther(const std::shared_ptr<Tensor> &input
     // C = grad_other.T[*, n, k]
     // A = grad_output.T[*, n, m]
     // B = input.T[*, k, m]
-    GemmCuda(GemmParams{
-        .trans_a = CUBLAS_OP_N,
-        .trans_b = CUBLAS_OP_T,
-        .m = static_cast<int>(n),
-        .n = static_cast<int>(k),
-        .k = static_cast<int>(m),
-        .A = grad_output_promoted->DataPtr(),
-        .lda = static_cast<int>(n),
-        .B = input1->DataPtr(),
-        .ldb = static_cast<int>(k),
-        .C = grad_other->DataPtr(),
-        .ldc = static_cast<int>(n),
-        .alpha = 1.0f,
-        .beta = 0.0f,
-        .batch_count = static_cast<int>(bs),
-        .stride_a = n * m,
-        .stride_b = k * m,
-        .stride_c = n * k,
-        .input_dtype = compute_dtype,
-        .output_dtype = output_dtype,
-        .blas_handle = GetCublasHandle(device),
-    });
+    GemmCuda(device, GemmParams{
+                         .trans_a = CUBLAS_OP_N,
+                         .trans_b = CUBLAS_OP_T,
+                         .m = static_cast<int>(n),
+                         .n = static_cast<int>(k),
+                         .k = static_cast<int>(m),
+                         .A = grad_output_promoted->DataPtr(),
+                         .lda = static_cast<int>(n),
+                         .B = input1->DataPtr(),
+                         .ldb = static_cast<int>(k),
+                         .C = grad_other->DataPtr(),
+                         .ldc = static_cast<int>(n),
+                         .alpha = 1.0f,
+                         .beta = 0.0f,
+                         .batch_count = static_cast<int>(bs),
+                         .stride_a = n * m,
+                         .stride_b = k * m,
+                         .stride_c = n * k,
+                         .input_dtype = compute_dtype,
+                         .output_dtype = output_dtype,
+                     });
 
     return grad_other;
 }
