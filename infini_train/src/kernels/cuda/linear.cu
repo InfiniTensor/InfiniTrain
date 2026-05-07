@@ -9,9 +9,11 @@
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/gemm.cuh"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/src/core/runtime/cuda/cuda_dispatch.h"
+#include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::kernels::cuda {
 
@@ -58,7 +60,9 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     auto output = std::make_shared<Tensor>(output_dims, dtype, input->GetDevice());
 
     auto device = input->GetDevice();
-    const auto cuda_stream = GetCudaStream(device);
+    const auto cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                 infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                 ->cuda_stream();
 
     if (bias) {
         CHECK_EQ(bias->Dims().size(), 1);
@@ -80,18 +84,17 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     // When bs==1 and fp32, use cublasSgemv (more efficient than GEMM for matrix-vector).
     // cublasSgemv does not support bf16, so bf16 falls through to GemmCuda.
     if (bs == 1 && dtype == DataType::kFLOAT32) {
-        SgemvCuda(SgemvParams{
-            .trans = transpose ? CUBLAS_OP_T : CUBLAS_OP_N,
-            .m = static_cast<int>(transpose ? in_features : out_features),
-            .n = static_cast<int>(transpose ? out_features : in_features),
-            .A = static_cast<const float *>(weight->DataPtr()),
-            .lda = static_cast<int>(transpose ? in_features : out_features),
-            .x = static_cast<const float *>(input->DataPtr()),
-            .y = static_cast<float *>(output->DataPtr()),
-            .alpha = 1.0f,
-            .beta = 1.0f, // output already initialized with bias or zero above
-            .blas_handle = GetCublasHandle(device),
-        });
+        SgemvCuda(device, SgemvParams{
+                              .trans = transpose ? CUBLAS_OP_T : CUBLAS_OP_N,
+                              .m = static_cast<int>(transpose ? in_features : out_features),
+                              .n = static_cast<int>(transpose ? out_features : in_features),
+                              .A = static_cast<const float *>(weight->DataPtr()),
+                              .lda = static_cast<int>(transpose ? in_features : out_features),
+                              .x = static_cast<const float *>(input->DataPtr()),
+                              .y = static_cast<float *>(output->DataPtr()),
+                              .alpha = 1.0f,
+                              .beta = 1.0f, // output already initialized with bias or zero above
+                          });
     } else {
         // cuBLAS is colmun-major
         // - if a is transposed:
@@ -106,25 +109,24 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
         // C = output.T[out_features, bs]
         // A = weight.T[out_features, in_features]
         // B = input.T[in_features, bs]
-        GemmCuda(GemmParams{
-            .trans_a = transpose ? CUBLAS_OP_T : CUBLAS_OP_N,
-            .trans_b = CUBLAS_OP_N,
-            .m = static_cast<int>(out_features),
-            .n = static_cast<int>(bs),
-            .k = static_cast<int>(in_features),
-            .A = weight->DataPtr(),
-            .lda = static_cast<int>(transpose ? in_features : out_features),
-            .B = input->DataPtr(),
-            .ldb = static_cast<int>(in_features),
-            .C = output->DataPtr(),
-            .ldc = static_cast<int>(out_features),
-            .alpha = 1.0f,
-            .beta = 1.0f, // bias already written into output; beta=1 accumulates
-            .batch_count = 1,
-            .input_dtype = dtype,
-            .output_dtype = dtype,
-            .blas_handle = GetCublasHandle(device),
-        });
+        GemmCuda(device, GemmParams{
+                             .trans_a = transpose ? CUBLAS_OP_T : CUBLAS_OP_N,
+                             .trans_b = CUBLAS_OP_N,
+                             .m = static_cast<int>(out_features),
+                             .n = static_cast<int>(bs),
+                             .k = static_cast<int>(in_features),
+                             .A = weight->DataPtr(),
+                             .lda = static_cast<int>(transpose ? in_features : out_features),
+                             .B = input->DataPtr(),
+                             .ldb = static_cast<int>(in_features),
+                             .C = output->DataPtr(),
+                             .ldc = static_cast<int>(out_features),
+                             .alpha = 1.0f,
+                             .beta = 1.0f, // bias already written into output; beta=1 accumulates
+                             .batch_count = 1,
+                             .input_dtype = dtype,
+                             .output_dtype = dtype,
+                         });
     }
 
     return output;
@@ -171,18 +173,17 @@ std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weigh
     // When bs==1 and fp32, use cublasSgemv (more efficient than GEMM for matrix-vector).
     // cublasSgemv does not support bf16, so bf16 falls through to GemmCuda.
     if (bs == 1 && compute_dtype == DataType::kFLOAT32) {
-        SgemvCuda(SgemvParams{
-            .trans = transpose ? CUBLAS_OP_N : CUBLAS_OP_T,
-            .m = static_cast<int>(transpose ? in_features : out_features),
-            .n = static_cast<int>(transpose ? out_features : in_features),
-            .A = static_cast<const float *>(weight->DataPtr()),
-            .lda = static_cast<int>(transpose ? in_features : out_features),
-            .x = static_cast<const float *>(grad_output_promoted->DataPtr()),
-            .y = static_cast<float *>(grad_input->DataPtr()),
-            .alpha = 1.0f,
-            .beta = 0.0f,
-            .blas_handle = GetCublasHandle(grad_output->GetDevice()),
-        });
+        SgemvCuda(grad_output->GetDevice(), SgemvParams{
+                                                .trans = transpose ? CUBLAS_OP_N : CUBLAS_OP_T,
+                                                .m = static_cast<int>(transpose ? in_features : out_features),
+                                                .n = static_cast<int>(transpose ? out_features : in_features),
+                                                .A = static_cast<const float *>(weight->DataPtr()),
+                                                .lda = static_cast<int>(transpose ? in_features : out_features),
+                                                .x = static_cast<const float *>(grad_output_promoted->DataPtr()),
+                                                .y = static_cast<float *>(grad_input->DataPtr()),
+                                                .alpha = 1.0f,
+                                                .beta = 0.0f,
+                                            });
     } else {
         // - if transpose:
         // weight is [out_features, in_features] here
@@ -197,25 +198,24 @@ std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weigh
         // C = d_input.T[in_features, bs]
         // A = weight.T[out_features, in_features]
         // B = d_output.T[out_features, bs]
-        GemmCuda(GemmParams{
-            .trans_a = transpose ? CUBLAS_OP_N : CUBLAS_OP_T,
-            .trans_b = CUBLAS_OP_N,
-            .m = static_cast<int>(in_features),
-            .n = static_cast<int>(bs),
-            .k = static_cast<int>(out_features),
-            .A = weight->DataPtr(),
-            .lda = static_cast<int>(transpose ? in_features : out_features),
-            .B = grad_output_promoted->DataPtr(),
-            .ldb = static_cast<int>(out_features),
-            .C = grad_input->DataPtr(),
-            .ldc = static_cast<int>(in_features),
-            .alpha = 1.0f,
-            .beta = 0.0f,
-            .batch_count = 1,
-            .input_dtype = compute_dtype,
-            .output_dtype = output_dtype,
-            .blas_handle = GetCublasHandle(grad_output->GetDevice()),
-        });
+        GemmCuda(grad_output->GetDevice(), GemmParams{
+                                               .trans_a = transpose ? CUBLAS_OP_N : CUBLAS_OP_T,
+                                               .trans_b = CUBLAS_OP_N,
+                                               .m = static_cast<int>(in_features),
+                                               .n = static_cast<int>(bs),
+                                               .k = static_cast<int>(out_features),
+                                               .A = weight->DataPtr(),
+                                               .lda = static_cast<int>(transpose ? in_features : out_features),
+                                               .B = grad_output_promoted->DataPtr(),
+                                               .ldb = static_cast<int>(out_features),
+                                               .C = grad_input->DataPtr(),
+                                               .ldc = static_cast<int>(in_features),
+                                               .alpha = 1.0f,
+                                               .beta = 0.0f,
+                                               .batch_count = 1,
+                                               .input_dtype = compute_dtype,
+                                               .output_dtype = output_dtype,
+                                           });
     }
 
     return grad_input;
@@ -257,25 +257,24 @@ std::shared_ptr<Tensor> LinearBackwardWeight(const std::shared_ptr<Tensor> &inpu
     const int lda = static_cast<int>(transpose ? in_features : out_features);
     const int ldb = static_cast<int>(transpose ? out_features : in_features);
 
-    GemmCuda(GemmParams{
-        .trans_a = CUBLAS_OP_N,
-        .trans_b = CUBLAS_OP_T,
-        .m = static_cast<int>(transpose ? in_features : out_features),
-        .n = static_cast<int>(transpose ? out_features : in_features),
-        .k = static_cast<int>(bs),
-        .A = a,
-        .lda = lda,
-        .B = b,
-        .ldb = ldb,
-        .C = grad_weight->DataPtr(),
-        .ldc = static_cast<int>(transpose ? in_features : out_features),
-        .alpha = 1.0f,
-        .beta = 0.0f,
-        .batch_count = 1,
-        .input_dtype = compute_dtype,
-        .output_dtype = output_dtype,
-        .blas_handle = GetCublasHandle(grad_output->GetDevice()),
-    });
+    GemmCuda(grad_output->GetDevice(), GemmParams{
+                                           .trans_a = CUBLAS_OP_N,
+                                           .trans_b = CUBLAS_OP_T,
+                                           .m = static_cast<int>(transpose ? in_features : out_features),
+                                           .n = static_cast<int>(transpose ? out_features : in_features),
+                                           .k = static_cast<int>(bs),
+                                           .A = a,
+                                           .lda = lda,
+                                           .B = b,
+                                           .ldb = ldb,
+                                           .C = grad_weight->DataPtr(),
+                                           .ldc = static_cast<int>(transpose ? in_features : out_features),
+                                           .alpha = 1.0f,
+                                           .beta = 0.0f,
+                                           .batch_count = 1,
+                                           .input_dtype = compute_dtype,
+                                           .output_dtype = output_dtype,
+                                       });
 
     return grad_weight;
 }
@@ -292,7 +291,9 @@ std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_o
         = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, output_dtype, grad_output->GetDevice());
 
     auto device = grad_output->GetDevice();
-    const auto cuda_stream = GetCudaStream(device);
+    const auto cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                 infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                 ->cuda_stream();
 
     // d_bias = \sum_i(i=0, bs-1) d_output[i]
     // TODO(dcj): use thrust::fill or reduce kernel do this

@@ -12,18 +12,6 @@
 
 namespace infini_train::kernels::cuda {
 
-cublasHandle_t GetCublasHandle(const Device &device) {
-    return dynamic_cast<infini_train::core::cuda::CudaBlasHandle *>(
-               infini_train::core::GetDeviceGuardImpl(device.type())->GetBlasHandle(device))
-        ->cublas_handle();
-}
-
-cudaStream_t GetCudaStream(const Device &device) {
-    return dynamic_cast<infini_train::core::cuda::CudaStream *>(
-               infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
-        ->cuda_stream();
-}
-
 namespace {
 
 cudaDataType_t ToCudaDataType(DataType dt) {
@@ -42,8 +30,10 @@ cudaDataType_t ToCudaDataType(DataType dt) {
 
 } // namespace
 
-void GemmCuda(const GemmParams &p) {
-    DCHECK(p.blas_handle != nullptr);
+void GemmCuda(const Device &device, const GemmParams &p) {
+    const cublasHandle_t blas_handle = dynamic_cast<infini_train::core::cuda::CudaBlasHandle *>(
+                                           infini_train::core::GetDeviceGuardImpl(device.type())->GetBlasHandle(device))
+                                           ->cublas_handle();
 
     if (p.batch_count == 1) {
         // strides are unused in the non-batched path; assert they are left at 0
@@ -61,19 +51,20 @@ void GemmCuda(const GemmParams &p) {
     const cublasComputeType_t ctype = CUBLAS_COMPUTE_32F;
 
     if (p.batch_count == 1) {
-        CUBLAS_CHECK(cublasGemmEx(p.blas_handle, p.trans_a, p.trans_b, p.m, p.n, p.k, &p.alpha, p.A, type_a, p.lda, p.B,
+        CUBLAS_CHECK(cublasGemmEx(blas_handle, p.trans_a, p.trans_b, p.m, p.n, p.k, &p.alpha, p.A, type_a, p.lda, p.B,
                                   type_b, p.ldb, &p.beta, p.C, type_c, p.ldc, ctype, CUBLAS_GEMM_DEFAULT));
     } else {
-        CUBLAS_CHECK(cublasGemmStridedBatchedEx(p.blas_handle, p.trans_a, p.trans_b, p.m, p.n, p.k, &p.alpha, p.A,
-                                                type_a, p.lda, p.stride_a, p.B, type_b, p.ldb, p.stride_b, &p.beta, p.C,
-                                                type_c, p.ldc, p.stride_c, p.batch_count, ctype, CUBLAS_GEMM_DEFAULT));
+        CUBLAS_CHECK(cublasGemmStridedBatchedEx(blas_handle, p.trans_a, p.trans_b, p.m, p.n, p.k, &p.alpha, p.A, type_a,
+                                                p.lda, p.stride_a, p.B, type_b, p.ldb, p.stride_b, &p.beta, p.C, type_c,
+                                                p.ldc, p.stride_c, p.batch_count, ctype, CUBLAS_GEMM_DEFAULT));
     }
 }
 
-void SgemvCuda(const SgemvParams &p) {
-    DCHECK(p.blas_handle != nullptr);
-    CUBLAS_CHECK(
-        cublasSgemv(p.blas_handle, p.trans, p.m, p.n, &p.alpha, p.A, p.lda, p.x, p.incx, &p.beta, p.y, p.incy));
+void SgemvCuda(const Device &device, const SgemvParams &p) {
+    const cublasHandle_t blas_handle = dynamic_cast<infini_train::core::cuda::CudaBlasHandle *>(
+                                           infini_train::core::GetDeviceGuardImpl(device.type())->GetBlasHandle(device))
+                                           ->cublas_handle();
+    CUBLAS_CHECK(cublasSgemv(blas_handle, p.trans, p.m, p.n, &p.alpha, p.A, p.lda, p.x, p.incx, &p.beta, p.y, p.incy));
 }
 
 } // namespace infini_train::kernels::cuda
