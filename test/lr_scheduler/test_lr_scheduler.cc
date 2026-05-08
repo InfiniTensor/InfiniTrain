@@ -69,7 +69,7 @@ void TestInitialState() {
 
     ASSERT_FLOAT_EQ(sched->GetLR(), kBaseLR);
     ASSERT_TRUE(sched->LastStep() == 0);
-    ASSERT_FLOAT_EQ(opt->GetLearningRate(), kBaseLR);
+    ASSERT_FLOAT_EQ(opt->learning_rate(), kBaseLR);
 }
 
 // T2: SingleStep
@@ -82,7 +82,7 @@ void TestSingleStep() {
 
     ASSERT_TRUE(sched->LastStep() == 1);
     ASSERT_FLOAT_EQ(sched->GetLR(), kBaseLR);
-    ASSERT_FLOAT_EQ(opt->GetLearningRate(), kBaseLR);
+    ASSERT_FLOAT_EQ(opt->learning_rate(), kBaseLR);
 }
 
 // T3: ComputeLR
@@ -92,15 +92,15 @@ void TestLinearDecay() {
     auto opt = MakeDummyOptimizer(kBaseLR);
     auto sched = LRScheduler::Create<LinearDecayScheduler>(opt, /*total_steps=*/kTotalSteps);
     ASSERT_FLOAT_EQ(sched->GetLR(), kBaseLR);
-    ASSERT_FLOAT_EQ(opt->GetLearningRate(), kBaseLR);
+    ASSERT_FLOAT_EQ(opt->learning_rate(), kBaseLR);
 
     sched->Step(); // last_step = 1 -> 0.09
     ASSERT_FLOAT_EQ(sched->GetLR(), 0.09f);
-    ASSERT_FLOAT_EQ(opt->GetLearningRate(), 0.09f);
+    ASSERT_FLOAT_EQ(opt->learning_rate(), 0.09f);
 
     for (int i = 0; i < 4; ++i) { sched->Step(); } // last_step = 5
     ASSERT_FLOAT_EQ(sched->GetLR(), 0.05f);
-    ASSERT_FLOAT_EQ(opt->GetLearningRate(), 0.05f);
+    ASSERT_FLOAT_EQ(opt->learning_rate(), 0.05f);
 }
 
 // T4: State → LoadState
@@ -124,7 +124,7 @@ void TestStateRoundTrip() {
 
     ASSERT_TRUE(sched2->LastStep() == 7);
     ASSERT_FLOAT_EQ(sched2->GetLR(), sched->GetLR());
-    ASSERT_FLOAT_EQ(opt2->GetLearningRate(), sched->GetLR());
+    ASSERT_FLOAT_EQ(opt2->learning_rate(), sched->GetLR());
 }
 
 // T5: resume Step
