@@ -10,10 +10,7 @@ constexpr float kBaseLR = 0.1f;
 
 void TestIdentityLambda() {
     auto opt = MakeDummyOptimizer(kBaseLR);
-    auto sched = CreateLRScheduler(opt, {
-                                            .type = "lambda",
-                                            .lambda_fn = [](int64_t) { return 1.0f; },
-                                        });
+    auto sched = LRScheduler::Create<LambdaLR>(opt, /*lr_lambda=*/[](int64_t) { return 1.0f; });
     // Step() → last_step_=0, lr = 0.1 * 1.0 = 0.1
     ASSERT_TRUE(sched->LastStep() == 0);
     ASSERT_FLOAT_NEAR(sched->GetLR(), kBaseLR, kEps);
@@ -22,10 +19,7 @@ void TestIdentityLambda() {
 
 void TestLinearDecayLambda() {
     auto opt = MakeDummyOptimizer(kBaseLR);
-    auto sched = CreateLRScheduler(opt, {
-                                            .type = "lambda",
-                                            .lambda_fn = [](int64_t step) { return 1.0f - step * 0.1f; },
-                                        });
+    auto sched = LRScheduler::Create<LambdaLR>(opt, /*lr_lambda=*/[](int64_t step) { return 1.0f - step * 0.1f; });
     // step=0, lambda(0)=1.0, lr=0.1
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.1f, kEps);
 
@@ -42,11 +36,8 @@ void TestLinearDecayLambda() {
 void TestPyTorchAlignment() {
     // PyTorch: LambdaLR(opt, lr_lambda=lambda epoch: 0.95**epoch)
     auto opt = MakeDummyOptimizer(kBaseLR);
-    auto sched
-        = CreateLRScheduler(opt, {
-                                     .type = "lambda",
-                                     .lambda_fn = [](int64_t step) { return static_cast<float>(std::pow(0.95, step)); },
-                                 });
+    auto sched = LRScheduler::Create<LambdaLR>(
+        opt, /*lr_lambda=*/[](int64_t step) { return static_cast<float>(std::pow(0.95, step)); });
     // step=0, lr = 0.1 * 0.95^0 = 0.1
     ASSERT_FLOAT_NEAR(sched->GetLR(), 0.1f, kEps);
 
@@ -60,18 +51,12 @@ void TestPyTorchAlignment() {
 void TestStateRoundTrip() {
     auto lambda_fn = [](int64_t step) { return 1.0f - step * 0.05f; };
     auto opt = MakeDummyOptimizer(kBaseLR);
-    auto sched = CreateLRScheduler(opt, {
-                                            .type = "lambda",
-                                            .lambda_fn = lambda_fn,
-                                        });
+    auto sched = LRScheduler::Create<LambdaLR>(opt, /*lr_lambda=*/lambda_fn);
     for (int i = 0; i < 5; ++i) { sched->Step(); }
     StateDict saved = sched->State();
 
     auto opt2 = MakeDummyOptimizer(kBaseLR);
-    auto sched2 = CreateLRScheduler(opt2, {
-                                              .type = "lambda",
-                                              .lambda_fn = lambda_fn,
-                                          }); // same lambda
+    auto sched2 = LRScheduler::Create<LambdaLR>(opt2, /*lr_lambda=*/lambda_fn); // same lambda
     sched2->LoadState(saved);
 
     ASSERT_TRUE(sched2->LastStep() == sched->LastStep());
@@ -83,25 +68,16 @@ void TestResumeConsistency() {
     constexpr int kN = 10, kK = 4;
 
     auto opt_ref = MakeDummyOptimizer(kBaseLR);
-    auto sched_ref = CreateLRScheduler(opt_ref, {
-                                                    .type = "lambda",
-                                                    .lambda_fn = lambda_fn,
-                                                });
+    auto sched_ref = LRScheduler::Create<LambdaLR>(opt_ref, /*lr_lambda=*/lambda_fn);
     for (int i = 0; i < kN; ++i) { sched_ref->Step(); }
 
     auto opt_a = MakeDummyOptimizer(kBaseLR);
-    auto sched_a = CreateLRScheduler(opt_a, {
-                                                .type = "lambda",
-                                                .lambda_fn = lambda_fn,
-                                            });
+    auto sched_a = LRScheduler::Create<LambdaLR>(opt_a, /*lr_lambda=*/lambda_fn);
     for (int i = 0; i < kK; ++i) { sched_a->Step(); }
     StateDict ckpt = sched_a->State();
 
     auto opt_b = MakeDummyOptimizer(kBaseLR);
-    auto sched_b = CreateLRScheduler(opt_b, {
-                                                .type = "lambda",
-                                                .lambda_fn = lambda_fn,
-                                            });
+    auto sched_b = LRScheduler::Create<LambdaLR>(opt_b, /*lr_lambda=*/lambda_fn);
     sched_b->LoadState(ckpt);
     for (int i = 0; i < kN - kK; ++i) { sched_b->Step(); }
 

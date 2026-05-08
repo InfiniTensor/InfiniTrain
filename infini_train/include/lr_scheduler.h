@@ -16,29 +16,13 @@ class Optimizer;
 using StateValue = std::variant<int64_t, float, double, std::string, std::vector<float>>;
 using StateDict = std::unordered_map<std::string, StateValue>;
 
-struct LRSchedulerConfig {
-    std::string type = "none";
-    // ConstantLR
-    float constant_factor = 1.0f / 3.0f;
-    int constant_total_iters = 5;
-    // StepLR
-    int64_t step_size = 10;
-    float step_gamma = 0.1f;
-    // LinearLR
-    float linear_start_factor = 1.0f / 3.0f;
-    float linear_end_factor = 1.0f;
-    int linear_total_iters = 5;
-    // LambdaLR
-    std::function<float(int64_t)> lambda_fn = nullptr;
-    // SequentialLR
-    std::vector<LRSchedulerConfig> sequential_configs;
-    std::vector<int64_t> sequential_milestones;
-    // ChainedScheduler
-    std::vector<LRSchedulerConfig> chained_configs;
-    // warmup
-    int64_t warmup_steps = 0;
-    float warmup_start_factor = 1.0f / 3.0f;
-    float warmup_end_factor = 1.0f;
+struct TrainingLRSchedulerConfig {
+    std::string lr_decay_style = "constant";
+    float lr = 0.0f;
+    float min_lr = 0.0f;
+    int64_t lr_decay_iters = 1;
+    int64_t lr_warmup_iters = 0;
+    float lr_warmup_init = 0.0f;
 };
 
 class LRScheduler {
@@ -81,7 +65,8 @@ protected:
     bool is_initial_ = false;
 };
 
-std::shared_ptr<LRScheduler> CreateLRScheduler(std::shared_ptr<Optimizer> optimizer, const LRSchedulerConfig &config);
+std::shared_ptr<LRScheduler> CreateLRScheduler(std::shared_ptr<Optimizer> optimizer,
+                                               const TrainingLRSchedulerConfig &config);
 
 namespace lr_schedulers {
 

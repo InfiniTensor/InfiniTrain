@@ -90,7 +90,7 @@ void TestLinearDecay() {
     std::cout << "[T3] TestLinearDecay" << std::endl;
     constexpr int64_t kTotalSteps = 10;
     auto opt = MakeDummyOptimizer(kBaseLR);
-    auto sched = LRScheduler::Create<LinearDecayScheduler>(opt, kTotalSteps);
+    auto sched = LRScheduler::Create<LinearDecayScheduler>(opt, /*total_steps=*/kTotalSteps);
     ASSERT_FLOAT_EQ(sched->GetLR(), kBaseLR);
     ASSERT_FLOAT_EQ(opt->GetLearningRate(), kBaseLR);
 
@@ -108,7 +108,7 @@ void TestStateRoundTrip() {
     std::cout << "[T4] TestStateRoundTrip" << std::endl;
     constexpr int64_t kTotalSteps = 20;
     auto opt = MakeDummyOptimizer(kBaseLR);
-    auto sched = LRScheduler::Create<LinearDecayScheduler>(opt, kTotalSteps);
+    auto sched = LRScheduler::Create<LinearDecayScheduler>(opt, /*total_steps=*/kTotalSteps);
 
     for (int i = 0; i < 7; ++i) { sched->Step(); }
 
@@ -119,7 +119,7 @@ void TestStateRoundTrip() {
     ASSERT_TRUE(saved.count("base_lr") == 1);
 
     auto opt2 = MakeDummyOptimizer(kBaseLR);
-    auto sched2 = LRScheduler::Create<LinearDecayScheduler>(opt2, kTotalSteps);
+    auto sched2 = LRScheduler::Create<LinearDecayScheduler>(opt2, /*total_steps=*/kTotalSteps);
     sched2->LoadState(saved);
 
     ASSERT_TRUE(sched2->LastStep() == 7);
@@ -133,17 +133,17 @@ void TestResumeAndContinue() {
     constexpr int64_t kTotalSteps = 20;
 
     auto opt_ref = MakeDummyOptimizer(kBaseLR);
-    auto sched_ref = LRScheduler::Create<LinearDecayScheduler>(opt_ref, kTotalSteps);
+    auto sched_ref = LRScheduler::Create<LinearDecayScheduler>(opt_ref, /*total_steps=*/kTotalSteps);
     for (int i = 0; i < 10; ++i) { sched_ref->Step(); }
     float lr_at_10 = sched_ref->GetLR();
 
     auto opt_a = MakeDummyOptimizer(kBaseLR);
-    auto sched_a = LRScheduler::Create<LinearDecayScheduler>(opt_a, kTotalSteps);
+    auto sched_a = LRScheduler::Create<LinearDecayScheduler>(opt_a, /*total_steps=*/kTotalSteps);
     for (int i = 0; i < 5; ++i) { sched_a->Step(); }
     StateDict checkpoint = sched_a->State();
 
     auto opt_b = MakeDummyOptimizer(kBaseLR);
-    auto sched_b = LRScheduler::Create<LinearDecayScheduler>(opt_b, kTotalSteps);
+    auto sched_b = LRScheduler::Create<LinearDecayScheduler>(opt_b, /*total_steps=*/kTotalSteps);
     sched_b->LoadState(checkpoint);
     for (int i = 0; i < 5; ++i) { sched_b->Step(); }
 
