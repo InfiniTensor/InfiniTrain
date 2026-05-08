@@ -11,8 +11,8 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/lr_scheduler.h"
+#include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
@@ -56,18 +56,14 @@ DEFINE_uint32(num_iteration, 10, "number of iterations to run");
 DEFINE_uint32(freq_generate_txt, 10, "frequency of text generation");
 DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
-DEFINE_double(learning_rate, 1e-5, "learning rate warmup iterations");
+DEFINE_double(learning_rate, 1e-5, "Peak learning rate.");
 DEFINE_bool(use_distributed_optimizer, false, "Whether to enable DistributedOptimizer(only take effects when DP>1)");
 // lr scheduler
-DEFINE_string(lr_scheduler, "none", "Learning rate scheduler type: none|constant|step|linear");
-DEFINE_int64(warmup_steps, 0, "Number of linear warmup steps (0 = no warmup)");
-DEFINE_double(warmup_start_factor, 0.333333, "Starting learning rate factor for linear warmup (multiplied by base LR)");
-DEFINE_double(warmup_end_factor, 1.0, "Ending learning rate factor for linear warmup (multiplied by base LR)");
-DEFINE_int64(step_size, 30, "StepLR: period of learning rate decay");
-DEFINE_double(gamma, 0.1, "StepLR: multiplicative factor of lr decay");
-DEFINE_double(start_factor, 0.333333, "LinearLR: starting multiplicative factor");
-DEFINE_double(end_factor, 1.0, "LinearLR: ending multiplicative factor");
-DEFINE_int64(lr_total_iters, 5, "ConstantLR/LinearLR: total iterations for the scheduler");
+DEFINE_double(min_lr, 0.0, "Minimum learning rate.");
+DEFINE_string(lr_decay_style, "constant", "LR decay style: none|constant|linear|cosine|inverse-square-root");
+DEFINE_int64(lr_warmup_iters, 0, "Number of linear warmup iterations.");
+DEFINE_double(lr_warmup_init, 0.0, "Initial learning rate at the start of warmup.");
+DEFINE_int64(lr_decay_iters, 0, "Number of iterations to decay LR over (0 = num_iteration).");
 // evaluation
 DEFINE_uint32(val_loss_every, 0, "every how many steps to evaluate val loss?");
 DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
@@ -106,11 +102,15 @@ constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
+const std::unordered_set<std::string> kSupportedLRDecayStyles
+    = {"none", "constant", "linear", "cosine", "inverse-square-root"};
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_validator(lr_decay_style,
+                 [](const char *, const std::string &value) { return kSupportedLRDecayStyles.contains(value); });
 
 void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
@@ -295,18 +295,14 @@ void Train(const nn::parallel::Rank &rank) {
         optimizer = optimizer_creator(params_to_optimize);
     }
 
-    LRSchedulerConfig sched_config;
-    sched_config.type = FLAGS_lr_scheduler;
-    sched_config.warmup_steps = FLAGS_warmup_steps;
-    sched_config.warmup_start_factor = static_cast<float>(FLAGS_warmup_start_factor);
-    sched_config.warmup_end_factor = static_cast<float>(FLAGS_warmup_end_factor);
-    sched_config.step_size = FLAGS_step_size;
-    sched_config.step_gamma = static_cast<float>(FLAGS_gamma);
-    sched_config.linear_start_factor = static_cast<float>(FLAGS_start_factor);
-    sched_config.linear_end_factor = static_cast<float>(FLAGS_end_factor);
-    sched_config.constant_factor = static_cast<float>(FLAGS_start_factor); // 复用
-    sched_config.constant_total_iters = FLAGS_lr_total_iters;
-    sched_config.linear_total_iters = FLAGS_lr_total_iters;
+    const int64_t lr_decay_iters = FLAGS_lr_decay_iters > 0 ? FLAGS_lr_decay_iters : FLAGS_num_iteration;
+    TrainingLRSchedulerConfig sched_config;
+    sched_config.lr = static_cast<float>(FLAGS_learning_rate);
+    sched_config.min_lr = static_cast<float>(FLAGS_min_lr);
+    sched_config.lr_decay_style = FLAGS_lr_decay_style;
+    sched_config.lr_decay_iters = lr_decay_iters;
+    sched_config.lr_warmup_iters = FLAGS_lr_warmup_iters;
+    sched_config.lr_warmup_init = static_cast<float>(FLAGS_lr_warmup_init);
     auto scheduler = CreateLRScheduler(optimizer, sched_config);
 
     auto train_iter = train_loader.begin();

@@ -35,11 +35,7 @@ bool ExpectDeath(const std::function<void()> &fn) {
 void TestStepLRRejectsNonPositiveStepSize() {
     ASSERT_TRUE(ExpectDeath([] {
         auto opt = MakeDummyOptimizer(0.1f);
-        auto sched = CreateLRScheduler(opt, {
-                                                .type = "step",
-                                                .step_size = 0,
-                                                .step_gamma = 0.1f,
-                                            });
+        auto sched = LRScheduler::Create<StepLR>(opt, /*step_size=*/0, /*gamma=*/0.1f);
         (void)sched;
     }));
 }
@@ -47,12 +43,8 @@ void TestStepLRRejectsNonPositiveStepSize() {
 void TestLinearLRRejectsNonPositiveTotalIters() {
     ASSERT_TRUE(ExpectDeath([] {
         auto opt = MakeDummyOptimizer(0.1f);
-        auto sched = CreateLRScheduler(opt, {
-                                                .type = "linear",
-                                                .linear_start_factor = 0.5f,
-                                                .linear_end_factor = 1.0f,
-                                                .linear_total_iters = 0,
-                                            });
+        auto sched = LRScheduler::Create<LinearLR>(opt, /*start_factor=*/0.5f, /*end_factor=*/1.0f,
+                                                   /*total_iters=*/0);
         (void)sched;
     }));
 }
@@ -60,9 +52,7 @@ void TestLinearLRRejectsNonPositiveTotalIters() {
 void TestLambdaLRRejectsNullLambda() {
     ASSERT_TRUE(ExpectDeath([] {
         auto opt = MakeDummyOptimizer(0.1f);
-        auto sched = CreateLRScheduler(opt, {
-                                                .type = "lambda",
-                                            });
+        auto sched = LRScheduler::Create<LambdaLR>(opt, /*lr_lambda=*/LambdaLR::LambdaFunc{});
         (void)sched;
     }));
 }
@@ -72,20 +62,13 @@ void TestSequentialLRRejectsMismatchedOptimizer() {
         auto opt1 = MakeDummyOptimizer(0.1f);
         auto opt2 = MakeDummyOptimizer(0.1f);
 
-        auto s1 = CreateLRScheduler(opt1, {
-                                              .type = "linear",
-                                              .linear_start_factor = 0.5f,
-                                              .linear_end_factor = 1.0f,
-                                              .linear_total_iters = 2,
-                                          });
-        auto s2 = CreateLRScheduler(opt2, {
-                                              .type = "step",
-                                              .step_size = 2,
-                                              .step_gamma = 0.5f,
-                                          });
+        auto s1 = LRScheduler::Create<LinearLR>(opt1, /*start_factor=*/0.5f, /*end_factor=*/1.0f,
+                                                /*total_iters=*/2);
+        auto s2 = LRScheduler::Create<StepLR>(opt2, /*step_size=*/2, /*gamma=*/0.5f);
 
-        auto sched = LRScheduler::Create<SequentialLR>(opt1, std::vector<std::shared_ptr<LRScheduler>>{s1, s2},
-                                                       std::vector<int64_t>{1});
+        auto sched
+            = LRScheduler::Create<SequentialLR>(opt1, /*schedulers=*/std::vector<std::shared_ptr<LRScheduler>>{s1, s2},
+                                                /*milestones=*/std::vector<int64_t>{1});
         (void)sched;
     }));
 }
@@ -93,8 +76,9 @@ void TestSequentialLRRejectsMismatchedOptimizer() {
 void TestSequentialLRRejectsNullChild() {
     ASSERT_TRUE(ExpectDeath([] {
         auto opt = MakeDummyOptimizer(0.1f);
-        auto sched = LRScheduler::Create<SequentialLR>(opt, std::vector<std::shared_ptr<LRScheduler>>{nullptr},
-                                                       std::vector<int64_t>{});
+        auto sched
+            = LRScheduler::Create<SequentialLR>(opt, /*schedulers=*/std::vector<std::shared_ptr<LRScheduler>>{nullptr},
+                                                /*milestones=*/std::vector<int64_t>{});
         (void)sched;
     }));
 }
@@ -102,7 +86,8 @@ void TestSequentialLRRejectsNullChild() {
 void TestChainedSchedulerRejectsEmptyChildren() {
     ASSERT_TRUE(ExpectDeath([] {
         auto opt = MakeDummyOptimizer(0.1f);
-        auto sched = LRScheduler::Create<ChainedScheduler>(opt, std::vector<std::shared_ptr<LRScheduler>>{});
+        auto sched
+            = LRScheduler::Create<ChainedScheduler>(opt, /*schedulers=*/std::vector<std::shared_ptr<LRScheduler>>{});
         (void)sched;
     }));
 }
@@ -112,18 +97,11 @@ void TestChainedSchedulerRejectsMismatchedOptimizer() {
         auto opt1 = MakeDummyOptimizer(0.1f);
         auto opt2 = MakeDummyOptimizer(0.1f);
 
-        auto s1 = CreateLRScheduler(opt1, {
-                                              .type = "step",
-                                              .step_size = 2,
-                                              .step_gamma = 0.5f,
-                                          });
-        auto s2 = CreateLRScheduler(opt2, {
-                                              .type = "constant",
-                                              .constant_factor = 0.5f,
-                                              .constant_total_iters = 2,
-                                          });
+        auto s1 = LRScheduler::Create<StepLR>(opt1, /*step_size=*/2, /*gamma=*/0.5f);
+        auto s2 = LRScheduler::Create<ConstantLR>(opt2, /*factor=*/0.5f, /*total_iters=*/2);
 
-        auto sched = LRScheduler::Create<ChainedScheduler>(opt1, std::vector<std::shared_ptr<LRScheduler>>{s1, s2});
+        auto sched = LRScheduler::Create<ChainedScheduler>(
+            opt1, /*schedulers=*/std::vector<std::shared_ptr<LRScheduler>>{s1, s2});
         (void)sched;
     }));
 }
@@ -131,7 +109,8 @@ void TestChainedSchedulerRejectsMismatchedOptimizer() {
 void TestChainedSchedulerRejectsNullChild() {
     ASSERT_TRUE(ExpectDeath([] {
         auto opt = MakeDummyOptimizer(0.1f);
-        auto sched = LRScheduler::Create<ChainedScheduler>(opt, std::vector<std::shared_ptr<LRScheduler>>{nullptr});
+        auto sched = LRScheduler::Create<ChainedScheduler>(
+            opt, /*schedulers=*/std::vector<std::shared_ptr<LRScheduler>>{nullptr});
         (void)sched;
     }));
 }
