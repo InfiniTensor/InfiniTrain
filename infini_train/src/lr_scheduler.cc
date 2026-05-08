@@ -1,71 +1,87 @@
 #include "infini_train/include/lr_scheduler.h"
 
+#include <algorithm>
+#include <cmath>
+#include <numbers>
+#include <utility>
+
 #include "glog/logging.h"
 
 #include "infini_train/include/optimizer.h"
 
 namespace infini_train {
 
-std::shared_ptr<LRScheduler> CreateLRScheduler(std::shared_ptr<Optimizer> optimizer, const LRSchedulerConfig &config) {
-    if (config.type == "none") {
+std::shared_ptr<LRScheduler> CreateLRScheduler(std::shared_ptr<Optimizer> optimizer,
+                                               const TrainingLRSchedulerConfig &config) {
+    if (config.lr_decay_style == "none") {
         return nullptr;
     }
 
-    auto create_main = [&](std::shared_ptr<Optimizer> opt) -> std::shared_ptr<LRScheduler> {
-        if (config.type == "constant") {
-            return LRScheduler::Create<lr_schedulers::ConstantLR>(opt, config.constant_factor,
-                                                                  config.constant_total_iters);
-        }
-        if (config.type == "step") {
-            return LRScheduler::Create<lr_schedulers::StepLR>(opt, config.step_size, config.step_gamma);
-        }
-        if (config.type == "linear") {
-            return LRScheduler::Create<lr_schedulers::LinearLR>(opt, config.linear_start_factor,
-                                                                config.linear_end_factor, config.linear_total_iters);
-        }
-        if (config.type == "lambda") {
-            return LRScheduler::Create<lr_schedulers::LambdaLR>(opt, config.lambda_fn);
-        }
-        if (config.type == "sequential") {
-            std::vector<std::shared_ptr<LRScheduler>> schedulers;
-            std::vector<int64_t> milestones = config.sequential_milestones;
-            for (const auto &sub_config : config.sequential_configs) {
-                auto sub_sched = CreateLRScheduler(opt, sub_config);
-                if (sub_sched) {
-                    schedulers.push_back(sub_sched);
-                }
-            }
-            return LRScheduler::Create<lr_schedulers::SequentialLR>(opt, schedulers, milestones);
-        }
-        if (config.type == "chained") {
-            std::vector<std::shared_ptr<LRScheduler>> schedulers;
-            for (const auto &sub_config : config.chained_configs) {
-                auto sub_sched = CreateLRScheduler(opt, sub_config);
-                if (sub_sched) {
-                    schedulers.push_back(sub_sched);
-                }
-            }
-            return LRScheduler::Create<lr_schedulers::ChainedScheduler>(opt, schedulers);
-        }
-        LOG(FATAL) << "Unsupported LR scheduler type: " << config.type;
-        return nullptr;
-    };
+    CHECK(optimizer) << "CreateLRScheduler: optimizer must not be null.";
+    const float max_lr = config.lr != 0.0f ? config.lr : optimizer->GetLearningRate();
+    CHECK_GT(max_lr, 0.0f) << "CreateLRScheduler: max_lr must be > 0.";
+    CHECK_GE(config.lr_warmup_init, 0.0f) << "CreateLRScheduler: lr_warmup_init must be >= 0.";
+    CHECK_GE(config.min_lr, 0.0f) << "CreateLRScheduler: min_lr must be >= 0.";
+    CHECK_GE(max_lr, config.min_lr) << "CreateLRScheduler: max_lr must be >= min_lr.";
+    CHECK_LE(config.lr_warmup_init, max_lr) << "CreateLRScheduler: lr_warmup_init must be <= max_lr.";
+    CHECK_GE(config.lr_warmup_iters, 0) << "CreateLRScheduler: lr_warmup_iters must be >= 0.";
+    CHECK_GT(config.lr_decay_iters, 0) << "CreateLRScheduler: lr_decay_iters must be > 0.";
+    CHECK_LT(config.lr_warmup_iters, config.lr_decay_iters)
+        << "CreateLRScheduler: lr_warmup_iters must be < lr_decay_iters.";
+    CHECK(config.lr_decay_style == "constant" || config.lr_decay_style == "linear" || config.lr_decay_style == "cosine"
+          || config.lr_decay_style == "inverse-square-root")
+        << "CreateLRScheduler: unsupported lr_decay_style: " << config.lr_decay_style;
 
-    if (config.warmup_steps <= 0) {
-        return create_main(optimizer);
+    std::shared_ptr<LRScheduler> main_scheduler;
+    const int64_t decay_iters_after_warmup = config.lr_decay_iters - config.lr_warmup_iters;
+    if (config.lr_decay_style == "constant") {
+        main_scheduler = LRScheduler::Create<lr_schedulers::LambdaLR>(optimizer, [](int64_t) { return 1.0f; });
+    } else if (config.lr_decay_style == "linear") {
+        main_scheduler = LRScheduler::Create<lr_schedulers::LinearLR>(optimizer, 1.0f, config.min_lr / max_lr,
+                                                                      decay_iters_after_warmup);
+    } else if (config.lr_decay_style == "cosine") {
+        main_scheduler = LRScheduler::Create<lr_schedulers::LambdaLR>(
+            optimizer, [max_lr, min_lr = config.min_lr, decay_iters_after_warmup](int64_t step) {
+                if (step > decay_iters_after_warmup) {
+                    return min_lr / max_lr;
+                }
+                const float decay_ratio = static_cast<float>(step) / static_cast<float>(decay_iters_after_warmup);
+                CHECK_GE(decay_ratio, 0.0f) << "CreateLRScheduler: decay "
+                                               "ratio must be >= 0.";
+                CHECK_LE(decay_ratio, 1.0f) << "CreateLRScheduler: decay "
+                                               "ratio must be <= 1.";
+                const float coeff = 0.5f * (std::cos(std::numbers::pi_v<float> * decay_ratio) + 1.0f);
+                return (min_lr + coeff * (max_lr - min_lr)) / max_lr;
+            });
+    } else if (config.lr_decay_style == "inverse-square-root") {
+        main_scheduler = LRScheduler::Create<lr_schedulers::LambdaLR>(
+            optimizer, [max_lr, min_lr = config.min_lr, lr_warmup_iters = config.lr_warmup_iters,
+                        lr_decay_iters = config.lr_decay_iters](int64_t step) {
+                const int64_t global_step = step + lr_warmup_iters;
+                if (global_step > lr_decay_iters) {
+                    return min_lr / max_lr;
+                }
+                const auto warmup = static_cast<float>(std::max<int64_t>(lr_warmup_iters, 1));
+                const auto current = static_cast<float>(std::max<int64_t>(global_step, 1));
+                return std::max(min_lr, max_lr * std::sqrt(warmup) / std::sqrt(current)) / max_lr;
+            });
     }
 
-    auto warmup_scheduler = LRScheduler::Create<lr_schedulers::LinearLR>(optimizer,
-                                                                         /*start_factor=*/config.warmup_start_factor,
-                                                                         /*end_factor=*/config.warmup_end_factor,
-                                                                         /*total_iters=*/config.warmup_steps);
+    CHECK(main_scheduler) << "CreateLRScheduler: failed to create scheduler.";
+    if (config.lr_warmup_iters == 0) {
+        return main_scheduler;
+    }
 
-    auto main_scheduler = create_main(optimizer);
-
+    auto warmup_scheduler = LRScheduler::Create<lr_schedulers::LambdaLR>(
+        optimizer,
+        [lr_warmup_init = config.lr_warmup_init, max_lr, lr_warmup_iters = config.lr_warmup_iters](int64_t step) {
+            const float warmup_ratio = static_cast<float>(step) / static_cast<float>(lr_warmup_iters);
+            return (lr_warmup_init + (max_lr - lr_warmup_init) * warmup_ratio) / max_lr;
+        });
     return LRScheduler::Create<lr_schedulers::SequentialLR>(
-        optimizer, std::vector<std::shared_ptr<LRScheduler>>{warmup_scheduler, main_scheduler},
-        std::vector<int64_t>{config.warmup_steps});
-};
+        std::move(optimizer), std::vector<std::shared_ptr<LRScheduler>>{warmup_scheduler, main_scheduler},
+        std::vector<int64_t>{config.lr_warmup_iters});
+}
 
 LRScheduler::LRScheduler(std::shared_ptr<Optimizer> optimizer, int64_t last_step)
     : optimizer_(std::move(optimizer)), last_step_(last_step), base_lr_(0.0f) {
@@ -310,9 +326,7 @@ ChainedScheduler::ChainedScheduler(std::shared_ptr<Optimizer> optimizer,
     }
 }
 
-void ChainedScheduler::InitialStep() {
-    last_step_ = 0;
-}
+void ChainedScheduler::InitialStep() { last_step_ = 0; }
 
 void ChainedScheduler::Step() {
     ++last_step_;
