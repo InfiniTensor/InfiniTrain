@@ -18,7 +18,7 @@ std::shared_ptr<LRScheduler> CreateLRScheduler(std::shared_ptr<Optimizer> optimi
     }
 
     CHECK(optimizer) << "CreateLRScheduler: optimizer must not be null.";
-    const float max_lr = config.lr != 0.0f ? config.lr : optimizer->GetLearningRate();
+    const float max_lr = config.lr != 0.0f ? config.lr : optimizer->learning_rate();
     CHECK_GT(max_lr, 0.0f) << "CreateLRScheduler: max_lr must be > 0.";
     CHECK_GE(config.lr_warmup_init, 0.0f) << "CreateLRScheduler: lr_warmup_init must be >= 0.";
     CHECK_GE(config.min_lr, 0.0f) << "CreateLRScheduler: min_lr must be >= 0.";
@@ -86,8 +86,8 @@ std::shared_ptr<LRScheduler> CreateLRScheduler(std::shared_ptr<Optimizer> optimi
 LRScheduler::LRScheduler(std::shared_ptr<Optimizer> optimizer, int64_t last_step)
     : optimizer_(std::move(optimizer)), last_step_(last_step), base_lr_(0.0f) {
     CHECK(optimizer_) << "LRScheduler: optimizer must not be null.";
-    optimizer_->SetInitialLearningRate(optimizer_->GetLearningRate());
-    base_lr_ = optimizer_->GetInitialLearningRate();
+    optimizer_->set_initial_learning_rate(optimizer_->learning_rate());
+    base_lr_ = optimizer_->initial_learning_rate();
 }
 
 void LRScheduler::Step() {
@@ -106,11 +106,11 @@ void LRScheduler::InitialStep() {
     is_initial_ = false;
 }
 
-void LRScheduler::ApplyLR(float lr) { optimizer_->SetLearningRate(lr); }
+void LRScheduler::ApplyLR(float lr) { optimizer_->set_learning_rate(lr); }
 
 float LRScheduler::GetChainedFormLR() const { return GetClosedFormLR(); }
 
-float LRScheduler::GetLR() const { return optimizer_->GetLearningRate(); }
+float LRScheduler::GetLR() const { return optimizer_->learning_rate(); }
 
 float LRScheduler::BaseLR() const { return base_lr_; }
 
@@ -123,7 +123,7 @@ void LRScheduler::ResetStep(int64_t step) { last_step_ = step; }
 StateDict LRScheduler::State() const {
     return {
         {"last_step", last_step_},
-        {"recover_lr", optimizer_->GetLearningRate()},
+        {"recover_lr", optimizer_->learning_rate()},
         {"base_lr", base_lr_},
     };
 }
@@ -132,7 +132,7 @@ void LRScheduler::LoadState(const StateDict &state) {
     last_step_ = std::get<int64_t>(state.at("last_step"));
     recover_lr_ = std::get<float>(state.at("recover_lr"));
     base_lr_ = std::get<float>(state.at("base_lr"));
-    optimizer_->SetLearningRate(recover_lr_);
+    optimizer_->set_learning_rate(recover_lr_);
 }
 
 // Concrete LR Schedulers
@@ -150,7 +150,7 @@ ConstantLR::ConstantLR(std::shared_ptr<Optimizer> optimizer, float factor, int t
 float ConstantLR::GetClosedFormLR() const { return last_step_ < total_iters_ ? base_lr_ * factor_ : base_lr_; }
 
 float ConstantLR::GetChainedFormLR() const {
-    const float lr = optimizer_->GetLearningRate();
+    const float lr = optimizer_->learning_rate();
     if (last_step_ == 0) {
         return lr * factor_;
     } else if (last_step_ < total_iters_) {
@@ -175,7 +175,7 @@ float StepLR::GetClosedFormLR() const {
 }
 
 float StepLR::GetChainedFormLR() const {
-    const float lr = optimizer_->GetLearningRate();
+    const float lr = optimizer_->learning_rate();
     if (last_step_ == 0 || (last_step_ % step_size_) != 0) {
         return lr;
     }
@@ -203,7 +203,7 @@ float LinearLR::GetClosedFormLR() const {
 }
 
 float LinearLR::GetChainedFormLR() const {
-    const float lr = optimizer_->GetLearningRate();
+    const float lr = optimizer_->learning_rate();
     if (last_step_ == 0) {
         return lr * start_factor_;
     }
@@ -252,7 +252,7 @@ SequentialLR::SequentialLR(std::shared_ptr<Optimizer> optimizer, std::vector<std
 
 void SequentialLR::InitialStep() {
 
-    optimizer_->SetLearningRate(schedulers_[0]->BaseLR());
+    optimizer_->set_learning_rate(schedulers_[0]->BaseLR());
 
     UndoChildInitialSteps();
 
@@ -285,7 +285,7 @@ void SequentialLR::Step() {
 StateDict SequentialLR::State() const {
     StateDict state;
     state["last_step"] = last_step_;
-    state["recover_lr"] = optimizer_->GetLearningRate();
+    state["recover_lr"] = optimizer_->learning_rate();
     state["base_lr"] = base_lr_;
     for (size_t i = 0; i < schedulers_.size(); ++i) {
         auto sub_state = schedulers_[i]->State();
@@ -311,7 +311,7 @@ void SequentialLR::LoadState(const StateDict &state) {
             schedulers_[i]->LoadState(sub_state);
         }
     }
-    optimizer_->SetLearningRate(recover_lr_);
+    optimizer_->set_learning_rate(recover_lr_);
 }
 
 ChainedScheduler::ChainedScheduler(std::shared_ptr<Optimizer> optimizer,
