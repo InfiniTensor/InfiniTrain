@@ -13,7 +13,7 @@ void TestInitialState() {
     auto sched = LRScheduler::Create<ConstantLR>(opt, /*factor=*/0.5f, /*total_iters=*/3);
     ASSERT_FLOAT_EQ(sched->GetLR(), 0.05f);
     ASSERT_TRUE(sched->LastStep() == 0);
-    ASSERT_FLOAT_EQ(opt->GetLearningRate(), 0.05f);
+    ASSERT_FLOAT_EQ(opt->learning_rate(), 0.05f);
 }
 
 void TestFirstStepAppliesFactor() {
@@ -21,7 +21,7 @@ void TestFirstStepAppliesFactor() {
     auto sched = LRScheduler::Create<ConstantLR>(opt, /*factor=*/0.5f, /*total_iters=*/3);
     sched->Step(); // last_step_ = 0
     ASSERT_FLOAT_EQ(sched->GetLR(), 0.05f);
-    ASSERT_FLOAT_EQ(opt->GetLearningRate(), 0.05f);
+    ASSERT_FLOAT_EQ(opt->learning_rate(), 0.05f);
     ASSERT_TRUE(sched->LastStep() == 1);
 }
 
@@ -38,7 +38,7 @@ void TestBeyondTotalIters() {
     auto sched = LRScheduler::Create<ConstantLR>(opt, /*factor=*/0.5f, /*total_iters=*/3);
     for (int i = 0; i < 10; ++i) { sched->Step(); }
     ASSERT_FLOAT_EQ(sched->GetLR(), kBaseLR);
-    ASSERT_FLOAT_EQ(opt->GetLearningRate(), kBaseLR);
+    ASSERT_FLOAT_EQ(opt->learning_rate(), kBaseLR);
 }
 
 void TestPyTorchAlignment() {
@@ -63,7 +63,7 @@ void TestStateRoundTrip() {
 
     ASSERT_TRUE(sched2->LastStep() == sched->LastStep());
     ASSERT_FLOAT_EQ(sched2->GetLR(), sched->GetLR());
-    ASSERT_FLOAT_EQ(opt2->GetLearningRate(), sched->GetLR());
+    ASSERT_FLOAT_EQ(opt2->learning_rate(), sched->GetLR());
 }
 
 void TestResumeConsistency() {

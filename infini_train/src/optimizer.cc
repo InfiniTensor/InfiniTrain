@@ -15,17 +15,17 @@ void Optimizer::ZeroGrad(bool set_to_none) {
     for (auto param : params_) { param->ZeroGrad(set_to_none); }
 }
 
-void Optimizer::SetLearningRate(float lr) { learning_rate_ = lr; }
+void Optimizer::set_learning_rate(float lr) { learning_rate_ = lr; }
 
-float Optimizer::GetLearningRate() const { return learning_rate_; }
+float Optimizer::learning_rate() const { return learning_rate_; }
 
-float Optimizer::GetInitialLearningRate() const {
+float Optimizer::initial_learning_rate() const {
     CHECK(initial_lr_set_) << "Optimizer: initial_learning_rate not set. "
                               "Use with an LRScheduler first.";
     return initial_learning_rate_;
 }
 
-void Optimizer::SetInitialLearningRate(float lr) {
+void Optimizer::set_initial_learning_rate(float lr) {
     if (!initial_lr_set_) {
         initial_learning_rate_ = lr;
         initial_lr_set_ = true;

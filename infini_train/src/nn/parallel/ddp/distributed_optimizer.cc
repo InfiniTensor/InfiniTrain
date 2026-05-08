@@ -114,18 +114,18 @@ void DistributedOptimizer::ZeroGrad(bool set_to_none) {
     }
 }
 
-void DistributedOptimizer::SetLearningRate(float lr) {
-    Optimizer::SetLearningRate(lr);
+void DistributedOptimizer::set_learning_rate(float lr) {
+    Optimizer::set_learning_rate(lr);
     if (base_optimizer_) {
-        base_optimizer_->SetLearningRate(lr);
+        base_optimizer_->set_learning_rate(lr);
     }
 }
 
-float DistributedOptimizer::GetLearningRate() const {
+float DistributedOptimizer::learning_rate() const {
     if (base_optimizer_) {
-        return base_optimizer_->GetLearningRate();
+        return base_optimizer_->learning_rate();
     }
-    return Optimizer::GetLearningRate();
+    return Optimizer::learning_rate();
 }
 
 void DistributedOptimizer::Step() {

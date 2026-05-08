@@ -142,9 +142,8 @@ public:
     void LoadState(const StateDict &state) override;
 
 protected:
-    float GetClosedFormLR() const override {
-        return base_lr_;
-    } // FIXME: SequentialLR should not have a closed-form LR, but we need to implement this pure virtual function.
+    // FIXME: SequentialLR should not have a closed-form LR, but we need to implement this pure virtual function.
+    float GetClosedFormLR() const override { return base_lr_; }
     void UndoChildInitialSteps();
 
 private:
@@ -165,9 +164,8 @@ public:
     void LoadState(const StateDict &state) override;
 
 protected:
-    float GetClosedFormLR() const override {
-        return base_lr_;
-    } // FIXME: ChainedScheduler should not have a closed-form LR, but we need to implement this pure virtual function.
+    // FIXME: ChainedScheduler should not have a closed-form LR, but we need to implement this pure virtual function.
+    float GetClosedFormLR() const override { return base_lr_; }
 
 private:
     std::vector<std::shared_ptr<LRScheduler>> schedulers_;

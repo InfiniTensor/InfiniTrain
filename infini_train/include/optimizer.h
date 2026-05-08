@@ -21,13 +21,13 @@ public:
 
     virtual void Step() = 0;
 
-    virtual void SetLearningRate(float lr);
+    virtual void set_learning_rate(float lr);
 
-    virtual float GetLearningRate() const;
+    virtual float learning_rate() const;
 
-    float GetInitialLearningRate() const;
+    float initial_learning_rate() const;
 
-    void SetInitialLearningRate(float lr);
+    void set_initial_learning_rate(float lr);
 
 protected:
     std::vector<std::shared_ptr<Tensor>> params_;
