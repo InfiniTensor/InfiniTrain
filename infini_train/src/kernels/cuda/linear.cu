@@ -7,13 +7,13 @@
 #include <cublas_v2.h>
 
 #include "infini_train/include/common/cuda/common_cuda.h"
-#include "infini_train/include/common/cuda/gemm.cuh"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/src/core/runtime/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
+#include "infini_train/src/kernels/cuda/common/gemm.cuh"
 
 namespace infini_train::kernels::cuda {
 
@@ -165,7 +165,7 @@ std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weigh
     auto grad_output_promoted
         = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
 
-    // For bf16 compute, accumulate in fp32 to preserve precision.
+    // FIXME(cx): output dtype promotion is a temporary hack; revisit when autograd/autocast is fixed.
     auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
     // No Fill(0) needed: cuBLAS beta=0.0f fully overwrites output.
     auto grad_input = std::make_shared<Tensor>(input_dims, output_dtype, grad_output->GetDevice());
@@ -234,7 +234,7 @@ std::shared_ptr<Tensor> LinearBackwardWeight(const std::shared_ptr<Tensor> &inpu
     auto grad_output_promoted
         = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
 
-    // For bf16 compute, accumulate in fp32 to preserve precision.
+    // FIXME(cx): output dtype promotion is a temporary hack; revisit when autograd/autocast is fixed.
     auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
     const std::vector<int64_t> weight_dims
         = transpose ? std::vector<int64_t>{out_features, in_features} : std::vector<int64_t>{in_features, out_features};
@@ -285,7 +285,7 @@ std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_o
     const int64_t bs = std::accumulate(dims.rbegin() + 1, dims.rend(), 1, std::multiplies<int64_t>{});
 
     auto compute_dtype = grad_output->Dtype();
-    // For bf16 compute, accumulate in fp32 to preserve precision.
+    // FIXME(cx): output dtype promotion is a temporary hack; revisit when autograd/autocast is fixed.
     auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
     auto grad_bias
         = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, output_dtype, grad_output->GetDevice());

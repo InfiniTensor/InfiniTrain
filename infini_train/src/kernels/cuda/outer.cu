@@ -7,9 +7,9 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"
-#include "infini_train/include/common/cuda/gemm.cuh"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/kernels/cuda/common/gemm.cuh"
 
 namespace infini_train::kernels::cuda {
 
