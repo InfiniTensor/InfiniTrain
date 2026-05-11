@@ -46,7 +46,8 @@ Device TensorBuffer::GetDevice() const { return device_; }
 size_t TensorBuffer::Size() const { return size_; }
 
 // Tensor implementation
-Tensor::Tensor(const std::vector<int64_t> &dims, DataType dtype, Device device) : dims_(dims), dtype_(dtype) {
+Tensor::Tensor(const std::vector<int64_t> &dims, DataType dtype, Device device, bool requires_grad)
+    : dims_(dims), dtype_(dtype), requires_grad_(requires_grad) {
     num_elements_ = std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>());
     buffer_ = std::make_shared<TensorBuffer>(device, kDataTypeToSize.at(dtype) * num_elements_);
 }

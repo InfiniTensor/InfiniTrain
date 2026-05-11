@@ -1,5 +1,3 @@
-#include <gtest/gtest.h>
-
 #include <filesystem>
 #include <memory>
 #include <vector>
@@ -8,7 +6,8 @@
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
-#include "test_utils.h"
+#include "tests/common/test_utils.h"
+#include "gtest/gtest.h"
 
 using namespace infini_train;
 

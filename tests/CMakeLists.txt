@@ -2,7 +2,7 @@
 # This file manages the test infrastructure for InfiniTrain
 
 # Include shared test macros (must be before any test subdirectory)
-include(${CMAKE_CURRENT_SOURCE_DIR}/common/test_macros.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/test_macros.cmake)
 
 # Common test utilities
 add_subdirectory(common)

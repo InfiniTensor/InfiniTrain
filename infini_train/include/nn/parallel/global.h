@@ -31,8 +31,6 @@ public:
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
               int pipeline_parallel_size, int virtual_pipeline_parallel_size);
 
-    bool IsInitialized() const;
-
     int nnodes() const;
 
     int nproc_per_node() const;

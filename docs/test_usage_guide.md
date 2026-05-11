@@ -49,15 +49,15 @@ ctest -R tensor --output-on-failure
 在 `tests/` 下对应子目录中新建文件，例如 `tests/tensor/test_tensor_copy.cc`：
 
 ```cpp
-#include "common/test_utils.h"
+#include "tests/common/test_utils.h"
 
 class TensorCopyTest : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(TensorCopyTest, CopiesDataCorrectly) {
-    auto src = createTensor({4}, DataType::kFLOAT32);
-    FillSequentialTensor(src);
+    auto src = std::make_shared<Tensor>(std::vector<int64_t>{4}, DataType::kFLOAT32, GetDevice());
+    src->Fill(1.0f);
 
-    auto dst = createTensor({4}, DataType::kFLOAT32);
+    auto dst = std::make_shared<Tensor>(std::vector<int64_t>{4}, DataType::kFLOAT32, GetDevice());
     // ... 执行拷贝并断言 ...
     EXPECT_EQ(dst->Dims(), src->Dims());
 }
@@ -66,7 +66,7 @@ INFINI_TRAIN_REGISTER_TEST(TensorCopyTest);
 ```
 
 注意事项：
-- 继承 `InfiniTrainTest`（autograd 测试继承 `AutogradTestBase`）。
+- 继承 `InfiniTrainTest`。
 - 使用 `TEST_P`，设备参数由框架自动注入。
 - 文件末尾调用 `INFINI_TRAIN_REGISTER_TEST`，自动实例化 CPU 和 CUDA 两个变体。
 
@@ -89,11 +89,9 @@ infini_train_add_test_suite(test_tensor_copy test_tensor_copy.cc)
 | 方法 | 说明 |
 |---|---|
 | `GetDevice()` | 返回当前测试实例的设备（CPU 或 CUDA） |
-| `createTensor(shape)` | 在当前设备上创建 `kFLOAT32` 张量 |
-| `createTensor(shape, dtype)` | 创建指定数据类型的张量 |
-| `createTensor(shape, dtype, requires_grad)` | 创建启用自动微分的张量 |
-| `FillSequentialTensor(tensor)` | 用 0, 1, 2, … 填充张量（自动处理 CPU/GPU 传输） |
-| `FillConstantTensor(tensor, value)` | 用常量填充张量所有元素 |
+| `tensor->Fill(value)` | 用常量填充张量所有元素（`Tensor` 内置方法） |
+
+张量创建直接使用 `std::make_shared<Tensor>(shape, dtype, GetDevice(), requires_grad)`，`requires_grad` 参数默认 `false`，需要梯度的测试传 `true` 即可。
 
 ---
 
@@ -130,20 +128,21 @@ TEST_P(MyTest, 需要多卡) {
 
 ## Autograd 测试
 
-需要预填充输入张量时，继承 `AutogradTestBase`：
+创建启用自动微分的张量时，给 `Tensor` 构造的第四个参数传 `true`：
 
 ```cpp
-#include "common/test_utils.h"
+#include "tests/common/test_utils.h"
 
-class MyOpTest : public infini_train::test::AutogradTestBase {};
+class MyOpTest : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(MyOpTest, 前向传播) {
-    // input_ 和 weight_ 已在当前设备上创建并填充好序列值
-    auto output = MyOp(input_, weight_);
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
+    input->Fill(1.0f);
+    auto weight = std::make_shared<Tensor>(std::vector<int64_t>{4, 3}, DataType::kFLOAT32, GetDevice(), true);
+    weight->Fill(0.5f);
+    auto output = MyOp(input, weight);
     EXPECT_NE(output, nullptr);
 }
 
 INFINI_TRAIN_REGISTER_TEST(MyOpTest);
 ```
-
-`AutogradTestBase` 继承自 `InfiniTrainTest`，预先创建了 `input_` 和 `weight_` 张量并填充了序列值。

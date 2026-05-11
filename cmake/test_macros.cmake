@@ -17,9 +17,6 @@
 
 include_guard(GLOBAL)
 
-# Path to this file's directory (tests/common/)
-set(TEST_MACROS_DIR "${CMAKE_CURRENT_LIST_DIR}")
-
 # -----------------------------------------------------------------------------
 # Load GoogleTest module (provides gtest_discover_tests)
 # -----------------------------------------------------------------------------
@@ -59,20 +56,16 @@ macro(infini_train_add_test)
   endif()
 
   # 1. Create executable target
-  add_executable(${ARG_TEST_NAME} ${ARG_SOURCES})
+  add_executable(${ARG_TEST_NAME} ${ARG_SOURCES} $<TARGET_OBJECTS:test_main>)
 
   # 2. Disable -Werror so tests can run under relaxed warning levels
   target_compile_options(${ARG_TEST_NAME} PRIVATE -Wno-error)
 
-  # 3. Link Google Test
-  target_link_libraries(${ARG_TEST_NAME} PRIVATE
-    GTest::gtest
-    GTest::gtest_main
-  )
+  # 3. Link Google Test (uses custom main from test_main that initializes GlobalEnv)
+  target_link_libraries(${ARG_TEST_NAME} PRIVATE GTest::gtest)
 
   # 4. Add include paths
   target_include_directories(${ARG_TEST_NAME} PRIVATE
-    ${TEST_MACROS_DIR}
     ${glog_SOURCE_DIR}/src
   )
 

@@ -174,6 +174,7 @@ void Train(const nn::parallel::Rank &rank) {
     if (!FLAGS_llmc_filepath.empty()) {
         model = llama3::LoadFromLLMC(FLAGS_llmc_filepath);
     } else {
+        llama3::SanitizeLLaMA3Config(model_config);
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
 

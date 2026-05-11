@@ -1,5 +1,7 @@
 #pragma once
 
+#include "glog/logging.h"
+
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
 namespace nn = infini_train::nn;
@@ -21,6 +23,20 @@ inline nn::TransformerConfig GPT2Config() {
             .ffn_expansion_ratio = 4.0f,
             .ffn_dim_multiplier = std::nullopt,
             .multiple_of = 1};
+}
+
+inline void SanitizeGPT2Config(const nn::TransformerConfig &c) {
+    CHECK_GT(c.block_size, 0);
+    CHECK_GT(c.vocab_size, 0);
+    CHECK_GE(c.vocab_size, c.original_vocab_size);
+    CHECK_GT(c.n_layer, 0);
+    CHECK_GT(c.n_head, 0);
+    CHECK_GT(c.n_embd, 0);
+    CHECK_EQ(c.n_embd % c.n_head, 0) << "n_embd must be divisible by n_head";
+    CHECK_EQ(c.n_kv_head, c.n_head) << "GPT-2 does not use GQA; n_kv_head must equal n_head";
+    CHECK(c.attention_type == nn::AttentionType::kStandard) << "GPT-2 requires standard attention";
+    CHECK(c.activation_type == nn::MLPType::kGELU) << "GPT-2 requires GELU activation";
+    CHECK(c.norm_type == nn::NormType::kLayerNorm) << "GPT-2 requires LayerNorm";
 }
 
 } // namespace gpt2

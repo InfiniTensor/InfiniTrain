@@ -9,7 +9,6 @@ tests/
 ├── CMakeLists.txt              # 顶层：include 宏 + add_subdirectory
 ├── common/
 │   ├── CMakeLists.txt          # header-only interface library
-│   ├── test_macros.cmake       # CMake 宏：infini_train_add_test / infini_train_add_test_suite
 │   └── test_utils.h            # C++ 基类、skip 宏、填充工具函数
 ├── tensor/                     # Tensor 创建 / 拷贝 / 销毁 / 算子
 ├── optimizer/                  # Optimizer 创建 / step
@@ -18,6 +17,9 @@ tests/
 ├── lora/                       # LoRA 相关
 ├── dtype/                      # Scalar / dtype dispatch + 编译期负面测试
 └── transformer/                # Transformer 架构测试
+
+cmake/
+└── test_macros.cmake           # CMake 宏：infini_train_add_test / infini_train_add_test_suite
 ```
 
 ### 核心设计：设备参数化
@@ -32,14 +34,15 @@ tests/
 
 | 基类 | 用途 | 提供的能力 |
 |------|------|-----------|
-| `InfiniTrainTest` | 通用参数化测试 | `GetDevice()`, `createTensor(shape, dtype, requires_grad)` |
-| `AutogradTestBase` | Autograd 测试 | `createTensor(shape, value)` 自动 `requires_grad=true` + 顺序填充 |
+| `InfiniTrainTest` | 通用参数化测试 | `GetDevice()`（当前参数化的 `Device`） |
 
-**为什么需要 AutogradTestBase？**
+测试中的张量直接通过 `Tensor` 构造接口创建：
 
-- 所有 autograd 测试都需要 `requires_grad=true`
-- 所有 autograd 测试都需要填充数据
-- 前向/反向传播测试必须有输入数据才能验证结果。`AutogradTestBase` 把 `FillSequentialTensor` 内置了，避免每个测试都手动调用
+```cpp
+auto t = std::make_shared<Tensor>(shape, DataType::kFLOAT32, GetDevice());
+auto g = std::make_shared<Tensor>(shape, DataType::kFLOAT32, GetDevice(), /*requires_grad=*/true);
+t->Fill(1.0f);                   // 常量填充（framework 内置 API）
+```
 
 ### 跳过特定平台
 
@@ -110,14 +113,14 @@ mkdir tests/foo
 // tests/foo/test_foo_basic.cc
 #include <gtest/gtest.h>
 #include "infini_train/include/tensor.h"
-#include "test_utils.h"
+#include "tests/common/test_utils.h"
 
 using namespace infini_train;
 
 class FooBasicTest : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(FooBasicTest, CreateTensor) {
-    auto tensor = createTensor({2, 3});
+    auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
     EXPECT_NE(tensor, nullptr);
 }
 
@@ -129,12 +132,9 @@ TEST_P(FooBasicTest, CUDAOnlyFeature) {
 INFINI_TRAIN_REGISTER_TEST(FooBasicTest);
 ```
 
-**基类选择（或创建）：**
+**基类选择：**
 
-| 场景 | 基类 |
-|------|------|
-| 通用测试 | `InfiniTrainTest`（提供 `createTensor(shape, dtype, requires_grad)`） |
-| 需要 autograd | `AutogradTestBase`（提供 `createTensor(shape, value)`，自动 `requires_grad=true` + 顺序填充） |
+所有测试类都继承 `InfiniTrainTest`。需要梯度时，给 `Tensor` 构造传 `requires_grad=true`；需要填充数据时用 `Tensor::Fill`。
 
 **Step 2: 写 CMakeLists.txt**
 
@@ -176,8 +176,6 @@ add_subdirectory(foo)
 | 函数 / 宏 | 用途 |
 |-----------|------|
 | `GetDevice()` | 返回当前参数化的 `Device`（基类方法） |
-| `createTensor(shape, dtype, requires_grad)` | 在当前设备创建 tensor（`InfiniTrainTest` 基类方法） |
-| `FillSequentialTensor(tensor, start)` | 填充递增值，自动处理 Device tensor（先填 CPU 再 copy） |
 | `SKIP_CPU()` | 跳过 CPU 实例 |
 | `ONLY_CPU()` | 只在 CPU 实例运行 |
 | `ONLY_CUDA()` | 只在 CUDA 实例运行 |
@@ -201,23 +199,12 @@ enum class DeviceType : int8_t {
 
 ### 4.2 测试工具层：`test_utils.h`
 
-1. 新增运行时检测函数和 `CudaDeviceTypes` 的对称版本：
+1. 新增 MACA 头文件的编译期引入（和 CUDA 对称）：
 
 ```cpp
-#ifdef USE_MACA
-inline int GetMacaDeviceCount() { /* macaGetDeviceCount ... */ }
-#else
-inline int GetMacaDeviceCount() { return 0; }
+#if defined(USE_MACA)
+#include <maca_runtime_api.h>
 #endif
-inline bool HasMacaRuntime() { return GetMacaDeviceCount() > 0; }
-
-inline std::vector<Device::DeviceType> MacaDeviceTypes() {
-    if (HasMacaRuntime()) {
-        return {Device::DeviceType::kMACA};
-    }
-    LOG(INFO) << "No MACA runtime found, skipping MACA tests.";
-    return {};
-}
 ```
 
 2. 新增 `ONLY_MACA()` 宏：
@@ -227,17 +214,35 @@ inline std::vector<Device::DeviceType> MacaDeviceTypes() {
     do { if (GetParam() != infini_train::Device::DeviceType::kMACA) { GTEST_SKIP() << "MACA-only test"; } } while (0)
 ```
 
+如果希望有类似 `REQUIRE_MIN_DEVICES(n)` 但针对 MACA 的语义，可以按 `USE_CUDA` 分支的写法增加一个新的宏；同理 `USE_MACA` 不开时该宏直接 skip 即可。
+
 ### 4.3 注册宏：新增 MACA 实例
 
+沿用 `USE_CUDA` 的做法，未开启编译开关时不注册对应实例：
+
 ```cpp
+#if defined(USE_CUDA) && defined(USE_MACA)
 #define INFINI_TRAIN_REGISTER_TEST(TestName)                                    \
     INSTANTIATE_TEST_SUITE_P(CPU, TestName,                                     \
         ::testing::Values(infini_train::Device::DeviceType::kCPU));             \
     INSTANTIATE_TEST_SUITE_P(CUDA, TestName,                                    \
-        ::testing::ValuesIn(infini_train::test::CudaDeviceTypes()));            \
+        ::testing::Values(infini_train::Device::DeviceType::kCUDA));            \
     INSTANTIATE_TEST_SUITE_P(MACA, TestName,                                    \
-        ::testing::ValuesIn(infini_train::test::MacaDeviceTypes()))
+        ::testing::Values(infini_train::Device::DeviceType::kMACA))
+#elif defined(USE_CUDA)
+#define INFINI_TRAIN_REGISTER_TEST(TestName) /* CPU + CUDA, 同现状 */
+#elif defined(USE_MACA)
+#define INFINI_TRAIN_REGISTER_TEST(TestName)                                    \
+    INSTANTIATE_TEST_SUITE_P(CPU, TestName,                                     \
+        ::testing::Values(infini_train::Device::DeviceType::kCPU));             \
+    INSTANTIATE_TEST_SUITE_P(MACA, TestName,                                    \
+        ::testing::Values(infini_train::Device::DeviceType::kMACA))
+#else
+#define INFINI_TRAIN_REGISTER_TEST(TestName) /* 仅 CPU */
+#endif
 ```
+
+运行时如果机器上没有对应设备（例如 `USE_MACA` 编译但无 MACA 硬件），让测试直接报错而不是静默跳过。
 
 ### 4.4 CMake 层：`test_macros.cmake`
 
@@ -248,7 +253,7 @@ inline std::vector<Device::DeviceType> MacaDeviceTypes() {
 | 步骤 | 文件 | 改动 |
 |------|------|------|
 | 1 | `device.h` | `DeviceType` 枚举新增 `kMACA` |
-| 2 | `test_utils.h` | 新增 `GetMacaDeviceCount()` / `HasMacaRuntime()` / `MacaDeviceTypes()` / `ONLY_MACA()` |
-| 3 | `test_utils.h` | `INFINI_TRAIN_REGISTER_TEST` 新增 MACA 实例 |
+| 2 | `test_utils.h` | 新增 `USE_MACA` 下的 `<maca_runtime_api.h>` 引入、`ONLY_MACA()` 宏 |
+| 3 | `test_utils.h` | `INFINI_TRAIN_REGISTER_TEST` 按 `USE_MACA` 条件新增 MACA 实例 |
 | 4 | `test_macros.cmake` | 将默认 label 列表扩展为 `cpu cuda maca` |
 | 5 | `CMakeLists.txt`（根） | 新增 `USE_MACA` option + MACA SDK 查找 + kernel 编译 |

@@ -58,7 +58,7 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
 public:
     Tensor() = default;
 
-    Tensor(const std::vector<int64_t> &dims, DataType dtype, Device device);
+    Tensor(const std::vector<int64_t> &dims, DataType dtype, Device device, bool requires_grad = false);
     Tensor(const std::vector<int64_t> &dims, DataType dtype) : Tensor(dims, dtype, Device()) {}
 
     Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &dims);
