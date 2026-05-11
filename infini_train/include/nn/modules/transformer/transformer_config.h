@@ -15,9 +15,40 @@ enum class MLPType {
     kSwiGLU // SwiGLU activation
 };
 
+enum class FFNType {
+    kDense, // Standard dense MLP
+    kMoE    // Mixture-of-Experts MLP
+};
+
 enum class NormType {
     kLayerNorm, // LayerNorm
     kRMSNorm    // RMSNorm
+};
+
+enum class MoERouterType {
+    kTopK // Top-k router. The initial implementation supports top-1.
+};
+
+enum class MoEDispatcherType {
+    kLocal,    // No cross-rank token exchange
+    kAllGather // Reserved for expert parallel MoE
+};
+
+enum class MoEExpertImpl {
+    kSequential // Run local experts sequentially
+};
+
+struct MoEConfig {
+    int64_t num_experts = 0;
+    int64_t expert_parallel_size = 1;
+    int64_t router_topk = 1;
+    float aux_loss_coeff = 0.0f;
+    std::optional<float> expert_capacity_factor = std::nullopt;
+    bool pad_expert_input_to_capacity = false;
+    int64_t moe_ffn_hidden_size = 0;
+    MoERouterType router_type = MoERouterType::kTopK;
+    MoEDispatcherType dispatcher_type = MoEDispatcherType::kLocal;
+    MoEExpertImpl expert_impl = MoEExpertImpl::kSequential;
 };
 
 struct TransformerConfig {
@@ -31,6 +62,7 @@ struct TransformerConfig {
 
     AttentionType attention_type = AttentionType::kStandard; // Attention mechanism type
     MLPType activation_type = MLPType::kGELU;                // MLP activation type
+    FFNType ffn_type = FFNType::kDense;                      // Feed-forward module type
     NormType norm_type = NormType::kLayerNorm;               // Normalization type
 
     bool add_bias_linear = true; // Whether to add learnable bias to all Linear layers in the Transformer block,
@@ -43,6 +75,7 @@ struct TransformerConfig {
     float ffn_expansion_ratio = 4.0f;               // MLP output: n_embd * ffn_expansion_ratio
     std::optional<float> ffn_dim_multiplier = 1.5f; // FFN dim multiplier
     int64_t multiple_of = 256;                      // FFN dims must be multiple of this number
+    std::optional<MoEConfig> moe_config = std::nullopt;
 
     // RoPE config
     float rope_theta = 500000.0f; // theta in RoPE
