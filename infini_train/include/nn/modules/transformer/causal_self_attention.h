@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
 namespace infini_train::nn {
@@ -14,6 +15,9 @@ public:
     static constexpr char kType[] = "CausalSelfAttention";
     static constexpr char kCAttnLayerName[] = "c_attn";
     static constexpr char kCProjLayerName[] = "c_proj";
+
+    static constexpr char kQNormLayerName[] = "q_norm";
+    static constexpr char kKNormLayerName[] = "k_norm";
 
     static constexpr char kParamBiasName[] = "bias";
 
@@ -31,6 +35,9 @@ private:
     int64_t n_kv_head_ = 0;
     int64_t n_rep_ = 0;
     int64_t head_dim_ = 0;
+
+    std::shared_ptr<infini_train::nn::RMSNorm> q_norm_;
+    std::shared_ptr<infini_train::nn::RMSNorm> k_norm_;
 
     // Setup method for different attention modes
     void SetupAttention(const TransformerConfig &config);

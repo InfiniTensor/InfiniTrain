@@ -61,6 +61,10 @@ struct TransformerConfig {
     bool flash = false;             // flash attention
     int64_t max_gen_batch_size = 4; // max batch size during inference
 
+    // ===== Q-K Norm (Qwen3 特有) =====
+    bool use_qk_norm = false;
+    float qk_norm_eps = 1e-6f;
+
     bool UseGQA() const;
     int GetChunkSize() const;
 };
