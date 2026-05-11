@@ -15,6 +15,7 @@
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
+#include "infini_train/include/nn/modules/transformer/moe/moe_layer.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
@@ -86,7 +87,11 @@ TransformerLayer::TransformerLayer(const nn::TransformerConfig &config) : Clonea
     }
 
     modules_[kAttnLayerName] = std::make_shared<CausalSelfAttention>(config);
-    modules_[kMlpLayerName] = std::make_shared<MLP>(config);
+    if (config.ffn_type == FFNType::kMoE) {
+        modules_[kMlpLayerName] = std::make_shared<moe::MoELayer>(config);
+    } else {
+        modules_[kMlpLayerName] = std::make_shared<MLP>(config);
+    }
 }
 
 std::vector<std::shared_ptr<Tensor>> TransformerLayer::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
