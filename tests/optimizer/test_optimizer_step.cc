@@ -1,11 +1,10 @@
-#include <gtest/gtest.h>
-
 #include <vector>
 
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
-#include "test_utils.h"
+#include "tests/common/test_utils.h"
+#include "gtest/gtest.h"
 
 using namespace infini_train;
 
@@ -14,7 +13,7 @@ class OptimizerStepTest : public infini_train::test::InfiniTrainTest {};
 TEST_P(OptimizerStepTest, SGDStep) {
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
     param->set_requires_grad(true);
-    infini_train::test::FillConstantTensor(param, 1.0f);
+    param->Fill(1.0f);
     auto optimizer = std::make_shared<optimizers::SGD>(std::vector<std::shared_ptr<Tensor>>{param}, 0.01);
     optimizer->ZeroGrad();
     optimizer->Step();
@@ -23,7 +22,7 @@ TEST_P(OptimizerStepTest, SGDStep) {
 TEST_P(OptimizerStepTest, AdamStep) {
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
     param->set_requires_grad(true);
-    infini_train::test::FillConstantTensor(param, 1.0f);
+    param->Fill(1.0f);
     auto optimizer = std::make_shared<optimizers::Adam>(std::vector<std::shared_ptr<Tensor>>{param}, 0.001);
     optimizer->ZeroGrad();
     optimizer->Step();

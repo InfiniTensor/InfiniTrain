@@ -1,5 +1,3 @@
-#include <gtest/gtest.h>
-
 #include <memory>
 #include <vector>
 
@@ -9,7 +7,8 @@
 #include "infini_train/include/common/hook.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
-#include "test_utils.h"
+#include "tests/common/test_utils.h"
+#include "gtest/gtest.h"
 
 using namespace infini_train;
 

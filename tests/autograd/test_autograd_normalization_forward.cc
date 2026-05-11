@@ -1,38 +1,46 @@
-#include <gtest/gtest.h>
-
 #include <vector>
 
 #include "infini_train/include/autograd/normalization.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
-#include "test_utils.h"
+#include "tests/common/test_utils.h"
+#include "gtest/gtest.h"
 
 using namespace infini_train;
 
-class AutogradNormalizationForwardTest : public infini_train::test::AutogradTestBase {};
+class AutogradNormalizationForwardTest : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(AutogradNormalizationForwardTest, LayerNormForward) {
-    auto a = createTensor({2, 3, 4}, 1.0f);
-    auto weight = createTensor({4}, 1.0f);
-    auto bias = createTensor({4}, 0.0f);
+    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3, 4}, DataType::kFLOAT32, GetDevice(), true);
+    a->Fill(1.0f);
+    auto weight = std::make_shared<Tensor>(std::vector<int64_t>{4}, DataType::kFLOAT32, GetDevice(), true);
+    weight->Fill(1.0f);
+    auto bias = std::make_shared<Tensor>(std::vector<int64_t>{4}, DataType::kFLOAT32, GetDevice(), true);
+    bias->Fill(0.0f);
     auto layernorm_fn = std::make_shared<autograd::LayerNorm>(1e-5f);
     auto result = layernorm_fn->Apply({a, weight, bias});
     EXPECT_EQ(result.size(), 1);
 }
 
 TEST_P(AutogradNormalizationForwardTest, LayerNormZeroBias) {
-    auto a = createTensor({2, 3, 4}, 1.0f);
-    auto weight = createTensor({4}, 1.0f);
-    auto bias = createTensor({4}, 0.0f);
+    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3, 4}, DataType::kFLOAT32, GetDevice(), true);
+    a->Fill(1.0f);
+    auto weight = std::make_shared<Tensor>(std::vector<int64_t>{4}, DataType::kFLOAT32, GetDevice(), true);
+    weight->Fill(1.0f);
+    auto bias = std::make_shared<Tensor>(std::vector<int64_t>{4}, DataType::kFLOAT32, GetDevice(), true);
+    bias->Fill(0.0f);
     auto layernorm_fn = std::make_shared<autograd::LayerNorm>(1e-5f);
     auto result = layernorm_fn->Apply({a, weight, bias});
     EXPECT_EQ(result.size(), 1);
 }
 
 TEST_P(AutogradNormalizationForwardTest, LayerNormThreeDim) {
-    auto a = createTensor({2, 1, 4}, 1.0f);
-    auto weight = createTensor({4}, 1.0f);
-    auto bias = createTensor({4}, 0.0f);
+    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 1, 4}, DataType::kFLOAT32, GetDevice(), true);
+    a->Fill(1.0f);
+    auto weight = std::make_shared<Tensor>(std::vector<int64_t>{4}, DataType::kFLOAT32, GetDevice(), true);
+    weight->Fill(1.0f);
+    auto bias = std::make_shared<Tensor>(std::vector<int64_t>{4}, DataType::kFLOAT32, GetDevice(), true);
+    bias->Fill(0.0f);
     auto layernorm_fn = std::make_shared<autograd::LayerNorm>(1e-5f);
     auto result = layernorm_fn->Apply({a, weight, bias});
     EXPECT_EQ(result.size(), 1);

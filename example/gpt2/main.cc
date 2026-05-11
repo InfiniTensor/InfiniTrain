@@ -190,6 +190,7 @@ void Train(const nn::parallel::Rank &rank) {
         model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath);
     } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
+        gpt2::SanitizeGPT2Config(model_config);
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
 

@@ -1,5 +1,3 @@
-#include <gtest/gtest.h>
-
 #include <cmath>
 #include <memory>
 #include <vector>
@@ -12,7 +10,8 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
-#include "test_utils.h"
+#include "tests/common/test_utils.h"
+#include "gtest/gtest.h"
 
 using namespace infini_train;
 using namespace infini_train::nn::lora;
@@ -118,7 +117,7 @@ TEST_P(LoRATest, LoRALinearMerge) {
     ASSERT_NE(lora_linear, nullptr);
 
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 5, 32}, DataType::kFLOAT32, GetDevice());
-    infini_train::test::FillSequentialTensor(input, 1.0f);
+    input->Fill(1.0f);
 
     auto output_before = (*model)({input})[0];
     float output_before_sum = TensorSum(output_before);
@@ -315,7 +314,7 @@ TEST_P(LoRATest, MergeAndUnload) {
     EXPECT_NE(dynamic_cast<LoRALinear *>(model.get()), nullptr);
 
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 5, 64}, DataType::kFLOAT32, GetDevice());
-    infini_train::test::FillSequentialTensor(input, 1.0f);
+    input->Fill(1.0f);
     auto output_before = (*model)({input})[0];
     float output_before_sum = TensorSum(output_before);
 

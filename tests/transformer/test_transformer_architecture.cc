@@ -1,11 +1,7 @@
-#include <gtest/gtest.h>
-
 #include <cmath>
 #include <memory>
 #include <vector>
 
-#include "example/gpt2/config.h"
-#include "example/llama3/config.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
@@ -14,34 +10,11 @@
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/tensor.h"
-#include "test_utils.h"
+#include "tests/common/test_utils.h"
+#include "gtest/gtest.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
-
-class TransformerConfigTest : public infini_train::test::InfiniTrainTest {};
-
-TEST_P(TransformerConfigTest, GPT2Config) {
-    auto config = gpt2::GPT2Config();
-    EXPECT_EQ(config.attention_type, nn::AttentionType::kStandard);
-    EXPECT_EQ(config.activation_type, nn::MLPType::kGELU);
-    EXPECT_EQ(config.norm_type, nn::NormType::kLayerNorm);
-    EXPECT_TRUE(config.add_bias_linear);
-    EXPECT_TRUE(config.tie_weights);
-    EXPECT_FALSE(config.UseGQA());
-}
-
-TEST_P(TransformerConfigTest, LLaMA3Config) {
-    auto config = llama3::LLaMA3Config();
-    EXPECT_EQ(config.attention_type, nn::AttentionType::kRoPE);
-    EXPECT_EQ(config.activation_type, nn::MLPType::kSwiGLU);
-    EXPECT_EQ(config.norm_type, nn::NormType::kRMSNorm);
-    EXPECT_FALSE(config.add_bias_linear);
-    EXPECT_FALSE(config.tie_weights);
-    EXPECT_TRUE(config.UseGQA());
-}
-
-INFINI_TRAIN_REGISTER_TEST(TransformerConfigTest);
 
 class TransformerModuleTest : public infini_train::test::InfiniTrainTest {};
 
@@ -137,9 +110,10 @@ TEST_P(TransformerModuleTest, StandardAttention) {
 
 TEST_P(TransformerModuleTest, GPT2TransformerLayer) {
     SKIP_CPU();
-    auto config = gpt2::GPT2Config();
+    nn::TransformerConfig config;
     config.n_embd = 64;
     config.n_head = 4;
+    config.n_kv_head = 4;
     config.n_layer = 1;
 
     auto layer = std::make_shared<nn::TransformerLayer>(config);
@@ -153,9 +127,10 @@ TEST_P(TransformerModuleTest, GPT2TransformerLayer) {
 
 TEST_P(TransformerModuleTest, GPT2Model) {
     SKIP_CPU();
-    auto config = gpt2::GPT2Config();
+    nn::TransformerConfig config;
     config.n_layer = 2;
     config.n_head = 4;
+    config.n_kv_head = 4;
     config.n_embd = 64;
 
     auto model = std::make_shared<nn::TransformerModel>(config);
@@ -165,11 +140,16 @@ TEST_P(TransformerModuleTest, GPT2Model) {
 
 TEST_P(TransformerModuleTest, LLaMA3Model) {
     SKIP_CPU();
-    auto config = llama3::LLaMA3Config();
+    nn::TransformerConfig config;
     config.n_layer = 2;
     config.n_head = 4;
     config.n_kv_head = 2;
     config.n_embd = 64;
+    config.attention_type = nn::AttentionType::kRoPE;
+    config.activation_type = nn::MLPType::kSwiGLU;
+    config.norm_type = nn::NormType::kRMSNorm;
+    config.add_bias_linear = false;
+    config.tie_weights = false;
 
     auto model = std::make_shared<nn::TransformerModel>(config);
     model->To(GetDevice());

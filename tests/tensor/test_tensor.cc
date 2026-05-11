@@ -1,10 +1,9 @@
-#include <gtest/gtest.h>
-
 #include <memory>
 #include <vector>
 
 #include "infini_train/include/tensor.h"
-#include "test_utils.h"
+#include "tests/common/test_utils.h"
+#include "gtest/gtest.h"
 
 using namespace infini_train;
 
@@ -15,9 +14,9 @@ using namespace infini_train;
 class TensorOpTest : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(TensorOpTest, MatmulAllocatesOutputs) {
-    auto a = createTensor({2, 3});
-    auto b = createTensor({3, 4});
-    auto c = createTensor({2, 4});
+    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
+    auto b = std::make_shared<Tensor>(std::vector<int64_t>{3, 4}, DataType::kFLOAT32, GetDevice());
+    auto c = std::make_shared<Tensor>(std::vector<int64_t>{2, 4}, DataType::kFLOAT32, GetDevice());
     EXPECT_NE(a->DataPtr(), nullptr);
     EXPECT_NE(b->DataPtr(), nullptr);
     EXPECT_NE(c->DataPtr(), nullptr);

@@ -80,6 +80,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     llama3_config.use_scaled_rope = static_cast<bool>(use_scaled_rope);
     llama3_config.norm_eps = norm_eps;
     llama3_config.max_gen_batch_size = max_gen_bs;
+    llama3::SanitizeLLaMA3Config(llama3_config);
     auto llama3 = std::make_shared<nn::TransformerModel>(llama3_config);
 
     // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
