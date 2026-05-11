@@ -1,4 +1,4 @@
-#include "infini_train/include/common/cuda/gemm.cuh"
+#include "infini_train/src/kernels/cuda/common/gemm.cuh"
 
 #include <cublas_v2.h>
 
@@ -48,15 +48,15 @@ void GemmCuda(const Device &device, const GemmParams &p) {
     const cudaDataType_t type_c = ToCudaDataType(p.output_dtype);
     // Always use CUBLAS_COMPUTE_32F: required for bf16/fp16 correctness,
     // and fine for fp32 (same compute path).
-    const cublasComputeType_t ctype = CUBLAS_COMPUTE_32F;
+    const cublasComputeType_t compute_type = CUBLAS_COMPUTE_32F;
 
     if (p.batch_count == 1) {
         CUBLAS_CHECK(cublasGemmEx(blas_handle, p.trans_a, p.trans_b, p.m, p.n, p.k, &p.alpha, p.A, type_a, p.lda, p.B,
-                                  type_b, p.ldb, &p.beta, p.C, type_c, p.ldc, ctype, CUBLAS_GEMM_DEFAULT));
+                                  type_b, p.ldb, &p.beta, p.C, type_c, p.ldc, compute_type, CUBLAS_GEMM_DEFAULT));
     } else {
         CUBLAS_CHECK(cublasGemmStridedBatchedEx(blas_handle, p.trans_a, p.trans_b, p.m, p.n, p.k, &p.alpha, p.A, type_a,
                                                 p.lda, p.stride_a, p.B, type_b, p.ldb, p.stride_b, &p.beta, p.C, type_c,
-                                                p.ldc, p.stride_c, p.batch_count, ctype, CUBLAS_GEMM_DEFAULT));
+                                                p.ldc, p.stride_c, p.batch_count, compute_type, CUBLAS_GEMM_DEFAULT));
     }
 }
 
