@@ -26,9 +26,25 @@ bool Device::IsCPU() const { return type_ == DeviceType::kCPU; }
 
 bool Device::IsCUDA() const { return type_ == DeviceType::kCUDA; }
 
+bool Device::IsMACA() const { return type_ == DeviceType::kMACA; }
+
 std::string Device::ToString() const {
+    const char *type_str = "Unknown";
+    switch (type_) {
+    case DeviceType::kCPU:
+        type_str = "CPU";
+        break;
+    case DeviceType::kCUDA:
+        type_str = "CUDA";
+        break;
+    case DeviceType::kMACA:
+        type_str = "MACA";
+        break;
+    default:
+        break;
+    }
     std::ostringstream oss;
-    oss << std::format("Device({}, {})", type_ == DeviceType::kCPU ? "CPU" : "CUDA", index_);
+    oss << std::format("Device({}, {})", type_str, index_);
     return oss.str();
 }
 
