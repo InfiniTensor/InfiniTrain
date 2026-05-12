@@ -2,9 +2,11 @@
 #include <cstdint>
 #include <limits>
 
-#include "infini_train/include/scalar.h"
-#include "tests/common/test_utils.h"
 #include "gtest/gtest.h"
+
+#include "infini_train/include/scalar.h"
+
+#include "tests/common/test_utils.h"
 
 using namespace infini_train;
 

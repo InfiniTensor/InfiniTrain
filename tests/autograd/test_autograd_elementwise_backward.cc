@@ -1,11 +1,13 @@
 #include <cmath>
 #include <vector>
 
+#include "gtest/gtest.h"
+
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
+
 #include "tests/common/test_utils.h"
-#include "gtest/gtest.h"
 
 using namespace infini_train;
 

@@ -2,6 +2,8 @@
 #include <memory>
 #include <vector>
 
+#include "gtest/gtest.h"
+
 #include "infini_train/include/nn/lora/lora_config.h"
 #include "infini_train/include/nn/lora/lora_linear.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
@@ -10,8 +12,8 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
+
 #include "tests/common/test_utils.h"
-#include "gtest/gtest.h"
 
 using namespace infini_train;
 using namespace infini_train::nn::lora;

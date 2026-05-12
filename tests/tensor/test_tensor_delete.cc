@@ -1,9 +1,11 @@
 #include <memory>
 #include <vector>
 
-#include "infini_train/include/tensor.h"
-#include "tests/common/test_utils.h"
 #include "gtest/gtest.h"
+
+#include "infini_train/include/tensor.h"
+
+#include "tests/common/test_utils.h"
 
 using namespace infini_train;
 

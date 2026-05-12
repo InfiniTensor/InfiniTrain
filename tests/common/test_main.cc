@@ -1,5 +1,6 @@
-#include "infini_train/include/nn/parallel/global.h"
 #include "gtest/gtest.h"
+
+#include "infini_train/include/nn/parallel/global.h"
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
