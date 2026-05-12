@@ -216,3 +216,17 @@ set_target_properties(infini_run PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BIN
 if(BUILD_TEST)
   add_subdirectory(tests)
 endif()
+
+# Negative compile test: missing dtype registration must fail at compile time.
+set(DTYPE_DISPATCH_COMPILE_FAIL_SOURCE
+  ${PROJECT_SOURCE_DIR}/tests/dtype/test_dtype_dispatch_compile_fail.cc)
+
+add_executable(test_dtype_dispatch_compile_fail EXCLUDE_FROM_ALL
+  ${DTYPE_DISPATCH_COMPILE_FAIL_SOURCE}
+)
+
+target_include_directories(test_dtype_dispatch_compile_fail PRIVATE
+  ${PROJECT_SOURCE_DIR}
+)
+
+link_infini_train_exe(test_dtype_dispatch_compile_fail)

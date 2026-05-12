@@ -2,6 +2,8 @@
 #include <memory>
 #include <vector>
 
+#include "gtest/gtest.h"
+
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
@@ -10,8 +12,8 @@
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/tensor.h"
+
 #include "tests/common/test_utils.h"
-#include "gtest/gtest.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;

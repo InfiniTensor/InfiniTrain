@@ -2,12 +2,14 @@
 #include <memory>
 #include <vector>
 
+#include "gtest/gtest.h"
+
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
+
 #include "tests/common/test_utils.h"
-#include "gtest/gtest.h"
 
 using namespace infini_train;
 

@@ -1,10 +1,12 @@
 #include <type_traits>
 
+#include "gtest/gtest.h"
+
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/dtype_dispatch.h"
+
 #include "infini_train/src/core/runtime/cpu/cpu_dispatch.h"
 #include "tests/common/test_utils.h"
-#include "gtest/gtest.h"
 
 using namespace infini_train;
 
