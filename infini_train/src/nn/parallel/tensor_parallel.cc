@@ -535,10 +535,22 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
         loss = loss->Mul(1.0f - smoothing)->Sub(mean_logp->Mul(smoothing));
     }
 
-    // 8. Save for backward
-    saved_tensors_ = {softmax_local, target_mask, masked_target, valid_mask_local};
+    softmax_local_ = softmax_local;
+    target_mask_ = target_mask;
+    masked_target_ = masked_target;
+    valid_mask_local_ = valid_mask_local;
 
     return {loss};
+}
+
+void VocabParallelCrossEntropy::SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
+                                             const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+    (void)output_tensors;
+    SaveForBackward({softmax_local_, target_mask_, masked_target_, valid_mask_local_});
+    softmax_local_.reset();
+    target_mask_.reset();
+    masked_target_.reset();
+    valid_mask_local_.reset();
 }
 
 std::vector<std::shared_ptr<Tensor>>
@@ -546,16 +558,16 @@ VocabParallelCrossEntropy::Backward(const std::vector<std::shared_ptr<Tensor>> &
     CHECK_EQ(grad_outputs.size(), 1);
 
     auto grad_output = grad_outputs[0];
-    auto softmax_local = saved_tensors_[0];
-    auto target_mask = std::make_shared<Tensor>(saved_tensors_[1]->To(softmax_local->Dtype()));
-    auto masked_target = saved_tensors_[2];
-    auto valid_mask_local = saved_tensors_[3];
+    auto softmax_local = GetSavedTensor(0);
+    auto target_mask = std::make_shared<Tensor>(GetSavedTensor(1)->To(softmax_local->Dtype()));
+    auto masked_target = GetSavedTensor(2);
+    auto valid_mask_local = GetSavedTensor(3);
 
     auto device = grad_output->GetDevice().type();
     auto grad_input = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
         {device, "VocabParallelCrossEntropyBackward"}, grad_output, softmax_local, target_mask, masked_target,
         valid_mask_local, vocab_size_local_, vocab_size_original_, label_smoothing_);
-    return {grad_input, nullptr};
+    return std::vector<std::shared_ptr<Tensor>>{grad_input, nullptr};
 }
 
 std::vector<std::shared_ptr<Tensor>>

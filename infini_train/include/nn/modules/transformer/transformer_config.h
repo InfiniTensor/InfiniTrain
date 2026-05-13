@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string_view>
 
 namespace infini_train::nn {
 
@@ -23,6 +24,18 @@ enum class MLPType {
 enum class NormType {
     kLayerNorm, // LayerNorm
     kRMSNorm    // RMSNorm
+};
+
+enum class ActivationRecomputeGranularity {
+    kNone,      // Disable activation recompute.
+    kFull,      // Recompute full transformer layers.
+    kSelective, // Recompute selected transformer submodules.
+};
+
+enum class ActivationRecomputeMethod {
+    kNone,    // Recompute every layer when granularity is full.
+    kUniform, // Uniformly divide layers into recompute chunks.
+    kBlock,   // Recompute only the first N layers in the local chunk/stage.
 };
 
 struct TransformerConfig {
@@ -56,6 +69,11 @@ struct TransformerConfig {
     // Normalization
     float norm_eps = 1e-5f; // epsilon in RMSNorm
 
+    // Activation recomputation, aligned with Megatron-Core TransformerConfig.
+    ActivationRecomputeGranularity recompute_granularity = ActivationRecomputeGranularity::kNone;
+    ActivationRecomputeMethod recompute_method = ActivationRecomputeMethod::kNone;
+    int64_t recompute_num_layers = 0;
+
     // Inference
     bool use_kv = false;            // kv cache
     bool flash = false;             // flash attention
@@ -63,5 +81,11 @@ struct TransformerConfig {
 
     bool UseGQA() const;
     int GetChunkSize() const;
+    bool RecomputeEnabled() const;
 };
+
+ActivationRecomputeGranularity ParseActivationRecomputeGranularity(std::string_view value);
+ActivationRecomputeMethod ParseActivationRecomputeMethod(std::string_view value);
+void SetActivationRecomputeConfig(TransformerConfig *config, bool enabled, std::string_view granularity,
+                                  std::string_view method, int64_t num_layers);
 } // namespace infini_train::nn

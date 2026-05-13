@@ -31,17 +31,17 @@ void Matmul::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
     // FIXME: compute_dtype is not necessarily the dtype of output_tensor; it should be
     // determined by autocast, not derived from output->Dtype().
     auto compute_dtype = output->Dtype();
-    saved_tensors_ = {
+    SaveForBackward({
         input1->Dtype() == compute_dtype ? input1 : std::make_shared<Tensor>(input1->To(compute_dtype)),
         input2->Dtype() == compute_dtype ? input2 : std::make_shared<Tensor>(input2->To(compute_dtype)),
-    };
+    });
     out_features_ = output->Dims()[0];
 }
 
 std::vector<std::shared_ptr<Tensor>> Matmul::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(saved_tensors_.size(), 2);
-    const auto &input1 = saved_tensors_[0];
-    const auto &input2 = saved_tensors_[1];
+    CHECK_EQ(SavedTensorsSize(), 2);
+    const auto &input1 = GetSavedTensor(0);
+    const auto &input2 = GetSavedTensor(1);
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 

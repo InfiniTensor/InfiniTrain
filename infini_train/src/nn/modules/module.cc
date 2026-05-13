@@ -20,7 +20,6 @@
 #endif
 
 namespace infini_train::nn {
-
 Module::Module() : Module(kUndefinedType) {}
 
 Module::Module(const std::string &type) : type_(type), device_(Device()) {}
@@ -152,7 +151,8 @@ std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shar
     return {};
 }
 
-std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+std::vector<std::shared_ptr<Tensor>>
+Module::ForwardWithHooks(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     // 1. Call global module forward pre-hooks
     utils::GlobalModuleHookRegistry::Instance().CallModuleForwardPreHooks(this, input_tensors);
 
@@ -221,6 +221,10 @@ std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::s
     }
 
     return output_tensors;
+}
+
+std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    return ForwardWithHooks(input_tensors);
 }
 
 void Module::To(Device device) {
