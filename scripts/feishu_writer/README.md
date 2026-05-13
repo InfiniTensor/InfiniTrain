@@ -4,13 +4,15 @@
 
 ## TL;DR
 
+核心流程是两步，对应两个脚本：
+1. 远端表格创建：在更换机器、新创建测试组类别的情形下，先运行 `provision_feishu_sheets.py` 脚本，在远端创建对应的表格云文档，然后本地创建或更新token JSON 文件。
+2. 性能数据写入：运行 `write_to_feishu_sheet.py` 脚本，传入 provisioning 输出或更新后的 token JSON，实现数据写入。
+
+下面介绍运行方式。在此之前，默认你已经拿到可用的 `APP_ID` 和 `APP_SECRET`，并已按本文末尾“附录：Lark-cli 配置”完成本地授权。
+
 ### 1. 手动运行脚本
 
-核心流程是两步：先 provisioning 出可用的 token JSON，再用这个 token JSON 写入远端表格。
-
-默认你已经拿到可用的 `APP_ID` 和 `APP_SECRET`，并已按本文末尾“附录：Lark-cli 配置”完成本地授权。
-
-最少保证 `scripts/feishu_writer/token.json` 中有：
+首先，最少保证 `scripts/feishu_writer/token.json` 中有：
 
 ```json
 {
@@ -30,11 +32,7 @@ python3 scripts/feishu_writer/provision_feishu_sheets.py \
   --yes
 ```
 
-输出默认写到：
-
-```text
-scripts/feishu_writer/new_token.json
-```
+其中，`--machine-folder-name` 不传入的时候会默认拿 `YYYYMM <hostname>` 补足。此时运行的输出将默认写到：`scripts/feishu_writer/new_token.json`。
 
 如果中途因为权限或网络失败，补完权限后用 `--grant-existing` 恢复：
 
@@ -46,12 +44,6 @@ python3 scripts/feishu_writer/provision_feishu_sheets.py \
   --grant-existing
 ```
 
-写入结果：
-
-```bash
-python3 scripts/feishu_writer/write_to_feishu_sheet.py scripts/feishu_writer/new_token.json
-```
-
 - **已有机器新增 tag**：
 
 ```bash
@@ -60,7 +52,7 @@ python3 scripts/feishu_writer/provision_feishu_sheets.py \
   --yes
 ```
 
-如果 `token.json` 里没有机器目录 token：
+如果 `token.json` 里没有机器目录 token，则需要显式传入：
 
 ```bash
 python3 scripts/feishu_writer/provision_feishu_sheets.py \
@@ -69,11 +61,23 @@ python3 scripts/feishu_writer/provision_feishu_sheets.py \
   --yes
 ```
 
-provisioning 成功后，spreadsheet token 会自动写入 `TAG_SPREADSHEET_CONFIGS`，后续不需要手工粘贴。
+运行成功后，新创建的 spreadsheet token 会自动写入 `token.json` 的 `TAG_SPREADSHEET_CONFIGS` 字段，后续不需要再手工粘贴。这个模式将默认原地更新 `scripts/feishu_writer/token.json`（不会生成 `new_token.json`；如果想输出到其他文件，可以额外传 `--output-token-file <path>`）。
+
+- **写入脚本**：
+
+Provisioning 完成后，根据模式运行写入脚本：
+
+```bash
+# 新增机器
+python3 scripts/feishu_writer/write_to_feishu_sheet.py scripts/feishu_writer/new_token.json
+
+# 已有机器新增 tag
+python3 scripts/feishu_writer/write_to_feishu_sheet.py scripts/feishu_writer/token.json
+```
 
 ### 2. 利用 AI Agent
 
-直接让 AI Agent 使用 `.agents/skills/infinitrain-feishu-writer/SKILL.md`。告诉它场景是“新增机器”还是“已有机器新增 tag”，以及机器目录名、目标 tag/model；`APP_SECRET` 通过本地 `token.json` 或隐藏输入提供，不要让 Agent 在回复中打印密钥。
+直接让 AI Agent 使用 `.agents/skills/infinitrain-feishu-writer/SKILL.md`。告诉它场景是“新增机器”还是“已有机器新增测试组”，以及机器目录名、目标测试组 tag/model；`APP_SECRET` 通过本地 `token.json` 或隐藏输入提供，不要让 Agent 在回复中打印密钥。
 
 ## 文件说明
 
@@ -129,7 +133,7 @@ provisioning 成功后，spreadsheet token 会自动写入 `TAG_SPREADSHEET_CONF
         },
         "tag_folders": {}
     },
-    "TAG_SPREADSHEET_CONFIGS": [...]
+    "TAG_SPREADSHEET_CONFIGS": []
 }
 ```
 
