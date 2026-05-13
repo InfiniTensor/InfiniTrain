@@ -37,6 +37,12 @@ MLP::MLP(const TransformerConfig &config) : CloneableModule(kType) {
     // Round up to multiple_of
     ffn_hidden = (ffn_hidden + config.multiple_of - 1) / config.multiple_of * config.multiple_of;
 
+    if (config.ffn_type == FFNType::kMoE && config.moe_config.has_value()
+        && config.moe_config->moe_ffn_hidden_size > 0) {
+        ffn_hidden = config.moe_config->moe_ffn_hidden_size;
+    }
+    CHECK_GT(ffn_hidden, 0);
+
     // c_fc: ColumnParallel (input full, output parallel)
     modules_[kCFcLayerName] = std::make_shared<parallel::ColumnParallelLinear>(
         /*in_features=*/config.n_embd, /*out_features=*/ffn_hidden,
