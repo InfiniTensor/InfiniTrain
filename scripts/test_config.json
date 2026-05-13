@@ -390,7 +390,7 @@
                         "batch_size": 10,
                         "total_batch_size": 5120,
                         "zero_stage": 2,
-                        "learning_rate": 0.00001,
+                        "learning_rate": 1e-05,
                         "lr_decay_style": "none"
                     }
                 },
@@ -403,8 +403,8 @@
                         "batch_size": 40,
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
-                        "learning_rate": 0.00001,
-                        "min_lr": 0.000001,
+                        "learning_rate": 1e-05,
+                        "min_lr": 1e-06,
                         "lr_decay_style": "constant",
                         "lr_warmup_iters": 0,
                         "lr_decay_iters": 0
@@ -421,8 +421,8 @@
                         "tensor_parallel": 4,
                         "sequence_parallel": true,
                         "zero_stage": 1,
-                        "learning_rate": 0.00001,
-                        "min_lr": 0.000001,
+                        "learning_rate": 1e-05,
+                        "min_lr": 1e-06,
                         "lr_decay_style": "linear",
                         "lr_warmup_iters": 2,
                         "lr_warmup_init": 0.0,
@@ -438,8 +438,8 @@
                         "batch_size": 10,
                         "total_batch_size": 5120,
                         "pipeline_parallel": 8,
-                        "learning_rate": 0.00001,
-                        "min_lr": 0.000001,
+                        "learning_rate": 1e-05,
+                        "min_lr": 1e-06,
                         "lr_decay_style": "cosine",
                         "lr_warmup_iters": 2,
                         "lr_warmup_init": 0.0,
@@ -456,8 +456,8 @@
                         "total_batch_size": 5120,
                         "pipeline_parallel": 4,
                         "virtual_pipeline_parallel": 2,
-                        "learning_rate": 0.00001,
-                        "min_lr": 0.000001,
+                        "learning_rate": 1e-05,
+                        "min_lr": 1e-06,
                         "lr_decay_style": "inverse-square-root",
                         "lr_warmup_iters": 2,
                         "lr_warmup_init": 0.0,
@@ -477,8 +477,8 @@
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
                         "zero_stage": 1,
-                        "learning_rate": 0.00001,
-                        "min_lr": 0.000001,
+                        "learning_rate": 1e-05,
+                        "min_lr": 1e-06,
                         "lr_decay_style": "cosine",
                         "lr_warmup_iters": 2,
                         "lr_warmup_init": 0.0,
@@ -493,8 +493,8 @@
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
-                        "learning_rate": 0.00001,
-                        "min_lr": 0.000001,
+                        "learning_rate": 1e-05,
+                        "min_lr": 1e-06,
                         "lr_decay_style": "linear",
                         "lr_warmup_iters": 2,
                         "lr_warmup_init": 0.0,
@@ -511,8 +511,8 @@
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
                         "zero_stage": 1,
-                        "learning_rate": 0.00001,
-                        "min_lr": 0.000001,
+                        "learning_rate": 1e-05,
+                        "min_lr": 1e-06,
                         "lr_decay_style": "inverse-square-root",
                         "lr_warmup_iters": 2,
                         "lr_warmup_init": 0.0,
@@ -529,8 +529,8 @@
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
                         "sequence_parallel": true,
-                        "learning_rate": 0.00001,
-                        "min_lr": 0.000001,
+                        "learning_rate": 1e-05,
+                        "min_lr": 1e-06,
                         "lr_decay_style": "constant",
                         "lr_warmup_iters": 0,
                         "lr_decay_iters": 10
@@ -548,8 +548,233 @@
                         "sequence_parallel": true,
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
-                        "learning_rate": 0.00001,
+                        "learning_rate": 1e-05,
                         "lr_decay_style": "none"
+                    }
+                }
+            ]
+        },
+        {
+            "tag": "recompute",
+            "tests": [
+                {
+                    "id": "2_recompute_uniform2",
+                    "args": {
+                        "dtype": "float32",
+                        "num_iteration": 10,
+                        "batch_size": 80,
+                        "total_batch_size": 5120,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "uniform",
+                        "recompute_num_layers": 2
+                    }
+                },
+                {
+                    "id": "2_recompute_block2_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 10,
+                        "batch_size": 80,
+                        "total_batch_size": 5120,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "block",
+                        "recompute_num_layers": 2
+                    }
+                },
+                {
+                    "id": "3_recompute_uniform1",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "uniform",
+                        "recompute_num_layers": 1
+                    }
+                },
+                {
+                    "id": "3_recompute_block2_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "block",
+                        "recompute_num_layers": 2
+                    }
+                },
+                {
+                    "id": "6_recompute_uniform1",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 8,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "uniform",
+                        "recompute_num_layers": 1
+                    }
+                },
+                {
+                    "id": "6_recompute_block1_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 8,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "block",
+                        "recompute_num_layers": 1
+                    }
+                },
+                {
+                    "id": "7_recompute_uniform2",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 4,
+                        "virtual_pipeline_parallel": 2,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "uniform",
+                        "recompute_num_layers": 2
+                    }
+                },
+                {
+                    "id": "7_recompute_block2_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 4,
+                        "virtual_pipeline_parallel": 2,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "block",
+                        "recompute_num_layers": 2
+                    }
+                },
+                {
+                    "id": "8_recompute_uniform3",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "uniform",
+                        "recompute_num_layers": 3
+                    }
+                },
+                {
+                    "id": "8_recompute_block2_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "block",
+                        "recompute_num_layers": 2
+                    }
+                },
+                {
+                    "id": "3_recompute_uniform1_distopt",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "use_distributed_optimizer": true,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "uniform",
+                        "recompute_num_layers": 1
+                    }
+                },
+                {
+                    "id": "3_recompute_block2_distopt_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "use_distributed_optimizer": true,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "block",
+                        "recompute_num_layers": 2
+                    }
+                },
+                {
+                    "id": "8_recompute_uniform3_distopt",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "use_distributed_optimizer": true,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "uniform",
+                        "recompute_num_layers": 3
+                    }
+                },
+                {
+                    "id": "8_recompute_block2_distopt_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "use_distributed_optimizer": true,
+                        "activation_recompute": true,
+                        "recompute_granularity": "full",
+                        "recompute_method": "block",
+                        "recompute_num_layers": 2
                     }
                 }
             ]
