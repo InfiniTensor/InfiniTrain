@@ -26,7 +26,7 @@ enum class NormType {
 };
 
 enum class MoERouterType {
-    kTopK // Top-k router. The initial implementation supports top-1.
+    kTopK // Top-k router.
 };
 
 enum class MoEDispatcherType {
