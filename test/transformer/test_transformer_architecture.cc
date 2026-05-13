@@ -564,12 +564,13 @@ void TestMoELayerTop2() {
     config.n_embd = 32;
     config.n_head = 2;
     config.n_kv_head = 2;
-    config.activation_type = nn::MLPType::kGELU;
-    config.add_bias_linear = true;
+    config.activation_type = nn::MLPType::kSwiGLU;
+    config.add_bias_linear = false;
     config.ffn_type = nn::FFNType::kMoE;
     config.moe_config = nn::MoEConfig{};
     config.moe_config->num_experts = 4;
     config.moe_config->router_topk = 2;
+    config.moe_config->moe_ffn_hidden_size = 48;
 
     auto moe = std::make_shared<nn::moe::MoELayer>(config);
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 4, config.n_embd}, DataType::kFLOAT32);
@@ -578,6 +579,14 @@ void TestMoELayerTop2() {
     auto output = (*moe)({input});
     CHECK_EQ(output.size(), 1);
     CHECK(output[0]->Dims() == input->Dims());
+
+    auto state = moe->StateDict();
+    CHECK(state.contains("experts.expert_0.c_fc.weight"));
+    CHECK(state.contains("experts.expert_0.c_fc2.weight"));
+    CHECK(state.contains("experts.expert_0.c_proj.weight"));
+    CHECK(state.at("experts.expert_0.c_fc.weight")->Dims() == std::vector<int64_t>({48, config.n_embd}));
+    CHECK(state.at("experts.expert_0.c_fc2.weight")->Dims() == std::vector<int64_t>({48, config.n_embd}));
+    CHECK(state.at("experts.expert_0.c_proj.weight")->Dims() == std::vector<int64_t>({config.n_embd, 48}));
 
     std::cout << "SUCCESS: MoE layer top-2 forward works correctly!" << std::endl;
 }
