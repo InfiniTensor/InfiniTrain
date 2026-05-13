@@ -108,6 +108,8 @@ protected:
     std::vector<ModulePreHook> backward_pre_hooks_;
     std::vector<ModulePostHook> backward_post_hooks_;
 
+    std::vector<std::shared_ptr<Tensor>> ForwardWithHooks(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
+
 private:
     friend std::vector<std::shared_ptr<Module>> parallel::function::Replicate(const std::shared_ptr<Module> &network,
                                                                               const std::vector<Device> &devices);

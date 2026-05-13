@@ -154,12 +154,15 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
 
     // Populate needs_input_grad before Forward/SetupContext so that
     // SetupContext can use it for saved-tensor pruning.
-    // Must be done before NoGradGuard since it checks GradMode.
+    // Non-reentrant checkpoint recomputes under no-grad; PropagateRequiresGrad
+    // keeps the same context metadata without wiring the recompute graph.
     ctx_.ReleaseVariables();
-    if (autograd::GradMode::IsEnabled()) {
+    const bool grad_enabled = autograd::GradMode::IsEnabled();
+    const bool record_context = grad_enabled || autograd::GradMode::PropagateRequiresGrad();
+    if (record_context) {
         std::vector<bool> needs_input_grad(input_tensors.size());
         for (size_t idx = 0; idx < input_tensors.size(); ++idx) {
-            needs_input_grad[idx] = input_tensors[idx]->requires_grad();
+            needs_input_grad[idx] = input_tensors[idx] && input_tensors[idx]->requires_grad();
         }
         ctx_.set_needs_input_grad(std::move(needs_input_grad));
     }
@@ -179,7 +182,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         SetupContext(compute_inputs, output_tensors);
     }
 
-    if (autograd::GradMode::IsEnabled()) {
+    if (record_context) {
         ctx_.SaveVariables(output_tensors);
     } else {
         ctx_.ReleaseVariables();
@@ -192,13 +195,34 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         }
     }
 
-    if (!autograd::GradMode::IsEnabled()) {
-        // with no_grad: block graph building operations
+    if (!grad_enabled) {
+        // with no_grad: block graph building operations. Non-reentrant
+        // checkpoint recomputation still needs requires_grad to flow through
+        // outputs so later SetupContext calls save the same tensors as the
+        // original forward.
+        if (autograd::GradMode::PropagateRequiresGrad()) {
+            bool output_requires_grad = false;
+            for (const auto &input_tensor : input_tensors) {
+                output_requires_grad |= input_tensor && input_tensor->requires_grad();
+            }
+            for (int output_idx = 0; output_idx < output_tensors.size(); ++output_idx) {
+                auto &output_tensor = output_tensors[output_idx];
+                if (!output_tensor) {
+                    continue;
+                }
+                output_tensor->set_requires_grad(output_requires_grad);
+                output_tensor->set_grad_fn(nullptr);
+                output_tensor->set_is_leaf(true);
+                output_tensor->set_output_idx(output_idx);
+            }
+        }
         return output_tensors;
     }
 
     bool output_requires_grad = false;
-    for (const auto &input_tensor : input_tensors) { output_requires_grad |= input_tensor->requires_grad(); }
+    for (const auto &input_tensor : input_tensors) {
+        output_requires_grad |= input_tensor && input_tensor->requires_grad();
+    }
 
     grad_outputs_reached_ = 0;
     grad_outputs_.resize(output_tensors.size(), nullptr);
@@ -220,6 +244,10 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
 
     for (int idx = 0; idx < input_tensors.size(); ++idx) {
         const auto &input_tensor = input_tensors[idx];
+        if (!input_tensor) {
+            next_functions_.emplace_back(nullptr, 0);
+            continue;
+        }
         if (input_tensor->requires_grad() && input_tensor->is_leaf()) {
             next_functions_.emplace_back(input_tensor->grad_accumulator(), input_tensor->output_idx());
             input_tensor->grad_accumulator()->IncreaseDependenciesNumber();

@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <map>
@@ -7,6 +8,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/container.h"
@@ -20,8 +22,52 @@
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/include/utils/checkpoint.h"
 
 namespace infini_train::nn {
+namespace {
+std::vector<std::shared_ptr<Tensor>> RunTransformerLayers(const std::shared_ptr<nn::ModuleList> &layers, size_t start,
+                                                          size_t end,
+                                                          const std::vector<std::shared_ptr<Tensor>> &inputs) {
+    auto hidden = inputs[0];
+    auto layer_inputs = inputs;
+    for (size_t layer_idx = start; layer_idx < end; ++layer_idx) {
+        layer_inputs[0] = hidden;
+        hidden = (*(*layers)[layer_idx])(layer_inputs)[0];
+    }
+    return {hidden};
+}
+
+std::vector<std::shared_ptr<Tensor>> CheckpointTransformerLayers(const std::shared_ptr<nn::ModuleList> &layers,
+                                                                 size_t start, size_t end,
+                                                                 const std::vector<std::shared_ptr<Tensor>> &inputs) {
+    auto forward_fn = [layers, start, end](const std::vector<std::shared_ptr<Tensor>> &checkpoint_inputs) {
+        return RunTransformerLayers(layers, start, end, checkpoint_inputs);
+    };
+    constexpr bool kUseReentrant = false;
+    constexpr bool kPreserveRngState = true;
+    return utils::checkpoint::Checkpoint(forward_fn, inputs, kUseReentrant, kPreserveRngState);
+}
+
+bool ShouldUseLayerRecompute(const TransformerConfig &config) {
+    if (!config.RecomputeEnabled() || !autograd::GradMode::IsEnabled()) {
+        return false;
+    }
+    if (config.recompute_granularity == ActivationRecomputeGranularity::kSelective) {
+        LOG(FATAL) << "Selective activation recompute is not implemented yet. Use full layer recompute.";
+    }
+    return config.recompute_granularity == ActivationRecomputeGranularity::kFull;
+}
+
+size_t GetRecomputeNumLayers(const TransformerConfig &config) {
+    if (config.recompute_method == ActivationRecomputeMethod::kNone) {
+        return 1;
+    }
+    CHECK_GE(config.recompute_num_layers, 1)
+        << "recompute_num_layers must be >= 1 when recompute_method is uniform or block.";
+    return static_cast<size_t>(config.recompute_num_layers);
+}
+} // namespace
 
 TransformerFirstStage::TransformerFirstStage(const TransformerConfig &config)
     : CloneableModule(kType), config_(config) {
@@ -127,8 +173,11 @@ TransformerChunk::TransformerChunk(const TransformerConfig &config, int start_la
 
 std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     auto x1 = x[0];
+    auto layers = std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName]);
+    CHECK(layers);
 
     // Check if we need to pass RoPE parameters (for LLaMA3 style models)
+    std::vector<std::shared_ptr<Tensor>> layer_inputs = {x1};
     if (config_.attention_type == AttentionType::kRoPE) {
         // For RoPE models, we need to prepare freqs_cis and potentially other parameters
         const auto device = x1->GetDevice();
@@ -136,6 +185,7 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
         // Init freqs_cis on device only once
         if (buffers_[kFreqsCisName] == nullptr) {
             int64_t head_dim = config_.n_embd / config_.n_head;
+            autograd::NoGradGuard no_grad;
             buffers_[kFreqsCisName] = PrecomputeFreqsCis(head_dim, config_.block_size * 2, config_.rope_theta,
                                                          config_.use_scaled_rope, device);
         }
@@ -152,13 +202,47 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
 
         std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 
-        // Pass RoPE parameters to each transformer block
-        for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName])) {
-            x1 = (*h)({x1, freqs_view, start_pos_ptr, mask})[0];
+        layer_inputs = {x1, freqs_view, start_pos_ptr, mask};
+    }
+
+    if (!ShouldUseLayerRecompute(config_)) {
+        return RunTransformerLayers(layers, 0, static_cast<size_t>(layers->end() - layers->begin()), layer_inputs);
+    }
+
+    const size_t num_layers = static_cast<size_t>(layers->end() - layers->begin());
+    const size_t recompute_num_layers = GetRecomputeNumLayers(config_);
+    switch (config_.recompute_method) {
+    case ActivationRecomputeMethod::kNone: {
+        for (size_t layer_idx = 0; layer_idx < num_layers; ++layer_idx) {
+            layer_inputs[0] = x1;
+            x1 = CheckpointTransformerLayers(layers, layer_idx, layer_idx + 1, layer_inputs)[0];
         }
-    } else {
-        // Standard attention (GPT2 style)
-        for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName])) { x1 = (*h)({x1})[0]; }
+        break;
+    }
+    case ActivationRecomputeMethod::kUniform: {
+        size_t layer_idx = 0;
+        while (layer_idx < num_layers) {
+            auto chunk_end = std::min(layer_idx + recompute_num_layers, num_layers);
+            layer_inputs[0] = x1;
+            x1 = CheckpointTransformerLayers(layers, layer_idx, chunk_end, layer_inputs)[0];
+            layer_idx = chunk_end;
+        }
+        break;
+    }
+    case ActivationRecomputeMethod::kBlock: {
+        const size_t checkpoint_layers = std::min(recompute_num_layers, num_layers);
+        for (size_t layer_idx = 0; layer_idx < num_layers; ++layer_idx) {
+            layer_inputs[0] = x1;
+            if (layer_idx < checkpoint_layers) {
+                x1 = CheckpointTransformerLayers(layers, layer_idx, layer_idx + 1, layer_inputs)[0];
+            } else {
+                x1 = RunTransformerLayers(layers, layer_idx, layer_idx + 1, layer_inputs)[0];
+            }
+        }
+        break;
+    }
+    default:
+        LOG(FATAL) << "Unsupported activation recompute method.";
     }
 
     return {x1};

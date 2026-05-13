@@ -3,6 +3,7 @@
 #include <cstring>
 #include <fstream>
 #include <functional>
+#include <iomanip>
 #include <memory>
 #include <numeric>
 
@@ -381,6 +382,16 @@ std::shared_ptr<Tensor> Tensor::Contiguous() {
 // correctly. Currently always returns true as a placeholder. The contiguous guard in
 // elementwise.cu ensures non-contiguous tensors fall back to the broadcast path.
 bool Tensor::IsContiguous() const { return true; }
+
+std::shared_ptr<Tensor> Tensor::Detach() const {
+    // Return a detached view of original tensor
+    // Shares the same storage, but never uses gradient
+    auto view = std::make_shared<Tensor>(*this, offset_, dims_);
+    view->set_requires_grad(false);
+    view->set_is_leaf(true);
+    view->set_grad_fn(nullptr);
+    return view;
+}
 
 std::shared_ptr<Tensor> Tensor::Flatten(int64_t start, int64_t end) {
     auto ndim = dims_.size();
