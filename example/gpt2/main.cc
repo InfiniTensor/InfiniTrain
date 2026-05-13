@@ -75,6 +75,12 @@ DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 
+// activation recompute
+DEFINE_bool(activation_recompute, false, "Enable activation recompute to trade compute for memory.");
+DEFINE_string(recompute_granularity, "full", "Activation recompute granularity: none|full|selective");
+DEFINE_string(recompute_method, "none", "Activation recompute method: none|uniform|block");
+DEFINE_uint32(recompute_num_layers, 0, "Number of transformer layers per recompute region for uniform/block methods.");
+
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 // precision check
@@ -187,21 +193,24 @@ void Train(const nn::parallel::Rank &rank) {
     nn::TransformerConfig model_config = gpt2::GPT2Config();
     std::shared_ptr<nn::Module> model = nullptr;
 
-    if (!FLAGS_llmc_filepath.empty()) {
-        model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath);
-    } else if (kModelToConfigs.count(FLAGS_model)) {
+    if (FLAGS_llmc_filepath.empty() && kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
         gpt2::SanitizeGPT2Config(model_config);
+    }
+    nn::SetActivationRecomputeConfig(&model_config, FLAGS_activation_recompute, FLAGS_recompute_granularity,
+                                     FLAGS_recompute_method, static_cast<int64_t>(FLAGS_recompute_num_layers));
+
+    if (!FLAGS_llmc_filepath.empty()) {
+        model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath, model_config);
+    } else {
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
+
+    CHECK(model) << "GPT2 example expects GPT2 model.";
 
     model->To(device);
 
     utils::PrecisionChecker::BuildNameMap(model.get());
-
-    // Get chunk size before wrapping with LoRA (needed for PipelineParallel)
-    auto gpt2_model = std::dynamic_pointer_cast<nn::TransformerModel>(model);
-    CHECK(gpt2_model) << "GPT2 example expects GPT2 model.";
 
     // Apply LoRA using GetLoRAModel (in-place injection)
     bool lora_enabled = FLAGS_lora_rank > 0;

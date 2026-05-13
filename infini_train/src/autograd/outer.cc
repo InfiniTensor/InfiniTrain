@@ -22,13 +22,13 @@ void Outer::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tenso
                          const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
     const auto &input1 = input_tensors[0];
     const auto &input2 = input_tensors[1];
-    saved_tensors_ = {input1, input2};
+    SaveForBackward({input1, input2});
 }
 
 std::vector<std::shared_ptr<Tensor>> Outer::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(saved_tensors_.size(), 2);
-    const auto &input1 = saved_tensors_[0];
-    const auto &input2 = saved_tensors_[1];
+    CHECK_EQ(SavedTensorsSize(), 2);
+    const auto &input1 = GetSavedTensor(0);
+    const auto &input2 = GetSavedTensor(1);
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 

@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -20,6 +21,15 @@ public:
     using FunctionPreHook = std::function<void(Function *, const std::vector<std::shared_ptr<Tensor>> &)>;
     using FunctionPostHook = std::function<void(Function *, const std::vector<std::shared_ptr<Tensor>> &,
                                                 const std::vector<std::shared_ptr<Tensor>> &)>;
+
+    // Definition of hooks for saved_tensors, in alignment with torch.autograd.graph.saved_tensors_hooks
+    using SavedTensorPackHook = std::function<std::shared_ptr<void>(const std::shared_ptr<Tensor> &)>;
+    using SavedTensorUnpackHook = std::function<std::shared_ptr<Tensor>(const std::shared_ptr<void> &)>;
+
+    struct SavedTensorHooks {
+        SavedTensorPackHook pack;
+        SavedTensorUnpackHook unpack;
+    };
 
     static constexpr char kUndefinedType[] = "Undefined";
 
@@ -45,8 +55,33 @@ public:
 
     const std::string &type() const { return type_; }
 
+    void SaveForBackward(const std::vector<std::shared_ptr<Tensor>> &tensors);
+    size_t SavedTensorsSize() const { return saved_tensors_.size(); }
+    std::shared_ptr<Tensor> GetSavedTensor(size_t index) const;
+    std::vector<std::shared_ptr<Tensor>> GetSavedTensors() const;
+
+    // RAII: Register pack/unpack hooks for saved_tensors, align with torch.autograd.graph.saved_tensors_hooks
+    class SavedTensorHooksGuard {
+    public:
+        explicit SavedTensorHooksGuard(SavedTensorHooks hooks);
+        ~SavedTensorHooksGuard();
+
+        SavedTensorHooksGuard(const SavedTensorHooksGuard &) = delete;
+        SavedTensorHooksGuard &operator=(const SavedTensorHooksGuard &) = delete;
+
+    private:
+        size_t depth_ = 0;
+    };
+
 protected:
-    std::vector<std::shared_ptr<Tensor>> saved_tensors_;
+    struct SavedTensorEntry {
+        // Tensor itself, used under default or reentrant version of recomputation
+        std::shared_ptr<Tensor> tensor;
+        // Function to recompute the target tensor, used under non-reentrant version of recomputation
+        std::shared_ptr<void> hook_state;
+        SavedTensorUnpackHook unpack;
+    };
+    std::vector<SavedTensorEntry> saved_tensors_;
     std::vector<bool> needs_input_grad_;
 
 private:

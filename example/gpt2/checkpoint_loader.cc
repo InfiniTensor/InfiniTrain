@@ -52,11 +52,22 @@ std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::
         return {}; // Unreachable, but keeps compiler happy
     }
 }
+
+void ApplyRuntimeRecomputeConfig(nn::TransformerConfig *config, const nn::TransformerConfig &runtime_config) {
+    config->recompute_granularity = runtime_config.recompute_granularity;
+    config->recompute_method = runtime_config.recompute_method;
+    config->recompute_num_layers = runtime_config.recompute_num_layers;
+}
 } // namespace
 
 namespace gpt2 {
 
 std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) {
+    return LoadFromLLMC(filepath, gpt2::GPT2Config());
+}
+
+std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
+                                                   const nn::TransformerConfig &runtime_config) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -88,6 +99,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     gpt2_config.n_head = n_head;
     gpt2_config.n_embd = n_embd;
     gpt2::SanitizeGPT2Config(gpt2_config);
+    ApplyRuntimeRecomputeConfig(&gpt2_config, runtime_config);
     auto local_gpt2 = std::make_shared<nn::TransformerModel>(gpt2_config);
 
     LOG(INFO) << "magic: " << magic << " version: " << version << " block_size: " << block_size

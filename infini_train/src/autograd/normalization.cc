@@ -18,7 +18,8 @@ std::vector<std::shared_ptr<Tensor>> LayerNorm::Forward(const std::vector<std::s
         = Dispatcher::Instance()
               .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
                   {device, "LayerNormForward"}, input, weight, bias, eps_);
-    saved_tensors_ = {mean, rstd};
+    mean_ = mean;
+    rstd_ = rstd;
     return {output};
 }
 
@@ -27,16 +28,18 @@ void LayerNorm::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_t
     const auto &input = input_tensors[0];
     const auto &weight = input_tensors[1];
     const auto &bias = input_tensors[2];
-    saved_tensors_.insert(saved_tensors_.begin(), {input, weight, bias});
+    SaveForBackward({input, weight, bias, mean_, rstd_});
+    mean_.reset();
+    rstd_.reset();
 }
 
 std::vector<std::shared_ptr<Tensor>> LayerNorm::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(saved_tensors_.size(), 5);
-    const auto &input = saved_tensors_[0];
-    const auto &weight = saved_tensors_[1];
-    const auto &bias = saved_tensors_[2];
-    const auto &mean = saved_tensors_[3];
-    const auto &rstd = saved_tensors_[4];
+    CHECK_EQ(SavedTensorsSize(), 5);
+    const auto &input = GetSavedTensor(0);
+    const auto &weight = GetSavedTensor(1);
+    const auto &bias = GetSavedTensor(2);
+    const auto &mean = GetSavedTensor(3);
+    const auto &rstd = GetSavedTensor(4);
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 

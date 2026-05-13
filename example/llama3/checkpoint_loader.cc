@@ -35,11 +35,22 @@ static std::mt19937 gen{kRandomSeed};
 namespace {
 constexpr int32_t kLLaMA3Magic = 20240803;
 constexpr int32_t kLLaMA3FP32Version = 3;
+
+void ApplyRuntimeRecomputeConfig(nn::TransformerConfig *config, const nn::TransformerConfig &runtime_config) {
+    config->recompute_granularity = runtime_config.recompute_granularity;
+    config->recompute_method = runtime_config.recompute_method;
+    config->recompute_num_layers = runtime_config.recompute_num_layers;
+}
 } // namespace
 
 namespace llama3 {
 
 std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) {
+    return LoadFromLLMC(filepath, llama3::LLaMA3Config());
+}
+
+std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
+                                                   const nn::TransformerConfig &runtime_config) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -81,6 +92,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     llama3_config.norm_eps = norm_eps;
     llama3_config.max_gen_batch_size = max_gen_bs;
     llama3::SanitizeLLaMA3Config(llama3_config);
+    ApplyRuntimeRecomputeConfig(&llama3_config, runtime_config);
     auto llama3 = std::make_shared<nn::TransformerModel>(llama3_config);
 
     // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========

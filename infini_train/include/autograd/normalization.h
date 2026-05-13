@@ -23,5 +23,7 @@ public:
 
 private:
     const float eps_ = 1e-5f;
+    std::shared_ptr<Tensor> mean_ = nullptr;
+    std::shared_ptr<Tensor> rstd_ = nullptr;
 };
 } // namespace infini_train::autograd

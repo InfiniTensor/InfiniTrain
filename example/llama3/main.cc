@@ -73,6 +73,12 @@ DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
+
+// activation recompute
+DEFINE_bool(activation_recompute, false, "Enable activation recompute to trade compute for memory.");
+DEFINE_string(recompute_granularity, "full", "Activation recompute granularity: none|full|selective");
+DEFINE_string(recompute_method, "none", "Activation recompute method: none|uniform|block");
+DEFINE_uint32(recompute_num_layers, 0, "Number of transformer layers per recompute region for uniform/block methods.");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 // precision check
@@ -172,12 +178,16 @@ void Train(const nn::parallel::Rank &rank) {
 
     nn::TransformerConfig model_config = llama3::LLaMA3Config();
     std::shared_ptr<nn::Module> model = nullptr;
+    nn::SetActivationRecomputeConfig(&model_config, FLAGS_activation_recompute, FLAGS_recompute_granularity,
+                                     FLAGS_recompute_method, static_cast<int64_t>(FLAGS_recompute_num_layers));
     if (!FLAGS_llmc_filepath.empty()) {
-        model = llama3::LoadFromLLMC(FLAGS_llmc_filepath);
+        model = llama3::LoadFromLLMC(FLAGS_llmc_filepath, model_config);
     } else {
         llama3::SanitizeLLaMA3Config(model_config);
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
+
+    CHECK(model) << "LLaMA3 example expects LLaMA3 model.";
 
     model->To(device);
 
@@ -358,12 +368,20 @@ void Train(const nn::parallel::Rank &rank) {
                 autocast_guard.Disable();
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
+                auto [forward_used_mb, forward_reserved_mb] = impl->GetMemPoolPeakMB(device);
+                LOG(INFO) << std::format(
+                    "Rank {}: after forward (micro_step {}/{}), peak used: {:5d} MB | peak reserved: {:5d} MB",
+                    rank.GlobalRank(), micro_step + 1, grad_accum_steps, forward_used_mb, forward_reserved_mb);
 
                 auto loss_cpu = loss->To(Device());
                 lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
                 loss->Backward();
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
+                auto [backward_used_mb, backward_reserved_mb] = impl->GetMemPoolPeakMB(device);
+                LOG(INFO) << std::format(
+                    "Rank {}: after backward (micro_step {}/{}), peak used: {:5d} MB | peak reserved: {:5d} MB",
+                    rank.GlobalRank(), micro_step + 1, grad_accum_steps, backward_used_mb, backward_reserved_mb);
             }
 
             optimizer->Step();
