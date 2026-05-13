@@ -8,7 +8,7 @@
 1. 远端表格创建：在更换机器、新创建测试组类别的情形下，先运行 `provision_feishu_sheets.py` 脚本，在远端创建对应的表格云文档，然后本地创建或更新token JSON 文件。
 2. 性能数据写入：运行 `write_to_feishu_sheet.py` 脚本，传入 provisioning 输出或更新后的 token JSON，实现数据写入。
 
-下面介绍运行方式。在此之前，默认你已经拿到可用的 `APP_ID` 和 `APP_SECRET`，并已按本文末尾“附录：Lark-cli 配置”完成本地授权。
+下面介绍运行方式。在此之前，默认你已经拿到可用的 `APP_ID` 和 `APP_SECRET`，并已按本文末尾“附录：Lark-cli 配置”安装飞书 CLI 并完成本地授权。
 
 ### 1. 手动运行脚本
 
@@ -310,6 +310,8 @@ python3 scripts/feishu_writer/write_to_feishu_sheet.py scripts/feishu_writer/new
 - `write_to_feishu_sheet.py` 仍然依赖 `APP_ID` 和 `APP_SECRET` 直接鉴权，因此输出 token JSON 必须保留这两个字段。
 
 ## 附录：Lark-cli 配置
+
+安装流程参考：https://www.feishu.cn/feishu-cli。
 
 首次使用前，需要把 `lark-cli` 配置到对应飞书应用：
 
