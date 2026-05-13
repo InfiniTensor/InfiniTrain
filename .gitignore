@@ -1,6 +1,7 @@
 build/
 .cache/
 .vscode/
+__pycache__/
 
 *.log
 *.report.rank*

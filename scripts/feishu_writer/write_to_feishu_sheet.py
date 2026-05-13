@@ -8,6 +8,7 @@ import glob
 import re
 import pandas as pd
 from datetime import datetime, date
+from pathlib import Path
 import subprocess
 
 # date/branch/commit/avg_latency/avg_throughput/peak_used/peak_reserved
@@ -18,6 +19,12 @@ HEADER_COLS="W"
 # Retry settings
 REQUEST_RETRY_TIMES=3
 REQUEST_RETRY_DELAY=10
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPTS_DIR = SCRIPT_DIR.parent
+DEFAULT_TOKEN_FILE = SCRIPT_DIR / "token.json"
+DEFAULT_LOG_DIR = SCRIPTS_DIR / "logs"
+DEFAULT_PROFILE_LOG_DIR = SCRIPTS_DIR / "profile_logs"
 
 class FeishuSheetHandler:
     """Feishu Sheet Handler for retrieving and writing sheet data"""
@@ -451,7 +458,7 @@ def parse_profile_report(profile_content):
         return merged_df.head(5).iloc[:, :16]
     return None
 
-def discover_testcases(model_name: str, tag: str, log_dir="logs"):
+def discover_testcases(model_name: str, tag: str, log_dir=DEFAULT_LOG_DIR):
     """Get all test case id from local log dir"""
     pattern = os.path.join(log_dir, tag, f"{model_name}_*.log")
     files = glob.glob(pattern)
@@ -484,7 +491,13 @@ def get_git_commit_id():
         return "unknown"
 
 
-def get_model_data(model_name, sheet_title, tag, log_dir="logs", profile_log_dir="profile_logs"):
+def get_model_data(
+    model_name,
+    sheet_title,
+    tag,
+    log_dir=DEFAULT_LOG_DIR,
+    profile_log_dir=DEFAULT_PROFILE_LOG_DIR,
+):
     """Construct 2D list for writing to Feishu"""
     log_file_path = os.path.join(log_dir, tag, f"{model_name}_{sheet_title}.log")
     profile_file_path = os.path.join(profile_log_dir, tag, f"{model_name}_{sheet_title}_profile_{model_name}.report.rank0")
@@ -539,7 +552,22 @@ def get_model_data(model_name, sheet_title, tag, log_dir="logs", profile_log_dir
 
 def main():
     parser = argparse.ArgumentParser(description='Script to write training metrics to Feishu sheets')
-    parser.add_argument('config_file', help='Path to JSON config file (e.g. token.json)')
+    parser.add_argument(
+        'config_file',
+        nargs='?',
+        default=str(DEFAULT_TOKEN_FILE),
+        help='Path to JSON config file. Default: scripts/feishu_writer/token.json'
+    )
+    parser.add_argument(
+        '--log-dir',
+        default=str(DEFAULT_LOG_DIR),
+        help='Directory containing run logs. Default: scripts/logs'
+    )
+    parser.add_argument(
+        '--profile-log-dir',
+        default=str(DEFAULT_PROFILE_LOG_DIR),
+        help='Directory containing profile reports. Default: scripts/profile_logs'
+    )
     args = parser.parse_args()
 
     config = load_config(args.config_file)
@@ -563,9 +591,9 @@ def main():
             print(f"\n--- Processing model={model_name} tag={tag} ---")
             model_name = model_name.lower()
 
-            testcases = discover_testcases(model_name, tag)
+            testcases = discover_testcases(model_name, tag, log_dir=args.log_dir)
             if not testcases:
-                print(f"No local testcases found under logs/{tag}/ for model={model_name}, skipping")
+                print(f"No local testcases found under {args.log_dir}/{tag}/ for model={model_name}, skipping")
                 continue
             print(f"Discovered {len(testcases)} local testcases: {testcases}")
 
@@ -597,7 +625,13 @@ def main():
 
                 print(f"Processing testcase '{testcase}' -> sheet_id={sheet_id}")
 
-                cmd_args, sheet_data = get_model_data(model_name=model_name, sheet_title=testcase, tag=tag)
+                cmd_args, sheet_data = get_model_data(
+                    model_name=model_name,
+                    sheet_title=testcase,
+                    tag=tag,
+                    log_dir=args.log_dir,
+                    profile_log_dir=args.profile_log_dir,
+                )
 
                 if not sheet_data:
                     print("No valid data generated, skipping")
