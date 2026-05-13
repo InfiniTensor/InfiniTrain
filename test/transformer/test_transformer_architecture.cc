@@ -527,10 +527,10 @@ void TestStateDict() {
 }
 
 // ============================================================================
-// Test 11: MoE Layer MVP
+// Test 11: MoE Layer
 // ============================================================================
 void TestMoELayer() {
-    std::cout << "\n=== Test 11: MoE Layer MVP ===" << std::endl;
+    std::cout << "\n=== Test 11: MoE Layer ===" << std::endl;
 
     nn::TransformerConfig config;
     config.n_embd = 32;
@@ -543,29 +543,43 @@ void TestMoELayer() {
     config.moe_config->num_experts = 2;
     config.moe_config->router_topk = 1;
 
-    try {
-        auto moe = std::make_shared<nn::moe::MoELayer>(config);
-        auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 4, config.n_embd}, DataType::kFLOAT32);
-        input->Uniform();
+    auto moe = std::make_shared<nn::moe::MoELayer>(config);
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 4, config.n_embd}, DataType::kFLOAT32);
+    input->Uniform();
 
-        auto output = (*moe)({input});
-        if (output.size() != 1) {
-            std::cout << "FAIL: MoELayer forward should return 1 tensor" << std::endl;
-            return;
-        }
-        if (output[0]->Dims() != input->Dims()) {
-            std::cout << "FAIL: MoELayer output shape mismatch" << std::endl;
-            return;
-        }
+    auto output = (*moe)({input});
+    CHECK_EQ(output.size(), 1);
+    CHECK(output[0]->Dims() == input->Dims());
 
-        auto params = moe->Parameters();
-        if (params.empty()) {
-            std::cout << "FAIL: MoELayer should own router and expert parameters" << std::endl;
-            return;
-        }
+    auto params = moe->Parameters();
+    CHECK(!params.empty());
 
-        std::cout << "SUCCESS: MoE layer MVP forward works correctly!" << std::endl;
-    } catch (const std::exception &e) { std::cout << "FAIL: Exception: " << e.what() << std::endl; }
+    std::cout << "SUCCESS: MoE layer forward works correctly!" << std::endl;
+}
+
+void TestMoELayerTop2() {
+    std::cout << "\n=== Test 12: MoE Layer Top-2 ===" << std::endl;
+
+    nn::TransformerConfig config;
+    config.n_embd = 32;
+    config.n_head = 2;
+    config.n_kv_head = 2;
+    config.activation_type = nn::MLPType::kGELU;
+    config.add_bias_linear = true;
+    config.ffn_type = nn::FFNType::kMoE;
+    config.moe_config = nn::MoEConfig{};
+    config.moe_config->num_experts = 4;
+    config.moe_config->router_topk = 2;
+
+    auto moe = std::make_shared<nn::moe::MoELayer>(config);
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 4, config.n_embd}, DataType::kFLOAT32);
+    input->Uniform();
+
+    auto output = (*moe)({input});
+    CHECK_EQ(output.size(), 1);
+    CHECK(output[0]->Dims() == input->Dims());
+
+    std::cout << "SUCCESS: MoE layer top-2 forward works correctly!" << std::endl;
 }
 
 // ============================================================================
@@ -591,6 +605,7 @@ int main(int argc, char *argv[]) {
     TestRopeUtils();
     TestStateDict();
     TestMoELayer();
+    TestMoELayerTop2();
 
     std::cout << "\n========================================" << std::endl;
     std::cout << "    All Tests Completed" << std::endl;

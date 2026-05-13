@@ -6,7 +6,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/linear.h"
-#include "infini_train/include/autograd/moe.h"
+#include "infini_train/include/autograd/topk_mask.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/transformer/moe/moe_utils.h"
@@ -17,8 +17,9 @@ namespace infini_train::nn::moe {
 TopKRouter::TopKRouter(const TransformerConfig &config) : CloneableModule(kType), config_(config) {
     const auto &moe_config = RequireMoEConfig(config_);
     CHECK(moe_config.router_type == MoERouterType::kTopK);
-    CHECK_EQ(moe_config.router_topk, 1) << "Current InfiniTrain MoE implementation supports top-1 routing only";
     CHECK_GT(moe_config.num_experts, 0);
+    CHECK_GT(moe_config.router_topk, 0);
+    CHECK_LE(moe_config.router_topk, moe_config.num_experts);
 
     parameters_[kParamWeightName]
         = std::make_shared<Tensor>(std::vector<int64_t>{moe_config.num_experts, config_.n_embd}, DataType::kFLOAT32,
@@ -43,7 +44,8 @@ std::vector<std::shared_ptr<Tensor>> TopKRouter::Forward(const std::vector<std::
 
     auto logits = std::make_shared<autograd::Linear>()->Apply(linear_inputs)[0];
     auto scores = function::Softmax(logits, -1);
-    auto routing_probs = std::make_shared<autograd::Top1Mask>()->Apply({scores})[0];
+    const auto &moe_config = RequireMoEConfig(config_);
+    auto routing_probs = std::make_shared<autograd::TopKMask>(moe_config.router_topk)->Apply({scores})[0];
     return {routing_probs};
 }
 
