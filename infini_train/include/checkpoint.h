@@ -18,7 +18,7 @@ struct TrainerState {
     int64_t global_step = 0;
     int64_t data_batch_idx = 0;
     int64_t data_batch_stride = 1;
-    float best_loss = 0.0f;
+    float best_loss = std::numeric_limits<float>::infinity();
     double last_lr = 0.0;
     std::string optimizer_type = "unknown";
     std::string checkpoint_format = "bin";

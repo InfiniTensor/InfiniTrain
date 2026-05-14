@@ -13,7 +13,8 @@ class Tensor;
 namespace infini_train {
 class Optimizer;
 
-using OptimizerCreator = std::function<std::shared_ptr<Optimizer>(const std::vector<std::shared_ptr<Tensor>> &params)>;
+using OptimizerCreator = std::function<std::shared_ptr<Optimizer>(
+    const std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> &named_params)>;
 
 class Optimizer {
 public:
@@ -23,7 +24,7 @@ public:
 
     virtual void Step() = 0;
 
-    virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const { return {}; }
+    virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const { return {}; };
 
     virtual void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {}
 
@@ -39,7 +40,10 @@ public:
     void Step() override;
 
     static OptimizerCreator Create(float learning_rate) {
-        return [learning_rate](const std::vector<std::shared_ptr<Tensor>> &params) {
+        return [learning_rate](const std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> &named_params) {
+            std::vector<std::shared_ptr<Tensor>> params;
+            params.reserve(named_params.size());
+            for (const auto &[name, param] : named_params) { params.push_back(param); }
             return std::make_shared<SGD>(params, learning_rate);
         };
     }
@@ -50,19 +54,18 @@ private:
 
 class Adam : public Optimizer {
 public:
-    Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate = 1e-3, float beta1 = 0.9,
-         float beta2 = 0.999, float eps = 1e-8);
+    Adam(const std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> &named_params, float learning_rate = 1e-3,
+         float beta1 = 0.9, float beta2 = 0.999, float eps = 1e-8);
 
     void Step() override;
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
 
     void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
-
     static OptimizerCreator Create(float learning_rate = 1e-3, float beta1 = 0.9, float beta2 = 0.999,
                                    float eps = 1e-8) {
-        return [=](const std::vector<std::shared_ptr<Tensor>> &params) {
-            return std::make_shared<Adam>(params, learning_rate, beta1, beta2, eps);
+        return [=](const std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> &named_params) {
+            return std::make_shared<Adam>(named_params, learning_rate, beta1, beta2, eps);
         };
     }
 
@@ -74,6 +77,7 @@ private:
     const float eps_;
     std::vector<std::shared_ptr<Tensor>> m_;
     std::vector<std::shared_ptr<Tensor>> v_;
+    std::vector<std::string> names_;
 };
 } // namespace optimizers
 } // namespace infini_train

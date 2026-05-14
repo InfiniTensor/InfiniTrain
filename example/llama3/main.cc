@@ -7,7 +7,6 @@
 #include <optional>
 #include <unordered_set>
 
-#include "example/common/utils.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
@@ -281,23 +280,32 @@ void Train(const nn::parallel::Rank &rank) {
     auto optimizer_creator = optimizers::Adam::Create(FLAGS_learning_rate);
     std::shared_ptr<Optimizer> optimizer = nullptr;
 
-    std::vector<std::shared_ptr<Tensor>> params_to_optimize;
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> named_params_to_optimize;
     if (lora_enabled) {
-        params_to_optimize = nn::lora::GetLoRAParameters(model);
-        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " LoRA parameters";
+        auto all_named = model->NamedParameters();
+        auto lora_tensors = nn::lora::GetLoRAParameters(model);
+        std::unordered_set<Tensor *> lora_set;
+        lora_set.reserve(lora_tensors.size());
+        for (const auto &t : lora_tensors) { lora_set.insert(t.get()); }
+        for (const auto &[name, param] : all_named) {
+            if (lora_set.contains(param.get())) {
+                named_params_to_optimize.emplace_back(name, param);
+            }
+        }
+        LOG(INFO) << "Optimizing " << named_params_to_optimize.size() << " LoRA parameters";
     } else {
-        params_to_optimize = model->Parameters();
-        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " model parameters";
+        named_params_to_optimize = model->NamedParameters();
+        LOG(INFO) << "Optimizing " << named_params_to_optimize.size() << " model parameters";
     }
 
     if (FLAGS_zero_stage >= 1) {
         auto model_chunks = (pp_world_size > 1)
                               ? *(dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks())
                               : std::vector<std::shared_ptr<nn::Module>>{model};
-        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, params_to_optimize,
+        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, named_params_to_optimize,
                                                                          model_chunks, ddp_world_size, ddp_rank);
     } else {
-        optimizer = optimizer_creator(params_to_optimize);
+        optimizer = optimizer_creator(named_params_to_optimize);
     }
 
     auto train_iter = train_loader.begin();
