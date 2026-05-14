@@ -33,10 +33,12 @@ void SGD::Step() {
     }
 }
 
-Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate, float beta1, float beta2, float eps)
-    : Optimizer(params), t_(0), learning_rate_(learning_rate), beta1_(beta1), beta2_(beta2), eps_(eps) {
-
-    for (const auto &param : params_) {
+Adam::Adam(const std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> &named_params, float learning_rate,
+           float beta1, float beta2, float eps)
+    : Optimizer({}), t_(0), learning_rate_(learning_rate), beta1_(beta1), beta2_(beta2), eps_(eps) {
+    for (const auto &[name, param] : named_params) {
+        params_.push_back(param);
+        names_.push_back(name);
         m_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
         v_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
         m_.back()->Fill(0.0);
@@ -67,8 +69,8 @@ void Adam::Step() {
 std::unordered_map<std::string, std::shared_ptr<Tensor>> Adam::StateDict() const {
     std::unordered_map<std::string, std::shared_ptr<Tensor>> state;
     for (size_t i = 0; i < m_.size(); ++i) {
-        state.emplace(std::format("adam.m.{}", i), m_[i]);
-        state.emplace(std::format("adam.v.{}", i), v_[i]);
+        state.emplace(std::format("adam.m.{}", names_[i]), m_[i]);
+        state.emplace(std::format("adam.v.{}", names_[i]), v_[i]);
     }
 
     auto t_tensor = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kINT64, Device());
@@ -79,8 +81,9 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Adam::StateDict() const
 
 void Adam::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
     for (size_t i = 0; i < m_.size(); ++i) {
-        const auto m_key = std::format("adam.m.{}", i);
-        const auto v_key = std::format("adam.v.{}", i);
+        const auto &name = names_[i];
+        const auto m_key = std::format("adam.m.{}", name);
+        const auto v_key = std::format("adam.v.{}", name);
         CHECK(state_dict.contains(m_key)) << "Missing optimizer state: " << m_key;
         CHECK(state_dict.contains(v_key)) << "Missing optimizer state: " << v_key;
         m_[i]->CopyFrom(state_dict.at(m_key));
