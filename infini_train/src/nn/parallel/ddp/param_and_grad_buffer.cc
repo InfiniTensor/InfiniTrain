@@ -86,7 +86,7 @@ void ParamAndGradBucket::ScaleGradients(float scaling_factor) {
 
     // FIXME(zbl): should perform in-place multiply
     // grad_data_ *= scaling_factor;
-    LOG(FATAL) << "ParamAndGradBucket: Should not arrive here";
+    LOG(FATAL) << "ParamAndGradBuffer::ScaleGradients(): Inplace multiply not implemented yet.";
 }
 
 ParamAndGradBucketGroup::ParamAndGradBucketGroup(const std::vector<std::shared_ptr<ParamAndGradBucket>> &buckets,
@@ -107,8 +107,7 @@ ParamAndGradBucketGroup::ParamAndGradBucketGroup(const std::vector<std::shared_p
     }
     if (rank_in_collective_pg_ == -1) {
         auto param = *params_.begin();
-        // FIXME(zbl): get correct rank in multi-node settings
-        rank_in_collective_pg_ = collective_pg_->GetGroupRank(param->GetDevice().Rank().thread_rank());
+        rank_in_collective_pg_ = collective_pg_->GetGroupRank(param->GetDevice().Rank().GlobalRank());
     }
 
     param_buffer_shard_list_.resize(buckets_.size());
@@ -168,9 +167,7 @@ void ParamAndGradBucketGroup::RegisterGradReady(const std::shared_ptr<Tensor> &p
         // TODO(zbl): check this if sync is only done in last mircobatch
         // if (!inserted) {
         //     LOG(FATAL) << "ParamAndGradBucketGroup: RegisterGradReady() was called twice for the same parameter in a
-        //     "
-        //                   "bucket group.";
-        //     return;
+        //     bucket group."; return;
         // }
 
         if (params_with_grad_.size() == params_.size()) {
@@ -304,7 +301,7 @@ void ParamAndGradBucketGroup::StartGradSync() {
     }
 
     grad_reduce_dispatched_ = true;
-    // FIXME(zbl): no need to clear params_with_grad_ here if grad sync is only done on last microbatch
+    // TODO(zbl): no need to clear params_with_grad_ here if grad sync is only done on last microbatch
     params_with_grad_.clear();
 }
 
@@ -637,7 +634,7 @@ void ParamAndGradBuffer::ScaleGradients(float scaling_factor) {
 
     // FIXME(zbl): should perform in-place multiply
     // grad_data_ *= scaling_factor;
-    LOG(FATAL) << "Should not arrive here";
+    LOG(FATAL) << "ParamAndGradBuffer::ScaleGradients(): Inplace multiply not implemented yet.";
 }
 
 void ParamAndGradBuffer::Reset(bool need_rebind) {

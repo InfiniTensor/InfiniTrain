@@ -79,12 +79,9 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads() {
                                                            std::vector<int64_t>{static_cast<int64_t>(piece_numel)});
 
                 param_piece->set_grad(grad_piece);
-                // if (use_grad_shard) {
-                //     // NOTE(zbl): Under ZeRO-2, param->grad() is the shard of grad, not the full grad.
-                //     //            The binding is done in the construnctor of DistributedOptimizer.
-                //     //            Not until backward is finished, the value of param->grad() will be updated.
-                //     param->set_grad(grad_piece);
-                // }
+                // NOTE(zbl): Do not call `param->set_grad(grad_piece);` under ZeRO-2.
+                //            The base optimizer updates param_piece views only; original param->grad()
+                //            would be a partial flattened shard and does not represent the full parameter grad.
                 shard_params_.push_back(param_piece);
             }
         }
@@ -135,7 +132,7 @@ void DistributedOptimizer::Step() {
 
     // 3. Gather updated param shards back to full params
     StartParamSync(/*force_sync=*/false);
-    // FIXME(zbl): Call sync before param is actually used in next step
+    // TODO(zbl): Delay sync call until param is actually used in next step
     FinishParamSync(/*skip_next_bucket_dispatch=*/true);
 }
 
