@@ -64,6 +64,27 @@ std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
     return params;
 }
 
+std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> Module::NamedParameters() const {
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> result;
+    std::unordered_set<const Tensor *> visited;
+
+    auto AddIfUnvisited = [&](const std::string &name, const std::shared_ptr<Tensor> &param) {
+        if (visited.insert(param.get()).second) {
+            result.emplace_back(name, param);
+        }
+    };
+
+    for (const auto &[name, param] : parameters_) { AddIfUnvisited(name, param); }
+
+    for (const auto &[name, module] : modules_) {
+        for (const auto &[sub_name, param] : module->NamedParameters()) {
+            AddIfUnvisited(name + "." + sub_name, param);
+        }
+    }
+
+    return result;
+}
+
 bool Module::has_parameter(const std::string &name) const { return parameters_.find(name) != parameters_.end(); }
 
 std::shared_ptr<Tensor> *Module::mutable_parameter(const std::string &name) {
@@ -175,6 +196,20 @@ void Module::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr
             << "Dtype mismatch for tensor: " << name << ", expected=" << kDataTypeToDesc.at(dst->Dtype())
             << ", got=" << kDataTypeToDesc.at(src->Dtype());
         dst->CopyFrom(src);
+    }
+
+    std::unordered_set<std::string> unexpected_keys;
+
+    for (const auto &[k, _] : state_dict) {
+        if (!expected.contains(k)) {
+            unexpected_keys.insert(k);
+        }
+    }
+
+    if (!unexpected_keys.empty()) {
+        std::string msg = "Unexpected keys in state_dict:";
+        for (const auto &k : unexpected_keys) { msg += " " + k; }
+        LOG(WARNING) << msg;
     }
 }
 

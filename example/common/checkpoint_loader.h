@@ -1,20 +1,19 @@
 #pragma once
 
-#include "infini_train/include/checkpoint.h"
-#include "infini_train/include/dataloader.h"
-#include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/rank.h"
-#include "infini_train/include/optimizer.h"
-
 #include "gflags/gflags.h"
 
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
-
 #include <functional>
 #include <limits>
 #include <string>
+
+#include "infini_train/include/checkpoint.h"
+#include "infini_train/include/dataloader.h"
+#include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/rank.h"
+#include "infini_train/include/optimizer.h"
 
 namespace infini_train {
 namespace nn {

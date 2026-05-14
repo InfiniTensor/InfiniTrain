@@ -20,7 +20,7 @@ namespace infini_train::nn::parallel {
 class DistributedOptimizer final : public infini_train::Optimizer {
 public:
     DistributedOptimizer(OptimizerCreator base_optimizer_creator,
-                         const std::vector<std::shared_ptr<Tensor>> &full_params,
+                         const std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> &named_full_params,
                          const std::vector<std::shared_ptr<Module>> &model_chunks, size_t ddp_world_size,
                          size_t ddp_rank);
 
@@ -39,7 +39,8 @@ public:
     void FinishParamSync(bool skip_next_bucket_dispatch = false);
 
 private:
-    void BuildShardParamsAndBindGrads();
+    void
+    BuildShardParamsAndBindGrads(const std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> &named_full_params);
 
 private:
     // Inherit from DDP model
@@ -52,6 +53,8 @@ private:
 
     // shard params
     std::vector<std::shared_ptr<Tensor>> shard_params_;
+    std::vector<std::string> shard_param_names_;
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> named_shard_params_;
 
     // Base optimizer (SGD, Adam and etc.)
     std::shared_ptr<Optimizer> base_optimizer_;

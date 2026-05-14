@@ -12,9 +12,6 @@
 
 #include "glog/logging.h"
 
-#include "example/common/utils.h"
-#include "example/gpt2/config.h"
-#include "example/llama3/config.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
@@ -24,6 +21,10 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
+
+#include "example/common/utils.h"
+#include "example/gpt2/config.h"
+#include "example/llama3/config.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
@@ -47,9 +48,9 @@ std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::
                                                                      size_t offset) {
     const auto version = BytesToType<uint32_t>(header, offset);
     switch (version) {
-    case kGPT2FP32Version:
-        return {version, infini_train::DataType::kBFLOAT16};
     case kGPT2BF16Version:
+        return {version, infini_train::DataType::kBFLOAT16};
+    case kGPT2FP32Version:
         return {version, infini_train::DataType::kFLOAT32};
     default:
         LOG(FATAL) << "Unsupported version: " << version << " at " << __FILE__ << ":" << __LINE__;
@@ -975,6 +976,9 @@ void SaveAsLLMC(const std::shared_ptr<nn::TransformerModel> &model, const std::s
 ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &args) {
     ResumeFromCheckpointResult result;
     int ddp_world_size = nn::parallel::global::GetDataParallelSize();
+    int tp_world_size = nn::parallel::global::GetTensorParallelSize();
+    int sp_world_size = nn::parallel::global::GetSequenceParallelEnabled() ? tp_world_size : 1;
+    int pp_world_size = nn::parallel::global::GetPipelineParallelSize();
 
     if (args.resume_root.empty()) {
         LOG(INFO) << "No checkpoint specified for resume. Starting training from scratch.";
@@ -998,6 +1002,14 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
                                   "Proceeding with recorded data_batch_idx {}.",
                                   args.state.data_batch_stride, ddp_world_size, args.state.data_batch_idx);
     }
+
+    CHECK_EQ(args.state.tp_size, tp_world_size)
+        << "TP size mismatch: checkpoint has TP=" << args.state.tp_size << ", but current run has TP=" << tp_world_size;
+    CHECK_EQ(args.state.sp_size, sp_world_size)
+        << "SP size mismatch: checkpoint has SP=" << args.state.sp_size << ", but current run has SP=" << sp_world_size;
+    CHECK_EQ(args.state.pp_size, pp_world_size)
+        << "PP size mismatch: checkpoint has PP=" << args.state.pp_size << ", but current run has PP=" << pp_world_size;
+
     result.data_batch_idx = static_cast<size_t>(std::max<int64_t>(args.state.data_batch_idx, 0));
     args.train_iter = args.train_loader.IteratorAtBatchIndex(result.data_batch_idx);
     if (args.rank.IsMainRank()) {

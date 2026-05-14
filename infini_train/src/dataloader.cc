@@ -9,6 +9,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/dataset.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
@@ -106,6 +107,10 @@ DataLoaderIterator DistributedDataLoader::end() const {
 }
 
 DataLoaderIterator DistributedDataLoader::IteratorAtBatchIndex(size_t batch_idx) const {
+    CHECK_LT(ddp_rank_, ddp_world_size_) << "ddp_rank " << ddp_rank_ << " >= ddp_world_size " << ddp_world_size_;
+    CHECK_EQ(static_cast<int>(batch_idx % ddp_world_size_), ddp_rank_)
+        << "batch_idx " << batch_idx << " not aligned with ddp_rank " << ddp_rank_ << " (ddp_world_size "
+        << ddp_world_size_ << ")";
     return DataLoaderIterator(*dataset_, batch_size_, std::min(batch_idx, max_batch_idx_), max_batch_idx_, ddp_rank_,
                               ddp_world_size_);
 }
