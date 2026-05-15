@@ -1,12 +1,15 @@
 #include "infini_train/src/core/runtime/maca/maca_guard_impl.h"
 
+#include <algorithm>
 #include <array>
+#include <cstdint>
 #include <cstdlib>
 #include <fstream>
 #include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "infini_train/include/common/maca/common_maca.h"
@@ -18,6 +21,7 @@
 namespace infini_train::core::maca {
 namespace {
 constexpr int kMaxGpus = 8;
+constexpr size_t kBytesPerMB = 1024ULL * 1024ULL;
 
 // Read /proc/self/cmdline and return --tensor_parallel value, or 1 if absent /
 // unparseable. Must be callable from static init (before main runs), so we
@@ -73,6 +77,20 @@ static std::array<std::once_flag, kMaxGpus> device_handle_flags;
 // mcErrorInvalidValue. The lock is held only for the brief window of the
 // API call itself; actual GPU work remains async on the caller's stream.
 static std::mutex g_memcpy_mutex;
+
+struct AllocationRecord {
+    int device_index = 0;
+    size_t size = 0;
+};
+
+struct AllocationStats {
+    size_t current = 0;
+    size_t high = 0;
+};
+
+static std::mutex g_allocation_mutex;
+static std::unordered_map<void *, AllocationRecord> g_allocations;
+static std::array<AllocationStats, kMaxGpus> g_allocation_stats;
 
 inline void CheckMacaDevice(Device device) {
     CHECK(device.type() == Device::DeviceType::kMACA) << std::format(
@@ -291,7 +309,24 @@ BlasHandle *MacaGuardImpl::GetBlasHandle(Device device) const {
 }
 
 // memory
-void MacaGuardImpl::Malloc(void **dev_ptr, size_t size) { MACA_CHECK(mcMalloc(dev_ptr, size)); }
+void MacaGuardImpl::Malloc(void **dev_ptr, size_t size) {
+    MACA_CHECK(mcMalloc(dev_ptr, size));
+
+    if (*dev_ptr == nullptr) {
+        return;
+    }
+
+    int current_device = -1;
+    MACA_CHECK(mcGetDevice(&current_device));
+    CHECK(current_device >= 0 && current_device < kMaxGpus)
+        << std::format("MACA current device index {} out of allocation stats range [0, {}).", current_device, kMaxGpus);
+
+    std::lock_guard<std::mutex> lock(g_allocation_mutex);
+    g_allocations[*dev_ptr] = AllocationRecord{current_device, size};
+    auto &stats = g_allocation_stats.at(current_device);
+    stats.current += size;
+    stats.high = std::max(stats.high, stats.current);
+}
 
 void MacaGuardImpl::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
     // NOTE(dcj): mcMallocAsync with a per-stream mempool gives a big speedup
@@ -307,7 +342,20 @@ void MacaGuardImpl::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
     // MACA_CHECK(mcMallocAsync(dev_ptr, size, maca_stream));
 }
 
-void MacaGuardImpl::Free(void *dev_ptr) { MACA_CHECK(mcFree(dev_ptr)); }
+void MacaGuardImpl::Free(void *dev_ptr) {
+    if (dev_ptr != nullptr) {
+        std::lock_guard<std::mutex> lock(g_allocation_mutex);
+        auto it = g_allocations.find(dev_ptr);
+        if (it != g_allocations.end()) {
+            auto &stats = g_allocation_stats.at(it->second.device_index);
+            CHECK_GE(stats.current, it->second.size) << "MACA allocation tracker underflow.";
+            stats.current -= it->second.size;
+            g_allocations.erase(it);
+        }
+    }
+
+    MACA_CHECK(mcFree(dev_ptr));
+}
 
 void MacaGuardImpl::FreeAsync(void *dev_ptr, Stream *stream) {
     // auto maca_stream = GetMacaStream(stream);
@@ -347,15 +395,57 @@ void MacaGuardImpl::MemcpyAsync(void *dst, const void *src, size_t count, Memcpy
 }
 
 void MacaGuardImpl::ResetMemPoolHighWatermarks(Device device) const {
-    // TODO(dcj): MetaX SDK support for mcMemPoolGetAttribute / mcMemPoolAttrUsedMemHigh
-    // is not confirmed. Keep this a no-op until verified against a working SDK.
-    (void)device;
+    CheckMacaDevice(device);
+
+    int current_device = -1;
+    MACA_CHECK(mcGetDevice(&current_device));
+
+    SetDevice(device);
+    mcMemPool_t pool;
+    MACA_CHECK(mcDeviceGetDefaultMemPool(&pool, device.index()));
+
+    uint64_t zero = 0;
+    // High watermark can only be reset to zero; non-zero is illegal.
+    MACA_CHECK(mcMemPoolSetAttribute(pool, mcMemPoolAttrUsedMemHigh, &zero));
+    MACA_CHECK(mcMemPoolSetAttribute(pool, mcMemPoolAttrReservedMemHigh, &zero));
+
+    {
+        std::lock_guard<std::mutex> lock(g_allocation_mutex);
+        auto &stats = g_allocation_stats.at(device.index());
+        stats.high = stats.current;
+    }
+
+    MACA_CHECK(mcSetDevice(current_device));
 }
 
 std::pair<size_t, size_t> MacaGuardImpl::GetMemPoolPeakMB(Device device) const {
-    // TODO(dcj): see note in ResetMemPoolHighWatermarks.
-    (void)device;
-    return std::make_pair<size_t, size_t>(0, 0);
+    CheckMacaDevice(device);
+
+    int current_device = -1;
+    MACA_CHECK(mcGetDevice(&current_device));
+
+    SetDevice(device);
+    mcMemPool_t pool;
+    MACA_CHECK(mcDeviceGetDefaultMemPool(&pool, device.index()));
+
+    uint64_t used = 0;
+    MACA_CHECK(mcMemPoolGetAttribute(pool, mcMemPoolAttrUsedMemHigh, &used));
+
+    uint64_t reserved = 0;
+    MACA_CHECK(mcMemPoolGetAttribute(pool, mcMemPoolAttrReservedMemHigh, &reserved));
+
+    size_t tracked_high = 0;
+    {
+        std::lock_guard<std::mutex> lock(g_allocation_mutex);
+        tracked_high = g_allocation_stats.at(device.index()).high;
+    }
+
+    MACA_CHECK(mcSetDevice(current_device));
+
+    const size_t used_peak = tracked_high + static_cast<size_t>(used);
+    const size_t reserved_peak = tracked_high + static_cast<size_t>(reserved);
+    return std::make_pair<size_t, size_t>(static_cast<size_t>(used_peak / kBytesPerMB),
+                                          static_cast<size_t>(reserved_peak / kBytesPerMB));
 }
 
 INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL(Device::DeviceType::kMACA, MacaGuardImpl)
