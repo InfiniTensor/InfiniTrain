@@ -138,17 +138,22 @@ void DistributedDataParallel::RegisterBackwardHooks() {
                 continue;
             }
             std::weak_ptr<ParamAndGradBucketGroup> weak_group = it->second;
-            param->SetGradAccumulateBypass(
-                [weak_group, param](const std::shared_ptr<Tensor> &grad_output, bool overwrite, float learning_rate) {
-                    if (auto group = weak_group.lock()) {
-                        group->AccumulateParamGrad(param, grad_output, overwrite, learning_rate);
-                        if (group->config().overlap_grad_reduce) {
-                            group->RegisterGradReady(param);
-                        }
-                        return true;
+            std::weak_ptr<Tensor> weak_param = param;
+            param->SetGradAccumulateBypass([weak_group, weak_param](const std::shared_ptr<Tensor> &grad_output,
+                                                                    bool overwrite, float learning_rate) {
+                if (auto group = weak_group.lock(); group) {
+                    auto param = weak_param.lock();
+                    if (!param) {
+                        return false;
                     }
-                    return false;
-                });
+                    group->AccumulateParamGrad(param, grad_output, overwrite, learning_rate);
+                    if (group->config().overlap_grad_reduce) {
+                        group->RegisterGradReady(param);
+                    }
+                    return true;
+                }
+                return false;
+            });
         }
         return;
     }

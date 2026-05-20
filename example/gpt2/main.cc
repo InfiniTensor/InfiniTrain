@@ -36,6 +36,7 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
+#include "example/common/utils.h"
 #include "example/gpt2/checkpoint_loader.h"
 #include "example/gpt2/config.h"
 
@@ -451,6 +452,7 @@ void Train(const nn::parallel::Rank &rank) {
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
+    ValidateDistributedOptimizerFlags(FLAGS_use_distributed_optimizer);
 
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,

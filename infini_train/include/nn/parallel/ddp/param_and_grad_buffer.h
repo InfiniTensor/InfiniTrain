@@ -124,7 +124,6 @@ private:
     // ZeRO-2: persistent grad shard buffers and temporary full grad buffers
     std::vector<std::shared_ptr<Tensor>> grad_shard_buffer_list_;
     std::vector<std::shared_ptr<Tensor>> temp_full_grad_buffer_list_;
-    std::vector<bool> temp_full_grad_initialized_;
 
     std::shared_ptr<ParamAndGradBucketGroup> next_param_gather_bucket_group_ = nullptr;
 
