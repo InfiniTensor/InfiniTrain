@@ -1,6 +1,7 @@
 build/
 .cache/
 .vscode/
+.worktrees/
 
 *.log
 *.report.rank*
