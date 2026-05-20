@@ -30,4 +30,6 @@ void ReadVectorAllFloat(std::ifstream &ifs, float *dst, int64_t len);
 
 void ReadVectorShardFloat(std::ifstream &ifs, float *dst, int64_t len, int64_t start, int64_t cnt);
 
+void ValidateDistributedOptimizerFlags(bool use_distributed_optimizer);
+
 } // namespace infini_train
