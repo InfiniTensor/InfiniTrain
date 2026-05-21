@@ -128,6 +128,30 @@ void DistributedDataParallel::BuildParamAndGradBuffers() {
 
 void DistributedDataParallel::RegisterBackwardHooks() {
     if (ddp_config_.zero_stage >= 2) {
+        // NOTE(zbl): ZeRO-2 bypasses Tensor::grad accumulation: stash grads in the bucket group's
+        //            temporary full-grad buffer, then mark the bucket ready for reduce-scatter.
+        class Zero2AccumulateGradHook final : public autograd::PostAccumulateGradHook {
+        public:
+            explicit Zero2AccumulateGradHook(std::weak_ptr<ParamAndGradBucketGroup> group) : group_(std::move(group)) {}
+
+            bool TryBypassAccumulate(const std::shared_ptr<Tensor> &param, const std::shared_ptr<Tensor> &grad_output,
+                                     bool overwrite, float learning_rate) override {
+                if (auto group = group_.lock(); group) {
+                    group->AccumulateParamGrad(param, grad_output, overwrite, learning_rate);
+                    if (group->config().overlap_grad_reduce) {
+                        group->RegisterGradReady(param);
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            void operator()(const std::shared_ptr<Tensor> &) override {}
+
+        private:
+            std::weak_ptr<ParamAndGradBucketGroup> group_;
+        };
+
         auto &module = modules_.at(kModuleName);
         for (auto &param : module->Parameters()) {
             if (!param->requires_grad()) {
@@ -138,22 +162,8 @@ void DistributedDataParallel::RegisterBackwardHooks() {
                 continue;
             }
             std::weak_ptr<ParamAndGradBucketGroup> weak_group = it->second;
-            std::weak_ptr<Tensor> weak_param = param;
-            param->SetGradAccumulateBypass([weak_group, weak_param](const std::shared_ptr<Tensor> &grad_output,
-                                                                    bool overwrite, float learning_rate) {
-                if (auto group = weak_group.lock(); group) {
-                    auto param = weak_param.lock();
-                    if (!param) {
-                        return false;
-                    }
-                    group->AccumulateParamGrad(param, grad_output, overwrite, learning_rate);
-                    if (group->config().overlap_grad_reduce) {
-                        group->RegisterGradReady(param);
-                    }
-                    return true;
-                }
-                return false;
-            });
+            auto hook = std::make_unique<Zero2AccumulateGradHook>(weak_group);
+            param->RegisterPostAccumulateGradHook(std::move(hook));
         }
         return;
     }
