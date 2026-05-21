@@ -68,17 +68,60 @@ uint64_t GeneratorImplRegistry::LastUserSeedOrRandom() {
     return RandomDeviceSeed64();
 }
 
-std::shared_ptr<GeneratorImpl> GeneratorImplRegistry::Default(Device /*device*/) {
-    LOG(FATAL) << "GeneratorImplRegistry::Default() not implemented yet (Task 5)";
-    return nullptr;
+std::shared_ptr<GeneratorImpl> GeneratorImplRegistry::Default(Device device) {
+    if (device.IsCPU()) {
+        std::call_once(default_cpu_once_, [&] {
+            auto it = factories_.find(Device::DeviceType::kCPU);
+            CHECK(it != factories_.end()) << "No CPU GeneratorImpl factory registered";
+            default_cpu_ = it->second(0);
+            default_cpu_->SetCurrentSeed(LastUserSeedOrRandom());
+            cpu_initialized_.store(true, std::memory_order_release);
+        });
+        return default_cpu_;
+    }
+    const int8_t idx = device.index();
+    CHECK(0 <= idx && idx < kMaxGpus) << "CUDA device index out of range: " << static_cast<int>(idx);
+    std::call_once(default_cuda_once_[idx], [&] {
+        auto it = factories_.find(Device::DeviceType::kCUDA);
+        if (it == factories_.end()) {
+            throw std::runtime_error("No CUDA GeneratorImpl factory registered (build with USE_CUDA=ON).");
+        }
+        default_cuda_[idx] = it->second(idx);
+        default_cuda_[idx]->SetCurrentSeed(LastUserSeedOrRandom());
+        cuda_initialized_[idx].store(true, std::memory_order_release);
+    });
+    return default_cuda_[idx];
 }
 
-void GeneratorImplRegistry::ResetAllSeeds(uint64_t /*seed*/) {
-    LOG(FATAL) << "GeneratorImplRegistry::ResetAllSeeds() not implemented yet (Task 5)";
+void GeneratorImplRegistry::ResetAllSeeds(uint64_t seed) {
+    {
+        std::lock_guard<std::mutex> lk(registry_mutex_);
+        last_user_seed_ = seed;
+    }
+    auto cpu_impl = Default(Device(Device::DeviceType::kCPU, 0));
+    {
+        std::lock_guard<std::mutex> lk(cpu_impl->mutex());
+        cpu_impl->SetCurrentSeed(seed);
+    }
+    for (int i = 0; i < kMaxGpus; ++i) {
+        if (!cuda_initialized_[i].load(std::memory_order_acquire)) {
+            continue;
+        }
+        auto &impl = default_cuda_[i];
+        std::lock_guard<std::mutex> lk(impl->mutex());
+        impl->SetCurrentSeed(seed);
+    }
 }
 
-void GeneratorImplRegistry::ResetCudaSeeds(uint64_t /*seed*/) {
-    LOG(FATAL) << "GeneratorImplRegistry::ResetCudaSeeds() not implemented yet (Task 5)";
+void GeneratorImplRegistry::ResetCudaSeeds(uint64_t seed) {
+    for (int i = 0; i < kMaxGpus; ++i) {
+        if (!cuda_initialized_[i].load(std::memory_order_acquire)) {
+            continue;
+        }
+        auto &impl = default_cuda_[i];
+        std::lock_guard<std::mutex> lk(impl->mutex());
+        impl->SetCurrentSeed(seed);
+    }
 }
 
 } // namespace infini_train::core
@@ -119,14 +162,39 @@ void Generator::SetState(const std::vector<uint8_t> &state) {
 
 Device Generator::device() const { return impl_->device(); }
 
-Generator &default_generator(Device /*device*/) {
-    LOG(FATAL) << "default_generator() not implemented yet (Task 5)";
-    static Generator dummy{Device(Device::DeviceType::kCPU, 0)};
-    return dummy;
+namespace {
+
+struct DefaultHandles {
+    Generator cpu{Device(Device::DeviceType::kCPU, 0)};
+    std::array<Generator, core::kMaxGpus> cuda{};
+    std::once_flag cpu_once;
+    std::array<std::once_flag, core::kMaxGpus> cuda_once;
+};
+
+DefaultHandles &handles() {
+    static DefaultHandles h;
+    return h;
 }
 
-void manual_seed(uint64_t /*seed*/) { LOG(FATAL) << "manual_seed() not implemented yet (Task 5)"; }
+} // namespace
 
-void manual_seed_cuda(uint64_t /*seed*/) { LOG(FATAL) << "manual_seed_cuda() not implemented yet (Task 5)"; }
+Generator &default_generator(Device device) {
+    auto &h = handles();
+    auto impl = core::GeneratorImplRegistry::Instance().Default(device);
+    if (device.IsCPU()) {
+        std::call_once(h.cpu_once, [&] { h.cpu = Generator::FromImpl(impl); });
+        DCHECK_EQ(h.cpu.impl().get(), impl.get());
+        return h.cpu;
+    }
+    const int8_t idx = device.index();
+    CHECK(0 <= idx && idx < core::kMaxGpus);
+    std::call_once(h.cuda_once[idx], [&] { h.cuda[idx] = Generator::FromImpl(impl); });
+    DCHECK_EQ(h.cuda[idx].impl().get(), impl.get());
+    return h.cuda[idx];
+}
+
+void manual_seed(uint64_t seed) { core::GeneratorImplRegistry::Instance().ResetAllSeeds(seed); }
+
+void manual_seed_cuda(uint64_t seed) { core::GeneratorImplRegistry::Instance().ResetCudaSeeds(seed); }
 
 } // namespace infini_train
