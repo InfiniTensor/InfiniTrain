@@ -83,6 +83,19 @@ void TestSequentialLRRejectsNullChild() {
     }));
 }
 
+void TestSequentialLRRejectsExplicitEpochStep() {
+    ASSERT_TRUE(ExpectDeath([] {
+        auto opt = MakeDummyOptimizer(0.1f);
+        auto linear = LRScheduler::Create<LinearLR>(opt, /*start_factor=*/0.5f, /*end_factor=*/1.0f,
+                                                    /*total_iters=*/2);
+        auto constant = LRScheduler::Create<ConstantLR>(opt, /*factor=*/1.0f, /*total_iters=*/2);
+        std::shared_ptr<LRScheduler> sched = LRScheduler::Create<SequentialLR>(
+            opt, /*schedulers=*/std::vector<std::shared_ptr<LRScheduler>>{linear, constant},
+            /*milestones=*/std::vector<int64_t>{1});
+        sched->Step(0);
+    }));
+}
+
 void TestChainedSchedulerRejectsEmptyChildren() {
     ASSERT_TRUE(ExpectDeath([] {
         auto opt = MakeDummyOptimizer(0.1f);
@@ -115,6 +128,16 @@ void TestChainedSchedulerRejectsNullChild() {
     }));
 }
 
+void TestChainedSchedulerRejectsExplicitEpochStep() {
+    ASSERT_TRUE(ExpectDeath([] {
+        auto opt = MakeDummyOptimizer(0.1f);
+        auto step_lr = LRScheduler::Create<StepLR>(opt, /*step_size=*/2, /*gamma=*/0.5f);
+        std::shared_ptr<LRScheduler> sched = LRScheduler::Create<ChainedScheduler>(
+            opt, /*schedulers=*/std::vector<std::shared_ptr<LRScheduler>>{step_lr});
+        sched->Step(0);
+    }));
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -126,9 +149,11 @@ int main(int argc, char *argv[]) {
     TestLambdaLRRejectsNullLambda();
     TestSequentialLRRejectsMismatchedOptimizer();
     TestSequentialLRRejectsNullChild();
+    TestSequentialLRRejectsExplicitEpochStep();
     TestChainedSchedulerRejectsEmptyChildren();
     TestChainedSchedulerRejectsMismatchedOptimizer();
     TestChainedSchedulerRejectsNullChild();
+    TestChainedSchedulerRejectsExplicitEpochStep();
 
     if (g_fail_count == 0) {
         std::cout << "All Tests PASSED" << std::endl;
