@@ -7,13 +7,15 @@
         "LLAMA3_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_fp32.bin",
         "PROFILE_LOG_DIR": "./profile_logs",
         "LOG_DIR": "./logs",
-        "COMPARE_LOG_DIR": ""
+        "COMPARE_LOG_DIR": "",
+        "RUN_CTEST": "true",
+        "CTEST_CMD": "ctest --output-on-failure -LE cuda -j$(nproc) && ctest --output-on-failure -L cuda -j1"
     },
     "builds": [
         {
             "id": "build_1",
             "profile": false,
-            "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON .. && make -j"
+            "cmd": "cmake -DBUILD_TEST=ON -DUSE_CUDA=ON -DUSE_NCCL=ON .. && make -j"
         },
         {
             "id": "build_2",
