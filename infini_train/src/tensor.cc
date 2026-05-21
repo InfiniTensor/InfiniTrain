@@ -468,7 +468,7 @@ std::shared_ptr<Tensor> Tensor::Outer(const std::shared_ptr<Tensor> &other) {
 }
 
 // distribution
-std::shared_ptr<Tensor> Tensor::Uniform(float from, float to, std::optional<std::mt19937> generator) {
+std::shared_ptr<Tensor> Tensor::Uniform(float from, float to, std::optional<Generator> generator) {
     return nn::init::Uniform(shared_from_this(), from, to, generator);
 }
 

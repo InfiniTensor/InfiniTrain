@@ -1,5 +1,6 @@
 #include <cmath>
 #include <memory>
+#include <numeric>
 
 #include "glog/logging.h"
 

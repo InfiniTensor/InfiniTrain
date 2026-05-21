@@ -1,67 +1,30 @@
 #include "infini_train/include/nn/init.h"
 
+#include <cmath>
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <numeric>
 #include <optional>
-#include <random>
 #include <unordered_set>
-
-#ifdef USE_OMP
-#include <omp.h>
-#endif
 
 #include "glog/logging.h"
 
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/dispatcher.h"
+#include "infini_train/include/generator.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::init {
-namespace {
-constexpr int kRandomSeed = 42;
-
-// FIXME: RNG design is incomplete.
-//
-// Current implementation lacks:
-//   - unified Generator abstraction
-//   - global default generator and seed control
-//   - reproducible / clonable RNG state
-//
-// TODO:
-//   - introduce Generator interface and backend impl
-//   - add default generator management (per device)
-//   - refactor random ops to consume Generator
-static std::mt19937 gen(kRandomSeed);
-} // namespace
 
 std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean, float std,
-                               std::optional<std::mt19937> generator) {
-    const int64_t num_elements = tensor->NumElements();
-    std::vector<float> buffer(num_elements);
-
-#ifdef USE_OMP
-#pragma omp parallel
-    {
-        std::mt19937 local_gen(kRandomSeed + omp_get_thread_num());
-        std::normal_distribution<float> local_dis(mean, std);
-#pragma omp for
-        for (int i = 0; i < buffer.size(); ++i) {
-            buffer[i] = generator ? local_dis(generator.value()) : local_dis(local_gen);
-        }
-    }
-#else
-    std::normal_distribution<float> dis(mean, std);
-    std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
-#endif
-
+                               std::optional<Generator> generator) {
     auto device = tensor->GetDevice();
     core::DeviceGuard guard(device);
-    auto impl = core::GetDeviceGuardImpl(device.type());
-
-    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
-                      impl->GetStream(device));
+    auto impl = ResolveGenerator(generator, device);
+    Dispatcher::Instance().Call<void>({device.type(), "NormalRandom"}, tensor, mean, std, impl.get());
     return tensor;
 }
 
@@ -73,8 +36,8 @@ std::pair<int64_t, int64_t> CalculateFanInAndFanOut(const std::shared_ptr<Tensor
     const auto num_output_fmaps = tensor->Dims()[0];
     int64_t receptive_field_size = 1;
     if (tensor->Dims().size() > 2) {
-        receptive_field_size
-            *= std::accumulate(tensor->Dims().begin() + 2, tensor->Dims().end(), 1, std::multiplies<int64_t>());
+        receptive_field_size *= std::accumulate(tensor->Dims().begin() + 2, tensor->Dims().end(), int64_t{1},
+                                                std::multiplies<int64_t>());
     }
     const auto fan_in = num_input_fmaps * receptive_field_size;
     const auto fan_out = num_output_fmaps * receptive_field_size;
@@ -99,10 +62,10 @@ float CalculateGain(NonLinearityType nonlinearity, std::optional<float> param = 
     } else if (nonlinearity == NonLinearityType::kTanh) {
         return 5.0f / 3;
     } else if (nonlinearity == NonLinearityType::kReLU) {
-        return sqrt(2.0f);
+        return std::sqrt(2.0f);
     } else if (nonlinearity == NonLinearityType::kLeakyReLU) {
         const float negative_slope = param ? *param : 0.01f;
-        return sqrt(2.0f / (1 + negative_slope * negative_slope));
+        return std::sqrt(2.0f / (1.0f + negative_slope * negative_slope));
     } else if (nonlinearity == NonLinearityType::kSELU) {
         return 3.0f / 4; // Value found empirically (https://github.com/pytorch/pytorch/pull/50664)
     } else {
@@ -113,7 +76,7 @@ float CalculateGain(NonLinearityType nonlinearity, std::optional<float> param = 
 } // namespace
 
 std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor, float a, KaimingMode mode,
-                                       NonLinearityType nonlinearity, std::optional<std::mt19937> generator) {
+                                       NonLinearityType nonlinearity, std::optional<Generator> generator) {
     for (const auto dim : tensor->Dims()) {
         if (dim == 0) {
             LOG(WARNING) << "Initializing zero-element tensors is a no-op";
@@ -122,40 +85,17 @@ std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor, fl
     }
     const auto fan = CalculateCorrectFan(tensor, mode);
     const auto gain = CalculateGain(nonlinearity, a);
-    const float std = gain / sqrt(fan);
-    const float bound = sqrt(3.0f) * std; // Calculate uniform bounds from standard deviation
+    const float std = gain / std::sqrt(static_cast<float>(fan));
+    const float bound = std::sqrt(3.0f) * std;
     return tensor->Uniform(-bound, bound, generator);
 }
 
 std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, float b,
-                                std::optional<std::mt19937> generator) {
-    const int64_t num_elements = tensor->NumElements();
-    std::vector<float> buffer(num_elements);
-
-#ifdef USE_OMP
-#pragma omp parallel
-    {
-        std::mt19937 local_gen(kRandomSeed + omp_get_thread_num());
-        std::uniform_real_distribution<float> local_dis(a, b);
-#pragma omp for
-        for (int i = 0; i < buffer.size(); ++i) {
-            buffer[i] = generator ? local_dis(generator.value()) : local_dis(local_gen);
-        }
-    }
-#else
-    std::uniform_real_distribution<float> dis(a, b);
-    std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
-#endif
-
+                                std::optional<Generator> generator) {
     auto device = tensor->GetDevice();
-
     core::DeviceGuard guard(device);
-    auto impl = core::GetDeviceGuardImpl(device.type());
-
-    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
-                      impl->GetStream(device));
-
+    auto impl = ResolveGenerator(generator, device);
+    Dispatcher::Instance().Call<void>({device.type(), "UniformRandom"}, tensor, a, b, impl.get());
     return tensor;
 }
 
