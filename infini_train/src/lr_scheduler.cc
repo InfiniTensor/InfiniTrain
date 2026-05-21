@@ -143,7 +143,7 @@ namespace lr_schedulers {
 
 ConstantLR::ConstantLR(std::shared_ptr<Optimizer> optimizer, float factor, int total_iters, int64_t last_step)
     : LRScheduler(std::move(optimizer), last_step), factor_(factor), total_iters_(total_iters) {
-    CHECK_GE(factor_, 0.0f) << "ConstantLR: factor must be >= 0.";
+    CHECK_GT(factor_, 0.0f) << "ConstantLR: factor must be > 0.";
     CHECK_LE(factor_, 1.0f) << "ConstantLR: factor must be <= 1.";
 }
 
@@ -229,6 +229,11 @@ LambdaLR::LambdaLR(std::shared_ptr<Optimizer> optimizer, std::function<float(int
 }
 
 float LambdaLR::GetClosedFormLR() const { return base_lr_ * lr_lambda_(last_step_); }
+
+float SequentialLR::GetClosedFormLR() const {
+    LOG(FATAL) << "SequentialLR does not support closed-form LR. Use Step() without an explicit epoch.";
+    return base_lr_;
+}
 
 SequentialLR::SequentialLR(std::shared_ptr<Optimizer> optimizer, std::vector<std::shared_ptr<LRScheduler>> schedulers,
                            std::vector<int64_t> milestones, int64_t last_step)
@@ -324,6 +329,11 @@ ChainedScheduler::ChainedScheduler(std::shared_ptr<Optimizer> optimizer,
         CHECK(schedulers_[i]->SharesOptimizerWith(optimizer_))
             << "ChainedScheduler: scheduler at index " << i << " must share the same optimizer.";
     }
+}
+
+float ChainedScheduler::GetClosedFormLR() const {
+    LOG(FATAL) << "ChainedScheduler does not support closed-form LR. Use Step() without an explicit epoch.";
+    return base_lr_;
 }
 
 void ChainedScheduler::InitialStep() { last_step_ = 0; }
