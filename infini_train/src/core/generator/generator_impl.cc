@@ -1,11 +1,15 @@
 #include "infini_train/include/core/generator/generator_impl.h"
 
 #include <cstdint>
+#include <mutex>
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 #include "glog/logging.h"
+
+#include "infini_train/include/generator.h"
 
 namespace infini_train::core {
 
@@ -78,3 +82,51 @@ void GeneratorImplRegistry::ResetCudaSeeds(uint64_t /*seed*/) {
 }
 
 } // namespace infini_train::core
+
+// ---------------------------------------------------------------------------
+// Generator handle (PImpl) — bound to GeneratorImplRegistry::Create().
+// ---------------------------------------------------------------------------
+
+namespace infini_train {
+
+Generator::Generator(Device device) : impl_(core::GeneratorImplRegistry::Instance().Create(device)) {}
+
+Generator::Generator(std::shared_ptr<core::GeneratorImpl> impl) : impl_(std::move(impl)) {}
+
+Generator Generator::FromImpl(std::shared_ptr<core::GeneratorImpl> impl) { return Generator(std::move(impl)); }
+
+void Generator::ManualSeed(uint64_t seed) {
+    std::lock_guard<std::mutex> lk(impl_->mutex());
+    impl_->SetCurrentSeed(seed);
+}
+
+uint64_t Generator::Seed() { return impl_->Seed(); }
+
+uint64_t Generator::InitialSeed() const {
+    std::lock_guard<std::mutex> lk(impl_->mutex());
+    return impl_->InitialSeed();
+}
+
+std::vector<uint8_t> Generator::GetState() const {
+    std::lock_guard<std::mutex> lk(impl_->mutex());
+    return impl_->GetState();
+}
+
+void Generator::SetState(const std::vector<uint8_t> &state) {
+    std::lock_guard<std::mutex> lk(impl_->mutex());
+    impl_->SetState(state);
+}
+
+Device Generator::device() const { return impl_->device(); }
+
+Generator &default_generator(Device /*device*/) {
+    LOG(FATAL) << "default_generator() not implemented yet (Task 5)";
+    static Generator dummy{Device(Device::DeviceType::kCPU, 0)};
+    return dummy;
+}
+
+void manual_seed(uint64_t /*seed*/) { LOG(FATAL) << "manual_seed() not implemented yet (Task 5)"; }
+
+void manual_seed_cuda(uint64_t /*seed*/) { LOG(FATAL) << "manual_seed_cuda() not implemented yet (Task 5)"; }
+
+} // namespace infini_train
