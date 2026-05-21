@@ -17,6 +17,12 @@ namespace infini_train::autograd {
 class PostAccumulateGradHook {
 public:
     virtual void operator()(const std::shared_ptr<Tensor> &tensor) = 0;
+
+    // ZeRO-2: Use this function to take over AccumulateGrad::Backward
+    virtual bool TryBypassAccumulate(const std::shared_ptr<Tensor> &, const std::shared_ptr<Tensor> &, bool, float) {
+        return false;
+    }
+
     virtual ~PostAccumulateGradHook() = default;
 };
 

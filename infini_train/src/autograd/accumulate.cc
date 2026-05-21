@@ -34,9 +34,8 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
         }
 
         const bool overwrite = tensor_->ConsumeGradOverwriteFlag();
-        // ZeRO-2: Use a bypass function to perform grad accumulation in temp full grad buffer
-        auto bypass = tensor_->grad_accumulate_bypass();
-        if (bypass && bypass(grad_output, overwrite, learning_rate_)) {
+        auto hook = tensor_->post_accumulate_grad_hook();
+        if (hook && hook->TryBypassAccumulate(tensor_, grad_output, overwrite, learning_rate_)) {
             tensor_->ResetAccumulator();
             return {};
         }
@@ -56,7 +55,6 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
             auto new_grad = std::make_shared<Tensor>(*grad_output.get(), 0, grad_output->Dims());
             tensor_->set_grad(new_grad);
         }
-        auto hook = tensor_->post_accumulate_grad_hook();
         if (hook != nullptr) {
             (*hook)(tensor_->grad());
         }
