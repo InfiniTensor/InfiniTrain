@@ -197,4 +197,11 @@ void manual_seed(uint64_t seed) { core::GeneratorImplRegistry::Instance().ResetA
 
 void manual_seed_cuda(uint64_t seed) { core::GeneratorImplRegistry::Instance().ResetCudaSeeds(seed); }
 
+std::shared_ptr<core::GeneratorImpl> ResolveGenerator(const std::optional<Generator> &gen, Device device) {
+    if (gen.has_value()) {
+        return gen->impl();
+    }
+    return default_generator(device).impl();
+}
+
 } // namespace infini_train

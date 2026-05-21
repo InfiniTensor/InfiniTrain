@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "infini_train/include/device.h"
@@ -46,5 +47,7 @@ Generator &default_generator(Device device = Device(Device::DeviceType::kCPU, 0)
 
 void manual_seed(uint64_t seed);
 void manual_seed_cuda(uint64_t seed);
+
+std::shared_ptr<core::GeneratorImpl> ResolveGenerator(const std::optional<Generator> &gen, Device device);
 
 } // namespace infini_train
