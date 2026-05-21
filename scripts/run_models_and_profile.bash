@@ -70,6 +70,8 @@ BUILD_DIR="$(read_var BUILD_DIR)";              : "${BUILD_DIR:=../build}"
 LOG_DIR="$(read_var LOG_DIR)";                  : "${LOG_DIR:=logs}"
 PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_logs}"
 COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
+RUN_CTEST="$(read_var RUN_CTEST)";              : "${RUN_CTEST:=true}"
+CTEST_CMD="$(read_var CTEST_CMD)";              : "${CTEST_CMD:=ctest --output-on-failure -LE cuda -j$(nproc) && ctest --output-on-failure -L cuda -j1}"
 
 mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
 
@@ -244,6 +246,9 @@ for ((id=0; id<num_builds; ++id)); do
     # always clean before another build
     clean_build_dir
     run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "build"
+    if [[ "$RUN_CTEST" == "true" && "$build_profile" != "true" ]]; then
+        run_and_log "$CTEST_CMD" "ctest_${build_id}" "no" "ctest"
+    fi
 
     # profile flag for runs
     profile_flag="no"
