@@ -5,7 +5,6 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
-#include <random>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -26,13 +25,6 @@
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
-
-namespace {
-constexpr int kRandomSeed = 42;
-
-// TODO(dcj): make this rng generator compatible with torch later
-static std::mt19937 gen{kRandomSeed};
-} // namespace
 
 namespace {
 constexpr int32_t kHeaderMagic = 20240326;
