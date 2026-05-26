@@ -25,7 +25,6 @@ std::vector<std::shared_ptr<Tensor>> Broadcast(const std::vector<std::shared_ptr
 std::vector<std::shared_ptr<Tensor>> ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads,
                                                         Device destination) {
     std::vector<std::shared_ptr<Tensor>> outputs;
-    auto kernel = Dispatcher::Instance().GetKernel({destination.type(), "AccumulateGrad"});
     std::vector<std::vector<std::shared_ptr<Tensor>>> to_destination_grads;
     for (int i = 0; i < grads[0].size(); ++i) {
         outputs.emplace_back(std::make_shared<Tensor>(grads[0][i]->Dims(), grads[0][i]->Dtype(), destination));
@@ -37,6 +36,9 @@ std::vector<std::shared_ptr<Tensor>> ReduceAddCoalesced(const std::vector<std::v
             to_destination_grads[i].push_back(std::make_shared<Tensor>(grads[i][j]->To(destination)));
         }
     }
+    // NOTE(zbl): To ensure Profiler works correctly, there should not be any other kernel calls
+    //            between GetKernel and kernel.Call, otherwise ProfileContext would be tainted
+    auto kernel = Dispatcher::Instance().GetKernel({destination.type(), "AccumulateGrad"});
     for (int i = 0; i < grads.size(); ++i) {
         for (int j = 0; j < grads[i].size(); ++j) {
             kernel.Call<void>(to_destination_grads[i][j], static_cast<float>(1.0), outputs[j]);
