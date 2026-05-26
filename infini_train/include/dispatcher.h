@@ -74,6 +74,9 @@ public:
     template <typename RetT, class... ArgsT> RetT Call(KeyT key, ArgsT... args) const {
         auto kernel = this->GetKernel(key);
         tls_autocast_context.Autocast(key, args...);
+#ifdef PROFILE_MODE
+        SetProfileContext(key.second, key.first);
+#endif
         return kernel.Call<RetT>(std::forward<ArgsT>(args)...);
     }
 
