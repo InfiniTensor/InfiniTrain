@@ -25,30 +25,33 @@ enum class NormType {
     kRMSNorm    // RMSNorm
 };
 
-enum class MoERouterType {
-    kTopK // Top-k router.
-};
-
-enum class MoEDispatcherType {
-    kLocal,    // No cross-rank token exchange
-    kAllGather // Reserved for expert parallel MoE
-};
-
-enum class MoEExpertImpl {
-    kSequential // Run local experts sequentially
-};
-
 struct MoEConfig {
+    enum class RouterScoreFunction {
+        kSoftmax,
+        kSigmoid,
+    };
+
+    enum class DispatcherType {
+        kAllGather, // Megatron-style AllGather dispatcher. Degenerates to local dispatch when TP=EP=1.
+        kAllToAll   // Megatron-style AllToAll dispatcher for expert parallel MoE.
+    };
+
+    enum class ExpertImpl {
+        kSequential // Run local experts sequentially
+    };
+
     int64_t num_experts = 0;
     int64_t expert_parallel_size = 1;
     int64_t router_topk = 1;
+    bool router_pre_softmax = false;
+    std::optional<float> router_topk_scaling_factor = std::nullopt;
+    RouterScoreFunction router_score_function = RouterScoreFunction::kSoftmax;
     float aux_loss_coeff = 0.0f;
     std::optional<float> expert_capacity_factor = std::nullopt;
     bool pad_expert_input_to_capacity = false;
     int64_t moe_ffn_hidden_size = 0;
-    MoERouterType router_type = MoERouterType::kTopK;
-    MoEDispatcherType dispatcher_type = MoEDispatcherType::kLocal;
-    MoEExpertImpl expert_impl = MoEExpertImpl::kSequential;
+    DispatcherType dispatcher_type = DispatcherType::kAllGather;
+    ExpertImpl expert_impl = ExpertImpl::kSequential;
 };
 
 struct TransformerConfig {
