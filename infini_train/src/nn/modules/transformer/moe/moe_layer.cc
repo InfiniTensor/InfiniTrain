@@ -15,8 +15,8 @@ namespace infini_train::nn::moe {
 MoELayer::MoELayer(const TransformerConfig &config) : CloneableModule(kType), config_(config) {
     const auto &moe_config = RequireMoEConfig(config_);
     CHECK(config_.ffn_type == FFNType::kMoE);
-    CHECK(moe_config.dispatcher_type == MoEDispatcherType::kLocal)
-        << "Current InfiniTrain MoE implementation supports local dispatch only";
+    CHECK(moe_config.dispatcher_type == MoEConfig::DispatcherType::kAllGather)
+        << "Current InfiniTrain MoE implementation supports AllGather dispatcher only";
 
     modules_[kRouterLayerName] = std::make_shared<TopKRouter>(config_);
     modules_[kExpertsLayerName] = std::make_shared<SequentialMLP>(config_);
@@ -25,8 +25,9 @@ MoELayer::MoELayer(const TransformerConfig &config) : CloneableModule(kType), co
 std::vector<std::shared_ptr<Tensor>> MoELayer::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1);
     auto hidden_states = input_tensors[0];
-    auto routing_probs = (*modules_.at(kRouterLayerName))({hidden_states})[0];
-    return (*modules_.at(kExpertsLayerName))({hidden_states, routing_probs});
+    auto router_output = (*modules_.at(kRouterLayerName))({hidden_states});
+    CHECK_EQ(router_output.size(), 2);
+    return (*modules_.at(kExpertsLayerName))({hidden_states, router_output[0], router_output[1]});
 }
 
 } // namespace infini_train::nn::moe
