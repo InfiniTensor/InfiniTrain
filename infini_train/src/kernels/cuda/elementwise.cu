@@ -2,6 +2,7 @@
 
 #include <cub/warp/warp_reduce.cuh>
 
+#include "infini_train/include/common/common.h"
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
 #include "infini_train/include/core/runtime/device_guard.h"

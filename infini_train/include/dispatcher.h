@@ -6,7 +6,6 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/autocast.h"
 #include "infini_train/include/device.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
@@ -73,7 +72,6 @@ public:
 
     template <typename RetT, class... ArgsT> RetT Call(KeyT key, ArgsT... args) const {
         auto kernel = this->GetKernel(key);
-        tls_autocast_context.Autocast(key, args...);
 #ifdef PROFILE_MODE
         SetProfileContext(key.second, key.first);
 #endif

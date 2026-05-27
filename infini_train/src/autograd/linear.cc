@@ -20,26 +20,12 @@ void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
                           const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
     const auto &input = input_tensors[0];
     const auto &weight = input_tensors[1];
-    // Cast saved tensors to forward compute dtype (output dtype) so backward
-    // computes in the same precision as forward, matching PyTorch's behavior.
 
-    // FIXME: An extra cast (input/weight -> compute_dtype) is performed here because
-    // autocast runs before autograd. The correct approach is to adjust the ordering or
-    // integration of autocast and autograd so that autograd receives already-cast tensors,
-    // avoiding the redundant cast.
-
-    // FIXME: compute_dtype is not necessarily the dtype of output_tensor; it should be
-    // determined by autocast, not derived from output_tensors[0]->Dtype().
-    auto compute_dtype = output_tensors[0]->Dtype();
     bool need_input = needs_input_grad_.size() > 0 && needs_input_grad_[0];
     bool need_weight = needs_input_grad_.size() > 1 && needs_input_grad_[1];
 
-    auto cast = [&](const std::shared_ptr<Tensor> &t) {
-        return t->Dtype() == compute_dtype ? t : std::make_shared<Tensor>(t->To(compute_dtype));
-    };
-
     // grad_input needs weight, grad_weight needs input
-    saved_tensors_ = {need_weight ? cast(input) : nullptr, need_input ? cast(weight) : nullptr};
+    saved_tensors_ = {need_weight ? input : nullptr, need_input ? weight : nullptr};
 
     transpose_ = true;
     bias_ = input_tensors.size() == 3;

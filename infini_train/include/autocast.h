@@ -11,25 +11,10 @@
 namespace infini_train {
 namespace {
 inline std::string_view GetBaseOpName(std::string_view op) {
-    constexpr std::string_view forward_suffix = "Forward";
-    constexpr std::string_view backward_suffix = "Backward";
-
-    // Check for "Forward" suffix
-    if (op.size() >= forward_suffix.size()) {
-        const auto suffix_pos = op.size() - forward_suffix.size();
-        if (op.substr(suffix_pos) == forward_suffix) {
-            return op.substr(0, suffix_pos);
-        }
+    constexpr std::string_view function_suffix = "Function";
+    if (op.size() >= function_suffix.size() && op.substr(op.size() - function_suffix.size()) == function_suffix) {
+        return op.substr(0, op.size() - function_suffix.size());
     }
-
-    // Check for "Backward" suffix
-    if (op.size() >= backward_suffix.size()) {
-        const auto suffix_pos = op.size() - backward_suffix.size();
-        if (op.substr(suffix_pos) == backward_suffix) {
-            return op.substr(0, suffix_pos);
-        }
-    }
-
     return op;
 }
 }; // namespace
@@ -97,18 +82,14 @@ struct AutocastContext {
     Device::DeviceType device_type = Device::DeviceType::kCPU; // Target device type (CPU/GPU)
     DataType autocast_dtype = DataType::kBFLOAT16;             // The data type used for autocasting
 
-    template <typename... ArgsT> void Autocast(std::pair<Device::DeviceType, std::string> key, ArgsT &...args) {
+    // Cast a parameter pack of tensors (or shared_ptr<Tensor>) according to the cast policy
+    // associated with `op_name`. Called from autograd::Function::Apply with type_ as op_name.
+    template <typename... ArgsT> void Autocast(std::string_view op_name, ArgsT &...args) {
         if (!enabled) {
             return;
         }
 
-        if (device_type != key.first) {
-            LOG_LOC(FATAL, "In AutocastContext::Autocast(): the AutocastContext device_type is different from the one "
-                           "passed in. Don't know what to do.");
-            return;
-        }
-
-        auto map_it = kOpCastPolicyMap.find(GetBaseOpName(key.second));
+        auto map_it = kOpCastPolicyMap.find(GetBaseOpName(op_name));
         if (map_it == kOpCastPolicyMap.end()) {
             return;
         }
@@ -132,7 +113,6 @@ struct AutocastContext {
             }
         };
 
-        // Process each argument
         auto cast_arg = [&](auto &arg) {
             using T = std::decay_t<decltype(arg)>;
             if constexpr (std::is_same_v<T, std::shared_ptr<Tensor>>) {
@@ -156,7 +136,6 @@ struct AutocastContext {
             }
         };
 
-        // Apply casting to each argument
         (cast_arg(args), ...);
     }
 };
