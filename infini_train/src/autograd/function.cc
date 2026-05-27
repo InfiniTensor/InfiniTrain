@@ -2,6 +2,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/autocast.h"
 #include "infini_train/include/autograd/accumulate.h"
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/autograd/grad_mode.h"
@@ -46,12 +47,19 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         }
     }
 
+    // Apply autocast once at the autograd boundary so Forward / SetupContext receive
+    // tensors already in the compute dtype. The shared_ptr copies are local; we keep
+    // the caller's `input_tensors` untouched so next_functions_ wires up to the
+    // original autograd graph (leaf -> AccumulateGrad / non-leaf -> grad_fn).
+    auto compute_inputs = input_tensors;
+    for (auto &t : compute_inputs) { tls_autocast_context.Autocast(type_, t); }
+
     std::vector<std::shared_ptr<Tensor>> output_tensors;
     {
         autograd::NoGradGuard no_grad;
         // no_grad in autograd.Function.Forward()
-        output_tensors = Forward(input_tensors);
-        SetupContext(input_tensors, output_tensors);
+        output_tensors = Forward(compute_inputs);
+        SetupContext(compute_inputs, output_tensors);
     }
 
     // Call forward post-hooks
