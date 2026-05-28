@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <tuple>
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
@@ -42,12 +41,6 @@ private:
     // RoPE-aware attention forward (LLaMA3 style: with RoPE, optional GQA)
     std::vector<std::shared_ptr<infini_train::Tensor>>
     ForwardWithRoPE(const std::vector<std::shared_ptr<infini_train::Tensor>> &x);
-
-    // RoPE helper methods
-    std::tuple<std::shared_ptr<infini_train::Tensor>, std::shared_ptr<infini_train::Tensor>>
-    ApplyRotaryEmbedding(const std::shared_ptr<infini_train::Tensor> &xq,
-                         const std::shared_ptr<infini_train::Tensor> &xk,
-                         const std::shared_ptr<infini_train::Tensor> &freqs_cis);
 
     // GQA helper method
     std::shared_ptr<infini_train::Tensor> RepeatKV(const std::shared_ptr<infini_train::Tensor> &x, int64_t n_rep);

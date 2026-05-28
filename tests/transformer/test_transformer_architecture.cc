@@ -7,6 +7,7 @@
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
+#include "infini_train/include/nn/modules/transformer/mla_self_attention.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
@@ -104,6 +105,30 @@ TEST_P(TransformerModuleTest, StandardAttention) {
     auto attn = std::make_shared<nn::CausalSelfAttention>(config);
     attn->To(GetDevice());
     EXPECT_EQ(attn->Parameters().size(), 4);
+
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 8, 64}, DataType::kFLOAT32, GetDevice());
+    auto output = (*attn)({input});
+    EXPECT_EQ(output[0]->Dims(), input->Dims());
+}
+
+TEST_P(TransformerModuleTest, MLAAttention) {
+    SKIP_CPU();
+    nn::TransformerConfig config;
+    config.n_embd = 64;
+    config.n_head = 4;
+    config.block_size = 16;
+    config.attention_type = nn::AttentionType::kStandard;
+    config.add_bias_linear = true;
+
+    auto attn = std::make_shared<nn::MLASelfAttention>(
+        config,
+        /*q_lora_rank=*/32,
+        /*kv_lora_rank=*/32,
+        /*qk_nope_head_dim=*/8,
+        /*qk_rope_head_dim=*/8,
+        /*v_head_dim=*/16);
+    attn->To(GetDevice());
+    EXPECT_FALSE(attn->Parameters().empty());
 
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 8, 64}, DataType::kFLOAT32, GetDevice());
     auto output = (*attn)({input});

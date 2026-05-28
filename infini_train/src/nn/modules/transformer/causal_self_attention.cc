@@ -12,6 +12,7 @@
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
+#include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
@@ -128,43 +129,6 @@ CausalSelfAttention::ForwardStandard(const std::vector<std::shared_ptr<infini_tr
     y = (*modules_[kCProjLayerName])({y})[0];
     // (B, T, C) == (bs, seq_len, n_embd)
     return {y};
-}
-
-// RoPE helper methods
-std::tuple<std::shared_ptr<infini_train::Tensor>, std::shared_ptr<infini_train::Tensor>>
-CausalSelfAttention::ApplyRotaryEmbedding(const std::shared_ptr<infini_train::Tensor> &xq,
-                                          const std::shared_ptr<infini_train::Tensor> &xk,
-                                          const std::shared_ptr<infini_train::Tensor> &freqs_cis) {
-    // Reshape freqs_cis for broadcasting
-    const auto &x_shape = xq->Dims(); // (B, T, H, D)
-    const int64_t T = x_shape[1];
-    const int64_t D = x_shape[3];
-
-    std::vector<int64_t> target_shape = {1, T, 1, D / 2, 2};
-    auto cos_sin = freqs_cis->View(target_shape); // -> (1, T, 1, D/2, 2)
-
-    auto cos = cos_sin->Slice(-1, 0, 1, 1)->Squeeze(-1); // (1, T, 1, D/2)
-    auto sin = cos_sin->Slice(-1, 1, 2, 1)->Squeeze(-1); // (1, T, 1, D/2)
-
-    auto slice_pair = [](const std::shared_ptr<Tensor> &x) {
-        auto even = x->Slice(-1, 0, x->Dims().back(), 2);
-        auto odd = x->Slice(-1, 1, x->Dims().back(), 2);
-        return std::make_pair(even, odd);
-    };
-
-    auto [q_even, q_odd] = slice_pair(xq);
-    auto q_rotated_left = q_even * cos - q_odd * sin;
-    auto q_rotated_right = q_even * sin + q_odd * cos;
-    auto q_rotated
-        = nn::function::Stack(std::vector<std::shared_ptr<Tensor>>{q_rotated_left, q_rotated_right}, -1)->Flatten(-2);
-
-    auto [k_even, k_odd] = slice_pair(xk);
-    auto k_rotated_left = k_even * cos - k_odd * sin;
-    auto k_rotated_right = k_even * sin + k_odd * cos;
-    auto k_rotated
-        = nn::function::Stack(std::vector<std::shared_ptr<Tensor>>{k_rotated_left, k_rotated_right}, -1)->Flatten(-2);
-
-    return {q_rotated, k_rotated};
 }
 
 std::shared_ptr<infini_train::Tensor> CausalSelfAttention::RepeatKV(const std::shared_ptr<infini_train::Tensor> &x,
