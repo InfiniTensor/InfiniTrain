@@ -12,19 +12,21 @@ class MLASelfAttention : public infini_train::nn::CloneableModule<MLASelfAttenti
 public:
     static constexpr char kType[] = "MLASelfAttention";
 
-    static constexpr char kQAProjLayerName[] = "q_a_proj";
-    static constexpr char kQANormLayerName[] = "q_a_layernorm";
-    static constexpr char kQBProjLayerName[] = "q_b_proj";
-    static constexpr char kKVAProjLayerName[] = "kv_a_proj_with_mqa";
-    static constexpr char kKVANormLayerName[] = "kv_a_layernorm";
-    static constexpr char kKVBProjLayerName[] = "kv_b_proj";
-    static constexpr char kCProjLayerName[] = "c_proj";
+    static constexpr char kLinearQProjLayerName[] = "linear_q_proj";
+    static constexpr char kLinearQDownProjLayerName[] = "linear_q_down_proj";
+    static constexpr char kQLayerNormLayerName[] = "q_layernorm";
+    static constexpr char kLinearQUpProjLayerName[] = "linear_q_up_proj";
+    static constexpr char kLinearKVDownProjLayerName[] = "linear_kv_down_proj";
+    static constexpr char kKVLayerNormLayerName[] = "kv_layernorm";
+    static constexpr char kLinearKVUpProjLayerName[] = "linear_kv_up_proj";
+    static constexpr char kLinearProjLayerName[] = "linear_proj";
 
     static constexpr char kParamBiasName[] = "bias";
 
     explicit MLASelfAttention(const TransformerConfig &config);
     MLASelfAttention(const TransformerConfig &config, int64_t q_lora_rank, int64_t kv_lora_rank,
-                     int64_t qk_nope_head_dim, int64_t qk_rope_head_dim, int64_t v_head_dim);
+                     int64_t qk_nope_head_dim, int64_t qk_rope_head_dim, int64_t v_head_dim,
+                     bool q_down_proj_use_tp = false, bool kv_down_proj_use_tp = false);
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
@@ -42,9 +44,13 @@ private:
     int64_t qk_head_dim_ = 0;
     int64_t v_head_dim_ = 0;
 
-    void SetupAttention(const TransformerConfig &config, int64_t q_lora_rank, int64_t kv_lora_rank,
-                        int64_t qk_nope_head_dim, int64_t qk_rope_head_dim, int64_t v_head_dim);
+    bool use_q_lora_ = true;
+    bool q_down_proj_use_tp_ = false;
+    bool kv_down_proj_use_tp_ = false;
 
+    void SetupAttention(const TransformerConfig &config, int64_t q_lora_rank, int64_t kv_lora_rank,
+                        int64_t qk_nope_head_dim, int64_t qk_rope_head_dim, int64_t v_head_dim,
+                        bool q_down_proj_use_tp, bool kv_down_proj_use_tp);
 };
 
 } // namespace infini_train::nn
