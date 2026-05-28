@@ -4,6 +4,7 @@
 
 #include "gtest/gtest.h"
 
+#include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
@@ -12,6 +13,7 @@
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
+#include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
@@ -129,9 +131,41 @@ TEST_P(TransformerModuleTest, MLAAttention) {
         /*v_head_dim=*/16);
     attn->To(GetDevice());
     EXPECT_FALSE(attn->Parameters().empty());
+    EXPECT_EQ(attn->module(nn::MLASelfAttention::kLinearQDownProjLayerName).type(), nn::Linear::kType);
+    EXPECT_EQ(attn->module(nn::MLASelfAttention::kLinearKVDownProjLayerName).type(), nn::Linear::kType);
 
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 8, 64}, DataType::kFLOAT32, GetDevice());
     auto output = (*attn)({input});
+    EXPECT_EQ(output[0]->Dims(), input->Dims());
+
+    auto tp_down_attn = std::make_shared<nn::MLASelfAttention>(
+        config,
+        /*q_lora_rank=*/32,
+        /*kv_lora_rank=*/32,
+        /*qk_nope_head_dim=*/8,
+        /*qk_rope_head_dim=*/8,
+        /*v_head_dim=*/16,
+        /*q_down_proj_use_tp=*/true,
+        /*kv_down_proj_use_tp=*/true);
+    tp_down_attn->To(GetDevice());
+    EXPECT_EQ(tp_down_attn->module(nn::MLASelfAttention::kLinearQDownProjLayerName).type(),
+              nn::parallel::ColumnParallelLinear::kType);
+    EXPECT_EQ(tp_down_attn->module(nn::MLASelfAttention::kLinearKVDownProjLayerName).type(),
+              nn::parallel::ColumnParallelLinear::kType);
+    output = (*tp_down_attn)({input});
+    EXPECT_EQ(output[0]->Dims(), input->Dims());
+
+    auto direct_q_attn = std::make_shared<nn::MLASelfAttention>(
+        config,
+        /*q_lora_rank=*/-1,
+        /*kv_lora_rank=*/32,
+        /*qk_nope_head_dim=*/8,
+        /*qk_rope_head_dim=*/8,
+        /*v_head_dim=*/16);
+    direct_q_attn->To(GetDevice());
+    EXPECT_EQ(direct_q_attn->module(nn::MLASelfAttention::kLinearQProjLayerName).type(),
+              nn::parallel::ColumnParallelLinear::kType);
+    output = (*direct_q_attn)({input});
     EXPECT_EQ(output[0]->Dims(), input->Dims());
 }
 

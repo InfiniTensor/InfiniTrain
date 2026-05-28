@@ -23,6 +23,7 @@ std::vector<int> GetPipelineParallelGroupRanks(int global_rank);
 
 // TP/SP Communication Helper Functions
 std::vector<std::shared_ptr<Tensor>> GatherFromTPRegionFunc(const std::shared_ptr<Tensor> &input);
+std::vector<std::shared_ptr<Tensor>> ScatterToSPRegionFunc(const std::shared_ptr<Tensor> &input);
 std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(const std::shared_ptr<Tensor> &input);
 std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_ptr<Tensor> &input);
 std::vector<std::shared_ptr<Tensor>> ScatterToTPRegionFunc(const std::shared_ptr<Tensor> &input);
