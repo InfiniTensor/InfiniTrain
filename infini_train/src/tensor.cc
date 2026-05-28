@@ -376,7 +376,7 @@ std::shared_ptr<Tensor> Tensor::Contiguous() {
 
 // FIXME: Requires stride tracking in the Tensor class before this can be implemented
 // correctly. Currently always returns true as a placeholder. The contiguous guard in
-// elementwise.cu ensures non-contiguous tensors fall back to the broadcast path.
+// the elementwise provider ensures non-contiguous tensors fall back to the broadcast path.
 bool Tensor::IsContiguous() const { return true; }
 
 std::shared_ptr<Tensor> Tensor::Flatten(int64_t start, int64_t end) {

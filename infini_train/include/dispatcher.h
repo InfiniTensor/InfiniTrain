@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -47,6 +48,11 @@ private:
     void *func_ptr_ = nullptr;
 };
 
+namespace kernel_provider {
+bool InfiniOpsEnabled(const std::pair<Device::DeviceType, std::string> &key);
+const KernelFunction *LookupInfiniOpsKernel(const std::pair<Device::DeviceType, std::string> &key);
+} // namespace kernel_provider
+
 class Dispatcher {
 public:
     using KeyT = std::pair<Device::DeviceType, std::string>;
@@ -57,6 +63,17 @@ public:
     }
 
     const KernelFunction &GetKernel(KeyT key) const {
+        if (kernel_provider::InfiniOpsEnabled(key)) {
+            if (const auto *kernel = kernel_provider::LookupInfiniOpsKernel(key)) {
+#ifdef PROFILE_MODE
+                SetProfileContext(key.second, key.first);
+#endif
+                return *kernel;
+            }
+            LOG(WARNING) << "InfiniOps kernel enabled but not registered: " << key.second
+                         << " on device: " << static_cast<int>(key.first) << "; falling back to default kernel";
+        }
+
         CHECK(key_to_kernel_map_.contains(key))
             << "Kernel not found: " << key.second << " on device: " << static_cast<int>(key.first);
 #ifdef PROFILE_MODE
