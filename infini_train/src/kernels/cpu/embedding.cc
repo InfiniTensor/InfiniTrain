@@ -46,7 +46,7 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
     for (int i = 0; i < input->NumElements(); ++i) {
         int idx = static_cast<int>(static_cast<const int64_t *>(input->DataPtr())[i]);
         for (int j = 0; j < embedding_dim; ++j) {
-            static_cast<float *>(grad_weight->DataPtr())[idx * embedding_dim + j] // <-- 修复这里
+            static_cast<float *>(grad_weight->DataPtr())[idx * embedding_dim + j]
                 += static_cast<const float *>(grad_output->DataPtr())[i * embedding_dim + j];
         }
     }
