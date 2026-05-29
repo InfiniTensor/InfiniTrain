@@ -1,4 +1,6 @@
 #include <cmath>
+#include <cstddef>
+#include <cstring>
 #include <memory>
 
 #include "glog/logging.h"
@@ -167,14 +169,15 @@ std::shared_ptr<Tensor> RepeatInterleaveForward(const std::shared_ptr<Tensor> &i
     output_dims[dim] = dim_size * repeat;
     auto output = std::make_shared<Tensor>(output_dims, input->Dtype(), input->GetDevice());
 
-    const float *input_ptr = static_cast<const float *>(input->DataPtr());
-    float *output_ptr = static_cast<float *>(output->DataPtr());
+    const size_t elem_size = kDataTypeToSize.at(input->Dtype());
+    const auto *input_ptr = static_cast<const std::byte *>(input->DataPtr());
+    auto *output_ptr = static_cast<std::byte *>(output->DataPtr());
 
     for (int64_t o = 0; o < outer; ++o) {
         for (int64_t i = 0; i < dim_size; ++i) {
             for (int r = 0; r < repeat; ++r) {
-                std::memcpy(output_ptr + ((o * dim_size * repeat + i * repeat + r) * inner),
-                            input_ptr + ((o * dim_size + i) * inner), sizeof(float) * inner);
+                std::memcpy(output_ptr + ((o * dim_size * repeat + i * repeat + r) * inner * elem_size),
+                            input_ptr + ((o * dim_size + i) * inner * elem_size), elem_size * inner);
             }
         }
     }
