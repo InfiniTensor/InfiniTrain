@@ -53,6 +53,16 @@ struct TransformerConfig {
     float rope_theta = 500000.0f; // theta in RoPE
     bool use_scaled_rope = false; // scaled RoPE
 
+    // MLA config
+    bool multi_latent_attention = false;               // Use MLA instead of standard causal self-attention.
+    std::optional<int64_t> q_lora_rank = std::nullopt; // nullopt means direct linear_q_proj path.
+    int64_t kv_lora_rank = 0;                          // 0 falls back to n_embd in MLASelfAttention.
+    int64_t qk_nope_head_dim = 0;                      // 0 falls back to n_embd / n_head.
+    int64_t qk_rope_head_dim = 0;                      // 0 falls back to n_embd / n_head.
+    int64_t v_head_dim = 0;                            // 0 falls back to n_embd / n_head.
+    bool q_down_proj_use_tp = false;                   // Use ColumnParallelLinear for linear_q_down_proj.
+    bool kv_down_proj_use_tp = false;                  // Use ColumnParallelLinear for linear_kv_down_proj.
+
     // Normalization
     float norm_eps = 1e-5f; // epsilon in RMSNorm
 

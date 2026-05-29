@@ -1,5 +1,6 @@
 #include <cmath>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -121,14 +122,14 @@ TEST_P(TransformerModuleTest, MLAAttention) {
     config.block_size = 16;
     config.attention_type = nn::AttentionType::kStandard;
     config.add_bias_linear = true;
+    config.multi_latent_attention = true;
+    config.q_lora_rank = 32;
+    config.kv_lora_rank = 32;
+    config.qk_nope_head_dim = 8;
+    config.qk_rope_head_dim = 8;
+    config.v_head_dim = 16;
 
-    auto attn = std::make_shared<nn::MLASelfAttention>(
-        config,
-        /*q_lora_rank=*/32,
-        /*kv_lora_rank=*/32,
-        /*qk_nope_head_dim=*/8,
-        /*qk_rope_head_dim=*/8,
-        /*v_head_dim=*/16);
+    auto attn = std::make_shared<nn::MLASelfAttention>(config);
     attn->To(GetDevice());
     EXPECT_FALSE(attn->Parameters().empty());
     EXPECT_EQ(attn->module(nn::MLASelfAttention::kLinearQDownProjLayerName).type(), nn::Linear::kType);
@@ -138,15 +139,10 @@ TEST_P(TransformerModuleTest, MLAAttention) {
     auto output = (*attn)({input});
     EXPECT_EQ(output[0]->Dims(), input->Dims());
 
-    auto tp_down_attn = std::make_shared<nn::MLASelfAttention>(
-        config,
-        /*q_lora_rank=*/32,
-        /*kv_lora_rank=*/32,
-        /*qk_nope_head_dim=*/8,
-        /*qk_rope_head_dim=*/8,
-        /*v_head_dim=*/16,
-        /*q_down_proj_use_tp=*/true,
-        /*kv_down_proj_use_tp=*/true);
+    auto tp_down_config = config;
+    tp_down_config.q_down_proj_use_tp = true;
+    tp_down_config.kv_down_proj_use_tp = true;
+    auto tp_down_attn = std::make_shared<nn::MLASelfAttention>(tp_down_config);
     tp_down_attn->To(GetDevice());
     EXPECT_EQ(tp_down_attn->module(nn::MLASelfAttention::kLinearQDownProjLayerName).type(),
               nn::parallel::ColumnParallelLinear::kType);
@@ -155,13 +151,9 @@ TEST_P(TransformerModuleTest, MLAAttention) {
     output = (*tp_down_attn)({input});
     EXPECT_EQ(output[0]->Dims(), input->Dims());
 
-    auto direct_q_attn = std::make_shared<nn::MLASelfAttention>(
-        config,
-        /*q_lora_rank=*/-1,
-        /*kv_lora_rank=*/32,
-        /*qk_nope_head_dim=*/8,
-        /*qk_rope_head_dim=*/8,
-        /*v_head_dim=*/16);
+    auto direct_q_config = config;
+    direct_q_config.q_lora_rank = std::nullopt;
+    auto direct_q_attn = std::make_shared<nn::MLASelfAttention>(direct_q_config);
     direct_q_attn->To(GetDevice());
     EXPECT_EQ(direct_q_attn->module(nn::MLASelfAttention::kLinearQProjLayerName).type(),
               nn::parallel::ColumnParallelLinear::kType);

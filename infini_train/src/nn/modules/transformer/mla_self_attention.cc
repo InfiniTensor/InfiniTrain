@@ -19,35 +19,9 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
-namespace {
-int64_t DefaultQKVHeadDim(const TransformerConfig &config) {
-    CHECK_EQ(config.n_embd % config.n_head, 0) << "n_embd must be divisible by n_head";
-    return config.n_embd / config.n_head;
-}
 
-int64_t DefaultQKRoPEHeadDim(const TransformerConfig &config) {
-    return DefaultQKVHeadDim(config);
-}
-
-int64_t DefaultQKNoPEHeadDim(const TransformerConfig &config) {
-    return DefaultQKVHeadDim(config);
-}
-} // namespace
-
-MLASelfAttention::MLASelfAttention(const TransformerConfig &config)
-    : MLASelfAttention(config,
-                       /*q_lora_rank=*/config.n_embd,
-                       /*kv_lora_rank=*/config.n_embd,
-                       /*qk_nope_head_dim=*/DefaultQKNoPEHeadDim(config),
-                       /*qk_rope_head_dim=*/DefaultQKRoPEHeadDim(config),
-                       /*v_head_dim=*/DefaultQKVHeadDim(config)) {}
-
-MLASelfAttention::MLASelfAttention(const TransformerConfig &config, int64_t q_lora_rank, int64_t kv_lora_rank,
-                                   int64_t qk_nope_head_dim, int64_t qk_rope_head_dim, int64_t v_head_dim,
-                                   bool q_down_proj_use_tp, bool kv_down_proj_use_tp)
-    : CloneableModule(kType), config_(config) {
-    SetupAttention(config, q_lora_rank, kv_lora_rank, qk_nope_head_dim, qk_rope_head_dim, v_head_dim,
-                   q_down_proj_use_tp, kv_down_proj_use_tp);
+MLASelfAttention::MLASelfAttention(const TransformerConfig &config) : CloneableModule(kType), config_(config) {
+    SetupAttention(config);
 
     if (use_q_lora_) {
         if (q_down_proj_use_tp_) {
@@ -123,15 +97,19 @@ MLASelfAttention::MLASelfAttention(const TransformerConfig &config, int64_t q_lo
                                    ->View({1, 1, config_.block_size, config_.block_size});
 }
 
-void MLASelfAttention::SetupAttention(const TransformerConfig &config, int64_t q_lora_rank, int64_t kv_lora_rank,
-                                      int64_t qk_nope_head_dim, int64_t qk_rope_head_dim, int64_t v_head_dim,
-                                      bool q_down_proj_use_tp, bool kv_down_proj_use_tp) {
+void MLASelfAttention::SetupAttention(const TransformerConfig &config) {
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
 
     CHECK_EQ(config.n_embd % config.n_head, 0) << "n_embd must be divisible by n_head";
     CHECK_EQ(config.n_head % tp_world_size, 0) << "n_head must be divisible by TP world size";
-    CHECK(q_lora_rank == -1 || q_lora_rank > 0) << "q_lora_rank must be positive, or -1 to disable q LoRA";
-    CHECK_GT(kv_lora_rank, 0) << "kv_lora_rank must be positive";
+    CHECK(!config.q_lora_rank.has_value() || config.q_lora_rank.value() > 0) << "q_lora_rank must be positive when set";
+
+    const auto default_head_dim = config.n_embd / config.n_head;
+    const int64_t kv_lora_rank = config.kv_lora_rank > 0 ? config.kv_lora_rank : config.n_embd;
+    const int64_t qk_nope_head_dim = config.qk_nope_head_dim > 0 ? config.qk_nope_head_dim : default_head_dim;
+    const int64_t qk_rope_head_dim = config.qk_rope_head_dim > 0 ? config.qk_rope_head_dim : default_head_dim;
+    const int64_t v_head_dim = config.v_head_dim > 0 ? config.v_head_dim : default_head_dim;
+
     CHECK_GT(qk_nope_head_dim, 0) << "qk_nope_head_dim must be positive";
     CHECK_GT(qk_rope_head_dim, 0) << "qk_rope_head_dim must be positive";
     CHECK_GT(v_head_dim, 0) << "v_head_dim must be positive";
@@ -141,15 +119,15 @@ void MLASelfAttention::SetupAttention(const TransformerConfig &config, int64_t q
     n_embd_ = config.n_embd;
     local_n_head_ = n_head_ / tp_world_size;
 
-    use_q_lora_ = q_lora_rank != -1;
-    q_lora_rank_ = use_q_lora_ ? q_lora_rank : 0;
+    use_q_lora_ = config.q_lora_rank.has_value();
+    q_lora_rank_ = config.q_lora_rank.value_or(0);
     kv_lora_rank_ = kv_lora_rank;
     qk_nope_head_dim_ = qk_nope_head_dim;
     qk_rope_head_dim_ = qk_rope_head_dim;
     qk_head_dim_ = qk_nope_head_dim_ + qk_rope_head_dim_;
     v_head_dim_ = v_head_dim;
-    q_down_proj_use_tp_ = q_down_proj_use_tp;
-    kv_down_proj_use_tp_ = kv_down_proj_use_tp;
+    q_down_proj_use_tp_ = config.q_down_proj_use_tp;
+    kv_down_proj_use_tp_ = config.kv_down_proj_use_tp;
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
@@ -173,7 +151,7 @@ MLASelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Tensor
 
     // ----------- Q PATH -----------
     // Q path, align with Megatron:
-    //     - q_lora_rank == -1 -> linear_q_proj directly;
+    //     - q_lora_rank == nullopt -> linear_q_proj directly;
     //     - otherwise linear_q_down_proj -> q_layernorm -> linear_q_up_proj.
     std::shared_ptr<Tensor> q;
     if (use_q_lora_) {
@@ -224,8 +202,8 @@ MLASelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Tensor
     // compressed_kv: (B, T_local, R_kv), k_pos_emb: (B, T_local, D_rope)
     auto compressed_kv = compressed_kv_with_pe->Slice(-1, 0, kv_lora_rank_);
     auto k_pos_emb = compressed_kv_with_pe->Slice(-1, kv_lora_rank_, kv_lora_rank_ + qk_rope_head_dim_)->Contiguous();
-    const bool k_pos_emb_has_full_sequence = kv_down_proj_use_tp_ && kv_down_proj_output_is_sharded
-                                        && sequence_parallel_enabled;
+    const bool k_pos_emb_has_full_sequence
+        = kv_down_proj_use_tp_ && kv_down_proj_output_is_sharded && sequence_parallel_enabled;
     if (k_pos_emb_has_full_sequence) {
         // k_pos_emb already has full T; keep only compressed_kv sequence-sharded for linear_kv_up_proj.
         // compressed_kv: (B, T, R_kv) -> (B, T_local, R_kv)
@@ -285,7 +263,7 @@ MLASelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Tensor
     y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_n_head_ * v_head_dim_});
     // linear_proj: (B, T, H_local * D_v) -> (B, T, C)
     y = (*modules_[kLinearProjLayerName])({y})[0];
-    
+
     return {y};
 }
 

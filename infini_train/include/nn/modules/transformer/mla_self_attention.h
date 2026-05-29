@@ -24,9 +24,6 @@ public:
     static constexpr char kParamBiasName[] = "bias";
 
     explicit MLASelfAttention(const TransformerConfig &config);
-    MLASelfAttention(const TransformerConfig &config, int64_t q_lora_rank, int64_t kv_lora_rank,
-                     int64_t qk_nope_head_dim, int64_t qk_rope_head_dim, int64_t v_head_dim,
-                     bool q_down_proj_use_tp = false, bool kv_down_proj_use_tp = false);
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
@@ -48,9 +45,7 @@ private:
     bool q_down_proj_use_tp_ = false;
     bool kv_down_proj_use_tp_ = false;
 
-    void SetupAttention(const TransformerConfig &config, int64_t q_lora_rank, int64_t kv_lora_rank,
-                        int64_t qk_nope_head_dim, int64_t qk_rope_head_dim, int64_t v_head_dim,
-                        bool q_down_proj_use_tp, bool kv_down_proj_use_tp);
+    void SetupAttention(const TransformerConfig &config);
 };
 
 } // namespace infini_train::nn
