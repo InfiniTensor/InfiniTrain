@@ -1,7 +1,6 @@
-#include <algorithm>
+#include <cstddef>
 #include <memory>
 #include <numeric>
-#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
@@ -42,23 +41,24 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
     const int64_t K_total = std::accumulate(Ks.begin(), Ks.end(), int64_t{0});
     output_dims[dim] = K_total;
 
-    auto output = std::make_shared<Tensor>(output_dims, DataType::kFLOAT32);
+    auto output = std::make_shared<Tensor>(output_dims, dtype, device);
 
     const int64_t outer_size
         = std::accumulate(output_dims.begin(), output_dims.begin() + dim, 1LL, std::multiplies<int64_t>());
     const int64_t inner_size
         = std::accumulate(output_dims.begin() + dim + 1, output_dims.end(), 1LL, std::multiplies<int64_t>());
-    const size_t elem_size = sizeof(float);
+    const size_t elem_size = kDataTypeToSize.at(dtype);
 
-    float *dst_ptr_base = static_cast<float *>(output->DataPtr());
+    auto *dst_ptr_base = static_cast<std::byte *>(output->DataPtr());
     for (int64_t n = 0; n < outer_size; ++n) {
         int64_t offset_k = 0;
-        float *dst_block = dst_ptr_base + n * K_total * inner_size;
+        auto *dst_block = dst_ptr_base + n * K_total * inner_size * elem_size;
 
         for (size_t i = 0; i < inputs.size(); ++i) {
             const int64_t Ki = Ks[i];
-            const float *src_ptr = static_cast<const float *>(inputs[i]->DataPtr()) + n * Ki * inner_size;
-            float *dst_ptr = dst_block + offset_k * inner_size;
+            const auto *src_ptr
+                = static_cast<const std::byte *>(inputs[i]->DataPtr()) + n * Ki * inner_size * elem_size;
+            auto *dst_ptr = dst_block + offset_k * inner_size * elem_size;
             std::memcpy(dst_ptr, src_ptr, static_cast<size_t>(Ki) * inner_size * elem_size);
             offset_k += Ki;
         }
