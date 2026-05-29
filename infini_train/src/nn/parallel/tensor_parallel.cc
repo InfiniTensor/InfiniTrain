@@ -56,22 +56,25 @@ std::shared_ptr<Tensor> GatherAlongFirstDim(
   return GatherTensorParallelShard(tensor, 0);
 }
 
-std::shared_ptr<Tensor> ScatterAlongFirstDim(const std::shared_ptr<Tensor> &tensor) {
-    int world_size = global::GetTensorParallelSize();
-    CHECK_GT(world_size, 0) << "Tensor Parallel group not initialized";
-    if (world_size == 1) {
-        return tensor;
-    }
+std::shared_ptr<Tensor> ScatterAlongFirstDim(
+    const std::shared_ptr<Tensor> &tensor) {
+  int world_size = global::GetTensorParallelSize();
+  CHECK_GT(world_size, 0) << "Tensor Parallel group not initialized";
+  if (world_size == 1) {
+    return tensor;
+  }
 
-    auto device = tensor->GetDevice();
-    auto tp_group = ProcessGroupFactory::Instance(device.type())
-                        ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
-    auto rank = tp_group->GetGroupRank(device.Rank().GlobalRank());
+  auto device = tensor->GetDevice();
+  auto tp_group =
+      ProcessGroupFactory::Instance(device.type())
+          ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+  auto rank = tp_group->GetGroupRank(device.Rank().GlobalRank());
 
-    CHECK_EQ(tensor->Dims()[0] % world_size, 0) << "First dimension must be divisible by TP world size";
-    auto first_dim_size = tensor->Dims()[0] / world_size;
-    auto shards = tensor->Split(first_dim_size, 0);
-    return shards[rank]->Contiguous();
+  CHECK_EQ(tensor->Dims()[0] % world_size, 0)
+      << "First dimension must be divisible by TP world size";
+  auto first_dim_size = tensor->Dims()[0] / world_size;
+  auto shards = tensor->Split(first_dim_size, 0);
+  return shards[rank]->Contiguous();
 }
 
 std::shared_ptr<Tensor> GatherAlongLastDim(
@@ -233,18 +236,22 @@ class ReduceScatterToSPRegion : public autograd::Function {
 };
 
 class ScatterToSPRegion : public autograd::Function {
-public:
-    static constexpr char kType[] = "ScatterToSPRegionFunction";
+ public:
+  static constexpr char kType[] = "ScatterToSPRegionFunction";
 
-    explicit ScatterToSPRegion() : autograd::Function(kType) {}
+  explicit ScatterToSPRegion() : autograd::Function(kType) {}
 
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
-        return {ScatterAlongFirstDim(input_tensors[0]->Transpose(0, 1))->Transpose(0, 1)};
-    };
+  std::vector<std::shared_ptr<Tensor>> Forward(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
+    return {ScatterAlongFirstDim(input_tensors[0]->Transpose(0, 1))
+                ->Transpose(0, 1)};
+  };
 
-    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
-        return {GatherAlongFirstDim(grad_outputs[0]->Transpose(0, 1))->Transpose(0, 1)};
-    };
+  std::vector<std::shared_ptr<Tensor>> Backward(
+      const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
+    return {
+        GatherAlongFirstDim(grad_outputs[0]->Transpose(0, 1))->Transpose(0, 1)};
+  };
 };
 
 class GatherFromSPRegion : public autograd::Function {
@@ -306,8 +313,9 @@ std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(
   return std::make_shared<ReduceScatterToSPRegion>()->Apply({input});
 }
 
-std::vector<std::shared_ptr<Tensor>> ScatterToSPRegionFunc(const std::shared_ptr<Tensor> &input) {
-    return std::make_shared<ScatterToSPRegion>()->Apply({input});
+std::vector<std::shared_ptr<Tensor>> ScatterToSPRegionFunc(
+    const std::shared_ptr<Tensor> &input) {
+  return std::make_shared<ScatterToSPRegion>()->Apply({input});
 }
 
 std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(
