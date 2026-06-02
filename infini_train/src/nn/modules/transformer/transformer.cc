@@ -29,9 +29,11 @@ TransformerFirstStage::TransformerFirstStage(const TransformerConfig &config)
     modules_[kWTELayerName] = std::make_shared<parallel::VocabParallelEmbedding>(
         config_.vocab_size, config_.n_embd, parallel::global::GetSequenceParallelEnabled());
 
-    // RoPE-based models do not use absolute position embedding.
-    if (config_.attention_type == AttentionType::kStandard) {
+    // Only learned absolute position embedding uses a trainable WPE table.
+    if (config_.position_embedding_type == PositionEmbeddingType::kLearnedAbsolute) {
         modules_[kWPELayerName] = std::make_shared<Embedding>(config_.block_size, config_.n_embd);
+    } else if (config_.position_embedding_type != PositionEmbeddingType::kRoPE) {
+        LOG(FATAL) << "Unsupported position embedding type";
     }
 }
 
@@ -45,7 +47,7 @@ std::vector<std::shared_ptr<Tensor>> TransformerFirstStage::Forward(const std::v
     // (B, T) -> Embedding(V_local, C) -> (B, T, C)
     auto tok_emb = (*modules_[kWTELayerName])({x1});
 
-    // Add position embedding only for models that use absolute position encoding
+    // Add position embedding only for models that use learned absolute position encoding.
     if (modules_.contains(kWPELayerName)) {
         // (T_local)
         // NOTE(zbl): Slice pos sequence when SP is enabled
@@ -66,7 +68,7 @@ std::vector<std::shared_ptr<Tensor>> TransformerFirstStage::Forward(const std::v
         // (B, T, C)
         return {tok_emb[0] + pos_emb[0]};
     } else {
-        // For RoPE-based models (LLaMA3), no position embedding needed
+        // For RoPE-based models (LLaMA3), no absolute position embedding is needed.
         // (B, T, C)
         return tok_emb;
     }
@@ -133,8 +135,8 @@ TransformerChunk::TransformerChunk(const TransformerConfig &config, int start_la
 std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     auto x1 = x[0];
 
-    // Check if we need to pass RoPE parameters (for LLaMA3 style models)
-    if (config_.attention_type == AttentionType::kRoPE) {
+    // Check if we need to pass RoPE parameters (for LLaMA3 style models).
+    if (config_.position_embedding_type == PositionEmbeddingType::kRoPE) {
         // For RoPE models, we need to prepare freqs_cis and potentially other parameters
         const auto device = x1->GetDevice();
 
@@ -163,9 +165,11 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
         for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName])) {
             x1 = (*h)({x1, freqs_view, start_pos_ptr, mask})[0];
         }
-    } else {
-        // Standard attention (GPT2 style)
+    } else if (config_.position_embedding_type == PositionEmbeddingType::kLearnedAbsolute) {
+        // Learned absolute position embedding models (GPT-2 style).
         for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName])) { x1 = (*h)({x1})[0]; }
+    } else {
+        LOG(FATAL) << "Unsupported position embedding type";
     }
 
     return {x1};
@@ -219,7 +223,7 @@ TransformerModel::TransformerModel(const TransformerConfig config)
         modules_[kPPFirstStageName] = std::make_shared<TransformerFirstStage>(config_);
         transformer[TransformerFirstStage::kWTELayerName]
             = modules_[kPPFirstStageName]->mutable_module(TransformerFirstStage::kWTELayerName);
-        if (config_.attention_type == AttentionType::kStandard) {
+        if (config_.position_embedding_type == PositionEmbeddingType::kLearnedAbsolute) {
             transformer[TransformerFirstStage::kWPELayerName]
                 = modules_[kPPFirstStageName]->mutable_module(TransformerFirstStage::kWPELayerName);
         }

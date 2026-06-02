@@ -14,7 +14,7 @@ inline nn::TransformerConfig LLaMA3Config() {
             .n_head = 32,
             .n_kv_head = 8,
             .n_embd = 2048,
-            .attention_type = nn::AttentionType::kRoPE,
+            .position_embedding_type = nn::PositionEmbeddingType::kRoPE,
             .activation_type = nn::MLPType::kSwiGLU,
             .norm_type = nn::NormType::kRMSNorm,
             .add_bias_linear = false,
@@ -36,7 +36,7 @@ inline void SanitizeLLaMA3Config(const nn::TransformerConfig &c) {
     CHECK_EQ(c.n_head % c.n_kv_head, 0) << "n_head must be divisible by n_kv_head for GQA";
     CHECK_GT(c.n_embd, 0);
     CHECK_EQ(c.n_embd % c.n_head, 0) << "n_embd must be divisible by n_head";
-    CHECK(c.attention_type == nn::AttentionType::kRoPE) << "LLaMA-3 requires RoPE attention";
+    CHECK(c.position_embedding_type == nn::PositionEmbeddingType::kRoPE) << "LLaMA-3 requires RoPE position embedding";
     CHECK(c.activation_type == nn::MLPType::kSwiGLU) << "LLaMA-3 requires SwiGLU activation";
     CHECK(c.norm_type == nn::NormType::kRMSNorm) << "LLaMA-3 requires RMSNorm";
     CHECK(!c.add_bias_linear) << "LLaMA-3 has no bias in linear layers";

@@ -34,14 +34,6 @@ private:
     // Setup method for different attention modes
     void SetupAttention(const TransformerConfig &config);
 
-    // Standard attention forward (GPT2 style: no RoPE, no GQA)
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    ForwardStandard(const std::vector<std::shared_ptr<infini_train::Tensor>> &x);
-
-    // RoPE-aware attention forward (LLaMA3 style: with RoPE, optional GQA)
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    ForwardWithRoPE(const std::vector<std::shared_ptr<infini_train::Tensor>> &x);
-
     // GQA helper method
     std::shared_ptr<infini_train::Tensor> RepeatKV(const std::shared_ptr<infini_train::Tensor> &x, int64_t n_rep);
 };

@@ -102,7 +102,7 @@ TEST_P(TransformerModuleTest, StandardAttention) {
     config.n_embd = 64;
     config.n_head = 4;
     config.n_kv_head = 4;
-    config.attention_type = nn::AttentionType::kStandard;
+    config.position_embedding_type = nn::PositionEmbeddingType::kLearnedAbsolute;
     config.add_bias_linear = true;
 
     auto attn = std::make_shared<nn::CausalSelfAttention>(config);
@@ -120,7 +120,7 @@ TEST_P(TransformerModuleTest, MLAAttention) {
     config.n_embd = 64;
     config.n_head = 4;
     config.block_size = 16;
-    config.attention_type = nn::AttentionType::kStandard;
+    config.position_embedding_type = nn::PositionEmbeddingType::kLearnedAbsolute;
     config.add_bias_linear = true;
     config.multi_latent_attention = true;
     config.q_lora_rank = 32;
@@ -198,7 +198,7 @@ TEST_P(TransformerModuleTest, LLaMA3Model) {
     config.n_head = 4;
     config.n_kv_head = 2;
     config.n_embd = 64;
-    config.attention_type = nn::AttentionType::kRoPE;
+    config.position_embedding_type = nn::PositionEmbeddingType::kRoPE;
     config.activation_type = nn::MLPType::kSwiGLU;
     config.norm_type = nn::NormType::kRMSNorm;
     config.add_bias_linear = false;
@@ -225,7 +225,7 @@ TEST_P(TransformerModuleTest, StateDict) {
     config.n_kv_head = 2;
     config.n_embd = 32;
     config.vocab_size = 1000;
-    config.attention_type = nn::AttentionType::kStandard;
+    config.position_embedding_type = nn::PositionEmbeddingType::kLearnedAbsolute;
     config.activation_type = nn::MLPType::kGELU;
     config.norm_type = nn::NormType::kLayerNorm;
     config.add_bias_linear = true;

@@ -143,7 +143,7 @@ MLASelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Tensor
     const auto freqs_cis = x.size() > 1 ? x[1] : nullptr;
     // external_mask: (1, 1, T, T)
     const auto external_mask = x.size() > 3 ? x[3] : nullptr;
-    if (config_.attention_type == AttentionType::kRoPE) {
+    if (config_.position_embedding_type == PositionEmbeddingType::kRoPE) {
         CHECK(freqs_cis != nullptr) << "freqs_cis is null.";
     }
 
@@ -227,7 +227,7 @@ MLASelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Tensor
     auto k_nope = kv->Slice(-1, 0, qk_nope_head_dim_);
     auto v = kv->Slice(-1, qk_nope_head_dim_, qk_nope_head_dim_ + v_head_dim_);
 
-    if (config_.attention_type == AttentionType::kRoPE) {
+    if (config_.position_embedding_type == PositionEmbeddingType::kRoPE) {
         // q_pos_emb: (B, T, H_local, D_rope), k_pos_emb: (B, T, 1, D_rope)
         std::tie(q_pos_emb, k_pos_emb) = ApplyRotaryEmbedding(q_pos_emb, k_pos_emb, freqs_cis);
     }

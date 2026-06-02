@@ -14,7 +14,7 @@ inline nn::TransformerConfig GPT2Config() {
             .n_head = 12,
             .n_kv_head = 12,
             .n_embd = 768,
-            .attention_type = nn::AttentionType::kStandard,
+            .position_embedding_type = nn::PositionEmbeddingType::kLearnedAbsolute,
             .activation_type = nn::MLPType::kGELU,
             .norm_type = nn::NormType::kLayerNorm,
             .add_bias_linear = true,
@@ -34,7 +34,8 @@ inline void SanitizeGPT2Config(const nn::TransformerConfig &c) {
     CHECK_GT(c.n_embd, 0);
     CHECK_EQ(c.n_embd % c.n_head, 0) << "n_embd must be divisible by n_head";
     CHECK_EQ(c.n_kv_head, c.n_head) << "GPT-2 does not use GQA; n_kv_head must equal n_head";
-    CHECK(c.attention_type == nn::AttentionType::kStandard) << "GPT-2 requires standard attention";
+    CHECK(c.position_embedding_type == nn::PositionEmbeddingType::kLearnedAbsolute)
+        << "GPT-2 requires learned absolute position embedding";
     CHECK(c.activation_type == nn::MLPType::kGELU) << "GPT-2 requires GELU activation";
     CHECK(c.norm_type == nn::NormType::kLayerNorm) << "GPT-2 requires LayerNorm";
 }

@@ -10,9 +10,13 @@ enum class ModelType {
     kLLaMA3, // LLaMA3
 };
 
-enum class AttentionType {
-    kStandard, // Standard attention
-    kRoPE      // Rotary Position Embedding
+enum class PositionEmbeddingType {
+    kLearnedAbsolute, // Megatron: learned_absolute
+    kRoPE,            // Megatron: rope
+    kYarn,            // Megatron: yarn
+    kMRoPE,           // Megatron: mrope
+    kRelative,        // Megatron: relative
+    kNone             // Megatron: none
 };
 
 enum class MLPType {
@@ -34,9 +38,9 @@ struct TransformerConfig {
     int64_t n_kv_head = 12;              // Num of Key/Value heads (<= n_head, < n_head if using GQA)
     int64_t n_embd = 768;                // Hidden size
 
-    AttentionType attention_type = AttentionType::kStandard; // Attention mechanism type
-    MLPType activation_type = MLPType::kGELU;                // MLP activation type
-    NormType norm_type = NormType::kLayerNorm;               // Normalization type
+    PositionEmbeddingType position_embedding_type = PositionEmbeddingType::kLearnedAbsolute; // Position embedding type.
+    MLPType activation_type = MLPType::kGELU;                                                // MLP activation type
+    NormType norm_type = NormType::kLayerNorm;                                               // Normalization type
 
     bool add_bias_linear = true; // Whether to add learnable bias to all Linear layers in the Transformer block,
                                  // including: attention QKV projection, attention output projection, MLP FC layers (and
