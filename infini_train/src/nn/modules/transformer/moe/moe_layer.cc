@@ -15,7 +15,7 @@ namespace infini_train::nn::moe {
 MoELayer::MoELayer(const TransformerConfig &config) : CloneableModule(kType), config_(config) {
     const auto &moe_config = RequireMoEConfig(config_);
     CHECK(config_.ffn_type == FFNType::kMoE);
-    CHECK(moe_config.dispatcher_type == MoEConfig::DispatcherType::kAllGather)
+    CHECK(moe_config.token_dispatcher_type == MoEConfig::TokenDispatcherType::kAllGather)
         << "Current InfiniTrain MoE implementation supports AllGather dispatcher only";
 
     modules_[kRouterLayerName] = std::make_shared<TopKRouter>(config_);
