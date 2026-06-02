@@ -18,6 +18,7 @@ namespace infini_train {
 namespace autograd {
 class Function;
 class AccumulateGrad;
+class PreAccumulateGradHook;
 class PostAccumulateGradHook;
 } // namespace autograd
 
@@ -230,8 +231,11 @@ public:
     std::shared_ptr<autograd::AccumulateGrad> grad_accumulator();
     void ResetAccumulator();
 
-    void RegisterPostAccumulateGradHook(std::shared_ptr<autograd::PostAccumulateGradHook> hook);
+    void RegisterPreAccumulateGradHook(std::shared_ptr<autograd::PreAccumulateGradHook> hook);
 
+    autograd::PreAccumulateGradHook *pre_accumulate_grad_hook() const;
+
+    void RegisterPostAccumulateGradHook(std::shared_ptr<autograd::PostAccumulateGradHook> hook);
     autograd::PostAccumulateGradHook *post_accumulate_grad_hook() const;
 
 private:
@@ -243,6 +247,7 @@ private:
     // FIXME(dcj): This should be a weak_ptr. The autograd graph should hold
     // a strong reference to the accumulator to manage its lifetime.
     std::shared_ptr<autograd::AccumulateGrad> grad_accumulator_ = nullptr;
+    std::shared_ptr<autograd::PreAccumulateGradHook> pre_accumulate_grad_hook_ = nullptr;
     std::shared_ptr<autograd::PostAccumulateGradHook> post_accumulate_grad_hook_ = nullptr;
 
     bool grad_overwrite_once_ = false;

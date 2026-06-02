@@ -1,8 +1,5 @@
 #include "example/common/utils.h"
 
-#include "gflags/gflags.h"
-#include "glog/logging.h"
-
 namespace infini_train {
 
 float ConvertBF16ToFloat(void *ptr) {
@@ -62,13 +59,6 @@ void ReadVectorShardFloat(std::ifstream &ifs, float *dst, int64_t len, int64_t s
     ifs.seekg(base + std::streamoff(start * sizeof(float)));
     ifs.read(reinterpret_cast<char *>(dst), static_cast<std::streamsize>(cnt * sizeof(float)));
     ifs.seekg(base + std::streamoff(len * sizeof(float)));
-}
-
-void ValidateDistributedOptimizerFlags(bool use_distributed_optimizer) {
-    gflags::CommandLineFlagInfo zero_stage_info;
-    CHECK(gflags::GetCommandLineFlagInfo("zero_stage", &zero_stage_info));
-    CHECK(use_distributed_optimizer || zero_stage_info.is_default)
-        << "--zero_stage requires --use_distributed_optimizer=true.";
 }
 
 } // namespace infini_train

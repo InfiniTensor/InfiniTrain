@@ -21,6 +21,19 @@ class Work;
 namespace infini_train::nn::parallel {
 class ParamAndGradBucket {
 public:
+    /**
+     * @brief Create bucket metadata and flat-buffer views.
+     *
+     * @param params                  Parameters in bucket-local order.
+     * @param param_data              View of this bucket in the flat parameter buffer, or nullptr if unused.
+     * @param param_dtype             Parameter storage dtype.
+     * @param grad_data               View of this bucket in the flat gradient buffer; nullptr for ZeRO-2.
+     * @param grad_dtype              Gradient storage dtype.
+     * @param offset                  Bucket start offset in the owning flat buffer.
+     * @param num_elements_unpadded   Bucket element count before padding.
+     * @param gradient_scaling_factor Pre-collective gradient scale factor.
+     * @param bucket_id               Bucket index in the owning ParamAndGradBuffer.
+     */
     ParamAndGradBucket(const std::vector<std::shared_ptr<Tensor>> &params, const std::shared_ptr<Tensor> &param_data,
                        DataType param_dtype, const std::shared_ptr<Tensor> &grad_data, DataType grad_dtype,
                        size_t offset, size_t num_elements_unpadded, float gradient_scaling_factor, size_t bucket_id);
@@ -65,6 +78,14 @@ private:
 
 class ParamAndGradBucketGroup {
 public:
+    /**
+     * @brief Group buckets that synchronize gradients and parameters together.
+     *
+     * @param buckets            Buckets owned by this group.
+     * @param collective_pg      Process group for gradient and parameter collectives.
+     * @param process_group_size Number of ranks in collective_pg.
+     * @param ddp_config         DDP/DistributedOptimizer behavior config.
+     */
     ParamAndGradBucketGroup(const std::vector<std::shared_ptr<ParamAndGradBucket>> &buckets,
                             const ProcessGroup *collective_pg, size_t process_group_size,
                             DistributedDataParallelConfig ddp_config);
@@ -79,8 +100,7 @@ public:
     // Start grad reduce
     void StartGradSync();
 
-    // Accumulate a parameter grad into bucket buffer
-    // ZeRO-2: Use this funtion to take over autograd::AccumulateGrad::Backward
+    // Accumulate a parameter grad into bucket storage for the ZeRO-2 pre-accumulate hook.
     void AccumulateParamGrad(const std::shared_ptr<Tensor> &parameter, const std::shared_ptr<Tensor> &grad,
                              bool overwrite, float learning_rate);
 
@@ -138,6 +158,15 @@ private:
 
 class ParamAndGradBuffer {
 public:
+    /**
+     * @brief Own flat buffers and bucket metadata for one dtype group.
+     *
+     * @param params      Parameters with the same parameter/gradient dtype pair.
+     * @param param_dtype Flat parameter-buffer dtype.
+     * @param grad_dtype  Gradient storage dtype.
+     * @param ddp_pg      Data-parallel process group used by derived bucket groups.
+     * @param ddp_config  DDP/DistributedOptimizer bucketing and padding config.
+     */
     ParamAndGradBuffer(const std::vector<std::shared_ptr<Tensor>> &params, DataType &param_dtype, DataType &grad_dtype,
                        const ProcessGroup *ddp_pg, DistributedDataParallelConfig ddp_config);
 

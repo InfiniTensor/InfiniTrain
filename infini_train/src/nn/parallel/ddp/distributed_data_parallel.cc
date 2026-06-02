@@ -22,9 +22,9 @@ constexpr char kModuleName[] = "module";
 
 // NOTE(zbl): ZeRO-2 bypasses Tensor::grad accumulation: stash grads in the bucket group's
 //            temporary full-grad buffer, then mark the bucket ready for reduce-scatter.
-class Zero2AccumulateGradHook final : public autograd::PostAccumulateGradHook {
+class Zero2PreAccumulateGradHook final : public autograd::PreAccumulateGradHook {
 public:
-    explicit Zero2AccumulateGradHook(std::weak_ptr<ParamAndGradBucketGroup> group) : group_(std::move(group)) {}
+    explicit Zero2PreAccumulateGradHook(std::weak_ptr<ParamAndGradBucketGroup> group) : group_(std::move(group)) {}
 
     bool TryBypassAccumulate(const std::shared_ptr<Tensor> &param, const std::shared_ptr<Tensor> &grad_output,
                              bool overwrite, float learning_rate) override {
@@ -67,15 +67,10 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
                                                  const DistributedDataParallelConfig ddp_config)
     : ddp_config_(ddp_config),
       ddp_pg_(ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(rank.GlobalRank()))) {
-    CHECK(ddp_config_.zero_stage >= 1 && ddp_config_.zero_stage <= 3)
-        << "DistributedDataParallel: zero_stage must be in 1/2/3.";
-    if (ddp_config_.zero_stage >= 3) {
+    CHECK(ddp_config_.zero_stage >= 0 && ddp_config_.zero_stage <= 3)
+        << "DistributedDataParallel: zero_stage must be in 0/1/2/3.";
+    if (ddp_config_.zero_stage == 3) {
         LOG(FATAL) << "DistributedDataParallel: ZeRO-3 is not implemented yet.";
-    }
-    if (!ddp_config_.use_distributed_optimizer && ddp_config_.zero_stage >= 1) {
-        LOG(WARNING) << "DistributedDataParallel: zero_stage is ignored because "
-                        "use_distributed_optimizer is false.";
-        ddp_config_.zero_stage = 1;
     }
     for (auto &param : module->Parameters()) {
         if (!param->requires_grad()) {
@@ -83,7 +78,7 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         }
         auto device = param->GetDevice();
         CHECK_EQ(device.index(), rank.thread_rank()) << "All parameters must be on the same device as the module";
-        if (!ddp_config.gradient_bucketing_enabled && !ddp_config.use_distributed_optimizer) {
+        if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
             auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(
                 function::ReduceOpType::kAvg, ddp_pg_);
             param->RegisterPostAccumulateGradHook(std::move(hook));
@@ -95,7 +90,7 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
     }
     modules_[kModuleName] = std::move(module);
 
-    if (ddp_config.use_distributed_optimizer) {
+    if (ddp_config.zero_stage >= 1) {
         BuildParamAndGradBuffers();
         RegisterBackwardHooks();
     } else if (ddp_config.gradient_bucketing_enabled) {
@@ -136,7 +131,6 @@ void DistributedDataParallel::BuildParamAndGradBuffers() {
             continue;
         }
 
-        // At the point, zero_stage is already aligned with use_distributed_optimizer.
         auto buffer = std::make_shared<ParamAndGradBuffer>(param_list, param_dtype, grad_dtype, ddp_pg_, ddp_config_);
 
         param_grad_buffers_.push_back(buffer);
@@ -145,7 +139,7 @@ void DistributedDataParallel::BuildParamAndGradBuffers() {
     // TODO(zbl): option for disable bucketing
     bucket_groups_ = PartitionBuckets(param_grad_buffers_, /*force_single_bucket_group=*/false);
 
-    if (ddp_config_.use_distributed_optimizer && ddp_config_.overlap_param_gather) {
+    if (ddp_config_.zero_stage >= 1 && ddp_config_.overlap_param_gather) {
         auto num_bucket_groups = bucket_groups_.size();
         for (auto i = num_bucket_groups - 1; i > 0; --i) {
             bucket_groups_[i]->SetNextParamGatherBucketGroup(bucket_groups_[i - 1]);
@@ -177,12 +171,11 @@ void DistributedDataParallel::RegisterBackwardHooks() {
                 continue;
             }
             auto it = param_to_bucket_group_.find(param.get());
-            if (it == param_to_bucket_group_.end()) {
-                continue;
-            }
+            CHECK(it != param_to_bucket_group_.end());
+
             std::weak_ptr<ParamAndGradBucketGroup> weak_group = it->second;
-            auto hook = std::make_unique<Zero2AccumulateGradHook>(weak_group);
-            param->RegisterPostAccumulateGradHook(std::move(hook));
+            auto hook = std::make_unique<Zero2PreAccumulateGradHook>(weak_group);
+            param->RegisterPreAccumulateGradHook(std::move(hook));
         }
         return;
     }
@@ -219,7 +212,7 @@ DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &inp
     if (reducer_) {
         reducer_->PrepareForBackward();
     }
-    if (ddp_config_.use_distributed_optimizer) {
+    if (ddp_config_.zero_stage >= 1) {
         for (auto buffer : param_grad_buffers_) { buffer->RebindGradViews(); }
     }
     return outputs;

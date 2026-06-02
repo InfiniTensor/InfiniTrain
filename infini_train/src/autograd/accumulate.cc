@@ -21,7 +21,6 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
     CHECK_EQ(grad_outputs.size(), 1);
     auto grad_output = grad_outputs[0];
 
-    auto grad = tensor_->grad();
     auto device = tensor_->GetDevice();
     core::DeviceGuard guard(device);
 
@@ -34,12 +33,16 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
         }
 
         const bool overwrite = tensor_->ConsumeGradOverwriteFlag();
-        auto hook = tensor_->post_accumulate_grad_hook();
-        if (hook && hook->TryBypassAccumulate(tensor_, grad_output, overwrite, learning_rate_)) {
-            tensor_->ResetAccumulator();
-            return {};
+        auto pre_hook = tensor_->pre_accumulate_grad_hook();
+        if (pre_hook) {
+            if (pre_hook->TryBypassAccumulate(tensor_, grad_output, overwrite, learning_rate_)) {
+                tensor_->ResetAccumulator();
+                return {};
+            }
+            (*pre_hook)(grad_output);
         }
 
+        auto grad = tensor_->grad();
         if (grad) {
             if (overwrite) {
                 // If the tensor is marked to overrite its current grad on next grad update
@@ -55,8 +58,9 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
             auto new_grad = std::make_shared<Tensor>(*grad_output.get(), 0, grad_output->Dims());
             tensor_->set_grad(new_grad);
         }
-        if (hook != nullptr) {
-            (*hook)(tensor_->grad());
+        auto post_hook = tensor_->post_accumulate_grad_hook();
+        if (post_hook != nullptr) {
+            (*post_hook)(tensor_->grad());
         }
         tensor_->ResetAccumulator();
     }

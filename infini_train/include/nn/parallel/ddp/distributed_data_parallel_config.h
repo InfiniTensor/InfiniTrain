@@ -30,21 +30,16 @@ public:
     // Ref:
     // https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/core/distributed/distributed_data_parallel_config.py
     // ======================================================
-    // Whether to enable DistributedOptimizer (ZeRO-1 equivalent).
-    // When set true:
-    //   1) Gradients/params are managed by ParamAndGradBuffer and reduced in groups.
-    //   2) The classic DDP reducer path is not used (i.e., disable reducer/bucketing in the DDP sense).
-    bool use_distributed_optimizer = false;
-
     // Whether to overlap gradient reduce-scatter/all-reduce with backward compute.
     // In this case, grad reduce is triggered immediately when a grad is ready or till all grads are ready.
     bool overlap_grad_reduce = true;
 
-    // ZeRO-DP Stage for memory optimization (Only take effects when use_distributed_optimizer=true)
-    //   ZeRO-1: Optimizer states partitioning, by default
+    // ZeRO-DP stage for memory optimization.
+    //   ZeRO-0: Disabled; use the classic DDP reducer path.
+    //   ZeRO-1: Optimizer states partitioning
     //   ZeRO-2: Gradients partitioning
     //   ZeRO-3: Parameters partitioning
-    int zero_stage = 1;
+    int zero_stage = 0;
 
     // Whether to overlap parameter all-gather with forward compute.
     bool overlap_param_gather = true;
