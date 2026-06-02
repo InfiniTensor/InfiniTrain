@@ -36,7 +36,6 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
-#include "example/common/utils.h"
 #include "example/gpt2/checkpoint_loader.h"
 #include "example/gpt2/config.h"
 

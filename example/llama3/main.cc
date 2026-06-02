@@ -35,7 +35,6 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
-#include "example/common/utils.h"
 #include "example/llama3/checkpoint_loader.h"
 #include "example/llama3/config.h"
 
