@@ -31,7 +31,7 @@ struct MoEConfig {
         kSigmoid,
     };
 
-    enum class DispatcherType {
+    enum class TokenDispatcherType {
         kAllGather, // Megatron-style AllGather dispatcher. Degenerates to local dispatch when TP=EP=1.
         kAllToAll   // Megatron-style AllToAll dispatcher for expert parallel MoE.
     };
@@ -50,7 +50,7 @@ struct MoEConfig {
     std::optional<float> expert_capacity_factor = std::nullopt;
     bool pad_expert_input_to_capacity = false;
     int64_t moe_ffn_hidden_size = 0;
-    DispatcherType dispatcher_type = DispatcherType::kAllGather;
+    TokenDispatcherType token_dispatcher_type = TokenDispatcherType::kAllGather;
     ExpertImpl expert_impl = ExpertImpl::kSequential;
 };
 
