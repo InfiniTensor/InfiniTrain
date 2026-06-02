@@ -283,7 +283,7 @@ void ParamAndGradBucketGroup::StartGradSync() {
             continue;
         }
 
-        if (ddp_config_.use_distributed_optimizer) {
+        if (ddp_config_.zero_stage >= 1) {
             if (grad_buffer_shard_list_[i].empty()) {
                 grad_buffer_shard_list_[i] = ShardBuffer(grad_buffer, collective_pg_size_);
             }
@@ -342,7 +342,7 @@ void ParamAndGradBucketGroup::FinishGradSync() {
 }
 
 void ParamAndGradBucketGroup::StartParamSync(bool force_sync) {
-    CHECK(ddp_config_.use_distributed_optimizer);
+    CHECK(ddp_config_.zero_stage >= 1);
 
     if (!collective_pg_) {
         LOG(ERROR) << "ParamAndGradBucketGroup: StartParamSync called with null collective_pg_.";
@@ -378,7 +378,7 @@ void ParamAndGradBucketGroup::StartParamSync(bool force_sync) {
 }
 
 void ParamAndGradBucketGroup::FinishParamSync(bool skip_next_bucket_dispatch) {
-    if (!ddp_config_.use_distributed_optimizer || !ddp_config_.overlap_param_gather) {
+    if (ddp_config_.zero_stage < 1 || !ddp_config_.overlap_param_gather) {
         return;
     }
 
@@ -427,7 +427,7 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
 
     // Param start must be multiple of 64
     auto PadParamStartIfNeeded = [&](size_t start) -> size_t {
-        if (ddp_config_.use_distributed_optimizer) {
+        if (ddp_config_.zero_stage >= 1) {
             // According to Megatron-LM, make sure each param starts at 128B aligned address (by default align to 64
             // elements for precision >=16-bit）
             return PadTo(start, kParamStartAlignElements);
@@ -437,7 +437,7 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
 
     // Bucket size shoule be multiple of ddp size and 128 (sweet spot for NCCL)
     auto PadBucketEndIfNeeded = [&](size_t bucket_end_index) -> size_t {
-        if (ddp_config_.use_distributed_optimizer) {
+        if (ddp_config_.zero_stage >= 1) {
             // According to Megatron-LM, ensure that all buckets start at a memory address that is 256B
             // aligned(128 values since params and grads use >= 16-bit precision)
             size_t lcm_val = std::lcm(ddp_world_size_, kBucketEndAlignElements);
@@ -509,7 +509,7 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
                                       static_cast<size_t>(0), std::plus<size_t>());
 
     CHECK(numel_unpadded_ <= numel_);
-    if (ddp_config_.use_distributed_optimizer) {
+    if (ddp_config_.zero_stage >= 1) {
         // numel must be multiple of ddp size (so that reduce-scatter could easily shard the buffer among ranks)
         CHECK_EQ(numel_ % ddp_world_size_, 0);
     } else {
@@ -518,10 +518,10 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
 
     // 2. Allocate buffer
     auto device = params_.front()->GetDevice();
-    if (ddp_config_.use_distributed_optimizer) {
+    if (ddp_config_.zero_stage >= 1) {
         param_buffer_ = AllocateFlatBuffer(numel_, param_dtype, device);
     } else {
-        // No param buffer needed if optimzer is not distributed
+        // No param buffer needed if optimizer is not distributed
         param_buffer_.reset();
     }
     if (ddp_config_.zero_stage >= 2) {
@@ -541,7 +541,7 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
     auto NewBucket
         = [&](const std::vector<std::shared_ptr<Tensor>> &bucket_params, size_t start_index, size_t end_index,
               size_t num_elements_unpadded, size_t bucket_id) -> std::shared_ptr<ParamAndGradBucket> {
-        if (ddp_config_.use_distributed_optimizer) {
+        if (ddp_config_.zero_stage >= 1) {
             CHECK_EQ(start_index % ddp_world_size_, 0);
             CHECK_EQ(end_index % ddp_world_size_, 0);
             CHECK_EQ(bucket_indices_.at(bucket_id).first, start_index);

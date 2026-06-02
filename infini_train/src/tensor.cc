@@ -559,6 +559,16 @@ void Tensor::ResetAccumulator() {
     }
 }
 
+void Tensor::RegisterPreAccumulateGradHook(std::shared_ptr<autograd::PreAccumulateGradHook> hook) {
+    CHECK(requires_grad_) << "cannot register a hook on a tensor that doesn't require gradient";
+
+    CHECK_EQ(grad_fn_, nullptr) << "pre accumulate grad hooks cannot be registered on non-leaf tensors";
+
+    pre_accumulate_grad_hook_ = hook;
+}
+
+autograd::PreAccumulateGradHook *Tensor::pre_accumulate_grad_hook() const { return pre_accumulate_grad_hook_.get(); }
+
 void Tensor::RegisterPostAccumulateGradHook(std::shared_ptr<autograd::PostAccumulateGradHook> hook) {
     CHECK(requires_grad_) << "cannot register a hook on a tensor that doesn't require gradient";
 
