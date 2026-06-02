@@ -19,7 +19,7 @@ SequentialMLP::SequentialMLP(const TransformerConfig &config) : CloneableModule(
     CHECK(moe_config.expert_impl == MoEConfig::ExpertImpl::kSequential);
     CHECK_EQ(moe_config.expert_parallel_size, 1)
         << "Current InfiniTrain MoE implementation supports expert_parallel_size=1 only";
-    CHECK(moe_config.dispatcher_type == MoEConfig::DispatcherType::kAllGather)
+    CHECK(moe_config.token_dispatcher_type == MoEConfig::TokenDispatcherType::kAllGather)
         << "Current InfiniTrain MoE implementation supports AllGather dispatcher only";
 
     num_local_experts_ = moe_config.num_experts;
