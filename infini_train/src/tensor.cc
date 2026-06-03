@@ -13,8 +13,9 @@
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/function_hook.h"
+#include "infini_train/include/autograd/gather.h"
 #include "infini_train/include/autograd/matmul.h"
-#include "infini_train/include/autograd/misc.h"
+#include "infini_train/include/autograd/no_op.h"
 #include "infini_train/include/autograd/outer.h"
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/transform.h"
@@ -356,7 +357,7 @@ std::vector<std::shared_ptr<Tensor>> Tensor::Split(int split_size, int dim) {
 
 std::shared_ptr<Tensor> Tensor::Gather(int dim, const std::shared_ptr<Tensor> &index) {
     CHECK(GetDevice() == index->GetDevice()) << "index must be on the same device as input.";
-    return std::make_shared<autograd::IndexGather>(dim)->Apply({shared_from_this(), index})[0];
+    return std::make_shared<autograd::Gather>(dim)->Apply({shared_from_this(), index})[0];
 }
 
 std::shared_ptr<Tensor> Tensor::RepeatInterleave(int64_t repeat, int64_t dim) {

@@ -10,15 +10,11 @@
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::kernels::cuda {
-// FIXME(zbl): This kernel aligns with torch.gather
-//             Currently named IndexGather to avoid conflict with communication operators
-//             Should be renamed to Gather later for interface consistency
 template <typename T>
-__global__ void IndexGatherForwardKernel(const T *__restrict__ input, const int64_t *__restrict__ norm_index,
-                                         T *__restrict__ output, const int64_t *__restrict__ out_dims,
-                                         const int64_t *__restrict__ in_strides,
-                                         const int64_t *__restrict__ out_strides, int num_dims, int gather_dim,
-                                         int64_t dim_size_gather, int64_t total_elements) {
+__global__ void GatherForwardKernel(const T *__restrict__ input, const int64_t *__restrict__ norm_index,
+                                    T *__restrict__ output, const int64_t *__restrict__ out_dims,
+                                    const int64_t *__restrict__ in_strides, const int64_t *__restrict__ out_strides,
+                                    int num_dims, int gather_dim, int64_t dim_size_gather, int64_t total_elements) {
     int64_t out_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (out_idx >= total_elements) {
         return;
@@ -44,8 +40,8 @@ __global__ void IndexGatherForwardKernel(const T *__restrict__ input, const int6
     output[out_idx] = input[in_linear];
 }
 
-std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &index,
-                                           int64_t dim) {
+std::shared_ptr<Tensor> GatherForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &index,
+                                      int64_t dim) {
     const auto &in_dims = input->Dims();
     const auto &idx_dims = index->Dims();
     CHECK_EQ(in_dims.size(), idx_dims.size());
@@ -104,23 +100,22 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
     core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            IndexGatherForwardKernel<T><<<blocks, threads, 0, stream>>>(
+            GatherForwardKernel<T><<<blocks, threads, 0, stream>>>(
                 static_cast<const T *>(input->DataPtr()), static_cast<const int64_t *>(index->DataPtr()),
                 static_cast<T *>(out->DataPtr()), out_dims_dev, in_strides_dev, out_strides_dev, (int)num_dims,
                 (int)dim, gather_dim_size, total_elements);
         },
-        "CUDA IndexGatherForward");
+        "CUDA GatherForward");
 
     CUDA_CHECK(cudaFreeAsync(dev_buf, stream));
     return out;
 }
 
 template <typename T>
-__global__ void IndexGatherBackwardKernel(const T *__restrict__ grad_output, const int64_t *__restrict__ index,
-                                          T *__restrict__ grad_input, const int64_t *__restrict__ out_dims,
-                                          const int64_t *__restrict__ in_strides,
-                                          const int64_t *__restrict__ out_strides, int num_dims, int gather_dim,
-                                          int64_t dim_size_gather, int64_t total_elements) {
+__global__ void GatherBackwardKernel(const T *__restrict__ grad_output, const int64_t *__restrict__ index,
+                                     T *__restrict__ grad_input, const int64_t *__restrict__ out_dims,
+                                     const int64_t *__restrict__ in_strides, const int64_t *__restrict__ out_strides,
+                                     int num_dims, int gather_dim, int64_t dim_size_gather, int64_t total_elements) {
     int64_t out_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (out_idx >= total_elements) {
         return;
@@ -150,9 +145,8 @@ __global__ void IndexGatherBackwardKernel(const T *__restrict__ grad_output, con
     atomicAdd(&grad_input[in_linear], grad_output[out_idx]);
 }
 
-std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_output,
-                                            const std::shared_ptr<Tensor> &index, int64_t dim,
-                                            const std::vector<int64_t> &input_dims) {
+std::shared_ptr<Tensor> GatherBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &index,
+                                       int64_t dim, const std::vector<int64_t> &input_dims) {
     const auto &in_dims = input_dims;
     const auto &idx_dims = index->Dims();
     CHECK_EQ(in_dims.size(), idx_dims.size());
@@ -211,12 +205,12 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
     core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            IndexGatherBackwardKernel<T><<<blocks, threads, 0, stream>>>(
+            GatherBackwardKernel<T><<<blocks, threads, 0, stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<const int64_t *>(index->DataPtr()),
                 static_cast<T *>(grad_input->DataPtr()), out_dims_dev, in_strides_dev, out_strides_dev, (int)num_dims,
                 (int)dim, gather_dim_size, total_elements);
         },
-        "CUDA IndexGatherBackward");
+        "CUDA GatherBackward");
 
     CUDA_CHECK(cudaFreeAsync(dev_buf, stream));
     return grad_input;
@@ -227,7 +221,7 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
 #define REGISTER_CUDA_GATHER_KERNEL(kernel_name)                                                                       \
     REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
-REGISTER_CUDA_GATHER_KERNEL(IndexGatherForward)
-REGISTER_CUDA_GATHER_KERNEL(IndexGatherBackward)
+REGISTER_CUDA_GATHER_KERNEL(GatherForward)
+REGISTER_CUDA_GATHER_KERNEL(GatherBackward)
 
 #undef REGISTER_CUDA_GATHER_KERNEL

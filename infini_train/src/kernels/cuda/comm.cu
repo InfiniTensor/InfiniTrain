@@ -9,7 +9,7 @@
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/tensor.h"
 
-namespace infini_train::kernels::cuda {
+namespace infini_train::kernels::cuda::comm {
 
 std::vector<std::shared_ptr<Tensor>> Broadcast(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                                                const std::vector<Device> &devices) {
@@ -69,11 +69,11 @@ std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tenso
     auto view_kernel = Dispatcher::Instance().GetKernel({destination.type(), "NoOpForward"});
     return view_kernel.Call<std::shared_ptr<Tensor>>(gathered_tensor, new_dims);
 }
-} // namespace infini_train::kernels::cuda
+} // namespace infini_train::kernels::cuda::comm
 
 #define REGISTER_CUDA_COMM_KERNEL(kernel_name)                                                                         \
-    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, Comm##kernel_name,                                        \
-                    infini_train::kernels::cuda::kernel_name)
+    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name,                                              \
+                    infini_train::kernels::cuda::comm::kernel_name)
 
 REGISTER_CUDA_COMM_KERNEL(Broadcast)
 REGISTER_CUDA_COMM_KERNEL(Scatter)
