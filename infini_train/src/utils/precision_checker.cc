@@ -193,6 +193,8 @@ std::string FormatShape(const std::vector<int64_t> &shape) {
 
 std::string DataTypeToString(DataType dtype) {
     switch (dtype) {
+    case DataType::kBOOL:
+        return "bool";
     case DataType::kFLOAT32:
         return "float32";
     case DataType::kFLOAT16:
