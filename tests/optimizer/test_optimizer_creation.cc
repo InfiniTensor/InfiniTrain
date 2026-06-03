@@ -2,7 +2,6 @@
 
 #include "gtest/gtest.h"
 
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
@@ -31,7 +30,7 @@ TEST_P(OptimizerCreationTest, SGDMultiParams) {
     for (int i = 0; i < 3; ++i) {
         auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
         param->set_requires_grad(true);
-        params.push_back(param);
+        params.emplace_back(param);
     }
     auto optimizer = std::make_shared<optimizers::SGD>(params, 0.01);
     EXPECT_NE(optimizer, nullptr);
@@ -42,9 +41,49 @@ TEST_P(OptimizerCreationTest, AdamMultiParams) {
     for (int i = 0; i < 3; ++i) {
         auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
         param->set_requires_grad(true);
-        params.push_back(param);
+        params.emplace_back(param);
     }
+
     auto optimizer = std::make_shared<optimizers::Adam>(params, 0.001);
+    EXPECT_NE(optimizer, nullptr);
+}
+
+TEST_P(OptimizerCreationTest, SGDCreationNamed) {
+    auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
+    param->set_requires_grad(true);
+    auto optimizer = std::make_shared<optimizers::SGD>(
+        std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>{{"weight", param}}, 0.01);
+    EXPECT_NE(optimizer, nullptr);
+}
+
+TEST_P(OptimizerCreationTest, AdamCreationNamed) {
+    auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
+    param->set_requires_grad(true);
+    auto optimizer = std::make_shared<optimizers::Adam>(
+        std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>{{"weight", param}}, 0.001);
+    EXPECT_NE(optimizer, nullptr);
+}
+
+TEST_P(OptimizerCreationTest, SGDMultiNamedParams) {
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> named_params;
+    for (int i = 0; i < 3; ++i) {
+        auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
+        param->set_requires_grad(true);
+        named_params.emplace_back("p" + std::to_string(i), param);
+    }
+    auto optimizer = std::make_shared<optimizers::SGD>(named_params, 0.01);
+    EXPECT_NE(optimizer, nullptr);
+}
+
+TEST_P(OptimizerCreationTest, AdamMultiNamedParams) {
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> named_params;
+    for (int i = 0; i < 3; ++i) {
+        auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
+        param->set_requires_grad(true);
+        named_params.emplace_back("p" + std::to_string(i), param);
+    }
+
+    auto optimizer = std::make_shared<optimizers::Adam>(named_params, 0.001);
     EXPECT_NE(optimizer, nullptr);
 }
 

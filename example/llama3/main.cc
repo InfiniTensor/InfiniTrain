@@ -40,8 +40,10 @@
 #include "example/common/checkpoint_loader.h"
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
+#include "example/llama3/checkpoint_loader.h"
 #include "example/llama3/config.h"
 
+// TODO(jym): Reorganize CLI flags into categories for better readability and maintainability.
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_string(input_val_bin, "", "input .bin to eval validation loss on");
@@ -79,15 +81,12 @@ DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
-DEFINE_uint32(save_steps, 0, "save checkpoint every N steps; 0 disables saving");
-DEFINE_string(resume_from, "", "checkpoint directory to resume from");
-DEFINE_string(checkpoint_dir, "./checkpoints", "root directory used to store checkpoints");
+DEFINE_uint32(save_interval, 0, "save checkpoint every N steps; 0 disables saving");
+DEFINE_string(load, "", "checkpoint directory to resume from");
+DEFINE_string(save, "./checkpoints", "root directory used to store checkpoints");
 DEFINE_uint32(max_checkpoint_keep, 3, "max number of checkpoint steps to keep");
-DEFINE_bool(save_optimizer_state, true, "whether optimizer state is persisted in checkpoints");
-DEFINE_string(checkpoint_format, "pth",
-              "checkpoint format: bin|pth. "
-              "'bin' generates model.bin/optimizer.bin (bin supports LLMC model format via callbacks); "
-              "'pth' generates model.pth/optimizer.pth (native StateDict binary).");
+DEFINE_bool(no_save_optim, true, "whether optimizer state is persisted in checkpoints");
+
 // precision check
 DEFINE_string(
     precision_check, "",
@@ -280,36 +279,27 @@ void Train(const nn::parallel::Rank &rank) {
     auto optimizer_creator = optimizers::Adam::Create(FLAGS_learning_rate);
     std::shared_ptr<Optimizer> optimizer = nullptr;
 
-    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> named_params_to_optimize;
+    std::vector<std::shared_ptr<Tensor>> params_to_optimize;
     if (lora_enabled) {
-        auto all_named = model->NamedParameters();
-        auto lora_tensors = nn::lora::GetLoRAParameters(model);
-        std::unordered_set<Tensor *> lora_set;
-        lora_set.reserve(lora_tensors.size());
-        for (const auto &t : lora_tensors) { lora_set.insert(t.get()); }
-        for (const auto &[name, param] : all_named) {
-            if (lora_set.contains(param.get())) {
-                named_params_to_optimize.emplace_back(name, param);
-            }
-        }
-        LOG(INFO) << "Optimizing " << named_params_to_optimize.size() << " LoRA parameters";
+        params_to_optimize = nn::lora::GetLoRAParameters(model);
+        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " LoRA parameters";
     } else {
-        named_params_to_optimize = model->NamedParameters();
-        LOG(INFO) << "Optimizing " << named_params_to_optimize.size() << " model parameters";
+        params_to_optimize = model->Parameters();
+        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " model parameters";
     }
 
     if (FLAGS_zero_stage >= 1) {
         auto model_chunks = (pp_world_size > 1)
                               ? *(dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks())
                               : std::vector<std::shared_ptr<nn::Module>>{model};
-        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, named_params_to_optimize,
+        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, params_to_optimize,
                                                                          model_chunks, ddp_world_size, ddp_rank);
     } else {
-        optimizer = optimizer_creator(named_params_to_optimize);
+        optimizer = optimizer_creator(params_to_optimize);
     }
 
     auto train_iter = train_loader.begin();
-    size_t saved_data_batch_idx = train_iter.BatchIndex();
+
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(std::make_shared<VocabParallelCrossEntropyLoss>())
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
@@ -319,54 +309,49 @@ void Train(const nn::parallel::Rank &rank) {
     auto impl = core::GetDeviceGuardImpl(device.type());
 
     int start_step = 0;
-    float best_loss = std::numeric_limits<float>::infinity();
     TrainerState state;
-    CheckpointLoadOptions load_options;
-    load_options.load_optimizer_state = true;
-    load_options.model_bin_loader = [](nn::Module *target_model, const std::filesystem::path &model_path) {
-        auto loaded_model = llama3::LoadFromLLMC(model_path.string());
-        target_model->LoadStateDict(loaded_model->StateDict());
-    };
-    const auto resume_result = infini_train::ResumeFromCheckpoint({
-        .resume_root = FLAGS_resume_from,
+    const auto resume_result = ResumeFromCheckpoint({
+        .resume_root = FLAGS_load,
         .rank = rank,
         .model = model,
         .optimizer = optimizer,
         .train_loader = train_loader,
         .state = state,
-        .train_iter = train_iter,
-        .load_options = load_options,
     });
-    start_step = resume_result.global_step;
-    best_loss = resume_result.best_loss;
-    saved_data_batch_idx = resume_result.data_batch_idx;
 
-    auto save_checkpoint = [&](const std::filesystem::path &save_dir, int64_t global_step,
-                               bool prune_step_checkpoints) {
-        infini_train::SaveCheckpoint({
-            .save_dir = save_dir,
-            .global_step = global_step,
-            .data_batch_idx = saved_data_batch_idx,
-            .best_loss = best_loss,
-            .last_lr = FLAGS_learning_rate,
-            .optimizer_type = "Adam",
-            .checkpoint_format = FLAGS_checkpoint_format,
-            .ddp_size = ddp_world_size,
-            .tp_size = tp_world_size,
-            .sp_size = sp_world_size,
-            .pp_size = pp_world_size,
-            .save_optimizer_state = FLAGS_save_optimizer_state,
-            .prune_step_checkpoints = prune_step_checkpoints,
-            .checkpoint_root_dir = FLAGS_checkpoint_dir,
-            .max_checkpoint_keep = FLAGS_max_checkpoint_keep,
-            .rank = rank,
-            .model = *model,
-            .optimizer = *optimizer,
-            .model_bin_writer
-            = [&](const nn::Module &,
-                  const std::filesystem::path &model_path) { llama3::SaveAsLLMC(llmc_model, model_path.string()); },
-        });
-    };
+    start_step = resume_result.global_step;
+    size_t consumed_batches = resume_result.consumed_batches;
+
+    // TODO(jym): Replace with Sampler abstraction when available.
+    // Skip dataloader to resume from the correct batch position.
+    if (consumed_batches > 0) {
+        size_t start = train_iter.BatchIndex();
+        // Each rank processes every ddp_world_size-th batch starting from its own rank.
+        // num_skips calculates how many ++ iterations to reach the saved batch position.
+        size_t num_skips = (consumed_batches - start) / ddp_world_size;
+        for (size_t i = 0; i < num_skips; ++i) { ++train_iter; }
+    }
+
+    auto save_checkpoint
+        = [&](const std::filesystem::path &save_dir, int64_t global_step, bool prune_step_checkpoints) {
+              SaveCheckpoint({
+                  .save_dir = save_dir,
+                  .global_step = global_step,
+                  .consumed_batches = consumed_batches,
+                  .last_lr = FLAGS_learning_rate,
+                  .ddp_size = ddp_world_size,
+                  .tp_size = tp_world_size,
+                  .sp_size = sp_world_size,
+                  .pp_size = pp_world_size,
+                  .no_save_optim = FLAGS_no_save_optim,
+                  .prune_step_checkpoints = prune_step_checkpoints,
+                  .checkpoint_root_dir = FLAGS_save,
+                  .max_checkpoint_keep = FLAGS_max_checkpoint_keep,
+                  .rank = rank,
+                  .model = *model,
+                  .optimizer = *optimizer,
+              });
+          };
 
     for (int step = start_step; step < FLAGS_num_iteration + 1; ++step) {
         // Reset precision check counters at start of each iteration for file overwrite
@@ -415,10 +400,11 @@ void Train(const nn::parallel::Rank &rank) {
 
                 // (bs, seq_len), (bs, seq_len)
                 auto [x, y] = *train_iter;
-                // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
+                // if we are trying to overfit a single batch, we reset the loader here by commenting out the
+                // line below
                 // TODO(dcj): support dataloader.reset() later
                 ++train_iter;
-                saved_data_batch_idx = train_iter.BatchIndex();
+                consumed_batches = train_iter.BatchIndex();
                 x = std::make_shared<Tensor>(x->To(device));
                 y = std::make_shared<Tensor>(y->To(device));
 
@@ -445,10 +431,11 @@ void Train(const nn::parallel::Rank &rank) {
             optimizer->Step();
         } else {
             auto [x, y] = *train_iter;
-            // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
+            // if we are trying to overfit a single batch, we reset the loader here by commenting out the line
+            // below
             // TODO(dcj): support dataloader.reset() later
             ++train_iter;
-            saved_data_batch_idx = train_iter.BatchIndex();
+            consumed_batches = train_iter.BatchIndex();
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
@@ -460,8 +447,6 @@ void Train(const nn::parallel::Rank &rank) {
             function::AllReduce(lossf_tensor, function::ReduceOpType::kAvg, ddp_pg);
             lossf = static_cast<const float *>(lossf_tensor->To(Device()).DataPtr())[0];
         }
-
-        best_loss = std::min(best_loss, lossf);
 
         const auto iter_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
@@ -486,9 +471,9 @@ void Train(const nn::parallel::Rank &rank) {
             }
         }
 
-        if (FLAGS_save_steps > 0 && (step + 1) % FLAGS_save_steps == 0) {
+        if (FLAGS_save_interval > 0 && (step + 1) % FLAGS_save_interval == 0) {
             std::filesystem::path step_dir
-                = std::filesystem::path(FLAGS_checkpoint_dir) / std::format("checkpoint_step_{:06d}", step + 1);
+                = std::filesystem::path(FLAGS_save) / std::format("checkpoint_step_{:06d}", step + 1);
             if (rank.IsParallel()) {
                 step_dir /= std::format("rank_{:06d}", rank.GlobalRank());
             }
@@ -502,7 +487,7 @@ void Train(const nn::parallel::Rank &rank) {
         nn::lora::SaveLoRAWeights(model, FLAGS_lora_save_path);
     }
 
-    std::filesystem::path final_dir = std::filesystem::path(FLAGS_checkpoint_dir) / "checkpoint_final";
+    std::filesystem::path final_dir = std::filesystem::path(FLAGS_save) / "checkpoint_final";
     if (rank.IsParallel()) {
         final_dir /= std::format("rank_{:06d}", rank.GlobalRank());
     }

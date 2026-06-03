@@ -84,24 +84,20 @@ template <typename T> T ExtractNumberField(const std::string &content, const std
 }
 } // namespace
 
-void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Module &model, const Optimizer &optimizer,
-                      const TrainerState &state, const CheckpointOptions &options) {
-    CHECK(options.format == "bin" || options.format == "pth") << "Unsupported checkpoint format: " << options.format;
+void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Module &model, const Optimizer *optimizer,
+                      const TrainerState &state, bool no_save_optim) {
     std::filesystem::create_directories(checkpoint_dir);
-    LOG(ERROR) << "[CKPT] Save begin: dir=" << checkpoint_dir << ", format=" << options.format
-               << ", global_step=" << state.global_step;
+    LOG(INFO) << "[CKPT] Save begin: dir=" << checkpoint_dir << ", global_step=" << state.global_step;
 
-    const auto model_path = checkpoint_dir / (options.format == "pth" ? "model.pth" : "model.bin");
-    if (options.format == "bin" && options.model_bin_writer) {
-        options.model_bin_writer(model, model_path);
-    } else {
-        SaveStateDictBinary(model_path, model.StateDict());
-    }
+    const auto model_path = checkpoint_dir / ("model.ckpt");
 
-    if (options.save_optimizer_state) {
-        auto opt_state = optimizer.StateDict();
+    SaveStateDictBinary(model_path, model.StateDict());
+
+    if (!no_save_optim) {
+        CHECK(optimizer != nullptr) << "Optimizer pointer is null, cannot save optimizer state.";
+        auto opt_state = optimizer->StateDict();
         if (!opt_state.empty()) {
-            const auto opt_path = checkpoint_dir / (options.format == "pth" ? "optimizer.pth" : "optimizer.bin");
+            const auto opt_path = checkpoint_dir / "optimizer.ckpt";
             SaveStateDictBinary(opt_path, opt_state);
         }
     }
@@ -110,49 +106,32 @@ void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Mod
     LOG(ERROR) << "[CKPT] Save done: dir=" << checkpoint_dir;
 }
 
-void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module *model, Optimizer *optimizer,
-                      TrainerState *state, const CheckpointLoadOptions &options) {
-    CHECK(model != nullptr);
-    CHECK(state != nullptr);
+void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &model, Optimizer *optimizer,
+                      TrainerState &state, bool load_optimizer_state) {
+    const auto model_path = checkpoint_dir / "model.ckpt";
+    LOG(INFO) << "[CKPT] Loading model: " << model_path;
 
-    const std::string format = InferFormat(checkpoint_dir);
-    const auto model_path = checkpoint_dir / (format == "pth" ? "model.pth" : "model.bin");
-    LOG(ERROR) << "[CKPT] Load begin: dir=" << checkpoint_dir << ", format=" << format;
-    LOG(ERROR) << "[CKPT] Loading model: " << model_path;
-    if (format == "bin" && options.model_bin_loader) {
-        const uint32_t magic = PeekMagic(model_path);
-        if (magic == kCkptMagic) {
-            LOG(ERROR) << "[CKPT] Model format detected: native checkpoint binary.";
-            model->LoadStateDict(LoadStateDictBinary(model_path));
-        } else {
-            LOG(ERROR) << "[CKPT] Model format detected: external model.bin (magic=" << magic
-                       << "), use model_bin_loader callback.";
-            options.model_bin_loader(model, model_path);
-        }
-    } else {
-        model->LoadStateDict(LoadStateDictBinary(model_path));
-    }
+    model.LoadStateDict(LoadStateDictBinary(model_path));
 
-    if (optimizer != nullptr && options.load_optimizer_state) {
-        const auto opt_path = checkpoint_dir / (format == "pth" ? "optimizer.pth" : "optimizer.bin");
+    if (optimizer == nullptr) {
+        LOG(ERROR) << "[CKPT] No optimizer instance, skip optimizer state loading.";
+    } else if (load_optimizer_state) {
+        const auto opt_path = checkpoint_dir / "optimizer.ckpt";
         if (std::filesystem::exists(opt_path)) {
             LOG(ERROR) << "[CKPT] Loading optimizer: " << opt_path;
             optimizer->LoadStateDict(LoadStateDictBinary(opt_path));
         } else {
             LOG(ERROR) << "[CKPT] Optimizer state not found, skip: " << opt_path;
         }
-    } else if (optimizer == nullptr) {
-        LOG(ERROR) << "[CKPT] No optimizer instance, skip optimizer state loading.";
     } else {
         LOG(ERROR) << "[CKPT] load_optimizer_state=false, skip optimizer state loading.";
     }
 
-    *state = LoadTrainerState(checkpoint_dir / "trainer_state.json");
-    LOG(ERROR) << "[CKPT] Load done: global_step=" << state->global_step << ", data_batch_idx=" << state->data_batch_idx
-               << ", data_batch_stride=" << state->data_batch_stride << ", best_loss=" << state->best_loss
-               << ", last_lr=" << state->last_lr << ", optimizer_type=" << state->optimizer_type
-               << ", topology(ddp,tp,sp,pp)=(" << state->ddp_size << "," << state->tp_size << "," << state->sp_size
-               << "," << state->pp_size << ")";
+    state = LoadTrainerState(checkpoint_dir / "trainer_state.json");
+    LOG(ERROR) << "[CKPT] Load done: global_step=" << state.global_step
+               << ", consumed_batches =" << state.consumed_batches << ", last_lr=" << state.last_lr
+               << ", topology(ddp,tp,sp,pp)=(" << state.ddp_size << "," << state.tp_size << "," << state.sp_size << ","
+               << state.pp_size << ")";
 }
 
 void Checkpoint::SaveStateDictBinary(const std::filesystem::path &path,
@@ -230,12 +209,8 @@ void Checkpoint::SaveTrainerState(const std::filesystem::path &path, const Train
     CHECK(ofs.is_open()) << "Failed to open trainer state file: " << path;
     ofs << "{\n";
     ofs << "  \"global_step\": " << state.global_step << ",\n";
-    ofs << "  \"data_batch_idx\": " << state.data_batch_idx << ",\n";
-    ofs << "  \"data_batch_stride\": " << state.data_batch_stride << ",\n";
-    ofs << "  \"best_loss\": " << state.best_loss << ",\n";
+    ofs << "  \"consumed_batches \": " << state.consumed_batches << ",\n";
     ofs << "  \"last_lr\": " << state.last_lr << ",\n";
-    ofs << "  \"optimizer_type\": \"" << state.optimizer_type << "\",\n";
-    ofs << "  \"checkpoint_format\": \"" << state.checkpoint_format << "\",\n";
     ofs << "  \"ddp_size\": " << state.ddp_size << ",\n";
     ofs << "  \"tp_size\": " << state.tp_size << ",\n";
     ofs << "  \"sp_size\": " << state.sp_size << ",\n";
@@ -243,6 +218,8 @@ void Checkpoint::SaveTrainerState(const std::filesystem::path &path, const Train
     ofs << "}\n";
 }
 
+// TODO(jym): Add TrainerState JSON version compatibility, referencing PyTorch's checkpoint
+// versioning.
 TrainerState Checkpoint::LoadTrainerState(const std::filesystem::path &path) {
     std::ifstream ifs(path);
     CHECK(ifs.is_open()) << "Failed to open trainer state file: " << path;
@@ -250,28 +227,12 @@ TrainerState Checkpoint::LoadTrainerState(const std::filesystem::path &path) {
 
     TrainerState state;
     state.global_step = ExtractNumberField<int64_t>(content, "global_step", 0);
-    state.data_batch_idx = ExtractNumberField<int64_t>(content, "data_batch_idx", 0);
-    state.data_batch_stride = ExtractNumberField<int64_t>(content, "data_batch_stride", 1);
-    state.best_loss = ExtractNumberField<float>(content, "best_loss", std::numeric_limits<float>::infinity());
+    state.consumed_batches = ExtractNumberField<int64_t>(content, "consumed_batches ", 0);
     state.last_lr = ExtractNumberField<double>(content, "last_lr", 0.0);
-    state.optimizer_type = ExtractStringField(content, "optimizer_type", "unknown");
-    state.checkpoint_format = ExtractStringField(content, "checkpoint_format", "bin");
     state.ddp_size = ExtractNumberField<int>(content, "ddp_size", 1);
     state.tp_size = ExtractNumberField<int>(content, "tp_size", 1);
     state.sp_size = ExtractNumberField<int>(content, "sp_size", 1);
     state.pp_size = ExtractNumberField<int>(content, "pp_size", 1);
     return state;
 }
-
-std::string Checkpoint::InferFormat(const std::filesystem::path &checkpoint_dir) {
-    if (std::filesystem::exists(checkpoint_dir / "model.pth")) {
-        return "pth";
-    }
-    if (std::filesystem::exists(checkpoint_dir / "model.bin")) {
-        return "bin";
-    }
-    LOG(FATAL) << "Failed to infer checkpoint format from path: " << checkpoint_dir;
-    return "bin";
-}
-
 } // namespace infini_train

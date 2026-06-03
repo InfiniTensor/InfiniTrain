@@ -5,15 +5,12 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
-#include <random>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "glog/logging.h"
 
-#include "example/common/utils.h"
-#include "example/llama3/config.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
@@ -22,24 +19,18 @@
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
+#include "example/common/utils.h"
+#include "example/llama3/config.h"
+
 using namespace infini_train;
 namespace nn = infini_train::nn;
-
-namespace {
-constexpr int kRandomSeed = 42;
-
-// TODO(zbl): make this rng generator compatible with torch later
-static std::mt19937 gen{kRandomSeed};
-} // namespace
 
 namespace {
 constexpr int32_t kLLaMA3Magic = 20240803;
 constexpr int32_t kLLaMA3FP32Version = 3;
 } // namespace
 
-namespace llama3 {
-
-std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) {
+std::shared_ptr<nn::TransformerModel> llama3::LoadFromLLMC(const std::string &filepath) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -346,7 +337,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     return llama3;
 }
 
-void SaveAsLLMC(const std::shared_ptr<nn::TransformerModel> &model, const std::string &filepath) {
+void llama3::SaveAsLLMC(const std::shared_ptr<nn::TransformerModel> &model, const std::string &filepath) {
     CHECK_EQ(nn::parallel::global::GetTensorParallelSize(), 1) << "SaveAsLLMC currently supports TP=1 only.";
     CHECK_EQ(nn::parallel::global::GetPipelineParallelSize(), 1) << "SaveAsLLMC currently supports PP=1 only.";
 
@@ -448,4 +439,3 @@ void SaveAsLLMC(const std::shared_ptr<nn::TransformerModel> &model, const std::s
     ofs.flush();
     CHECK(ofs.good()) << "Failed to flush model file: " << filepath;
 }
-} // namespace llama3
