@@ -59,7 +59,7 @@ std::vector<std::shared_ptr<Tensor>> SplitForward(const std::shared_ptr<Tensor> 
                                       infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                       ->cuda_stream();
 
-        core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
+        core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
             dtype,
             [=]<typename T>() {
                 SplitForwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
@@ -166,7 +166,7 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
     CHECK_GE(dim, 0) << "Currently we do not support negative dimension";
     CHECK_LT(dim, input_dims.size());
 
-    return core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
+    return core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
         grad_outputs[0]->Dtype(),
         [=]<typename T>() { return LaunchSplitBackward<T>(input_dims, split_size, dim, grad_outputs); },
         "CUDA SplitBackward");

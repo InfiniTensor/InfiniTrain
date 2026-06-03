@@ -34,7 +34,8 @@ std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
     dim3 grid_dims(CEIL_DIV(num_elements, block_dims.x));
     const size_t step = grid_dims.x * block_dims.x;
 
-    core::cuda::DispatchCudaFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
+    core::cuda::DispatchCudaFunc<DataTypeList<INFINI_ALL_NUMERIC_TYPES, INFINI_LOGICAL_TYPES>,
+                                 DataTypeList<INFINI_ALL_NUMERIC_TYPES, INFINI_LOGICAL_TYPES>>(
         {dtype, input->Dtype()},
         [=]<typename Tdst, typename Tsrc>() {
             auto dst = static_cast<Tdst *>(dst_tensor->DataPtr());

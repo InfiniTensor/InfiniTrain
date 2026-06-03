@@ -180,10 +180,11 @@ namespace infini_train {
 #define INFINI_FLOATING_TYPES DataType::kFLOAT32, DataType::kFLOAT64
 #define INFINI_REDUCED_FLOATING_TYPES DataType::kFLOAT16, DataType::kBFLOAT16
 #define INFINI_ALL_FLOATING_TYPES INFINI_FLOATING_TYPES, INFINI_REDUCED_FLOATING_TYPES
+#define INFINI_LOGICAL_TYPES DataType::kBOOL
 #define INFINI_SIGNED_INTEGRAL_TYPES DataType::kINT8, DataType::kINT16, DataType::kINT32, DataType::kINT64
 #define INFINI_UNSIGNED_INTEGRAL_TYPES DataType::kUINT8, DataType::kUINT16, DataType::kUINT32, DataType::kUINT64
 #define INFINI_ALL_INTEGRAL_TYPES INFINI_SIGNED_INTEGRAL_TYPES, INFINI_UNSIGNED_INTEGRAL_TYPES
-#define INFINI_ALL_TYPES INFINI_ALL_FLOATING_TYPES, INFINI_ALL_INTEGRAL_TYPES
+#define INFINI_ALL_NUMERIC_TYPES INFINI_ALL_FLOATING_TYPES, INFINI_ALL_INTEGRAL_TYPES
 #define INFINI_8_BIT_TYPES DataType::kINT8, DataType::kUINT8
 #define INFINI_16_BIT_TYPES DataType::kINT16, DataType::kUINT16, DataType::kFLOAT16, DataType::kBFLOAT16
 #define INFINI_32_BIT_TYPES DataType::kINT32, DataType::kUINT32, DataType::kFLOAT32
@@ -242,6 +243,7 @@ auto DispatchByTypeMap(DataType dtype, Functor &&func, std::string_view context_
         }                                                                                                              \
     }
 
+        CASE_FOR_TYPE(DataType::kBOOL)
         CASE_FOR_TYPE(DataType::kUINT8)
         CASE_FOR_TYPE(DataType::kINT8)
         CASE_FOR_TYPE(DataType::kUINT16)
@@ -290,6 +292,7 @@ struct TypeMapDispatcher {
             break;                                                                                                     \
         }
 
+                CASE_FOR_TYPE(DataType::kBOOL)
                 CASE_FOR_TYPE(DataType::kUINT8)
                 CASE_FOR_TYPE(DataType::kINT8)
                 CASE_FOR_TYPE(DataType::kUINT16)

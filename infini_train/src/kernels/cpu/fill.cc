@@ -8,7 +8,7 @@
 
 namespace infini_train::kernels::cpu {
 void Fill(std::shared_ptr<Tensor> tensor, Scalar scalar) {
-    core::cpu::DispatchCpuFunc<INFINI_ALL_TYPES>(
+    core::cpu::DispatchCpuFunc<INFINI_ALL_NUMERIC_TYPES>(
         tensor->Dtype(),
         [=]<typename T>() {
             auto data = reinterpret_cast<T *>(tensor->DataPtr());
