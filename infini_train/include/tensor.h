@@ -232,7 +232,6 @@ public:
     void ResetAccumulator();
 
     void RegisterPreAccumulateGradHook(std::shared_ptr<autograd::PreAccumulateGradHook> hook);
-
     autograd::PreAccumulateGradHook *pre_accumulate_grad_hook() const;
 
     void RegisterPostAccumulateGradHook(std::shared_ptr<autograd::PostAccumulateGradHook> hook);

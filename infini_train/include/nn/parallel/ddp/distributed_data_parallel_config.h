@@ -59,7 +59,6 @@ public:
 
     // Maximum number of parameters in each ParamAndGradBucket.
     // NOTE(zbl): This is distinct from DDP Reducer's MB-based bucket caps.
-    // TODO(zbl): To unify the definition of bucket_size argument for users
     size_t bucket_size_in_elements = 1000000;
 
     // Whether to pad bucket sizes to improve NCCL bus bandwidth utilization.
