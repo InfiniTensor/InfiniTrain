@@ -212,26 +212,29 @@ move_profile_logs() {
 # For checkpoint-related args, automatically isolate by model and run mode
 # (resume/no_resume) to avoid cross-test overwrites in one-click runs.
 args_string_for_test() {
-        local idx="$1"
-        local model_name="$2"
-        jq -r --argjson i "$idx" --arg model "$model_name" '
-            def namespaced_path($p; $model; $mode):
-                if ($p | test("/checkpoint_step_[0-9]+($|/)")) then
-                    ($p | capture("^(?<prefix>.*)/(?<step>checkpoint_step_[0-9]+(?:/.*)?)$")) as $m
-                    | ($m.prefix + "/" + $model + "/" + $mode + "/" + $m.step)
-                else
-                    ($p + "/" + $model + "/" + $mode)
-                end;
+    local group_idx="$1"
+    local test_idx="$2"
+    local model_name="$3"
+    local test_id="$4"
 
-            .tests[$i].args as $args
-            | (if ($args | has("resume_from")) then "resume" else "no_resume" end) as $run_mode
-            | (if (($args.resume_from // "") | test("(^|/)no_resume(/|$)")) then "no_resume" else "resume" end) as $resume_src_mode
-            | $args
-            | (if has("checkpoint_dir") then .checkpoint_dir = namespaced_path(.checkpoint_dir; $model; $run_mode) else . end)
-            | (if has("resume_from") then .resume_from = namespaced_path(.resume_from; $model; $resume_src_mode) else . end)
-            | to_entries[]
-            | "--\(.key) \(.value|tostring)"
-        ' "$CONFIG_FILE" | paste -sd' ' -
+    jq -r --argjson g "$group_idx" --argjson t "$test_idx" --arg model "$model_name" --arg test_id "$test_id" '
+    def namespaced_path($p; $model; $mode):
+        if ($p | test("/checkpoint_step_[0-9]+($|/)")) then
+            ($p | capture("^(?<prefix>.*)/(?<step>checkpoint_step_[0-9]+(?:/.*)?)$")) as $m
+            | ($m.prefix + "/" + $model + "/" + $mode + "/" + $m.step)
+        else
+            ($p + "/" + $model + "/" + $mode)
+        end;
+
+    .test_groups[$g].tests[$t].args as $args
+    | (if ($args | has("load")) then "resume" else "no_resume" end) as $run_mode
+    | (if (($args.load // "") | test("no_resume")) then "no_resume" else "resume" end) as $resume_src_mode
+    | $args
+    | (if has("save") then .save = namespaced_path(.save; $model; $run_mode) else . end)
+    | (if has("load") then .load = namespaced_path(.load; $model; $resume_src_mode) else . end)
+    | to_entries[]
+    | "--\(.key) \(.value|tostring)"
+    ' "$CONFIG_FILE" | paste -sd' ' -
 }
 
 # Run tests
@@ -273,18 +276,28 @@ for ((id=0; id<num_builds; ++id)); do
         log_suffix="_profile"
     fi
 
-    for ((ti=0; ti<num_tests; ++ti)); do
-        test_id=$(jq -r ".tests[$ti].id" "$CONFIG_FILE")
-        gpt2_arg_str="$(args_string_for_test "$ti" "gpt2")"
-        llama3_arg_str="$(args_string_for_test "$ti" "llama3")"
+    for ((gi=0; gi<num_groups; ++gi)); do
+        group_tag=$(jq -r ".test_groups[$gi].tag" "$CONFIG_FILE")
+        if [[ ${#SELECTED_TAGS[@]} -gt 0 && -z "${SELECTED_TAGS[$group_tag]}" ]]; then
+            continue
+        fi
 
-        # gpt2
-        gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
-        run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag"
+        num_tests=$(jq ".test_groups[$gi].tests | length" "$CONFIG_FILE")
+        echo -e "\033[1;36m[TEST GROUP] tag=${group_tag}, cases=${num_tests}\033[0m"
 
-        # llama3
-        llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
-        run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag"
+        for ((ti=0; ti<num_tests; ++ti)); do
+            test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
+            gpt2_arg_str="$(args_string_for_test "$gi" "$ti" "gpt2" "$test_id")"
+            llama3_arg_str="$(args_string_for_test "$gi" "$ti" "llama3" "$test_id")"
+
+            # gpt2
+            gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
+            run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+
+            # llama3
+            llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
+            run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+        done
     done
 done
 
