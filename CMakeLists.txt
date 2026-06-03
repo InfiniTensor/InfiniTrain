@@ -196,6 +196,7 @@ add_executable(gpt2
   example/common/utils.cc
   example/common/checkpoint_loader.cc
   example/common/tokenizer.cc
+  example/gpt2/checkpoint_loader.cc
 )
 link_infini_train_exe(gpt2)
 
@@ -205,6 +206,7 @@ add_executable(llama3
   example/common/utils.cc
   example/common/checkpoint_loader.cc
   example/common/tokenizer.cc
+  example/llama3/checkpoint_loader.cc
 )
 link_infini_train_exe(llama3)
 

@@ -600,6 +600,105 @@
                     }
                 }
             ]
+        },
+        {
+            "tag": "checkpoint",
+            "tests": [
+                {
+                    "id": "ckpt_no_resume",
+                    "args": {
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "save": "/data1/ckpt/no_resume"
+                    }
+                },
+                {
+                    "id": "ckpt_resume",
+                    "args": {
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "load": "/data1/ckpt/no_resume/checkpoint_step_000030",
+                        "save": "/data1/ckpt/base_resume"
+                    }
+                },
+                {
+                    "id": "ckpt_bf16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "save": "/data1/ckpt/bf16_no_resume"
+                    }
+                },
+                {
+                    "id": "ckpt_bf16_resume",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "load": "/data1/ckpt/bf16_no_resume/checkpoint_step_000030",
+                        "save": "/data1/ckpt/bf16_resume"
+                    }
+                },
+                {
+                    "id": "ckpt_lora",
+                    "args": {
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "lora_rank": 8,
+                        "lora_alpha": 16.0,
+                        "lora_target_modules": "c_attn,attn.c_proj",
+                        "save": "/data1/ckpt/lora_no_resume"
+                    }
+                },
+                {
+                    "id": "ckpt_lora_resume",
+                    "args": {
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "lora_rank": 8,
+                        "lora_alpha": 16.0,
+                        "lora_target_modules": "c_attn,attn.c_proj",
+                        "load": "/data1/ckpt/lora_no_resume/checkpoint_step_000030",
+                        "save": "/data1/ckpt/lora_resume"
+                    }
+                },
+                {
+                    "id": "ckpt_3d_ddp_tp_pp",
+                    "args": {
+                        "nthread_per_process": 8,
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "save": "/data1/ckpt/3d_ddp2_tp2_pp2_no_resume",
+                        "no_save_optim": false,
+                        "max_checkpoint_keep": 5
+                    }
+                },
+                {
+                    "id": "ckpt_3d_ddp_tp_pp_resume",
+                    "args": {
+                        "nthread_per_process": 8,
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "load": "/data1/ckpt/3d_ddp2_tp2_pp2_no_resume/checkpoint_step_000030",
+                        "save": "/data1/ckpt/3d_tp2_pp2_resume",
+                        "no_save_optim": false,
+                        "max_checkpoint_keep": 5
+                    }
+                }
+            ]
         }
     ]
 }

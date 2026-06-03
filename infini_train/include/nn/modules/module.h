@@ -47,9 +47,8 @@ public:
 
     const std::string &type() const;
 
-    // TODO: Change return type to filterable iterator (like PyTorch's named_parameters with prefix matching)
     virtual std::vector<std::shared_ptr<Tensor>> Parameters() const;
-    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> NamedParameters() const;
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> NamedParameters(bool remove_duplicate = true) const;
     bool has_parameter(const std::string &name) const;
     std::shared_ptr<Tensor> *mutable_parameter(const std::string &name);
     const std::shared_ptr<Tensor> &parameter(const std::string &name) const;
@@ -62,7 +61,7 @@ public:
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
 
-    virtual void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict);
+    void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict);
 
     // operator() calls hooks and Forward
     std::vector<std::shared_ptr<Tensor>> operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors);

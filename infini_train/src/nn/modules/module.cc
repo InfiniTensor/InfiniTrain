@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <memory>
-#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -12,30 +11,15 @@
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/common/hook.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/global_module_hook_registry.h"
+#include "infini_train/include/utils/string_utils.h"
 
 #ifndef UNLIKELY
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 #endif
 
 namespace infini_train::nn {
-
-namespace {
-std::string DimsToString(const std::vector<int64_t> &dims) {
-    std::ostringstream oss;
-    oss << "[";
-    for (size_t i = 0; i < dims.size(); ++i) {
-        if (i > 0) {
-            oss << ", ";
-        }
-        oss << dims[i];
-    }
-    oss << "]";
-    return oss.str();
-}
-} // namespace
 
 Module::Module() : Module(kUndefinedType) {}
 
@@ -44,43 +28,38 @@ Module::Module(const std::string &type) : type_(type), device_(Device()) {}
 const std::string &Module::type() const { return type_; }
 
 std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
+    auto namedParameters = NamedParameters();
     std::vector<std::shared_ptr<Tensor>> params;
-    std::unordered_set<const Tensor *> visited;
-
-    auto AddIfUnvisited = [&](const std::shared_ptr<Tensor> &param) {
-        if (visited.insert(param.get()).second) {
-            params.push_back(param);
-        }
-    };
-
-    // Add parameters of this module
-    for (const auto &[_, param] : parameters_) { AddIfUnvisited(param); }
-
-    // Recursively add parameters of submodules
-    for (const auto &[_, module] : modules_) {
-        for (const auto &param : module->Parameters()) { AddIfUnvisited(param); }
-    }
-
+    params.reserve(namedParameters.size());
+    for (auto &[name, param] : namedParameters) { params.push_back(param); }
     return params;
 }
 
-std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> Module::NamedParameters() const {
+std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> Module::NamedParameters(bool remove_duplicate) const {
     std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> result;
     std::unordered_set<const Tensor *> visited;
 
-    auto AddIfUnvisited = [&](const std::string &name, const std::shared_ptr<Tensor> &param) {
-        if (visited.insert(param.get()).second) {
-            result.emplace_back(name, param);
-        }
-    };
+    std::function<void(const std::string &, const Module *)> collect
+        = [&](const std::string &prefix, const Module *mod) {
+              for (const auto &[name, param] : mod->parameters_) {
+                  auto full_name = prefix.empty() ? name : prefix + "." + name;
 
-    for (const auto &[name, param] : parameters_) { AddIfUnvisited(name, param); }
+                  if (!remove_duplicate) {
+                      result.emplace_back(full_name, param);
+                      continue;
+                  }
+                  if (visited.insert(param.get()).second) {
+                      result.emplace_back(full_name, param);
+                  }
+              }
 
-    for (const auto &[name, module] : modules_) {
-        for (const auto &[sub_name, param] : module->NamedParameters()) {
-            AddIfUnvisited(name + "." + sub_name, param);
-        }
-    }
+              for (const auto &[name, child] : mod->modules_) {
+                  auto child_prefix = prefix.empty() ? name : prefix + "." + name;
+                  collect(child_prefix, child.get());
+              }
+          };
+
+    collect("", this);
 
     return result;
 }
@@ -185,31 +164,48 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() con
 }
 
 void Module::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
+    // Current behavior: missing keys / shape / dtype mismatches are FATAL errors;
+    // unexpected keys in state_dict are WARNING-only and silently ignored.
+
+    // Stage 1: Validate all keys, shapes, and dtypes without copying
+    std::vector<std::string> error_msgs;
+    std::unordered_set<std::string> visited_keys;
     auto expected = StateDict();
+
     for (const auto &[name, dst] : expected) {
-        CHECK(state_dict.contains(name)) << "Missing tensor in state dict: " << name;
+        visited_keys.insert(name);
+        if (!state_dict.contains(name)) {
+            error_msgs.push_back(std::format("Missing key: {}", name));
+            continue;
+        }
         const auto &src = state_dict.at(name);
-        CHECK(dst->Dims() == src->Dims())
-            << "Shape mismatch for tensor: " << name << ", expected=" << DimsToString(dst->Dims())
-            << ", got=" << DimsToString(src->Dims());
-        CHECK(dst->Dtype() == src->Dtype())
-            << "Dtype mismatch for tensor: " << name << ", expected=" << kDataTypeToDesc.at(dst->Dtype())
-            << ", got=" << kDataTypeToDesc.at(src->Dtype());
-        dst->CopyFrom(src);
-    }
-
-    std::unordered_set<std::string> unexpected_keys;
-
-    for (const auto &[k, _] : state_dict) {
-        if (!expected.contains(k)) {
-            unexpected_keys.insert(k);
+        if (dst->Dims() != src->Dims()) {
+            error_msgs.push_back(std::format("Shape mismatch for '{}': expected={}, got={}", name,
+                                             infini_train::utils::DimsToString(dst->Dims()),
+                                             infini_train::utils::DimsToString(src->Dims())));
+        }
+        if (dst->Dtype() != src->Dtype()) {
+            error_msgs.push_back(std::format("Dtype mismatch for '{}': expected={}, got={}", name,
+                                             kDataTypeToDesc.at(dst->Dtype()), kDataTypeToDesc.at(src->Dtype())));
         }
     }
 
-    if (!unexpected_keys.empty()) {
-        std::string msg = "Unexpected keys in state_dict:";
-        for (const auto &k : unexpected_keys) { msg += " " + k; }
-        LOG(WARNING) << msg;
+    for (const auto &[name, src] : state_dict) {
+        if (!visited_keys.contains(name)) {
+            LOG(WARNING) << std::format("Unexpected key in state_dict: {}", name);
+        }
+    }
+
+    if (!error_msgs.empty()) {
+        std::string msg = "LoadStateDict failed:";
+        for (const auto &err : error_msgs) { msg += "\n  " + err; }
+        LOG(FATAL) << msg;
+    }
+
+    // Stage 2: All checks passed, now copy data
+    for (const auto &[name, dst] : expected) {
+        const auto &src = state_dict.at(name);
+        dst->CopyFrom(*src);
     }
 }
 

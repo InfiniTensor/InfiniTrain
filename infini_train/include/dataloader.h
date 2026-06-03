@@ -41,7 +41,6 @@ public:
 
     virtual DataLoaderIterator begin() const;
     virtual DataLoaderIterator end() const;
-    virtual DataLoaderIterator IteratorAtBatchIndex(size_t batch_idx) const;
 
 protected:
     std::shared_ptr<Dataset> dataset_;
@@ -56,7 +55,6 @@ public:
 
     DataLoaderIterator begin() const override;
     DataLoaderIterator end() const override;
-    DataLoaderIterator IteratorAtBatchIndex(size_t batch_idx) const override;
 
 private:
     size_t ddp_rank_ = 0;
