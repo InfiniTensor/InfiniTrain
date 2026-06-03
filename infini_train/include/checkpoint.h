@@ -20,7 +20,11 @@ struct TrainerState {
     // FIXME(jym): learning_rate should be restored from scheduler state, move `last_lr` from TrainerState to
     // SchedulerState later
     double last_lr = 0.0;
-
+    int64_t n_layer = 0;
+    int64_t n_head = 0;
+    int64_t n_kv_head = 0;
+    int64_t n_embd = 0;
+    int64_t vocab_size = 0;
     int ddp_size = 1;
     int tp_size = 1;
     int sp_size = 1;

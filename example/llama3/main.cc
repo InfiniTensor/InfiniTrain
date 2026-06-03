@@ -316,6 +316,7 @@ void Train(const nn::parallel::Rank &rank) {
         .model = model,
         .optimizer = optimizer,
         .train_loader = train_loader,
+        .model_config = model_config,
         .state = state,
     });
 
@@ -339,6 +340,11 @@ void Train(const nn::parallel::Rank &rank) {
                   .global_step = global_step,
                   .consumed_batches = consumed_batches,
                   .last_lr = FLAGS_learning_rate,
+                  .n_layer = model_config.n_layer,
+                  .n_head = model_config.n_head,
+                  .n_kv_head = model_config.n_kv_head,
+                  .n_embd = model_config.n_embd,
+                  .vocab_size = model_config.vocab_size,
                   .ddp_size = ddp_world_size,
                   .tp_size = tp_world_size,
                   .sp_size = sp_world_size,
