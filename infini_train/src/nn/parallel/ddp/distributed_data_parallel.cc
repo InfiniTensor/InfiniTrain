@@ -20,47 +20,6 @@ namespace infini_train::nn::parallel {
 namespace {
 constexpr char kModuleName[] = "module";
 
-// NOTE(zbl): ZeRO-2 bypasses Tensor::grad accumulation: stash grads in the bucket group's
-//            temporary full-grad buffer, then mark the bucket ready for reduce-scatter.
-class Zero2PreAccumulateGradHook final : public autograd::PreAccumulateGradHook {
-public:
-    explicit Zero2PreAccumulateGradHook(std::weak_ptr<ParamAndGradBucketGroup> group) : group_(std::move(group)) {}
-
-    bool TryBypassAccumulate(const std::shared_ptr<Tensor> &param, const std::shared_ptr<Tensor> &grad_output,
-                             bool overwrite, float learning_rate) override {
-        if (auto group = group_.lock(); group) {
-            group->AccumulateParamGrad(param, grad_output, overwrite, learning_rate);
-            if (group->config().overlap_grad_reduce) {
-                group->RegisterGradReady(param);
-            }
-            return true;
-        }
-        return false;
-    }
-
-    void operator()(const std::shared_ptr<Tensor> &) override {}
-
-private:
-    std::weak_ptr<ParamAndGradBucketGroup> group_;
-};
-
-class DDPPostAccumulateHook final : public autograd::PostAccumulateGradHook {
-public:
-    using Callback = std::function<void(const std::shared_ptr<Tensor> &)>;
-
-    DDPPostAccumulateHook(const std::weak_ptr<Tensor> param, Callback callback)
-        : param_(param), callback_(std::move(callback)) {}
-
-    void operator()(const std::shared_ptr<Tensor> &) override {
-        if (auto param = param_.lock()) {
-            callback_(param);
-        }
-    }
-
-private:
-    std::weak_ptr<Tensor> param_;
-    Callback callback_;
-};
 } // namespace
 
 DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, const Rank &rank,
@@ -165,6 +124,31 @@ void DistributedDataParallel::BuildParamAndGradBuffers() {
 
 void DistributedDataParallel::RegisterBackwardHooks() {
     if (ddp_config_.zero_stage >= 2) {
+        // NOTE(zbl): ZeRO-2 bypasses Tensor::grad accumulation: stash grads in the bucket group's
+        //            temporary full-grad buffer, then mark the bucket ready for reduce-scatter.
+        class Zero2PreAccumulateGradHook final : public autograd::PreAccumulateGradHook {
+        public:
+            explicit Zero2PreAccumulateGradHook(std::weak_ptr<ParamAndGradBucketGroup> group)
+                : group_(std::move(group)) {}
+
+            bool TryBypassAccumulate(const std::shared_ptr<Tensor> &param, const std::shared_ptr<Tensor> &grad_output,
+                                     bool overwrite, float learning_rate) override {
+                if (auto group = group_.lock(); group) {
+                    group->AccumulateParamGrad(param, grad_output, overwrite, learning_rate);
+                    if (group->config().overlap_grad_reduce) {
+                        group->RegisterGradReady(param);
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            void operator()(const std::shared_ptr<Tensor> &) override {}
+
+        private:
+            std::weak_ptr<ParamAndGradBucketGroup> group_;
+        };
+
         auto &module = modules_.at(kModuleName);
         for (auto &param : module->Parameters()) {
             if (!param->requires_grad()) {
@@ -180,14 +164,29 @@ void DistributedDataParallel::RegisterBackwardHooks() {
         return;
     }
 
+    class DDPPostAccumulateHook final : public autograd::PostAccumulateGradHook {
+    public:
+        DDPPostAccumulateHook(DistributedDataParallel *ddp, const std::weak_ptr<Tensor> param)
+            : ddp_(ddp), param_(param) {}
+
+        void operator()(const std::shared_ptr<Tensor> &) override {
+            if (auto param = param_.lock()) {
+                ddp_->OnGradReady(param);
+            }
+        }
+
+    private:
+        DistributedDataParallel *ddp_;
+        std::weak_ptr<Tensor> param_;
+    };
+
     auto &module = modules_.at(kModuleName);
     for (auto &param : module->Parameters()) {
         if (!param->requires_grad()) {
             continue;
         }
 
-        auto hook = std::make_unique<DDPPostAccumulateHook>(
-            param, [this](const std::shared_ptr<Tensor> &param) { OnGradReady(param); });
+        auto hook = std::make_unique<DDPPostAccumulateHook>(this, param);
         param->RegisterPostAccumulateGradHook(std::move(hook));
     }
 }
