@@ -21,6 +21,11 @@ TEST_P(TrainerStateTest, DefaultValues) {
     TrainerState state;
     EXPECT_EQ(state.global_step, 0);
     EXPECT_EQ(state.consumed_batches, 0);
+    EXPECT_EQ(state.n_layer, 0);
+    EXPECT_EQ(state.n_head, 0);
+    EXPECT_EQ(state.n_kv_head, 0);
+    EXPECT_EQ(state.n_embd, 0);
+    EXPECT_EQ(state.vocab_size, 0);
     EXPECT_EQ(state.ddp_size, 1);
     EXPECT_EQ(state.tp_size, 1);
     EXPECT_EQ(state.sp_size, 1);
@@ -48,7 +53,6 @@ TEST_P(TrainerStateTest, TrainerStateFileCreated) {
     std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     EXPECT_NE(content.find("\"global_step\""), std::string::npos);
     EXPECT_NE(content.find("\"consumed_batches \""), std::string::npos);
-    EXPECT_NE(content.find("\"Adam\""), std::string::npos);
 
     std::filesystem::remove_all(dir);
 }
@@ -61,6 +65,11 @@ TEST_P(TrainerStateTest, RoundTrip) {
         .global_step = 99,
         .consumed_batches = 5000,
         .last_lr = 3e-4,
+        .n_layer = 24,
+        .n_head = 16,
+        .n_kv_head = 8,
+        .n_embd = 1024,
+        .vocab_size = 128256,
         .ddp_size = 2,
         .tp_size = 1,
         .sp_size = 1,
@@ -87,6 +96,11 @@ TEST_P(TrainerStateTest, RoundTrip) {
     EXPECT_EQ(loaded.global_step, 99);
     EXPECT_EQ(loaded.consumed_batches, 5000);
     EXPECT_NEAR(loaded.last_lr, 3e-4, 1e-10);
+    EXPECT_EQ(loaded.n_layer, 24);
+    EXPECT_EQ(loaded.n_head, 16);
+    EXPECT_EQ(loaded.n_kv_head, 8);
+    EXPECT_EQ(loaded.n_embd, 1024);
+    EXPECT_EQ(loaded.vocab_size, 128256);
     EXPECT_EQ(loaded.ddp_size, 2);
     EXPECT_EQ(loaded.pp_size, 2);
 

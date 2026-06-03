@@ -9,6 +9,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 
@@ -39,6 +40,17 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
 
     result.global_step = static_cast<int>(args.state.global_step);
 
+    CHECK_EQ(args.state.n_layer, args.model_config.n_layer)
+        << "n_layer mismatch: ckpt=" << args.state.n_layer << ", config=" << args.model_config.n_layer;
+    CHECK_EQ(args.state.n_head, args.model_config.n_head)
+        << "n_head mismatch: ckpt=" << args.state.n_head << ", config=" << args.model_config.n_head;
+    CHECK_EQ(args.state.n_kv_head, args.model_config.n_kv_head)
+        << "n_kv_head mismatch: ckpt=" << args.state.n_kv_head << ", config=" << args.model_config.n_kv_head;
+    CHECK_EQ(args.state.n_embd, args.model_config.n_embd)
+        << "n_embd mismatch: ckpt=" << args.state.n_embd << ", config=" << args.model_config.n_embd;
+    CHECK_EQ(args.state.vocab_size, args.model_config.vocab_size)
+        << "vocab_size mismatch: ckpt=" << args.state.vocab_size << ", config=" << args.model_config.vocab_size;
+
     CHECK_EQ(args.state.ddp_size, ddp_world_size) << "DDP size mismatch: checkpoint has DDP=" << args.state.ddp_size
                                                   << ", but current run has DDP=" << ddp_world_size;
     CHECK_EQ(args.state.tp_size, tp_world_size)
@@ -64,6 +76,11 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
     state.global_step = args.global_step;
     state.consumed_batches = static_cast<int64_t>(args.consumed_batches);
     state.last_lr = args.last_lr;
+    state.n_layer = args.n_layer;
+    state.n_head = args.n_head;
+    state.n_kv_head = args.n_kv_head;
+    state.n_embd = args.n_embd;
+    state.vocab_size = args.vocab_size;
     state.ddp_size = args.ddp_size;
     state.tp_size = args.tp_size;
     state.sp_size = args.sp_size;

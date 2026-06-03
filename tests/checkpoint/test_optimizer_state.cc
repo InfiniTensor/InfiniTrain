@@ -17,8 +17,7 @@ TEST_P(OptimizerStateTest, AdamStateDictKeys) {
     param->set_requires_grad(true);
     param->Fill(1.0f);
 
-    auto adam = std::make_shared<optimizers::Adam>(
-        std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>{{"weight", param}}, 0.001);
+    auto adam = std::make_shared<optimizers::Adam>(std::vector<std::shared_ptr<Tensor>>{{param}}, 0.001);
 
     adam->ZeroGrad();
     adam->Step(); // t=1
@@ -26,8 +25,8 @@ TEST_P(OptimizerStateTest, AdamStateDictKeys) {
 
     auto state = adam->StateDict();
     EXPECT_GT(state.size(), 0);
-    EXPECT_TRUE(state.count("adam.m.weight"));
-    EXPECT_TRUE(state.count("adam.v.weight"));
+    EXPECT_TRUE(state.count("adam.m.0"));
+    EXPECT_TRUE(state.count("adam.v.0"));
     EXPECT_TRUE(state.count("adam.t"));
 
     auto t_cpu = state["adam.t"]->To(Device());
@@ -41,8 +40,7 @@ TEST_P(OptimizerStateTest, AdamStateDictRoundTrip) {
     param1->set_requires_grad(true);
     param1->Fill(1.0f);
 
-    auto adam1 = std::make_shared<optimizers::Adam>(
-        std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>{{"w", param1}}, 0.001);
+    auto adam1 = std::make_shared<optimizers::Adam>(std::vector<std::shared_ptr<Tensor>>{{param1}}, 0.001);
     adam1->ZeroGrad();
     adam1->Step();
     adam1->Step();
@@ -54,8 +52,7 @@ TEST_P(OptimizerStateTest, AdamStateDictRoundTrip) {
     param2->set_requires_grad(true);
     param2->Fill(1.0f);
 
-    auto adam2 = std::make_shared<optimizers::Adam>(
-        std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>{{"w", param2}}, 0.001);
+    auto adam2 = std::make_shared<optimizers::Adam>(std::vector<std::shared_ptr<Tensor>>{{param2}}, 0.001);
     adam2->LoadStateDict(saved);
 
     adam2->ZeroGrad();
