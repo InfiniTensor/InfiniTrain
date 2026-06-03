@@ -8,7 +8,7 @@
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/tensor.h"
 
-namespace infini_train::autograd {
+namespace infini_train::autograd::comm {
 
 Scatter::Scatter(const std::vector<Device> &target_gpus, int64_t dim,
                  const infini_train::nn::parallel::ProcessGroup *pg)
@@ -122,4 +122,4 @@ std::vector<std::shared_ptr<Tensor>>
 ReduceAddCoalesced::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     return std::make_shared<Broadcast>(target_gpus_)->Apply(grad_outputs);
 }
-} // namespace infini_train::autograd
+} // namespace infini_train::autograd::comm

@@ -15,7 +15,7 @@ class ProcessGroup;
 } // namespace nn::parallel
 } // namespace infini_train
 
-namespace infini_train::autograd {
+namespace infini_train::autograd::comm {
 class Scatter : public autograd::Function {
 public:
     static constexpr char kType[] = "ScatterFunction";
@@ -99,4 +99,4 @@ private:
     std::vector<Device> target_gpus_;
     int64_t num_inputs_ = 0;
 };
-} // namespace infini_train::autograd
+} // namespace infini_train::autograd::comm
