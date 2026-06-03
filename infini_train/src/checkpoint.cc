@@ -208,6 +208,11 @@ void Checkpoint::SaveTrainerState(const std::filesystem::path &path, const Train
     std::ofstream ofs(path);
     CHECK(ofs.is_open()) << "Failed to open trainer state file: " << path;
     ofs << "{\n";
+    ofs << "  \"n_layer\": " << state.n_layer << ",\n";
+    ofs << "  \"n_head\": " << state.n_head << ",\n";
+    ofs << "  \"n_kv_head\": " << state.n_kv_head << ",\n";
+    ofs << "  \"n_embd\": " << state.n_embd << ",\n";
+    ofs << "  \"vocab_size\": " << state.vocab_size << "\n";
     ofs << "  \"global_step\": " << state.global_step << ",\n";
     ofs << "  \"consumed_batches \": " << state.consumed_batches << ",\n";
     ofs << "  \"last_lr\": " << state.last_lr << ",\n";
@@ -226,6 +231,11 @@ TrainerState Checkpoint::LoadTrainerState(const std::filesystem::path &path) {
     const std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
 
     TrainerState state;
+    state.n_layer = ExtractNumberField<int64_t>(content, "n_layer", 0);
+    state.n_head = ExtractNumberField<int64_t>(content, "n_head", 0);
+    state.n_kv_head = ExtractNumberField<int64_t>(content, "n_kv_head", 0);
+    state.n_embd = ExtractNumberField<int64_t>(content, "n_embd", 0);
+    state.vocab_size = ExtractNumberField<int64_t>(content, "vocab_size", 0);
     state.global_step = ExtractNumberField<int64_t>(content, "global_step", 0);
     state.consumed_batches = ExtractNumberField<int64_t>(content, "consumed_batches ", 0);
     state.last_lr = ExtractNumberField<double>(content, "last_lr", 0.0);

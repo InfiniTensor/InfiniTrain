@@ -72,6 +72,10 @@ PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_
 COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
 RUN_CTEST="$(read_var RUN_CTEST)";              : "${RUN_CTEST:=true}"
 CTEST_CMD="$(read_var CTEST_CMD)";              : "${CTEST_CMD:=ctest --output-on-failure -LE cuda -j$(nproc) && ctest --output-on-failure -L cuda -j1}"
+CKPT_CLEAN_DIRS=(
+    "/data1/ckpt"
+    "./checkpoints"
+)
 
 mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
 
@@ -112,6 +116,17 @@ clean_build_dir() {
     echo -e "\033[1;31m[CLEAN] Removing all contents in: ${BUILD_DIR}\033[0m"
     mkdir -p "$BUILD_DIR"
     rm -rf "${BUILD_DIR:?}/"*
+}
+
+# Clean checkpoint directories (called once at start of script)
+clean_checkpoints() {
+    echo -e "\033[1;31m[CLEAN] Removing checkpoint directories from previous run\033[0m"
+    for dir in "${CKPT_CLEAN_DIRS[@]}"; do
+        if [[ -d "$dir" ]]; then
+            echo -e "\033[1;31m[CLEAN] Removing: ${dir}\033[0m"
+            rm -rf "${dir:?}"
+        fi
+    done
 }
 
 # Run a command and log output
@@ -298,6 +313,9 @@ for ((id=0; id<num_builds; ++id)); do
             llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
             run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
         done
+
+        # Clean checkpoints from previous run to avoid disk overflow and stale state
+        clean_checkpoints
     done
 done
 
