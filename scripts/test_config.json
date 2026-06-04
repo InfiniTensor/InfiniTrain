@@ -214,7 +214,7 @@
                     }
                 },
                 {
-                    "id": "3_distopt_zero2",
+                    "id": "3_zero2",
                     "args": {
                         "dtype": "float32",
                         "nthread_per_process": 8,
@@ -236,7 +236,7 @@
                     }
                 },
                 {
-                    "id": "3_bfloat16_distopt_zero2",
+                    "id": "3_bfloat16_zero2",
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 8,
@@ -259,7 +259,7 @@
                     }
                 },
                 {
-                    "id": "4_distopt_zero2",
+                    "id": "4_zero2",
                     "args": {
                         "dtype": "float32",
                         "nthread_per_process": 8,
@@ -283,7 +283,7 @@
                     }
                 },
                 {
-                    "id": "4_bfloat16_distopt_zero2",
+                    "id": "4_bfloat16_zero2",
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 8,
@@ -308,7 +308,7 @@
                     }
                 },
                 {
-                    "id": "5_distopt_zero2",
+                    "id": "5_zero2",
                     "args": {
                         "dtype": "float32",
                         "nthread_per_process": 8,
@@ -334,7 +334,7 @@
                     }
                 },
                 {
-                    "id": "5_bfloat16_distopt_zero2",
+                    "id": "5_bfloat16_zero2",
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 8,
