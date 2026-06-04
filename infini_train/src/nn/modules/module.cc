@@ -267,6 +267,9 @@ Module::ForwardWithHooks(const std::vector<std::shared_ptr<Tensor>> &input_tenso
 }
 
 std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    // NOTE(zbl): This is the full Module call protocol. External callers should use operator() instead of
+    //            Forward() so hooks and other framework-level behaviors are preserved.
+    // ref: https://docs.pytorch.org/docs/2.12/generated/torch.nn.Module.html#torch.nn.Module.forward
     return ForwardWithHooks(input_tensors);
 }
 
