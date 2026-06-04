@@ -79,8 +79,6 @@ struct TransformerConfig {
     bool RecomputeEnabled() const;
 };
 
-ActivationRecomputeGranularity ParseActivationRecomputeGranularity(std::string_view value);
-ActivationRecomputeMethod ParseActivationRecomputeMethod(std::string_view value);
 void SetActivationRecomputeConfig(TransformerConfig *config, bool enabled, std::string_view granularity,
                                   std::string_view method, int64_t num_layers);
 } // namespace infini_train::nn

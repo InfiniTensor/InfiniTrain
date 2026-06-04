@@ -368,20 +368,12 @@ void Train(const nn::parallel::Rank &rank) {
                 autocast_guard.Disable();
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
-                auto [forward_used_mb, forward_reserved_mb] = impl->GetMemPoolPeakMB(device);
-                LOG(INFO) << std::format(
-                    "Rank {}: after forward (micro_step {}/{}), peak used: {:5d} MB | peak reserved: {:5d} MB",
-                    rank.GlobalRank(), micro_step + 1, grad_accum_steps, forward_used_mb, forward_reserved_mb);
 
                 auto loss_cpu = loss->To(Device());
                 lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
                 loss->Backward();
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
-                auto [backward_used_mb, backward_reserved_mb] = impl->GetMemPoolPeakMB(device);
-                LOG(INFO) << std::format(
-                    "Rank {}: after backward (micro_step {}/{}), peak used: {:5d} MB | peak reserved: {:5d} MB",
-                    rank.GlobalRank(), micro_step + 1, grad_accum_steps, backward_used_mb, backward_reserved_mb);
             }
 
             optimizer->Step();

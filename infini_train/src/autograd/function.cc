@@ -114,6 +114,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         }
         output_requires_grad |= input_tensor->requires_grad();
     }
+
     grad_outputs_reached_ = 0;
     grad_outputs_.resize(output_tensors.size(), nullptr);
     for (int output_idx = 0; output_idx < output_tensors.size(); ++output_idx) {

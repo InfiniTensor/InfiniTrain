@@ -18,19 +18,10 @@ std::vector<std::shared_ptr<Tensor>> LayerNorm::Forward(const std::vector<std::s
         = Dispatcher::Instance()
               .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
                   {device, "LayerNormForward"}, input, weight, bias, eps_);
-    mean_ = mean;
-    rstd_ = rstd;
+    // FIXME(zbl): mean/rstd are hidden per-forward autograd context, not user-visible outputs.
+    //             Save them directly here until Function supports explicit auxiliary outputs as PyTorch does.
+    SaveForBackward({input, weight, bias, mean, rstd});
     return {output};
-}
-
-void LayerNorm::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                             const std::vector<std::shared_ptr<Tensor>> &) {
-    const auto &input = input_tensors[0];
-    const auto &weight = input_tensors[1];
-    const auto &bias = input_tensors[2];
-    SaveForBackward({input, weight, bias, mean_, rstd_});
-    mean_.reset();
-    rstd_.reset();
 }
 
 std::vector<std::shared_ptr<Tensor>> LayerNorm::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {

@@ -104,8 +104,6 @@ public:
         : autograd::Function(kType), vocab_size_original_(vocab_size_original), label_smoothing_(label_smoothing) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
-    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
 private:
@@ -115,11 +113,6 @@ private:
     int64_t vocab_size_local_ = 0;
     int64_t vocab_size_global_ = 0;
     int64_t vocab_size_original_ = 0; // For padded situations
-
-    std::shared_ptr<Tensor> softmax_local_;
-    std::shared_ptr<Tensor> target_mask_;
-    std::shared_ptr<Tensor> masked_target_;
-    std::shared_ptr<Tensor> valid_mask_local_;
 };
 
 class VocabParallelCrossEntropyLoss : public nn::CloneableModule<VocabParallelCrossEntropyLoss> {

@@ -21,20 +21,6 @@ Enum ParseEnum(std::string_view value, const std::array<std::pair<std::string_vi
     LOG(FATAL) << "Unknown " << name << ": " << value << ". Expected " << expected << ".";
     return entries[0].second;
 }
-} // namespace
-
-bool TransformerConfig::UseGQA() const { return n_kv_head < n_head; }
-
-int TransformerConfig::GetChunkSize() const {
-    auto stage_info = parallel::PipelineParallel::GetStageInfo(n_layer, parallel::global::GetPipelineParallelSize(),
-                                                               parallel::pp_rank,
-                                                               parallel::global::GetVirtualPipelineParallelSize());
-    return stage_info.layer_ranges_per_chunk.size();
-}
-
-bool TransformerConfig::RecomputeEnabled() const {
-    return recompute_granularity != ActivationRecomputeGranularity::kNone;
-}
 
 ActivationRecomputeGranularity ParseActivationRecomputeGranularity(std::string_view value) {
     static constexpr std::array kEntries = {
@@ -53,6 +39,20 @@ ActivationRecomputeMethod ParseActivationRecomputeMethod(std::string_view value)
         std::pair<std::string_view, ActivationRecomputeMethod>{"block", ActivationRecomputeMethod::kBlock},
     };
     return ParseEnum(value, kEntries, "recompute_method", "none|uniform|block");
+}
+} // namespace
+
+bool TransformerConfig::UseGQA() const { return n_kv_head < n_head; }
+
+int TransformerConfig::GetChunkSize() const {
+    auto stage_info = parallel::PipelineParallel::GetStageInfo(n_layer, parallel::global::GetPipelineParallelSize(),
+                                                               parallel::pp_rank,
+                                                               parallel::global::GetVirtualPipelineParallelSize());
+    return stage_info.layer_ranges_per_chunk.size();
+}
+
+bool TransformerConfig::RecomputeEnabled() const {
+    return recompute_granularity != ActivationRecomputeGranularity::kNone;
 }
 
 void SetActivationRecomputeConfig(TransformerConfig *config, bool enabled, std::string_view granularity,

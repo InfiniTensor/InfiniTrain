@@ -382,9 +382,8 @@ std::shared_ptr<Tensor> Tensor::Contiguous() {
 bool Tensor::IsContiguous() const { return true; }
 
 std::shared_ptr<Tensor> Tensor::Detach() const {
-    // Return a detached view of original tensor
-    // Shares the same storage, but never uses gradient
-    auto view = std::make_shared<Tensor>(*this, offset_, dims_);
+    // Return a detached view of original tensor that shares the same storage, but never uses gradient
+    auto view = std::make_shared<Tensor>(*this, 0, dims_);
     view->set_requires_grad(false);
     view->set_is_leaf(true);
     view->set_grad_fn(nullptr);

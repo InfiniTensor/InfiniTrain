@@ -535,22 +535,10 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
         loss = loss->Mul(1.0f - smoothing)->Sub(mean_logp->Mul(smoothing));
     }
 
-    softmax_local_ = softmax_local;
-    target_mask_ = target_mask;
-    masked_target_ = masked_target;
-    valid_mask_local_ = valid_mask_local;
-
+    // FIXME(zbl): These tensors are hidden per-forward autograd context, not persistent Function state.
+    //             Save them directly here until Function supports explicit auxiliary outputs as PyTorch does.
+    SaveForBackward({softmax_local, target_mask, masked_target, valid_mask_local});
     return {loss};
-}
-
-void VocabParallelCrossEntropy::SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
-                                             const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
-    (void)output_tensors;
-    SaveForBackward({softmax_local_, target_mask_, masked_target_, valid_mask_local_});
-    softmax_local_.reset();
-    target_mask_.reset();
-    masked_target_.reset();
-    valid_mask_local_.reset();
 }
 
 std::vector<std::shared_ptr<Tensor>>
