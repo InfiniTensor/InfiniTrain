@@ -37,6 +37,8 @@ std::shared_ptr<Tensor> ScatterForward(const std::shared_ptr<Tensor> &values, co
     const int64_t num_experts = output_dims.back();
     CHECK_GT(num_experts, 0);
     const int64_t rows = values->NumElements() / topk;
+    const int64_t output_numel = std::accumulate(output_dims.begin(), output_dims.end(), 1, std::multiplies<int64_t>());
+    CHECK_EQ(output_numel, static_cast<size_t>(rows * num_experts));
 
     auto output = std::make_shared<Tensor>(output_dims, values->Dtype(), values->GetDevice());
 
