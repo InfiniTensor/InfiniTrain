@@ -75,4 +75,85 @@ TEST_P(HookTest, HookRemove) {
     EXPECT_EQ(hook3_count, 3);
 }
 
+TEST_P(HookTest, SavedTensorHooksPackAndUnpack) {
+    auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
+    x->Fill(1.0f);
+
+    int pack_count = 0;
+    int unpack_count = 0;
+    autograd::Function::SavedTensorHooks hooks{
+        [&pack_count](const std::shared_ptr<Tensor> &tensor) {
+            ++pack_count;
+            return std::shared_ptr<void>(tensor);
+        },
+        [&unpack_count](const std::shared_ptr<void> &state) {
+            ++unpack_count;
+            return std::static_pointer_cast<Tensor>(state);
+        },
+    };
+
+    auto sin_fn = std::make_shared<autograd::Sin>();
+    {
+        autograd::Function::SavedTensorHooksGuard guard(std::move(hooks));
+        sin_fn->Apply({x});
+    }
+
+    EXPECT_EQ(pack_count, 1);
+    EXPECT_EQ(unpack_count, 0);
+    EXPECT_EQ(sin_fn->GetSavedTensor(0), x);
+    EXPECT_EQ(unpack_count, 1);
+}
+
+TEST_P(HookTest, SavedTensorHooksCanBeDisabledInNestedScope) {
+    auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
+    x->Fill(1.0f);
+
+    int pack_count = 0;
+    autograd::Function::SavedTensorHooks hooks{
+        [&pack_count](const std::shared_ptr<Tensor> &tensor) {
+            ++pack_count;
+            return std::shared_ptr<void>(tensor);
+        },
+        [](const std::shared_ptr<void> &state) { return std::static_pointer_cast<Tensor>(state); },
+    };
+
+    autograd::Function::SavedTensorHooksGuard outer_guard(std::move(hooks));
+    auto first_fn = std::make_shared<autograd::Sin>();
+    first_fn->Apply({x});
+    {
+        autograd::Function::SavedTensorHooksGuard disable_hooks({nullptr, nullptr});
+        auto disabled_fn = std::make_shared<autograd::Sin>();
+        disabled_fn->Apply({x});
+        EXPECT_EQ(disabled_fn->GetSavedTensor(0), x);
+    }
+    auto second_fn = std::make_shared<autograd::Sin>();
+    second_fn->Apply({x});
+
+    EXPECT_EQ(pack_count, 2);
+}
+
+TEST_P(HookTest, SavedTensorHooksSupportNullHookState) {
+    auto x = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
+    x->Fill(1.0f);
+
+    int unpack_count = 0;
+    autograd::Function::SavedTensorHooks hooks{
+        [](const std::shared_ptr<Tensor> &) { return std::shared_ptr<void>{}; },
+        [&x, &unpack_count](const std::shared_ptr<void> &state) {
+            ++unpack_count;
+            EXPECT_EQ(state, nullptr);
+            return x;
+        },
+    };
+
+    auto sin_fn = std::make_shared<autograd::Sin>();
+    {
+        autograd::Function::SavedTensorHooksGuard guard(std::move(hooks));
+        sin_fn->Apply({x});
+    }
+
+    EXPECT_EQ(sin_fn->GetSavedTensor(0), x);
+    EXPECT_EQ(unpack_count, 1);
+}
+
 INFINI_TRAIN_REGISTER_TEST(HookTest);

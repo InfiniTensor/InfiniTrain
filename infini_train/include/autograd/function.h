@@ -21,6 +21,14 @@ public:
     using FunctionPostHook = std::function<void(Function *, const std::vector<std::shared_ptr<Tensor>> &,
                                                 const std::vector<std::shared_ptr<Tensor>> &)>;
 
+    using SavedTensorPackHook = std::function<std::shared_ptr<void>(const std::shared_ptr<Tensor> &)>;
+    using SavedTensorUnpackHook = std::function<std::shared_ptr<Tensor>(const std::shared_ptr<void> &)>;
+
+    struct SavedTensorHooks {
+        SavedTensorPackHook pack;
+        SavedTensorUnpackHook unpack;
+    };
+
     static constexpr char kUndefinedType[] = "Undefined";
 
     Function() : type_(kUndefinedType) {}
@@ -45,8 +53,31 @@ public:
 
     const std::string &type() const { return type_; }
 
+    void SaveForBackward(const std::vector<std::shared_ptr<Tensor>> &tensors);
+    size_t SavedTensorsSize() const { return saved_tensors_.size(); }
+    std::shared_ptr<Tensor> GetSavedTensor(size_t index) const;
+    std::vector<std::shared_ptr<Tensor>> GetSavedTensors() const;
+
+    class SavedTensorHooksGuard {
+    public:
+        explicit SavedTensorHooksGuard(SavedTensorHooks hooks);
+        ~SavedTensorHooksGuard();
+
+        SavedTensorHooksGuard(const SavedTensorHooksGuard &) = delete;
+        SavedTensorHooksGuard &operator=(const SavedTensorHooksGuard &) = delete;
+
+    private:
+        size_t depth_ = 0;
+    };
+
 protected:
-    std::vector<std::shared_ptr<Tensor>> saved_tensors_;
+    struct SavedTensorEntry {
+        std::shared_ptr<Tensor> tensor;
+        std::shared_ptr<void> hook_state;
+        SavedTensorUnpackHook unpack;
+        bool has_hook = false;
+    };
+    std::vector<SavedTensorEntry> saved_tensors_;
     std::vector<bool> needs_input_grad_;
 
 private:

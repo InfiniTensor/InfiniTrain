@@ -15,6 +15,9 @@
 #include "infini_train/include/utils/precision_checker.h"
 
 namespace infini_train::autograd {
+namespace {
+thread_local std::vector<Function::SavedTensorHooks> tls_saved_tensor_hooks;
+} // namespace
 
 std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_GE(input_tensors.size(), 1);
@@ -181,6 +184,59 @@ void Function::BackwardPartial(std::shared_ptr<Tensor> grad_output, int grad_out
             }
         }
         next_functions_.clear();
+    }
+}
+
+void Function::SaveForBackward(const std::vector<std::shared_ptr<Tensor>> &tensors) {
+    saved_tensors_.clear();
+    saved_tensors_.reserve(tensors.size());
+    for (const auto &tensor : tensors) {
+        SavedTensorEntry entry;
+        if (!tensor || tls_saved_tensor_hooks.empty()) {
+            entry.tensor = tensor;
+        } else {
+            const auto &hooks = tls_saved_tensor_hooks.back();
+            if (!hooks.pack && !hooks.unpack) {
+                entry.tensor = tensor;
+            } else {
+                CHECK(hooks.pack && hooks.unpack) << "saved tensor hooks must provide both pack and unpack hooks";
+                entry.hook_state = hooks.pack(tensor);
+                entry.unpack = hooks.unpack;
+                entry.has_hook = true;
+            }
+        }
+        saved_tensors_.push_back(std::move(entry));
+    }
+}
+
+std::shared_ptr<Tensor> Function::GetSavedTensor(size_t index) const {
+    CHECK_LT(index, SavedTensorsSize());
+    const auto &entry = saved_tensors_[index];
+    if (entry.has_hook) {
+        CHECK(entry.unpack) << "saved tensor entry is missing its unpack hook";
+        return entry.unpack(entry.hook_state);
+    }
+    return entry.tensor;
+}
+
+std::vector<std::shared_ptr<Tensor>> Function::GetSavedTensors() const {
+    std::vector<std::shared_ptr<Tensor>> tensors;
+    tensors.reserve(SavedTensorsSize());
+    for (size_t index = 0; index < SavedTensorsSize(); ++index) { tensors.push_back(GetSavedTensor(index)); }
+    return tensors;
+}
+
+Function::SavedTensorHooksGuard::SavedTensorHooksGuard(SavedTensorHooks hooks) {
+    tls_saved_tensor_hooks.push_back(std::move(hooks));
+    depth_ = tls_saved_tensor_hooks.size();
+}
+
+Function::SavedTensorHooksGuard::~SavedTensorHooksGuard() {
+    if (tls_saved_tensor_hooks.size() == depth_) {
+        tls_saved_tensor_hooks.pop_back();
+    } else if (!tls_saved_tensor_hooks.empty()) {
+        LOG(WARNING) << "SavedTensorHooksGuard destroyed out of order.";
+        tls_saved_tensor_hooks.pop_back();
     }
 }
 
