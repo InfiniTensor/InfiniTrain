@@ -38,10 +38,10 @@ int GetRank(Device::DeviceType device) {
 }
 
 void Profiler::StartRecord(const std::string &name, Device::DeviceType device) {
-    if (g_profiling_depth++ > 0) {
+    if (tls_profiling_depth++ > 0) {
         return;
     }
-    cpu_timing_map_[name] = std::chrono::high_resolution_clock::now();
+    tls_cpu_timing_map_[name] = std::chrono::high_resolution_clock::now();
 
     if (device == Device::DeviceType::kCPU) {
         return;
@@ -52,11 +52,11 @@ void Profiler::StartRecord(const std::string &name, Device::DeviceType device) {
     auto current_device = Device(device, static_cast<int8_t>(device_id));
     auto *stream = impl->GetStream(current_device);
 
-    auto it = device_timing_map_.find(name);
-    if (it != device_timing_map_.end()) {
+    auto it = tls_device_timing_map_.find(name);
+    if (it != tls_device_timing_map_.end()) {
         impl->EventDestroy(it->second.start);
         impl->EventDestroy(it->second.stop);
-        device_timing_map_.erase(it);
+        tls_device_timing_map_.erase(it);
     }
 
     core::Event *start = nullptr;
@@ -67,13 +67,13 @@ void Profiler::StartRecord(const std::string &name, Device::DeviceType device) {
     // Make sure the compute stream has done waiting, and ready for the execution of next op
     impl->SynchronizeStream(stream);
     // Start record after waiting
-    cpu_timing_map_[name] = std::chrono::high_resolution_clock::now();
+    tls_cpu_timing_map_[name] = std::chrono::high_resolution_clock::now();
     impl->EventRecord(start, stream);
-    device_timing_map_[name] = {start, stop};
+    tls_device_timing_map_[name] = {start, stop};
 }
 
 void Profiler::EndRecord(const std::string &name, Device::DeviceType device) {
-    if (--g_profiling_depth > 0) {
+    if (--tls_profiling_depth > 0) {
         return;
     }
     int64_t host_us = 0, device_us = 0;
@@ -86,8 +86,8 @@ void Profiler::EndRecord(const std::string &name, Device::DeviceType device) {
         auto current_device = Device(device, static_cast<int8_t>(rank));
         auto *stream = impl->GetStream(current_device);
 
-        auto it = device_timing_map_.find(name);
-        if (it == device_timing_map_.end()) {
+        auto it = tls_device_timing_map_.find(name);
+        if (it == tls_device_timing_map_.end()) {
             LOG(FATAL) << "Start time of " + name + " is not recorded.";
         }
 
@@ -97,7 +97,7 @@ void Profiler::EndRecord(const std::string &name, Device::DeviceType device) {
         device_us = static_cast<int64_t>(impl->EventElapsedTime(event_pair.start, event_pair.stop) * 1000.0f);
         impl->EventDestroy(event_pair.start);
         impl->EventDestroy(event_pair.stop);
-        device_timing_map_.erase(it);
+        tls_device_timing_map_.erase(it);
 
         auto [peak_used_mb, peak_reserved_mb] = impl->GetMemPoolPeakMB(current_device);
         (void)peak_used_mb;
@@ -105,10 +105,10 @@ void Profiler::EndRecord(const std::string &name, Device::DeviceType device) {
         device_str = current_device.ToString();
     }
 
-    auto cpu_start = cpu_timing_map_[name];
+    auto cpu_start = tls_cpu_timing_map_[name];
     auto cpu_end = std::chrono::high_resolution_clock::now();
     host_us = std::chrono::duration_cast<std::chrono::microseconds>(cpu_end - cpu_start).count();
-    cpu_timing_map_.erase(name);
+    tls_cpu_timing_map_.erase(name);
 
     RecordKernel(name, rank, device_str, host_us, device_us, peak_mem_mb);
 }

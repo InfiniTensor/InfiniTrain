@@ -16,7 +16,7 @@ namespace infini_train::nn::parallel {
 class PipelineStage;
 class PipelineSchedule;
 
-extern thread_local int pp_rank;
+extern thread_local int tls_pp_rank;
 
 struct StageInfo {
     bool is_first_stage;

@@ -1,4 +1,5 @@
 #include "infini_train/include/nn/parallel/rank.h"
+
 #include "infini_train/include/nn/parallel/global.h"
 
 namespace infini_train::nn::parallel {
