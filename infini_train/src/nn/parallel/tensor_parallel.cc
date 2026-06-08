@@ -21,7 +21,7 @@ namespace infini_train::nn::parallel {
 
 // NOTE(zbl): Reserved for VocabParallelEmbedding, since rank is needed in its constructor before any Device exists
 //            On other occasions, should use Device::Rank()
-thread_local int tp_rank = 0;
+thread_local int tls_tp_rank = 0;
 
 namespace {
 // Comm Kernel Call Functions
@@ -389,7 +389,7 @@ VocabParallelEmbedding::VocabParallelEmbedding(int64_t num_embeddings, int64_t e
         << "num_embeddings must be divisible by TP world size for VocabParallelEmbedding";
 
     vocab_size_per_partition_ = num_embeddings / tp_size;
-    vocab_start_index_ = static_cast<int64_t>(tp_rank) * vocab_size_per_partition_;
+    vocab_start_index_ = static_cast<int64_t>(tls_tp_rank) * vocab_size_per_partition_;
     vocab_end_index_ = vocab_start_index_ + vocab_size_per_partition_;
 
     parameters_[kParamWeightName]
