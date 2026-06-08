@@ -13,10 +13,10 @@ inline nn::TransformerConfig TinyMixtralConfig() {
     config.block_size = 32768;  // Same as Mixtral/Megatron --max-position-embeddings.
     config.vocab_size = 128256; // Validation data uses LLaMA3 token ids; real Mixtral uses 32000.
     config.original_vocab_size = 128256;
-    config.n_layer = 2;   // Tiny scale; Megatron --num-layers 32.
-    config.n_head = 4;    // Tiny scale; preserves the Megatron 4:1 GQA ratio.
-    config.n_kv_head = 1; // Tiny scale; Megatron --num-query-groups 8.
-    config.n_embd = 32;   // Tiny scale; Megatron --hidden-size 4096.
+    config.n_layer = 32;
+    config.n_head = 4;    // Scaled down; preserves Mixtral 4:1 GQA ratio.
+    config.n_kv_head = 1; // Scaled down with n_head; real Mixtral uses 8 KV heads.
+    config.n_embd = 512;  // Scaled down from Mixtral/Megatron --hidden-size 4096.
     config.attention_type = nn::AttentionType::kRoPE;
     config.activation_type = nn::MLPType::kSwiGLU;
     config.ffn_type = nn::FFNType::kMoE;
@@ -33,7 +33,7 @@ inline nn::TransformerConfig TinyMixtralConfig() {
     moe_config.num_experts = 8;
     moe_config.expert_parallel_size = 1; // Single-rank validation scale.
     moe_config.router_topk = 2;
-    moe_config.moe_ffn_hidden_size = 112; // Tiny scale; Megatron --ffn-hidden-size 14336.
+    moe_config.moe_ffn_hidden_size = 1792; // Scaled down as 512 * 3.5; real Mixtral uses 14336.
     moe_config.token_dispatcher_type = nn::MoEConfig::TokenDispatcherType::kAllGather; // Single-rank validation path.
     moe_config.expert_impl = nn::MoEConfig::ExpertImpl::kSequential;                   // Local correctness path.
     config.moe_config = moe_config;
