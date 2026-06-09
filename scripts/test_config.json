@@ -9,8 +9,7 @@
         "LOG_DIR": "./logs",
         "CKPT_ROOT_DIR": "/data1/ckpt",
         "COMPARE_LOG_DIR": "",
-        "RUN_CTEST": "true",
-        "CTEST_CMD": "ctest --output-on-failure -LE cuda -j$(nproc) && ctest --output-on-failure -L cuda -j1"
+        "RUN_CTEST": "true"
     },
     "builds": [
         {

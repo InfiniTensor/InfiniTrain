@@ -28,8 +28,9 @@ include(GoogleTest)
 # Features:
 #   1. Create executable target
 #   2. Configure compile options, link libraries, and include paths
-#   3. Use gtest_discover_tests to auto-discover test cases
-#   4. Set test labels
+#   3. Use gtest_discover_tests to auto-discover CPU test cases
+#   4. Register CUDA tests at binary granularity with CTest GPU resources
+#   5. Set test labels
 #
 # Arguments:
 #   SOURCES:    Source file list (required)
@@ -73,7 +74,7 @@ macro(infini_train_add_test)
   # 5. Link project library (reuses framework linking strategy)
   link_infini_train_exe(${ARG_TEST_NAME})
 
-  # 6. Auto-discover gtest cases and register as ctest tests
+  # 6. Register tests
   set(labels "cpu")
   if(ARG_LABELS)
     set(labels "${ARG_LABELS}")
@@ -84,16 +85,30 @@ macro(infini_train_add_test)
     set(test_timeout ${ARG_TEST_TIMEOUT})
   endif()
 
-  if(ARG_TEST_FILTER)
+  list(FIND labels cuda _has_cuda_label)
+  if(NOT _has_cuda_label EQUAL -1)
+    set(_cuda_test_args)
+    if(ARG_TEST_FILTER)
+      list(APPEND _cuda_test_args --gtest_filter=${ARG_TEST_FILTER})
+    endif()
+
+    add_test(
+      NAME ${ARG_TEST_NAME}
+      COMMAND $<TARGET_FILE:${ARG_TEST_NAME}> ${_cuda_test_args}
+    )
+    set_tests_properties(${ARG_TEST_NAME}
+      PROPERTIES
+        LABELS "${labels}"
+        TIMEOUT ${test_timeout}
+    )
+  elseif(ARG_TEST_FILTER)
     gtest_discover_tests(${ARG_TEST_NAME}
-      EXTRA_ARGS --gtest_output=xml:%T.xml
       TEST_FILTER "${ARG_TEST_FILTER}"
       DISCOVERY_TIMEOUT 10
       PROPERTIES LABELS "${labels}" TIMEOUT ${test_timeout}
     )
   else()
     gtest_discover_tests(${ARG_TEST_NAME}
-      EXTRA_ARGS --gtest_output=xml:%T.xml
       PROPERTIES LABELS "${labels}" TIMEOUT ${test_timeout}
     )
   endif()
