@@ -207,17 +207,17 @@ inline size_t ChooseBlockSize(size_t num_elements) {
     return 512;
 }
 
+inline dim3 ChooseBlockDims(size_t num_elements) { return dim3(ChooseBlockSize(num_elements)); }
+
 // launch the given kernel function with the given output and inputs
-template <size_t BLOCK_SIZE, typename T, typename Kernel, typename... Inputs>
+template <typename T, typename Kernel, typename... Inputs>
 void LaunchKernel(Kernel &&kernel, const std::shared_ptr<Tensor> &output, const Inputs &...inputs) {
     auto extract_ptrs
         = [](const auto &...ts) { return std::make_tuple(static_cast<T *>(ts ? ts->DataPtr() : nullptr)...); };
     auto input_ptrs = extract_ptrs(inputs...);
 
     const size_t num_elements = output->NumElements();
-    // Use dynamic block size based on tensor size for better occupancy
-    size_t block_size = std::min(ChooseBlockSize(num_elements), static_cast<size_t>(1024));
-    dim3 block_dims(block_size);
+    dim3 block_dims = ChooseBlockDims(num_elements);
     dim3 grid_dims(CEIL_DIV(num_elements, block_dims.x));
     const size_t step = grid_dims.x * block_dims.x;
 
@@ -228,7 +228,7 @@ void LaunchKernel(Kernel &&kernel, const std::shared_ptr<Tensor> &output, const 
 
 // launch a forward elementwise operation given the calculation function, output, and the inputs
 // Note: currently only support unary and binary operations
-template <size_t BLOCK_SIZE, typename T, typename Func, typename... Inputs>
+template <typename T, typename Func, typename... Inputs>
 void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Inputs &...inputs) {
     auto device = output->GetDevice();
     const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
@@ -238,7 +238,7 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
 
     if constexpr (sizeof...(inputs) == 1) {
         // Unary case
-        LaunchKernel<BLOCK_SIZE, T>(
+        LaunchKernel<T>(
             [&](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
                 UnaryForwardKernel<<<grid, block, 0, cuda_stream>>>(output_ptr, func, output->NumElements(), offset,
                                                                     ptrs...);
@@ -262,7 +262,7 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
             const size_t num_elements = output->NumElements();
             const T *a_ptr = static_cast<const T *>(input_a->DataPtr());
             const T *b_ptr = static_cast<const T *>(input_b->DataPtr());
-            dim3 block_dims(std::min(BLOCK_SIZE, static_cast<size_t>(1024)));
+            dim3 block_dims = ChooseBlockDims(num_elements);
             dim3 grid_dims(std::min(CEIL_DIV(num_elements, block_dims.x), static_cast<size_t>(65535)));
             BinaryForwardKernelNoBroadcast<<<grid_dims, block_dims, 0, cuda_stream>>>(output_ptr, func, a_ptr, b_ptr,
                                                                                       num_elements);
@@ -272,7 +272,7 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
             // dominated the host-side jitter floor (especially under LoRA training).
             BroadcastMeta meta = MakeBroadcastMeta(a_dims, b_dims, out_dims);
 
-            LaunchKernel<BLOCK_SIZE, T>(
+            LaunchKernel<T>(
                 [&](dim3 grid, dim3 block, size_t /*offset*/, const T *a_ptr, const T *b_ptr) {
                     BinaryForwardKernel<<<grid, block, 0, cuda_stream>>>(output_ptr, func, meta, a_ptr, b_ptr,
                                                                          output->NumElements());
@@ -611,7 +611,7 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
 }
 
 // launch unary operator's backward kernel
-template <size_t BLOCK_SIZE, typename T, typename Func, typename... Inputs>
+template <typename T, typename Func, typename... Inputs>
 void LaunchBackward(Func func, const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &grad_output,
                     const Inputs &...inputs) {
     auto device = output->GetDevice();
@@ -622,7 +622,7 @@ void LaunchBackward(Func func, const std::shared_ptr<Tensor> &output, const std:
     T *output_ptr = static_cast<T *>(output->DataPtr());
     const T *grad_ptr = static_cast<const T *>(grad_output->DataPtr());
 
-    LaunchKernel<BLOCK_SIZE, T>(
+    LaunchKernel<T>(
         [=](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
             UnaryBackwardKernel<<<grid, block, 0, cuda_stream>>>(output_ptr, func, output->NumElements(), offset,
                                                                  grad_ptr, ptrs...);
@@ -631,7 +631,7 @@ void LaunchBackward(Func func, const std::shared_ptr<Tensor> &output, const std:
 }
 
 // launch binary operator's backward kernel
-template <size_t BLOCK_SIZE, typename T, typename FuncA, typename FuncB, typename... Inputs>
+template <typename T, typename FuncA, typename FuncB, typename... Inputs>
 void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &output_a,
                     const std::shared_ptr<Tensor> &output_b, const std::vector<int64_t> &a_dims,
                     const std::vector<int64_t> &b_dims, const std::shared_ptr<Tensor> &grad_output,
@@ -674,7 +674,7 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
             BinaryBackwardKernelNoBroadcastVectorized<T, VecSize><<<grid_dims, block_dims, 0, stream>>>(
                 output_a_ptr, output_b_ptr, fun_a, fun_b, num_elements, grad_output_ptr, input_a_ptr, input_b_ptr);
         } else {
-            dim3 block_dims(std::min(BLOCK_SIZE, static_cast<size_t>(1024)));
+            dim3 block_dims = ChooseBlockDims(num_elements);
             dim3 grid_dims(std::min(CEIL_DIV(num_elements, block_dims.x), static_cast<size_t>(65535)));
             BinaryBackwardKernelNoBroadcastFast<<<grid_dims, block_dims, 0, stream>>>(
                 output_a_ptr, output_b_ptr, fun_a, fun_b, num_elements, grad_output_ptr, input_a_ptr, input_b_ptr);
@@ -688,9 +688,10 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     BroadcastMeta meta = MakeBroadcastMeta(a_dims, b_dims, out_dims);
 
     if constexpr (std::is_same_v<T, float>) {
-        LaunchKernel<BLOCK_SIZE, T>(
+        LaunchKernel<T>(
             [=](dim3 grid, dim3 block, size_t /*offset*/, auto... ptrs) {
-                const int num_warps = BLOCK_SIZE / kWarpSize;
+                const int block_threads = static_cast<int>(block.x);
+                const int num_warps = CEIL_DIV(block_threads, kWarpSize);
                 const size_t smem_size = num_warps * sizeof(cub::WarpReduce<float>::TempStorage);
                 BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(output_a_ptr, output_b_ptr, fun_a, fun_b, meta,
                                                                          num_elements, grad_output_ptr, ptrs...);
@@ -713,7 +714,7 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
 
         if (path == BF16Path::NoBroadcast) {
             // No broadcast: write gradients directly without shared memory or atomics.
-            LaunchKernel<BLOCK_SIZE, T>(
+            LaunchKernel<T>(
                 [=](dim3 grid, dim3 block, size_t /*offset*/, auto... ptrs) {
                     BinaryBackwardKernelNoBroadcast<T, FuncA, FuncB><<<grid, block, 0, stream>>>(
                         output_a_ptr, output_b_ptr, fun_a, fun_b, meta, num_elements, grad_output_ptr, ptrs...);
@@ -724,7 +725,7 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
 
         if (path == BF16Path::TwoPassHist) {
             // Small K with variation in the innermost dimension: use two-pass histogram strategy.
-            LaunchKernel<BLOCK_SIZE, T>(
+            LaunchKernel<T>(
                 [=](dim3 /*grid*/, dim3 /*block*/, size_t /*offset*/, const T *input_a_ptr, const T *input_b_ptr) {
                     BinaryBackwardBhistLaunch<T, FuncA, FuncB>(fun_a, fun_b, output_a_ptr, output_b_ptr,
                                                                grad_output_ptr, meta, num_elements, K_linear,
@@ -736,9 +737,10 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
         }
 
         // Otherwise fall back to the block-reduction kernel with SoA layout and fast atomics.
-        LaunchKernel<BLOCK_SIZE, T>(
+        LaunchKernel<T>(
             [=](dim3 grid, dim3 block, size_t /*offset*/, auto... ptrs) {
-                const int padded_block = BLOCK_SIZE + BLOCK_SIZE / kWarpSize;
+                const int block_threads = static_cast<int>(block.x);
+                const int padded_block = block_threads + block_threads / kWarpSize;
                 const size_t smem_size = static_cast<size_t>(padded_block) * (sizeof(int64_t) + sizeof(float));
                 BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(
                     output_a_ptr, output_b_ptr, fun_a, fun_b, meta, num_elements, output_b->NumElements(),
@@ -753,9 +755,9 @@ template <typename Func> std::shared_ptr<Tensor> UnaryForward(const std::shared_
     auto output = std::make_shared<Tensor>(input->Dims(), dtype, input->GetDevice());
 
     switch (dtype) {
-        DISPATCH_CASE(WRAP(LaunchForward<256, float>(unary_fn, output, input);), DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP(LaunchForward<256, nv_bfloat16>(unary_fn, output, input);), DataType::kBFLOAT16)
-        DISPATCH_CASE(WRAP(LaunchForward<256, int64_t>(unary_fn, output, input);), DataType::kINT64)
+        DISPATCH_CASE(WRAP(LaunchForward<float>(unary_fn, output, input);), DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(LaunchForward<nv_bfloat16>(unary_fn, output, input);), DataType::kBFLOAT16)
+        DISPATCH_CASE(WRAP(LaunchForward<int64_t>(unary_fn, output, input);), DataType::kINT64)
     default:
         LOG_LOC(FATAL, "CUDA unary forward: 'Unsupported data type'");
     }
@@ -776,11 +778,11 @@ std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output
     auto output = std::make_shared<Tensor>(grad_output->Dims(), promoted_type, grad_output->GetDevice());
 
     switch (promoted_type) {
-        DISPATCH_CASE(WRAP({ LaunchBackward<256, float>(unary_fn, output, grad_output_promoted, a_promoted); }),
+        DISPATCH_CASE(WRAP({ LaunchBackward<float>(unary_fn, output, grad_output_promoted, a_promoted); }),
                       DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP({ LaunchBackward<256, nv_bfloat16>(unary_fn, output, grad_output_promoted, a_promoted); }),
+        DISPATCH_CASE(WRAP({ LaunchBackward<nv_bfloat16>(unary_fn, output, grad_output_promoted, a_promoted); }),
                       DataType::kBFLOAT16)
-        DISPATCH_CASE(WRAP({ LaunchBackward<256, int64_t>(unary_fn, output, grad_output_promoted, a_promoted); }),
+        DISPATCH_CASE(WRAP({ LaunchBackward<int64_t>(unary_fn, output, grad_output_promoted, a_promoted); }),
                       DataType::kINT64)
     default:
         LOG_LOC(FATAL, "CUDA unary backward: 'Unsupported data type'");
@@ -806,10 +808,9 @@ std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const st
     auto output = std::make_shared<Tensor>(a->Dims(), promoted_type, a->GetDevice());
 
     switch (promoted_type) {
-        DISPATCH_CASE(WRAP(LaunchForward<256, float>(binary_fn, output, a_promoted, b_promoted);), DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP(LaunchForward<256, nv_bfloat16>(binary_fn, output, a_promoted, b_promoted);),
-                      DataType::kBFLOAT16)
-        DISPATCH_CASE(WRAP(LaunchForward<256, int64_t>(binary_fn, output, a_promoted, b_promoted);), DataType::kINT64)
+        DISPATCH_CASE(WRAP(LaunchForward<float>(binary_fn, output, a_promoted, b_promoted);), DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(LaunchForward<nv_bfloat16>(binary_fn, output, a_promoted, b_promoted);), DataType::kBFLOAT16)
+        DISPATCH_CASE(WRAP(LaunchForward<int64_t>(binary_fn, output, a_promoted, b_promoted);), DataType::kINT64)
     default:
         LOG_LOC(FATAL, "CUDA binary forward: 'Unsupported data type'");
     }
@@ -866,8 +867,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
                               grad_a->Fill(0.0f);
                               grad_b->Fill(0.0f);
                           }
-                          LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
-                                                     a_promoted, b_promoted);
+                          LaunchBackward<float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
+                                                a_promoted, b_promoted);
                       }),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
@@ -875,15 +876,15 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
                               grad_a->Fill(0.0f);
                               grad_b->Fill(0.0f);
                           }
-                          LaunchBackward<256, nv_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims,
-                                                           grad_output_promoted, a_promoted, b_promoted);
+                          LaunchBackward<nv_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
+                                                      a_promoted, b_promoted);
                       }),
                       DataType::kBFLOAT16)
         // FIXME(zbl): AtomicAdd does not support int64_t
         // DISPATCH_CASE(WRAP({
         //                   grad_a->Fill(0.0);
         //                   grad_b->Fill(0.0);
-        //                   LaunchBackward<256, int64_t>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
+        //                   LaunchBackward<int64_t>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
         //                   b);
         //               }),
         //               DataType::kINT64)
