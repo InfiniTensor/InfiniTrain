@@ -34,7 +34,8 @@ include(GoogleTest)
 # Arguments:
 #   SOURCES:    Source file list (required)
 #   LABELS:     Test labels, e.g. "cpu" "cuda" "distributed" (optional, default "cpu")
-#   TEST_FILTER: gtest test filter pattern (optional)
+#   TEST_FILTER:  gtest test filter pattern (optional)
+#   TEST_TIMEOUT: ctest timeout in seconds (optional, default 10)
 #
 # Examples:
 #   # Single-label test (one liner)
@@ -45,7 +46,7 @@ include(GoogleTest)
 #   infini_train_add_test(test_example_cuda SOURCES test_example.cc LABELS cuda TEST_FILTER "*CUDA*")
 # -----------------------------------------------------------------------------
 macro(infini_train_add_test)
-  cmake_parse_arguments(ARG "" "TEST_NAME;TEST_FILTER" "SOURCES;LABELS" ${ARGN})
+  cmake_parse_arguments(ARG "" "TEST_NAME;TEST_FILTER;TEST_TIMEOUT" "SOURCES;LABELS" ${ARGN})
 
   if(NOT ARG_TEST_NAME)
     set(ARG_TEST_NAME ${ARG_UNPARSED_ARGUMENTS})
@@ -78,17 +79,22 @@ macro(infini_train_add_test)
     set(labels "${ARG_LABELS}")
   endif()
 
+  set(test_timeout 10)
+  if(ARG_TEST_TIMEOUT)
+    set(test_timeout ${ARG_TEST_TIMEOUT})
+  endif()
+
   if(ARG_TEST_FILTER)
     gtest_discover_tests(${ARG_TEST_NAME}
       EXTRA_ARGS --gtest_output=xml:%T.xml
       TEST_FILTER "${ARG_TEST_FILTER}"
       DISCOVERY_TIMEOUT 10
-      PROPERTIES LABELS "${labels}" TIMEOUT 10
+      PROPERTIES LABELS "${labels}" TIMEOUT ${test_timeout}
     )
   else()
     gtest_discover_tests(${ARG_TEST_NAME}
       EXTRA_ARGS --gtest_output=xml:%T.xml
-      PROPERTIES LABELS "${labels}" TIMEOUT 10
+      PROPERTIES LABELS "${labels}" TIMEOUT ${test_timeout}
     )
   endif()
 endmacro()
@@ -103,17 +109,23 @@ endmacro()
 #   <name>   Base name; each target is named <name>_<label>
 #   SOURCES  Source file list (required)
 #   LABELS   Subset of {cpu cuda} (optional, default: both)
+#   TEST_TIMEOUT ctest timeout in seconds (optional, default 10)
 #
 # Examples:
 #   infini_train_add_test_suite(test_tensor SOURCES ${TENSOR_TEST_SOURCES})
 #   infini_train_add_test_suite(test_lora   SOURCES test_lora.cc LABELS cpu)
 # -----------------------------------------------------------------------------
 macro(infini_train_add_test_suite)
-  cmake_parse_arguments(SUITE "" "" "SOURCES;LABELS" ${ARGN})
+  cmake_parse_arguments(SUITE "" "TEST_TIMEOUT" "SOURCES;LABELS" ${ARGN})
   set(_suite_name ${SUITE_UNPARSED_ARGUMENTS})
 
   if(NOT SUITE_LABELS)
     set(SUITE_LABELS cpu cuda)
+  endif()
+
+  set(suite_test_timeout 10)
+  if(SUITE_TEST_TIMEOUT)
+    set(suite_test_timeout ${SUITE_TEST_TIMEOUT})
   endif()
 
   foreach(_label IN LISTS SUITE_LABELS)
@@ -123,6 +135,7 @@ macro(infini_train_add_test_suite)
       SOURCES ${SUITE_SOURCES}
       LABELS ${_label}
       TEST_FILTER "${_filter}"
+      TEST_TIMEOUT ${suite_test_timeout}
     )
   endforeach()
 endmacro()
