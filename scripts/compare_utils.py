@@ -8,7 +8,9 @@ def collect_log_files(base_dir: Path):
     duplicates = {}
 
     for path in base_dir.rglob("*.log"):
-        if path.name.startswith("build") or path.name.endswith("_profile.log"):
+        if not path.name.startswith(("gpt2_", "llama3_")):
+            continue
+        if path.name.endswith("_profile.log"):
             continue
 
         key = path.name

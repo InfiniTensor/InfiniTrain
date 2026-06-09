@@ -71,7 +71,6 @@ LOG_DIR="$(read_var LOG_DIR)";                  : "${LOG_DIR:=logs}"
 PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_logs}"
 COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
 RUN_CTEST="$(read_var RUN_CTEST)";              : "${RUN_CTEST:=true}"
-CTEST_CMD="$(read_var CTEST_CMD)";              : "${CTEST_CMD:=ctest --output-on-failure -LE cuda -j$(nproc) && ctest --output-on-failure -L cuda -j1}"
 
 mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
 
@@ -112,6 +111,74 @@ clean_build_dir() {
     echo -e "\033[1;31m[CLEAN] Removing all contents in: ${BUILD_DIR}\033[0m"
     mkdir -p "$BUILD_DIR"
     rm -rf "${BUILD_DIR:?}/"*
+}
+
+run_ctest() {
+    local gpu_list=()
+    local cuda_tests=()
+
+    if [[ -n "${CTEST_CUDA_GPUS:-}" ]]; then
+        IFS=',' read -r -a gpu_list <<< "$CTEST_CUDA_GPUS"
+    elif command -v nvidia-smi >/dev/null 2>&1; then
+        mapfile -t gpu_list < <(nvidia-smi --query-gpu=index --format=csv,noheader 2>/dev/null || true)
+    fi
+
+    if [[ ${#gpu_list[@]} -eq 0 ]]; then
+        gpu_list=(0)
+    fi
+
+    local filtered_gpu_list=()
+    local gpu
+    for gpu in "${gpu_list[@]}"; do
+        gpu="${gpu//[[:space:]]/}"
+        [[ -z "$gpu" ]] && continue
+        filtered_gpu_list+=("$gpu")
+    done
+
+    if [[ ${#filtered_gpu_list[@]} -eq 0 ]]; then
+        filtered_gpu_list=(0)
+    fi
+
+    ctest --output-on-failure -LE cuda -j"$(nproc)"
+
+    mapfile -t cuda_tests < <(ctest -N -L cuda | sed -n 's/^ *Test *#[0-9][0-9]*: //p')
+    if [[ ${#cuda_tests[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    local worker_count="${#filtered_gpu_list[@]}"
+    local pids=()
+    local worker_idx
+    for ((worker_idx = 0; worker_idx < worker_count; worker_idx++)); do
+        (
+            local worker_failed=0
+            local test_idx="$worker_idx"
+            local test_name
+            local assigned_gpu="${filtered_gpu_list[$worker_idx]}"
+
+            while ((test_idx < ${#cuda_tests[@]})); do
+                test_name="${cuda_tests[$test_idx]}"
+                echo "[CUDA GPU ${assigned_gpu}] ${test_name}"
+                if ! CUDA_VISIBLE_DEVICES="$assigned_gpu" ctest --output-on-failure -R "^${test_name}$" -j1; then
+                    worker_failed=1
+                fi
+                test_idx=$((test_idx + worker_count))
+            done
+
+            exit "$worker_failed"
+        ) &
+        pids+=("$!")
+    done
+
+    local failed=0
+    local pid
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then
+            failed=1
+        fi
+    done
+
+    return "$failed"
 }
 
 # Run a command and log output
@@ -247,7 +314,7 @@ for ((id=0; id<num_builds; ++id)); do
     clean_build_dir
     run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "build"
     if [[ "$RUN_CTEST" == "true" && "$build_profile" != "true" ]]; then
-        run_and_log "$CTEST_CMD" "ctest_${build_id}" "no" "ctest"
+        run_and_log "run_ctest" "ctest_${build_id}" "no" "ctest"
     fi
 
     # profile flag for runs
