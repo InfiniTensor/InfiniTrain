@@ -2,10 +2,13 @@
 
 #include <algorithm>
 #include <atomic>
+#include <exception>
 #include <unordered_map>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/autocast.h"
+#include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/tensor.h"
 
@@ -15,6 +18,22 @@ constexpr char kCheckpointType[] = "Checkpoint";
 std::atomic<int64_t> g_checkpoint_gid{0};
 
 int64_t NextCheckpointGid() { return g_checkpoint_gid.fetch_add(1) + 1; }
+
+class CheckpointFunction : public autograd::Function {
+public:
+    explicit CheckpointFunction(CheckpointForwardFn forward_fn);
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+
+private:
+    CheckpointForwardFn forward_fn_;
+    std::vector<std::shared_ptr<Tensor>> saved_inputs_;
+    std::vector<bool> saved_inputs_requires_grad_;
+    AutocastState saved_autocast_;
+};
 
 struct SavedTensorMeta {
     std::vector<int64_t> dims;
@@ -36,7 +55,7 @@ struct SavedTensorHolder {
 };
 
 struct CheckpointFrame {
-    CheckpointFunction::ForwardFn forward_fn;
+    CheckpointForwardFn forward_fn;
     std::vector<std::shared_ptr<Tensor>> inputs;
     std::vector<bool> inputs_requires_grad;
     AutocastState autocast_state;
@@ -106,8 +125,7 @@ struct CheckpointFrame {
             detached_inputs.push_back(detached);
         }
 
-        auto prev_autocast = GetAutocastState();
-        SetAutocastState(autocast_state);
+        AutocastStateGuard autocast_guard(autocast_state);
         // Unlike PyTorch's engine, this autograd implementation mutates
         // dependency counters eagerly while building a graph. The recompute
         // graph is not traversed by non-reentrant checkpoint here, so building
@@ -118,9 +136,9 @@ struct CheckpointFrame {
         autograd::NoGradGuard no_grad;
         autograd::PropagateRequiresGradGuard propagate_requires_grad;
 
-        autograd::FunctionCtx::SavedTensorHooks hooks;
-        hooks.pack = [this, gid, alive_needed, &filled,
-                      &recompute_index](const std::shared_ptr<Tensor> &tensor) -> std::shared_ptr<void> {
+        autograd::FunctionCtx::SavedTensorHooks recompute_hooks;
+        recompute_hooks.pack = [this, gid, alive_needed, &filled,
+                                &recompute_index](const std::shared_ptr<Tensor> &tensor) -> std::shared_ptr<void> {
             size_t idx = recompute_index++;
             if (idx >= weak_holders.size()) {
                 LOG(FATAL) << "Checkpoint: recomputed more tensors than saved during forward.";
@@ -153,10 +171,10 @@ struct CheckpointFrame {
             }
             return tensor;
         };
-        hooks.unpack = [](const std::shared_ptr<void> &state) -> std::shared_ptr<Tensor> {
+        recompute_hooks.unpack = [](const std::shared_ptr<void> &state) -> std::shared_ptr<Tensor> {
             return std::static_pointer_cast<Tensor>(state);
         };
-        autograd::FunctionCtx::SavedTensorHooksGuard guard(std::move(hooks));
+        autograd::FunctionCtx::SavedTensorHooksGuard guard(std::move(recompute_hooks));
 
         try {
             forward_fn(detached_inputs);
@@ -168,7 +186,6 @@ struct CheckpointFrame {
                        << ").";
         }
 
-        SetAutocastState(prev_autocast);
         recomputed[gid] = true;
 
         // Break potential reference cycles once recomputation is done.
@@ -177,9 +194,8 @@ struct CheckpointFrame {
         forward_fn = nullptr;
     }
 };
-} // namespace
 
-CheckpointFunction::CheckpointFunction(ForwardFn forward_fn)
+CheckpointFunction::CheckpointFunction(CheckpointForwardFn forward_fn)
     : autograd::Function(kCheckpointType), forward_fn_(std::move(forward_fn)) {}
 
 std::vector<std::shared_ptr<Tensor>>
@@ -215,8 +231,7 @@ CheckpointFunction::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_ou
     CHECK(!saved_inputs_.empty());
     CHECK_EQ(grad_outputs.size(), 1) << "Checkpoint currently supports single-output forward only.";
 
-    auto prev_autocast = GetAutocastState();
-    SetAutocastState(saved_autocast_);
+    AutocastStateGuard autocast_guard(saved_autocast_);
     autograd::EnableGradGuard enable_grad;
 
     std::vector<std::shared_ptr<Tensor>> detached_inputs;
@@ -241,8 +256,6 @@ CheckpointFunction::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_ou
         outputs[0]->Backward(grad_outputs[0]);
     }
 
-    SetAutocastState(prev_autocast);
-
     std::vector<std::shared_ptr<Tensor>> grad_inputs;
     grad_inputs.reserve(detached_inputs.size());
     for (const auto &detached : detached_inputs) {
@@ -258,11 +271,14 @@ CheckpointFunction::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_ou
     return grad_inputs;
 }
 
-std::vector<std::shared_ptr<Tensor>> Checkpoint(const CheckpointFunction::ForwardFn &forward_fn,
+} // namespace
+
+std::vector<std::shared_ptr<Tensor>> Checkpoint(const CheckpointForwardFn &forward_fn,
                                                 const std::vector<std::shared_ptr<Tensor>> &inputs, bool use_reentrant,
                                                 bool preserve_rng_state, bool determinism_check, bool early_stop) {
     if (preserve_rng_state) {
         // TODO(zbl): Preserve and restore RNG state for CPU/CUDA.
+        LOG(FATAL) << "Checkpoint RNG state preservation is not implemented. Pass preserve_rng_state=false.";
     }
     if (!autograd::GradMode::IsEnabled()) {
         return forward_fn(inputs);
@@ -295,8 +311,8 @@ std::vector<std::shared_ptr<Tensor>> Checkpoint(const CheckpointFunction::Forwar
     }
     frame->autocast_state = GetAutocastState();
 
-    autograd::FunctionCtx::SavedTensorHooks hooks;
-    hooks.pack = [frame](const std::shared_ptr<Tensor> &tensor) -> std::shared_ptr<void> {
+    autograd::FunctionCtx::SavedTensorHooks placeholder_hooks;
+    placeholder_hooks.pack = [frame](const std::shared_ptr<Tensor> &tensor) -> std::shared_ptr<void> {
         auto holder = std::make_shared<SavedTensorHolder>();
         holder->frame = frame;
         holder->index = frame->forward_metas.size();
@@ -312,7 +328,7 @@ std::vector<std::shared_ptr<Tensor>> Checkpoint(const CheckpointFunction::Forwar
         }
         return holder;
     };
-    hooks.unpack = [](const std::shared_ptr<void> &state) -> std::shared_ptr<Tensor> {
+    placeholder_hooks.unpack = [](const std::shared_ptr<void> &state) -> std::shared_ptr<Tensor> {
         auto holder = std::static_pointer_cast<SavedTensorHolder>(state);
         auto frame = holder->frame;
         const int64_t gid = frame->GetOrCreateGid();
@@ -341,7 +357,7 @@ std::vector<std::shared_ptr<Tensor>> Checkpoint(const CheckpointFunction::Forwar
         return recomputed;
     };
 
-    autograd::FunctionCtx::SavedTensorHooksGuard guard(std::move(hooks));
+    autograd::FunctionCtx::SavedTensorHooksGuard guard(std::move(placeholder_hooks));
     return forward_fn(inputs);
 }
 

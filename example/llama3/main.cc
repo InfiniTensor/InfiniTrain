@@ -207,7 +207,7 @@ void Train(const nn::parallel::Rank &rank) {
     nn::SetActivationRecomputeConfig(&model_config, FLAGS_activation_recompute, FLAGS_recompute_granularity,
                                      FLAGS_recompute_method, static_cast<int64_t>(FLAGS_recompute_num_layers));
     if (!FLAGS_llmc_filepath.empty()) {
-        model = llama3::LoadFromLLMC(FLAGS_llmc_filepath, model_config);
+        model = llama3::LoadFromLLMC(FLAGS_llmc_filepath, nn::GetActivationRecomputeOptions(model_config));
     } else {
         llama3::SanitizeLLaMA3Config(model_config);
         model = std::make_shared<nn::TransformerModel>(model_config);

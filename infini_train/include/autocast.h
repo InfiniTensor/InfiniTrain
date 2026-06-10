@@ -161,6 +161,20 @@ inline void SetAutocastState(const AutocastState &state) {
     tls_autocast_context.autocast_dtype = state.autocast_dtype;
 }
 
+class AutocastStateGuard {
+public:
+    explicit AutocastStateGuard(const AutocastState &state) : saved_state_(GetAutocastState()) {
+        SetAutocastState(state);
+    }
+    ~AutocastStateGuard() { SetAutocastState(saved_state_); }
+
+    AutocastStateGuard(const AutocastStateGuard &) = delete;
+    AutocastStateGuard &operator=(const AutocastStateGuard &) = delete;
+
+private:
+    AutocastState saved_state_;
+};
+
 // RAII guard to enable/disable autocast in a scope
 class AutocastGuard {
 public:
