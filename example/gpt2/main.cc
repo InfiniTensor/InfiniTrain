@@ -201,7 +201,7 @@ void Train(const nn::parallel::Rank &rank) {
                                      FLAGS_recompute_method, static_cast<int64_t>(FLAGS_recompute_num_layers));
 
     if (!FLAGS_llmc_filepath.empty()) {
-        model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath, model_config);
+        model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath, nn::GetActivationRecomputeOptions(model_config));
     } else {
         model = std::make_shared<nn::TransformerModel>(model_config);
     }

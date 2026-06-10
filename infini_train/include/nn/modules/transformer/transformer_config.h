@@ -33,6 +33,12 @@ enum class ActivationRecomputeMethod {
     kBlock,   // Recompute only the first N layers in the local chunk/stage.
 };
 
+struct ActivationRecomputeOptions {
+    ActivationRecomputeGranularity granularity = ActivationRecomputeGranularity::kNone;
+    ActivationRecomputeMethod method = ActivationRecomputeMethod::kNone;
+    int64_t num_layers = 0;
+};
+
 struct TransformerConfig {
     int64_t block_size = 1024;           // Max seq_len
     int64_t vocab_size = 50304;          // Vocab size
@@ -81,4 +87,6 @@ struct TransformerConfig {
 
 void SetActivationRecomputeConfig(TransformerConfig *config, bool enabled, std::string_view granularity,
                                   std::string_view method, int64_t num_layers);
+ActivationRecomputeOptions GetActivationRecomputeOptions(const TransformerConfig &config);
+void ApplyActivationRecomputeOptions(TransformerConfig *config, const ActivationRecomputeOptions &options);
 } // namespace infini_train::nn

@@ -61,7 +61,7 @@ public:
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
 
-    // operator() calls hooks and Forward
+    // Public module invocation entry point.
     std::vector<std::shared_ptr<Tensor>> operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
 
     // Forward to be overridden by subclasses
@@ -104,7 +104,8 @@ protected:
     std::vector<ModulePreHook> backward_pre_hooks_;
     std::vector<ModulePostHook> backward_post_hooks_;
 
-    std::vector<std::shared_ptr<Tensor>> ForwardWithHooks(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
+    // Full module call protocol: hooks followed by Forward.
+    std::vector<std::shared_ptr<Tensor>> Call(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
 
 private:
     friend std::vector<std::shared_ptr<Module>> parallel::function::Replicate(const std::shared_ptr<Module> &network,
