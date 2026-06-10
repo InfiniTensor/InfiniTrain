@@ -46,7 +46,7 @@ std::vector<std::shared_ptr<Tensor>> CheckpointTransformerLayers(const std::shar
         return RunTransformerLayers(layers, start, end, checkpoint_inputs);
     };
     constexpr bool kUseReentrant = false;
-    constexpr bool kPreserveRngState = true;
+    constexpr bool kPreserveRngState = false;
     return utils::checkpoint::Checkpoint(forward_fn, inputs, kUseReentrant, kPreserveRngState);
 }
 

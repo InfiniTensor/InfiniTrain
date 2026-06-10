@@ -82,4 +82,19 @@ void SetActivationRecomputeConfig(TransformerConfig *config, bool enabled, std::
     CHECK_GE(num_layers, 1) << "recompute_num_layers must be >= 1 when recompute_method is uniform or block.";
     config->recompute_num_layers = num_layers;
 }
+
+ActivationRecomputeOptions GetActivationRecomputeOptions(const TransformerConfig &config) {
+    return ActivationRecomputeOptions{
+        .granularity = config.recompute_granularity,
+        .method = config.recompute_method,
+        .num_layers = config.recompute_num_layers,
+    };
+}
+
+void ApplyActivationRecomputeOptions(TransformerConfig *config, const ActivationRecomputeOptions &options) {
+    CHECK(config);
+    config->recompute_granularity = options.granularity;
+    config->recompute_method = options.method;
+    config->recompute_num_layers = options.num_layers;
+}
 } // namespace infini_train::nn
