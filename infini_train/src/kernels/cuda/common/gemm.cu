@@ -83,5 +83,3 @@ void SgemvCuda(const Device &device, const SgemvParams &p) {
 }
 
 } // namespace infini_train::kernels::cuda
-
-REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, Gemm, infini_train::kernels::cuda::Gemm)
