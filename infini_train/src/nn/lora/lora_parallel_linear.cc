@@ -102,18 +102,14 @@ void LoRAColumnParallelLinear::InitLoRAWeights() {
                              ->Get(parallel::GetTensorParallelProcessGroupName(global_rank));
         const int tp_rank = tp_group->GetGroupRank(global_rank);
 
-        // Only TP rank 0 generates random values; others zero-init.
-        // AllReduce(sum) then broadcasts rank-0's values to all TP ranks.
         if (tp_rank == 0) {
             if (config_.use_kaiming_a) {
                 init::KaimingUniform(parameters_[kParamLoraAName], config_.kaiming_a_param);
             } else {
                 init::Normal(parameters_[kParamLoraAName], 0.0f, 0.02f);
             }
-        } else {
-            init::Zeros(parameters_[kParamLoraAName]);
         }
-        tp_group->AllReduce(parameters_[kParamLoraAName]);
+        tp_group->Broadcast({parameters_[kParamLoraAName]}, 0);
     } else {
         if (config_.use_kaiming_a) {
             init::KaimingUniform(parameters_[kParamLoraAName], config_.kaiming_a_param);
@@ -307,10 +303,30 @@ void LoRARowParallelLinear::InitLoRAWeights() {
         = std::make_shared<Tensor>(std::vector<int64_t>{config_.rank, in_features_per_partition_}, DataType::kFLOAT32,
                                    device_)
               ->RequiresGrad();
-    if (config_.use_kaiming_a) {
-        init::KaimingUniform(parameters_[kParamLoraAName], config_.kaiming_a_param);
+    if (parallel::global::GetTensorParallelSize() > 1) {
+        const auto global_rank = device_.Rank().GlobalRank();
+        auto *tp_group = parallel::ProcessGroupFactory::Instance(device_.type())
+                             ->Get(parallel::GetTensorParallelProcessGroupName(global_rank));
+        const int tp_rank = tp_group->GetGroupRank(global_rank);
+
+        std::vector<std::shared_ptr<Tensor>> scatter_inputs;
+        if (tp_rank == 0) {
+            auto full_lora_A = std::make_shared<Tensor>(std::vector<int64_t>{config_.rank, in_features_},
+                                                        DataType::kFLOAT32, device_);
+            if (config_.use_kaiming_a) {
+                init::KaimingUniform(full_lora_A, config_.kaiming_a_param);
+            } else {
+                init::Normal(full_lora_A, 0.0f, 0.02f);
+            }
+            scatter_inputs = full_lora_A->Split(in_features_per_partition_, 1);
+        }
+        tp_group->Scatter({parameters_[kParamLoraAName]}, scatter_inputs, 0);
     } else {
-        init::Normal(parameters_[kParamLoraAName], 0.0f, 0.02f);
+        if (config_.use_kaiming_a) {
+            init::KaimingUniform(parameters_[kParamLoraAName], config_.kaiming_a_param);
+        } else {
+            init::Normal(parameters_[kParamLoraAName], 0.0f, 0.02f);
+        }
     }
 
     // lora_B: [out_features, rank]
