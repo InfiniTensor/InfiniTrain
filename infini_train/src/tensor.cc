@@ -125,10 +125,11 @@ Eigen::Map<Eigen::Matrix<float, 1, Eigen::Dynamic, Eigen::RowMajor>> Tensor::Eig
 Tensor Tensor::To(Device device) {
     const auto buffer_device = buffer_->GetDevice();
     if (device == buffer_device) {
-        auto new_tensor = Tensor(*this, offset_, dims_);
+        auto new_tensor = Tensor(*this, 0, dims_);
         if (grad_) {
-            new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), grad_->offset_, grad_->dims_);
+            new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), 0, grad_->dims_);
         }
+        new_tensor.requires_grad_ = requires_grad_;
         return new_tensor;
     }
 
@@ -171,10 +172,11 @@ Tensor Tensor::To(Device device) {
 
 Tensor Tensor::To(DataType dtype) {
     if (dtype == dtype_) {
-        auto new_tensor = Tensor(*this, offset_, dims_);
+        auto new_tensor = Tensor(*this, 0, dims_);
         if (grad_) {
-            new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), grad_->offset_, grad_->dims_);
+            new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), 0, grad_->dims_);
         }
+        new_tensor.requires_grad_ = requires_grad_;
         return new_tensor;
     }
 

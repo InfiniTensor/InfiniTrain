@@ -10,6 +10,7 @@
 #include "glog/logging.h"
 
 #include "example/common/utils.h"
+#include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
@@ -107,6 +108,7 @@ std::string Tokenizer::Decode(uint32_t token_id) const {
 
 void Tokenizer::GenerateText(infini_train::nn::Module &model, uint32_t batch_size, uint32_t sequence_length,
                              uint32_t text_length, Device device) const {
+    CHECK_LE(text_length, sequence_length) << "text_length must be <= sequence_length";
     std::vector<int64_t> dims;
     dims.assign({batch_size, sequence_length});
     // x_tensor (FLAGS_batch_size, FLAGS_sequence_length) eq:(4, 64)
@@ -121,20 +123,23 @@ void Tokenizer::GenerateText(infini_train::nn::Module &model, uint32_t batch_siz
     std::cout << "The meaning of life is";
 
     auto x = std::make_shared<infini_train::Tensor>(x_tensor.To(device));
-    uint64_t kRngState = kRngState;
+    uint64_t rng_state = kRngState;
     LOG(INFO) << "start generate text:";
 
     auto cpu_device = Device();
     for (int t = prompt_len; t < text_length; ++t) {
         x = std::make_shared<infini_train::Tensor>(x->To(device)); // CPU->calc device
-        // TODO(jym): use no_grad forward later
-        auto logits = model.Forward({x})[0];
-        auto logits_orignal = nn::function::Softmax(logits, -1);
+        std::shared_ptr<infini_train::Tensor> logits_orignal;
+        {
+            infini_train::autograd::NoGradGuard no_grad;
+            auto logits = model.Forward({x})[0];
+            logits_orignal = nn::function::Softmax(logits, -1);
+        }
         auto logits_cpu = logits_orignal->To(cpu_device);
         auto data = logits_cpu.DataPtr();
-        auto vocab_size = logits->Dims()[2];
+        auto vocab_size = logits_orignal->Dims()[2];
         float *probs = static_cast<float *>(data) + (t - 1) * vocab_size;
-        float coin = RandomF32(kRngState);
+        float coin = RandomF32(rng_state);
         int next_token = SampleMult(probs, vocab_size, coin);
 
         x = std::make_shared<infini_train::Tensor>(x->To(cpu_device)); // calc device->CPU

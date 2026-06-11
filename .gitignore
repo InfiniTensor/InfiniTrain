@@ -1,7 +1,12 @@
 build/
+build-cpu/
+build-full/
 .cache/
 .vscode/
 
 *.log
 *.report.rank*
 *.records.log.rank*
+
+server_code/
+.claude/

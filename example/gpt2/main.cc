@@ -3,8 +3,10 @@
 #include <format>
 #include <memory>
 #include <optional>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -57,12 +59,13 @@ DEFINE_uint32(freq_generate_txt, 10, "frequency of text generation");
 DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
 DEFINE_double(learning_rate, 1e-4, "learning rate warmup iterations");
+DEFINE_string(optimizer, "sgd", "optimizer type (sgd/adam)");
 DEFINE_bool(use_distributed_optimizer, false, "Whether to enable DistributedOptimizer(only take effects when DP>1)");
 // evaluation
 DEFINE_uint32(val_loss_every, 0, "every how many steps to evaluate val loss?");
 DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 // debugging
-DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
+DEFINE_bool(overfit_single_batch, false, "overfit just one batch of data");
 // memory management
 DEFINE_string(device, "cuda", "device type (cpu/cuda), useless if using parallel training mode");
 // parallel
@@ -100,6 +103,8 @@ constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
+constexpr char kOptimizerSGD[] = "sgd";
+constexpr char kOptimizerAdam[] = "adam";
 
 //
 const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
@@ -114,6 +119,9 @@ const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_validator(optimizer, [](const char *, const std::string &value) {
+    return value == kOptimizerSGD || value == kOptimizerAdam;
+});
 
 void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
@@ -290,9 +298,8 @@ void Train(const nn::parallel::Rank &rank) {
         tokenizer = std::make_unique<Tokenizer>(FLAGS_tokenizer_bin);
     }
 
-    // TODO(dcj): support more complex optimizer later
-    // auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
-    auto optimizer_creator = optimizers::SGD::Create(FLAGS_learning_rate);
+    auto optimizer_creator = FLAGS_optimizer == kOptimizerAdam ? optimizers::Adam::Create(FLAGS_learning_rate)
+                                                               : optimizers::SGD::Create(FLAGS_learning_rate);
     std::shared_ptr<Optimizer> optimizer = nullptr;
 
     if (FLAGS_use_distributed_optimizer) {
@@ -306,6 +313,7 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     auto train_iter = train_loader.begin();
+    std::vector<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>> overfit_batches;
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(
               std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
@@ -353,20 +361,20 @@ void Train(const nn::parallel::Rank &rank) {
         if (pp_world_size == 1) {
             optimizer->ZeroGrad();
 
-            // if we are trying to overfit a single batch, we reset the loader here
-            if (FLAGS_overfit_single_batch) {
-                // train_loader.Reset();
-            }
-
             for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
                 // enable autocast for the current step
                 infini_train::AutocastGuard autocast_guard(device.type(), dtype);
 
                 // (bs, seq_len), (bs, seq_len)
-                auto [x, y] = *train_iter;
-                // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
-                // TODO(dcj): support dataloader.reset() later
-                ++train_iter;
+                std::shared_ptr<Tensor> x;
+                std::shared_ptr<Tensor> y;
+                if (FLAGS_overfit_single_batch && overfit_batches.size() == grad_accum_steps) {
+                    std::tie(x, y) = overfit_batches[micro_step];
+                } else {
+                    std::tie(x, y) = *train_iter;
+                    ++train_iter;
+                    if (FLAGS_overfit_single_batch) { overfit_batches.emplace_back(x, y); }
+                }
                 x = std::make_shared<Tensor>(x->To(device));
                 y = std::make_shared<Tensor>(y->To(device));
 
@@ -393,10 +401,15 @@ void Train(const nn::parallel::Rank &rank) {
 
             optimizer->Step();
         } else {
-            auto [x, y] = *train_iter;
-            // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
-            // TODO(dcj): support dataloader.reset() later
-            ++train_iter;
+            std::shared_ptr<Tensor> x;
+            std::shared_ptr<Tensor> y;
+            if (FLAGS_overfit_single_batch && !overfit_batches.empty()) {
+                std::tie(x, y) = overfit_batches[0];
+            } else {
+                std::tie(x, y) = *train_iter;
+                ++train_iter;
+                if (FLAGS_overfit_single_batch) { overfit_batches.emplace_back(x, y); }
+            }
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
