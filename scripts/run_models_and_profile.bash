@@ -156,8 +156,9 @@ run_and_log() {
         > "$log_path"
     fi
 
-    # Write the current run command to the log
-    echo "[COMMAND] $cmd" >> "$log_path"
+    # Write the current run command to the log (expand $LORA_WEIGHTS_DIR)
+    local expanded_cmd="${cmd//\$LORA_WEIGHTS_DIR/$LORA_WEIGHTS_DIR}"
+    echo "[COMMAND] $expanded_cmd" >> "$log_path"
 
     # Run the command and append both stdout and stderr to the log file
     if ! eval "$cmd" >> "$log_path" 2>&1; then
@@ -272,10 +273,12 @@ for ((id=0; id<num_builds; ++id)); do
             arg_str="$(args_string_for_test "$gi" "$ti")"
 
             # gpt2
+            LORA_WEIGHTS_DIR="$GPT2_LORA_WEIGHTS_DIR"
             gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
             run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
 
             # llama3
+            LORA_WEIGHTS_DIR="$LLAMA3_LORA_WEIGHTS_DIR"
             llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str}"
             run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
         done
