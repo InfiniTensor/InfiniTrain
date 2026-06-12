@@ -17,12 +17,12 @@ std::vector<std::shared_ptr<Tensor>> Softmax::Forward(const std::vector<std::sha
 void Softmax::SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
                            const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
     const auto &output = output_tensors[0];
-    saved_tensors_ = {output};
+    SaveForBackward({output});
 }
 
 std::vector<std::shared_ptr<Tensor>> Softmax::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(saved_tensors_.size(), 1);
-    const auto &output = saved_tensors_[0];
+    CHECK_EQ(SavedTensorsSize(), 1);
+    const auto &output = GetSavedTensor(0);
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 

@@ -166,12 +166,12 @@ void Slice::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tenso
                          const std::vector<std::shared_ptr<Tensor>> &) {
     // FIXME(dcj): only input's dim need to be saved
     const auto &input = input_tensors[0];
-    saved_tensors_ = {input};
+    SaveForBackward({input});
 }
 
 std::vector<std::shared_ptr<Tensor>> Slice::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(saved_tensors_.size(), 1);
-    const auto &input = saved_tensors_[0];
+    CHECK_EQ(SavedTensorsSize(), 1);
+    const auto &input = GetSavedTensor(0);
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice().type();

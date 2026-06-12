@@ -25,7 +25,7 @@ void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
     bool need_weight = needs_input_grad_.size() > 1 && needs_input_grad_[1];
 
     // grad_input needs weight, grad_weight needs input
-    saved_tensors_ = {need_weight ? input : nullptr, need_input ? weight : nullptr};
+    SaveForBackward({need_weight ? input : nullptr, need_input ? weight : nullptr});
 
     transpose_ = true;
     bias_ = input_tensors.size() == 3;
@@ -35,9 +35,9 @@ void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
 }
 
 std::vector<std::shared_ptr<Tensor>> Linear::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(saved_tensors_.size(), 2);
-    const auto &input = saved_tensors_[0];
-    const auto &weight = saved_tensors_[1];
+    CHECK_EQ(SavedTensorsSize(), 2);
+    const auto &input = GetSavedTensor(0);
+    const auto &weight = GetSavedTensor(1);
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 

@@ -143,6 +143,38 @@ struct AutocastContext {
 // Global thread-local storage for autocast context
 inline thread_local AutocastContext tls_autocast_context;
 
+// Lightweight snapshot for autocast state
+struct AutocastState {
+    bool enabled = false;
+    Device::DeviceType device_type = Device::DeviceType::kCPU;
+    DataType autocast_dtype = DataType::kBFLOAT16;
+};
+
+inline AutocastState GetAutocastState() {
+    return AutocastState{tls_autocast_context.enabled, tls_autocast_context.device_type,
+                         tls_autocast_context.autocast_dtype};
+}
+
+inline void SetAutocastState(const AutocastState &state) {
+    tls_autocast_context.enabled = state.enabled;
+    tls_autocast_context.device_type = state.device_type;
+    tls_autocast_context.autocast_dtype = state.autocast_dtype;
+}
+
+class AutocastStateGuard {
+public:
+    explicit AutocastStateGuard(const AutocastState &state) : saved_state_(GetAutocastState()) {
+        SetAutocastState(state);
+    }
+    ~AutocastStateGuard() { SetAutocastState(saved_state_); }
+
+    AutocastStateGuard(const AutocastStateGuard &) = delete;
+    AutocastStateGuard &operator=(const AutocastStateGuard &) = delete;
+
+private:
+    AutocastState saved_state_;
+};
+
 // RAII guard to enable/disable autocast in a scope
 class AutocastGuard {
 public:
