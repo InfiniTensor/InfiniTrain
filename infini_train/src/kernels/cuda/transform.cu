@@ -375,7 +375,7 @@ std::shared_ptr<Tensor> MaskForward(const std::shared_ptr<Tensor> &input, const 
             dtype,
             [=]<typename T>() {
                 MaskLeadsForwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
-                    static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask->DataPtr()),
+                    static_cast<const T *>(input->DataPtr()), static_cast<const T *>(mask_casted->DataPtr()),
                     static_cast<T *>(output->DataPtr()), common::cuda::Cast<T>(value), rows, inner);
             },
             "CUDA MaskForward(rows)");
