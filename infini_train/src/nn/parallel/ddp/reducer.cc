@@ -368,7 +368,6 @@ void Reducer::MarkBucketReady(size_t bucket_index) {
     }
     // From next_bucket_, launch ready buckets(pending==0) in turn
     while (next_bucket_ < buckets_.size() && buckets_[next_bucket_].pending == 0) {
-        auto &bucket = buckets_[next_bucket_];
         FinalizeBucketDense(next_bucket_);
         ++next_bucket_;
     }

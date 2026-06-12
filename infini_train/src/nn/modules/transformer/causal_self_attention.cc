@@ -88,7 +88,6 @@ CausalSelfAttention::ForwardStandard(const std::vector<std::shared_ptr<infini_tr
     auto tp_world_size = parallel::global::GetTensorParallelSize();
 
     const auto B = x[0]->Dims()[0];                  // bs
-    const auto C = x[0]->Dims()[2];                  // n_embd
     const int64_t head_dim = n_embd_ / n_head_;      // per-head dim (global)
     const int64_t local_C = n_embd_ / tp_world_size; // per-rank hidden
 
