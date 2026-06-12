@@ -12,8 +12,6 @@
 
 #include "glog/logging.h"
 
-#include "example/common/utils.h"
-#include "example/llama3/config.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
@@ -21,6 +19,9 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
+
+#include "example/common/utils.h"
+#include "example/llama3/config.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;

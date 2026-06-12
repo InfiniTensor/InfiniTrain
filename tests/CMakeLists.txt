@@ -27,3 +27,6 @@ add_subdirectory(dtype)
 
 # Transformer architecture tests
 add_subdirectory(transformer)
+
+# Checkpoint tests
+add_subdirectory(checkpoint)

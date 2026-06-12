@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace infini_train {
@@ -12,31 +14,37 @@ namespace infini_train {
 class Optimizer;
 
 using OptimizerCreator = std::function<std::shared_ptr<Optimizer>(const std::vector<std::shared_ptr<Tensor>> &params)>;
+using OptimizerCreatorNamed = std::function<std::shared_ptr<Optimizer>(
+    const std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> &named_params)>;
 
 class Optimizer {
 public:
     explicit Optimizer(const std::vector<std::shared_ptr<Tensor>> &params);
+    Optimizer(const std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> &named_params);
 
     virtual void ZeroGrad(bool set_to_none = true);
 
     virtual void Step() = 0;
 
+    virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const { return {}; };
+
+    virtual void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {}
+
 protected:
     std::vector<std::shared_ptr<Tensor>> params_;
+    std::vector<std::string> param_names_;
 };
 
 namespace optimizers {
 class SGD : public Optimizer {
 public:
     SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate);
+    SGD(const std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> &named_params, float learning_rate);
 
     void Step() override;
 
-    static OptimizerCreator Create(float learning_rate) {
-        return [learning_rate](const std::vector<std::shared_ptr<Tensor>> &params) {
-            return std::make_shared<SGD>(params, learning_rate);
-        };
-    }
+    static OptimizerCreator Create(float learning_rate);
+    static OptimizerCreatorNamed CreateNamed(float learning_rate);
 
 private:
     const float learning_rate_ = 0.0;
@@ -46,15 +54,18 @@ class Adam : public Optimizer {
 public:
     Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate = 1e-3, float beta1 = 0.9,
          float beta2 = 0.999, float eps = 1e-8);
+    Adam(const std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> &named_params, float learning_rate = 1e-3,
+         float beta1 = 0.9, float beta2 = 0.999, float eps = 1e-8);
 
     void Step() override;
 
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
+
+    void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
     static OptimizerCreator Create(float learning_rate = 1e-3, float beta1 = 0.9, float beta2 = 0.999,
-                                   float eps = 1e-8) {
-        return [=](const std::vector<std::shared_ptr<Tensor>> &params) {
-            return std::make_shared<Adam>(params, learning_rate, beta1, beta2, eps);
-        };
-    }
+                                   float eps = 1e-8);
+    static OptimizerCreatorNamed CreateNamed(float learning_rate = 1e-3, float beta1 = 0.9, float beta2 = 0.999,
+                                             float eps = 1e-8);
 
 private:
     int64_t t_;

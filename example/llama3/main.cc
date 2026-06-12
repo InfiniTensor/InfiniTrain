@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <filesystem>
 #include <format>
 #include <memory>
 #include <optional>
@@ -8,6 +9,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
+#include "infini_train/include/checkpoint.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
@@ -33,11 +35,13 @@
 #include "infini_train/include/profiler.h"
 #endif
 
+#include "example/common/checkpoint_loader.h"
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
 #include "example/llama3/checkpoint_loader.h"
 #include "example/llama3/config.h"
 
+// TODO(jym): Reorganize CLI flags into categories for better readability and maintainability.
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_string(input_val_bin, "", "input .bin to eval validation loss on");
@@ -75,6 +79,12 @@ DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
+DEFINE_uint32(save_interval, 0, "save checkpoint every N steps; 0 disables saving");
+DEFINE_string(load, "", "checkpoint directory to resume from");
+DEFINE_string(save, "./checkpoints", "root directory used to store checkpoints");
+DEFINE_uint32(max_checkpoint_keep, 3, "max number of checkpoint steps to keep");
+DEFINE_bool(no_save_optim, false, "whether optimizer state is persisted in checkpoints");
+
 // precision check
 DEFINE_string(
     precision_check, "",
@@ -293,7 +303,57 @@ void Train(const nn::parallel::Rank &rank) {
 
     auto impl = core::GetDeviceGuardImpl(device.type());
 
-    for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
+    int start_step = 0;
+    TrainerState state;
+    const auto resume_result = ResumeFromCheckpoint({
+        .resume_root = FLAGS_load,
+        .rank = rank,
+        .model = model,
+        .optimizer = optimizer,
+        .model_config = model_config,
+        .state = state,
+    });
+
+    start_step = resume_result.global_step;
+    size_t consumed_batches = resume_result.consumed_batches;
+
+    // TODO(jym): Replace with Sampler abstraction when available.
+    // Skip dataloader to resume from the correct batch position.
+    if (consumed_batches > 0) {
+        size_t start = train_iter.BatchIndex();
+        // Each rank processes every ddp_world_size-th batch starting from its own rank.
+        // num_skips calculates how many ++ iterations to reach the saved batch position.
+        size_t num_skips = (consumed_batches - start) / ddp_world_size;
+        for (size_t i = 0; i < num_skips; ++i) { ++train_iter; }
+    }
+
+    auto save_checkpoint
+        = [&](const std::filesystem::path &save_dir, int64_t global_step, bool prune_step_checkpoints) {
+              SaveCheckpoint({
+                  .save_dir = save_dir,
+                  .global_step = global_step,
+                  .consumed_batches = consumed_batches,
+                  .last_lr = FLAGS_learning_rate,
+                  .n_layer = model_config.n_layer,
+                  .n_head = model_config.n_head,
+                  .n_kv_head = model_config.n_kv_head,
+                  .n_embd = model_config.n_embd,
+                  .vocab_size = model_config.vocab_size,
+                  .ddp_size = ddp_world_size,
+                  .tp_size = tp_world_size,
+                  .sp_size = sp_world_size,
+                  .pp_size = pp_world_size,
+                  .no_save_optim = FLAGS_no_save_optim,
+                  .prune_step_checkpoints = prune_step_checkpoints,
+                  .checkpoint_root_dir = FLAGS_save,
+                  .max_checkpoint_keep = FLAGS_max_checkpoint_keep,
+                  .rank = rank,
+                  .model = *model,
+                  .optimizer = *optimizer,
+              });
+          };
+
+    for (int step = start_step; step < FLAGS_num_iteration + 1; ++step) {
         // Reset precision check counters at start of each iteration for file overwrite
         utils::PrecisionChecker::ResetCounters();
 
@@ -343,6 +403,7 @@ void Train(const nn::parallel::Rank &rank) {
                 // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
                 // TODO(dcj): support dataloader.reset() later
                 ++train_iter;
+                consumed_batches = train_iter.BatchIndex();
                 x = std::make_shared<Tensor>(x->To(device));
                 y = std::make_shared<Tensor>(y->To(device));
 
@@ -372,6 +433,7 @@ void Train(const nn::parallel::Rank &rank) {
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
             // TODO(dcj): support dataloader.reset() later
             ++train_iter;
+            consumed_batches = train_iter.BatchIndex();
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
@@ -406,6 +468,15 @@ void Train(const nn::parallel::Rank &rank) {
                 }
             }
         }
+
+        if (FLAGS_save_interval > 0 && (step + 1) % FLAGS_save_interval == 0) {
+            std::filesystem::path step_dir
+                = std::filesystem::path(FLAGS_save) / std::format("checkpoint_step_{:06d}", step + 1);
+            if (rank.IsParallel()) {
+                step_dir /= std::format("rank_{:06d}", rank.GlobalRank());
+            }
+            save_checkpoint(step_dir, step + 1, true);
+        }
     }
 
     // Save LoRA weights if enabled and path specified
@@ -413,6 +484,12 @@ void Train(const nn::parallel::Rank &rank) {
         LOG(INFO) << "Saving LoRA weights to: " << FLAGS_lora_save_path;
         nn::lora::SaveLoRAWeights(model, FLAGS_lora_save_path);
     }
+
+    std::filesystem::path final_dir = std::filesystem::path(FLAGS_save) / "checkpoint_final";
+    if (rank.IsParallel()) {
+        final_dir /= std::format("rank_{:06d}", rank.GlobalRank());
+    }
+    save_checkpoint(final_dir, FLAGS_num_iteration, false);
 
 #ifdef PROFILE_MODE
     Profiler::Instance().Report("llama3.report", Profiler::SortBy::DeviceTimePercentage);

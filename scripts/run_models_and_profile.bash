@@ -72,6 +72,10 @@ PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_
 COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
 RUN_CTEST="$(read_var RUN_CTEST)";              : "${RUN_CTEST:=true}"
 CTEST_CMD="$(read_var CTEST_CMD)";              : "${CTEST_CMD:=ctest --output-on-failure -LE cuda -j$(nproc) && ctest --output-on-failure -L cuda -j1}"
+CKPT_CLEAN_DIRS=(
+    "/data1/ckpt"
+    "./checkpoints"
+)
 
 mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
 
@@ -112,6 +116,17 @@ clean_build_dir() {
     echo -e "\033[1;31m[CLEAN] Removing all contents in: ${BUILD_DIR}\033[0m"
     mkdir -p "$BUILD_DIR"
     rm -rf "${BUILD_DIR:?}/"*
+}
+
+# Clean checkpoint directories (called once at start of script)
+clean_checkpoints() {
+    echo -e "\033[1;31m[CLEAN] Removing checkpoint directories from previous run\033[0m"
+    for dir in "${CKPT_CLEAN_DIRS[@]}"; do
+        if [[ -d "$dir" ]]; then
+            echo -e "\033[1;31m[CLEAN] Removing: ${dir}\033[0m"
+            rm -rf "${dir:?}"
+        fi
+    done
 }
 
 # Run a command and log output
@@ -208,14 +223,32 @@ move_profile_logs() {
     done
 }
 
-# Build "--key value" arg string from test_groups[gi].tests[ti].args (shell-escaped)
+# Build "--key value" arg string from tests[i].args.
+# For checkpoint-related args, automatically isolate by model and run mode
+# (resume/no_resume) to avoid cross-test overwrites in one-click runs.
 args_string_for_test() {
     local group_idx="$1"
     local test_idx="$2"
-    jq -r --argjson g "$group_idx" --argjson t "$test_idx" '
-      .test_groups[$g].tests[$t].args
-      | to_entries[]
-      | "--\(.key)=\(.value|tostring)"
+    local model_name="$3"
+    local test_id="$4"
+
+    jq -r --argjson g "$group_idx" --argjson t "$test_idx" --arg model "$model_name" --arg test_id "$test_id" '
+    def namespaced_path($p; $model; $mode):
+        if ($p | test("/checkpoint_step_[0-9]+($|/)")) then
+            ($p | capture("^(?<prefix>.*)/(?<step>checkpoint_step_[0-9]+(?:/.*)?)$")) as $m
+            | ($m.prefix + "/" + $model + "/" + $mode + "/" + $m.step)
+        else
+            ($p + "/" + $model + "/" + $mode)
+        end;
+
+    .test_groups[$g].tests[$t].args as $args
+    | (if ($args | has("load")) then "resume" else "no_resume" end) as $run_mode
+    | (if (($args.load // "") | test("no_resume")) then "no_resume" else "resume" end) as $resume_src_mode
+    | $args
+    | (if has("save") then .save = namespaced_path(.save; $model; $run_mode) else . end)
+    | (if has("load") then .load = namespaced_path(.load; $model; $resume_src_mode) else . end)
+    | to_entries[]
+    | "--\(.key) \(.value|tostring)"
     ' "$CONFIG_FILE" | paste -sd' ' -
 }
 
@@ -269,16 +302,20 @@ for ((id=0; id<num_builds; ++id)); do
 
         for ((ti=0; ti<num_tests; ++ti)); do
             test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
-            arg_str="$(args_string_for_test "$gi" "$ti")"
+            gpt2_arg_str="$(args_string_for_test "$gi" "$ti" "gpt2" "$test_id")"
+            llama3_arg_str="$(args_string_for_test "$gi" "$ti" "llama3" "$test_id")"
 
             # gpt2
-            gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
+            gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
             run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
 
             # llama3
-            llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str}"
+            llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
             run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
         done
+
+        # Clean checkpoints from previous run to avoid disk overflow and stale state
+        clean_checkpoints
     done
 done
 
