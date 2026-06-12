@@ -544,6 +544,21 @@ def get_git_commit_id():
         return "unknown"
 
 
+def resolve_log_dirs(run_log_dir):
+    """Resolve training and profile log directories from a run output directory."""
+    log_dir = os.path.join(run_log_dir, "logs")
+    profile_log_dir = os.path.join(run_log_dir, "profile_logs")
+
+    if not os.path.isdir(log_dir):
+        print(f"Training log directory does not exist: {log_dir}")
+        return None, None
+    if not os.path.isdir(profile_log_dir):
+        print(f"Profile log directory does not exist: {profile_log_dir}")
+        return None, None
+
+    return log_dir, profile_log_dir
+
+
 def get_model_data(model_name, sheet_title, tag, log_dir="logs", profile_log_dir="profile_logs"):
     """Construct 2D list for writing to Feishu"""
     log_file_path = os.path.join(log_dir, tag, f"{model_name}_{sheet_title}.log")
@@ -602,9 +617,16 @@ def get_model_data(model_name, sheet_title, tag, log_dir="logs", profile_log_dir
 def main():
     parser = argparse.ArgumentParser(description='Script to write training metrics to Feishu sheets')
     parser.add_argument('config_file', help='Path to JSON config file (e.g. token.json)')
-    parser.add_argument('--log-dir', default='logs', help='Training log directory. Default: logs')
-    parser.add_argument('--profile-log-dir', default='profile_logs', help='Profile log directory. Default: profile_logs')
+    parser.add_argument(
+        '--log-dir',
+        default='.',
+        help='Run output directory containing logs/ and profile_logs/. Default: current directory'
+    )
     args = parser.parse_args()
+
+    log_dir, profile_log_dir = resolve_log_dirs(args.log_dir)
+    if not log_dir or not profile_log_dir:
+        return
 
     config = load_config(args.config_file)
     if not config:
@@ -627,9 +649,9 @@ def main():
             print(f"\n--- Processing model={model_name} tag={tag} ---")
             model_name = model_name.lower()
 
-            testcases = discover_testcases(model_name, tag, log_dir=args.log_dir)
+            testcases = discover_testcases(model_name, tag, log_dir=log_dir)
             if not testcases:
-                print(f"No local testcases found under {args.log_dir}/{tag}/ for model={model_name}, skipping")
+                print(f"No local testcases found under {log_dir}/{tag}/ for model={model_name}, skipping")
                 continue
             print(f"Discovered {len(testcases)} local testcases: {testcases}")
 
@@ -665,8 +687,8 @@ def main():
                     model_name=model_name,
                     sheet_title=testcase,
                     tag=tag,
-                    log_dir=args.log_dir,
-                    profile_log_dir=args.profile_log_dir
+                    log_dir=log_dir,
+                    profile_log_dir=profile_log_dir
                 )
 
                 if not sheet_data:
