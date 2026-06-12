@@ -66,12 +66,15 @@ read_var() {
     jq -r --arg k "$key" '.variables[$k] // empty' "$CONFIG_FILE"
 }
 
-BUILD_DIR="$(read_var BUILD_DIR)";              : "${BUILD_DIR:=../build}"
-LOG_DIR="$(read_var LOG_DIR)";                  : "${LOG_DIR:=logs}"
-PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_logs}"
-COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
-RUN_CTEST="$(read_var RUN_CTEST)";              : "${RUN_CTEST:=true}"
-CTEST_CMD="$(read_var CTEST_CMD)";              : "${CTEST_CMD:=ctest --output-on-failure -LE cuda -j$(nproc) && ctest --output-on-failure -L cuda -j1}"
+BUILD_DIR="$(read_var BUILD_DIR)";                  : "${BUILD_DIR:=../build}"
+LOG_DIR="$(read_var LOG_DIR)";                      : "${LOG_DIR:=logs}"
+PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";      : "${PROFILE_LOG_DIR:=./profile_logs}"
+COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";      : "${COMPARE_LOG_DIR:=}"
+RUN_CTEST="$(read_var RUN_CTEST)";                  : "${RUN_CTEST:=true}"
+CTEST_CMD="$(read_var CTEST_CMD)";                  : "${CTEST_CMD:=ctest --output-on-failure -LE cuda -j$(nproc) && ctest --output-on-failure -L cuda -j1}"
+GPT2_TEST_GROUPS="$(read_var GPT2_TEST_GROUPS)";    : "${GPT2_TEST_GROUPS:=basic,zero,lora}"
+LLAMA3_TEST_GROUPS="$(read_var LLAMA3_TEST_GROUPS)"; : "${LLAMA3_TEST_GROUPS:=basic,zero,lora}"
+MIXTRAL_TEST_GROUPS="$(read_var MIXTRAL_TEST_GROUPS)"; : "${MIXTRAL_TEST_GROUPS:=moe}"
 
 mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
 
@@ -219,6 +222,54 @@ args_string_for_test() {
     ' "$CONFIG_FILE" | paste -sd' ' -
 }
 
+tag_enabled_for_model() {
+    local tag="$1"
+    local enabled_tags="$2"
+
+    if [[ "$enabled_tags" == "*" ]]; then
+        return 0
+    fi
+
+    IFS=',' read -r -a tags <<< "$enabled_tags"
+    for raw_tag in "${tags[@]}"; do
+        local enabled_tag
+        enabled_tag="$(normalize_tag "$raw_tag")"
+        if [[ "$enabled_tag" == "$tag" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+model_has_selected_group() {
+    local enabled_tags="$1"
+
+    for ((gi=0; gi<num_groups; ++gi)); do
+        local group_tag
+        group_tag=$(jq -r ".test_groups[$gi].tag" "$CONFIG_FILE")
+        if [[ ${#SELECTED_TAGS[@]} -gt 0 && -z "${SELECTED_TAGS[$group_tag]:-}" ]]; then
+            continue
+        fi
+        if tag_enabled_for_model "$group_tag" "$enabled_tags"; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+check_model_inputs() {
+    if model_has_selected_group "$MIXTRAL_TEST_GROUPS"; then
+        if [[ ! -f "$MIXTRAL_INPUT_BIN" ]]; then
+            echo "Error: missing MIXTRAL_INPUT_BIN: $MIXTRAL_INPUT_BIN" >&2
+            exit 1
+        fi
+        if [[ ! -f "$MIXTRAL_LLMC_FILEPATH" ]]; then
+            echo "Error: missing MIXTRAL_LLMC_FILEPATH: $MIXTRAL_LLMC_FILEPATH" >&2
+            exit 1
+        fi
+    fi
+}
+
 # Run tests
 num_builds=$(jq '.builds | length' "$CONFIG_FILE")
 num_groups=$(jq '.test_groups | length' "$CONFIG_FILE")
@@ -226,7 +277,7 @@ num_groups=$(jq '.test_groups | length' "$CONFIG_FILE")
 selected_group_count=0
 for ((gi=0; gi<num_groups; ++gi)); do
     group_tag=$(jq -r ".test_groups[$gi].tag" "$CONFIG_FILE")
-    if [[ ${#SELECTED_TAGS[@]} -eq 0 || -n "${SELECTED_TAGS[$group_tag]}" ]]; then
+    if [[ ${#SELECTED_TAGS[@]} -eq 0 || -n "${SELECTED_TAGS[$group_tag]:-}" ]]; then
         ((selected_group_count += 1))
     fi
 done
@@ -235,6 +286,8 @@ if [[ "$selected_group_count" -eq 0 ]]; then
     echo "Error: No matching test groups found for --only-run=${ONLY_RUN_TAGS}"
     exit 1
 fi
+
+check_model_inputs
 
 for ((id=0; id<num_builds; ++id)); do
     build_id=$(jq -r ".builds[$id].id" "$CONFIG_FILE")
@@ -260,7 +313,7 @@ for ((id=0; id<num_builds; ++id)); do
 
     for ((gi=0; gi<num_groups; ++gi)); do
         group_tag=$(jq -r ".test_groups[$gi].tag" "$CONFIG_FILE")
-        if [[ ${#SELECTED_TAGS[@]} -gt 0 && -z "${SELECTED_TAGS[$group_tag]}" ]]; then
+        if [[ ${#SELECTED_TAGS[@]} -gt 0 && -z "${SELECTED_TAGS[$group_tag]:-}" ]]; then
             continue
         fi
 
@@ -271,13 +324,20 @@ for ((id=0; id<num_builds; ++id)); do
             test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
             arg_str="$(args_string_for_test "$gi" "$ti")"
 
-            # gpt2
-            gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
-            run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+            if tag_enabled_for_model "$group_tag" "$GPT2_TEST_GROUPS"; then
+                gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
+                run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+            fi
 
-            # llama3
-            llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str}"
-            run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+            if tag_enabled_for_model "$group_tag" "$LLAMA3_TEST_GROUPS"; then
+                llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str}"
+                run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+            fi
+
+            if tag_enabled_for_model "$group_tag" "$MIXTRAL_TEST_GROUPS"; then
+                mixtral_cmd="${prefix}./tiny_mixtral --input_bin ${MIXTRAL_INPUT_BIN} --llmc_filepath ${MIXTRAL_LLMC_FILEPATH} --device cuda ${arg_str}"
+                run_and_log "$mixtral_cmd" "tiny_mixtral_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+            fi
         done
     done
 done
