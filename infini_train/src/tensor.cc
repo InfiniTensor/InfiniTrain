@@ -787,7 +787,6 @@ void Tensor::Print(std::ostream &os) const {
     CHECK(dtype_ == DataType::kFLOAT32);
 
     const size_t num_elements = NumElements();
-    const size_t num_bytes = num_elements * sizeof(float);
 
     auto impl = core::GetDeviceGuardImpl(GetDevice().type());
 

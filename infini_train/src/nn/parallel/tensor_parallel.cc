@@ -442,7 +442,6 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     auto logits = std::make_shared<Tensor>(input_tensors[0]->To(DataType::kFLOAT32));
     auto target = input_tensors[1];
 
-    auto dtype = logits->Dtype();
     auto device = logits->GetDevice();
 
     CHECK(target->Dtype() == DataType::kINT64) << "target must be int64";

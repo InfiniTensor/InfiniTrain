@@ -18,7 +18,6 @@ Scatter::Scatter(const std::vector<Device> &target_gpus, int64_t dim,
 std::vector<std::shared_ptr<Tensor>> Scatter::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     const auto &input = input_tensors[0];
     std::vector<std::shared_ptr<Tensor>> output_tensors;
-    auto device = input->GetDevice().type();
     output_tensors = pg_->Scatter(input, target_gpus_, dim_);
     return output_tensors;
 }
@@ -51,7 +50,7 @@ std::vector<std::shared_ptr<Tensor>> Gather::Forward(const std::vector<std::shar
     } else {
         unsqueezed_scalar_ = false;
     }
-    auto device = input_tensors[0]->GetDevice().type();
+
     return {pg_->Gather(input_tensors, target_device_, dim_)};
 }
 
