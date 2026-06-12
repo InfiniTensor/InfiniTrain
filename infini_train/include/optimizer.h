@@ -12,6 +12,7 @@ class Tensor;
 }
 namespace infini_train {
 class Optimizer;
+
 using OptimizerCreator = std::function<std::shared_ptr<Optimizer>(const std::vector<std::shared_ptr<Tensor>> &params)>;
 using OptimizerCreatorNamed = std::function<std::shared_ptr<Optimizer>(
     const std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> &named_params)>;

@@ -3,7 +3,6 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <limits>
 #include <sstream>
 #include <string>
 
@@ -214,7 +213,7 @@ void Checkpoint::SaveTrainerState(const std::filesystem::path &path, const Train
     ofs << "  \"n_embd\": " << state.n_embd << ",\n";
     ofs << "  \"vocab_size\": " << state.vocab_size << "\n";
     ofs << "  \"global_step\": " << state.global_step << ",\n";
-    ofs << "  \"consumed_batches \": " << state.consumed_batches << ",\n";
+    ofs << "  \"consumed_batches\": " << state.consumed_batches << ",\n";
     ofs << "  \"last_lr\": " << state.last_lr << ",\n";
     ofs << "  \"ddp_size\": " << state.ddp_size << ",\n";
     ofs << "  \"tp_size\": " << state.tp_size << ",\n";
@@ -223,8 +222,7 @@ void Checkpoint::SaveTrainerState(const std::filesystem::path &path, const Train
     ofs << "}\n";
 }
 
-// TODO(jym): Add TrainerState JSON version compatibility, referencing PyTorch's checkpoint
-// versioning.
+// TODO(jym): Add TrainerState JSON version compatibility, referencing PyTorch's checkpoint versioning.
 TrainerState Checkpoint::LoadTrainerState(const std::filesystem::path &path) {
     std::ifstream ifs(path);
     CHECK(ifs.is_open()) << "Failed to open trainer state file: " << path;
@@ -237,7 +235,7 @@ TrainerState Checkpoint::LoadTrainerState(const std::filesystem::path &path) {
     state.n_embd = ExtractNumberField<int64_t>(content, "n_embd", 0);
     state.vocab_size = ExtractNumberField<int64_t>(content, "vocab_size", 0);
     state.global_step = ExtractNumberField<int64_t>(content, "global_step", 0);
-    state.consumed_batches = ExtractNumberField<int64_t>(content, "consumed_batches ", 0);
+    state.consumed_batches = ExtractNumberField<int64_t>(content, "consumed_batches", 0);
     state.last_lr = ExtractNumberField<double>(content, "last_lr", 0.0);
     state.ddp_size = ExtractNumberField<int>(content, "ddp_size", 1);
     state.tp_size = ExtractNumberField<int>(content, "tp_size", 1);

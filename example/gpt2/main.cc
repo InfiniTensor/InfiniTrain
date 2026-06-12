@@ -1,9 +1,7 @@
-#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <unordered_map>
@@ -205,8 +203,6 @@ void Train(const nn::parallel::Rank &rank) {
         gpt2::SanitizeGPT2Config(model_config);
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
-    auto llmc_model = std::dynamic_pointer_cast<nn::TransformerModel>(model);
-    CHECK(llmc_model != nullptr) << "Failed to cast model to GPT2 for LLMC checkpoint I/O.";
 
     model->To(device);
 
@@ -305,8 +301,8 @@ void Train(const nn::parallel::Rank &rank) {
 
     // TODO(dcj): support more complex optimizer later
     // auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
-    std::shared_ptr<Optimizer> optimizer = nullptr;
     auto optimizer_creator = optimizers::SGD::Create(FLAGS_learning_rate);
+    std::shared_ptr<Optimizer> optimizer = nullptr;
 
     if (FLAGS_zero_stage >= 1) {
         auto model_chunks = (pp_world_size > 1)
@@ -319,7 +315,6 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     auto train_iter = train_loader.begin();
-
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(
               std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
@@ -335,7 +330,6 @@ void Train(const nn::parallel::Rank &rank) {
                                                      .rank = rank,
                                                      .model = model,
                                                      .optimizer = optimizer,
-                                                     .train_loader = train_loader,
                                                      .model_config = model_config,
                                                      .state = state});
     start_step = resume_result.global_step;
@@ -376,6 +370,8 @@ void Train(const nn::parallel::Rank &rank) {
                   .optimizer = *optimizer,
               });
           };
+
+    LOG(INFO) << "start training";
 
     for (int step = start_step; step < FLAGS_num_iteration + 1; ++step) {
         // Reset precision check counters at start of each iteration for file overwrite

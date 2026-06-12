@@ -52,8 +52,6 @@ private:
 
     // shard params
     std::vector<std::shared_ptr<Tensor>> shard_params_;
-    std::vector<std::string> shard_param_names_;
-    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> named_shard_params_;
 
     // Base optimizer (SGD, Adam and etc.)
     std::shared_ptr<Optimizer> base_optimizer_;

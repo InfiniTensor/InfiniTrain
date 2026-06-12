@@ -30,7 +30,7 @@ TEST_P(CheckpointSerializationTest, SaveAndLoadModelFP32) {
 
     auto opt1 = std::make_shared<optimizers::SGD>(model1->Parameters(), 0.01);
     TrainerState saved{.global_step = 42, .consumed_batches = 100};
-    Checkpoint::Save(dir, *model1, opt1.get(), saved);
+    Checkpoint::Save(dir, *model1, opt1.get(), saved, false);
 
     auto model2 = std::make_shared<nn::Linear>(3, 2, true, GetDevice());
     auto q1 = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
@@ -42,7 +42,7 @@ TEST_P(CheckpointSerializationTest, SaveAndLoadModelFP32) {
     auto opt2 = std::make_shared<optimizers::SGD>(model2->Parameters(), 0.01);
 
     TrainerState loaded;
-    Checkpoint::Load(dir, *model2, opt2.get(), loaded);
+    Checkpoint::Load(dir, *model2, opt2.get(), loaded, true);
 
     EXPECT_EQ(loaded.global_step, 42);
     EXPECT_EQ(loaded.consumed_batches, 100);
@@ -64,14 +64,14 @@ TEST_P(CheckpointSerializationTest, InferFormat) {
     *model->mutable_parameter("weight") = p;
     auto opt = std::make_shared<optimizers::SGD>(model->Parameters(), 0.01);
     TrainerState state;
-    Checkpoint::Save(dir, *model, opt.get(), state);
+    Checkpoint::Save(dir, *model, opt.get(), state, false);
 
     auto model2 = std::make_shared<nn::Linear>(1, 2, true, GetDevice());
     auto p2 = std::make_shared<Tensor>(std::vector<int64_t>{2}, DataType::kFLOAT32, GetDevice());
     p2->Fill(0.0f);
     *model2->mutable_parameter("weight") = p2;
     TrainerState loaded;
-    Checkpoint::Load(dir, *model2, nullptr, loaded);
+    Checkpoint::Load(dir, *model2, nullptr, loaded, true);
 
     EXPECT_NEAR(static_cast<const float *>(model2->parameter("weight")->To(Device()).DataPtr())[0], 1.0f, 1e-6);
 

@@ -22,7 +22,6 @@ struct ResumeFromCheckpointArgs {
     const nn::parallel::Rank &rank;
     std::shared_ptr<nn::Module> model;
     std::shared_ptr<Optimizer> optimizer;
-    DistributedDataLoader &train_loader;
     const nn::TransformerConfig &model_config;
     TrainerState &state;
 };
