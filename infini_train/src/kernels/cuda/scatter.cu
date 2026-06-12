@@ -1,7 +1,11 @@
+#include <functional>
+#include <numeric>
+
 #include "glog/logging.h"
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
@@ -49,12 +53,13 @@ std::shared_ptr<Tensor> ScatterForward(const std::shared_ptr<Tensor> &values, co
     CUDA_CHECK(cudaMemsetAsync(output->DataPtr(), 0, output->SizeInBytes(), stream));
     const int threads = 256;
     const int blocks = static_cast<int>(((rows * topk) + threads - 1) / threads);
-    core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
-        values->Dtype(),
+    core::cuda::DispatchCudaFunc<DataTypeList<INFINI_ALL_NUMERIC_TYPES, INFINI_LOGICAL_TYPES>>(
+        {values->Dtype()},
         [=]<typename T>() {
             ScatterForwardKernel<T><<<blocks, threads, 0, stream>>>(
                 static_cast<const T *>(values->DataPtr()), static_cast<const int64_t *>(indices->DataPtr()),
                 static_cast<T *>(output->DataPtr()), rows, topk, num_experts);
+            CUDA_CHECK(cudaGetLastError());
         },
         "CUDA ScatterForward");
     return output;
@@ -76,6 +81,9 @@ __global__ void ScatterBackwardKernel(const T *__restrict__ grad_output, const i
 std::shared_ptr<Tensor> ScatterBackward(const std::shared_ptr<Tensor> &grad_output,
                                         const std::shared_ptr<Tensor> &indices) {
     CHECK(indices->Dtype() == DataType::kINT64) << "CUDA ScatterBackward expects int64 indices";
+    CHECK(IsFloatingPointDType(grad_output->Dtype()))
+        << "CUDA ScatterBackward only supports floating grad_output dtype, got "
+        << kDataTypeToDesc.at(grad_output->Dtype());
     CHECK_GE(grad_output->Dims().size(), 1);
     CHECK_GE(indices->Dims().size(), 1);
     const int64_t num_experts = grad_output->Dims().back();
