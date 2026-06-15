@@ -7,6 +7,7 @@
         "LLAMA3_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_fp32.bin",
         "PROFILE_LOG_DIR": "./profile_logs",
         "LOG_DIR": "./logs",
+        "CKPT_ROOT_DIR": "/data1/ckpt",
         "COMPARE_LOG_DIR": "",
         "RUN_CTEST": "true",
         "CTEST_CMD": "ctest --output-on-failure -LE cuda -j$(nproc) && ctest --output-on-failure -L cuda -j1"
@@ -609,7 +610,7 @@
                     "args": {
                         "num_iteration": 50,
                         "save_interval": 10,
-                        "save": "/data1/ckpt/no_resume"
+                        "save": "@CKPT_ROOT_DIR@/no_resume"
                     }
                 },
                 {
@@ -617,8 +618,8 @@
                     "args": {
                         "num_iteration": 50,
                         "save_interval": 10,
-                        "load": "/data1/ckpt/no_resume/checkpoint_step_000030",
-                        "save": "/data1/ckpt/base_resume"
+                        "load": "@CKPT_ROOT_DIR@/no_resume/checkpoint_step_000030",
+                        "save": "@CKPT_ROOT_DIR@/base_resume"
                     }
                 },
                 {
@@ -627,7 +628,7 @@
                         "dtype": "bfloat16",
                         "num_iteration": 50,
                         "save_interval": 10,
-                        "save": "/data1/ckpt/bf16_no_resume"
+                        "save": "@CKPT_ROOT_DIR@/bf16_no_resume"
                     }
                 },
                 {
@@ -636,31 +637,8 @@
                         "dtype": "bfloat16",
                         "num_iteration": 50,
                         "save_interval": 10,
-                        "load": "/data1/ckpt/bf16_no_resume/checkpoint_step_000030",
-                        "save": "/data1/ckpt/bf16_resume"
-                    }
-                },
-                {
-                    "id": "ckpt_lora",
-                    "args": {
-                        "num_iteration": 50,
-                        "save_interval": 10,
-                        "lora_rank": 8,
-                        "lora_alpha": 16.0,
-                        "lora_target_modules": "c_attn,attn.c_proj",
-                        "save": "/data1/ckpt/lora_no_resume"
-                    }
-                },
-                {
-                    "id": "ckpt_lora_resume",
-                    "args": {
-                        "num_iteration": 50,
-                        "save_interval": 10,
-                        "lora_rank": 8,
-                        "lora_alpha": 16.0,
-                        "lora_target_modules": "c_attn,attn.c_proj",
-                        "load": "/data1/ckpt/lora_no_resume/checkpoint_step_000030",
-                        "save": "/data1/ckpt/lora_resume"
+                        "load": "@CKPT_ROOT_DIR@/bf16_no_resume/checkpoint_step_000030",
+                        "save": "@CKPT_ROOT_DIR@/bf16_resume"
                     }
                 },
                 {
@@ -675,8 +653,8 @@
                         "sequence_parallel": true,
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
-                        "save": "/data1/ckpt/3d_ddp2_tp2_pp2_no_resume",
-                        "no_save_optim": false,
+                        "save": "@CKPT_ROOT_DIR@/3d_ddp2_tp2_pp2_no_resume",
+                        "save_optimizer_state": true,
                         "max_checkpoint_keep": 5
                     }
                 },
@@ -692,9 +670,9 @@
                         "sequence_parallel": true,
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
-                        "load": "/data1/ckpt/3d_ddp2_tp2_pp2_no_resume/checkpoint_step_000030",
-                        "save": "/data1/ckpt/3d_tp2_pp2_resume",
-                        "no_save_optim": false,
+                        "load": "@CKPT_ROOT_DIR@/3d_ddp2_tp2_pp2_no_resume/checkpoint_step_000030",
+                        "save": "@CKPT_ROOT_DIR@/3d_tp2_pp2_resume",
+                        "save_optimizer_state": true,
                         "max_checkpoint_keep": 5
                     }
                 }

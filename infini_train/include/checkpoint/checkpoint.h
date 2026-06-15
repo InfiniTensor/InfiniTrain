@@ -34,17 +34,16 @@ struct TrainerState {
 class Checkpoint {
 public:
     static void Save(const std::filesystem::path &checkpoint_dir, const nn::Module &model, const Optimizer *optimizer,
-                     const TrainerState &state, bool no_save_optim);
+                     const TrainerState &state, bool save_optimizer_state);
 
     static void Load(const std::filesystem::path &checkpoint_dir, nn::Module &model, Optimizer *optimizer,
                      TrainerState &state, bool load_optimizer_state);
 
 private:
-    static void SaveStateDictBinary(const std::filesystem::path &path,
-                                    const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict);
+    static void SaveStateDict(const std::filesystem::path &path,
+                              const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict);
 
-    static std::unordered_map<std::string, std::shared_ptr<Tensor>>
-    LoadStateDictBinary(const std::filesystem::path &path);
+    static std::unordered_map<std::string, std::shared_ptr<Tensor>> LoadStateDict(const std::filesystem::path &path);
 
     static void SaveTrainerState(const std::filesystem::path &path, const TrainerState &state);
     static TrainerState LoadTrainerState(const std::filesystem::path &path);

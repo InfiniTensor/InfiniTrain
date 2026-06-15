@@ -60,6 +60,22 @@ TEST_P(OptimizerStateTest, AdamStateDictRoundTrip) {
     auto restored = adam2->StateDict();
     auto t_cpu = restored["adam.t"]->To(Device());
     EXPECT_EQ(*static_cast<const int64_t *>(t_cpu.DataPtr()), 4); // 3 + 1
+
+    auto saved_state = adam1->StateDict();
+    for (const auto &[key, tensor] : saved_state) {
+        if (key == "adam.t") {
+            continue;
+        }
+        ASSERT_TRUE(restored.count(key)) << "Missing optimizer state key: " << key;
+        auto s_cpu = tensor->To(Device());
+        auto r_cpu = restored.at(key)->To(Device());
+        EXPECT_EQ(s_cpu.Dims(), r_cpu.Dims()) << "Shape mismatch for " << key;
+        const float *s = static_cast<const float *>(s_cpu.DataPtr());
+        const float *r = static_cast<const float *>(r_cpu.DataPtr());
+        for (size_t i = 0; i < s_cpu.NumElements(); ++i) {
+            EXPECT_NEAR(s[i], r[i], 1e-6) << "Value mismatch for " << key << " at index " << i;
+        }
+    }
 }
 
 // ---------- SGD ----------

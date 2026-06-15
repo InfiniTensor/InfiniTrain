@@ -1,4 +1,4 @@
-#include "infini_train/include/checkpoint.h"
+#include "infini_train/include/checkpoint/checkpoint.h"
 
 #include <cstring>
 #include <filesystem>
@@ -17,14 +17,6 @@ namespace {
 constexpr uint32_t kCkptMagic = 0x54504B43; // CKPT
 constexpr uint32_t kCkptVersion = 1;
 
-uint32_t PeekMagic(const std::filesystem::path &path) {
-    std::ifstream ifs(path, std::ios::binary);
-    CHECK(ifs.is_open()) << "Failed to open checkpoint file: " << path;
-    uint32_t magic = 0;
-    ifs.read(reinterpret_cast<char *>(&magic), sizeof(magic));
-    return magic;
-}
-
 void WriteString(std::ofstream *ofs, const std::string &value) {
     uint32_t len = static_cast<uint32_t>(value.size());
     ofs->write(reinterpret_cast<const char *>(&len), sizeof(len));
@@ -39,21 +31,8 @@ std::string ReadString(std::ifstream *ifs) {
     return s;
 }
 
-std::string ExtractStringField(const std::string &content, const std::string &key, const std::string &fallback) {
-    const auto token = std::string("\"") + key + "\"";
-    const auto key_pos = content.find(token);
-    if (key_pos == std::string::npos) {
-        return fallback;
-    }
-    const auto colon_pos = content.find(':', key_pos);
-    const auto first_quote = content.find('"', colon_pos + 1);
-    const auto second_quote = content.find('"', first_quote + 1);
-    if (first_quote == std::string::npos || second_quote == std::string::npos) {
-        return fallback;
-    }
-    return content.substr(first_quote + 1, second_quote - first_quote - 1);
-}
-
+// TODO: This is a hand-rolled JSON field extractor. Replace with a proper JSON library (e.g., nlohmann/json) once
+// available in the project dependencies.
 template <typename T> T ExtractNumberField(const std::string &content, const std::string &key, T fallback) {
     const auto token = std::string("\"") + key + "\"";
     const auto key_pos = content.find(token);
@@ -84,20 +63,20 @@ template <typename T> T ExtractNumberField(const std::string &content, const std
 } // namespace
 
 void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Module &model, const Optimizer *optimizer,
-                      const TrainerState &state, bool no_save_optim) {
+                      const TrainerState &state, bool save_optimizer_state) {
     std::filesystem::create_directories(checkpoint_dir);
     LOG(INFO) << "[CKPT] Save begin: dir=" << checkpoint_dir << ", global_step=" << state.global_step;
 
     const auto model_path = checkpoint_dir / ("model.ckpt");
 
-    SaveStateDictBinary(model_path, model.StateDict());
+    SaveStateDict(model_path, model.StateDict());
 
-    if (!no_save_optim) {
+    if (save_optimizer_state) {
         CHECK(optimizer != nullptr) << "Optimizer pointer is null, cannot save optimizer state.";
         auto opt_state = optimizer->StateDict();
         if (!opt_state.empty()) {
             const auto opt_path = checkpoint_dir / "optimizer.ckpt";
-            SaveStateDictBinary(opt_path, opt_state);
+            SaveStateDict(opt_path, opt_state);
         }
     }
 
@@ -110,20 +89,17 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &m
     const auto model_path = checkpoint_dir / "model.ckpt";
     LOG(INFO) << "[CKPT] Loading model: " << model_path;
 
-    model.LoadStateDict(LoadStateDictBinary(model_path));
+    model.LoadStateDict(LoadStateDict(model_path));
 
-    if (optimizer == nullptr) {
-        LOG(ERROR) << "[CKPT] No optimizer instance, skip optimizer state loading.";
-    } else if (load_optimizer_state) {
+    if (load_optimizer_state) {
+        CHECK(optimizer != nullptr) << "Optimizer pointer is null, cannot load optimizer state.";
         const auto opt_path = checkpoint_dir / "optimizer.ckpt";
         if (std::filesystem::exists(opt_path)) {
-            LOG(ERROR) << "[CKPT] Loading optimizer: " << opt_path;
-            optimizer->LoadStateDict(LoadStateDictBinary(opt_path));
+            LOG(INFO) << "[CKPT] Loading optimizer: " << opt_path;
+            optimizer->LoadStateDict(LoadStateDict(opt_path));
         } else {
-            LOG(ERROR) << "[CKPT] Optimizer state not found, skip: " << opt_path;
+            LOG(FATAL) << "Optimizer checkpoint not found at: " << opt_path;
         }
-    } else {
-        LOG(ERROR) << "[CKPT] load_optimizer_state=false, skip optimizer state loading.";
     }
 
     state = LoadTrainerState(checkpoint_dir / "trainer_state.json");
@@ -133,8 +109,8 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &m
                << state.pp_size << ")";
 }
 
-void Checkpoint::SaveStateDictBinary(const std::filesystem::path &path,
-                                     const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
+void Checkpoint::SaveStateDict(const std::filesystem::path &path,
+                               const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
     std::ofstream ofs(path, std::ios::binary);
     CHECK(ofs.is_open()) << "Failed to open checkpoint file: " << path;
 
@@ -163,8 +139,7 @@ void Checkpoint::SaveStateDictBinary(const std::filesystem::path &path,
     }
 }
 
-std::unordered_map<std::string, std::shared_ptr<Tensor>>
-Checkpoint::LoadStateDictBinary(const std::filesystem::path &path) {
+std::unordered_map<std::string, std::shared_ptr<Tensor>> Checkpoint::LoadStateDict(const std::filesystem::path &path) {
     std::ifstream ifs(path, std::ios::binary);
     CHECK(ifs.is_open()) << "Failed to open checkpoint file: " << path;
 

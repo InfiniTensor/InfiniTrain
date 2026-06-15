@@ -4,7 +4,7 @@
 #include <cstring>
 #include <filesystem>
 
-#include "infini_train/include/checkpoint.h"
+#include "infini_train/include/checkpoint/checkpoint.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/rank.h"
@@ -24,6 +24,7 @@ struct ResumeFromCheckpointArgs {
     std::shared_ptr<Optimizer> optimizer;
     const nn::TransformerConfig &model_config;
     TrainerState &state;
+    bool load_optimizer_state;
 };
 
 struct ResumeFromCheckpointResult {
@@ -45,8 +46,7 @@ struct SaveCheckpointArgs {
     int tp_size = 1;
     int sp_size = 1;
     int pp_size = 1;
-    bool no_save_optim = false;
-    bool prune_step_checkpoints = false;
+    bool save_optimizer_state = true;
     std::filesystem::path checkpoint_root_dir;
     size_t max_checkpoint_keep = 0;
     const nn::parallel::Rank &rank;
