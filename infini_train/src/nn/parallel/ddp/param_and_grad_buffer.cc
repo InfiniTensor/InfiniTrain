@@ -161,7 +161,7 @@ void ParamAndGradBucketGroup::RegisterGradReady(const std::shared_ptr<Tensor> &p
             return;
         }
 
-        const bool inserted = params_with_grad_.insert(parameter.get()).second;
+        params_with_grad_.insert(parameter.get());
         // TODO(zbl): check this if sync is only done in last mircobatch
         // if (!inserted) {
         //     LOG(FATAL) << "ParamAndGradBucketGroup: RegisterGradReady() was called twice for the same parameter in a

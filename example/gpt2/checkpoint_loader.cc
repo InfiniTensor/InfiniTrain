@@ -114,11 +114,8 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     // calculate xx_size_per_partition
     const int64_t vpp = model_vocab_size / tp_size;
     const int64_t v_start = static_cast<int64_t>(tp_rank) * vpp;
-    const int64_t v_end = v_start + vpp;
 
     const int64_t qkv_out = 3 * n_embd;
-    const int64_t qkv_pp = qkv_out / tp_size;
-    const int64_t qkv_start = static_cast<int64_t>(tp_rank) * qkv_pp;
 
     const int64_t fc_out = 4 * n_embd;
     const int64_t fc_pp = fc_out / tp_size;
