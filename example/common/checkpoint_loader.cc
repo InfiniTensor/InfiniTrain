@@ -16,6 +16,8 @@
 using namespace infini_train;
 namespace nn = infini_train::nn;
 
+// TODO(jym): ckpt is a new checkpoint format; bin is the legacy format. Keeping both as an interim solution; plan to
+// consolidate into one later.
 ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &args) {
     ResumeFromCheckpointResult result;
     if (args.resume_root.empty()) {
@@ -36,7 +38,7 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
         }
     }
 
-    Checkpoint::Load(resume_dir, *args.model, args.optimizer.get(), args.state);
+    Checkpoint::Load(resume_dir, *args.model, args.optimizer.get(), args.state, true);
 
     result.global_step = static_cast<int>(args.state.global_step);
 
@@ -86,7 +88,7 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
     state.sp_size = args.sp_size;
     state.pp_size = args.pp_size;
 
-    Checkpoint::Save(args.save_dir, args.model, &args.optimizer, state);
+    Checkpoint::Save(args.save_dir, args.model, &args.optimizer, state, args.no_save_optim);
 
     const auto ckpt_end = std::chrono::high_resolution_clock::now();
     const double ckpt_ms = std::chrono::duration<double, std::milli>(ckpt_end - ckpt_start).count();

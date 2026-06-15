@@ -1,8 +1,6 @@
-#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <unordered_set>
@@ -85,7 +83,7 @@ DEFINE_uint32(save_interval, 0, "save checkpoint every N steps; 0 disables savin
 DEFINE_string(load, "", "checkpoint directory to resume from");
 DEFINE_string(save, "./checkpoints", "root directory used to store checkpoints");
 DEFINE_uint32(max_checkpoint_keep, 3, "max number of checkpoint steps to keep");
-DEFINE_bool(no_save_optim, true, "whether optimizer state is persisted in checkpoints");
+DEFINE_bool(no_save_optim, false, "whether optimizer state is persisted in checkpoints");
 
 // precision check
 DEFINE_string(
@@ -190,8 +188,6 @@ void Train(const nn::parallel::Rank &rank) {
         llama3::SanitizeLLaMA3Config(model_config);
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
-    auto llmc_model = std::dynamic_pointer_cast<nn::TransformerModel>(model);
-    CHECK(llmc_model != nullptr) << "Failed to cast model to LLaMA3 for LLMC checkpoint I/O.";
 
     model->To(device);
 
@@ -299,7 +295,6 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     auto train_iter = train_loader.begin();
-
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(std::make_shared<VocabParallelCrossEntropyLoss>())
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
@@ -315,7 +310,6 @@ void Train(const nn::parallel::Rank &rank) {
         .rank = rank,
         .model = model,
         .optimizer = optimizer,
-        .train_loader = train_loader,
         .model_config = model_config,
         .state = state,
     });
@@ -406,8 +400,7 @@ void Train(const nn::parallel::Rank &rank) {
 
                 // (bs, seq_len), (bs, seq_len)
                 auto [x, y] = *train_iter;
-                // if we are trying to overfit a single batch, we reset the loader here by commenting out the
-                // line below
+                // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
                 // TODO(dcj): support dataloader.reset() later
                 ++train_iter;
                 consumed_batches = train_iter.BatchIndex();
@@ -437,8 +430,7 @@ void Train(const nn::parallel::Rank &rank) {
             optimizer->Step();
         } else {
             auto [x, y] = *train_iter;
-            // if we are trying to overfit a single batch, we reset the loader here by commenting out the line
-            // below
+            // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
             // TODO(dcj): support dataloader.reset() later
             ++train_iter;
             consumed_batches = train_iter.BatchIndex();

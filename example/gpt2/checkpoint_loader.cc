@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <random>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -28,17 +29,25 @@ using namespace infini_train;
 namespace nn = infini_train::nn;
 
 namespace {
-constexpr int32_t kGPT2Magic = 20240326;
-constexpr int32_t kGPT2FP32Version = 3;
-constexpr int32_t kGPT2BF16Version = 5;
+constexpr int kRandomSeed = 42;
 
-std::tuple<int32_t, DataType> DetermineAndCheckVersion(const std::vector<uint8_t> &header, size_t offset) {
+// TODO(dcj): make this rng generator compatible with torch later
+static std::mt19937 gen{kRandomSeed};
+} // namespace
+
+namespace {
+constexpr int32_t kHeaderMagic = 20240326;
+constexpr int32_t kHeaderFP32Version = 3;
+constexpr int32_t kHeaderBF16Version = 5;
+
+std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::vector<uint8_t> &header,
+                                                                     size_t offset) {
     const auto version = BytesToType<uint32_t>(header, offset);
     switch (version) {
-    case kGPT2BF16Version:
-        return {version, DataType::kBFLOAT16};
-    case kGPT2FP32Version:
-        return {version, DataType::kFLOAT32};
+    case kHeaderBF16Version:
+        return {version, infini_train::DataType::kBFLOAT16};
+    case kHeaderFP32Version:
+        return {version, infini_train::DataType::kFLOAT32};
     default:
         LOG(FATAL) << "Unsupported version: " << version << " at " << __FILE__ << ":" << __LINE__;
         return {}; // Unreachable, but keeps compiler happy
@@ -46,7 +55,9 @@ std::tuple<int32_t, DataType> DetermineAndCheckVersion(const std::vector<uint8_t
 }
 } // namespace
 
-std::shared_ptr<nn::TransformerModel> gpt2::LoadFromLLMC(const std::string &filepath) {
+namespace gpt2 {
+
+std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -55,9 +66,9 @@ std::shared_ptr<nn::TransformerModel> gpt2::LoadFromLLMC(const std::string &file
     const auto header = ReadSeveralBytesFromIfstream(256 * sizeof(int32_t), &ifs);
 
     const auto magic = BytesToType<uint32_t>(header, 0);
-    CHECK_EQ(magic, kGPT2Magic);
+    CHECK_EQ(magic, kHeaderMagic);
     auto [version, dtype] = DetermineAndCheckVersion(header, 4);
-    CHECK_EQ(version, kGPT2FP32Version);
+    CHECK_EQ(version, kHeaderFP32Version);
 
     auto tp_size = nn::parallel::global::GetTensorParallelSize();
 
@@ -418,127 +429,4 @@ std::shared_ptr<nn::TransformerModel> gpt2::LoadFromLLMC(const std::string &file
 
     return local_gpt2;
 }
-
-void gpt2::SaveAsLLMC(const std::shared_ptr<nn::TransformerModel> &model, const std::string &filepath) {
-    CHECK_EQ(nn::parallel::global::GetTensorParallelSize(), 1) << "SaveAsLLMC currently supports TP=1 only.";
-    CHECK_EQ(nn::parallel::global::GetPipelineParallelSize(), 1) << "SaveAsLLMC currently supports PP=1 only.";
-
-    std::ofstream ofs(filepath, std::ios::binary);
-    CHECK(ofs.is_open()) << "Failed to open model file for write: " << filepath;
-
-    auto config = model->Config();
-    std::vector<int32_t> header(256, 0);
-    header[0] = kGPT2Magic;
-    header[1] = kGPT2FP32Version;
-    header[2] = static_cast<int32_t>(config.block_size);
-    header[3] = static_cast<int32_t>(config.original_vocab_size);
-    header[4] = static_cast<int32_t>(config.n_layer);
-    header[5] = static_cast<int32_t>(config.n_head);
-    header[6] = static_cast<int32_t>(config.n_embd);
-    header[7] = static_cast<int32_t>(config.vocab_size);
-    ofs.write(reinterpret_cast<const char *>(header.data()),
-              static_cast<std::streamsize>(header.size() * sizeof(int32_t)));
-
-    const auto state_dict = model->StateDict();
-    auto get_tensor = [&](const std::string &name) -> std::shared_ptr<Tensor> {
-        CHECK(state_dict.contains(name)) << "Missing tensor in GPT2 state_dict: " << name;
-        return state_dict.at(name);
-    };
-
-    auto write_tensor_fp32 = [&](const std::shared_ptr<Tensor> &tensor) {
-        Tensor cpu = tensor->To(Device());
-        if (cpu.Dtype() != DataType::kFLOAT32) {
-            cpu = cpu.To(DataType::kFLOAT32);
-        }
-        const auto bytes = static_cast<std::streamsize>(cpu.SizeInBytes());
-        ofs.write(reinterpret_cast<const char *>(cpu.DataPtr()), bytes);
-    };
-
-    // transformer.wte.weight
-    write_tensor_fp32(get_tensor(std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                             nn::TransformerFirstStage::kWTELayerName,
-                                             nn::parallel::VocabParallelEmbedding::kParamWeightName)));
-
-    // transformer.wpe.weight
-    write_tensor_fp32(
-        get_tensor(std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                               nn::TransformerFirstStage::kWPELayerName, nn::Embedding::kParamWeightName)));
-
-    for (int idx = 0; idx < config.n_layer; ++idx) {
-        write_tensor_fp32(get_tensor(std::format(
-            "{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName, idx,
-            nn::TransformerLayer::kLn1LayerName, nn::LayerNorm::kParamWeightName)));
-    }
-    for (int idx = 0; idx < config.n_layer; ++idx) {
-        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                                 nn::TransformerChunk::kHLayerName, idx,
-                                                 nn::TransformerLayer::kLn1LayerName, nn::LayerNorm::kParamBiasName)));
-    }
-    for (int idx = 0; idx < config.n_layer; ++idx) {
-        write_tensor_fp32(get_tensor(std::format(
-            "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName, idx,
-            nn::TransformerLayer::kAttnLayerName, nn::CausalSelfAttention::kCAttnLayerName,
-            nn::parallel::ColumnParallelLinear::kParamWeightName)));
-    }
-    for (int idx = 0; idx < config.n_layer; ++idx) {
-        write_tensor_fp32(get_tensor(
-            std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                        nn::TransformerChunk::kHLayerName, idx, nn::TransformerLayer::kAttnLayerName,
-                        nn::CausalSelfAttention::kCAttnLayerName, nn::parallel::ColumnParallelLinear::kParamBiasName)));
-    }
-    for (int idx = 0; idx < config.n_layer; ++idx) {
-        write_tensor_fp32(get_tensor(
-            std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                        nn::TransformerChunk::kHLayerName, idx, nn::TransformerLayer::kAttnLayerName,
-                        nn::CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)));
-    }
-    for (int idx = 0; idx < config.n_layer; ++idx) {
-        write_tensor_fp32(get_tensor(
-            std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                        nn::TransformerChunk::kHLayerName, idx, nn::TransformerLayer::kAttnLayerName,
-                        nn::CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamBiasName)));
-    }
-    for (int idx = 0; idx < config.n_layer; ++idx) {
-        write_tensor_fp32(get_tensor(std::format(
-            "{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName, idx,
-            nn::TransformerLayer::kLn2LayerName, nn::LayerNorm::kParamWeightName)));
-    }
-    for (int idx = 0; idx < config.n_layer; ++idx) {
-        write_tensor_fp32(get_tensor(std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                                 nn::TransformerChunk::kHLayerName, idx,
-                                                 nn::TransformerLayer::kLn2LayerName, nn::LayerNorm::kParamBiasName)));
-    }
-    for (int idx = 0; idx < config.n_layer; ++idx) {
-        write_tensor_fp32(
-            get_tensor(std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                   nn::TransformerChunk::kHLayerName, idx, nn::TransformerLayer::kMlpLayerName,
-                                   nn::MLP::kCFcLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)));
-    }
-    for (int idx = 0; idx < config.n_layer; ++idx) {
-        write_tensor_fp32(
-            get_tensor(std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                   nn::TransformerChunk::kHLayerName, idx, nn::TransformerLayer::kMlpLayerName,
-                                   nn::MLP::kCFcLayerName, nn::parallel::ColumnParallelLinear::kParamBiasName)));
-    }
-    for (int idx = 0; idx < config.n_layer; ++idx) {
-        write_tensor_fp32(
-            get_tensor(std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                   nn::TransformerChunk::kHLayerName, idx, nn::TransformerLayer::kMlpLayerName,
-                                   nn::MLP::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)));
-    }
-    for (int idx = 0; idx < config.n_layer; ++idx) {
-        write_tensor_fp32(
-            get_tensor(std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                   nn::TransformerChunk::kHLayerName, idx, nn::TransformerLayer::kMlpLayerName,
-                                   nn::MLP::kCProjLayerName, nn::parallel::RowParallelLinear::kParamBiasName)));
-    }
-
-    write_tensor_fp32(
-        get_tensor(std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                               nn::TransformerLastStage::kLnFLayerName, nn::LayerNorm::kParamWeightName)));
-    write_tensor_fp32(get_tensor(std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                             nn::TransformerLastStage::kLnFLayerName, nn::LayerNorm::kParamBiasName)));
-
-    ofs.flush();
-    CHECK(ofs.good()) << "Failed to flush model file: " << filepath;
-}
+} // namespace gpt2

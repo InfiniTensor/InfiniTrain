@@ -1,5 +1,7 @@
 #include "infini_train/include/utils/string_utils.h"
 
+#include <sstream>
+
 namespace infini_train::utils {
 std::string DimsToString(const std::vector<int64_t> &dims) {
     std::ostringstream oss;
