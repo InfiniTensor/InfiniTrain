@@ -15,6 +15,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+add_compile_options(-Wunused -Wunused-function)
+
 # ------------------------------------------------------------------------------
 # GoogleTest (submodule)
 # ------------------------------------------------------------------------------
