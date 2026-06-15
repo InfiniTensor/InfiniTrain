@@ -45,14 +45,14 @@ TEST_P(TrainerStateTest, TrainerStateFileCreated) {
     *model->mutable_parameter("weight") = p;
     auto opt = std::make_shared<optimizers::SGD>(model->Parameters(), 0.01);
 
-    Checkpoint::Save(dir, *model, opt.get(), saved);
+    Checkpoint::Save(dir, *model, opt.get(), saved, false);
 
     EXPECT_TRUE(std::filesystem::exists(dir / "trainer_state.json"));
 
     std::ifstream ifs(dir / "trainer_state.json");
     std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     EXPECT_NE(content.find("\"global_step\""), std::string::npos);
-    EXPECT_NE(content.find("\"consumed_batches \""), std::string::npos);
+    EXPECT_NE(content.find("\"consumed_batches\""), std::string::npos);
 
     std::filesystem::remove_all(dir);
 }
@@ -82,7 +82,7 @@ TEST_P(TrainerStateTest, RoundTrip) {
     *model1->mutable_parameter("weight") = p1;
     auto opt1 = std::make_shared<optimizers::SGD>(model1->Parameters(), 0.01);
 
-    Checkpoint::Save(dir, *model1, opt1.get(), saved);
+    Checkpoint::Save(dir, *model1, opt1.get(), saved, false);
 
     auto model2 = std::make_shared<nn::Linear>(1, 3, true, GetDevice());
     auto p2 = std::make_shared<Tensor>(std::vector<int64_t>{3}, DataType::kFLOAT32, GetDevice());
@@ -91,7 +91,7 @@ TEST_P(TrainerStateTest, RoundTrip) {
     auto opt2 = std::make_shared<optimizers::SGD>(model2->Parameters(), 0.01);
 
     TrainerState loaded;
-    Checkpoint::Load(dir, *model2, opt2.get(), loaded);
+    Checkpoint::Load(dir, *model2, opt2.get(), loaded, true);
 
     EXPECT_EQ(loaded.global_step, 99);
     EXPECT_EQ(loaded.consumed_batches, 5000);

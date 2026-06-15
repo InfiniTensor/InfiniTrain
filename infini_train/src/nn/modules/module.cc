@@ -35,32 +35,31 @@ std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
     return params;
 }
 
-std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> Module::NamedParameters(bool remove_duplicate) const {
+std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> Module::NamedParameters(const std::string &prefix,
+                                                                                     bool remove_duplicate) const {
     std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> result;
     std::unordered_set<const Tensor *> visited;
 
-    std::function<void(const std::string &, const Module *)> collect
-        = [&](const std::string &prefix, const Module *mod) {
-              for (const auto &[name, param] : mod->parameters_) {
-                  auto full_name = prefix.empty() ? name : prefix + "." + name;
+    std::function<void(const std::string &, const Module *)> collect = [&](const std::string &p, const Module *mod) {
+        for (const auto &[name, param] : mod->parameters_) {
+            auto full_name = p.empty() ? name : p + "." + name;
 
-                  if (!remove_duplicate) {
-                      result.emplace_back(full_name, param);
-                      continue;
-                  }
-                  if (visited.insert(param.get()).second) {
-                      result.emplace_back(full_name, param);
-                  }
-              }
+            if (!remove_duplicate) {
+                result.emplace_back(full_name, param);
+                continue;
+            }
+            if (visited.insert(param.get()).second) {
+                result.emplace_back(full_name, param);
+            }
+        }
 
-              for (const auto &[name, child] : mod->modules_) {
-                  auto child_prefix = prefix.empty() ? name : prefix + "." + name;
-                  collect(child_prefix, child.get());
-              }
-          };
+        for (const auto &[name, child] : mod->modules_) {
+            auto child_prefix = p.empty() ? name : p + "." + name;
+            collect(child_prefix, child.get());
+        }
+    };
 
-    collect("", this);
-
+    collect(prefix, this);
     return result;
 }
 
@@ -164,9 +163,6 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() con
 }
 
 void Module::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
-    // Current behavior: missing keys / shape / dtype mismatches are FATAL errors;
-    // unexpected keys in state_dict are WARNING-only and silently ignored.
-
     // Stage 1: Validate all keys, shapes, and dtypes without copying
     std::vector<std::string> error_msgs;
     std::unordered_set<std::string> visited_keys;

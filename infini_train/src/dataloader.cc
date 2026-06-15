@@ -100,5 +100,4 @@ DataLoaderIterator DistributedDataLoader::begin() const {
 DataLoaderIterator DistributedDataLoader::end() const {
     return DataLoaderIterator(*dataset_, batch_size_, max_batch_idx_, max_batch_idx_, ddp_rank_, ddp_world_size_);
 }
-
 } // namespace infini_train

@@ -30,7 +30,7 @@ TEST_P(OptimizerCreationTest, SGDMultiParams) {
     for (int i = 0; i < 3; ++i) {
         auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
         param->set_requires_grad(true);
-        params.emplace_back(param);
+        params.push_back(param);
     }
     auto optimizer = std::make_shared<optimizers::SGD>(params, 0.01);
     EXPECT_NE(optimizer, nullptr);
@@ -41,9 +41,8 @@ TEST_P(OptimizerCreationTest, AdamMultiParams) {
     for (int i = 0; i < 3; ++i) {
         auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
         param->set_requires_grad(true);
-        params.emplace_back(param);
+        params.push_back(param);
     }
-
     auto optimizer = std::make_shared<optimizers::Adam>(params, 0.001);
     EXPECT_NE(optimizer, nullptr);
 }

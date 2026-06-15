@@ -25,8 +25,7 @@ TEST_P(OptimizerStepTest, AdamStep) {
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
     param->set_requires_grad(true);
     param->Fill(1.0f);
-    auto optimizer = std::make_shared<optimizers::Adam>(
-        std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>{{"w", param}}, 0.001);
+    auto optimizer = std::make_shared<optimizers::Adam>(std::vector<std::shared_ptr<Tensor>>{param}, 0.001);
     optimizer->ZeroGrad();
     optimizer->Step();
 }
@@ -50,7 +49,7 @@ TEST_P(OptimizerStepTest, SGDMultiParams) {
     for (int i = 0; i < 3; ++i) {
         auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
         param->set_requires_grad(true);
-        params.emplace_back(param);
+        params.push_back(param);
     }
     auto optimizer = std::make_shared<optimizers::SGD>(params, 0.01);
     EXPECT_NE(optimizer, nullptr);
