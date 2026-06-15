@@ -1,4 +1,4 @@
-#include "example/common/checkpoint_loader.h"
+#include "infini_train/include/checkpoint/checkpoint_manager.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -38,7 +38,7 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
         }
     }
 
-    Checkpoint::Load(resume_dir, *args.model, args.optimizer.get(), args.state, true);
+    Checkpoint::Load(resume_dir, *args.model, args.optimizer.get(), args.state, args.load_optimizer_state);
 
     result.global_step = static_cast<int>(args.state.global_step);
 
@@ -88,7 +88,7 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
     state.sp_size = args.sp_size;
     state.pp_size = args.pp_size;
 
-    Checkpoint::Save(args.save_dir, args.model, &args.optimizer, state, args.no_save_optim);
+    Checkpoint::Save(args.save_dir, args.model, &args.optimizer, state, args.save_optimizer_state);
 
     const auto ckpt_end = std::chrono::high_resolution_clock::now();
     const double ckpt_ms = std::chrono::duration<double, std::milli>(ckpt_end - ckpt_start).count();
@@ -99,12 +99,13 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
 
     LOG(INFO) << std::format("Checkpoint saved at: {} ({:.2f} ms)", args.save_dir.string(), ckpt_ms);
 
-    if (!args.prune_step_checkpoints) {
-        return;
-    }
-
-    std::vector<std::filesystem::path> ckpts;
-    if (std::filesystem::exists(args.checkpoint_root_dir)) {
+    // FIXME(jym): Pruning currently relies on lexicographic sorting of directory names.
+    // This only works when step directories use zero-padded names (e.g. checkpoint_step_000042).
+    // If a future change introduces unpadded names, the prune order will be incorrect.
+    // Consider extracting the step number from the directory name and sorting numerically
+    // instead, once the checkpoint naming convention is finalized.
+    if (args.max_checkpoint_keep > 0 && std::filesystem::exists(args.checkpoint_root_dir)) {
+        std::vector<std::filesystem::path> ckpts;
         for (const auto &entry : std::filesystem::directory_iterator(args.checkpoint_root_dir)) {
             if (entry.is_directory() && entry.path().filename().string().starts_with("checkpoint_step_")) {
                 ckpts.push_back(entry.path());

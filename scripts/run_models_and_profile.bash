@@ -72,10 +72,7 @@ PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_
 COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
 RUN_CTEST="$(read_var RUN_CTEST)";              : "${RUN_CTEST:=true}"
 CTEST_CMD="$(read_var CTEST_CMD)";              : "${CTEST_CMD:=ctest --output-on-failure -LE cuda -j$(nproc) && ctest --output-on-failure -L cuda -j1}"
-CKPT_CLEAN_DIRS=(
-    "/data1/ckpt"
-    "./checkpoints"
-)
+CKPT_ROOT_DIR="$(read_var CKPT_ROOT_DIR)";      : "${CKPT_ROOT_DIR:=/data1/ckpt}"
 
 mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
 
@@ -121,12 +118,10 @@ clean_build_dir() {
 # Clean checkpoint directories (called once at start of script)
 clean_checkpoints() {
     echo -e "\033[1;31m[CLEAN] Removing checkpoint directories from previous run\033[0m"
-    for dir in "${CKPT_CLEAN_DIRS[@]}"; do
-        if [[ -d "$dir" ]]; then
-            echo -e "\033[1;31m[CLEAN] Removing: ${dir}\033[0m"
-            rm -rf "${dir:?}"
-        fi
-    done
+    if [[ -d "$CKPT_ROOT_DIR" ]]; then
+        echo -e "\033[1;31m[CLEAN] Removing: ${CKPT_ROOT_DIR}\033[0m"
+        rm -rf "${CKPT_ROOT_DIR:?}"
+    fi
 }
 
 # Run a command and log output
@@ -249,7 +244,8 @@ args_string_for_test() {
     | (if has("load") then .load = namespaced_path(.load; $model; $resume_src_mode) else . end)
     | to_entries[]
     | "--\(.key) \(.value|tostring)"
-    ' "$CONFIG_FILE" | paste -sd' ' -
+    ' "$CONFIG_FILE" | paste -sd' ' - | \
+       sed "s|@CKPT_ROOT_DIR@|${CKPT_ROOT_DIR}|g"
 }
 
 # Run tests

@@ -28,39 +28,24 @@ Module::Module(const std::string &type) : type_(type), device_(Device()) {}
 const std::string &Module::type() const { return type_; }
 
 std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
-    auto namedParameters = NamedParameters();
     std::vector<std::shared_ptr<Tensor>> params;
-    params.reserve(namedParameters.size());
-    for (auto &[name, param] : namedParameters) { params.push_back(param); }
-    return params;
-}
-
-std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> Module::NamedParameters(const std::string &prefix,
-                                                                                     bool remove_duplicate) const {
-    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> result;
     std::unordered_set<const Tensor *> visited;
 
-    std::function<void(const std::string &, const Module *)> collect = [&](const std::string &p, const Module *mod) {
-        for (const auto &[name, param] : mod->parameters_) {
-            auto full_name = p.empty() ? name : p + "." + name;
-
-            if (!remove_duplicate) {
-                result.emplace_back(full_name, param);
-                continue;
-            }
-            if (visited.insert(param.get()).second) {
-                result.emplace_back(full_name, param);
-            }
-        }
-
-        for (const auto &[name, child] : mod->modules_) {
-            auto child_prefix = p.empty() ? name : p + "." + name;
-            collect(child_prefix, child.get());
+    auto AddIfUnvisited = [&](const std::shared_ptr<Tensor> &param) {
+        if (visited.insert(param.get()).second) {
+            params.push_back(param);
         }
     };
 
-    collect(prefix, this);
-    return result;
+    // Add parameters of this module
+    for (const auto &[_, param] : parameters_) { AddIfUnvisited(param); }
+
+    // Recursively add parameters of submodules
+    for (const auto &[_, module] : modules_) {
+        for (const auto &param : module->Parameters()) { AddIfUnvisited(param); }
+    }
+
+    return params;
 }
 
 bool Module::has_parameter(const std::string &name) const { return parameters_.find(name) != parameters_.end(); }

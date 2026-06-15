@@ -4,7 +4,7 @@
 
 #include "gtest/gtest.h"
 
-#include "infini_train/include/checkpoint.h"
+#include "infini_train/include/checkpoint/checkpoint.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/optimizer.h"
@@ -45,7 +45,7 @@ TEST_P(TrainerStateTest, TrainerStateFileCreated) {
     *model->mutable_parameter("weight") = p;
     auto opt = std::make_shared<optimizers::SGD>(model->Parameters(), 0.01);
 
-    Checkpoint::Save(dir, *model, opt.get(), saved, false);
+    Checkpoint::Save(dir, *model, opt.get(), saved, true);
 
     EXPECT_TRUE(std::filesystem::exists(dir / "trainer_state.json"));
 
@@ -91,7 +91,7 @@ TEST_P(TrainerStateTest, RoundTrip) {
     auto opt2 = std::make_shared<optimizers::SGD>(model2->Parameters(), 0.01);
 
     TrainerState loaded;
-    Checkpoint::Load(dir, *model2, opt2.get(), loaded, true);
+    Checkpoint::Load(dir, *model2, opt2.get(), loaded, false);
 
     EXPECT_EQ(loaded.global_step, 99);
     EXPECT_EQ(loaded.consumed_batches, 5000);
