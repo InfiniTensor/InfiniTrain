@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -13,6 +14,34 @@ template <typename HookType> class HookHandleImpl;
 
 namespace infini_train::autograd {
 
+class FunctionCtx {
+public:
+    FunctionCtx();
+
+    void SaveForBackward(const std::vector<std::shared_ptr<Tensor>> &tensors);
+
+    const std::vector<std::shared_ptr<Tensor>> &saved_tensors() const;
+
+    void MarkNonDifferentiable(const std::vector<std::shared_ptr<Tensor>> &outputs);
+
+    const std::vector<bool> &needs_input_grad() const;
+
+private:
+    friend class Function;
+
+    void set_needs_input_grad(std::vector<bool> needs_input_grad);
+
+    void SaveVariables(const std::vector<std::shared_ptr<Tensor>> &outputs);
+    void ReleaseVariables();
+
+    bool IsNonDifferentiable(const std::shared_ptr<Tensor> &output) const;
+
+    std::vector<std::shared_ptr<Tensor>> to_save_;
+    std::vector<std::shared_ptr<Tensor>> saved_tensors_;
+    std::vector<bool> needs_input_grad_;
+    std::vector<Tensor *> non_differentiable_;
+};
+
 class Function : public std::enable_shared_from_this<Function> {
 public:
     template <typename HookType> using FunctionHookHandleImpl = infini_train::HookHandleImpl<HookType>;
@@ -23,14 +52,14 @@ public:
 
     static constexpr char kUndefinedType[] = "Undefined";
 
-    Function() : type_(kUndefinedType) {}
-    explicit Function(const std::string &type) : type_(type) {}
+    Function();
+    explicit Function(const std::string &type);
 
-    virtual ~Function() = default;
+    virtual ~Function();
 
     virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) = 0;
     virtual void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                              const std::vector<std::shared_ptr<Tensor>> &output_tensors) {}
+                              const std::vector<std::shared_ptr<Tensor>> &output_tensors);
     virtual std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) = 0;
 
     std::vector<std::shared_ptr<Tensor>> Apply(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
@@ -43,11 +72,10 @@ public:
     std::shared_ptr<infini_train::HookHandle> RegisterBackwardPreHook(FunctionPreHook hook);
     std::shared_ptr<infini_train::HookHandle> RegisterBackwardPostHook(FunctionPostHook hook);
 
-    const std::string &type() const { return type_; }
+    const std::string &type() const;
 
 protected:
-    std::vector<std::shared_ptr<Tensor>> saved_tensors_;
-    std::vector<bool> needs_input_grad_;
+    FunctionCtx ctx_;
 
 private:
     std::vector<std::pair<std::shared_ptr<Function>, int>> next_functions_;

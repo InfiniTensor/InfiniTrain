@@ -21,13 +21,13 @@ void Gather::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
     const auto &input = input_tensors[0];
     const auto &index = input_tensors[1];
     input_dims_ = input->Dims();
-    saved_tensors_ = {index};
+    ctx_.SaveForBackward({index});
 }
 
 std::vector<std::shared_ptr<Tensor>> Gather::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
-    const auto &index = saved_tensors_[0];
+    const auto &index = ctx_.saved_tensors()[0];
 
     auto device = grad_outputs[0]->GetDevice();
     auto kernel = Dispatcher::Instance().GetKernel({device.type(), "GatherBackward"});
