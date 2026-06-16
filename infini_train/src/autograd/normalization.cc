@@ -18,26 +18,29 @@ std::vector<std::shared_ptr<Tensor>> LayerNorm::Forward(const std::vector<std::s
         = Dispatcher::Instance()
               .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
                   {device, "LayerNormForward"}, input, weight, bias, eps_);
-    saved_tensors_ = {mean, rstd};
-    return {output};
+    return {output, mean, rstd};
 }
 
 void LayerNorm::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                             const std::vector<std::shared_ptr<Tensor>> &) {
+                             const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+    CHECK_EQ(output_tensors.size(), 3);
     const auto &input = input_tensors[0];
     const auto &weight = input_tensors[1];
     const auto &bias = input_tensors[2];
-    saved_tensors_.insert(saved_tensors_.begin(), {input, weight, bias});
+    const auto &mean = output_tensors[1];
+    const auto &rstd = output_tensors[2];
+    ctx_.MarkNonDifferentiable({mean, rstd});
+    ctx_.SaveForBackward({input, weight, bias, mean, rstd});
 }
 
 std::vector<std::shared_ptr<Tensor>> LayerNorm::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(saved_tensors_.size(), 5);
-    const auto &input = saved_tensors_[0];
-    const auto &weight = saved_tensors_[1];
-    const auto &bias = saved_tensors_[2];
-    const auto &mean = saved_tensors_[3];
-    const auto &rstd = saved_tensors_[4];
-    CHECK_EQ(grad_outputs.size(), 1);
+    CHECK_EQ(ctx_.saved_tensors().size(), 5);
+    const auto &input = ctx_.saved_tensors()[0];
+    const auto &weight = ctx_.saved_tensors()[1];
+    const auto &bias = ctx_.saved_tensors()[2];
+    const auto &mean = ctx_.saved_tensors()[3];
+    const auto &rstd = ctx_.saved_tensors()[4];
+    CHECK_GE(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice().type();

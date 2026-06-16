@@ -27,6 +27,131 @@ using namespace infini_train;
 class AutogradForwardTest : public infini_train::test::InfiniTrainTest {};
 class AutogradBackwardTest : public infini_train::test::InfiniTrainTest {};
 
+class SaveOutputForBackwardFunction : public autograd::Function {
+public:
+    static constexpr char kType[] = "SaveOutputForBackwardFunction";
+
+    SaveOutputForBackwardFunction() : autograd::Function(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
+        const auto &input = input_tensors[0];
+        auto output = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());
+        output->CopyFrom(input);
+        return {output};
+    }
+
+    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
+                      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override {
+        ctx_.SaveForBackward({output_tensors[0]});
+    }
+
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
+        return {grad_outputs[0]};
+    }
+
+    const std::shared_ptr<Tensor> &saved_tensor() const { return ctx_.saved_tensors()[0]; }
+};
+
+class NeedsInputGradFunction : public autograd::Function {
+public:
+    static constexpr char kType[] = "NeedsInputGradFunction";
+
+    NeedsInputGradFunction() : autograd::Function(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
+        const auto &input = input_tensors[0];
+        auto output = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());
+        output->CopyFrom(input);
+        return {output};
+    }
+
+    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                      const std::vector<std::shared_ptr<Tensor>> &) override {
+        observed_needs_input_grad_ = ctx_.needs_input_grad();
+        ctx_.SaveForBackward({input_tensors[0]});
+    }
+
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
+        return {grad_outputs[0], nullptr};
+    }
+
+    const std::vector<bool> &observed_needs_input_grad() const { return observed_needs_input_grad_; }
+    const std::shared_ptr<Tensor> &saved_tensor() const { return ctx_.saved_tensors()[0]; }
+
+private:
+    std::vector<bool> observed_needs_input_grad_;
+};
+
+class MarkNonDifferentiableFunction : public autograd::Function {
+public:
+    static constexpr char kType[] = "MarkNonDifferentiableFunction";
+
+    MarkNonDifferentiableFunction() : autograd::Function(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
+        const auto &input = input_tensors[0];
+        auto differentiable = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());
+        auto non_differentiable = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());
+        differentiable->CopyFrom(input);
+        non_differentiable->CopyFrom(input);
+        return {differentiable, non_differentiable};
+    }
+
+    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
+                      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override {
+        ctx_.MarkNonDifferentiable({output_tensors[1]});
+    }
+
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
+        return {grad_outputs[0]};
+    }
+};
+
+TEST_P(AutogradForwardTest, SavedOutputIsPackedWithoutAutogradMeta) {
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
+    input->Fill(1.0f);
+
+    auto fn = std::make_shared<SaveOutputForBackwardFunction>();
+    auto outputs = fn->Apply({input});
+
+    ASSERT_EQ(outputs.size(), 1);
+    ASSERT_NE(fn->saved_tensor(), nullptr);
+    EXPECT_NE(fn->saved_tensor().get(), outputs[0].get());
+    EXPECT_EQ(fn->saved_tensor()->DataPtr(), outputs[0]->DataPtr());
+    EXPECT_FALSE(fn->saved_tensor()->requires_grad());
+    EXPECT_EQ(fn->saved_tensor()->grad_fn(), nullptr);
+}
+
+TEST_P(AutogradForwardTest, FunctionCtxNeedsInputGradAndSaveForBackward) {
+    auto requires_grad_input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
+    auto no_grad_input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), false);
+    requires_grad_input->Fill(1.0f);
+    no_grad_input->Fill(2.0f);
+
+    auto fn = std::make_shared<NeedsInputGradFunction>();
+    auto outputs = fn->Apply({requires_grad_input, no_grad_input});
+
+    ASSERT_EQ(outputs.size(), 1);
+    ASSERT_EQ(fn->observed_needs_input_grad().size(), 2);
+    EXPECT_TRUE(fn->observed_needs_input_grad()[0]);
+    EXPECT_FALSE(fn->observed_needs_input_grad()[1]);
+    EXPECT_EQ(fn->saved_tensor().get(), requires_grad_input.get());
+}
+
+TEST_P(AutogradForwardTest, MarkNonDifferentiableOutput) {
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
+    input->Fill(1.0f);
+
+    auto outputs = std::make_shared<MarkNonDifferentiableFunction>()->Apply({input});
+
+    ASSERT_EQ(outputs.size(), 2);
+    EXPECT_TRUE(outputs[0]->requires_grad());
+    EXPECT_NE(outputs[0]->grad_fn(), nullptr);
+    EXPECT_FALSE(outputs[1]->requires_grad());
+    EXPECT_EQ(outputs[1]->grad_fn(), nullptr);
+    EXPECT_TRUE(outputs[1]->is_leaf());
+}
+
 TEST_P(AutogradForwardTest, AddForward) {
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
     a->Fill(1.0f);
@@ -188,7 +313,11 @@ TEST_P(AutogradForwardTest, LayerNormForward) {
     auto bias = std::make_shared<Tensor>(std::vector<int64_t>{4}, DataType::kFLOAT32, GetDevice(), true);
     bias->Fill(0.0f);
     auto result = std::make_shared<autograd::LayerNorm>(1e-5f)->Apply({a, weight, bias});
-    EXPECT_EQ(result.size(), 1);
+    EXPECT_EQ(result.size(), 3);
+    EXPECT_FALSE(result[1]->requires_grad());
+    EXPECT_EQ(result[1]->grad_fn(), nullptr);
+    EXPECT_FALSE(result[2]->requires_grad());
+    EXPECT_EQ(result[2]->grad_fn(), nullptr);
 }
 
 TEST_P(AutogradForwardTest, LinearForward) {

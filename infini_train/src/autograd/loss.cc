@@ -19,13 +19,13 @@ void CrossEntropy::SetupContext(const std::vector<std::shared_ptr<Tensor>> &inpu
                                 const std::vector<std::shared_ptr<Tensor>> &) {
     const auto &input = input_tensors[0];
     const auto &target = input_tensors[1];
-    saved_tensors_ = {input, target};
+    ctx_.SaveForBackward({input, target});
 }
 
 std::vector<std::shared_ptr<Tensor>> CrossEntropy::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(saved_tensors_.size(), 2);
-    const auto &input = saved_tensors_[0];
-    const auto &target = saved_tensors_[1];
+    CHECK_EQ(ctx_.saved_tensors().size(), 2);
+    const auto &input = ctx_.saved_tensors()[0];
+    const auto &target = ctx_.saved_tensors()[1];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 

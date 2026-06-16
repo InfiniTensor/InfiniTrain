@@ -20,12 +20,26 @@ void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
                           const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
     const auto &input = input_tensors[0];
     const auto &weight = input_tensors[1];
+    // Cast saved tensors to forward compute dtype (output dtype) so backward
+    // computes in the same precision as forward, matching PyTorch's behavior.
 
-    bool need_input = needs_input_grad_.size() > 0 && needs_input_grad_[0];
-    bool need_weight = needs_input_grad_.size() > 1 && needs_input_grad_[1];
+    // FIXME: An extra cast (input/weight -> compute_dtype) is performed here because
+    // autocast runs before autograd. The correct approach is to adjust the ordering or
+    // integration of autocast and autograd so that autograd receives already-cast tensors,
+    // avoiding the redundant cast.
+
+    // FIXME: compute_dtype is not necessarily the dtype of output_tensor; it should be
+    // determined by autocast, not derived from output_tensors[0]->Dtype().
+    auto compute_dtype = output_tensors[0]->Dtype();
+    bool need_input = ctx_.needs_input_grad().size() > 0 && ctx_.needs_input_grad()[0];
+    bool need_weight = ctx_.needs_input_grad().size() > 1 && ctx_.needs_input_grad()[1];
+
+    auto cast = [&](const std::shared_ptr<Tensor> &t) {
+        return t->Dtype() == compute_dtype ? t : std::make_shared<Tensor>(t->To(compute_dtype));
+    };
 
     // grad_input needs weight, grad_weight needs input
-    saved_tensors_ = {need_weight ? input : nullptr, need_input ? weight : nullptr};
+    ctx_.SaveForBackward({need_weight ? cast(input) : nullptr, need_input ? cast(weight) : nullptr});
 
     transpose_ = true;
     bias_ = input_tensors.size() == 3;
@@ -35,16 +49,16 @@ void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
 }
 
 std::vector<std::shared_ptr<Tensor>> Linear::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(saved_tensors_.size(), 2);
-    const auto &input = saved_tensors_[0];
-    const auto &weight = saved_tensors_[1];
+    CHECK_EQ(ctx_.saved_tensors().size(), 2);
+    const auto &input = ctx_.saved_tensors()[0];
+    const auto &weight = ctx_.saved_tensors()[1];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    CHECK(!needs_input_grad_.empty()) << "needs_input_grad_ not populated in Linear::Backward";
-    bool need_grad_input = needs_input_grad_[0];
-    bool need_grad_weight = needs_input_grad_.size() > 1 && needs_input_grad_[1];
-    bool need_grad_bias = bias_ && needs_input_grad_.size() > 2 && needs_input_grad_[2];
+    CHECK(!ctx_.needs_input_grad().empty()) << "needs_input_grad not populated in Linear::Backward";
+    bool need_grad_input = ctx_.needs_input_grad()[0];
+    bool need_grad_weight = ctx_.needs_input_grad().size() > 1 && ctx_.needs_input_grad()[1];
+    bool need_grad_bias = bias_ && ctx_.needs_input_grad().size() > 2 && ctx_.needs_input_grad()[2];
 
     auto device = grad_output->GetDevice().type();
 
