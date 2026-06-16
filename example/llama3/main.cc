@@ -352,7 +352,7 @@ void Train(const nn::parallel::Rank &rank) {
             .save_dir = save_dir,
             .global_step = global_step,
             .consumed_batches = consumed_batches,
-            .last_lr = FLAGS_learning_rate,
+            .last_lr = optimizer->learning_rate(),
             .n_layer = model_config.n_layer,
             .n_head = model_config.n_head,
             .n_kv_head = model_config.n_kv_head,
