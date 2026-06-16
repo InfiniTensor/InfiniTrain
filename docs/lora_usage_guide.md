@@ -145,10 +145,13 @@ void LoadLoRAWeights(std::shared_ptr<Module> model,
 - `MergeLoRAWeights` 将 `W += (alpha / rank) * B @ A` 写回基础权重，并冻结 LoRA 参数。
 - `UnmergeLoRAWeights` 撤销一次已合并的 LoRA 增量，并恢复 LoRA 参数可训练。
 - `MergeAndUnload` 会先合并，再把 LoRA 模块替换回普通 `Linear` / TP Linear，并解冻返回模型参数。
-- `SaveLoRAWeights` 只保存名字包含 `lora_A` / `lora_B` 的参数。
+- `SaveLoRAWeights` 只保存名字包含 `lora_A` / `lora_B` 的参数；TP 下会先把分片参数 gather 成
+  full/unsharded tensor，再由主 TP rank 写文件。
 - LoRA 权重文件是二进制文件，包含 magic `"LORA"`、version `1`、tensor 名称、维度和 float 数据。
 - 加载前模型必须已经用相同目标层注入 LoRA；找不到的 LoRA 参数会打印 warning。
-- 加载时如果文件里的 tensor 和当前参数同形状，会直接拷贝；如果当前参数是 TP 分片，会按第一个不同维度用 `parallel::tp_rank` 切片后再拷贝。
+- 加载时如果输入 tensor 和当前参数同形状，会直接拷贝；如果当前参数是 TP 分片，会按当前 `tp_rank`
+  切片后再拷贝。`c_attn.lora_B` 会按 packed QKV 的 `[Q | K | V]` 布局特殊处理，加载为本 rank 的
+  `[Qi | Ki | Vi]`，和 attention QKV 权重加载方式保持一致。
 
 ### 统计和解析工具
 
@@ -175,7 +178,10 @@ ParseLoRATargetModules(const std::string &targets);
 如果模型用了 TP，不需要手动创建 `LoRAColumnParallelLinear` 或 `LoRARowParallelLinear`；
 只要正常调用 `GetLoRAModel(model, config)`，注入逻辑会根据基础层类型自动选择对应的 LoRA 实现。
 
-加载 LoRA 权重时，如果文件里保存的是完整 tensor，而当前模型在 TP 下只需要某个 rank 的分片，加载函数会自动按当前 `tp_rank` 切片。
+加载 LoRA 权重时，如果文件里保存的是完整 tensor，而当前模型在 TP 下只需要某个 rank 的分片，加载函数会自动按当前
+`tp_rank` 切片；attention 的 `c_attn.lora_B` 会按 Q/K/V 三段分别切片后再拼接。
+保存 LoRA 权重时，文件里的 tensor 默认也是完整 tensor；attention 的 `c_attn.lora_B` 会从各 rank 的
+`[Qi | Ki | Vi]` 还原成 `[Q | K | V]` 后写入。
 
 ## 命令行示例
 
@@ -294,8 +300,10 @@ ctest --test-dir build -R LoRATest --output-on-failure
 - 直接用 `GetLoRAModel` 就好；现在没有单独的 `LoRAModel` 类，也没有 `lora_model.h`。
 - `LoRAConfig` 先默认创建再填字段；如果想一行构造，需要传完整的 4 个参数。
 - 保存和加载传的是具体文件名，比如 `gpt2_lora.bin`，不是目录。
-- LoRA 文件只存 `lora_A` / `lora_B`，不会保存基础模型权重。
-- TP 运行时加载 LoRA 权重，如果文件里是完整 tensor、当前 rank 只需要分片，加载函数会自动按当前 `tp_rank` 切一段。
+- LoRA 文件只存 `lora_A` / `lora_B`，不会保存基础模型权重；TP 下文件里保存的是可移植的完整 tensor，
+  不是某个 rank 的 local shard。
+- TP 运行时加载 LoRA 权重，如果文件里是完整 tensor、当前 rank 只需要分片，加载函数会自动按当前 `tp_rank`
+  切片；`c_attn.lora_B` 会按 Q/K/V 三段分别切片后再拼接。
 - `MergeLoRAWeights` 适合推理前用；如果还要继续训练，先调用 `UnmergeLoRAWeights`。
 - `MergeAndUnload` 会把 LoRA 模块变回普通 Linear，之后模型里就没有 `lora_A` / `lora_B` 了。
 - 现在一次只支持一套 LoRA adapter，不支持多个 adapter 叠加。

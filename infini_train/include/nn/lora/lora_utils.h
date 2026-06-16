@@ -18,6 +18,18 @@ class Module;
 
 namespace infini_train::nn::lora {
 
+namespace detail {
+
+// Internal helper for packed QKV tensors stored as [Q | K | V] along dim 0.
+std::shared_ptr<Tensor> SlicePackedQKVRowsForTensorParallel(const std::shared_ptr<Tensor> &full_tensor, int64_t q_rows,
+                                                            int tp_rank, int tp_size);
+
+// Internal helper for TP-gathered packed QKV shards stored rank-major as [Q_i | K_i | V_i].
+std::shared_ptr<Tensor> RestorePackedQKVRowsFromTensorParallel(const std::shared_ptr<Tensor> &gathered_tensor,
+                                                               int64_t q_rows, int tp_size);
+
+} // namespace detail
+
 /**
  * Apply LoRA to a model (PEFT-style injection).
  *
@@ -88,23 +100,29 @@ void UnmergeLoRAWeights(std::shared_ptr<Module> model);
 std::shared_ptr<Module> MergeAndUnload(std::shared_ptr<Module> model);
 
 /**
- * Return a state dict containing only LoRA parameters.
+ * Return a state dict containing only LoRA parameters from the current model.
+ *
+ * Under TP this returns the current rank's local shards for sharded LoRA tensors.
+ * Use SaveLoRAWeights() for a portable adapter file with full/unsharded tensors.
  */
 std::unordered_map<std::string, std::shared_ptr<Tensor>> LoRAStateDict(const std::shared_ptr<Module> &model);
 
 /**
- * Load LoRA parameters from a state dict.
+ * Load LoRA parameters from a state dict. Full tensors are sliced for TP-local
+ * parameters when the current model stores shards.
  */
 void LoadLoRAStateDict(std::shared_ptr<Module> model,
                        const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict);
 
 /**
- * Save only LoRA parameters to file.
+ * Save only LoRA parameters to file. TP-sharded LoRA tensors are exported as
+ * full/unsharded tensors so the file can be loaded with a different TP rank.
  */
 void SaveLoRAWeights(const std::shared_ptr<Module> &model, const std::string &filepath);
 
 /**
- * Load LoRA parameters from file.
+ * Load LoRA parameters from file. Packed QKV LoRA-B tensors are split as
+ * [Qi | Ki | Vi] for the current TP rank.
  */
 void LoadLoRAWeights(std::shared_ptr<Module> model, const std::string &filepath);
 
