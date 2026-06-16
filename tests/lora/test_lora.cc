@@ -30,6 +30,48 @@ static float TensorSum(const std::shared_ptr<Tensor> &t) {
     return cpu->EigenMatrix().sum();
 }
 
+static float RowValue(int64_t row, int64_t col) { return static_cast<float>(row * 100 + col); }
+
+static std::shared_ptr<Tensor> MakeRowLabeledTensor(int64_t rows, int64_t cols, Device device) {
+    auto cpu_tensor = std::make_shared<Tensor>(std::vector<int64_t>{rows, cols}, DataType::kFLOAT32,
+                                               Device(Device::DeviceType::kCPU, 0));
+    auto matrix = cpu_tensor->EigenMatrix();
+    for (int64_t row = 0; row < rows; ++row) {
+        for (int64_t col = 0; col < cols; ++col) { matrix(row, col) = RowValue(row, col); }
+    }
+
+    if (device.IsCPU()) {
+        return cpu_tensor;
+    }
+
+    auto device_tensor = std::make_shared<Tensor>(std::vector<int64_t>{rows, cols}, DataType::kFLOAT32, device);
+    device_tensor->CopyFrom(cpu_tensor);
+    return device_tensor;
+}
+
+static std::shared_ptr<Tensor> ToCpuTensor(const std::shared_ptr<Tensor> &tensor) {
+    if (tensor->GetDevice().IsCPU()) {
+        return tensor;
+    }
+
+    auto cpu_tensor = std::make_shared<Tensor>(tensor->Dims(), tensor->Dtype(), Device(Device::DeviceType::kCPU, 0));
+    cpu_tensor->CopyFrom(tensor);
+    return cpu_tensor;
+}
+
+static void ExpectRows(const std::shared_ptr<Tensor> &tensor, const std::vector<int64_t> &source_rows) {
+    ASSERT_EQ(tensor->Dims().size(), 2);
+    ASSERT_EQ(tensor->Dims()[0], static_cast<int64_t>(source_rows.size()));
+
+    auto cpu_tensor = ToCpuTensor(tensor);
+    auto matrix = cpu_tensor->EigenMatrix();
+    for (int64_t row = 0; row < static_cast<int64_t>(source_rows.size()); ++row) {
+        for (int64_t col = 0; col < tensor->Dims()[1]; ++col) {
+            EXPECT_FLOAT_EQ(matrix(row, col), RowValue(source_rows[row], col));
+        }
+    }
+}
+
 TEST_P(LoRATest, LoRAConfigScaling) {
     LoRAConfig config;
     config.rank = 8;
@@ -37,6 +79,33 @@ TEST_P(LoRATest, LoRAConfigScaling) {
 
     float expected_scaling = 16.0f / 8.0f;
     EXPECT_EQ(config.Scaling(), expected_scaling);
+}
+
+TEST_P(LoRATest, PackedQKVShardGPTStyle) {
+    auto full_qkv = MakeRowLabeledTensor(/*rows=*/12, /*cols=*/3, GetDevice());
+    auto shard = infini_train::nn::lora::detail::SlicePackedQKVRowsForTensorParallel(full_qkv, /*q_rows=*/4,
+                                                                                     /*tp_rank=*/1, /*tp_size=*/2);
+
+    EXPECT_EQ(shard->Dims(), (std::vector<int64_t>{6, 3}));
+    ExpectRows(shard, {2, 3, 6, 7, 10, 11});
+}
+
+TEST_P(LoRATest, PackedQKVShardGQAStyle) {
+    auto full_qkv = MakeRowLabeledTensor(/*rows=*/16, /*cols=*/2, GetDevice());
+    auto shard = infini_train::nn::lora::detail::SlicePackedQKVRowsForTensorParallel(full_qkv, /*q_rows=*/8,
+                                                                                     /*tp_rank=*/2, /*tp_size=*/4);
+
+    EXPECT_EQ(shard->Dims(), (std::vector<int64_t>{4, 2}));
+    ExpectRows(shard, {4, 5, 10, 14});
+}
+
+TEST_P(LoRATest, PackedQKVRestoreFromTPGather) {
+    auto rank_major_qkv = MakeRowLabeledTensor(/*rows=*/12, /*cols=*/3, GetDevice());
+    auto restored = infini_train::nn::lora::detail::RestorePackedQKVRowsFromTensorParallel(rank_major_qkv, /*q_rows=*/4,
+                                                                                           /*tp_size=*/2);
+
+    EXPECT_EQ(restored->Dims(), (std::vector<int64_t>{12, 3}));
+    ExpectRows(restored, {0, 1, 6, 7, 2, 3, 8, 9, 4, 5, 10, 11});
 }
 
 TEST_P(LoRATest, LoRAConfigShouldApply) {
