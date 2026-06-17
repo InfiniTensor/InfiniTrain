@@ -15,7 +15,7 @@ std::vector<std::shared_ptr<Tensor>> TopKForward(const std::shared_ptr<Tensor> &
                                                  bool largest, bool sorted) {
     CHECK(input->Dtype() == DataType::kFLOAT32) << "CPU TopKForward currently supports float32 only";
     CHECK_GE(input->Dims().size(), 1);
-    (void)sorted;
+    CHECK(sorted) << "TopK currently only supports sorted=true";
 
     const auto &dims = input->Dims();
     if (dim < 0) {

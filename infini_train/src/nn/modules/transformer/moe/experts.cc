@@ -42,19 +42,19 @@ std::vector<std::shared_ptr<Tensor>> SequentialMLP::Forward(const std::vector<st
     std::vector<std::shared_ptr<Tensor>> expert_outputs;
     int64_t start = 0;
     for (int64_t expert_idx = 0; expert_idx < num_local_experts_; ++expert_idx) {
-        const int64_t num_tokens_for_expert = dispatch.metadata.tokens_per_expert_host[expert_idx];
+        const int64_t num_tokens_for_expert = dispatch.metadata.tokens_per_expert[expert_idx];
         const int64_t end = start + num_tokens_for_expert;
         if (num_tokens_for_expert == 0) {
             start = end;
             continue;
         }
 
-        auto expert_input = dispatch.permuted_hidden_states->Slice(0, start, end);
+        auto expert_input = dispatch.permuted_input->Slice(0, start, end);
         auto expert_name = std::string(kExpertNamePrefix) + std::to_string(expert_idx);
         expert_outputs.push_back((*modules_.at(expert_name))({expert_input})[0]);
         start = end;
     }
-    CHECK_EQ(start, dispatch.permuted_hidden_states->Dims()[0]);
+    CHECK_EQ(start, dispatch.permuted_input->Dims()[0]);
     CHECK(!expert_outputs.empty()) << "No tokens were dispatched to any local expert";
 
     auto permuted_expert_output
