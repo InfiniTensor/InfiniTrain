@@ -77,47 +77,39 @@ PermutationMetadata BuildPermutationMetadata(const std::shared_ptr<Tensor> &rout
     const auto *routing_map_ptr = static_cast<const bool *>(routing_map_cpu->DataPtr());
 
     std::vector<int64_t> sorted_indices_host;
-    std::vector<int64_t> route_indices_host;
-    std::vector<int64_t> tokens_per_expert_host;
+    std::vector<int64_t> selected_probs_indices_host;
+    std::vector<int64_t> tokens_per_expert;
     sorted_indices_host.reserve(routing_map->NumElements());
-    route_indices_host.reserve(routing_map->NumElements());
-    tokens_per_expert_host.reserve(num_experts);
+    selected_probs_indices_host.reserve(routing_map->NumElements());
+    tokens_per_expert.reserve(num_experts);
 
     for (int64_t expert_idx = 0; expert_idx < num_experts; ++expert_idx) {
         int64_t tokens_for_expert = 0;
         for (int64_t token_idx = 0; token_idx < num_tokens; ++token_idx) {
             if (routing_map_ptr[token_idx * num_experts + expert_idx]) {
                 sorted_indices_host.push_back(token_idx);
-                route_indices_host.push_back(token_idx * num_experts + expert_idx);
+                selected_probs_indices_host.push_back(token_idx * num_experts + expert_idx);
                 ++tokens_for_expert;
             }
         }
-        tokens_per_expert_host.push_back(tokens_for_expert);
+        tokens_per_expert.push_back(tokens_for_expert);
     }
 
     const int64_t num_dispatched_tokens = static_cast<int64_t>(sorted_indices_host.size());
     auto sorted_indices_cpu
         = std::make_shared<Tensor>(std::vector<int64_t>{num_dispatched_tokens}, DataType::kINT64, Device());
-    auto route_indices_cpu
+    auto selected_probs_indices_cpu
         = std::make_shared<Tensor>(std::vector<int64_t>{num_dispatched_tokens}, DataType::kINT64, Device());
-    auto gather_indices_cpu
+    auto expanded_sorted_indices_cpu
         = std::make_shared<Tensor>(std::vector<int64_t>{num_dispatched_tokens, 1}, DataType::kINT64, Device());
-    auto tokens_per_expert_cpu
-        = std::make_shared<Tensor>(std::vector<int64_t>{num_experts}, DataType::kINT64, Device());
-
     auto *sorted_indices_ptr = static_cast<int64_t *>(sorted_indices_cpu->DataPtr());
-    auto *route_indices_ptr = static_cast<int64_t *>(route_indices_cpu->DataPtr());
-    auto *gather_indices_ptr = static_cast<int64_t *>(gather_indices_cpu->DataPtr());
-    auto *tokens_per_expert_ptr = static_cast<int64_t *>(tokens_per_expert_cpu->DataPtr());
+    auto *selected_probs_indices_ptr = static_cast<int64_t *>(selected_probs_indices_cpu->DataPtr());
+    auto *expanded_sorted_indices_ptr = static_cast<int64_t *>(expanded_sorted_indices_cpu->DataPtr());
     for (int64_t idx = 0; idx < num_dispatched_tokens; ++idx) {
         sorted_indices_ptr[idx] = sorted_indices_host[idx];
-        route_indices_ptr[idx] = route_indices_host[idx];
-        gather_indices_ptr[idx] = sorted_indices_host[idx];
+        selected_probs_indices_ptr[idx] = selected_probs_indices_host[idx];
+        expanded_sorted_indices_ptr[idx] = sorted_indices_host[idx];
     }
-    for (int64_t expert_idx = 0; expert_idx < num_experts; ++expert_idx) {
-        tokens_per_expert_ptr[expert_idx] = tokens_per_expert_host[expert_idx];
-    }
-
     auto to_device = [&](const std::shared_ptr<Tensor> &cpu_tensor) -> std::shared_ptr<Tensor> {
         if (routing_map->GetDevice().type() == Device::DeviceType::kCPU) {
             return cpu_tensor;
@@ -125,54 +117,52 @@ PermutationMetadata BuildPermutationMetadata(const std::shared_ptr<Tensor> &rout
         return std::make_shared<Tensor>(cpu_tensor->To(routing_map->GetDevice()));
     };
 
-    return {to_device(sorted_indices_cpu), to_device(gather_indices_cpu), to_device(route_indices_cpu),
-            to_device(tokens_per_expert_cpu), tokens_per_expert_host};
+    return {to_device(sorted_indices_cpu), to_device(expanded_sorted_indices_cpu),
+            to_device(selected_probs_indices_cpu), tokens_per_expert};
 }
 
-PermutationResult Permute(const std::shared_ptr<Tensor> &hidden_states_2d,
-                          const std::shared_ptr<Tensor> &routing_probs_2d,
-                          const std::shared_ptr<Tensor> &routing_map_2d) {
-    CHECK_EQ(hidden_states_2d->Dims().size(), 2);
-    CHECK(routing_probs_2d->Dims() == routing_map_2d->Dims());
-    CHECK(routing_map_2d->Dtype() == DataType::kBOOL);
+PermutationResult Permute(const std::shared_ptr<Tensor> &tokens, const std::shared_ptr<Tensor> &probs,
+                          const std::shared_ptr<Tensor> &routing_map) {
+    CHECK_EQ(tokens->Dims().size(), 2);
+    CHECK(probs->Dims() == routing_map->Dims());
+    CHECK(routing_map->Dtype() == DataType::kBOOL);
 
-    const int64_t hidden_size = hidden_states_2d->Dims()[1];
-    auto metadata = BuildPermutationMetadata(routing_map_2d);
+    const int64_t hidden_size = tokens->Dims()[1];
+    auto metadata = BuildPermutationMetadata(routing_map);
     const int64_t num_dispatched_tokens = metadata.sorted_indices->Dims()[0];
 
-    std::shared_ptr<Tensor> permuted_hidden_states;
+    std::shared_ptr<Tensor> permuted_input;
     std::shared_ptr<Tensor> permuted_probs;
     if (num_dispatched_tokens == 0) {
-        permuted_hidden_states = std::make_shared<Tensor>(std::vector<int64_t>{0, hidden_size},
-                                                          hidden_states_2d->Dtype(), hidden_states_2d->GetDevice());
-        permuted_probs = std::make_shared<Tensor>(std::vector<int64_t>{0}, routing_probs_2d->Dtype(),
-                                                  routing_probs_2d->GetDevice());
+        permuted_input
+            = std::make_shared<Tensor>(std::vector<int64_t>{0, hidden_size}, tokens->Dtype(), tokens->GetDevice());
+        permuted_probs = std::make_shared<Tensor>(std::vector<int64_t>{0}, probs->Dtype(), probs->GetDevice());
     } else {
-        auto gather_indices = metadata.gather_indices;
+        auto expanded_sorted_indices = metadata.expanded_sorted_indices;
         if (hidden_size != 1) {
-            gather_indices = metadata.gather_indices->RepeatInterleave(hidden_size, 1);
+            expanded_sorted_indices = metadata.expanded_sorted_indices->RepeatInterleave(hidden_size, 1);
         }
-        permuted_hidden_states = hidden_states_2d->Gather(0, gather_indices);
-        permuted_probs = routing_probs_2d->View({static_cast<int64_t>(routing_probs_2d->NumElements())})
-                             ->Gather(0, metadata.route_indices);
+        permuted_input = tokens->Gather(0, expanded_sorted_indices);
+        permuted_probs
+            = probs->View({static_cast<int64_t>(probs->NumElements())})->Gather(0, metadata.selected_probs_indices);
     }
 
-    return {permuted_hidden_states, permuted_probs, metadata};
+    return {permuted_input, permuted_probs, metadata};
 }
 
-std::shared_ptr<Tensor> Unpermute(const std::shared_ptr<Tensor> &permuted_hidden_states,
+std::shared_ptr<Tensor> Unpermute(const std::shared_ptr<Tensor> &permuted_tokens,
                                   const std::shared_ptr<Tensor> &permuted_probs, const PermutationMetadata &metadata,
                                   const std::vector<int64_t> &restore_shape) {
-    CHECK_EQ(permuted_hidden_states->Dims().size(), 2);
+    CHECK_EQ(permuted_tokens->Dims().size(), 2);
     CHECK_EQ(permuted_probs->Dims().size(), 1);
-    CHECK_EQ(permuted_hidden_states->Dims()[0], permuted_probs->Dims()[0]);
+    CHECK_EQ(permuted_tokens->Dims()[0], permuted_probs->Dims()[0]);
     CHECK_EQ(restore_shape.size(), 2);
 
-    auto weighted = permuted_hidden_states * permuted_probs->View({permuted_probs->Dims()[0], 1});
-    auto scatter_indices = metadata.gather_indices;
+    auto weighted = permuted_tokens * permuted_probs->View({permuted_probs->Dims()[0], 1});
+    auto scatter_indices = metadata.expanded_sorted_indices;
     const int64_t hidden_size = restore_shape[1];
     if (hidden_size != 1) {
-        scatter_indices = metadata.gather_indices->RepeatInterleave(hidden_size, 1);
+        scatter_indices = metadata.expanded_sorted_indices->RepeatInterleave(hidden_size, 1);
     }
     return std::make_shared<autograd::ScatterAdd>(0, restore_shape)->Apply({weighted, scatter_indices})[0];
 }

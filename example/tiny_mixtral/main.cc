@@ -26,7 +26,7 @@ DEFINE_uint32(micro_batch_size, 4, "micro batch size per training step");
 DEFINE_uint32(global_batch_size, 4, "global batch size across gradient accumulation and data parallelism");
 DEFINE_uint32(sequence_length, 64, "sequence length");
 DEFINE_uint32(num_iteration, 10, "number of training iterations");
-DEFINE_double(learning_rate, 1e-4, "SGD learning rate");
+DEFINE_double(learning_rate, 1e-4, "Adam learning rate");
 DEFINE_string(llmc_filepath, "",
               "optional PyTorch-generated tiny Mixtral LLMC model file path to load before training");
 DEFINE_string(device, "cpu", "Training device: cpu or cuda.");
@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
 
     auto loss_fn = std::make_shared<infini_train::nn::CrossEntropyLoss>();
     auto optimizer
-        = infini_train::optimizers::SGD::Create(static_cast<float>(FLAGS_learning_rate))(model->Parameters());
+        = infini_train::optimizers::Adam::Create(static_cast<float>(FLAGS_learning_rate))(model->Parameters());
 
     auto device_impl = infini_train::core::GetDeviceGuardImpl(train_device.type());
     std::vector<double> step_duration_ms;

@@ -205,6 +205,7 @@ TEST_P(TransformerModuleTest, MoELayerTop1) {
     config.moe_config->num_experts = 2;
     config.moe_config->router_topk = 1;
     config.moe_config->router_pre_softmax = true;
+    config.moe_config->moe_ffn_hidden_size = 64;
 
     auto moe = std::make_shared<nn::moe::MoELayer>(config);
     moe->To(GetDevice());

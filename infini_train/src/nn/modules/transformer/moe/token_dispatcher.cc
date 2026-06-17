@@ -44,9 +44,9 @@ MoEAllGatherTokenDispatcher::DispatchPreprocess(const std::shared_ptr<Tensor> &t
     CHECK_EQ(probs->NumElements(), static_cast<size_t>(num_tokens_ * num_local_experts_));
 
     routing_map_ = routing_map->View({num_tokens_, num_local_experts_});
-    auto hidden_states_2d = tokens->View({num_tokens_, hidden_size_});
+    auto tokens_2d = tokens->View({num_tokens_, hidden_size_});
     auto probs_2d = probs->View({num_tokens_, num_local_experts_});
-    return {hidden_states_2d, probs_2d};
+    return {tokens_2d, probs_2d};
 }
 
 std::vector<std::shared_ptr<Tensor>>

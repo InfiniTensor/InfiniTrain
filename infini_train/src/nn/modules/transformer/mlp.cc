@@ -11,6 +11,7 @@
 #include "infini_train/include/nn/modules/activations.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
+#include "infini_train/include/nn/modules/transformer/moe/moe_utils.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
@@ -37,9 +38,11 @@ MLP::MLP(const TransformerConfig &config) : CloneableModule(kType) {
     // Round up to multiple_of
     ffn_hidden = (ffn_hidden + config.multiple_of - 1) / config.multiple_of * config.multiple_of;
 
-    if (config.ffn_type == FFNType::kMoE && config.moe_config.has_value()
-        && config.moe_config->moe_ffn_hidden_size > 0) {
-        ffn_hidden = config.moe_config->moe_ffn_hidden_size;
+    if (config.ffn_type == FFNType::kMoE) {
+        const auto &moe_config = moe::RequireMoEConfig(config);
+        CHECK_GT(moe_config.moe_ffn_hidden_size, 0);
+
+        ffn_hidden = moe_config.moe_ffn_hidden_size;
     }
     CHECK_GT(ffn_hidden, 0);
 
