@@ -4,6 +4,7 @@ option(USE_CUDA "Support NVIDIA CUDA" OFF)
 option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
 option(USE_NCCL "Build project for distributed running" ON)
+option(USE_INFINIOPS "Use InfiniOps as an optional kernel provider" OFF)
 option(BUILD_TEST "Build InfiniTrain tests" OFF)
 
 project(infini_train VERSION 0.6.0 LANGUAGES CXX)
@@ -53,6 +54,31 @@ include_directories(${PROJECT_SOURCE_DIR}/third_party/eigen)
 
 include_directories(${PROJECT_SOURCE_DIR})
 
+if(USE_INFINIOPS)
+  if(NOT USE_CUDA)
+    message(FATAL_ERROR "USE_INFINIOPS=ON currently requires USE_CUDA=ON")
+  endif()
+
+  add_compile_definitions(USE_INFINIOPS=1)
+
+  set(INFINIOPS_SOURCE_DIR "${PROJECT_SOURCE_DIR}/third_party/InfiniOps")
+  if(NOT EXISTS "${INFINIOPS_SOURCE_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR
+      "USE_INFINIOPS=ON requires InfiniOps under third_party/InfiniOps. "
+      "Run: git submodule update --init third_party/InfiniOps")
+  endif()
+
+  set(WITH_CPU OFF CACHE BOOL "Enable InfiniOps CPU backend" FORCE)
+  set(WITH_NVIDIA ON CACHE BOOL "Enable InfiniOps NVIDIA backend" FORCE)
+  add_subdirectory(${INFINIOPS_SOURCE_DIR} ${CMAKE_BINARY_DIR}/third_party/InfiniOps EXCLUDE_FROM_ALL)
+  if(NOT TARGET infiniops)
+    message(FATAL_ERROR "InfiniOps third-party project did not define target `infiniops`")
+  endif()
+  if(NOT TARGET InfiniOps::infiniops)
+    add_library(InfiniOps::infiniops ALIAS infiniops)
+  endif()
+endif()
+
 if(PROFILE_MODE)
   add_compile_definitions(PROFILE_MODE=1)
 endif()
@@ -64,6 +90,9 @@ endif()
 # Framework core sources (*.cc), excluding cpu kernels (they are built separately)
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
 list(FILTER SRC EXCLUDE REGEX ".*kernels/cpu/.*")
+if(NOT USE_INFINIOPS)
+  list(FILTER SRC EXCLUDE REGEX ".*infini_train/src/core/kernel_provider/infiniops/.*\.cc$")
+endif()
 if(NOT USE_CUDA)
   list(FILTER SRC EXCLUDE REGEX ".*runtime/cuda/.*")
   list(FILTER SRC EXCLUDE REGEX ".*ccl/cuda/.*")
@@ -102,6 +131,10 @@ if(USE_CUDA)
 
   # Only compile CUDA kernels / cuda sources here (your original used src/*.cu)
   file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
+  if(USE_INFINIOPS)
+    list(FILTER CUDA_KERNELS EXCLUDE REGEX ".*infini_train/src/kernels/cuda/common/gemm_registry[.]cu$")
+    list(FILTER CUDA_KERNELS EXCLUDE REGEX ".*infini_train/src/kernels/cuda/elementwise_add_registry[.]cu$")
+  endif()
 
   add_library(infini_train_cuda_kernels STATIC ${CUDA_KERNELS})
   set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "75;80;90")
@@ -128,6 +161,9 @@ endif()
 # ------------------------------------------------------------------------------
 
 add_library(infini_train STATIC ${SRC})
+if(USE_INFINIOPS)
+  target_link_libraries(infini_train PUBLIC InfiniOps::infiniops)
+endif()
 target_link_libraries(infini_train
   PUBLIC
     glog
