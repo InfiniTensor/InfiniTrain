@@ -71,6 +71,7 @@ LOG_DIR="$(read_var LOG_DIR)";                  : "${LOG_DIR:=logs}"
 PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_logs}"
 COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
 RUN_CTEST="$(read_var RUN_CTEST)";              : "${RUN_CTEST:=true}"
+RUN_PROFILE_TEST="$(read_var RUN_PROFILE_TEST)";  : "${RUN_PROFILE_TEST:=true}"
 CKPT_ROOT_DIR="$(read_var CKPT_ROOT_DIR)";      : "${CKPT_ROOT_DIR:=/data1/ckpt}"
 
 mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
@@ -91,6 +92,31 @@ normalize_tag() {
     raw="${raw#"${raw%%[![:space:]]*}"}"
     raw="${raw%"${raw##*[![:space:]]}"}"
     printf '%s' "$raw"
+}
+
+cmake_bool_value() {
+    if [[ "$1" == "true" ]]; then
+        printf 'ON'
+    else
+        printf 'OFF'
+    fi
+}
+
+set_cmake_option() {
+    local cmd="$1"
+    local option="$2"
+    local value="$3"
+    local flag="-D${option}=${value}"
+
+    if [[ "$cmd" =~ (^|[[:space:]])-D${option}= ]]; then
+        cmd="$(printf '%s' "$cmd" | sed -E "s#(^|[[:space:]])-D${option}=[^[:space:]]+#\1${flag}#")"
+    elif [[ "$cmd" == *" .."* ]]; then
+        cmd="${cmd/ ../ ${flag} ..}"
+    else
+        cmd="${cmd} ${flag}"
+    fi
+
+    printf '%s' "$cmd"
 }
 
 if [[ -n "$ONLY_RUN_TAGS" ]]; then
@@ -316,8 +342,13 @@ args_string_for_test() {
 }
 
 # Run tests
-num_builds=$(jq '.builds | length' "$CONFIG_FILE")
+num_basic_compile_commands=$(jq '.basic_compile_commands | length' "$CONFIG_FILE")
 num_groups=$(jq '.test_groups | length' "$CONFIG_FILE")
+
+if [[ "$num_basic_compile_commands" -eq 0 ]]; then
+    echo "Error: No basic compile commands found in basic_compile_commands."
+    exit 1
+fi
 
 selected_group_count=0
 for ((gi=0; gi<num_groups; ++gi)); do
@@ -332,53 +363,68 @@ if [[ "$selected_group_count" -eq 0 ]]; then
     exit 1
 fi
 
-for ((id=0; id<num_builds; ++id)); do
-    build_id=$(jq -r ".builds[$id].id" "$CONFIG_FILE")
-    build_profile=$(jq -r ".builds[$id].profile" "$CONFIG_FILE")
-    build_cmake=$(jq -r ".builds[$id].cmd" "$CONFIG_FILE")
+for ((id=0; id<num_basic_compile_commands; ++id)); do
+    basic_compile_id=$(jq -r ".basic_compile_commands[$id].id" "$CONFIG_FILE")
+    basic_compile_cmake=$(jq -r ".basic_compile_commands[$id].cmd" "$CONFIG_FILE")
 
-    LAST_CMAKE_CMD="$build_cmake"
-
-    # always clean before another build
-    clean_build_dir
-    run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "build"
-    if [[ "$RUN_CTEST" == "true" && "$build_profile" != "true" ]]; then
-        run_and_log "run_ctest" "ctest_${build_id}" "no" "ctest"
-    fi
-
-    # profile flag for runs
-    profile_flag="no"
-    log_suffix=""
-    if [[ "$build_profile" == "true" ]]; then
-        profile_flag="yes"
-        log_suffix="_profile"
-    fi
-
-    for ((gi=0; gi<num_groups; ++gi)); do
-        group_tag=$(jq -r ".test_groups[$gi].tag" "$CONFIG_FILE")
-        if [[ ${#SELECTED_TAGS[@]} -gt 0 && -z "${SELECTED_TAGS[$group_tag]}" ]]; then
+    for build_profile in false true; do
+        if [[ "$build_profile" == "true" && "$RUN_PROFILE_TEST" != "true" ]]; then
             continue
         fi
 
-        num_tests=$(jq ".test_groups[$gi].tests | length" "$CONFIG_FILE")
-        echo -e "\033[1;36m[TEST GROUP] tag=${group_tag}, cases=${num_tests}\033[0m"
+        build_id="$basic_compile_id"
+        build_cmake="$basic_compile_cmake"
+        profile_flag="no"
+        log_suffix=""
 
-        for ((ti=0; ti<num_tests; ++ti)); do
-            test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
-            gpt2_arg_str="$(args_string_for_test "$gi" "$ti" "gpt2" "$test_id")"
-            llama3_arg_str="$(args_string_for_test "$gi" "$ti" "llama3" "$test_id")"
+        if [[ "$build_profile" == "true" ]]; then
+            build_id="${basic_compile_id}_profile"
+            profile_flag="yes"
+            log_suffix="_profile"
+        fi
 
-            # gpt2
-            gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
-            run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+        if [[ "$build_profile" == "true" ]]; then
+            build_cmake="$(set_cmake_option "$build_cmake" "BUILD_TEST" "OFF")"
+        else
+            build_cmake="$(set_cmake_option "$build_cmake" "BUILD_TEST" "$(cmake_bool_value "$RUN_CTEST")")"
+        fi
+        build_cmake="$(set_cmake_option "$build_cmake" "PROFILE_MODE" "$(cmake_bool_value "$build_profile")")"
 
-            # llama3
-            llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
-            run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+        LAST_CMAKE_CMD="$build_cmake"
+
+        # always clean before another build
+        clean_build_dir
+        run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "build"
+        if [[ "$RUN_CTEST" == "true" && "$build_profile" != "true" ]]; then
+            run_and_log "run_ctest" "ctest_${build_id}" "no" "ctest"
+        fi
+
+        for ((gi=0; gi<num_groups; ++gi)); do
+            group_tag=$(jq -r ".test_groups[$gi].tag" "$CONFIG_FILE")
+            if [[ ${#SELECTED_TAGS[@]} -gt 0 && -z "${SELECTED_TAGS[$group_tag]}" ]]; then
+                continue
+            fi
+
+            num_tests=$(jq ".test_groups[$gi].tests | length" "$CONFIG_FILE")
+            echo -e "\033[1;36m[TEST GROUP] tag=${group_tag}, cases=${num_tests}\033[0m"
+
+            for ((ti=0; ti<num_tests; ++ti)); do
+                test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
+                gpt2_arg_str="$(args_string_for_test "$gi" "$ti" "gpt2" "$test_id")"
+                llama3_arg_str="$(args_string_for_test "$gi" "$ti" "llama3" "$test_id")"
+
+                # gpt2
+                gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
+                run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+
+                # llama3
+                llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
+                run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+            done
+
+            # Clean checkpoints from previous run to avoid disk overflow and stale state
+            clean_checkpoints
         done
-
-        # Clean checkpoints from previous run to avoid disk overflow and stale state
-        clean_checkpoints
     done
 done
 
