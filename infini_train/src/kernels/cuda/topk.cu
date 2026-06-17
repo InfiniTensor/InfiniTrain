@@ -44,7 +44,7 @@ __global__ void TopKForwardKernel(const T *__restrict__ input, T *__restrict__ t
 std::vector<std::shared_ptr<Tensor>> TopKForward(const std::shared_ptr<Tensor> &input, int64_t topk, int64_t dim,
                                                  bool largest, bool sorted) {
     CHECK_GE(input->Dims().size(), 1);
-    (void)sorted;
+    CHECK(sorted) << "TopK currently only supports sorted=true";
     const auto &dims = input->Dims();
     if (dim < 0) {
         dim += static_cast<int64_t>(dims.size());
