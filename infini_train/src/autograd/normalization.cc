@@ -34,12 +34,13 @@ void LayerNorm::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_t
 }
 
 std::vector<std::shared_ptr<Tensor>> LayerNorm::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(ctx_.saved_tensors().size(), 5);
-    const auto &input = ctx_.saved_tensors()[0];
-    const auto &weight = ctx_.saved_tensors()[1];
-    const auto &bias = ctx_.saved_tensors()[2];
-    const auto &mean = ctx_.saved_tensors()[3];
-    const auto &rstd = ctx_.saved_tensors()[4];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 5);
+    const auto &input = saved_tensors[0];
+    const auto &weight = saved_tensors[1];
+    const auto &bias = saved_tensors[2];
+    const auto &mean = saved_tensors[3];
+    const auto &rstd = saved_tensors[4];
     CHECK_GE(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 

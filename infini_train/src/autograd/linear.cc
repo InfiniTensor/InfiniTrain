@@ -49,9 +49,10 @@ void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
 }
 
 std::vector<std::shared_ptr<Tensor>> Linear::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(ctx_.saved_tensors().size(), 2);
-    const auto &input = ctx_.saved_tensors()[0];
-    const auto &weight = ctx_.saved_tensors()[1];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 2);
+    const auto &input = saved_tensors[0];
+    const auto &weight = saved_tensors[1];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 

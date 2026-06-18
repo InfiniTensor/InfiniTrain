@@ -24,7 +24,8 @@ void Scatter::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_ten
 std::vector<std::shared_ptr<Tensor>> Scatter::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
-    const auto &indices = ctx_.saved_tensors()[0];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    const auto &indices = saved_tensors[0];
     auto device = grad_output->GetDevice().type();
     auto grad_values
         = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "ScatterBackward"}, grad_output, indices);

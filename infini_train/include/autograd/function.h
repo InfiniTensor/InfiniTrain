@@ -16,17 +16,43 @@ namespace infini_train::autograd {
 
 class FunctionCtx {
 public:
+    using SavedTensorPackHook = std::function<std::shared_ptr<void>(const std::shared_ptr<Tensor> &)>;
+    using SavedTensorUnpackHook = std::function<std::shared_ptr<Tensor>(const std::shared_ptr<void> &)>;
+
+    struct SavedTensorHooks {
+        SavedTensorPackHook pack;
+        SavedTensorUnpackHook unpack;
+    };
+
+    class SavedTensorHooksGuard {
+    public:
+        explicit SavedTensorHooksGuard(SavedTensorHooks hooks);
+        ~SavedTensorHooksGuard();
+
+        SavedTensorHooksGuard(const SavedTensorHooksGuard &) = delete;
+        SavedTensorHooksGuard &operator=(const SavedTensorHooksGuard &) = delete;
+
+    private:
+        size_t depth_ = 0;
+    };
+
     FunctionCtx();
 
     void SaveForBackward(const std::vector<std::shared_ptr<Tensor>> &tensors);
 
-    const std::vector<std::shared_ptr<Tensor>> &saved_tensors() const;
+    std::vector<std::shared_ptr<Tensor>> GetSavedTensors() const;
 
     void MarkNonDifferentiable(const std::vector<std::shared_ptr<Tensor>> &outputs);
 
     const std::vector<bool> &needs_input_grad() const;
 
 private:
+    struct SavedTensorEntry {
+        std::shared_ptr<Tensor> tensor;
+        std::shared_ptr<void> hook_state;
+        SavedTensorUnpackHook unpack;
+    };
+
     friend class Function;
 
     void set_needs_input_grad(std::vector<bool> needs_input_grad);
@@ -37,7 +63,7 @@ private:
     bool IsNonDifferentiable(const std::shared_ptr<Tensor> &output) const;
 
     std::vector<std::shared_ptr<Tensor>> to_save_;
-    std::vector<std::shared_ptr<Tensor>> saved_tensors_;
+    std::vector<SavedTensorEntry> saved_tensor_entries_;
     std::vector<bool> needs_input_grad_;
     std::vector<Tensor *> non_differentiable_;
 };
