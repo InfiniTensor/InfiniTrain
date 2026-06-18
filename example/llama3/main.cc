@@ -332,7 +332,8 @@ void Train(const nn::parallel::Rank &rank) {
                                                      .optimizer = optimizer,
                                                      .model_config = model_config,
                                                      .state = state,
-                                                     .load_optimizer_state = true});
+                                                     .load_optimizer_state = true,
+                                                     .lr_scheduler = scheduler});
 
     start_step = resume_result.global_step;
     size_t consumed_batches = resume_result.consumed_batches;
@@ -368,6 +369,7 @@ void Train(const nn::parallel::Rank &rank) {
             .rank = rank,
             .model = *model,
             .optimizer = *optimizer,
+            .lr_scheduler = scheduler.get(),
         });
     };
 

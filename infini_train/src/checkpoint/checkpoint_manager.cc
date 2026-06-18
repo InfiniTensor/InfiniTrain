@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <memory>
 #include <string>
 #include <vector>
@@ -38,7 +39,8 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
         }
     }
 
-    Checkpoint::Load(resume_dir, *args.model, args.optimizer.get(), args.state, args.load_optimizer_state);
+    Checkpoint::Load(resume_dir, *args.model, args.optimizer.get(), args.state, args.load_optimizer_state,
+                     args.lr_scheduler.get(), args.load_lr_scheduler_state);
 
     result.global_step = static_cast<int>(args.state.global_step);
 
@@ -88,7 +90,8 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
     state.sp_size = args.sp_size;
     state.pp_size = args.pp_size;
 
-    Checkpoint::Save(args.save_dir, args.model, &args.optimizer, state, args.save_optimizer_state);
+    Checkpoint::Save(args.save_dir, args.model, &args.optimizer, state, args.save_optimizer_state, args.lr_scheduler,
+                     args.save_lr_scheduler_state);
 
     const auto ckpt_end = std::chrono::high_resolution_clock::now();
     const double ckpt_ms = std::chrono::duration<double, std::milli>(ckpt_end - ckpt_start).count();
