@@ -83,7 +83,7 @@ DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 DEFINE_uint32(save_interval, 0, "save checkpoint every N steps; 0 disables saving");
 DEFINE_string(load, "", "checkpoint directory to resume from");
-DEFINE_string(save, "./checkpoints", "root directory used to store checkpoints");
+DEFINE_string(save, "", "root directory used to store checkpoints");
 DEFINE_uint32(max_checkpoint_keep, 3, "max number of checkpoint steps to keep");
 DEFINE_bool(save_optimizer_state, true, "whether optimizer state is persisted in checkpoints");
 // precision check
@@ -127,6 +127,22 @@ DEFINE_validator(zero_stage, [](const char *, int32_t value) { return value >= 0
 
 void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
+
+    {
+        if (rank.IsLastRank()) {
+            if (!FLAGS_save.empty() && FLAGS_save_interval == 0) {
+                LOG(FATAL) << "Invalid configuration: --save is set ('" << FLAGS_save
+                           << "'), but --save_interval is 0. "
+                           << "They must be set together.";
+            }
+
+            if (FLAGS_save.empty() && FLAGS_save_interval > 0) {
+                LOG(FATAL) << "Invalid configuration: --save_interval is set to " << FLAGS_save_interval
+                           << ", but --save is empty. "
+                           << "They must be set together.";
+            }
+        }
+    }
 
     // select the device
     Device device;
@@ -489,13 +505,15 @@ void Train(const nn::parallel::Rank &rank) {
             }
         }
 
-        if (FLAGS_save_interval > 0 && (step + 1) % FLAGS_save_interval == 0) {
-            std::filesystem::path step_dir
-                = std::filesystem::path(FLAGS_save) / std::format("checkpoint_step_{:06d}", step + 1);
-            if (rank.IsParallel()) {
-                step_dir /= std::format("rank_{:06d}", rank.GlobalRank());
+        if (!FLAGS_save.empty() && FLAGS_save_interval > 0) {
+            if ((step + 1) % FLAGS_save_interval == 0 || (step + 1) == FLAGS_num_iteration) {
+                std::filesystem::path step_dir
+                    = std::filesystem::path(FLAGS_save) / std::format("checkpoint_step_{:06d}", step + 1);
+                if (rank.IsParallel()) {
+                    step_dir /= std::format("rank_{:06d}", rank.GlobalRank());
+                }
+                save_checkpoint(step_dir, step + 1);
             }
-            save_checkpoint(step_dir, step + 1);
         }
     }
 
@@ -504,12 +522,6 @@ void Train(const nn::parallel::Rank &rank) {
         LOG(INFO) << "Saving LoRA weights to: " << FLAGS_lora_save_path;
         nn::lora::SaveLoRAWeights(model, FLAGS_lora_save_path);
     }
-
-    std::filesystem::path final_dir = std::filesystem::path(FLAGS_save) / "checkpoint_final";
-    if (rank.IsParallel()) {
-        final_dir /= std::format("rank_{:06d}", rank.GlobalRank());
-    }
-    save_checkpoint(final_dir, FLAGS_num_iteration);
 
 #ifdef PROFILE_MODE
     Profiler::Instance().Report("gpt2.report", Profiler::SortBy::DeviceTimePercentage);
