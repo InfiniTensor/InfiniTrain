@@ -1,10 +1,10 @@
 {
     "variables": {
         "BUILD_DIR": "../build",
-        "GPT2_INPUT_BIN": "/data/shared/InfiniTrain-dev/data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin",
-        "GPT2_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/gpt2/gpt2_124M.bin",
-        "LLAMA3_INPUT_BIN": "/data/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
-        "LLAMA3_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_fp32.bin",
+        "GPT2_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin",
+        "GPT2_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/gpt2/gpt2_124M.bin",
+        "LLAMA3_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
+        "LLAMA3_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_fp32.bin",
         "PROFILE_LOG_DIR": "./profile_logs",
         "LOG_DIR": "./logs",
         "CKPT_ROOT_DIR": "/data1/ckpt",
@@ -622,22 +622,22 @@
                     }
                 },
                 {
-                    "id": "ckpt_bf16",
+                    "id": "ckpt_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
                         "num_iteration": 50,
                         "save_interval": 10,
-                        "save": "@CKPT_ROOT_DIR@/bf16_no_resume"
+                        "save": "@CKPT_ROOT_DIR@/bfloat16_no_resume"
                     }
                 },
                 {
-                    "id": "ckpt_bf16_resume",
+                    "id": "ckpt_bfloat16_resume",
                     "args": {
                         "dtype": "bfloat16",
                         "num_iteration": 50,
                         "save_interval": 10,
-                        "load": "@CKPT_ROOT_DIR@/bf16_no_resume/checkpoint_step_000030",
-                        "save": "@CKPT_ROOT_DIR@/bf16_resume"
+                        "load": "@CKPT_ROOT_DIR@/bfloat16_no_resume/checkpoint_step_000030",
+                        "save": "@CKPT_ROOT_DIR@/bfloat16_resume"
                     }
                 },
                 {
