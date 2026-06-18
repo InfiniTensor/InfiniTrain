@@ -545,10 +545,11 @@ VocabParallelCrossEntropy::Backward(const std::vector<std::shared_ptr<Tensor>> &
     CHECK_EQ(grad_outputs.size(), 1);
 
     auto grad_output = grad_outputs[0];
-    auto softmax_local = ctx_.saved_tensors()[0];
-    auto target_mask = std::make_shared<Tensor>(ctx_.saved_tensors()[1]->To(softmax_local->Dtype()));
-    auto masked_target = ctx_.saved_tensors()[2];
-    auto valid_mask_local = ctx_.saved_tensors()[3];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    auto softmax_local = saved_tensors[0];
+    auto target_mask = std::make_shared<Tensor>(saved_tensors[1]->To(softmax_local->Dtype()));
+    auto masked_target = saved_tensors[2];
+    auto valid_mask_local = saved_tensors[3];
 
     auto device = grad_output->GetDevice().type();
     auto grad_input = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(

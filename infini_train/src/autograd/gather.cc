@@ -27,7 +27,8 @@ void Gather::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
 std::vector<std::shared_ptr<Tensor>> Gather::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
-    const auto &index = ctx_.saved_tensors()[0];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    const auto &index = saved_tensors[0];
 
     auto device = grad_outputs[0]->GetDevice();
     auto kernel = Dispatcher::Instance().GetKernel({device.type(), "GatherBackward"});

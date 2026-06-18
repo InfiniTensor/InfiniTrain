@@ -72,10 +72,11 @@ void Max::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors
 
 std::vector<std::shared_ptr<Tensor>> Max::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
-    CHECK_EQ(ctx_.saved_tensors().size(), 2);
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 2);
     const auto &grad_output = grad_outputs[0];
-    const auto &input = ctx_.saved_tensors()[0];
-    const auto &reduced = ctx_.saved_tensors()[1];
+    const auto &input = saved_tensors[0];
+    const auto &reduced = saved_tensors[1];
 
     auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MaxBackward"}, grad_output, input, reduced,
@@ -99,10 +100,11 @@ void Min::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors
 
 std::vector<std::shared_ptr<Tensor>> Min::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
-    CHECK_EQ(ctx_.saved_tensors().size(), 2);
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 2);
     const auto &grad_output = grad_outputs[0];
-    const auto &input = ctx_.saved_tensors()[0];
-    const auto &reduced = ctx_.saved_tensors()[1];
+    const auto &input = saved_tensors[0];
+    const auto &reduced = saved_tensors[1];
 
     auto device = input->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MinBackward"}, grad_output, input, reduced,

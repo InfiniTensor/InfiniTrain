@@ -49,7 +49,7 @@ public:
         return {grad_outputs[0]};
     }
 
-    const std::shared_ptr<Tensor> &saved_tensor() const { return ctx_.saved_tensors()[0]; }
+    std::shared_ptr<Tensor> GetSavedTensor() const { return ctx_.GetSavedTensors()[0]; }
 };
 
 class NeedsInputGradFunction : public autograd::Function {
@@ -76,7 +76,7 @@ public:
     }
 
     const std::vector<bool> &observed_needs_input_grad() const { return observed_needs_input_grad_; }
-    const std::shared_ptr<Tensor> &saved_tensor() const { return ctx_.saved_tensors()[0]; }
+    std::shared_ptr<Tensor> GetSavedTensor() const { return ctx_.GetSavedTensors()[0]; }
 
 private:
     std::vector<bool> observed_needs_input_grad_;
@@ -115,11 +115,11 @@ TEST_P(AutogradForwardTest, SavedOutputIsPackedWithoutAutogradMeta) {
     auto outputs = fn->Apply({input});
 
     ASSERT_EQ(outputs.size(), 1);
-    ASSERT_NE(fn->saved_tensor(), nullptr);
-    EXPECT_NE(fn->saved_tensor().get(), outputs[0].get());
-    EXPECT_EQ(fn->saved_tensor()->DataPtr(), outputs[0]->DataPtr());
-    EXPECT_FALSE(fn->saved_tensor()->requires_grad());
-    EXPECT_EQ(fn->saved_tensor()->grad_fn(), nullptr);
+    ASSERT_NE(fn->GetSavedTensor(), nullptr);
+    EXPECT_NE(fn->GetSavedTensor().get(), outputs[0].get());
+    EXPECT_EQ(fn->GetSavedTensor()->DataPtr(), outputs[0]->DataPtr());
+    EXPECT_FALSE(fn->GetSavedTensor()->requires_grad());
+    EXPECT_EQ(fn->GetSavedTensor()->grad_fn(), nullptr);
 }
 
 TEST_P(AutogradForwardTest, FunctionCtxNeedsInputGradAndSaveForBackward) {
@@ -135,7 +135,7 @@ TEST_P(AutogradForwardTest, FunctionCtxNeedsInputGradAndSaveForBackward) {
     ASSERT_EQ(fn->observed_needs_input_grad().size(), 2);
     EXPECT_TRUE(fn->observed_needs_input_grad()[0]);
     EXPECT_FALSE(fn->observed_needs_input_grad()[1]);
-    EXPECT_EQ(fn->saved_tensor().get(), requires_grad_input.get());
+    EXPECT_EQ(fn->GetSavedTensor().get(), requires_grad_input.get());
 }
 
 TEST_P(AutogradForwardTest, MarkNonDifferentiableOutput) {
@@ -150,6 +150,47 @@ TEST_P(AutogradForwardTest, MarkNonDifferentiableOutput) {
     EXPECT_FALSE(outputs[1]->requires_grad());
     EXPECT_EQ(outputs[1]->grad_fn(), nullptr);
     EXPECT_TRUE(outputs[1]->is_leaf());
+}
+
+TEST_P(AutogradForwardTest, FunctionCtxSavedTensorHooksPackAndUnpack) {
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
+    input->Fill(1.0f);
+
+    int pack_calls = 0;
+    int unpack_calls = 0;
+    std::shared_ptr<Tensor> packed_tensor;
+
+    autograd::FunctionCtx::SavedTensorHooks hooks;
+    hooks.pack = [&](const std::shared_ptr<Tensor> &tensor) -> std::shared_ptr<void> {
+        ++pack_calls;
+        packed_tensor = tensor;
+        EXPECT_NE(tensor, nullptr);
+        EXPECT_FALSE(tensor->requires_grad());
+        EXPECT_EQ(tensor->grad_fn(), nullptr);
+        return std::static_pointer_cast<void>(tensor);
+    };
+    hooks.unpack = [&](const std::shared_ptr<void> &state) -> std::shared_ptr<Tensor> {
+        ++unpack_calls;
+        return std::static_pointer_cast<Tensor>(state);
+    };
+
+    auto fn = std::make_shared<SaveOutputForBackwardFunction>();
+    std::vector<std::shared_ptr<Tensor>> outputs;
+    {
+        autograd::FunctionCtx::SavedTensorHooksGuard guard(std::move(hooks));
+        outputs = fn->Apply({input});
+    }
+
+    ASSERT_EQ(outputs.size(), 1);
+    EXPECT_EQ(pack_calls, 1);
+    EXPECT_EQ(unpack_calls, 0);
+    ASSERT_NE(packed_tensor, nullptr);
+    EXPECT_NE(packed_tensor.get(), outputs[0].get());
+    EXPECT_EQ(packed_tensor->DataPtr(), outputs[0]->DataPtr());
+
+    auto saved = fn->GetSavedTensor();
+    EXPECT_EQ(unpack_calls, 1);
+    EXPECT_EQ(saved.get(), packed_tensor.get());
 }
 
 TEST_P(AutogradForwardTest, AddForward) {

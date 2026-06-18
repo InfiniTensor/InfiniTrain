@@ -37,8 +37,9 @@ void Reciprocal::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_
 }
 
 std::vector<std::shared_ptr<Tensor>> Reciprocal::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(ctx_.saved_tensors().size(), 1);
-    const auto &input = ctx_.saved_tensors()[0];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 1);
+    const auto &input = saved_tensors[0];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
@@ -61,8 +62,9 @@ void Sin::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors
 }
 
 std::vector<std::shared_ptr<Tensor>> Sin::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(ctx_.saved_tensors().size(), 1);
-    const auto &input = ctx_.saved_tensors()[0];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 1);
+    const auto &input = saved_tensors[0];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
@@ -85,8 +87,9 @@ void Cos::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors
 }
 
 std::vector<std::shared_ptr<Tensor>> Cos::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(ctx_.saved_tensors().size(), 1);
-    const auto &input = ctx_.saved_tensors()[0];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 1);
+    const auto &input = saved_tensors[0];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
@@ -109,8 +112,9 @@ void Tanh::SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
 }
 
 std::vector<std::shared_ptr<Tensor>> Tanh::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(ctx_.saved_tensors().size(), 1);
-    const auto &output = ctx_.saved_tensors()[0];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 1);
+    const auto &output = saved_tensors[0];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
@@ -134,8 +138,9 @@ void Pow::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors
 }
 
 std::vector<std::shared_ptr<Tensor>> Pow::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(ctx_.saved_tensors().size(), 1);
-    const auto &input = ctx_.saved_tensors()[0];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 1);
+    const auto &input = saved_tensors[0];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
@@ -159,8 +164,9 @@ void Rsqrt::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tenso
 }
 
 std::vector<std::shared_ptr<Tensor>> Rsqrt::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(ctx_.saved_tensors().size(), 1);
-    const auto &input = ctx_.saved_tensors()[0];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 1);
+    const auto &input = saved_tensors[0];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
@@ -199,8 +205,9 @@ void Log::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors
 }
 
 std::vector<std::shared_ptr<Tensor>> Log::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(ctx_.saved_tensors().size(), 1);
-    const auto &input = ctx_.saved_tensors()[0];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 1);
+    const auto &input = saved_tensors[0];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
@@ -459,9 +466,10 @@ void Mul::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors
 }
 
 std::vector<std::shared_ptr<Tensor>> Mul::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(ctx_.saved_tensors().size(), 2);
-    const auto &a = ctx_.saved_tensors()[0];
-    const auto &b = ctx_.saved_tensors()[1];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 2);
+    const auto &a = saved_tensors[0];
+    const auto &b = saved_tensors[1];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
@@ -504,9 +512,10 @@ void Div::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors
 }
 
 std::vector<std::shared_ptr<Tensor>> Div::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(ctx_.saved_tensors().size(), 2);
-    const auto &a = ctx_.saved_tensors()[0];
-    const auto &b = ctx_.saved_tensors()[1];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 2);
+    const auto &a = saved_tensors[0];
+    const auto &b = saved_tensors[1];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 

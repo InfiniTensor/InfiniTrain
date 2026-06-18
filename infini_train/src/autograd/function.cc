@@ -17,6 +17,8 @@
 namespace infini_train::autograd {
 
 namespace {
+thread_local std::vector<FunctionCtx::SavedTensorHooks> tls_saved_tensor_hooks;
+
 std::shared_ptr<Tensor> ShallowCopyWithoutAutogradMeta(const std::shared_ptr<Tensor> &tensor) {
     if (!tensor) {
         return nullptr;
@@ -25,9 +27,39 @@ std::shared_ptr<Tensor> ShallowCopyWithoutAutogradMeta(const std::shared_ptr<Ten
 }
 } // namespace
 
+FunctionCtx::SavedTensorHooksGuard::SavedTensorHooksGuard(SavedTensorHooks hooks) {
+    CHECK(hooks.pack) << "Saved tensor pack hook must be set";
+    CHECK(hooks.unpack) << "Saved tensor unpack hook must be set";
+    tls_saved_tensor_hooks.push_back(std::move(hooks));
+    depth_ = tls_saved_tensor_hooks.size();
+}
+
+FunctionCtx::SavedTensorHooksGuard::~SavedTensorHooksGuard() {
+    if (tls_saved_tensor_hooks.empty()) {
+        return;
+    }
+    if (tls_saved_tensor_hooks.size() != depth_) {
+        LOG(WARNING) << "SavedTensorHooksGuard destroyed out of order";
+    }
+    tls_saved_tensor_hooks.pop_back();
+}
+
 FunctionCtx::FunctionCtx() = default;
 
-const std::vector<std::shared_ptr<Tensor>> &FunctionCtx::saved_tensors() const { return saved_tensors_; }
+std::vector<std::shared_ptr<Tensor>> FunctionCtx::GetSavedTensors() const {
+    std::vector<std::shared_ptr<Tensor>> saved_tensors;
+    saved_tensors.reserve(saved_tensor_entries_.size());
+    for (const auto &entry : saved_tensor_entries_) {
+        if (entry.tensor) {
+            saved_tensors.push_back(entry.tensor);
+        } else if (entry.unpack) {
+            saved_tensors.push_back(entry.unpack(entry.hook_state));
+        } else {
+            saved_tensors.push_back(nullptr);
+        }
+    }
+    return saved_tensors;
+}
 
 const std::vector<bool> &FunctionCtx::needs_input_grad() const { return needs_input_grad_; }
 
@@ -48,24 +80,38 @@ void FunctionCtx::set_needs_input_grad(std::vector<bool> needs_input_grad) {
 }
 
 void FunctionCtx::SaveVariables(const std::vector<std::shared_ptr<Tensor>> &outputs) {
-    saved_tensors_.clear();
-    saved_tensors_.reserve(to_save_.size());
+    saved_tensor_entries_.clear();
+    saved_tensor_entries_.reserve(to_save_.size());
     for (const auto &tensor : to_save_) {
+        SavedTensorEntry entry;
+        if (!tensor) {
+            saved_tensor_entries_.push_back(std::move(entry));
+            continue;
+        }
+
         bool is_output = false;
         for (const auto &output : outputs) {
-            if (tensor && tensor.get() == output.get()) {
+            if (tensor.get() == output.get()) {
                 is_output = true;
                 break;
             }
         }
-        saved_tensors_.push_back(is_output ? ShallowCopyWithoutAutogradMeta(tensor) : tensor);
+        auto tensor_to_save = is_output ? ShallowCopyWithoutAutogradMeta(tensor) : tensor;
+        if (tls_saved_tensor_hooks.empty()) {
+            entry.tensor = std::move(tensor_to_save);
+        } else {
+            const auto &hooks = tls_saved_tensor_hooks.back();
+            entry.hook_state = hooks.pack(tensor_to_save);
+            entry.unpack = hooks.unpack;
+        }
+        saved_tensor_entries_.push_back(std::move(entry));
     }
     to_save_.clear();
 }
 
 void FunctionCtx::ReleaseVariables() {
     to_save_.clear();
-    saved_tensors_.clear();
+    saved_tensor_entries_.clear();
     needs_input_grad_.clear();
     non_differentiable_.clear();
 }

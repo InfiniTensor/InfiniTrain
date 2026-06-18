@@ -21,8 +21,9 @@ void Softmax::SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
 }
 
 std::vector<std::shared_ptr<Tensor>> Softmax::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(ctx_.saved_tensors().size(), 1);
-    const auto &output = ctx_.saved_tensors()[0];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 1);
+    const auto &output = saved_tensors[0];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
