@@ -80,6 +80,8 @@ public:
     size_t NumElements() const;
     DataType Dtype() const;
 
+    std::shared_ptr<Tensor> Detach() const;
+
     void Fill(Scalar value);
 
     Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> EigenMatrix();

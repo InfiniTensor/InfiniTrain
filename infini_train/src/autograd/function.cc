@@ -19,12 +19,6 @@ namespace infini_train::autograd {
 namespace {
 thread_local std::vector<FunctionCtx::SavedTensorHooks> tls_saved_tensor_hooks;
 
-std::shared_ptr<Tensor> ShallowCopyWithoutAutogradMeta(const std::shared_ptr<Tensor> &tensor) {
-    if (!tensor) {
-        return nullptr;
-    }
-    return std::make_shared<Tensor>(*tensor, 0, tensor->Dims());
-}
 } // namespace
 
 FunctionCtx::SavedTensorHooksGuard::SavedTensorHooksGuard(SavedTensorHooks hooks) {
@@ -96,7 +90,7 @@ void FunctionCtx::SaveVariables(const std::vector<std::shared_ptr<Tensor>> &outp
                 break;
             }
         }
-        auto tensor_to_save = is_output ? ShallowCopyWithoutAutogradMeta(tensor) : tensor;
+        auto tensor_to_save = is_output ? tensor->Detach() : tensor;
         if (tls_saved_tensor_hooks.empty()) {
             entry.tensor = std::move(tensor_to_save);
         } else {
