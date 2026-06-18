@@ -104,6 +104,8 @@ size_t Tensor::NumElements() const { return num_elements_; }
 
 DataType Tensor::Dtype() const { return dtype_; }
 
+std::shared_ptr<Tensor> Tensor::Detach() const { return std::make_shared<Tensor>(*this, 0, dims_); }
+
 void Tensor::Fill(Scalar value) {
     auto device = GetDevice();
     core::DeviceGuard guard(device);
