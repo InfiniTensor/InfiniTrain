@@ -133,7 +133,7 @@ void Train(const nn::parallel::Rank &rank) {
     int pp_rank = 0;
 
     // Set thread-local global rank
-    nn::parallel::global::thread_global_rank = rank.GlobalRank();
+    nn::parallel::global::tls_thread_global_rank = rank.GlobalRank();
 
     const ProcessGroup *ddp_pg = nullptr;
     const ProcessGroup *tp_pg = nullptr;
@@ -154,15 +154,14 @@ void Train(const nn::parallel::Rank &rank) {
                                             GetTensorParallelGroupRanks(rank.GlobalRank()));
             tp_rank = tp_pg->GetGroupRank(rank.GlobalRank());
             // NOTE(zbl): Reserved for VocabParallelEmbedding
-            nn::parallel::tp_rank = tp_rank;
+            nn::parallel::tls_tp_rank = tp_rank;
         }
 
         if (pp_world_size > 1) {
             pp_pg = pg_factory->GetOrCreate(GetPipelineParallelProcessGroupName(rank.GlobalRank()),
                                             GetPipelineParallelGroupRanks(rank.GlobalRank()));
             pp_rank = pp_pg->GetGroupRank(rank.GlobalRank());
-
-            nn::parallel::pp_rank = pp_rank;
+            nn::parallel::tls_pp_rank = pp_rank;
         }
     } else {
         device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);

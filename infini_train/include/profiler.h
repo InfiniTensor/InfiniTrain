@@ -17,23 +17,23 @@ namespace core {
 class Event;
 }
 
-inline thread_local int g_profiling_depth = 0;
+inline thread_local int tls_profiling_depth = 0;
 
 struct ProfileContext {
     std::string name;
     Device::DeviceType device;
 };
 
-inline thread_local ProfileContext g_profile_context;
+inline thread_local ProfileContext tls_profile_context;
 
 inline void SetProfileContext(const std::string &name, Device::DeviceType device) {
-    if (g_profiling_depth == 0) {
-        g_profile_context.name = name;
-        g_profile_context.device = device;
+    if (tls_profiling_depth == 0) {
+        tls_profile_context.name = name;
+        tls_profile_context.device = device;
     }
 }
 
-inline const ProfileContext &GetProfileContext() { return g_profile_context; }
+inline const ProfileContext &GetProfileContext() { return tls_profile_context; }
 
 struct KernelProfileInfo {
     int64_t host_total_us = 0;
@@ -89,13 +89,14 @@ private:
     std::string current_tag_ = "Untagged";
 
     // thread-local tracking
-    thread_local static inline std::map<std::string, std::chrono::high_resolution_clock::time_point> cpu_timing_map_;
+    thread_local static inline std::map<std::string, std::chrono::high_resolution_clock::time_point>
+        tls_cpu_timing_map_;
 
     struct EventPair {
         core::Event *start = nullptr;
         core::Event *stop = nullptr;
     };
 
-    thread_local static inline std::map<std::string, EventPair> device_timing_map_;
+    thread_local static inline std::map<std::string, EventPair> tls_device_timing_map_;
 };
 } // namespace infini_train

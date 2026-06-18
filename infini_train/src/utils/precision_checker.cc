@@ -162,7 +162,7 @@ std::ostream &GetLogStream() {
         std::lock_guard<std::mutex> lock(tls_init_mutex);
         if (!tls_initialized) {
             const auto &output_path = PrecisionCheckEnv::Instance().GetOutputPath();
-            int global_rank = nn::parallel::global::thread_global_rank;
+            int global_rank = nn::parallel::global::tls_thread_global_rank;
             std::string filename = output_path + "/precision_check_rank_" + std::to_string(global_rank) + ".log";
             tls_log_file.open(filename, std::ios::out | std::ios::trunc);
             if (!tls_log_file.is_open()) {
@@ -284,7 +284,7 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
         return;
     }
 
-    const int rank = nn::parallel::global::thread_global_rank;
+    const int rank = nn::parallel::global::tls_thread_global_rank;
 
     for (size_t i = 0; i < tensors.size(); ++i) {
         if (!tensors[i]) {

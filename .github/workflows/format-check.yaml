@@ -16,12 +16,43 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-format-16 include-what-you-use
+
     - name: Install Python dependencies
       run: |
         python3 -m pip install --upgrade pip
-        pip install black
+        pip install black colorama
 
     - name: Run format check
       run: |
         python3 scripts/format.py --path infini_train example --check
 
+    - name: Run custom style check
+      run: |
+        python3 scripts/style_check.py --path infini_train example
+
+    - name: Configure compile database for IWYU
+      # Keep IWYU advisory until the existing codebase is fully cleaned up.
+      continue-on-error: true
+      run: |
+        cmake -S . -B build-iwyu -DUSE_CUDA=OFF -DUSE_MACA=OFF -DUSE_MPI=OFF -DUSE_OMP=OFF -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+    - name: Run IWYU check
+      continue-on-error: true
+      run: |
+        if command -v iwyu_tool.py >/dev/null; then
+          IWYU_TOOL="$(command -v iwyu_tool.py)"
+        else
+          IWYU_TOOL="$(command -v iwyu_tool)"
+        fi
+        mapfile -t IWYU_SOURCES < <(
+          find infini_train example -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' -o -name '*.cxx' \) \
+            ! -path 'infini_train/src/core/ccl/cuda/*' \
+            ! -path 'infini_train/src/core/runtime/cuda/*' \
+            ! -path 'infini_train/src/core/ccl/maca/*' \
+            ! -path 'infini_train/src/core/runtime/maca/*'
+        )
+        "${IWYU_TOOL}" -p build-iwyu -j "$(nproc)" "${IWYU_SOURCES[@]}"

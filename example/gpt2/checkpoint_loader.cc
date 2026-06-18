@@ -102,7 +102,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
     int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
-    auto pp_rank = nn::parallel::pp_rank;
+    auto pp_rank = nn::parallel::tls_pp_rank;
     auto [is_first_stage, is_last_stage, layer_ranges_per_chunk]
         = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size, pp_rank, vpp_size);
     // ========== layer to chunk ==========
@@ -111,7 +111,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         for (int i = start; i < end; ++i) { owned_layers[i] = true; }
     }
 
-    auto tp_rank = nn::parallel::tp_rank;
+    auto tp_rank = nn::parallel::tls_tp_rank;
     // calculate xx_size_per_partition
     const int64_t vpp = model_vocab_size / tp_size;
     const int64_t v_start = static_cast<int64_t>(tp_rank) * vpp;

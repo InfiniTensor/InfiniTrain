@@ -30,6 +30,8 @@ def format_file(file: Path, check: bool, formatter) -> bool:
         cmd = []
         if formatter.startswith("clang-format"):
             cmd = [formatter, "-style=file", "-i", file]
+            if file.suffix == ".cu":
+                cmd.insert(2, "--sort-includes=false")
             if check:
                 cmd.insert(2, "-dry-run")
                 process = subprocess.run(
@@ -202,4 +204,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

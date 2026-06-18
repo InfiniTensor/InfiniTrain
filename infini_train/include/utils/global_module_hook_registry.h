@@ -1,11 +1,12 @@
 #pragma once
 
-#include "infini_train/include/common/hook.h"
-#include "infini_train/include/tensor.h"
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <vector>
+
+#include "infini_train/include/common/hook.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train {
 namespace nn {

@@ -4,8 +4,9 @@
 #include <cuda_runtime_api.h>
 #endif
 
-#include "infini_train/include/device.h"
 #include "gtest/gtest.h"
+
+#include "infini_train/include/device.h"
 
 namespace infini_train {
 namespace test {

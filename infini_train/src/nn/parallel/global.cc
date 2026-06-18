@@ -17,7 +17,7 @@ int GetEnvAsInt(const std::string &name, int default_value) {
 
 namespace infini_train::nn::parallel::global {
 
-thread_local int thread_global_rank = 0;
+thread_local int tls_thread_global_rank = 0;
 
 void Layout::InitStrides() {
     // Calculate strides
