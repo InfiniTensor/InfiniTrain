@@ -18,6 +18,7 @@
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
@@ -42,6 +43,34 @@ enum class LoRATensorSharding {
 
 bool EndsWith(const std::string &value, const std::string &suffix) {
     return value.size() >= suffix.size() && value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+std::string ConsumeDDPModulePrefixIfPresent(const std::string &name) {
+    const auto module_name_len = std::char_traits<char>::length(parallel::kModuleName);
+    if (name.size() > module_name_len && name.compare(0, module_name_len, parallel::kModuleName) == 0
+        && name[module_name_len] == '.') {
+        return name.substr(module_name_len + 1);
+    }
+    return name;
+}
+
+std::string ResolveLoRAStateDictKey(const std::string &name,
+                                    const std::unordered_map<std::string, std::shared_ptr<Tensor>> &model_state_dict) {
+    if (model_state_dict.find(name) != model_state_dict.end()) {
+        return name;
+    }
+
+    const auto unwrapped_name = ConsumeDDPModulePrefixIfPresent(name);
+    if (unwrapped_name != name && model_state_dict.find(unwrapped_name) != model_state_dict.end()) {
+        return unwrapped_name;
+    }
+
+    return name;
+}
+
+std::shared_ptr<Module> UnwrapDistributedDataParallel(const std::shared_ptr<Module> &model) {
+    auto ddp_model = std::dynamic_pointer_cast<parallel::DistributedDataParallel>(model);
+    return ddp_model ? ddp_model->module() : model;
 }
 
 std::string LoraANameForLoraB(const std::string &name) {
@@ -608,13 +637,17 @@ void LoadLoRAStateDict(std::shared_ptr<Module> model,
     auto model_state_dict = model->StateDict();
     auto shardings = BuildLoRATensorShardings(model);
 
-    for (auto &[name, param] : state_dict) { LoadLoRATensorIntoModel(name, param, model_state_dict, shardings); }
+    for (auto &[name, param] : state_dict) {
+        const auto resolved_name = ResolveLoRAStateDictKey(name, model_state_dict);
+        LoadLoRATensorIntoModel(resolved_name, param, model_state_dict, shardings);
+    }
 }
 
 void SaveLoRAWeights(const std::shared_ptr<Module> &model, const std::string &filepath) {
-    auto lora_state_dict = LoRAStateDict(model);
+    auto adapter_model = UnwrapDistributedDataParallel(model);
+    auto lora_state_dict = LoRAStateDict(adapter_model);
     auto sorted_names = SortedLoRAStateDictNames(lora_state_dict);
-    auto shardings = BuildLoRATensorShardings(model);
+    auto shardings = BuildLoRATensorShardings(adapter_model);
 
     // TP ranks in the primary DP/PP group must all run the gather loop below.
     // Only TP rank 0 writes the file after receiving full tensors.
@@ -727,7 +760,8 @@ void LoadLoRAWeights(std::shared_ptr<Module> model, const std::string &filepath)
         auto cpu_tensor = std::make_shared<Tensor>(dims, DataType::kFLOAT32, Device(Device::DeviceType::kCPU, 0));
         file.read(reinterpret_cast<char *>(cpu_tensor->DataPtr()), num_elements * sizeof(float));
 
-        LoadLoRATensorIntoModel(name, cpu_tensor, model_state_dict, shardings);
+        const auto resolved_name = ResolveLoRAStateDictKey(name, model_state_dict);
+        LoadLoRATensorIntoModel(resolved_name, cpu_tensor, model_state_dict, shardings);
     }
 
     file.close();

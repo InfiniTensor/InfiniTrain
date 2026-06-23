@@ -17,12 +17,19 @@ class Rank;
 
 namespace infini_train::nn::parallel {
 
+namespace {
+constexpr char kModuleName[] = "module";
+
+} // namespace
+
 class DistributedDataParallel : public nn::Module {
 public:
     DistributedDataParallel(std::shared_ptr<nn::Module> module, const Rank &rank,
                             DistributedDataParallelConfig ddp_config);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+    std::shared_ptr<nn::Module> module() const;
 
     DistributedDataParallelConfig ddp_config() const { return ddp_config_; }
 
