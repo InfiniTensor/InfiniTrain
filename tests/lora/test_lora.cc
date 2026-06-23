@@ -1,5 +1,6 @@
 #include <cmath>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -28,6 +29,12 @@ static float TensorSum(const std::shared_ptr<Tensor> &t) {
     auto cpu = std::make_shared<Tensor>(t->Dims(), t->Dtype(), Device(Device::DeviceType::kCPU, 0));
     cpu->CopyFrom(t);
     return cpu->EigenMatrix().sum();
+}
+
+static std::shared_ptr<Tensor> MakeFilledTensor(const std::vector<int64_t> &dims, Device device, float value) {
+    auto tensor = std::make_shared<Tensor>(dims, DataType::kFLOAT32, device);
+    tensor->Fill(value);
+    return tensor;
 }
 
 static float RowValue(int64_t row, int64_t col) { return static_cast<float>(row * 100 + col); }
@@ -343,6 +350,30 @@ TEST_P(LoRATest, LoRAStateDict) {
     EXPECT_EQ(state_dict.at("lora_A")->Dims()[1], 64);
     EXPECT_EQ(state_dict.at("lora_B")->Dims()[0], 128);
     EXPECT_EQ(state_dict.at("lora_B")->Dims()[1], config.rank);
+}
+
+TEST_P(LoRATest, LoadLoRAStateDictConsumesDDPModulePrefix) {
+    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true, GetDevice());
+
+    LoRAConfig config;
+    config.rank = 4;
+    config.alpha = 8.0f;
+    config.target_modules = {"Linear"};
+
+    auto model = GetLoRAModel(base_linear, config);
+    auto lora_state_dict = LoRAStateDict(model);
+
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> prefixed_state_dict;
+    prefixed_state_dict["module.lora_A"] = MakeFilledTensor(lora_state_dict.at("lora_A")->Dims(), GetDevice(), 3.0f);
+    prefixed_state_dict["module.lora_B"] = MakeFilledTensor(lora_state_dict.at("lora_B")->Dims(), GetDevice(), 5.0f);
+
+    LoadLoRAStateDict(model, prefixed_state_dict);
+
+    auto loaded_state_dict = LoRAStateDict(model);
+    EXPECT_FLOAT_EQ(TensorSum(loaded_state_dict.at("lora_A")),
+                    3.0f * static_cast<float>(loaded_state_dict.at("lora_A")->NumElements()));
+    EXPECT_FLOAT_EQ(TensorSum(loaded_state_dict.at("lora_B")),
+                    5.0f * static_cast<float>(loaded_state_dict.at("lora_B")->NumElements()));
 }
 
 TEST_P(LoRATest, GetLoRAModel) {
