@@ -17,10 +17,6 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
-namespace {
-constexpr char kModuleName[] = "module";
-
-} // namespace
 
 DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, const Rank &rank,
                                                  const DistributedDataParallelConfig ddp_config)
@@ -216,4 +212,6 @@ DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &inp
     }
     return outputs;
 }
+
+std::shared_ptr<nn::Module> DistributedDataParallel::module() const { return modules_.at(kModuleName); }
 } // namespace infini_train::nn::parallel
