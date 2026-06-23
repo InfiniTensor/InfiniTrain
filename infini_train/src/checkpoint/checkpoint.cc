@@ -182,8 +182,7 @@ template <typename T> T ExtractNumberField(const std::string &content, const std
 } // namespace
 
 void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Module &model, const Optimizer *optimizer,
-                      const TrainerState &state, bool save_optimizer_state, const LRScheduler *lr_scheduler,
-                      bool save_lr_scheduler_state) {
+                      const TrainerState &state, bool save_optimizer_state, const LRScheduler *lr_scheduler) {
     std::filesystem::create_directories(checkpoint_dir);
     LOG(INFO) << "[CKPT] Save begin: dir=" << checkpoint_dir << ", global_step=" << state.global_step;
 
@@ -200,8 +199,7 @@ void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Mod
         }
     }
 
-    if (save_lr_scheduler_state) {
-        CHECK(lr_scheduler != nullptr) << "LR scheduler pointer is null, cannot save LR scheduler state.";
+    if (lr_scheduler != nullptr) {
         SaveLRSchedulerState(checkpoint_dir / "lr_scheduler.ckpt", lr_scheduler->State());
     }
 
@@ -210,8 +208,7 @@ void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Mod
 }
 
 void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &model, Optimizer *optimizer,
-                      TrainerState &state, bool load_optimizer_state, LRScheduler *lr_scheduler,
-                      bool load_lr_scheduler_state) {
+                      TrainerState &state, bool load_optimizer_state, LRScheduler *lr_scheduler) {
     const auto model_path = checkpoint_dir / "model.ckpt";
     LOG(INFO) << "[CKPT] Loading model: " << model_path;
 
@@ -230,8 +227,7 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &m
 
     state = LoadTrainerState(checkpoint_dir / "trainer_state.json");
 
-    if (load_lr_scheduler_state) {
-        CHECK(lr_scheduler != nullptr) << "LR scheduler pointer is null, cannot load LR scheduler state.";
+    if (lr_scheduler != nullptr) {
         const auto lr_scheduler_path = checkpoint_dir / "lr_scheduler.ckpt";
         if (std::filesystem::exists(lr_scheduler_path)) {
             LOG(INFO) << "[CKPT] Loading LR scheduler: " << lr_scheduler_path;

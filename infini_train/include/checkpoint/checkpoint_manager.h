@@ -31,7 +31,6 @@ struct ResumeFromCheckpointArgs {
     TrainerState &state;
     bool load_optimizer_state;
     std::shared_ptr<LRScheduler> lr_scheduler = nullptr;
-    bool load_lr_scheduler_state = true;
 };
 
 struct ResumeFromCheckpointResult {
@@ -53,7 +52,6 @@ struct SaveCheckpointArgs {
     int sp_size = 1;
     int pp_size = 1;
     bool save_optimizer_state = true;
-    bool save_lr_scheduler_state = true;
     std::filesystem::path checkpoint_root_dir;
     size_t max_checkpoint_keep = 0;
     const nn::parallel::Rank &rank;
