@@ -66,8 +66,8 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
 
     result.consumed_batches = static_cast<size_t>(std::max<int64_t>(args.state.consumed_batches, 0));
     if (args.rank.IsMainRank()) {
-        LOG(INFO) << std::format("Resume training from step {}, last_lr {:.3e}, consumed_batches  {}",
-                                 args.state.global_step, args.state.last_lr, args.state.consumed_batches);
+        LOG(INFO) << std::format("Resume training from step {}, consumed_batches  {}", args.state.global_step,
+                                 args.state.consumed_batches);
     }
 
     return result;
@@ -79,7 +79,6 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
     TrainerState state;
     state.global_step = args.global_step;
     state.consumed_batches = static_cast<int64_t>(args.consumed_batches);
-    state.last_lr = args.last_lr;
     state.n_layer = args.n_layer;
     state.n_head = args.n_head;
     state.n_kv_head = args.n_kv_head;
