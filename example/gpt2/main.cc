@@ -354,8 +354,7 @@ void Train(const nn::parallel::Rank &rank) {
                                                      .model_config = model_config,
                                                      .state = state,
                                                      .load_optimizer_state = false,
-                                                     .lr_scheduler = scheduler,
-                                                     .load_lr_scheduler_state = scheduler != nullptr});
+                                                     .lr_scheduler = scheduler});
     start_step = resume_result.global_step;
     size_t consumed_batches = resume_result.consumed_batches;
 
@@ -384,7 +383,6 @@ void Train(const nn::parallel::Rank &rank) {
             .sp_size = sp_world_size,
             .pp_size = pp_world_size,
             .save_optimizer_state = FLAGS_save_optimizer_state,
-            .save_lr_scheduler_state = scheduler != nullptr,
             .checkpoint_root_dir = FLAGS_save,
             .max_checkpoint_keep = FLAGS_max_checkpoint_keep,
             .rank = rank,
