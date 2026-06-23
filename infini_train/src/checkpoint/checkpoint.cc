@@ -200,7 +200,8 @@ void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Mod
         }
     }
 
-    if (save_lr_scheduler_state && lr_scheduler != nullptr) {
+    if (save_lr_scheduler_state) {
+        CHECK(lr_scheduler != nullptr) << "LR scheduler pointer is null, cannot save LR scheduler state.";
         SaveLRSchedulerState(checkpoint_dir / "lr_scheduler.ckpt", lr_scheduler->State());
     }
 
@@ -229,7 +230,8 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &m
 
     state = LoadTrainerState(checkpoint_dir / "trainer_state.json");
 
-    if (load_lr_scheduler_state && lr_scheduler != nullptr) {
+    if (load_lr_scheduler_state) {
+        CHECK(lr_scheduler != nullptr) << "LR scheduler pointer is null, cannot load LR scheduler state.";
         const auto lr_scheduler_path = checkpoint_dir / "lr_scheduler.ckpt";
         if (std::filesystem::exists(lr_scheduler_path)) {
             LOG(INFO) << "[CKPT] Loading LR scheduler: " << lr_scheduler_path;
@@ -241,9 +243,8 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &m
     }
 
     LOG(ERROR) << "[CKPT] Load done: global_step=" << state.global_step
-               << ", consumed_batches =" << state.consumed_batches << ", last_lr=" << state.last_lr
-               << ", topology(ddp,tp,sp,pp)=(" << state.ddp_size << "," << state.tp_size << "," << state.sp_size << ","
-               << state.pp_size << ")";
+               << ", consumed_batches =" << state.consumed_batches << ", topology(ddp,tp,sp,pp)=(" << state.ddp_size
+               << "," << state.tp_size << "," << state.sp_size << "," << state.pp_size << ")";
 }
 
 void Checkpoint::SaveStateDict(const std::filesystem::path &path,
@@ -323,10 +324,9 @@ void Checkpoint::SaveTrainerState(const std::filesystem::path &path, const Train
     ofs << "  \"n_head\": " << state.n_head << ",\n";
     ofs << "  \"n_kv_head\": " << state.n_kv_head << ",\n";
     ofs << "  \"n_embd\": " << state.n_embd << ",\n";
-    ofs << "  \"vocab_size\": " << state.vocab_size << "\n";
+    ofs << "  \"vocab_size\": " << state.vocab_size << ",\n";
     ofs << "  \"global_step\": " << state.global_step << ",\n";
     ofs << "  \"consumed_batches\": " << state.consumed_batches << ",\n";
-    ofs << "  \"last_lr\": " << state.last_lr << ",\n";
     ofs << "  \"ddp_size\": " << state.ddp_size << ",\n";
     ofs << "  \"tp_size\": " << state.tp_size << ",\n";
     ofs << "  \"sp_size\": " << state.sp_size << ",\n";
@@ -348,7 +348,6 @@ TrainerState Checkpoint::LoadTrainerState(const std::filesystem::path &path) {
     state.vocab_size = ExtractNumberField<int64_t>(content, "vocab_size", 0);
     state.global_step = ExtractNumberField<int64_t>(content, "global_step", 0);
     state.consumed_batches = ExtractNumberField<int64_t>(content, "consumed_batches", 0);
-    state.last_lr = ExtractNumberField<double>(content, "last_lr", 0.0);
     state.ddp_size = ExtractNumberField<int>(content, "ddp_size", 1);
     state.tp_size = ExtractNumberField<int>(content, "tp_size", 1);
     state.sp_size = ExtractNumberField<int>(content, "sp_size", 1);

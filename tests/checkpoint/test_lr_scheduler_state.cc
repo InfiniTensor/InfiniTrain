@@ -59,7 +59,7 @@ TEST_P(LRSchedulerCheckpointTest, SaveAndLoadLRSchedulerState) {
     auto sched1 = CreateLRScheduler(opt1, MakeSchedulerConfig());
     StepTimes(sched1, 3);
 
-    TrainerState saved{.global_step = 3, .consumed_batches = 12, .last_lr = sched1->GetLR()};
+    TrainerState saved{.global_step = 3, .consumed_batches = 12};
     Checkpoint::Save(dir, *model1, opt1.get(), saved, /*save_optimizer_state=*/false, sched1.get(),
                      /*save_lr_scheduler_state=*/true);
     EXPECT_TRUE(std::filesystem::exists(dir / "lr_scheduler.ckpt"));
@@ -94,7 +94,7 @@ TEST_P(LRSchedulerCheckpointTest, HonorsLRSchedulerStateFlags) {
     auto sched1 = CreateLRScheduler(opt1, MakeSchedulerConfig());
     StepTimes(sched1, 3);
 
-    TrainerState saved{.global_step = 3, .last_lr = sched1->GetLR()};
+    TrainerState saved{.global_step = 3};
     Checkpoint::Save(dir, *model1, opt1.get(), saved, /*save_optimizer_state=*/false, sched1.get(),
                      /*save_lr_scheduler_state=*/false);
     EXPECT_FALSE(std::filesystem::exists(dir / "lr_scheduler.ckpt"));
