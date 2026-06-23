@@ -60,8 +60,7 @@ TEST_P(LRSchedulerCheckpointTest, SaveAndLoadLRSchedulerState) {
     StepTimes(sched1, 3);
 
     TrainerState saved{.global_step = 3, .consumed_batches = 12};
-    Checkpoint::Save(dir, *model1, opt1.get(), saved, /*save_optimizer_state=*/false, sched1.get(),
-                     /*save_lr_scheduler_state=*/true);
+    Checkpoint::Save(dir, *model1, opt1.get(), saved, /*save_optimizer_state=*/false, sched1.get());
     EXPECT_TRUE(std::filesystem::exists(dir / "lr_scheduler.ckpt"));
 
     auto model2 = MakeModel(GetDevice());
@@ -69,8 +68,7 @@ TEST_P(LRSchedulerCheckpointTest, SaveAndLoadLRSchedulerState) {
     auto sched2 = CreateLRScheduler(opt2, MakeSchedulerConfig());
 
     TrainerState loaded;
-    Checkpoint::Load(dir, *model2, opt2.get(), loaded, /*load_optimizer_state=*/false, sched2.get(),
-                     /*load_lr_scheduler_state=*/true);
+    Checkpoint::Load(dir, *model2, opt2.get(), loaded, /*load_optimizer_state=*/false, sched2.get());
 
     EXPECT_EQ(loaded.global_step, 3);
     EXPECT_EQ(loaded.consumed_batches, 12);
@@ -85,36 +83,16 @@ TEST_P(LRSchedulerCheckpointTest, SaveAndLoadLRSchedulerState) {
     std::filesystem::remove_all(dir);
 }
 
-TEST_P(LRSchedulerCheckpointTest, HonorsLRSchedulerStateFlags) {
-    auto dir = std::filesystem::temp_directory_path() / "test_lr_scheduler_ckpt_flags";
+TEST_P(LRSchedulerCheckpointTest, SkipsLRSchedulerStateWhenSchedulerIsNull) {
+    auto dir = std::filesystem::temp_directory_path() / "test_lr_scheduler_ckpt_null";
     std::filesystem::remove_all(dir);
 
     auto model1 = MakeModel(GetDevice());
     auto opt1 = std::make_shared<optimizers::SGD>(model1->Parameters(), kBaseLR);
-    auto sched1 = CreateLRScheduler(opt1, MakeSchedulerConfig());
-    StepTimes(sched1, 3);
 
     TrainerState saved{.global_step = 3};
-    Checkpoint::Save(dir, *model1, opt1.get(), saved, /*save_optimizer_state=*/false, sched1.get(),
-                     /*save_lr_scheduler_state=*/false);
+    Checkpoint::Save(dir, *model1, opt1.get(), saved, /*save_optimizer_state=*/false);
     EXPECT_FALSE(std::filesystem::exists(dir / "lr_scheduler.ckpt"));
-
-    Checkpoint::Save(dir, *model1, opt1.get(), saved, /*save_optimizer_state=*/false, sched1.get(),
-                     /*save_lr_scheduler_state=*/true);
-    ASSERT_TRUE(std::filesystem::exists(dir / "lr_scheduler.ckpt"));
-
-    auto model2 = MakeModel(GetDevice());
-    auto opt2 = std::make_shared<optimizers::SGD>(model2->Parameters(), kBaseLR);
-    auto sched2 = CreateLRScheduler(opt2, MakeSchedulerConfig());
-    const auto initial_step = sched2->LastStep();
-    const auto initial_lr = sched2->GetLR();
-
-    TrainerState loaded;
-    Checkpoint::Load(dir, *model2, opt2.get(), loaded, /*load_optimizer_state=*/false, sched2.get(),
-                     /*load_lr_scheduler_state=*/false);
-
-    EXPECT_EQ(sched2->LastStep(), initial_step);
-    EXPECT_NEAR(sched2->GetLR(), initial_lr, kEps);
 
     std::filesystem::remove_all(dir);
 }
