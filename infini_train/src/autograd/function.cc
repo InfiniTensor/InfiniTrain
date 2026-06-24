@@ -32,9 +32,7 @@ FunctionCtx::SavedTensorHooksGuard::~SavedTensorHooksGuard() {
     if (tls_saved_tensor_hooks.empty()) {
         return;
     }
-    if (tls_saved_tensor_hooks.size() != depth_) {
-        LOG(WARNING) << "SavedTensorHooksGuard destroyed out of order";
-    }
+    CHECK_EQ(tls_saved_tensor_hooks.size(), depth_) << "SavedTensorHooksGuard destroyed out of order";
     tls_saved_tensor_hooks.pop_back();
 }
 
