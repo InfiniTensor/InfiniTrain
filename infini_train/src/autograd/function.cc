@@ -179,7 +179,11 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         SetupContext(compute_inputs, output_tensors);
     }
 
-    ctx_.SaveVariables(output_tensors);
+    if (autograd::GradMode::IsEnabled()) {
+        ctx_.SaveVariables(output_tensors);
+    } else {
+        ctx_.ReleaseVariables();
+    }
 
     // Call forward post-hooks
     for (const auto &hook : forward_post_hooks_) {
