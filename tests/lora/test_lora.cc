@@ -1,5 +1,6 @@
 #include <cmath>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -30,6 +31,54 @@ static float TensorSum(const std::shared_ptr<Tensor> &t) {
     return cpu->EigenMatrix().sum();
 }
 
+static std::shared_ptr<Tensor> MakeFilledTensor(const std::vector<int64_t> &dims, Device device, float value) {
+    auto tensor = std::make_shared<Tensor>(dims, DataType::kFLOAT32, device);
+    tensor->Fill(value);
+    return tensor;
+}
+
+static float RowValue(int64_t row, int64_t col) { return static_cast<float>(row * 100 + col); }
+
+static std::shared_ptr<Tensor> MakeRowLabeledTensor(int64_t rows, int64_t cols, Device device) {
+    auto cpu_tensor = std::make_shared<Tensor>(std::vector<int64_t>{rows, cols}, DataType::kFLOAT32,
+                                               Device(Device::DeviceType::kCPU, 0));
+    auto matrix = cpu_tensor->EigenMatrix();
+    for (int64_t row = 0; row < rows; ++row) {
+        for (int64_t col = 0; col < cols; ++col) { matrix(row, col) = RowValue(row, col); }
+    }
+
+    if (device.IsCPU()) {
+        return cpu_tensor;
+    }
+
+    auto device_tensor = std::make_shared<Tensor>(std::vector<int64_t>{rows, cols}, DataType::kFLOAT32, device);
+    device_tensor->CopyFrom(cpu_tensor);
+    return device_tensor;
+}
+
+static std::shared_ptr<Tensor> ToCpuTensor(const std::shared_ptr<Tensor> &tensor) {
+    if (tensor->GetDevice().IsCPU()) {
+        return tensor;
+    }
+
+    auto cpu_tensor = std::make_shared<Tensor>(tensor->Dims(), tensor->Dtype(), Device(Device::DeviceType::kCPU, 0));
+    cpu_tensor->CopyFrom(tensor);
+    return cpu_tensor;
+}
+
+static void ExpectRows(const std::shared_ptr<Tensor> &tensor, const std::vector<int64_t> &source_rows) {
+    ASSERT_EQ(tensor->Dims().size(), 2);
+    ASSERT_EQ(tensor->Dims()[0], static_cast<int64_t>(source_rows.size()));
+
+    auto cpu_tensor = ToCpuTensor(tensor);
+    auto matrix = cpu_tensor->EigenMatrix();
+    for (int64_t row = 0; row < static_cast<int64_t>(source_rows.size()); ++row) {
+        for (int64_t col = 0; col < tensor->Dims()[1]; ++col) {
+            EXPECT_FLOAT_EQ(matrix(row, col), RowValue(source_rows[row], col));
+        }
+    }
+}
+
 TEST_P(LoRATest, LoRAConfigScaling) {
     LoRAConfig config;
     config.rank = 8;
@@ -37,6 +86,33 @@ TEST_P(LoRATest, LoRAConfigScaling) {
 
     float expected_scaling = 16.0f / 8.0f;
     EXPECT_EQ(config.Scaling(), expected_scaling);
+}
+
+TEST_P(LoRATest, PackedQKVShardGPTStyle) {
+    auto full_qkv = MakeRowLabeledTensor(/*rows=*/12, /*cols=*/3, GetDevice());
+    auto shard = infini_train::nn::lora::detail::SlicePackedQKVRowsForTensorParallel(full_qkv, /*q_rows=*/4,
+                                                                                     /*tp_rank=*/1, /*tp_size=*/2);
+
+    EXPECT_EQ(shard->Dims(), (std::vector<int64_t>{6, 3}));
+    ExpectRows(shard, {2, 3, 6, 7, 10, 11});
+}
+
+TEST_P(LoRATest, PackedQKVShardGQAStyle) {
+    auto full_qkv = MakeRowLabeledTensor(/*rows=*/16, /*cols=*/2, GetDevice());
+    auto shard = infini_train::nn::lora::detail::SlicePackedQKVRowsForTensorParallel(full_qkv, /*q_rows=*/8,
+                                                                                     /*tp_rank=*/2, /*tp_size=*/4);
+
+    EXPECT_EQ(shard->Dims(), (std::vector<int64_t>{4, 2}));
+    ExpectRows(shard, {4, 5, 10, 14});
+}
+
+TEST_P(LoRATest, PackedQKVRestoreFromTPGather) {
+    auto rank_major_qkv = MakeRowLabeledTensor(/*rows=*/12, /*cols=*/3, GetDevice());
+    auto restored = infini_train::nn::lora::detail::RestorePackedQKVRowsFromTensorParallel(rank_major_qkv, /*q_rows=*/4,
+                                                                                           /*tp_size=*/2);
+
+    EXPECT_EQ(restored->Dims(), (std::vector<int64_t>{12, 3}));
+    ExpectRows(restored, {0, 1, 6, 7, 2, 3, 8, 9, 4, 5, 10, 11});
 }
 
 TEST_P(LoRATest, LoRAConfigShouldApply) {
@@ -274,6 +350,30 @@ TEST_P(LoRATest, LoRAStateDict) {
     EXPECT_EQ(state_dict.at("lora_A")->Dims()[1], 64);
     EXPECT_EQ(state_dict.at("lora_B")->Dims()[0], 128);
     EXPECT_EQ(state_dict.at("lora_B")->Dims()[1], config.rank);
+}
+
+TEST_P(LoRATest, LoadLoRAStateDictConsumesDDPModulePrefix) {
+    auto base_linear = std::make_shared<nn::Linear>(64, 128, /*bias=*/true, GetDevice());
+
+    LoRAConfig config;
+    config.rank = 4;
+    config.alpha = 8.0f;
+    config.target_modules = {"Linear"};
+
+    auto model = GetLoRAModel(base_linear, config);
+    auto lora_state_dict = LoRAStateDict(model);
+
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> prefixed_state_dict;
+    prefixed_state_dict["module.lora_A"] = MakeFilledTensor(lora_state_dict.at("lora_A")->Dims(), GetDevice(), 3.0f);
+    prefixed_state_dict["module.lora_B"] = MakeFilledTensor(lora_state_dict.at("lora_B")->Dims(), GetDevice(), 5.0f);
+
+    LoadLoRAStateDict(model, prefixed_state_dict);
+
+    auto loaded_state_dict = LoRAStateDict(model);
+    EXPECT_FLOAT_EQ(TensorSum(loaded_state_dict.at("lora_A")),
+                    3.0f * static_cast<float>(loaded_state_dict.at("lora_A")->NumElements()));
+    EXPECT_FLOAT_EQ(TensorSum(loaded_state_dict.at("lora_B")),
+                    5.0f * static_cast<float>(loaded_state_dict.at("lora_B")->NumElements()));
 }
 
 TEST_P(LoRATest, GetLoRAModel) {

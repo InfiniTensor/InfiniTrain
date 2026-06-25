@@ -18,7 +18,7 @@ Scatter::Scatter(const std::vector<Device> &target_gpus, int64_t dim,
 std::vector<std::shared_ptr<Tensor>> Scatter::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     const auto &input = input_tensors[0];
     std::vector<std::shared_ptr<Tensor>> output_tensors;
-    output_tensors = pg_->Scatter(input, target_gpus_, dim_);
+    output_tensors = pg_->Scatter_(input, target_gpus_, dim_);
     return output_tensors;
 }
 
@@ -82,7 +82,7 @@ std::vector<std::shared_ptr<Tensor>> Broadcast::Forward(const std::vector<std::s
     }
 
     // TODO(dcj): mark non differentiable
-    return pg_->BroadCast(input_tensors);
+    return pg_->BroadCast_(input_tensors);
 }
 
 void Broadcast::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,

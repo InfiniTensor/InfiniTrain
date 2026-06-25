@@ -52,6 +52,15 @@ public:
                                                 function::ReduceOpType reduce_op = function::ReduceOpType::kSum,
                                                 bool async_op = false) const;
 
+    // root_rank_in_group is ProcessGroup-local rank. Broadcast updates tensors in place.
+    virtual std::shared_ptr<Work> Broadcast(const std::vector<std::shared_ptr<Tensor>> &tensors, int root_rank_in_group,
+                                            bool async_op = false) const;
+
+    // Root provides rank-major input_tensors: rank * output_tensors.size() + tensor_index.
+    virtual std::shared_ptr<Work> Scatter(const std::vector<std::shared_ptr<Tensor>> &output_tensors,
+                                          const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                                          int root_rank_in_group, bool async_op = false) const;
+
     virtual std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
                                        bool async_op = false) const;
 
@@ -60,13 +69,13 @@ public:
 
     // Legacy communication APIs (Single-stream)
     virtual std::vector<std::shared_ptr<Tensor>>
-    BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const;
+    BroadCast_(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const;
 
     virtual std::vector<std::shared_ptr<Tensor>>
     ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads, Device destination) const;
 
-    virtual std::vector<std::shared_ptr<Tensor>> Scatter(const std::shared_ptr<Tensor> &tensor,
-                                                         std::vector<Device> devices, int64_t dim) const;
+    virtual std::vector<std::shared_ptr<Tensor>> Scatter_(const std::shared_ptr<Tensor> &tensor,
+                                                          std::vector<Device> devices, int64_t dim) const;
 
     virtual std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors, Device destination,
                                            int64_t dim) const;
