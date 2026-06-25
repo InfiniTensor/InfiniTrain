@@ -9,6 +9,7 @@
 
 namespace infini_train {
 class Optimizer;
+class LRScheduler;
 class Tensor;
 namespace nn {
 class Module;
@@ -17,9 +18,6 @@ class Module;
 struct TrainerState {
     int64_t global_step = 0;
     int64_t consumed_batches = 0;
-    // FIXME(jym): learning_rate should be restored from scheduler state, move `last_lr` from TrainerState to
-    // SchedulerState later
-    double last_lr = 0.0;
     int64_t n_layer = 0;
     int64_t n_head = 0;
     int64_t n_kv_head = 0;
@@ -34,10 +32,10 @@ struct TrainerState {
 class Checkpoint {
 public:
     static void Save(const std::filesystem::path &checkpoint_dir, const nn::Module &model, const Optimizer *optimizer,
-                     const TrainerState &state, bool save_optimizer_state);
+                     const TrainerState &state, bool save_optimizer_state, const LRScheduler *lr_scheduler = nullptr);
 
     static void Load(const std::filesystem::path &checkpoint_dir, nn::Module &model, Optimizer *optimizer,
-                     TrainerState &state, bool load_optimizer_state);
+                     TrainerState &state, bool load_optimizer_state, LRScheduler *lr_scheduler = nullptr);
 
 private:
     static void SaveStateDict(const std::filesystem::path &path,

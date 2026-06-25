@@ -374,6 +374,182 @@
             ]
         },
         {
+            "tag": "lr_scheduler",
+            "tests": [
+                {
+                    "id": "3_none_distopt",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "use_distributed_optimizer": true,
+                        "learning_rate": 0.00001,
+                        "lr_decay_style": "none"
+                    }
+                },
+                {
+                    "id": "4_constant_tp4",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "constant",
+                        "lr_warmup_iters": 0,
+                        "lr_decay_iters": 0
+                    }
+                },
+                {
+                    "id": "5_linear_tp4_sp_distopt",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "use_distributed_optimizer": true,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "linear",
+                        "lr_warmup_iters": 2,
+                        "lr_warmup_init": 0.0,
+                        "lr_decay_iters": 10
+                    }
+                },
+                {
+                    "id": "6_cosine_pp8",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 8,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "cosine",
+                        "lr_warmup_iters": 2,
+                        "lr_warmup_init": 0.0,
+                        "lr_decay_iters": 10
+                    }
+                },
+                {
+                    "id": "7_inverse_sqrt_pp4_vpp2",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 4,
+                        "virtual_pipeline_parallel": 2,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "inverse-square-root",
+                        "lr_warmup_iters": 2,
+                        "lr_warmup_init": 0.0,
+                        "lr_decay_iters": 10
+                    }
+                },
+                {
+                    "id": "8_cosine_all_parallel_distopt",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "use_distributed_optimizer": true,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "cosine",
+                        "lr_warmup_iters": 2,
+                        "lr_warmup_init": 0.0,
+                        "lr_decay_iters": 10
+                    }
+                },
+                {
+                    "id": "3_bfloat16_linear",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "linear",
+                        "lr_warmup_iters": 2,
+                        "lr_warmup_init": 0.0,
+                        "lr_decay_iters": 0
+                    }
+                },
+                {
+                    "id": "4_bfloat16_inverse_sqrt_tp4_distopt",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "use_distributed_optimizer": true,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "inverse-square-root",
+                        "lr_warmup_iters": 2,
+                        "lr_warmup_init": 0.0,
+                        "lr_decay_iters": 10
+                    }
+                },
+                {
+                    "id": "5_bfloat16_constant_tp4_sp",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "constant",
+                        "lr_warmup_iters": 0,
+                        "lr_decay_iters": 10
+                    }
+                },
+                {
+                    "id": "8_bfloat16_none_all_parallel",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "learning_rate": 0.00001,
+                        "lr_decay_style": "none"
+                    }
+                }
+            ]
+        },
+        {
             "tag": "lora",
             "tests": [
                 {

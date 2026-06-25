@@ -38,6 +38,9 @@ public:
     void StartParamSync(bool force_sync = false);
     void FinishParamSync(bool skip_next_bucket_dispatch = false);
 
+    virtual void set_learning_rate(float lr) override;
+    virtual float learning_rate() const override;
+
 private:
     void BuildShardParamsAndBindGrads();
 

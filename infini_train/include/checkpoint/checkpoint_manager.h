@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <memory>
 
 #include "infini_train/include/checkpoint/checkpoint.h"
 #include "infini_train/include/dataloader.h"
@@ -12,6 +13,10 @@
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
+
+namespace infini_train {
+class LRScheduler;
+}
 
 namespace infini_train::nn {
 class TransformerConfig;
@@ -25,6 +30,7 @@ struct ResumeFromCheckpointArgs {
     const nn::TransformerConfig &model_config;
     TrainerState &state;
     bool load_optimizer_state;
+    std::shared_ptr<LRScheduler> lr_scheduler = nullptr;
 };
 
 struct ResumeFromCheckpointResult {
@@ -36,7 +42,6 @@ struct SaveCheckpointArgs {
     std::filesystem::path save_dir;
     int64_t global_step = 0;
     size_t consumed_batches = 0;
-    double last_lr = 0.0;
     int64_t n_layer = 0;
     int64_t n_head = 0;
     int64_t n_kv_head = 0;
@@ -52,6 +57,7 @@ struct SaveCheckpointArgs {
     const nn::parallel::Rank &rank;
     const nn::Module &model;
     const Optimizer &optimizer;
+    const LRScheduler *lr_scheduler = nullptr;
 };
 
 ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &args);

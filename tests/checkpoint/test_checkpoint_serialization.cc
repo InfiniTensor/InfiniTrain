@@ -30,7 +30,7 @@ TEST_P(CheckpointSerializationTest, SaveAndLoadModelFP32) {
 
     auto opt1 = std::make_shared<optimizers::Adam>(model1->Parameters(), 0.01);
     TrainerState saved{.global_step = 42, .consumed_batches = 100};
-    Checkpoint::Save(dir, *model1, opt1.get(), saved, true);
+    Checkpoint::Save(dir, *model1, opt1.get(), saved, /*save_optimizer_state=*/true);
 
     auto model2 = std::make_shared<nn::Linear>(3, 2, true, GetDevice());
     auto q1 = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
@@ -42,7 +42,7 @@ TEST_P(CheckpointSerializationTest, SaveAndLoadModelFP32) {
     auto opt2 = std::make_shared<optimizers::Adam>(model2->Parameters(), 0.01);
 
     TrainerState loaded;
-    Checkpoint::Load(dir, *model2, opt2.get(), loaded, true);
+    Checkpoint::Load(dir, *model2, opt2.get(), loaded, /*load_optimizer_state=*/true);
 
     EXPECT_EQ(loaded.global_step, 42);
     EXPECT_EQ(loaded.consumed_batches, 100);
