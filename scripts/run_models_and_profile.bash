@@ -74,10 +74,7 @@ RUN_CTEST="$(read_var RUN_CTEST)";              : "${RUN_CTEST:=true}"
 RUN_PROFILE_TEST="$(read_var RUN_PROFILE_TEST)";  : "${RUN_PROFILE_TEST:=true}"
 CKPT_ROOT_DIR="$(read_var CKPT_ROOT_DIR)";      : "${CKPT_ROOT_DIR:=/data1/ckpt}"
 
-mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
-
-# export custom PATHs
-export BUILD_DIR LOG_DIR PROFILE_LOG_DIR
+# export custom variables from config first. LOG_DIR/PROFILE_LOG_DIR are normalized below.
 while IFS="=" read -r k v; do
     [[ -z "$k" || "$k" == "null" ]] && continue
     export "$k"="$v"
@@ -86,6 +83,48 @@ done < <(jq -r '.variables | to_entries[] | "\(.key)=\(.value)"' "$CONFIG_FILE")
 # Global variable to save the last cmake command
 LAST_CMAKE_CMD=""
 declare -A SELECTED_TAGS=()
+
+RUN_STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
+RUN_ID="$(date '+%Y%m%d_%H%M%S')"
+RUN_DATE="$(date '+%Y%m%d')"
+GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+: "${GIT_BRANCH:=unknown}"
+GIT_COMMIT_FULL="$(git rev-parse HEAD 2>/dev/null || true)"
+: "${GIT_COMMIT_FULL:=unknown}"
+GIT_COMMIT_SHORT="${GIT_COMMIT_FULL:0:7}"
+SAFE_GIT_BRANCH="${GIT_BRANCH//\//_}"
+SAFE_GIT_BRANCH="${SAFE_GIT_BRANCH//[[:space:]]/_}"
+SAFE_GIT_BRANCH="$(printf '%s' "$SAFE_GIT_BRANCH" | tr -cd '[:alnum:]_.-')"
+: "${SAFE_GIT_BRANCH:=unknown}"
+
+LOG_DIR_PARENT="$(dirname "$LOG_DIR")"
+if [[ "$LOG_DIR_PARENT" == "." ]]; then
+    RUN_OUTPUT_DIR="${RUN_DATE}/${SAFE_GIT_BRANCH}_${GIT_COMMIT_SHORT}"
+else
+    RUN_OUTPUT_DIR="${LOG_DIR_PARENT}/${RUN_DATE}/${SAFE_GIT_BRANCH}_${GIT_COMMIT_SHORT}"
+fi
+LOG_DIR="${RUN_OUTPUT_DIR}/logs"
+PROFILE_LOG_DIR="${RUN_OUTPUT_DIR}/profile_logs"
+
+mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
+export BUILD_DIR LOG_DIR PROFILE_LOG_DIR
+
+RUN_METADATA_FILE="${LOG_DIR}/run_metadata.log"
+: > "$RUN_METADATA_FILE"
+RUN_METADATA_FILE="$(realpath "$RUN_METADATA_FILE")"
+{
+    echo "[RUN_STARTED_AT] $RUN_STARTED_AT"
+    echo "[RUN_ID] $RUN_ID"
+    echo "[GIT_BRANCH] $GIT_BRANCH"
+    echo "[GIT_COMMIT] $GIT_COMMIT_FULL"
+    echo "[GIT_COMMIT_SHORT] $GIT_COMMIT_SHORT"
+    echo "[CONFIG_FILE] $CONFIG_FILE"
+    echo "[LOG_DIR] $(realpath "$LOG_DIR")"
+    echo "[PROFILE_LOG_DIR] $(realpath "$PROFILE_LOG_DIR")"
+} > "$RUN_METADATA_FILE"
+echo -e "\033[1;33mRun metadata:\033[0m $RUN_METADATA_FILE"
+echo -e "\033[1;33mRun log dir:\033[0m $(realpath "$LOG_DIR")"
+echo -e "\033[1;33mRun profile log dir:\033[0m $(realpath "$PROFILE_LOG_DIR")"
 
 normalize_tag() {
     local raw="$1"
@@ -260,6 +299,11 @@ run_and_log() {
     fi
 
     # Write the current run command to the log
+    echo "[RUN_METADATA] $RUN_METADATA_FILE" >> "$log_path"
+    echo "[RUN_STARTED_AT] $RUN_STARTED_AT" >> "$log_path"
+    echo "[GIT_BRANCH] $GIT_BRANCH" >> "$log_path"
+    echo "[GIT_COMMIT] $GIT_COMMIT_FULL" >> "$log_path"
+    echo "[GIT_COMMIT_SHORT] $GIT_COMMIT_SHORT" >> "$log_path"
     echo "[COMMAND] $cmd" >> "$log_path"
 
     # Run the command and append both stdout and stderr to the log file
@@ -457,3 +501,6 @@ fi
 
 echo -e "\n\033[1;36m[END OF TEST] Cleaning build directory after all tests\033[0m"
 clean_build_dir
+
+echo -e "\n\033[1;33mNext step:\033[0m"
+echo "python3 write_to_feishu_sheet.py token.json --log-dir \"$(realpath "$RUN_OUTPUT_DIR")\""
