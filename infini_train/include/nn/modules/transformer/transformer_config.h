@@ -15,9 +15,43 @@ enum class MLPType {
     kSwiGLU // SwiGLU activation
 };
 
+enum class FFNType {
+    kDense, // Standard dense MLP
+    kMoE    // Mixture-of-Experts MLP
+};
+
 enum class NormType {
     kLayerNorm, // LayerNorm
     kRMSNorm    // RMSNorm
+};
+
+struct MoEConfig {
+    enum class RouterScoreFunction {
+        kSoftmax,
+        kSigmoid,
+    };
+
+    enum class TokenDispatcherType {
+        kAllGather, // Megatron-style AllGather dispatcher. Degenerates to local dispatch when TP=EP=1.
+        kAllToAll   // Megatron-style AllToAll dispatcher for expert parallel MoE.
+    };
+
+    enum class ExpertImpl {
+        kSequential // Run local experts sequentially
+    };
+
+    int64_t num_experts = 0;
+    int64_t expert_parallel_size = 1;
+    int64_t router_topk = 1;
+    bool router_pre_softmax = false;
+    std::optional<float> router_topk_scaling_factor = std::nullopt;
+    RouterScoreFunction router_score_function = RouterScoreFunction::kSoftmax;
+    float aux_loss_coeff = 0.0f;
+    std::optional<float> expert_capacity_factor = std::nullopt;
+    bool pad_expert_input_to_capacity = false;
+    int64_t moe_ffn_hidden_size = 0;
+    TokenDispatcherType token_dispatcher_type = TokenDispatcherType::kAllGather;
+    ExpertImpl expert_impl = ExpertImpl::kSequential;
 };
 
 struct TransformerConfig {
@@ -31,6 +65,7 @@ struct TransformerConfig {
 
     AttentionType attention_type = AttentionType::kStandard; // Attention mechanism type
     MLPType activation_type = MLPType::kGELU;                // MLP activation type
+    FFNType ffn_type = FFNType::kDense;                      // Feed-forward module type
     NormType norm_type = NormType::kLayerNorm;               // Normalization type
 
     bool add_bias_linear = true; // Whether to add learnable bias to all Linear layers in the Transformer block,
@@ -43,6 +78,7 @@ struct TransformerConfig {
     float ffn_expansion_ratio = 4.0f;               // MLP output: n_embd * ffn_expansion_ratio
     std::optional<float> ffn_dim_multiplier = 1.5f; // FFN dim multiplier
     int64_t multiple_of = 256;                      // FFN dims must be multiple of this number
+    std::optional<MoEConfig> moe_config = std::nullopt;
 
     // RoPE config
     float rope_theta = 500000.0f; // theta in RoPE

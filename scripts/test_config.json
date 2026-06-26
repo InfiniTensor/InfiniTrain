@@ -10,7 +10,12 @@
         "CKPT_ROOT_DIR": "/data1/ckpt",
         "COMPARE_LOG_DIR": "",
         "RUN_CTEST": "true",
-        "RUN_PROFILE_TEST": "false"
+        "RUN_PROFILE_TEST": "false",
+        "MIXTRAL_INPUT_BIN": "/data/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
+        "MIXTRAL_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/tiny_mixtral/tiny_mixtral_megatron_export.bin",
+        "GPT2_TEST_GROUPS": "basic,zero,lora,checkpoint",
+        "LLAMA3_TEST_GROUPS": "basic,zero,lora,checkpoint",
+        "MIXTRAL_TEST_GROUPS": "moe"
     },
     "basic_compile_commands": [
         {
@@ -668,6 +673,41 @@
                         "save": "@CKPT_ROOT_DIR@/3d_tp2_pp2_resume",
                         "save_optimizer_state": true,
                         "max_checkpoint_keep": 5
+                    }
+                }
+            ]
+        },
+        {
+            "tag": "moe",
+            "tests": [
+                {
+                    "id": "1",
+                    "args": {
+                        "dtype": "float32"
+                    }
+                },
+                {
+                    "id": "1_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16"
+                    }
+                },
+                {
+                    "id": "2",
+                    "args": {
+                        "dtype": "float32",
+                        "num_iteration": 10,
+                        "global_batch_size": 80,
+                        "micro_batch_size": 80
+                    }
+                },
+                {
+                    "id": "2_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 10,
+                        "global_batch_size": 80,
+                        "micro_batch_size": 80
                     }
                 }
             ]
