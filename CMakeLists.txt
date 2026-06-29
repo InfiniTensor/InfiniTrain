@@ -376,6 +376,11 @@ if(BUILD_TEST)
   add_subdirectory(tests)
 endif()
 
+if(USE_MACA)
+  add_executable(test_maca_allocator test/runtime/test_maca_allocator.cc)
+  link_infini_train_exe(test_maca_allocator)
+endif()
+
 # Negative compile test: missing dtype registration must fail at compile time.
 set(DTYPE_DISPATCH_COMPILE_FAIL_SOURCE
   ${PROJECT_SOURCE_DIR}/tests/dtype/test_dtype_dispatch_compile_fail.cc)
