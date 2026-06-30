@@ -17,6 +17,6 @@ int main(int argc, char **argv) {
 #if defined(INFINI_TRAIN_TEST_BACKEND_REGISTRAR)
     INFINI_TRAIN_TEST_BACKEND_REGISTRAR();
 #endif
-    infini_train::nn::parallel::global::GlobalEnv::Instance().Init(1, 1, false, 1, 1);
+    infini_train::nn::parallel::global::GlobalEnv::Instance().Init(1, 1, false, 1, "p2p", 1, 1);
     return RUN_ALL_TESTS();
 }

@@ -15,13 +15,21 @@ class Module;
 namespace infini_train::nn::parallel {
 std::string GetDataParallelProcessGroupName(int global_rank);
 
+std::string GetDataParallelWithContextProcessGroupName(int global_rank);
+
 std::string GetTensorParallelProcessGroupName(int global_rank);
+
+std::string GetContextParallelProcessGroupName(int global_rank);
 
 std::string GetPipelineParallelProcessGroupName(int global_rank);
 
 std::vector<int> GetDataParallelGroupRanks(int global_rank);
 
+std::vector<int> GetDataParallelWithContextGroupRanks(int global_rank);
+
 std::vector<int> GetTensorParallelGroupRanks(int global_rank);
+
+std::vector<int> GetContextParallelGroupRanks(int global_rank);
 
 std::vector<int> GetPipelineParallelGroupRanks(int global_rank);
 
