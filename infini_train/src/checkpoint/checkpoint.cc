@@ -260,11 +260,11 @@ void Checkpoint::Save(const std::filesystem::path &checkpoint_dir,
   }
   SynchronizeCheckpointRanks(model);
 
-  int dp_rank = 0, tp_rank = 0, pp_rank = 0;
-  nn::parallel::global::GetCoordOf(global_rank, dp_rank, tp_rank, pp_rank);
+  int dp_rank = 0, tp_rank = 0, cp_rank = 0, pp_rank = 0;
+  nn::parallel::global::GetCoordOf(global_rank, dp_rank, tp_rank, cp_rank, pp_rank);
   // TODO(jym): Select checkpoint writers from each shard's replica_id instead
   // of hard-coding DP rank 0.
-  if (dp_rank == 0) {
+  if (dp_rank == 0 && cp_rank == 0) {
     const auto rank_dir =
         checkpoint_dir / std::format("rank_{:06d}", global_rank);
     auto sharded_state = model.BuildShardedStateDict();
@@ -332,6 +332,7 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir,
   state.tp_size = current_tp;
   state.pp_size = current_pp;
   state.ddp_size = nn::parallel::global::GetDataParallelSize();
+  state.cp_size = nn::parallel::global::GetContextParallelSize();
   state.sp_size =
       nn::parallel::global::GetSequenceParallelEnabled() ? current_tp : 1;
   state.vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
@@ -459,6 +460,7 @@ void Checkpoint::SaveTrainerState(const std::filesystem::path &path,
   ofs << "  \"ddp_size\": " << state.ddp_size << ",\n";
   ofs << "  \"tp_size\": " << state.tp_size << ",\n";
   ofs << "  \"sp_size\": " << state.sp_size << ",\n";
+  ofs << "  \"cp_size\": " << state.cp_size << ",\n";
   ofs << "  \"pp_size\": " << state.pp_size << ",\n";
   ofs << "  \"vpp_size\": " << state.vpp_size << "\n";
   ofs << "}\n";
@@ -489,6 +491,7 @@ TrainerState Checkpoint::LoadTrainerState(const std::filesystem::path &path) {
   state.ddp_size = ExtractNumberField<int>(content, "ddp_size", 1);
   state.tp_size = ExtractNumberField<int>(content, "tp_size", 1);
   state.sp_size = ExtractNumberField<int>(content, "sp_size", 1);
+  state.cp_size = ExtractNumberField<int>(content, "cp_size", 1);
   state.pp_size = ExtractNumberField<int>(content, "pp_size", 1);
   state.vpp_size = ExtractNumberField<int>(content, "vpp_size", 1);
   return state;
@@ -595,8 +598,8 @@ void Checkpoint::SaveLocalShard(
         emitted_items.push_back(&item);
       }
     }
-    int dp_rank = 0, tp_rank = 0, pp_rank = 0;
-    nn::parallel::global::GetCoordOf(global_rank, dp_rank, tp_rank, pp_rank);
+    int dp_rank = 0, tp_rank = 0, cp_rank = 0, pp_rank = 0;
+    nn::parallel::global::GetCoordOf(global_rank, dp_rank, tp_rank, cp_rank, pp_rank);
     for (size_t i = 0; i < emitted_items.size(); ++i) {
       const auto &item = *emitted_items[i];
       const auto it = sharded_sd.tensors.find(item.key);
