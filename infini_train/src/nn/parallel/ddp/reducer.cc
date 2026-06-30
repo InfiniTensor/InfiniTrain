@@ -387,7 +387,7 @@ void Reducer::MarkBucketReady(size_t bucket_index) {
 void Reducer::FinalizeBucketDense(size_t bucket_index) {
     // NOTE(zbl): Assume mutex is on when entering this function
     auto &bucket = buckets_.at(bucket_index);
-    auto ddp_pg = ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(bucket.device_rank));
+    auto ddp_pg = ProcessGroupFactory::Instance()->Get(GetDataParallelWithContextProcessGroupName(bucket.device_rank));
 
     if (comm_hook_) {
         std::vector<std::shared_ptr<Tensor>> bucket_view{bucket.contents};

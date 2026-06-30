@@ -39,6 +39,8 @@ public:
 
     virtual int GetGroupRank(int global_rank) const;
 
+    int WorldSize() const { return world_size_; }
+
     // Asynchronous communication APIs (Compute / Communication stream decoupled)
     virtual std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor,
                                             function::ReduceOpType reduce_op = function::ReduceOpType::kSum,

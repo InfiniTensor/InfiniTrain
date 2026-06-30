@@ -8,20 +8,24 @@ namespace infini_train::nn::parallel::global {
 
 extern thread_local int thread_global_rank;
 
-enum Axis : uint8_t { DP = 0, TP = 1, PP = 2, AXIS_COUNT = 3 };
+enum Axis : uint8_t { DP = 0, TP = 1, CP = 2, PP = 3, AXIS_COUNT = 4 };
 
 struct Layout {
-    int sizes[AXIS_COUNT]{1, 1, 1};
-    // Default order according to Megatron-LM is TP-DP-PP. Ref:
+    int sizes[AXIS_COUNT]{1, 1, 1, 1};
+    // Default order follows Megatron-LM's TP-CP-DP-PP layout for context parallelism. Ref:
     // https://github.com/NVIDIA/Megatron-LM/blob/e07c4a4450b6faa187a1ef4ec082a35ad7d2f085/megatron/core/parallel_state.py#L618
-    Axis order[AXIS_COUNT]{TP, DP, PP};
-    int strides[AXIS_COUNT]{1, 1, 1};
+    Axis order[AXIS_COUNT]{TP, CP, DP, PP};
+    int strides[AXIS_COUNT]{1, 1, 1, 1};
 
     void InitStrides();
     int RankOf(int dp, int tp, int pp) const;
+    int RankOf(int dp, int tp, int cp, int pp) const;
     void CoordOf(int rank, int &dp, int &tp, int &pp) const;
+    void CoordOf(int rank, int &dp, int &tp, int &cp, int &pp) const;
     int GroupId(Axis target, int dp, int tp, int pp) const;
+    int GroupId(Axis target, int dp, int tp, int cp, int pp) const;
     std::vector<int> GroupRanks(Axis target, int fixed_dp, int fixed_tp, int fixed_pp) const;
+    std::vector<int> GroupRanks(Axis target, int fixed_dp, int fixed_tp, int fixed_cp, int fixed_pp) const;
 };
 
 class GlobalEnv {
@@ -29,7 +33,8 @@ public:
     static GlobalEnv &Instance();
 
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-              int pipeline_parallel_size, int virtual_pipeline_parallel_size);
+              int context_parallel_size, const std::string &context_parallel_comm_type, int pipeline_parallel_size,
+              int virtual_pipeline_parallel_size);
 
     int nnodes() const;
 
@@ -48,6 +53,10 @@ public:
     int sequence_parallel_size() const;
 
     bool sequence_parallel_enabled() const;
+
+    int context_parallel_size() const;
+
+    const std::string &context_parallel_comm_type() const;
 
     int data_parallel_size() const;
 
@@ -75,6 +84,8 @@ private:
 
     int tensor_parallel_size_ = 1;
     bool sequence_parallel_enabled_ = false;
+    int context_parallel_size_ = 1;
+    std::string context_parallel_comm_type_ = "p2p";
 
     int data_parallel_size_ = 1;
 
@@ -90,7 +101,15 @@ private:
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
                        int pipeline_parallel_size, int virtual_pipeline_parallel) {
     GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
+                               /*context_parallel_size=*/1, /*context_parallel_comm_type=*/"p2p",
                                pipeline_parallel_size, virtual_pipeline_parallel);
+}
+inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
+                       int context_parallel_size, const std::string &context_parallel_comm_type,
+                       int pipeline_parallel_size, int virtual_pipeline_parallel) {
+    GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
+                               context_parallel_size, context_parallel_comm_type, pipeline_parallel_size,
+                               virtual_pipeline_parallel);
 }
 inline int GetNnodes() { return GlobalEnv::Instance().nnodes(); }
 inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }
@@ -102,6 +121,8 @@ inline int GetLocalProcRank() { return GlobalEnv::Instance().local_proc_rank(); 
 inline int GetTensorParallelSize() { return GlobalEnv::Instance().tensor_parallel_size(); }
 inline int GetSequenceParallelSize() { return GlobalEnv::Instance().sequence_parallel_size(); }
 inline bool GetSequenceParallelEnabled() { return GlobalEnv::Instance().sequence_parallel_enabled(); }
+inline int GetContextParallelSize() { return GlobalEnv::Instance().context_parallel_size(); }
+inline const std::string &GetContextParallelCommType() { return GlobalEnv::Instance().context_parallel_comm_type(); }
 inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
 inline int GetPipelineParallelSize() { return GlobalEnv::Instance().pipeline_parallel_size(); }
 inline int GetVirtualPipelineParallelSize() { return GlobalEnv::Instance().virtual_pipeline_parallel_size(); }
@@ -114,11 +135,15 @@ inline int GetVirtualPipelineParallelSize() { return GlobalEnv::Instance().virtu
  * @brief Get the global rank corresponding to the given (dp, tp, pp) coordinate.
  */
 inline int GetRankOf(int dp, int tp, int pp) { return GlobalEnv::Instance().layout().RankOf(dp, tp, pp); }
+inline int GetRankOf(int dp, int tp, int cp, int pp) { return GlobalEnv::Instance().layout().RankOf(dp, tp, cp, pp); }
 /**
  * @brief Get the (dp, tp, pp) coordinate corresponding to the given global rank.
  */
 inline void GetCoordOf(int rank, int &dp, int &tp, int &pp) {
     return GlobalEnv::Instance().layout().CoordOf(rank, dp, tp, pp);
+}
+inline void GetCoordOf(int rank, int &dp, int &tp, int &cp, int &pp) {
+    return GlobalEnv::Instance().layout().CoordOf(rank, dp, tp, cp, pp);
 }
 
 /**
@@ -127,13 +152,16 @@ inline void GetCoordOf(int rank, int &dp, int &tp, int &pp) {
 inline int GetGroupId(Axis target, int dp, int tp, int pp) {
     return GlobalEnv::Instance().layout().GroupId(target, dp, tp, pp);
 }
+inline int GetGroupId(Axis target, int dp, int tp, int cp, int pp) {
+    return GlobalEnv::Instance().layout().GroupId(target, dp, tp, cp, pp);
+}
 /**
  * @brief Get the group ID that a given rank belongs to along a specific parallel axis.
  */
 inline int GetGroupId(Axis target, int rank) {
-    int dp, tp, pp;
-    GetCoordOf(rank, dp, tp, pp);
-    return GlobalEnv::Instance().layout().GroupId(target, dp, tp, pp);
+    int dp, tp, cp, pp;
+    GetCoordOf(rank, dp, tp, cp, pp);
+    return GlobalEnv::Instance().layout().GroupId(target, dp, tp, cp, pp);
 }
 
 /**
@@ -143,15 +171,18 @@ inline int GetGroupId(Axis target, int rank) {
 inline std::vector<int> GetGroupRanks(Axis target, int dp, int tp, int pp) {
     return GlobalEnv::Instance().layout().GroupRanks(target, dp, tp, pp);
 }
+inline std::vector<int> GetGroupRanks(Axis target, int dp, int tp, int cp, int pp) {
+    return GlobalEnv::Instance().layout().GroupRanks(target, dp, tp, cp, pp);
+}
 
 /**
  * @brief Get all ranks that belong to the same group as the given rank
  *        along a specified parallel axis (e.g., all ranks in the same DP group).
  */
 inline std::vector<int> GetGroupRanks(Axis target, int rank) {
-    int dp, tp, pp;
-    GetCoordOf(rank, dp, tp, pp);
-    return GlobalEnv::Instance().layout().GroupRanks(target, dp, tp, pp);
+    int dp, tp, cp, pp;
+    GetCoordOf(rank, dp, tp, cp, pp);
+    return GlobalEnv::Instance().layout().GroupRanks(target, dp, tp, cp, pp);
 }
 
 /**
@@ -160,7 +191,7 @@ inline std::vector<int> GetGroupRanks(Axis target, int rank) {
  * The output is intended for debugging, logging, and runtime verification of
  * distributed parallelism configuration.
  *
- * @param L  The Layout describing DP / TP / PP sizes and axis ordering.
+ * @param L  The Layout describing DP / TP / CP / PP sizes and axis ordering.
  * @param skip_trivial_axes
  *        If true, axes whose size <= 1(i.e. parallel strategy that is not enabled)
  *        will be marked as "unenabled" and their detailed group listing will be skipped.

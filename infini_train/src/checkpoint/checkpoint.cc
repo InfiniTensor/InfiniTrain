@@ -105,8 +105,8 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &m
     state = LoadTrainerState(checkpoint_dir / "trainer_state.json");
     LOG(ERROR) << "[CKPT] Load done: global_step=" << state.global_step
                << ", consumed_batches =" << state.consumed_batches << ", last_lr=" << state.last_lr
-               << ", topology(ddp,tp,sp,pp)=(" << state.ddp_size << "," << state.tp_size << "," << state.sp_size << ","
-               << state.pp_size << ")";
+               << ", topology(ddp,tp,sp,cp,pp)=(" << state.ddp_size << "," << state.tp_size << "," << state.sp_size
+               << "," << state.cp_size << "," << state.pp_size << ")";
 }
 
 void Checkpoint::SaveStateDict(const std::filesystem::path &path,
@@ -186,13 +186,14 @@ void Checkpoint::SaveTrainerState(const std::filesystem::path &path, const Train
     ofs << "  \"n_head\": " << state.n_head << ",\n";
     ofs << "  \"n_kv_head\": " << state.n_kv_head << ",\n";
     ofs << "  \"n_embd\": " << state.n_embd << ",\n";
-    ofs << "  \"vocab_size\": " << state.vocab_size << "\n";
+    ofs << "  \"vocab_size\": " << state.vocab_size << ",\n";
     ofs << "  \"global_step\": " << state.global_step << ",\n";
     ofs << "  \"consumed_batches\": " << state.consumed_batches << ",\n";
     ofs << "  \"last_lr\": " << state.last_lr << ",\n";
     ofs << "  \"ddp_size\": " << state.ddp_size << ",\n";
     ofs << "  \"tp_size\": " << state.tp_size << ",\n";
     ofs << "  \"sp_size\": " << state.sp_size << ",\n";
+    ofs << "  \"cp_size\": " << state.cp_size << ",\n";
     ofs << "  \"pp_size\": " << state.pp_size << "\n";
     ofs << "}\n";
 }
@@ -215,6 +216,7 @@ TrainerState Checkpoint::LoadTrainerState(const std::filesystem::path &path) {
     state.ddp_size = ExtractNumberField<int>(content, "ddp_size", 1);
     state.tp_size = ExtractNumberField<int>(content, "tp_size", 1);
     state.sp_size = ExtractNumberField<int>(content, "sp_size", 1);
+    state.cp_size = ExtractNumberField<int>(content, "cp_size", 1);
     state.pp_size = ExtractNumberField<int>(content, "pp_size", 1);
     return state;
 }

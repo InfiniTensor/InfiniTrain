@@ -28,6 +28,7 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
     int ddp_world_size = nn::parallel::global::GetDataParallelSize();
     int tp_world_size = nn::parallel::global::GetTensorParallelSize();
     int sp_world_size = nn::parallel::global::GetSequenceParallelEnabled() ? tp_world_size : 1;
+    int cp_world_size = nn::parallel::global::GetContextParallelSize();
     int pp_world_size = nn::parallel::global::GetPipelineParallelSize();
 
     std::filesystem::path resume_dir = args.resume_root;
@@ -59,6 +60,8 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
         << "TP size mismatch: checkpoint has TP=" << args.state.tp_size << ", but current run has TP=" << tp_world_size;
     CHECK_EQ(args.state.sp_size, sp_world_size)
         << "SP size mismatch: checkpoint has SP=" << args.state.sp_size << ", but current run has SP=" << sp_world_size;
+    CHECK_EQ(args.state.cp_size, cp_world_size)
+        << "CP size mismatch: checkpoint has CP=" << args.state.cp_size << ", but current run has CP=" << cp_world_size;
     CHECK_EQ(args.state.pp_size, pp_world_size)
         << "PP size mismatch: checkpoint has PP=" << args.state.pp_size << ", but current run has PP=" << pp_world_size;
 
@@ -86,6 +89,7 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
     state.ddp_size = args.ddp_size;
     state.tp_size = args.tp_size;
     state.sp_size = args.sp_size;
+    state.cp_size = args.cp_size;
     state.pp_size = args.pp_size;
 
     Checkpoint::Save(args.save_dir, args.model, &args.optimizer, state, args.save_optimizer_state);
