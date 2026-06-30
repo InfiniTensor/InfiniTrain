@@ -55,6 +55,7 @@ struct SaveCheckpointArgs {
   int ddp_size = 1;
   int tp_size = 1;
   int sp_size = 1;
+    int cp_size = 1;
   int pp_size = 1;
   int vpp_size = 1;
   std::filesystem::path checkpoint_root_dir;

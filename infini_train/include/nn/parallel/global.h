@@ -17,7 +17,7 @@ extern thread_local int thread_global_rank;
 // TP and DP are view-local axes. In the expert rank generator they represent
 // expert tensor parallelism (ETP) and expert data parallelism (EDP), matching
 // Megatron-LM's RankGenerator semantics.
-enum Axis : uint8_t { kDp = 0, kTp = 1, kPp = 2, kEp = 3, kAxisCount = 4 };
+enum Axis : uint8_t { kDp = 0, kTp = 1, kPp = 2, kEp = 3, kCp = 4, kAxisCount = 5 };
 
 class RankGenerator {
  public:
@@ -25,8 +25,8 @@ class RankGenerator {
   // https://github.com/NVIDIA/Megatron-LM/blob/cf2f07d7b1315c96c05554c670c43207c6783e5e/megatron/core/parallel_state.py#L561
   explicit RankGenerator(int tensor_parallel_size, int expert_parallel_size,
                          int data_parallel_size, int pipeline_parallel_size,
-                         std::array<Axis, kAxisCount> order = {kTp, kEp, kDp,
-                                                               kPp});
+                         int context_parallel_size = 1,
+                         std::array<Axis, kAxisCount> order = {kTp, kCp, kEp, kDp, kPp});
 
   int AxisSize(Axis axis) const;
   int WorldSize() const;
@@ -44,15 +44,15 @@ class RankGenerator {
                               int global_rank) const;
   std::vector<int> GroupRanks(Axis varying_axis, int global_rank) const;
 
-  int RankOf(int dp, int tp, int pp, int ep) const;
-  void CoordOf(int rank, int &dp, int &tp, int &pp, int &ep) const;
+  int RankOf(int dp, int tp, int pp, int ep, int cp = 0) const;
+  void CoordOf(int rank, int &dp, int &tp, int &pp, int &ep, int &cp) const;
 
  private:
   void InitStrides();
 
-  std::array<int, kAxisCount> sizes_{1, 1, 1, 1};
-  std::array<Axis, kAxisCount> order_{kTp, kEp, kDp, kPp};
-  std::array<int, kAxisCount> strides_{1, 1, 1, 1};
+  std::array<int, kAxisCount> sizes_{1, 1, 1, 1, 1};
+  std::array<Axis, kAxisCount> order_{kTp, kCp, kEp, kDp, kPp};
+  std::array<int, kAxisCount> strides_{1, 1, 1, 1, 1};
 };
 
 class GlobalEnv {
@@ -87,6 +87,10 @@ class GlobalEnv {
 
   bool sequence_parallel_enabled() const;
 
+  int context_parallel_size() const;
+  const std::string &context_parallel_comm_type() const;
+  const std::vector<int> &hierarchical_context_parallel_sizes() const;
+
   int data_parallel_size() const;
 
   int expert_data_parallel_size() const;
@@ -120,14 +124,18 @@ class GlobalEnv {
 
   ModelParallelConfig model_parallel_config_;
 
+  int context_parallel_size_ = 1;
+  std::string context_parallel_comm_type_ = "p2p";
+  std::vector<int> hierarchical_context_parallel_sizes_;
+
   int data_parallel_size_ = 1;
   int expert_data_parallel_size_ = 1;
 
   mutable std::mutex mutex_;
   bool initialized_ = false;
 
-  RankGenerator dense_rank_generator_{1, 1, 1, 1};
-  RankGenerator expert_rank_generator_{1, 1, 1, 1};
+  RankGenerator dense_rank_generator_{1, 1, 1, 1, 1};
+  RankGenerator expert_rank_generator_{1, 1, 1, 1, 1};
 };
 
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size,
@@ -175,6 +183,15 @@ inline int GetSequenceParallelSize() {
 inline bool GetSequenceParallelEnabled() {
   return GlobalEnv::Instance().sequence_parallel_enabled();
 }
+inline int GetContextParallelSize() {
+  return GlobalEnv::Instance().context_parallel_size();
+}
+inline const std::string &GetContextParallelCommType() {
+  return GlobalEnv::Instance().context_parallel_comm_type();
+}
+inline const std::vector<int> &GetHierarchicalContextParallelSizes() {
+  return GlobalEnv::Instance().hierarchical_context_parallel_sizes();
+}
 inline int GetDataParallelSize() {
   return GlobalEnv::Instance().data_parallel_size();
 }
@@ -198,30 +215,19 @@ inline const RankGenerator &GetExpertRankGenerator() {
   return GlobalEnv::Instance().expert_rank_generator();
 }
 
-// Compatibility helpers for the pre-RankGenerator dense topology API.
-inline int GetRankOf(int dp, int tp, int pp) {
-  return GetDenseRankGenerator().RankOf(dp, tp, pp, /*ep=*/0);
+// Dense topology helpers use the complete DP/TP/CP/PP coordinate.
+inline int GetRankOf(int dp, int tp, int cp, int pp) {
+  return GetDenseRankGenerator().RankOf(dp, tp, pp, /*ep=*/0, cp);
 }
-
-inline void GetCoordOf(int rank, int &dp, int &tp, int &pp) {
+inline void GetCoordOf(int rank, int &dp, int &tp, int &cp, int &pp) {
   int ep = 0;
-  GetDenseRankGenerator().CoordOf(rank, dp, tp, pp, ep);
+  GetDenseRankGenerator().CoordOf(rank, dp, tp, pp, ep, cp);
 }
-
 inline int GetGroupId(Axis target, int rank) {
   return GetDenseRankGenerator().GroupId(target, rank);
 }
-
-inline int GetGroupId(Axis target, int dp, int tp, int pp) {
-  return GetGroupId(target, GetRankOf(dp, tp, pp));
-}
-
 inline std::vector<int> GetGroupRanks(Axis target, int rank) {
   return GetDenseRankGenerator().GroupRanks(target, rank);
-}
-
-inline std::vector<int> GetGroupRanks(Axis target, int dp, int tp, int pp) {
-  return GetGroupRanks(target, GetRankOf(dp, tp, pp));
 }
 
 /**

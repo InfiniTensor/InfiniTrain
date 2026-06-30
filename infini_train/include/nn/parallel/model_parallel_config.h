@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <string>
 
 namespace infini_train::nn::parallel {
 
@@ -35,6 +36,10 @@ struct ModelParallelConfig {
   // still apply.
   bool tp_comm_overlap_disable_qkv = false;
   bool tp_comm_overlap_disable_fc1 = false;
+
+  int context_model_parallel_size = 1;
+  std::string context_parallel_comm_type = "p2p";
+  std::string hierarchical_context_parallel_sizes;
 };
 
 }  // namespace infini_train::nn::parallel

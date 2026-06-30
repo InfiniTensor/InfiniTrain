@@ -84,6 +84,12 @@ std::string GetExpertDataParallelProcessGroupName(int global_rank) {
                      global::kDp, global_rank));
 }
 
+std::string GetDataParallelWithContextProcessGroupName(int global_rank) {
+  int dp, tp, cp, pp;
+  global::GetCoordOf(global_rank, dp, tp, cp, pp);
+  return "DP_CP" + std::to_string(tp * global::GetPipelineParallelSize() + pp);
+}
+
 std::string GetTensorParallelProcessGroupName(int global_rank) {
   return "TP" + std::to_string(global::GetGroupId(global::kTp, global_rank));
 }
@@ -91,6 +97,10 @@ std::string GetTensorParallelProcessGroupName(int global_rank) {
 std::string GetExpertTensorParallelProcessGroupName(int global_rank) {
   return "ETP" + std::to_string(global::GetExpertRankGenerator().GroupId(
                      global::kTp, global_rank));
+}
+
+std::string GetContextParallelProcessGroupName(int global_rank) {
+  return "CP" + std::to_string(global::GetGroupId(global::CP, global_rank));
 }
 
 std::string GetPipelineParallelProcessGroupName(int global_rank) {
@@ -115,12 +125,30 @@ std::vector<int> GetExpertDataParallelGroupRanks(int global_rank) {
   return global::GetExpertRankGenerator().GroupRanks(global::kDp, global_rank);
 }
 
+std::vector<int> GetDataParallelWithContextGroupRanks(int global_rank) {
+  int dp, tp, cp, pp;
+  global::GetCoordOf(global_rank, dp, tp, cp, pp);
+  std::vector<int> ranks;
+  ranks.reserve(global::GetDataParallelSize() *
+                global::GetContextParallelSize());
+  for (int dp_idx = 0; dp_idx < global::GetDataParallelSize(); ++dp_idx) {
+    for (int cp_idx = 0; cp_idx < global::GetContextParallelSize(); ++cp_idx) {
+      ranks.push_back(global::GetRankOf(dp_idx, tp, cp_idx, pp));
+    }
+  }
+  return ranks;
+}
+
 std::vector<int> GetTensorParallelGroupRanks(int global_rank) {
   return global::GetDenseRankGenerator().GroupRanks(global::kTp, global_rank);
 }
 
 std::vector<int> GetExpertTensorParallelGroupRanks(int global_rank) {
   return global::GetExpertRankGenerator().GroupRanks(global::kTp, global_rank);
+}
+
+std::vector<int> GetContextParallelGroupRanks(int global_rank) {
+  return global::GetGroupRanks(global::CP, global_rank);
 }
 
 std::vector<int> GetPipelineParallelGroupRanks(int global_rank) {

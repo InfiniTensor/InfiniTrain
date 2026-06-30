@@ -45,6 +45,7 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/parallel/comm.h"
+#include "infini_train/include/nn/parallel/context_parallel.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
@@ -134,6 +135,9 @@ DEFINE_bool(tp_comm_overlap_disable_qkv, false,
             "Disable QKV forward AG and split dgrad RS overlap");
 DEFINE_bool(tp_comm_overlap_disable_fc1, false,
             "Disable FC1 forward AG and split dgrad RS overlap");
+DEFINE_uint32(context_parallel, 1, "Context Parallel world size");
+DEFINE_string(cp_comm_type, "p2p",
+              "Context Parallel communication type (all_gather|p2p|a2a)");
 DEFINE_uint32(
     pipeline_parallel, 1,
     "Pipeline Parallel world size, specified the number of PP stages.");
@@ -226,6 +230,9 @@ DEFINE_validator(zero_stage, [](const char *, int32_t value) {
 DEFINE_validator(lr_decay_style, [](const char *, const std::string &value) {
   return kSupportedLRDecayStyles.contains(value);
 });
+DEFINE_validator(cp_comm_type, [](const char *, const std::string &value) {
+  return value == "all_gather" || value == "p2p" || value == "a2a";
+});
 
 void Train(const nn::parallel::Rank &rank) {
   using namespace nn::parallel;
@@ -253,16 +260,30 @@ void Train(const nn::parallel::Rank &rank) {
   int ddp_world_size = global::GetDataParallelSize();
   int tp_world_size = global::GetTensorParallelSize();
   int sp_world_size = global::GetSequenceParallelEnabled() ? tp_world_size : 1;
+  int cp_world_size = global::GetContextParallelSize();
+  int dp_cp_world_size = ddp_world_size * cp_world_size;
   int pp_world_size = global::GetPipelineParallelSize();
+  const auto cp_local_sequence_length = FLAGS_sequence_length / cp_world_size;
 
+  if (cp_world_size > 1) {
+    CHECK_EQ(FLAGS_sequence_length % cp_world_size, 0)
+        << "sequence_length must be divisible by context_parallel.";
+  }
   if (FLAGS_sequence_parallel) {
-    CHECK_EQ(FLAGS_sequence_length % tp_world_size, 0)
-        << "sequence_length must be divisible by tp_world_size when SP is "
-           "enabled (pad later if needed).";
+    CHECK_EQ(cp_local_sequence_length % tp_world_size, 0)
+        << "CP-local sequence_length must be divisible by tp_world_size when "
+           "SP is enabled.";
+  }
+  if (FLAGS_zero_stage >= 1) {
+    CHECK_GT(dp_cp_world_size, 1)
+        << "ZeRO requires DP or CP world size greater than 1.";
+    CHECK_LE(FLAGS_zero_stage, 2) << "ZeRO-3 is not supported yet.";
   }
 
   int ddp_rank = 0;
+  int dp_cp_rank = 0;
   int tp_rank = 0;
+  int cp_rank = 0;
   int pp_rank = 0;
 
   // Set thread-local global rank
@@ -270,7 +291,9 @@ void Train(const nn::parallel::Rank &rank) {
   nn::parallel::global::thread_global_rank = rank.GlobalRank();
 
   const ProcessGroup *ddp_pg = nullptr;
+  const ProcessGroup *dp_cp_pg = nullptr;
   const ProcessGroup *tp_pg = nullptr;
+  const ProcessGroup *cp_pg = nullptr;
   const ProcessGroup *pp_pg = nullptr;
 
   if (rank.IsParallel()) {
@@ -286,6 +309,13 @@ void Train(const nn::parallel::Rank &rank) {
       ddp_rank = ddp_pg->GetGroupRank(rank.GlobalRank());
     }
 
+    if (dp_cp_world_size > 1) {
+      dp_cp_pg = pg_factory->GetOrCreate(
+          GetDataParallelWithContextProcessGroupName(rank.GlobalRank()),
+          GetDataParallelWithContextGroupRanks(rank.GlobalRank()));
+      dp_cp_rank = dp_cp_pg->GetGroupRank(rank.GlobalRank());
+    }
+
     if (tp_world_size > 1) {
       tp_pg = pg_factory->GetOrCreate(
           GetTensorParallelProcessGroupName(rank.GlobalRank()),
@@ -293,6 +323,14 @@ void Train(const nn::parallel::Rank &rank) {
       tp_rank = tp_pg->GetGroupRank(rank.GlobalRank());
       // NOTE(zbl): Reserved for VocabParallelEmbedding
       nn::parallel::tp_rank = tp_rank;
+    }
+
+    if (cp_world_size > 1) {
+      cp_pg = pg_factory->GetOrCreate(
+          GetContextParallelProcessGroupName(rank.GlobalRank()),
+          GetContextParallelGroupRanks(rank.GlobalRank()));
+      cp_rank = cp_pg->GetGroupRank(rank.GlobalRank());
+      nn::parallel::cp_rank = cp_rank;
     }
 
     if (pp_world_size > 1) {
@@ -394,16 +432,16 @@ void Train(const nn::parallel::Rank &rank) {
 
   if (pp_world_size > 1) {
     // NOTE(dcj): To ensure that the tensor shapes at the pipeline stage
-    // boundaries remain correct when sequence parallelism (SP) is enabled, we
-    // need to divide by sp_world_size.
+    // boundaries remain correct when context/sequence parallelism is enabled,
+    // use the CP-local and SP-local sequence length.
     auto shapes = std::vector<std::vector<int64_t>>{
-        {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size,
+        {FLAGS_batch_size, cp_local_sequence_length / sp_world_size,
          model_config.n_embd}};
 
     model = std::make_shared<nn::parallel::PipelineParallel>(
         model, pp_world_size, num_micro_batches, shapes, pp_rank, device,
         model_config.GetChunkSize());
-    if (ddp_world_size > 1) {
+    if (dp_cp_world_size > 1) {
       auto ddp_config =
           DistributedDataParallelConfig{.zero_stage = FLAGS_zero_stage};
       auto *mutable_chunks =
@@ -414,7 +452,7 @@ void Train(const nn::parallel::Rank &rank) {
             mutable_chunks->at(chunk_id), rank, ddp_config);
       }
     }
-  } else if (ddp_world_size > 1) {
+  } else if (dp_cp_world_size > 1) {
     // NOTE(dcj): Complete all device (.to(device)) and dtype (.to(dtype))
     // conversions before wrapping the model with DistributedDataParallel (DDP).
     // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
@@ -474,8 +512,8 @@ void Train(const nn::parallel::Rank &rank) {
                     ->mutable_chunks())
             : std::vector<std::shared_ptr<nn::Module>>{model};
     optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(
-        optimizer_creator, named_parameters, model_chunks, ddp_world_size,
-        ddp_rank);
+        optimizer_creator, named_parameters, model_chunks, dp_cp_world_size,
+        dp_cp_rank);
   } else {
     optimizer = optimizer_creator(named_parameters);
   }
@@ -556,6 +594,7 @@ void Train(const nn::parallel::Rank &rank) {
         .ddp_size = ddp_world_size,
         .tp_size = tp_world_size,
         .sp_size = sp_world_size,
+        .cp_size = cp_world_size,
         .pp_size = pp_world_size,
         .vpp_size = static_cast<int>(FLAGS_virtual_pipeline_parallel),
         .checkpoint_root_dir = FLAGS_save,
@@ -626,6 +665,10 @@ void Train(const nn::parallel::Rank &rank) {
         auto [x, y] = next_train_batch();
         x = std::make_shared<Tensor>(x->To(device));
         y = std::make_shared<Tensor>(y->To(device));
+        if (cp_world_size > 1) {
+          x = nn::parallel::SliceAlongCPRegionFunc(x, 1);
+          y = nn::parallel::SliceAlongCPRegionFunc(y, 1);
+        }
 
         LOG(INFO) << "Rank " << rank.GlobalRank() << ": start forward";
 
@@ -665,6 +708,10 @@ void Train(const nn::parallel::Rank &rank) {
       auto [x, y] = next_train_batch();
       x = std::make_shared<Tensor>(x->To(device));
       y = std::make_shared<Tensor>(y->To(device));
+      if (cp_world_size > 1) {
+        x = nn::parallel::SliceAlongCPRegionFunc(x, 1);
+        y = nn::parallel::SliceAlongCPRegionFunc(y, 1);
+      }
 
       lossf = model->TrainStep({x}, {y}, optimizer, loss_fn, dtype);
       if (scheduler) {
@@ -672,10 +719,10 @@ void Train(const nn::parallel::Rank &rank) {
       }
     }
 
-    if (ddp_world_size > 1) {
+    if (dp_cp_world_size > 1) {
       auto lossf_tensor = std::make_shared<Tensor>(
           &lossf, std::vector<int64_t>{}, DataType::kFLOAT32, device);
-      comm::AllReduce(lossf_tensor, comm::ReduceOpType::kAvg, ddp_pg);
+      comm::AllReduce(lossf_tensor, comm::ReduceOpType::kAvg, dp_cp_pg);
       lossf =
           static_cast<const float *>(lossf_tensor->To(Device()).DataPtr())[0];
     }
@@ -693,10 +740,11 @@ void Train(const nn::parallel::Rank &rank) {
           "step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} "
           "tok/s | "
           "peak used: {:5d} MB | peak reserved: {:5d} MB, DP={}, TP={}, SP={}, "
+          "CP={}, "
           "PP={})",
           step + 1, FLAGS_num_iteration, lossf, current_lr, duration_us / 1e3f,
           tps, used_mb, reserved_mb, ddp_world_size, tp_world_size,
-          sp_world_size, pp_world_size);
+          sp_world_size, cp_world_size, pp_world_size);
 
       if ((step + 1) % FLAGS_freq_generate_txt == 0) {
         if (tokenizer) {
@@ -759,7 +807,7 @@ int main(int argc, char *argv[]) {
 
   auto precision_config =
       utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
-  nn::parallel::ModelParallelConfig model_parallel_config;
+nn::parallel::ModelParallelConfig model_parallel_config;
   model_parallel_config.tensor_model_parallel_size = FLAGS_tensor_parallel;
   model_parallel_config.pipeline_model_parallel_size = FLAGS_pipeline_parallel;
   model_parallel_config.virtual_pipeline_model_parallel_size =
@@ -776,6 +824,8 @@ int main(int argc, char *argv[]) {
       FLAGS_tp_comm_overlap_disable_qkv;
   model_parallel_config.tp_comm_overlap_disable_fc1 =
       FLAGS_tp_comm_overlap_disable_fc1;
+  model_parallel_config.context_model_parallel_size = FLAGS_context_parallel;
+  model_parallel_config.context_parallel_comm_type = FLAGS_cp_comm_type;
   model_parallel_config.expert_tensor_parallel_size = 1;
   nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process,
                                    model_parallel_config);
