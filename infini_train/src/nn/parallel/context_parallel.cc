@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/parallel/context_parallel.h"
 
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <string>
@@ -139,6 +140,37 @@ std::shared_ptr<Tensor> NewZeroTensorLike(const std::shared_ptr<Tensor> &tensor)
     return output;
 }
 
+std::vector<std::shared_ptr<Work>> P2PCommunicate(int rank, const std::vector<std::shared_ptr<Tensor>> &send_tensors,
+                                                  int send_dst,
+                                                  const std::vector<std::shared_ptr<Tensor>> &recv_tensors,
+                                                  int recv_src, const ProcessGroup *cp_group, bool batch_p2p_comm) {
+    std::vector<P2POp> ops;
+    ops.reserve(send_tensors.size() + recv_tensors.size());
+    std::vector<std::shared_ptr<Work>> works;
+
+    if (rank % 2 == 0) {
+        if (batch_p2p_comm) {
+            for (const auto &tensor : send_tensors) { ops.push_back({P2POpType::kSend, tensor, send_dst}); }
+            for (const auto &tensor : recv_tensors) { ops.push_back({P2POpType::kRecv, tensor, recv_src}); }
+        } else {
+            works.push_back(cp_group->Send(send_tensors, send_dst, true));
+            works.push_back(cp_group->Recv(recv_tensors, recv_src, true));
+        }
+    } else {
+        if (batch_p2p_comm) {
+            for (const auto &tensor : recv_tensors) { ops.push_back({P2POpType::kRecv, tensor, recv_src}); }
+            for (const auto &tensor : send_tensors) { ops.push_back({P2POpType::kSend, tensor, send_dst}); }
+        } else {
+            works.push_back(cp_group->Recv(recv_tensors, recv_src, true));
+            works.push_back(cp_group->Send(send_tensors, send_dst, true));
+        }
+    }
+    if (batch_p2p_comm) {
+        works.push_back(cp_group->BatchSendRecv(ops, true));
+    }
+    return works;
+}
+
 std::shared_ptr<Tensor> RepeatKVHeads(const std::shared_ptr<Tensor> &x, int64_t n_rep) {
     if (n_rep == 1) {
         return x;
@@ -161,8 +193,8 @@ std::shared_ptr<Tensor> SumRepeatedKVHeads(const std::shared_ptr<Tensor> &x, int
 }
 
 std::shared_ptr<Tensor> ApplyCoreAttention(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
-                                           const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask,
-                                           float scale) {
+                                           const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask) {
+    const float scale = static_cast<float>(1.0 / std::sqrt(static_cast<double>(q->Dims().back())));
     // scores: (B, H, T_q, T_k)
     auto scores = q->Matmul(k->Transpose(-2, -1)) * scale;
     if (mask) {
@@ -189,7 +221,8 @@ public:
     }
 
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
-        // FIXME(zbl): See Forward() for the [B, H, S, D] sequence-first bridge.
+        // FIXME(zbl): Megatron keeps sequence as dim 0. We uses [B, H, S, D], so move only
+        //              the sequence dimension to dim 0 before the CP gather.
         return {ReduceScatterAlongFirstDim(grad_outputs[0]->Transpose(0, 2))->Transpose(0, 2)->Contiguous()};
     }
 };
@@ -228,7 +261,7 @@ class AttnWithCPAndKVP2P : public autograd::Function {
 public:
     static constexpr char kType[] = "AttnWithCPAndKVP2PFunction";
 
-    AttnWithCPAndKVP2P(float scale, int64_t n_rep) : autograd::Function(kType), scale_(scale), n_rep_(n_rep) {}
+    AttnWithCPAndKVP2P() : autograd::Function(kType) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
         CHECK_EQ(input_tensors.size(), 4);
@@ -252,12 +285,16 @@ public:
         const int rank = cp_group->GetGroupRank(q->GetDevice().Rank().GlobalRank());
         const int send_to = (rank + 1) % cp_size;
         const int recv_from = (rank - 1 + cp_size) % cp_size;
+        // NOTE(zbl): Megatron-LM enables batched P2P by default for CP=2 on pre-Blackwell GPUs.
+        const bool batch_p2p_comm = (cp_size == 2);
 
         const int64_t local_t = q->Dims()[2];
         CHECK_EQ(k_local->Dims()[2], local_t);
         CHECK_EQ(v_local->Dims()[2], local_t);
-        CHECK_EQ(q->Dims()[1], k_local->Dims()[1] * n_rep_);
-        CHECK_EQ(q->Dims()[1], v_local->Dims()[1] * n_rep_);
+        CHECK_EQ(k_local->Dims()[1], v_local->Dims()[1]);
+        CHECK_EQ(q->Dims()[1] % k_local->Dims()[1], 0);
+        const int64_t n_rep = q->Dims()[1] / k_local->Dims()[1];
+        const float scale = static_cast<float>(1.0 / std::sqrt(static_cast<double>(q->Dims().back())));
 
         // current_k: (B, H_kv, T_l, D), owned by rank `(rank - step + cp_size) % cp_size`.
         auto current_k = k_local;
@@ -273,20 +310,14 @@ public:
         for (int step = 0; step < cp_size; ++step) {
             std::shared_ptr<Tensor> next_k;
             std::shared_ptr<Tensor> next_v;
-            std::shared_ptr<Work> send_work;
-            std::shared_ptr<Work> recv_work;
+            std::vector<std::shared_ptr<Work>> p2p_works;
             if (step + 1 < cp_size) {
                 // next_k: (B, H_kv, T_l, D)
                 next_k = std::make_shared<Tensor>(k_local->Dims(), k_local->Dtype(), k_local->GetDevice());
                 // next_v: (B, H_kv, T_l, D)
                 next_v = std::make_shared<Tensor>(v_local->Dims(), v_local->Dtype(), v_local->GetDevice());
-                if (rank % 2 == 0) {
-                    send_work = cp_group->Send({current_k, current_v}, send_to, true);
-                    recv_work = cp_group->Recv({next_k, next_v}, recv_from, true);
-                } else {
-                    recv_work = cp_group->Recv({next_k, next_v}, recv_from, true);
-                    send_work = cp_group->Send({current_k, current_v}, send_to, true);
-                }
+                p2p_works = P2PCommunicate(rank, {current_k, current_v}, send_to, {next_k, next_v}, recv_from, cp_group,
+                                           batch_p2p_comm);
             }
 
             const int owner = (rank - step + cp_size) % cp_size;
@@ -294,11 +325,11 @@ public:
             const int64_t kv_end = kv_start + local_t;
 
             // k_for_attn: (B, H_q, T_l, D)
-            auto k_for_attn = RepeatKVHeads(current_k, n_rep_);
+            auto k_for_attn = RepeatKVHeads(current_k, n_rep);
             // v_for_attn: (B, H_q, T_l, D)
-            auto v_for_attn = RepeatKVHeads(current_v, n_rep_);
+            auto v_for_attn = RepeatKVHeads(current_v, n_rep);
             // scores: (B, H_q, T_l, T_l)
-            auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale_;
+            auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
             // invalid_mask: (1, 1, T_l, T_l)
             auto invalid_mask = mask->Slice(3, kv_start, kv_end);
             scores = scores->MaskedFill(invalid_mask, std::numeric_limits<float>::lowest());
@@ -329,9 +360,8 @@ public:
                 running_max = new_max;
             }
 
-            if (recv_work) {
-                recv_work->WaitNonBlocking();
-                send_work->WaitNonBlocking();
+            if (!p2p_works.empty()) {
+                for (const auto &work : p2p_works) { work->WaitNonBlocking(); }
                 current_k = next_k;
                 current_v = next_v;
             }
@@ -355,15 +385,14 @@ public:
     }
 
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
-        // This backward is intentionally handwritten. Although the p2p Forward is composed from
-        // small Tensor ops, InfiniTrain executes autograd::Function::Forward() under NoGradGuard,
-        // so those ops are not recorded in the autograd graph. Raw CP p2p Send/Recv also has no
-        // autograd edge; the backward ring must explicitly accumulate every Q shard's contribution
-        // and return each K/V chunk's gradients to its owner rank.
-        //
         // Shape notation:
-        // B: batch size, H_q: local query heads after TP, H_kv: local KV heads before GQA repeat,
-        // T_l: CP-local sequence length, T_g: global sequence length, D: head dimension.
+        // - B: batch size
+        // - H_q: local query heads after TP
+        // - H_kv: local KV heads before GQA repeat
+        // - T_l: CP-local sequence length
+        // - T_g: global sequence length
+        // - D: head dimension.
+
         CHECK_GE(grad_outputs.size(), 1);
         auto saved_tensors = ctx_.GetSavedTensors();
         CHECK_EQ(saved_tensors.size(), 7);
@@ -393,12 +422,16 @@ public:
         const int rank = cp_group->GetGroupRank(q->GetDevice().Rank().GlobalRank());
         const int send_to = (rank + 1) % cp_size;
         const int recv_from = (rank - 1 + cp_size) % cp_size;
+        // NOTE(zbl): Megatron-LM enables batched P2P by default for CP=2 on pre-Blackwell GPUs.
+        const bool batch_p2p_comm = (cp_size == 2);
 
         const int64_t local_t = q->Dims()[2];
         CHECK_EQ(k_local->Dims()[2], local_t);
         CHECK_EQ(v_local->Dims()[2], local_t);
-        CHECK_EQ(q->Dims()[1], k_local->Dims()[1] * n_rep_);
-        CHECK_EQ(q->Dims()[1], v_local->Dims()[1] * n_rep_);
+        CHECK_EQ(k_local->Dims()[1], v_local->Dims()[1]);
+        CHECK_EQ(q->Dims()[1] % k_local->Dims()[1], 0);
+        const int64_t n_rep = q->Dims()[1] / k_local->Dims()[1];
+        const float scale = static_cast<float>(1.0 / std::sqrt(static_cast<double>(q->Dims().back())));
 
         // current_k: (B, H_kv, T_l, D)
         auto current_k = k_local;
@@ -419,11 +452,11 @@ public:
             const int64_t kv_end = kv_start + local_t;
 
             // k_for_attn: (B, H_q, T_l, D)
-            auto k_for_attn = RepeatKVHeads(current_k, n_rep_);
+            auto k_for_attn = RepeatKVHeads(current_k, n_rep);
             // v_for_attn: (B, H_q, T_l, D)
-            auto v_for_attn = RepeatKVHeads(current_v, n_rep_);
+            auto v_for_attn = RepeatKVHeads(current_v, n_rep);
             // scores: (B, H_q, T_l, T_l)
-            auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale_;
+            auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
             // invalid_mask: (1, 1, T_l, T_l)
             auto invalid_mask = mask->Slice(3, kv_start, kv_end);
             scores = scores->MaskedFill(invalid_mask, std::numeric_limits<float>::lowest());
@@ -437,14 +470,13 @@ public:
             // grad_scores: (B, H_q, T_l, T_l)
             auto grad_scores = probs * (grad_probs - softmax_delta);
             // grad_k_repeated: (B, H_q, T_l, D)
-            auto grad_k_repeated = grad_scores->Transpose(-2, -1)->Matmul(q) * scale_;
+            auto grad_k_repeated = grad_scores->Transpose(-2, -1)->Matmul(q) * scale;
 
             // SumRepeatedKVHeads maps repeated GQA gradients from (B, H_q, T_l, D) to (B, H_kv, T_l, D).
-            current_grad_k = current_grad_k + SumRepeatedKVHeads(grad_k_repeated, n_rep_);
-            current_grad_v = current_grad_v + SumRepeatedKVHeads(grad_v_repeated, n_rep_);
+            current_grad_k = current_grad_k + SumRepeatedKVHeads(grad_k_repeated, n_rep);
+            current_grad_v = current_grad_v + SumRepeatedKVHeads(grad_v_repeated, n_rep);
 
-            std::shared_ptr<Work> send_work;
-            std::shared_ptr<Work> recv_work;
+            std::vector<std::shared_ptr<Work>> p2p_works;
             std::shared_ptr<Tensor> next_k;
             std::shared_ptr<Tensor> next_v;
             std::shared_ptr<Tensor> next_grad_k;
@@ -460,34 +492,24 @@ public:
                 next_grad_k = NewZeroTensorLike(k_local);
                 // next_grad_v: (B, H_kv, T_l, D)
                 next_grad_v = NewZeroTensorLike(v_local);
-                if (rank % 2 == 0) {
-                    send_work = cp_group->Send({current_k, current_v, current_grad_k, current_grad_v}, send_to, true);
-                    recv_work = cp_group->Recv({next_k, next_v, next_grad_k, next_grad_v}, recv_from, true);
-                } else {
-                    recv_work = cp_group->Recv({next_k, next_v, next_grad_k, next_grad_v}, recv_from, true);
-                    send_work = cp_group->Send({current_k, current_v, current_grad_k, current_grad_v}, send_to, true);
-                }
+                p2p_works
+                    = P2PCommunicate(rank, {current_k, current_v, current_grad_k, current_grad_v}, send_to,
+                                     {next_k, next_v, next_grad_k, next_grad_v}, recv_from, cp_group, batch_p2p_comm);
             } else {
                 // Last step only needs to rotate accumulated K/V grads back to the local owner rank.
                 // next_grad_k: (B, H_kv, T_l, D)
                 next_grad_k = NewZeroTensorLike(k_local);
                 // next_grad_v: (B, H_kv, T_l, D)
                 next_grad_v = NewZeroTensorLike(v_local);
-                if (rank % 2 == 0) {
-                    send_work = cp_group->Send({current_grad_k, current_grad_v}, send_to, true);
-                    recv_work = cp_group->Recv({next_grad_k, next_grad_v}, recv_from, true);
-                } else {
-                    recv_work = cp_group->Recv({next_grad_k, next_grad_v}, recv_from, true);
-                    send_work = cp_group->Send({current_grad_k, current_grad_v}, send_to, true);
-                }
+                p2p_works = P2PCommunicate(rank, {current_grad_k, current_grad_v}, send_to, {next_grad_k, next_grad_v},
+                                           recv_from, cp_group, batch_p2p_comm);
             }
 
             // grad_q_chunk: (B, H_q, T_l, D)
-            auto grad_q_chunk = grad_scores->Matmul(k_for_attn) * scale_;
+            auto grad_q_chunk = grad_scores->Matmul(k_for_attn) * scale;
             grad_q = grad_q ? grad_q + grad_q_chunk : grad_q_chunk;
 
-            recv_work->WaitNonBlocking();
-            send_work->WaitNonBlocking();
+            for (const auto &work : p2p_works) { work->WaitNonBlocking(); }
 
             if (step + 1 < cp_size) {
                 current_k = next_k;
@@ -502,10 +524,6 @@ public:
 
         return {grad_q, current_grad_k, current_grad_v, nullptr};
     }
-
-private:
-    float scale_ = 1.0f;
-    int64_t n_rep_ = 1;
 };
 
 std::shared_ptr<Tensor> AllToAllSeqToHeadCPRegionFunc(const std::shared_ptr<Tensor> &input) {
@@ -551,14 +569,16 @@ std::shared_ptr<Tensor> GatherFromCPRegionFunc(const std::shared_ptr<Tensor> &in
 
 // CP Attention Backend Functions
 std::shared_ptr<Tensor> AttnFuncWithCPAndKVP2P(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
-                                               const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask,
-                                               float scale, int64_t n_rep) {
-    return std::make_shared<AttnWithCPAndKVP2P>(scale, n_rep)->Apply({q, k, v, mask})[0];
+                                               const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask) {
+    return std::make_shared<AttnWithCPAndKVP2P>()->Apply({q, k, v, mask})[0];
 }
 
 std::shared_ptr<Tensor> AttnFuncWithCPAndKVAllGather(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
                                                      const std::shared_ptr<Tensor> &v,
-                                                     const std::shared_ptr<Tensor> &mask, float scale, int64_t n_rep) {
+                                                     const std::shared_ptr<Tensor> &mask) {
+    CHECK_EQ(k->Dims()[1], v->Dims()[1]);
+    CHECK_EQ(q->Dims()[1] % k->Dims()[1], 0);
+    const int64_t n_rep = q->Dims()[1] / k->Dims()[1];
     // gathered_k: (B, H_kv, T_g, D)
     auto gathered_k = GatherFromCPRegionFunc(k);
     // gathered_v: (B, H_kv, T_g, D)
@@ -567,17 +587,19 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndKVAllGather(const std::shared_ptr<Tenso
     auto k_for_attn = RepeatKVHeads(gathered_k, n_rep);
     // v_for_attn: (B, H_q, T_g, D)
     auto v_for_attn = RepeatKVHeads(gathered_v, n_rep);
-    return ApplyCoreAttention(q, k_for_attn, v_for_attn, mask, scale);
+    return ApplyCoreAttention(q, k_for_attn, v_for_attn, mask);
 }
 
 std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2A(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
-                                                 const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask,
-                                                 float scale, int64_t n_rep) {
+                                                 const std::shared_ptr<Tensor> &v,
+                                                 const std::shared_ptr<Tensor> &mask) {
     const int cp_size = global::GetContextParallelSize();
     const int64_t q_heads = q->Dims()[1];
     const int64_t kv_heads = k->Dims()[1];
+    CHECK_EQ(kv_heads, v->Dims()[1]);
     CHECK_EQ(q_heads % cp_size, 0) << "A2A CP requires local query heads divisible by CP size";
     CHECK_EQ(kv_heads % cp_size, 0) << "A2A CP requires local KV heads divisible by CP size";
+    CHECK_EQ(q_heads % kv_heads, 0);
 
     // q_shard: (B, H_q/CP, T_g, D)
     auto q_shard = AllToAllSeqToHeadCPRegionFunc(q);
@@ -588,29 +610,31 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2A(const std::shared_ptr<Tensor> &
     // full_mask: (1, 1, T_g, T_g)
     auto full_mask = mask ? GatherFromCPRegionFunc(mask) : nullptr;
 
+    const int64_t n_rep = q_shard->Dims()[1] / k_shard->Dims()[1];
     // k_for_attn: (B, H_q/CP, T_g, D)
     auto k_for_attn = RepeatKVHeads(k_shard, n_rep);
     // v_for_attn: (B, H_q/CP, T_g, D)
     auto v_for_attn = RepeatKVHeads(v_shard, n_rep);
     // output_shard: (B, H_q/CP, T_g, D)
-    auto output_shard = ApplyCoreAttention(q_shard, k_for_attn, v_for_attn, full_mask, scale);
+    auto output_shard = ApplyCoreAttention(q_shard, k_for_attn, v_for_attn, full_mask);
 
     // output: (B, H_q, T_l, D)
     return AllToAllHeadToSeqCPRegionFunc(output_shard);
 }
 
 std::shared_ptr<Tensor> AttnForwardFuncWithCP(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
-                                              const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask,
-                                              float scale, int64_t n_rep) {
+                                              const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask) {
     CHECK_GT(global::GetContextParallelSize(), 1);
     const auto comm_type = global::GetContextParallelCommType();
     if (comm_type == "p2p") {
-        return AttnFuncWithCPAndKVP2P(q, k, v, mask, scale, n_rep);
+        return AttnFuncWithCPAndKVP2P(q, k, v, mask);
+    } else if (comm_type == "a2a") {
+        return AttnFuncWithCPAndQKVOA2A(q, k, v, mask);
+    } else if (comm_type == "all_gather") {
+        return AttnFuncWithCPAndKVAllGather(q, k, v, mask);
+    } else {
+        LOG(FATAL) << "AttnForwardFuncWithCP: Unsupported communication type " << comm_type << ".";
     }
-    if (comm_type == "a2a") {
-        return AttnFuncWithCPAndQKVOA2A(q, k, v, mask, scale, n_rep);
-    }
-    return AttnFuncWithCPAndKVAllGather(q, k, v, mask, scale, n_rep);
 }
 
 } // namespace infini_train::nn::parallel
