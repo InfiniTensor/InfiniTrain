@@ -19,22 +19,20 @@ std::shared_ptr<Tensor> SliceAlongCPRegionFunc(const std::shared_ptr<Tensor> &in
 
 std::shared_ptr<Tensor> GatherFromCPRegionFunc(const std::shared_ptr<Tensor> &input);
 
-std::shared_ptr<Tensor> ContextParallelAttentionFunc(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
-                                                     const std::shared_ptr<Tensor> &v,
-                                                     const std::shared_ptr<Tensor> &mask, bool mask_true_means_invalid,
-                                                     float scale, int64_t n_rep);
+std::shared_ptr<Tensor> AttnForwardFuncWithCP(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
+                                              const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask,
+                                              float scale, int64_t n_rep);
 
 std::shared_ptr<Tensor> AttnFuncWithCPAndKVP2P(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
                                                const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask,
-                                               bool mask_true_means_invalid, float scale, int64_t n_rep);
+                                               float scale, int64_t n_rep);
 
 std::shared_ptr<Tensor> AttnFuncWithCPAndKVAllGather(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
                                                      const std::shared_ptr<Tensor> &v,
-                                                     const std::shared_ptr<Tensor> &mask, bool mask_true_means_invalid,
-                                                     float scale, int64_t n_rep);
+                                                     const std::shared_ptr<Tensor> &mask, float scale, int64_t n_rep);
 
 std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2A(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
                                                  const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask,
-                                                 bool mask_true_means_invalid, float scale, int64_t n_rep);
+                                                 float scale, int64_t n_rep);
 
 } // namespace infini_train::nn::parallel
