@@ -118,8 +118,7 @@ CausalSelfAttention::ForwardStandard(const std::vector<std::shared_ptr<infini_tr
     auto mask = buffers_[kParamBiasName]->Slice({0, 0, q_start, 0}, {1, 1, q_start + T, T_kv}, {1, 1, 1, 1});
     std::shared_ptr<Tensor> y;
     if (parallel::global::GetContextParallelSize() > 1) {
-        y = parallel::AttnForwardFuncWithCP(q, k, v, mask == 0, static_cast<float>(1.0 / std::sqrt(head_dim)),
-                                            /*n_rep=*/1);
+        y = parallel::AttnForwardFuncWithCP(q, k, v, mask == 0);
     } else {
         // (B, h_l, T_local, T_global)
         auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
@@ -248,7 +247,7 @@ CausalSelfAttention::ForwardWithRoPE(const std::vector<std::shared_ptr<infini_tr
 
     std::shared_ptr<Tensor> y;
     if (use_context_parallel) {
-        y = parallel::AttnForwardFuncWithCP(q, k, v, mask, 1.0f / std::sqrt(static_cast<float>(D)), n_rep_);
+        y = parallel::AttnForwardFuncWithCP(q, k, v, mask);
     } else {
         // manual implementation of attention
         // this materializes the large (T,T) matrix for all the queries and keys
