@@ -171,7 +171,7 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
 
     std::shared_ptr<Tensor> y;
     if (use_context_parallel) {
-        y = parallel::AttnForwardFuncWithCP(q, k, v, mask, 1.0f / std::sqrt(static_cast<float>(D)), n_rep_);
+        y = parallel::AttnForwardFuncWithCP(q, k, v, mask);
     } else {
         // manual implementation of attention
         // this materializes the large (T,T) matrix for all the queries and keys
