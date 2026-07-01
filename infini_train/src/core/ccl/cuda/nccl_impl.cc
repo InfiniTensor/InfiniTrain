@@ -146,6 +146,40 @@ void NcclImpl::ReduceScatter(const void *sendbuff, void *recvbuff, size_t recv_c
                                  kNcclReduceOpMap.at(reduce_op), GetNcclComm(comm), GetCudaStream(stream)));
 }
 
+void NcclImpl::AllToAll(const void *sendbuff, void *recvbuff, size_t count, DataType dtype, const CclComm *comm,
+                        Stream *stream) const {
+    auto nccl_comm = GetNcclComm(comm);
+    auto cuda_stream = GetCudaStream(stream);
+    int nranks = 0;
+    int rank = 0;
+    NCCL_CHECK(ncclCommCount(nccl_comm, &nranks));
+    NCCL_CHECK(ncclCommUserRank(nccl_comm, &rank));
+    CHECK_GT(nranks, 0);
+    CHECK_GE(rank, 0);
+    CHECK_LT(rank, nranks);
+
+    const size_t chunk_bytes = count * kDataTypeToSize.at(dtype);
+    auto send_ptr = static_cast<const char *>(sendbuff);
+    auto recv_ptr = static_cast<char *>(recvbuff);
+
+    if (chunk_bytes > 0) {
+        CUDA_CHECK(cudaMemcpyAsync(recv_ptr + static_cast<size_t>(rank) * chunk_bytes,
+                                   send_ptr + static_cast<size_t>(rank) * chunk_bytes, chunk_bytes,
+                                   cudaMemcpyDeviceToDevice, cuda_stream));
+    }
+
+    NCCL_CHECK(ncclGroupStart());
+    for (int peer = 0; peer < nranks; ++peer) {
+        if (peer == rank) {
+            continue;
+        }
+        const auto offset = static_cast<size_t>(peer) * chunk_bytes;
+        NCCL_CHECK(ncclSend(send_ptr + offset, count, kNcclDtypeMap.at(dtype), peer, nccl_comm, cuda_stream));
+        NCCL_CHECK(ncclRecv(recv_ptr + offset, count, kNcclDtypeMap.at(dtype), peer, nccl_comm, cuda_stream));
+    }
+    NCCL_CHECK(ncclGroupEnd());
+}
+
 void NcclImpl::Send(const void *buff, size_t count, DataType dtype, int peer, const CclComm *comm,
                     Stream *stream) const {
     NCCL_CHECK(ncclSend(buff, count, kNcclDtypeMap.at(dtype), peer, GetNcclComm(comm), GetCudaStream(stream)));

@@ -194,6 +194,33 @@ std::shared_ptr<Work> ProcessGroup::ReduceScatter(const std::shared_ptr<Tensor> 
     }
 }
 
+std::shared_ptr<Work> ProcessGroup::AllToAll(const std::shared_ptr<Tensor> &output,
+                                             const std::shared_ptr<Tensor> &input, bool async_op) const {
+    auto device = input->GetDevice();
+    CHECK_EQ(device, output->GetDevice());
+    CHECK(input->Dtype() == output->Dtype());
+    CHECK_EQ(input->NumElements(), output->NumElements());
+    CHECK_EQ(input->NumElements() % world_size_, 0) << "AllToAll input must be evenly divisible by world size";
+    core::DeviceGuard guard(device);
+    auto *compute_stream = runtime_impl_->GetStream(device);
+    auto *comm_stream = device_stream_map_.at(device.index());
+    auto comm = device_comm_map_.at(device.index());
+
+    auto work = std::make_shared<Work>(device, comm);
+    runtime_impl_->EventRecord(work->ready_event(), compute_stream);
+    runtime_impl_->StreamWaitEvent(comm_stream, work->ready_event(), 0);
+    ccl_impl_->AllToAll(input->DataPtr(), output->DataPtr(), input->NumElements() / world_size_, input->Dtype(), comm,
+                        comm_stream);
+    runtime_impl_->EventRecord(work->done_event(), comm_stream);
+
+    if (async_op) {
+        return work;
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
+    }
+}
+
 std::shared_ptr<Work> ProcessGroup::Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
                                          bool async_op) const {
     CHECK_GT(tensors.size(), 0);
