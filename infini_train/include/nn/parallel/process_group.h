@@ -54,6 +54,9 @@ public:
                                                 function::ReduceOpType reduce_op = function::ReduceOpType::kSum,
                                                 bool async_op = false) const;
 
+    virtual std::shared_ptr<Work> AllToAll(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                                           bool async_op = false) const;
+
     virtual std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
                                        bool async_op = false) const;
 
