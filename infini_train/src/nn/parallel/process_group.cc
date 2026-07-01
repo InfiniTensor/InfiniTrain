@@ -275,6 +275,46 @@ std::shared_ptr<Work> ProcessGroup::Recv(std::vector<std::shared_ptr<Tensor>> te
     }
 }
 
+std::shared_ptr<Work> ProcessGroup::BatchSendRecv(const std::vector<P2POp> &ops, bool async_op) const {
+    CHECK_GT(ops.size(), 0);
+    CHECK_NOTNULL(ops[0].tensor);
+    auto device = ops[0].tensor->GetDevice();
+    core::DeviceGuard guard(device);
+    auto *compute_stream = runtime_impl_->GetStream(device);
+    auto *comm_stream = device_stream_map_.at(device.index());
+    auto comm = device_comm_map_.at(device.index());
+
+    auto work = std::make_shared<Work>(device, comm);
+    runtime_impl_->EventRecord(work->ready_event(), compute_stream);
+    runtime_impl_->StreamWaitEvent(comm_stream, work->ready_event(), 0);
+
+    {
+        core::CclGroupGuard ccl_group_guard(backend_);
+        for (const auto &op : ops) {
+            CHECK_NOTNULL(op.tensor);
+            CHECK_EQ(device, op.tensor->GetDevice());
+            CHECK_GE(op.peer_rank, 0);
+            CHECK_LT(op.peer_rank, world_size_);
+            if (op.type == P2POpType::kSend) {
+                ccl_impl_->Send(op.tensor->DataPtr(), op.tensor->NumElements(), op.tensor->Dtype(), op.peer_rank, comm,
+                                comm_stream);
+            } else {
+                ccl_impl_->Recv(op.tensor->DataPtr(), op.tensor->NumElements(), op.tensor->Dtype(), op.peer_rank, comm,
+                                comm_stream);
+            }
+        }
+    }
+
+    runtime_impl_->EventRecord(work->done_event(), comm_stream);
+
+    if (async_op) {
+        return work;
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
+    }
+}
+
 std::vector<std::shared_ptr<Tensor>>
 ProcessGroup::BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const {
     std::vector<std::shared_ptr<Tensor>> outputs;
