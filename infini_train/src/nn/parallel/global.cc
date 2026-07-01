@@ -2,7 +2,9 @@
 
 #include <cstdlib>
 #include <format>
+#include <sstream>
 #include <string>
+#include <tuple>
 
 #include "glog/logging.h"
 
@@ -20,7 +22,6 @@ namespace infini_train::nn::parallel::global {
 thread_local int thread_global_rank = 0;
 
 void Layout::InitStrides() {
-    // Calculate strides
     int stride = 1;
     for (int i = 0; i < AXIS_COUNT; ++i) {
         const Axis ax = order[i];
@@ -29,9 +30,10 @@ void Layout::InitStrides() {
     }
 }
 
-int Layout::RankOf(int dp, int tp, int pp) const {
-    // Return the thread rank given layout coords
-    const int coord[AXIS_COUNT] = {dp, tp, pp};
+int Layout::RankOf(int dp, int tp, int pp) const { return RankOf(dp, tp, /*cp=*/0, pp); }
+
+int Layout::RankOf(int dp, int tp, int cp, int pp) const {
+    const int coord[AXIS_COUNT] = {dp, tp, cp, pp};
     int r = 0;
     for (int i = 0; i < AXIS_COUNT; ++i) {
         const Axis ax = static_cast<Axis>(i);
@@ -41,14 +43,20 @@ int Layout::RankOf(int dp, int tp, int pp) const {
 }
 
 void Layout::CoordOf(int rank, int &dp, int &tp, int &pp) const {
-    // Return the layout coords given thread rank
+    int cp = 0;
+    CoordOf(rank, dp, tp, cp, pp);
+}
+
+void Layout::CoordOf(int rank, int &dp, int &tp, int &cp, int &pp) const {
     dp = (rank / strides[DP]) % sizes[DP];
     tp = (rank / strides[TP]) % sizes[TP];
+    cp = (rank / strides[CP]) % sizes[CP];
     pp = (rank / strides[PP]) % sizes[PP];
 }
 
-int Layout::GroupId(Axis target, int dp, int tp, int pp) const {
-    // Return the parallel ProcessGroup ID where the rank is in
+int Layout::GroupId(Axis target, int dp, int tp, int pp) const { return GroupId(target, dp, tp, /*cp=*/0, pp); }
+
+int Layout::GroupId(Axis target, int dp, int tp, int cp, int pp) const {
     int id = 0;
     int mult = 1;
     for (int i = AXIS_COUNT - 1; i >= 0; --i) {
@@ -56,7 +64,7 @@ int Layout::GroupId(Axis target, int dp, int tp, int pp) const {
         if (ax == target) {
             continue;
         }
-        int c = (ax == DP ? dp : (ax == TP ? tp : pp));
+        int c = (ax == DP ? dp : (ax == TP ? tp : (ax == CP ? cp : pp)));
         id += c * mult;
         mult *= sizes[ax];
     }
@@ -64,19 +72,24 @@ int Layout::GroupId(Axis target, int dp, int tp, int pp) const {
 }
 
 std::vector<int> Layout::GroupRanks(Axis target, int fixed_dp, int fixed_tp, int fixed_pp) const {
-    // Return all the ranks within the same parallel ProcessGroup
+    return GroupRanks(target, fixed_dp, fixed_tp, /*fixed_cp=*/0, fixed_pp);
+}
+
+std::vector<int> Layout::GroupRanks(Axis target, int fixed_dp, int fixed_tp, int fixed_cp, int fixed_pp) const {
     std::vector<int> ranks;
     ranks.reserve(sizes[target]);
-    int dp = fixed_dp, tp = fixed_tp, pp = fixed_pp;
+    int dp = fixed_dp, tp = fixed_tp, cp = fixed_cp, pp = fixed_pp;
     for (int v = 0; v < sizes[target]; ++v) {
         if (target == DP) {
             dp = v;
         } else if (target == TP) {
             tp = v;
+        } else if (target == CP) {
+            cp = v;
         } else {
             pp = v;
         }
-        ranks.push_back(RankOf(dp, tp, pp));
+        ranks.push_back(RankOf(dp, tp, cp, pp));
     }
     return ranks;
 }
@@ -87,6 +100,7 @@ GlobalEnv &GlobalEnv::Instance() {
 }
 
 void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
+                     int context_parallel_size, const std::string &context_parallel_comm_type,
                      int pipeline_parallel_size, int virtual_pipeline_parallel_size) {
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -102,12 +116,20 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     CHECK_GE(tensor_parallel_size, 1) << "Tensor Parallel size must be >= 1";
     tensor_parallel_size_ = tensor_parallel_size;
     sequence_parallel_enabled_ = sequence_parallel_enabled;
+    CHECK_GE(context_parallel_size, 1) << "Context Parallel size must be >= 1";
+    context_parallel_size_ = context_parallel_size;
+    context_parallel_comm_type_ = context_parallel_comm_type;
+    CHECK_GE(pipeline_parallel_size, 1) << "Pipeline Parallel size must be >= 1";
     pipeline_parallel_size_ = pipeline_parallel_size;
     virtual_pipeline_parallel_size_ = virtual_pipeline_parallel_size;
-    data_parallel_size_ = world_size_ / tensor_parallel_size_ / pipeline_parallel_size_;
+
+    CHECK_EQ(world_size_ % (tensor_parallel_size_ * context_parallel_size_ * pipeline_parallel_size_), 0)
+        << "world_size must be divisible by TP * CP * PP";
+    data_parallel_size_ = world_size_ / tensor_parallel_size_ / context_parallel_size_ / pipeline_parallel_size_;
 
     layout_.sizes[DP] = data_parallel_size_;
     layout_.sizes[TP] = tensor_parallel_size_;
+    layout_.sizes[CP] = context_parallel_size_;
     layout_.sizes[PP] = pipeline_parallel_size_;
     layout_.InitStrides();
 
@@ -159,6 +181,16 @@ bool GlobalEnv::sequence_parallel_enabled() const {
     return sequence_parallel_enabled_;
 }
 
+int GlobalEnv::context_parallel_size() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return context_parallel_size_;
+}
+
+const std::string &GlobalEnv::context_parallel_comm_type() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return context_parallel_comm_type_;
+}
+
 int GlobalEnv::data_parallel_size() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return data_parallel_size_;
@@ -180,7 +212,7 @@ Layout GlobalEnv::layout() const {
 }
 
 namespace {
-inline const char *AxisName(Axis a) { return a == DP ? "DP" : (a == TP ? "TP" : "PP"); }
+inline const char *AxisName(Axis a) { return a == DP ? "DP" : (a == TP ? "TP" : (a == CP ? "CP" : "PP")); }
 
 inline int NumGroups(const Layout &L, Axis target) {
     int n = 1;
@@ -196,8 +228,8 @@ inline int NumGroups(const Layout &L, Axis target) {
 std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
     std::ostringstream oss;
     oss << std::format("\n=== Parallel Communication Groups ===\n"
-                       "world_size = {}, config: {{DP={}, TP={}, PP={}}}, order: {{",
-                       GetWorldSize(), L.sizes[DP], L.sizes[TP], L.sizes[PP]);
+                       "world_size = {}, config: {{DP={}, TP={}, CP={}, PP={}}}, order: {{",
+                       GetWorldSize(), L.sizes[DP], L.sizes[TP], L.sizes[CP], L.sizes[PP]);
 
     for (int i = 0; i < AXIS_COUNT; ++i) { oss << AxisName(L.order[i]) << (i + 1 == AXIS_COUNT ? "" : " -> "); }
     oss << "}\n";
@@ -208,51 +240,38 @@ std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
             oss << std::format("[{}] size={}, unenabled\n", AxisName(ax), L.sizes[ax]);
             continue;
         }
-        // Build <Group ID, <DP, TP, PP>> mapping
-        std::vector<std::pair<int, std::tuple<int, int, int>>> groups;
+
+        std::vector<std::pair<int, std::tuple<int, int, int, int>>> groups;
         for (int dp = 0; dp < (ax == DP ? 1 : L.sizes[DP]); ++dp) {
             for (int tp = 0; tp < (ax == TP ? 1 : L.sizes[TP]); ++tp) {
-                for (int pp = 0; pp < (ax == PP ? 1 : L.sizes[PP]); ++pp) {
-                    int gid = L.GroupId(ax, dp, tp, pp);
-                    groups.emplace_back(gid, std::make_tuple(dp, tp, pp));
+                for (int cp = 0; cp < (ax == CP ? 1 : L.sizes[CP]); ++cp) {
+                    for (int pp = 0; pp < (ax == PP ? 1 : L.sizes[PP]); ++pp) {
+                        int gid = L.GroupId(ax, dp, tp, cp, pp);
+                        groups.emplace_back(gid, std::make_tuple(dp, tp, cp, pp));
+                    }
                 }
             }
         }
-        // Sort by the order of Group ID
         std::sort(groups.begin(), groups.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
 
         const int num_groups = NumGroups(L, ax);
         const auto name = AxisName(ax);
         oss << std::format("[{}] size={}, num_groups={}\n", name, L.sizes[ax], num_groups);
 
-        // Iterate and print in the order of Group ID
         for (const auto &pair : groups) {
             int gid = pair.first;
-            int dp, tp, pp;
-            std::tie(dp, tp, pp) = pair.second;
-            auto ranks = L.GroupRanks(ax, dp, tp, pp);
-            std::sort(ranks.begin(), ranks.end());
+            auto [dp, tp, cp, pp] = pair.second;
+            auto coord = std::format("dp={}, tp={}, cp={}, pp={}", ax == DP ? "-" : std::to_string(dp),
+                                     ax == TP ? "-" : std::to_string(tp), ax == CP ? "-" : std::to_string(cp),
+                                     ax == PP ? "-" : std::to_string(pp));
 
-            auto dp_size_str = (ax == DP) ? "-" : std::to_string(dp);
-            auto tp_size_str = (ax == TP) ? "-" : std::to_string(tp);
-            auto pp_size_str = (ax == PP) ? "-" : std::to_string(pp);
-
-            std::string ranks_str;
-            ranks_str.reserve(ranks.size() * 4);
-            for (size_t i = 0; i < ranks.size(); ++i) {
-                if (i > 0) {
-                    ranks_str += ", ";
-                }
-                ranks_str += std::to_string(ranks[i]);
-            }
-            oss << std::format("  - {} {} (dp={}, tp={}, pp={}): [{}]\n", name, gid, dp_size_str, tp_size_str,
-                               pp_size_str, ranks_str);
-        }
-        if (a + 1 < AXIS_COUNT) {
-            oss << "\n";
+            oss << std::format("- {} {} ({}): [", name, gid, coord);
+            auto ranks = L.GroupRanks(ax, dp, tp, cp, pp);
+            for (size_t i = 0; i < ranks.size(); ++i) { oss << ranks[i] << (i + 1 == ranks.size() ? "" : ", "); }
+            oss << "]\n";
         }
     }
-    oss << "\n";
+    oss << "=====================================\n";
     return oss.str();
 }
 

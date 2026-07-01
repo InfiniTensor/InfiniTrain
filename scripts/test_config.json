@@ -191,6 +191,62 @@
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2
                     }
+                },
+                {
+                    "id": "9",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "context_parallel": 2,
+                        "cp_comm_type": "p2p"
+                    }
+                },
+                {
+                    "id": "9_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "context_parallel": 2,
+                        "cp_comm_type": "p2p"
+                    }
+                },
+                {
+                    "id": "10",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "context_parallel": 2,
+                        "cp_comm_type": "p2p"
+                    }
+                },
+                {
+                    "id": "10_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "context_parallel": 2,
+                        "cp_comm_type": "p2p"
+                    }
                 }
             ]
         },
@@ -338,6 +394,58 @@
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
                         "sequence_parallel": true,
+                        "zero_stage": 2
+                    }
+                },
+                {
+                    "id": "9_distopt",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "context_parallel": 2,
+                        "cp_comm_type": "p2p",
+                        "zero_stage": 1
+                    }
+                },
+                {
+                    "id": "9_zero2",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "context_parallel": 2,
+                        "cp_comm_type": "p2p",
+                        "zero_stage": 2
+                    }
+                },
+                {
+                    "id": "9_bfloat16_distopt",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "context_parallel": 2,
+                        "cp_comm_type": "p2p",
+                        "zero_stage": 1
+                    }
+                },
+                {
+                    "id": "9_bfloat16_zero2",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "context_parallel": 2,
+                        "cp_comm_type": "p2p",
                         "zero_stage": 2
                     }
                 },

@@ -1,6 +1,7 @@
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
 
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <tuple>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
+#include "infini_train/include/nn/parallel/context_parallel.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
@@ -109,16 +111,24 @@ CausalSelfAttention::ForwardStandard(const std::vector<std::shared_ptr<infini_tr
     q = q->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
     v = v->View({B, T, local_n_head_, head_dim})->Transpose(1, 2);
 
-    // (B, h_l, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
-    // (1, 1, T, T)
-    auto mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
-    // (1, 1, T, T) -> eq 0 -> (1, 1, T, T) -> masked_fill -> (B, h_l, T, T)
-    att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
-    // (B, h_l, T, T)
-    att = nn::function::Softmax(att, -1);
-    // (B, h_l, T, Dh)
-    auto y = att->Matmul(v);
+    const auto q_start = parallel::GetContextParallelSequenceStart(T);
+    const auto T_kv = T * parallel::global::GetContextParallelSize();
+
+    // (1, 1, T_local, T_global)
+    auto mask = buffers_[kParamBiasName]->Slice({0, 0, q_start, 0}, {1, 1, q_start + T, T_kv}, {1, 1, 1, 1});
+    std::shared_ptr<Tensor> y;
+    if (parallel::global::GetContextParallelSize() > 1) {
+        y = parallel::AttnForwardFuncWithCP(q, k, v, mask == 0);
+    } else {
+        // (B, h_l, T_local, T_global)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(head_dim));
+        // (1, 1, T_local, T_global) -> eq 0 -> masked_fill -> (B, h_l, T_local, T_global)
+        att = att->MaskedFill(mask == 0, -std::numeric_limits<float>::infinity());
+        // (B, h_l, T_local, T_global)
+        att = nn::function::Softmax(att, -1);
+        // (B, h_l, T, Dh)
+        y = att->Matmul(v);
+    }
     // (B, h_l, T, Dh) -> (B, T, h_l, Dh) -> (B, T, local_C)
     y = y->Transpose(1, 2)->Contiguous()->View({B, T, local_C});
 
@@ -219,10 +229,13 @@ CausalSelfAttention::ForwardWithRoPE(const std::vector<std::shared_ptr<infini_tr
     // TODO(zbl): use kv cache during inference
     // if (use_kv_) { ... }
 
-    // align n_head in GQA
-    // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
-    k = RepeatKV(k, n_rep_);
-    v = RepeatKV(v, n_rep_);
+    const bool use_context_parallel = parallel::global::GetContextParallelSize() > 1;
+    if (!use_context_parallel) {
+        // align n_head in GQA
+        // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
+        k = RepeatKV(k, n_rep_);
+        v = RepeatKV(v, n_rep_);
+    }
 
     // (B, T, H_local, D) -> (B, H_local, T, D)
     q = q->Transpose(1, 2);
@@ -232,21 +245,26 @@ CausalSelfAttention::ForwardWithRoPE(const std::vector<std::shared_ptr<infini_tr
     // TODO(zbl): support flash attention later
     // if (flash_) { ... }
 
-    // manual implementation of attention
-    // this materializes the large (T,T) matrix for all the queries and keys
+    std::shared_ptr<Tensor> y;
+    if (use_context_parallel) {
+        y = parallel::AttnForwardFuncWithCP(q, k, v, mask);
+    } else {
+        // manual implementation of attention
+        // this materializes the large (T,T) matrix for all the queries and keys
 
-    // q: (B, H_local, T, D)
-    // k: (B, H_local, T, D) -> (B, H_local, D, T)
-    // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
-    if (mask) {
-        // mask: (1, 1, T, T)
-        att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+        // q: (B, H_local, T, D)
+        // k: (B, H_local, T, D) -> (B, H_local, D, T)
+        // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
+        if (mask) {
+            // mask: (1, 1, T, T)
+            att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+        }
+        // (B, H_local, T, T)
+        att = nn::function::Softmax(att, -1);
+        // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
+        y = att->Matmul(v);
     }
-    // (B, H_local, T, T)
-    att = nn::function::Softmax(att, -1);
-    // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
-    auto y = att->Matmul(v);
     // (B, H_local, T, D) -> Transpose(1, 2) -> (B, T, H_local, D) -> (B, T, C_local)
     y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
     // output projection
