@@ -285,14 +285,19 @@ void Reducer::PrepareForBackward() {
                 // If ZeroGrad(set_to_none=True), grad is nullptr at this point
                 // If ZeroGrad(set_to_none=False), grad is set to view of bucket.contents (or modified by user)
                 // Either way, we reset grad to view of bucket.contents
-                // Since bucket.contents might not be zeroed, we need to overwrite it on next grad accumulation
+                // Since bucket.contents might not be zeroed, we might need to overwrite it on next grad accumulation
                 if (!grad || (grad.get() != view.get())) {
                     if (grad) {
-                        LOG(WARNING) << "gradient_as_bucket_view is enabled, but param " << param
-                                     << " has a non-view grad tensor. Automatically overwriting it with bucket view.";
+                        // Buckets might be rebuilt between micro-batches when grad accumulation is on.
+                        // In this case, the old grad may point to a diffrent previous bucket view, the new bucket view
+                        // should continue accumulating from the same value left in old bucket view on next backward.
+                        view->CopyFrom(grad);
+                    } else {
+                        // In this case, ZeroGrad(set_to_none=true) leaves grad null.
+                        // Bucket view may contain stale data, so we must overwrite it on next backward.
+                        param->MarkGradOverwriteOnNextAccum();
                     }
                     param->set_grad(view);
-                    param->MarkGradOverwriteOnNextAccum();
                 }
             }
         }
