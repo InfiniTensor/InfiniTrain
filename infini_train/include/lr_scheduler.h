@@ -80,8 +80,8 @@ protected:
     float GetClosedFormLR() const override;
 
 private:
-    const float factor_;
-    const int64_t total_iters_;
+    const float factor_ = 1.0f / 3.0f;
+    const int64_t total_iters_ = 5;
 };
 
 class StepLR : public LRScheduler {
@@ -94,8 +94,8 @@ protected:
     float GetClosedFormLR() const override;
 
 private:
-    const int64_t step_size_;
-    const float gamma_;
+    const int64_t step_size_ = 1;
+    const float gamma_ = 0.1f;
 };
 
 class LinearLR : public LRScheduler {
@@ -109,9 +109,9 @@ protected:
     float GetClosedFormLR() const override;
 
 private:
-    const float start_factor_;
-    const float end_factor_;
-    const int64_t total_iters_;
+    const float start_factor_ = 1.0f / 3.0f;
+    const float end_factor_ = 1.0f;
+    const int64_t total_iters_ = 5;
 };
 
 class LambdaLR : public LRScheduler {

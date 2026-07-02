@@ -96,7 +96,7 @@ std::shared_ptr<LRScheduler> CreateLRScheduler(std::shared_ptr<Optimizer> optimi
 }
 
 LRScheduler::LRScheduler(std::shared_ptr<Optimizer> optimizer, int64_t last_step)
-    : optimizer_(std::move(optimizer)), last_step_(last_step), base_lr_(0.0f) {
+    : optimizer_(std::move(optimizer)), last_step_(last_step) {
     CHECK(optimizer_) << "LRScheduler: optimizer must not be null.";
     if (!optimizer_->initial_lr_set()) {
         optimizer_->set_initial_learning_rate(optimizer_->learning_rate());
