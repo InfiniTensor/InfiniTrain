@@ -377,14 +377,14 @@
             "tag": "lr_scheduler",
             "tests": [
                 {
-                    "id": "3_none_distopt",
+                    "id": "3_none_zero2",
                     "args": {
                         "dtype": "float32",
                         "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
-                        "use_distributed_optimizer": true,
+                        "zero_stage": 2,
                         "learning_rate": 0.00001,
                         "lr_decay_style": "none"
                     }
@@ -415,7 +415,7 @@
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
                         "sequence_parallel": true,
-                        "use_distributed_optimizer": true,
+                        "zero_stage": 1,
                         "learning_rate": 0.00001,
                         "min_lr": 0.000001,
                         "lr_decay_style": "linear",
@@ -471,7 +471,7 @@
                         "sequence_parallel": true,
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
-                        "use_distributed_optimizer": true,
+                        "zero_stage": 1,
                         "learning_rate": 0.00001,
                         "min_lr": 0.000001,
                         "lr_decay_style": "cosine",
@@ -505,7 +505,7 @@
                         "batch_size": 40,
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
-                        "use_distributed_optimizer": true,
+                        "zero_stage": 1,
                         "learning_rate": 0.00001,
                         "min_lr": 0.000001,
                         "lr_decay_style": "inverse-square-root",
