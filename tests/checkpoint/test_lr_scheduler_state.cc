@@ -72,12 +72,12 @@ TEST_P(LRSchedulerCheckpointTest, SaveAndLoadLRSchedulerState) {
 
     EXPECT_EQ(loaded.global_step, 3);
     EXPECT_EQ(loaded.consumed_batches, 12);
-    EXPECT_EQ(sched2->LastStep(), sched1->LastStep());
-    EXPECT_NEAR(sched2->GetLR(), sched1->GetLR(), kEps);
+    EXPECT_EQ(sched2->last_step(), sched1->last_step());
+    EXPECT_NEAR(sched2->learning_rate(), sched1->learning_rate(), kEps);
 
     StepTimes(sched2, 3);
-    EXPECT_EQ(sched2->LastStep(), sched_ref->LastStep());
-    EXPECT_NEAR(sched2->GetLR(), sched_ref->GetLR(), kEps);
+    EXPECT_EQ(sched2->last_step(), sched_ref->last_step());
+    EXPECT_NEAR(sched2->learning_rate(), sched_ref->learning_rate(), kEps);
     EXPECT_NEAR(opt2->learning_rate(), opt_ref->learning_rate(), kEps);
 
     std::filesystem::remove_all(dir);
@@ -91,7 +91,7 @@ TEST_P(LRSchedulerCheckpointTest, SkipsLRSchedulerStateWhenSchedulerIsNull) {
     auto opt1 = std::make_shared<optimizers::SGD>(model1->Parameters(), kBaseLR);
 
     TrainerState saved{.global_step = 3};
-    Checkpoint::Save(dir, *model1, opt1.get(), saved, /*save_optimizer_state=*/false);
+    Checkpoint::Save(dir, *model1, opt1.get(), saved, /*save_optimizer_state=*/false, nullptr);
     EXPECT_FALSE(std::filesystem::exists(dir / "lr_scheduler.ckpt"));
 
     std::filesystem::remove_all(dir);

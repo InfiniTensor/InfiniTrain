@@ -441,7 +441,7 @@ void Train(const nn::parallel::Rank &rank) {
         Profiler::Instance().SetTag("Step_" + std::to_string(step));
 #endif
 
-        const float current_lr = scheduler ? scheduler->GetLR() : static_cast<float>(FLAGS_learning_rate);
+        const float current_lr = scheduler ? scheduler->learning_rate() : static_cast<float>(FLAGS_learning_rate);
         float lossf = 0.0f;
         // model->Train();
         if (pp_world_size == 1) {

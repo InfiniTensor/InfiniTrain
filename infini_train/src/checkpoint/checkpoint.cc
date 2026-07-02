@@ -111,7 +111,7 @@ StateValue ReadLRSchedulerStateValue(std::ifstream *ifs) {
     return int64_t{0};
 }
 
-void SaveLRSchedulerState(const std::filesystem::path &path, const StateDict &state_dict) {
+void SaveLRSchedulerState(const std::filesystem::path &path, const LRSchedulerStateDict &state_dict) {
     std::ofstream ofs(path, std::ios::binary);
     CHECK(ofs.is_open()) << "Failed to open LR scheduler checkpoint file: " << path;
 
@@ -128,7 +128,7 @@ void SaveLRSchedulerState(const std::filesystem::path &path, const StateDict &st
     }
 }
 
-StateDict LoadLRSchedulerState(const std::filesystem::path &path) {
+LRSchedulerStateDict LoadLRSchedulerState(const std::filesystem::path &path) {
     std::ifstream ifs(path, std::ios::binary);
     CHECK(ifs.is_open()) << "Failed to open LR scheduler checkpoint file: " << path;
 
@@ -142,7 +142,7 @@ StateDict LoadLRSchedulerState(const std::filesystem::path &path) {
     CHECK_EQ(magic, kLRSchedulerMagic) << "Invalid LR scheduler checkpoint magic: " << path;
     CHECK_EQ(version, kLRSchedulerVersion) << "Unsupported LR scheduler checkpoint version: " << path;
 
-    StateDict state;
+    LRSchedulerStateDict state;
     for (uint32_t i = 0; i < count; ++i) {
         auto name = ReadString(&ifs);
         state.emplace(std::move(name), ReadLRSchedulerStateValue(&ifs));
@@ -200,7 +200,7 @@ void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Mod
     }
 
     if (lr_scheduler != nullptr) {
-        SaveLRSchedulerState(checkpoint_dir / "lr_scheduler.ckpt", lr_scheduler->State());
+        SaveLRSchedulerState(checkpoint_dir / "lr_scheduler.ckpt", lr_scheduler->StateDict());
     }
 
     SaveTrainerState(checkpoint_dir / "trainer_state.json", state);
@@ -231,7 +231,7 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &m
         const auto lr_scheduler_path = checkpoint_dir / "lr_scheduler.ckpt";
         if (std::filesystem::exists(lr_scheduler_path)) {
             LOG(INFO) << "[CKPT] Loading LR scheduler: " << lr_scheduler_path;
-            lr_scheduler->LoadState(LoadLRSchedulerState(lr_scheduler_path));
+            lr_scheduler->LoadStateDict(LoadLRSchedulerState(lr_scheduler_path));
         } else {
             LOG(WARNING) << "[CKPT] LR scheduler checkpoint not found at: " << lr_scheduler_path
                          << ". Keeping the initialized scheduler state.";

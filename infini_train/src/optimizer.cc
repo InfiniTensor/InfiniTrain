@@ -26,11 +26,12 @@ float Optimizer::initial_learning_rate() const {
     return initial_learning_rate_;
 }
 
+bool Optimizer::initial_lr_set() const { return initial_lr_set_; }
+
 void Optimizer::set_initial_learning_rate(float lr) {
-    if (!initial_lr_set_) {
-        initial_learning_rate_ = lr;
-        initial_lr_set_ = true;
-    }
+    CHECK(!initial_lr_set_) << "Optimizer: initial_learning_rate has already been set.";
+    initial_learning_rate_ = lr;
+    initial_lr_set_ = true;
 }
 namespace optimizers {
 
