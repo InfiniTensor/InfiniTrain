@@ -33,6 +33,8 @@ public:
 
     float initial_learning_rate() const;
 
+    bool initial_lr_set() const;
+
     void set_initial_learning_rate(float lr);
 
 protected:

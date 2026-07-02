@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <string>
 #include <utility>
 
 #include "glog/logging.h"
@@ -10,6 +11,17 @@
 #include "infini_train/include/optimizer.h"
 
 namespace infini_train {
+namespace {
+constexpr char kLastStepStateKey[] = "last_step";
+constexpr char kRecoverLRStateKey[] = "recover_lr";
+constexpr char kBaseLRStateKey[] = "base_lr";
+constexpr char kSchedulerStatePrefix[] = "scheduler_";
+constexpr char kSchedulerStateSeparator[] = ".";
+
+std::string SchedulerStatePrefix(size_t index) {
+    return std::string(kSchedulerStatePrefix) + std::to_string(index) + kSchedulerStateSeparator;
+}
+} // namespace
 
 std::shared_ptr<LRScheduler> CreateLRScheduler(std::shared_ptr<Optimizer> optimizer,
                                                const TrainingLRSchedulerConfig &config) {
@@ -86,7 +98,9 @@ std::shared_ptr<LRScheduler> CreateLRScheduler(std::shared_ptr<Optimizer> optimi
 LRScheduler::LRScheduler(std::shared_ptr<Optimizer> optimizer, int64_t last_step)
     : optimizer_(std::move(optimizer)), last_step_(last_step), base_lr_(0.0f) {
     CHECK(optimizer_) << "LRScheduler: optimizer must not be null.";
-    optimizer_->set_initial_learning_rate(optimizer_->learning_rate());
+    if (!optimizer_->initial_lr_set()) {
+        optimizer_->set_initial_learning_rate(optimizer_->learning_rate());
+    }
     base_lr_ = optimizer_->initial_learning_rate();
 }
 
@@ -110,28 +124,28 @@ void LRScheduler::ApplyLR(float lr) { optimizer_->set_learning_rate(lr); }
 
 float LRScheduler::GetChainedFormLR() const { return GetClosedFormLR(); }
 
-float LRScheduler::GetLR() const { return optimizer_->learning_rate(); }
+float LRScheduler::learning_rate() const { return optimizer_->learning_rate(); }
 
-float LRScheduler::BaseLR() const { return base_lr_; }
+float LRScheduler::base_lr() const { return base_lr_; }
 
-int64_t LRScheduler::LastStep() const { return last_step_; }
+int64_t LRScheduler::last_step() const { return last_step_; }
 
-bool LRScheduler::SharesOptimizerWith(const std::shared_ptr<Optimizer> &opt) const { return optimizer_ == opt; }
+const std::shared_ptr<Optimizer> &LRScheduler::optimizer() const { return optimizer_; }
 
 void LRScheduler::ResetStep(int64_t step) { last_step_ = step; }
 
-StateDict LRScheduler::State() const {
+LRSchedulerStateDict LRScheduler::StateDict() const {
     return {
-        {"last_step", last_step_},
-        {"recover_lr", optimizer_->learning_rate()},
-        {"base_lr", base_lr_},
+        {kLastStepStateKey, last_step_},
+        {kRecoverLRStateKey, optimizer_->learning_rate()},
+        {kBaseLRStateKey, base_lr_},
     };
 }
 
-void LRScheduler::LoadState(const StateDict &state) {
-    last_step_ = std::get<int64_t>(state.at("last_step"));
-    recover_lr_ = std::get<float>(state.at("recover_lr"));
-    base_lr_ = std::get<float>(state.at("base_lr"));
+void LRScheduler::LoadStateDict(const LRSchedulerStateDict &state) {
+    last_step_ = std::get<int64_t>(state.at(kLastStepStateKey));
+    recover_lr_ = std::get<float>(state.at(kRecoverLRStateKey));
+    base_lr_ = std::get<float>(state.at(kBaseLRStateKey));
     optimizer_->set_learning_rate(recover_lr_);
 }
 
@@ -243,7 +257,7 @@ SequentialLR::SequentialLR(std::shared_ptr<Optimizer> optimizer, std::vector<std
 
     for (size_t i = 0; i < schedulers_.size(); ++i) {
         CHECK(schedulers_[i]) << "SequentialLR: scheduler at index " << i << " must not be null.";
-        CHECK(schedulers_[i]->SharesOptimizerWith(optimizer_))
+        CHECK(schedulers_[i]->optimizer() == optimizer_)
             << "SequentialLR: scheduler at index " << i << " must share the same optimizer.";
     }
 
@@ -257,7 +271,7 @@ SequentialLR::SequentialLR(std::shared_ptr<Optimizer> optimizer, std::vector<std
 
 void SequentialLR::InitialStep() {
 
-    optimizer_->set_learning_rate(schedulers_[0]->BaseLR());
+    optimizer_->set_learning_rate(schedulers_[0]->base_lr());
 
     UndoChildInitialSteps();
 
@@ -270,7 +284,7 @@ void SequentialLR::UndoChildInitialSteps() {
         if (auto nested = std::dynamic_pointer_cast<SequentialLR>(sched)) {
             nested->UndoChildInitialSteps();
         }
-        sched->ResetStep(sched->LastStep() - 1);
+        sched->ResetStep(sched->last_step() - 1);
     }
 }
 
@@ -287,33 +301,34 @@ void SequentialLR::Step() {
     }
 }
 
-StateDict SequentialLR::State() const {
-    StateDict state;
-    state["last_step"] = last_step_;
-    state["recover_lr"] = optimizer_->learning_rate();
-    state["base_lr"] = base_lr_;
+LRSchedulerStateDict SequentialLR::StateDict() const {
+    LRSchedulerStateDict state;
+    state[kLastStepStateKey] = last_step_;
+    state[kRecoverLRStateKey] = optimizer_->learning_rate();
+    state[kBaseLRStateKey] = base_lr_;
     for (size_t i = 0; i < schedulers_.size(); ++i) {
-        auto sub_state = schedulers_[i]->State();
-        for (const auto &[key, value] : sub_state) { state["scheduler_" + std::to_string(i) + "." + key] = value; }
+        auto sub_state = schedulers_[i]->StateDict();
+        const auto prefix = SchedulerStatePrefix(i);
+        for (const auto &[key, value] : sub_state) { state[prefix + key] = value; }
     }
     return state;
 }
 
-void SequentialLR::LoadState(const StateDict &state) {
-    last_step_ = std::get<int64_t>(state.at("last_step"));
-    recover_lr_ = std::get<float>(state.at("recover_lr"));
-    base_lr_ = std::get<float>(state.at("base_lr"));
+void SequentialLR::LoadStateDict(const LRSchedulerStateDict &state) {
+    last_step_ = std::get<int64_t>(state.at(kLastStepStateKey));
+    recover_lr_ = std::get<float>(state.at(kRecoverLRStateKey));
+    base_lr_ = std::get<float>(state.at(kBaseLRStateKey));
 
     for (size_t i = 0; i < schedulers_.size(); ++i) {
-        StateDict sub_state;
-        std::string prefix = "scheduler_" + std::to_string(i) + ".";
+        LRSchedulerStateDict sub_state;
+        const auto prefix = SchedulerStatePrefix(i);
         for (const auto &[key, value] : state) {
             if (key.substr(0, prefix.size()) == prefix) {
                 sub_state[key.substr(prefix.size())] = value;
             }
         }
         if (!sub_state.empty()) {
-            schedulers_[i]->LoadState(sub_state);
+            schedulers_[i]->LoadStateDict(sub_state);
         }
     }
     optimizer_->set_learning_rate(recover_lr_);
@@ -326,7 +341,7 @@ ChainedScheduler::ChainedScheduler(std::shared_ptr<Optimizer> optimizer,
 
     for (size_t i = 0; i < schedulers_.size(); ++i) {
         CHECK(schedulers_[i]) << "ChainedScheduler: scheduler at index " << i << " must not be null.";
-        CHECK(schedulers_[i]->SharesOptimizerWith(optimizer_))
+        CHECK(schedulers_[i]->optimizer() == optimizer_)
             << "ChainedScheduler: scheduler at index " << i << " must share the same optimizer.";
     }
 }
@@ -343,27 +358,28 @@ void ChainedScheduler::Step() {
     for (auto &sched : schedulers_) { sched->Step(); }
 }
 
-StateDict ChainedScheduler::State() const {
-    StateDict state = LRScheduler::State();
+LRSchedulerStateDict ChainedScheduler::StateDict() const {
+    LRSchedulerStateDict state = LRScheduler::StateDict();
     for (size_t i = 0; i < schedulers_.size(); ++i) {
-        auto sub_state = schedulers_[i]->State();
-        for (const auto &[key, value] : sub_state) { state["scheduler_" + std::to_string(i) + "." + key] = value; }
+        auto sub_state = schedulers_[i]->StateDict();
+        const auto prefix = SchedulerStatePrefix(i);
+        for (const auto &[key, value] : sub_state) { state[prefix + key] = value; }
     }
     return state;
 }
 
-void ChainedScheduler::LoadState(const StateDict &state) {
-    LRScheduler::LoadState(state);
+void ChainedScheduler::LoadStateDict(const LRSchedulerStateDict &state) {
+    LRScheduler::LoadStateDict(state);
     for (size_t i = 0; i < schedulers_.size(); ++i) {
-        StateDict sub_state;
-        std::string prefix = "scheduler_" + std::to_string(i) + ".";
+        LRSchedulerStateDict sub_state;
+        const auto prefix = SchedulerStatePrefix(i);
         for (const auto &[key, value] : state) {
             if (key.substr(0, prefix.size()) == prefix) {
                 sub_state[key.substr(prefix.size())] = value;
             }
         }
         if (!sub_state.empty()) {
-            schedulers_[i]->LoadState(sub_state);
+            schedulers_[i]->LoadStateDict(sub_state);
         }
     }
 }

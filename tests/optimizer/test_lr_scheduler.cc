@@ -49,7 +49,7 @@ void ExpectStepSequence(const std::shared_ptr<LRScheduler> &scheduler, std::init
                         float eps = kEps) {
     for (float expected_lr : expected) {
         scheduler->Step();
-        EXPECT_NEAR(scheduler->GetLR(), expected_lr, eps);
+        EXPECT_NEAR(scheduler->learning_rate(), expected_lr, eps);
     }
 }
 
@@ -82,27 +82,27 @@ TEST_P(LRSchedulerTest, BaseSchedulerStateRoundTripAndResume) {
     auto sched_a = LRScheduler::Create<LinearDecayScheduler>(opt_a, /*total_steps=*/kTotalSteps);
     ExpectStepSequence(sched_a, {0.095f, 0.09f, 0.085f});
 
-    StateDict state = sched_a->State();
+    LRSchedulerStateDict state = sched_a->StateDict();
     EXPECT_EQ(state.count("last_step"), 1);
     EXPECT_EQ(state.count("recover_lr"), 1);
     EXPECT_EQ(state.count("base_lr"), 1);
 
     auto opt_b = MakeDummyOptimizer(kBaseLR);
     auto sched_b = LRScheduler::Create<LinearDecayScheduler>(opt_b, /*total_steps=*/kTotalSteps);
-    sched_b->LoadState(state);
+    sched_b->LoadStateDict(state);
     ExpectStepSequence(sched_b, {0.08f, 0.075f, 0.07f, 0.065f});
 
-    EXPECT_EQ(sched_b->LastStep(), sched_ref->LastStep());
-    EXPECT_NEAR(sched_b->GetLR(), sched_ref->GetLR(), kEps);
-    EXPECT_NEAR(opt_b->learning_rate(), sched_ref->GetLR(), kEps);
+    EXPECT_EQ(sched_b->last_step(), sched_ref->last_step());
+    EXPECT_NEAR(sched_b->learning_rate(), sched_ref->learning_rate(), kEps);
+    EXPECT_NEAR(opt_b->learning_rate(), sched_ref->learning_rate(), kEps);
 }
 
 TEST_P(LRSchedulerTest, ConstantLRMatchesExpectedSchedule) {
     auto opt = MakeDummyOptimizer(kBaseLR);
     auto sched = LRScheduler::Create<ConstantLR>(opt, /*factor=*/0.5f, /*total_iters=*/3);
 
-    EXPECT_EQ(sched->LastStep(), 0);
-    EXPECT_NEAR(sched->GetLR(), 0.05f, kEps);
+    EXPECT_EQ(sched->last_step(), 0);
+    EXPECT_NEAR(sched->learning_rate(), 0.05f, kEps);
     EXPECT_NEAR(opt->learning_rate(), 0.05f, kEps);
 
     ExpectStepSequence(sched, {0.05f, 0.05f, 0.1f, 0.1f, 0.1f});
@@ -113,7 +113,7 @@ TEST_P(LRSchedulerTest, LinearLRMatchesExpectedScheduleAndClosedForm) {
     auto chainable = LRScheduler::Create<LinearLR>(opt_a, /*start_factor=*/0.2f, /*end_factor=*/1.0f,
                                                    /*total_iters=*/5);
 
-    EXPECT_NEAR(chainable->GetLR(), 0.02f, kEps);
+    EXPECT_NEAR(chainable->learning_rate(), 0.02f, kEps);
     ExpectStepSequence(chainable, {0.036f, 0.052f, 0.068f, 0.084f, 0.1f, 0.1f, 0.1f}, 1e-7f);
 
     auto opt_b = MakeDummyOptimizer(kBaseLR);
@@ -126,7 +126,7 @@ TEST_P(LRSchedulerTest, LinearLRMatchesExpectedScheduleAndClosedForm) {
     for (int epoch = 1; epoch <= 10; ++epoch) {
         chainable_again->Step();
         closed_form->Step(epoch);
-        EXPECT_NEAR(chainable_again->GetLR(), closed_form->GetLR(), kEps);
+        EXPECT_NEAR(chainable_again->learning_rate(), closed_form->learning_rate(), kEps);
     }
 }
 
@@ -134,7 +134,7 @@ TEST_P(LRSchedulerTest, StepLRMatchesExpectedScheduleAndClosedForm) {
     auto opt = MakeDummyOptimizer(kBaseLR);
     auto sched = LRScheduler::Create<StepLR>(opt, /*step_size=*/3, /*gamma=*/0.1f);
 
-    EXPECT_NEAR(sched->GetLR(), kBaseLR, kEps);
+    EXPECT_NEAR(sched->learning_rate(), kBaseLR, kEps);
     ExpectStepSequence(sched, {0.1f, 0.1f, 0.01f, 0.01f, 0.01f, 0.001f, 0.001f}, 1e-7f);
 
     auto opt_a = MakeDummyOptimizer(kBaseLR);
@@ -145,7 +145,7 @@ TEST_P(LRSchedulerTest, StepLRMatchesExpectedScheduleAndClosedForm) {
     for (int epoch = 1; epoch <= 12; ++epoch) {
         chainable->Step();
         closed_form->Step(epoch);
-        EXPECT_NEAR(chainable->GetLR(), closed_form->GetLR(), 1e-7f);
+        EXPECT_NEAR(chainable->learning_rate(), closed_form->learning_rate(), 1e-7f);
     }
 }
 
@@ -159,22 +159,22 @@ TEST_P(LRSchedulerTest, LambdaLRMatchesExpectedScheduleAndRestoresState) {
     auto opt_a = MakeDummyOptimizer(kBaseLR);
     auto sched_a = LRScheduler::Create<LambdaLR>(opt_a, /*lr_lambda=*/lambda_fn);
     ExpectStepSequence(sched_a, {0.095f, 0.09025f}, 1e-6f);
-    StateDict state = sched_a->State();
+    LRSchedulerStateDict state = sched_a->StateDict();
 
     auto opt_b = MakeDummyOptimizer(kBaseLR);
     auto sched_b = LRScheduler::Create<LambdaLR>(opt_b, /*lr_lambda=*/lambda_fn);
-    sched_b->LoadState(state);
+    sched_b->LoadStateDict(state);
     ExpectStepSequence(sched_b, {0.0857375f, 0.08145062f}, 1e-6f);
 
-    EXPECT_EQ(sched_b->LastStep(), sched_ref->LastStep());
-    EXPECT_NEAR(sched_b->GetLR(), sched_ref->GetLR(), 1e-6f);
+    EXPECT_EQ(sched_b->last_step(), sched_ref->last_step());
+    EXPECT_NEAR(sched_b->learning_rate(), sched_ref->learning_rate(), 1e-6f);
 }
 
 TEST_P(LRSchedulerTest, SequentialLRSwitchesAtMilestonesAndRestoresState) {
     auto opt = MakeDummyOptimizer(kBaseLR);
     auto sched = MakeSequentialScheduler(opt);
 
-    EXPECT_NEAR(sched->GetLR(), 0.0f, kEps);
+    EXPECT_NEAR(sched->learning_rate(), 0.0f, kEps);
     ExpectStepSequence(sched, {0.1f / 3.0f, 0.2f / 3.0f, 0.1f, 0.1f, 0.1f, 0.05f}, 1e-5f);
 
     auto opt_ref = MakeDummyOptimizer(kBaseLR);
@@ -184,22 +184,22 @@ TEST_P(LRSchedulerTest, SequentialLRSwitchesAtMilestonesAndRestoresState) {
     auto opt_a = MakeDummyOptimizer(kBaseLR);
     auto sched_a = MakeSequentialScheduler(opt_a);
     ExpectStepSequence(sched_a, {0.1f / 3.0f, 0.2f / 3.0f, 0.1f, 0.1f}, 1e-5f);
-    StateDict state = sched_a->State();
+    LRSchedulerStateDict state = sched_a->StateDict();
 
     auto opt_b = MakeDummyOptimizer(kBaseLR);
     auto sched_b = MakeSequentialScheduler(opt_b);
-    sched_b->LoadState(state);
+    sched_b->LoadStateDict(state);
     ExpectStepSequence(sched_b, {0.1f, 0.05f, 0.05f, 0.05f}, 1e-5f);
 
-    EXPECT_EQ(sched_b->LastStep(), sched_ref->LastStep());
-    EXPECT_NEAR(sched_b->GetLR(), sched_ref->GetLR(), kEps);
+    EXPECT_EQ(sched_b->last_step(), sched_ref->last_step());
+    EXPECT_NEAR(sched_b->learning_rate(), sched_ref->learning_rate(), kEps);
 }
 
 TEST_P(LRSchedulerTest, ChainedSchedulerComposesChildrenAndRestoresState) {
     auto opt = MakeDummyOptimizer(kBaseLR);
     auto sched = MakeChainedScheduler(opt);
 
-    EXPECT_NEAR(sched->GetLR(), 0.1f, kEps);
+    EXPECT_NEAR(sched->learning_rate(), 0.1f, kEps);
     ExpectStepSequence(sched, {0.095f, 0.09f, 0.085f, 0.08f}, kEps);
 
     auto opt_ref = MakeDummyOptimizer(kBaseLR);
@@ -209,15 +209,15 @@ TEST_P(LRSchedulerTest, ChainedSchedulerComposesChildrenAndRestoresState) {
     auto opt_a = MakeDummyOptimizer(kBaseLR);
     auto sched_a = MakeChainedScheduler(opt_a);
     ExpectStepSequence(sched_a, {0.095f, 0.09f, 0.085f}, kEps);
-    StateDict state = sched_a->State();
+    LRSchedulerStateDict state = sched_a->StateDict();
 
     auto opt_b = MakeDummyOptimizer(kBaseLR);
     auto sched_b = MakeChainedScheduler(opt_b);
-    sched_b->LoadState(state);
+    sched_b->LoadStateDict(state);
     ExpectStepSequence(sched_b, {0.08f, 0.075f, 0.07f}, kEps);
 
-    EXPECT_EQ(sched_b->LastStep(), sched_ref->LastStep());
-    EXPECT_NEAR(sched_b->GetLR(), sched_ref->GetLR(), kEps);
+    EXPECT_EQ(sched_b->last_step(), sched_ref->last_step());
+    EXPECT_NEAR(sched_b->learning_rate(), sched_ref->learning_rate(), kEps);
 }
 
 TEST_P(LRSchedulerTest, TrainingSchedulerFactoryBuildsCommonDecayStyles) {
@@ -231,7 +231,7 @@ TEST_P(LRSchedulerTest, TrainingSchedulerFactoryBuildsCommonDecayStyles) {
                                                 .lr_warmup_iters = 0,
                                                 .lr_warmup_init = 0.0f,
                                             });
-        EXPECT_NEAR(sched->GetLR(), 0.1f, kEps);
+        EXPECT_NEAR(sched->learning_rate(), 0.1f, kEps);
         ExpectStepSequence(sched, {0.1f, 0.1f, 0.1f}, kEps);
     }
 
@@ -245,7 +245,7 @@ TEST_P(LRSchedulerTest, TrainingSchedulerFactoryBuildsCommonDecayStyles) {
                                                 .lr_warmup_iters = 2,
                                                 .lr_warmup_init = 0.0f,
                                             });
-        EXPECT_NEAR(sched->GetLR(), 0.0f, kEps);
+        EXPECT_NEAR(sched->learning_rate(), 0.0f, kEps);
         ExpectStepSequence(sched, {0.5f, 1.0f, 0.775f, 0.55f, 0.325f, 0.1f}, kEps);
     }
 

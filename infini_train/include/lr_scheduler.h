@@ -14,7 +14,7 @@ namespace infini_train {
 class Optimizer;
 
 using StateValue = std::variant<int64_t, float, double, std::string, std::vector<float>>;
-using StateDict = std::unordered_map<std::string, StateValue>;
+using LRSchedulerStateDict = std::unordered_map<std::string, StateValue>;
 
 struct TrainingLRSchedulerConfig {
     std::string lr_decay_style = "constant";
@@ -43,15 +43,14 @@ public:
     virtual void Step(int64_t epoch);
     virtual void InitialStep();
 
-    float GetLR() const;
-    float BaseLR() const;
-    int64_t LastStep() const;
+    float learning_rate() const;
+    float base_lr() const;
+    int64_t last_step() const;
+    const std::shared_ptr<Optimizer> &optimizer() const;
 
     void ResetStep(int64_t step = -1);
-    virtual StateDict State() const;
-    virtual void LoadState(const StateDict &state);
-
-    bool SharesOptimizerWith(const std::shared_ptr<Optimizer> &opt) const;
+    virtual LRSchedulerStateDict StateDict() const;
+    virtual void LoadStateDict(const LRSchedulerStateDict &state);
 
 protected:
     virtual float GetClosedFormLR() const = 0;
@@ -59,9 +58,9 @@ protected:
     void ApplyLR(float lr);
 
     std::shared_ptr<Optimizer> optimizer_;
-    int64_t last_step_;
-    float recover_lr_;
-    float base_lr_;
+    int64_t last_step_ = -1;
+    float recover_lr_ = 0.0f;
+    float base_lr_ = 0.0f;
     bool is_initial_ = false;
 };
 
@@ -138,8 +137,8 @@ public:
     void Step() override;
     void InitialStep() override;
 
-    StateDict State() const override;
-    void LoadState(const StateDict &state) override;
+    LRSchedulerStateDict StateDict() const override;
+    void LoadStateDict(const LRSchedulerStateDict &state) override;
 
 protected:
     float GetClosedFormLR() const override;
@@ -159,8 +158,8 @@ public:
     void Step() override;
     void InitialStep() override;
 
-    StateDict State() const override;
-    void LoadState(const StateDict &state) override;
+    LRSchedulerStateDict StateDict() const override;
+    void LoadStateDict(const LRSchedulerStateDict &state) override;
 
 protected:
     float GetClosedFormLR() const override;
