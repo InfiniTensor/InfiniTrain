@@ -98,6 +98,7 @@ inline int GetNprocPerNode() { return GlobalEnv::Instance().nproc_per_node(); }
 inline int GetNthreadPerProc() { return GlobalEnv::Instance().nthread_per_process(); }
 inline int GetGlobalProcRank() { return GlobalEnv::Instance().global_proc_rank(); }
 inline int GetLocalProcRank() { return GlobalEnv::Instance().local_proc_rank(); }
+inline int GetLocalDeviceIndex(int thread_rank = 0) { return GetLocalProcRank() * GetNthreadPerProc() + thread_rank; }
 
 inline int GetTensorParallelSize() { return GlobalEnv::Instance().tensor_parallel_size(); }
 inline int GetSequenceParallelSize() { return GlobalEnv::Instance().sequence_parallel_size(); }

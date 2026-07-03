@@ -180,7 +180,7 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *pp_pg = nullptr;
 
     if (rank.IsParallel()) {
-        device = Device(Device::DeviceType::kCUDA, rank.thread_rank());
+        device = Device(Device::DeviceType::kCUDA, global::GetLocalDeviceIndex(rank.thread_rank()));
         auto *pg_factory = ProcessGroupFactory::Instance(device.type());
 
         if (ddp_world_size > 1) {
@@ -565,7 +565,6 @@ int main(int argc, char *argv[]) {
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 
-    // NOTE(dcj): currently we only support single process
     if (FLAGS_nthread_per_process > 1) {
         std::vector<std::thread> threads;
         for (int idx = 0; idx < FLAGS_nthread_per_process; ++idx) {
@@ -576,7 +575,9 @@ int main(int argc, char *argv[]) {
 
         for (auto &thread : threads) { thread.join(); }
     } else {
-        Train({0, 0, 1, 1});
+        nn::parallel::Rank rank(nn::parallel::global::GetGlobalProcRank(), 0, nn::parallel::global::GetNprocPerNode(),
+                                FLAGS_nthread_per_process);
+        Train(rank);
     }
 
     gflags::ShutDownCommandLineFlags();

@@ -13,6 +13,8 @@ int GetEnvAsInt(const std::string &name, int default_value) {
     return value ? std::atoi(value) : default_value;
 }
 
+bool HasEnv(const std::string &name) { return std::getenv(name.c_str()) != nullptr; }
+
 } // namespace
 
 namespace infini_train::nn::parallel::global {
@@ -92,13 +94,30 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
 
-    nnodes_ = GetEnvAsInt("NNODES", 1);
-    nproc_per_node_ = GetEnvAsInt("NPROC_PER_NODE", 1);
-    world_size_ = GetEnvAsInt("PROC_WORLD_SIZE", 1) * nthread_per_process;
-    global_proc_rank_ = GetEnvAsInt("GLOBAL_PROC_RANK", 0);
-    local_proc_rank_ = GetEnvAsInt("LOCAL_PROC_RANK", 0);
+    const int proc_world_size = GetEnvAsInt("PROC_WORLD_SIZE", GetEnvAsInt("WORLD_SIZE", 1));
+    nproc_per_node_ = GetEnvAsInt("NPROC_PER_NODE", GetEnvAsInt("LOCAL_WORLD_SIZE", 1));
+    CHECK_GT(nproc_per_node_, 0) << "NPROC_PER_NODE/LOCAL_WORLD_SIZE must be positive";
+    CHECK_GT(proc_world_size, 0) << "PROC_WORLD_SIZE/WORLD_SIZE must be positive";
+    CHECK_EQ(proc_world_size % nproc_per_node_, 0)
+        << "PROC_WORLD_SIZE/WORLD_SIZE must be divisible by NPROC_PER_NODE/LOCAL_WORLD_SIZE";
+    const bool nnodes_env_set = HasEnv("NNODES");
+    nnodes_ = GetEnvAsInt("NNODES", proc_world_size / nproc_per_node_);
+    CHECK_GT(nnodes_, 0) << "NNODES must be positive";
+    if (nnodes_env_set) {
+        CHECK_EQ(nnodes_ * nproc_per_node_, proc_world_size)
+            << "NNODES * NPROC_PER_NODE/LOCAL_WORLD_SIZE must equal PROC_WORLD_SIZE/WORLD_SIZE";
+    }
+    global_proc_rank_ = GetEnvAsInt("GLOBAL_PROC_RANK", GetEnvAsInt("RANK", 0));
+    local_proc_rank_ = GetEnvAsInt("LOCAL_PROC_RANK", GetEnvAsInt("LOCAL_RANK", 0));
+    CHECK_GE(global_proc_rank_, 0) << "GLOBAL_PROC_RANK/RANK must be non-negative";
+    CHECK_LT(global_proc_rank_, proc_world_size)
+        << "GLOBAL_PROC_RANK/RANK must be less than PROC_WORLD_SIZE/WORLD_SIZE";
+    CHECK_GE(local_proc_rank_, 0) << "LOCAL_PROC_RANK/LOCAL_RANK must be non-negative";
+    CHECK_LT(local_proc_rank_, nproc_per_node_)
+        << "LOCAL_PROC_RANK/LOCAL_RANK must be less than NPROC_PER_NODE/LOCAL_WORLD_SIZE";
 
     nthread_per_process_ = nthread_per_process;
+    world_size_ = proc_world_size * nthread_per_process;
     CHECK_GE(tensor_parallel_size, 1) << "Tensor Parallel size must be >= 1";
     tensor_parallel_size_ = tensor_parallel_size;
     sequence_parallel_enabled_ = sequence_parallel_enabled;
