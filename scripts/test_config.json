@@ -10,7 +10,7 @@
         "CKPT_ROOT_DIR": "/data1/ckpt",
         "COMPARE_LOG_DIR": "",
         "RUN_CTEST": "true",
-        "RUN_PROFILE_TEST": "false"
+        "RUN_PROFILE_TEST": "true"
     },
     "basic_compile_commands": [
         {
