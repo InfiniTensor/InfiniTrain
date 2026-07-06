@@ -8,6 +8,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/autocast.h"
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/parallel/global.h"
@@ -297,9 +298,12 @@ public:
         const float scale = static_cast<float>(1.0 / std::sqrt(static_cast<double>(q->Dims().back())));
 
         // current_k: (B, H_kv, T_l, D), owned by rank `(rank - step + cp_size) % cp_size`.
-        auto current_k = k_local;
+        //
+        // K/V can be transposed views after attention input layout conversion. P2P communication sends raw
+        // contiguous memory through DataPtr(), so materialize K/V before entering the ring.
+        auto current_k = k_local->Contiguous();
         // current_v: (B, H_kv, T_l, D), owned by rank `(rank - step + cp_size) % cp_size`.
-        auto current_v = v_local;
+        auto current_v = v_local->Contiguous();
         // running_max: (B, H_q, T_l, 1)
         std::shared_ptr<Tensor> running_max;
         // running_sum: (B, H_q, T_l, 1)
@@ -323,25 +327,47 @@ public:
             const int owner = (rank - step + cp_size) % cp_size;
             const int64_t kv_start = static_cast<int64_t>(owner) * local_t;
             const int64_t kv_end = kv_start + local_t;
+            const bool chunk_fully_masked = owner > rank;
 
-            // k_for_attn: (B, H_q, T_l, D)
-            auto k_for_attn = RepeatKVHeads(current_k, n_rep);
-            // v_for_attn: (B, H_q, T_l, D)
-            auto v_for_attn = RepeatKVHeads(current_v, n_rep);
-            // scores: (B, H_q, T_l, T_l)
-            auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
-            // invalid_mask: (1, 1, T_l, T_l)
-            auto invalid_mask = mask->Slice(3, kv_start, kv_end);
-            scores = scores->MaskedFill(invalid_mask, std::numeric_limits<float>::lowest());
+            std::shared_ptr<Tensor> chunk_max;
+            std::shared_ptr<Tensor> chunk_sum;
+            std::shared_ptr<Tensor> chunk_out;
+            if (chunk_fully_masked) {
+                auto stats_shape = q->Dims();
+                stats_shape.back() = 1;
+                // chunk_max: (B, H_q, T_l, 1)
+                chunk_max = std::make_shared<Tensor>(stats_shape, q->Dtype(), q->GetDevice());
+                chunk_max->Fill(std::numeric_limits<float>::lowest());
+                // chunk_sum: (B, H_q, T_l, 1)
+                chunk_sum = std::make_shared<Tensor>(stats_shape, q->Dtype(), q->GetDevice());
+                chunk_sum->Fill(0.0f);
+                // chunk_out: (B, H_q, T_l, D)
+                chunk_out = NewZeroTensorLike(q);
+            } else {
+                // k_for_attn: (B, H_q, T_l, D)
+                auto k_for_attn = RepeatKVHeads(current_k, n_rep);
+                // v_for_attn: (B, H_q, T_l, D)
+                auto v_for_attn = RepeatKVHeads(current_v, n_rep);
+                // scores: (B, H_q, T_l, T_l)
+                auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
+                // invalid_mask: (1, 1, T_l, T_l)
+                auto invalid_mask = mask->Slice(3, kv_start, kv_end);
+                scores = scores->MaskedFill(invalid_mask, std::numeric_limits<float>::lowest());
 
-            // chunk_max: (B, H_q, T_l, 1)
-            auto chunk_max = scores->Max(-1, true);
-            // probs: (B, H_q, T_l, T_l)
-            auto probs = (scores - chunk_max)->Exp()->MaskedFill(invalid_mask, 0.0f);
-            // chunk_sum: (B, H_q, T_l, 1)
-            auto chunk_sum = probs->Sum(-1, true);
-            // chunk_out: (B, H_q, T_l, D)
-            auto chunk_out = probs->Matmul(v_for_attn);
+                // chunk_max: (B, H_q, T_l, 1)
+                chunk_max = scores->Max(-1, true);
+                // shifted_scores: (B, H_q, T_l, T_l)
+                //
+                // Masked chunks can contain only invalid keys. Skip fully masked chunks above, and keep invalid
+                // shifted scores finite so masked entries never contribute to Exp/Sum.
+                auto shifted_scores = (scores - chunk_max)->MaskedFill(invalid_mask, 0.0f);
+                // probs: (B, H_q, T_l, T_l)
+                auto probs = shifted_scores->Exp()->MaskedFill(invalid_mask, 0.0f);
+                // chunk_sum: (B, H_q, T_l, 1)
+                chunk_sum = probs->Sum(-1, true);
+                // chunk_out: (B, H_q, T_l, D)
+                chunk_out = probs->Matmul(v_for_attn);
+            }
 
             if (!running_out) {
                 running_max = chunk_max;
@@ -414,6 +440,14 @@ public:
         // grad_output: (B, H_q, T_l, D)
         const auto &grad_output = grad_outputs[0];
 
+        // Backward recomputes the same matmul/softmax pieces as forward, but it is invoked after the
+        // outer training autocast guard has gone out of scope. Restore autocast for low-precision
+        // saved tensors so FP32-policy ops such as Exp follow the framework autocast rules.
+        std::unique_ptr<AutocastGuard> autocast_guard;
+        if (q->Dtype() == DataType::kFLOAT16 || q->Dtype() == DataType::kBFLOAT16) {
+            autocast_guard = std::make_unique<AutocastGuard>(q->GetDevice().type(), q->Dtype());
+        }
+
         const int cp_size = global::GetContextParallelSize();
         CHECK_GT(cp_size, 1);
 
@@ -434,9 +468,11 @@ public:
         const float scale = static_cast<float>(1.0 / std::sqrt(static_cast<double>(q->Dims().back())));
 
         // current_k: (B, H_kv, T_l, D)
-        auto current_k = k_local;
+        //
+        // Keep the same contiguous P2P contract as forward; saved K/V may be transposed views.
+        auto current_k = k_local->Contiguous();
         // current_v: (B, H_kv, T_l, D)
-        auto current_v = v_local;
+        auto current_v = v_local->Contiguous();
         // current_grad_k: (B, H_kv, T_l, D)
         auto current_grad_k = NewZeroTensorLike(k_local);
         // current_grad_v: (B, H_kv, T_l, D)
@@ -450,37 +486,48 @@ public:
             const int owner = (rank - step + cp_size) % cp_size;
             const int64_t kv_start = static_cast<int64_t>(owner) * local_t;
             const int64_t kv_end = kv_start + local_t;
+            const bool chunk_fully_masked = owner > rank;
 
-            // k_for_attn: (B, H_q, T_l, D)
-            auto k_for_attn = RepeatKVHeads(current_k, n_rep);
-            // v_for_attn: (B, H_q, T_l, D)
-            auto v_for_attn = RepeatKVHeads(current_v, n_rep);
-            // scores: (B, H_q, T_l, T_l)
-            auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
-            // invalid_mask: (1, 1, T_l, T_l)
-            auto invalid_mask = mask->Slice(3, kv_start, kv_end);
-            scores = scores->MaskedFill(invalid_mask, std::numeric_limits<float>::lowest());
+            std::shared_ptr<Tensor> grad_scores;
+            std::shared_ptr<Tensor> k_for_attn;
+            if (!chunk_fully_masked) {
+                // k_for_attn: (B, H_q, T_l, D)
+                k_for_attn = RepeatKVHeads(current_k, n_rep);
+                // v_for_attn: (B, H_q, T_l, D)
+                auto v_for_attn = RepeatKVHeads(current_v, n_rep);
+                // scores: (B, H_q, T_l, T_l)
+                auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
+                // invalid_mask: (1, 1, T_l, T_l)
+                auto invalid_mask = mask->Slice(3, kv_start, kv_end);
+                scores = scores->MaskedFill(invalid_mask, std::numeric_limits<float>::lowest());
 
-            // probs: (B, H_q, T_l, T_l)
-            auto probs = (scores - softmax_max)->Exp()->MaskedFill(invalid_mask, 0.0f) / softmax_sum;
-            // grad_v_repeated: (B, H_q, T_l, D)
-            auto grad_v_repeated = probs->Transpose(-2, -1)->Matmul(grad_output);
-            // grad_probs: (B, H_q, T_l, T_l)
-            auto grad_probs = grad_output->Matmul(v_for_attn->Transpose(-2, -1));
-            // grad_scores: (B, H_q, T_l, T_l)
-            auto grad_scores = probs * (grad_probs - softmax_delta);
-            // grad_k_repeated: (B, H_q, T_l, D)
-            auto grad_k_repeated = grad_scores->Transpose(-2, -1)->Matmul(q) * scale;
+                // shifted_scores: (B, H_q, T_l, T_l)
+                //
+                // Match forward: invalid entries stay finite before Exp() and then are zeroed, which mirrors
+                // masked softmax semantics while avoiding bogus probability mass from masked positions.
+                auto shifted_scores = (scores - softmax_max)->MaskedFill(invalid_mask, 0.0f);
+                // probs: (B, H_q, T_l, T_l)
+                auto probs = shifted_scores->Exp()->MaskedFill(invalid_mask, 0.0f) / softmax_sum;
+                // grad_v_repeated: (B, H_q, T_l, D)
+                auto grad_v_repeated = probs->Transpose(-2, -1)->Matmul(grad_output);
+                // grad_probs: (B, H_q, T_l, T_l)
+                auto grad_probs = grad_output->Matmul(v_for_attn->Transpose(-2, -1));
+                // grad_scores: (B, H_q, T_l, T_l)
+                grad_scores = probs * (grad_probs - softmax_delta);
+                // grad_k_repeated: (B, H_q, T_l, D)
+                auto grad_k_repeated = grad_scores->Transpose(-2, -1)->Matmul(q) * scale;
 
-            // SumRepeatedKVHeads maps repeated GQA gradients from (B, H_q, T_l, D) to (B, H_kv, T_l, D).
-            current_grad_k = current_grad_k + SumRepeatedKVHeads(grad_k_repeated, n_rep);
-            current_grad_v = current_grad_v + SumRepeatedKVHeads(grad_v_repeated, n_rep);
+                // SumRepeatedKVHeads maps repeated GQA gradients from (B, H_q, T_l, D) to (B, H_kv, T_l, D).
+                current_grad_k = current_grad_k + SumRepeatedKVHeads(grad_k_repeated, n_rep);
+                current_grad_v = current_grad_v + SumRepeatedKVHeads(grad_v_repeated, n_rep);
+            }
 
             std::vector<std::shared_ptr<Work>> p2p_works;
             std::shared_ptr<Tensor> next_k;
             std::shared_ptr<Tensor> next_v;
             std::shared_ptr<Tensor> next_grad_k;
             std::shared_ptr<Tensor> next_grad_v;
+            std::shared_ptr<Tensor> next_grad_kv;
 
             if (step + 1 < cp_size) {
                 // Send current K/V plus accumulated K/V grads to the next rank; receive the previous owner chunk.
@@ -497,17 +544,22 @@ public:
                                      {next_k, next_v, next_grad_k, next_grad_v}, recv_from, cp_group, batch_p2p_comm);
             } else {
                 // Last step only needs to rotate accumulated K/V grads back to the local owner rank.
-                // next_grad_k: (B, H_kv, T_l, D)
-                next_grad_k = NewZeroTensorLike(k_local);
-                // next_grad_v: (B, H_kv, T_l, D)
-                next_grad_v = NewZeroTensorLike(v_local);
-                p2p_works = P2PCommunicate(rank, {current_grad_k, current_grad_v}, send_to, {next_grad_k, next_grad_v},
-                                           recv_from, cp_group, batch_p2p_comm);
+                // Send packed_grad_kv: (2, B, H_kv, T_l, D) as one P2P payload to keep the final dK/dV
+                // return communication matched as a single operation.
+                auto packed_grad_kv
+                    = nn::function::Stack(std::vector<std::shared_ptr<Tensor>>{current_grad_k, current_grad_v}, 0)
+                          ->Contiguous();
+                next_grad_kv = std::make_shared<Tensor>(packed_grad_kv->Dims(), packed_grad_kv->Dtype(),
+                                                        packed_grad_kv->GetDevice());
+                p2p_works = P2PCommunicate(rank, {packed_grad_kv}, send_to, {next_grad_kv}, recv_from, cp_group,
+                                           batch_p2p_comm);
             }
 
-            // grad_q_chunk: (B, H_q, T_l, D)
-            auto grad_q_chunk = grad_scores->Matmul(k_for_attn) * scale;
-            grad_q = grad_q ? grad_q + grad_q_chunk : grad_q_chunk;
+            if (!chunk_fully_masked) {
+                // grad_q_chunk: (B, H_q, T_l, D)
+                auto grad_q_chunk = grad_scores->Matmul(k_for_attn) * scale;
+                grad_q = grad_q ? grad_q + grad_q_chunk : grad_q_chunk;
+            }
 
             for (const auto &work : p2p_works) { work->WaitNonBlocking(); }
 
@@ -517,8 +569,10 @@ public:
                 current_grad_k = next_grad_k;
                 current_grad_v = next_grad_v;
             } else {
-                current_grad_k = next_grad_k;
-                current_grad_v = next_grad_v;
+                auto next_grad_kv_split = next_grad_kv->Split(1, 0);
+                CHECK_EQ(next_grad_kv_split.size(), 2);
+                current_grad_k = next_grad_kv_split[0]->Squeeze(0)->Contiguous();
+                current_grad_v = next_grad_kv_split[1]->Squeeze(0)->Contiguous();
             }
         }
 

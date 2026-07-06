@@ -12,6 +12,10 @@
 #include "infini_train/src/core/ccl/cuda/nccl_common.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
+#ifndef NCCL_VERSION_CODE
+#define NCCL_VERSION_CODE NCCL_VERSION(NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH)
+#endif
+
 namespace infini_train::core::cuda {
 namespace {
 
@@ -150,6 +154,13 @@ void NcclImpl::AllToAll(const void *sendbuff, void *recvbuff, size_t count, Data
                         Stream *stream) const {
     auto nccl_comm = GetNcclComm(comm);
     auto cuda_stream = GetCudaStream(stream);
+    CHECK_NE(sendbuff, recvbuff) << "NcclImpl::AlltoAll does not support in-place operation.";
+
+    // NCCL 2.28.3+ provides native host collective ncclAlltoAll with the same contiguous rank-major layout.
+    // Older NCCL releases do not expose it, so fall back to an equivalent grouped ncclSend/ncclRecv schedule.
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 28, 3)
+    NCCL_CHECK(ncclAlltoAll(sendbuff, recvbuff, count, kNcclDtypeMap.at(dtype), nccl_comm, cuda_stream));
+#else
     int nranks = 0;
     int rank = 0;
     NCCL_CHECK(ncclCommCount(nccl_comm, &nranks));
@@ -178,6 +189,7 @@ void NcclImpl::AllToAll(const void *sendbuff, void *recvbuff, size_t count, Data
         NCCL_CHECK(ncclRecv(recv_ptr + offset, count, kNcclDtypeMap.at(dtype), peer, nccl_comm, cuda_stream));
     }
     NCCL_CHECK(ncclGroupEnd());
+#endif
 }
 
 void NcclImpl::Send(const void *buff, size_t count, DataType dtype, int peer, const CclComm *comm,
