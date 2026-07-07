@@ -10,6 +10,7 @@
 
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/autograd/function.h"
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/process_group.h"
@@ -145,6 +146,20 @@ std::vector<std::shared_ptr<Work>> P2PCommunicate(int rank, const std::vector<st
                                                   int send_dst,
                                                   const std::vector<std::shared_ptr<Tensor>> &recv_tensors,
                                                   int recv_src, const ProcessGroup *cp_group, bool batch_p2p_comm) {
+    // NOTE(zbl): Sanity checks for Send/Recv calls, in case of communication hanging.
+    CHECK_EQ(send_tensors.size(), recv_tensors.size());
+    for (size_t i = 0; i < send_tensors.size(); ++i) {
+        CHECK_NOTNULL(send_tensors[i]);
+        CHECK_NOTNULL(recv_tensors[i]);
+        CHECK_EQ(send_tensors[i]->NumElements(), recv_tensors[i]->NumElements())
+            << "P2P send/recv tensor numel mismatch at slot " << i;
+        const auto send_dtype = send_tensors[i]->Dtype();
+        const auto recv_dtype = recv_tensors[i]->Dtype();
+        CHECK(send_dtype == recv_dtype) << "P2P send/recv tensor dtype mismatch at slot " << i
+                                        << ", send=" << kDataTypeToDesc.at(send_dtype)
+                                        << ", recv=" << kDataTypeToDesc.at(recv_dtype);
+    }
+
     std::vector<P2POp> ops;
     ops.reserve(send_tensors.size() + recv_tensors.size());
     std::vector<std::shared_ptr<Work>> works;
@@ -440,12 +455,13 @@ public:
         // grad_output: (B, H_q, T_l, D)
         const auto &grad_output = grad_outputs[0];
 
-        // Backward recomputes the same matmul/softmax pieces as forward, but it is invoked after the
-        // outer training autocast guard has gone out of scope. Restore autocast for low-precision
-        // saved tensors so FP32-policy ops such as Exp follow the framework autocast rules.
+        // NOTE(zbl): Backward recomputes per-chunk scores/probs instead of saving the full attn matrix.
+        //            Saving probs would require O(B * H_q * T_l * T_g) activation memory and is against
+        //            the purpose of context parallel ring attention.
+        auto forward_autocast_context = ctx_.GetForwardAutocastContext();
         std::unique_ptr<AutocastGuard> autocast_guard;
-        if (q->Dtype() == DataType::kFLOAT16 || q->Dtype() == DataType::kBFLOAT16) {
-            autocast_guard = std::make_unique<AutocastGuard>(q->GetDevice().type(), q->Dtype());
+        if (forward_autocast_context.enabled) {
+            autocast_guard = std::make_unique<AutocastGuard>(forward_autocast_context);
         }
 
         const int cp_size = global::GetContextParallelSize();
@@ -481,6 +497,7 @@ public:
         std::shared_ptr<Tensor> grad_q;
         // softmax_delta: (B, H_q, T_l, 1)
         const auto softmax_delta = (grad_output * output)->Sum(-1, true);
+        const auto device = grad_output->GetDevice().type();
 
         for (int step = 0; step < cp_size; ++step) {
             const int owner = (rank - step + cp_size) % cp_size;
@@ -508,14 +525,32 @@ public:
                 auto shifted_scores = (scores - softmax_max)->MaskedFill(invalid_mask, 0.0f);
                 // probs: (B, H_q, T_l, T_l)
                 auto probs = shifted_scores->Exp()->MaskedFill(invalid_mask, 0.0f) / softmax_sum;
+                if (probs->Dtype() != scores->Dtype()) {
+                    // NOTE(zbl): Online softmax is decomposed into FP32-policy ops such as Exp, while standard
+                    //            SoftmaxForward returns the same dtype as its input scores. Cast back before
+                    //            using Matmul backward kernels.
+                    probs = std::make_shared<Tensor>(probs->To(scores->Dtype()));
+                }
+                // NOTE(zbl): Must use MatmulBackward here because it will perform an upcast to FP32
                 // grad_v_repeated: (B, H_q, T_l, D)
-                auto grad_v_repeated = probs->Transpose(-2, -1)->Matmul(grad_output);
+                auto grad_v_repeated = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+                    {device, "MatmulBackwardOther"}, probs, grad_output, v_for_attn->Dims());
                 // grad_probs: (B, H_q, T_l, T_l)
-                auto grad_probs = grad_output->Matmul(v_for_attn->Transpose(-2, -1));
+                auto grad_probs = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+                    {device, "MatmulBackwardInput"}, v_for_attn, grad_output, probs->Dims());
                 // grad_scores: (B, H_q, T_l, T_l)
                 grad_scores = probs * (grad_probs - softmax_delta);
+                // grad_scores_scaled: (B, H_q, T_l, T_l)
+                auto grad_scores_scaled = grad_scores * scale;
+                // grad_q_chunk: (B, H_q, T_l, D)
+                auto grad_q_chunk = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+                    {device, "MatmulBackwardInput"}, k_for_attn->Transpose(-2, -1), grad_scores_scaled, q->Dims());
+                grad_q = grad_q ? grad_q + grad_q_chunk : grad_q_chunk;
+                // grad_k_transposed: (B, H_q, D, T_l)
+                auto grad_k_transposed = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+                    {device, "MatmulBackwardOther"}, q, grad_scores_scaled, k_for_attn->Transpose(-2, -1)->Dims());
                 // grad_k_repeated: (B, H_q, T_l, D)
-                auto grad_k_repeated = grad_scores->Transpose(-2, -1)->Matmul(q) * scale;
+                auto grad_k_repeated = grad_k_transposed->Transpose(-2, -1);
 
                 // SumRepeatedKVHeads maps repeated GQA gradients from (B, H_q, T_l, D) to (B, H_kv, T_l, D).
                 current_grad_k = current_grad_k + SumRepeatedKVHeads(grad_k_repeated, n_rep);
@@ -527,7 +562,6 @@ public:
             std::shared_ptr<Tensor> next_v;
             std::shared_ptr<Tensor> next_grad_k;
             std::shared_ptr<Tensor> next_grad_v;
-            std::shared_ptr<Tensor> next_grad_kv;
 
             if (step + 1 < cp_size) {
                 // Send current K/V plus accumulated K/V grads to the next rank; receive the previous owner chunk.
@@ -535,30 +569,21 @@ public:
                 next_k = std::make_shared<Tensor>(k_local->Dims(), k_local->Dtype(), k_local->GetDevice());
                 // next_v: (B, H_kv, T_l, D)
                 next_v = std::make_shared<Tensor>(v_local->Dims(), v_local->Dtype(), v_local->GetDevice());
-                // next_grad_k: (B, H_kv, T_l, D)
-                next_grad_k = NewZeroTensorLike(k_local);
-                // next_grad_v: (B, H_kv, T_l, D)
-                next_grad_v = NewZeroTensorLike(v_local);
+                // next_grad_k: (B, H_kv, T_l, D), same dtype as current_grad_k.
+                next_grad_k = NewZeroTensorLike(current_grad_k);
+                // next_grad_v: (B, H_kv, T_l, D), same dtype as current_grad_v.
+                next_grad_v = NewZeroTensorLike(current_grad_v);
                 p2p_works
                     = P2PCommunicate(rank, {current_k, current_v, current_grad_k, current_grad_v}, send_to,
                                      {next_k, next_v, next_grad_k, next_grad_v}, recv_from, cp_group, batch_p2p_comm);
             } else {
                 // Last step only needs to rotate accumulated K/V grads back to the local owner rank.
-                // Send packed_grad_kv: (2, B, H_kv, T_l, D) as one P2P payload to keep the final dK/dV
-                // return communication matched as a single operation.
-                auto packed_grad_kv
-                    = nn::function::Stack(std::vector<std::shared_ptr<Tensor>>{current_grad_k, current_grad_v}, 0)
-                          ->Contiguous();
-                next_grad_kv = std::make_shared<Tensor>(packed_grad_kv->Dims(), packed_grad_kv->Dtype(),
-                                                        packed_grad_kv->GetDevice());
-                p2p_works = P2PCommunicate(rank, {packed_grad_kv}, send_to, {next_grad_kv}, recv_from, cp_group,
-                                           batch_p2p_comm);
-            }
-
-            if (!chunk_fully_masked) {
-                // grad_q_chunk: (B, H_q, T_l, D)
-                auto grad_q_chunk = grad_scores->Matmul(k_for_attn) * scale;
-                grad_q = grad_q ? grad_q + grad_q_chunk : grad_q_chunk;
+                // next_grad_k: (B, H_kv, T_l, D), same dtype as current_grad_k.
+                next_grad_k = NewZeroTensorLike(current_grad_k);
+                // next_grad_v: (B, H_kv, T_l, D), same dtype as current_grad_v.
+                next_grad_v = NewZeroTensorLike(current_grad_v);
+                p2p_works = P2PCommunicate(rank, {current_grad_k, current_grad_v}, send_to, {next_grad_k, next_grad_v},
+                                           recv_from, cp_group, batch_p2p_comm);
             }
 
             for (const auto &work : p2p_works) { work->WaitNonBlocking(); }
@@ -569,10 +594,8 @@ public:
                 current_grad_k = next_grad_k;
                 current_grad_v = next_grad_v;
             } else {
-                auto next_grad_kv_split = next_grad_kv->Split(1, 0);
-                CHECK_EQ(next_grad_kv_split.size(), 2);
-                current_grad_k = next_grad_kv_split[0]->Squeeze(0)->Contiguous();
-                current_grad_v = next_grad_kv_split[1]->Squeeze(0)->Contiguous();
+                current_grad_k = next_grad_k;
+                current_grad_v = next_grad_v;
             }
         }
 
