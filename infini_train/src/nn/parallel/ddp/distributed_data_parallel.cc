@@ -25,7 +25,7 @@ constexpr char kModuleName[] = "module";
 DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, const Rank &rank,
                                                  const DistributedDataParallelConfig ddp_config)
     : ddp_config_(ddp_config),
-      ddp_pg_(ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(rank.GlobalRank()))) {
+      ddp_pg_(ProcessGroupFactory::Instance()->Get(GetDataParallelWithContextProcessGroupName(rank.GlobalRank()))) {
     CHECK(ddp_config_.zero_stage >= 0 && ddp_config_.zero_stage <= 3)
         << "DistributedDataParallel: zero_stage must be in 0/1/2/3.";
     if (ddp_config_.zero_stage == 3) {

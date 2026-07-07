@@ -413,7 +413,7 @@ ParamAndGradBuffer::ParamAndGradBuffer(const std::vector<std::shared_ptr<Tensor>
                                        DistributedDataParallelConfig ddp_config)
     : params_(std::move(params)), ddp_pg_(std::move(ddp_pg)), ddp_config_(ddp_config) {
     if (ddp_pg_) {
-        ddp_world_size_ = global::GetDataParallelSize();
+        ddp_world_size_ = static_cast<size_t>(ddp_pg_->WorldSize());
     }
 
     grads_.clear();

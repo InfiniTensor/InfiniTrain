@@ -16,6 +16,7 @@
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
+#include "infini_train/include/nn/parallel/context_parallel.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
@@ -56,8 +57,9 @@ std::vector<std::shared_ptr<Tensor>> TransformerFirstStage::Forward(const std::v
                 nn::parallel::GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
             tp_rank = tp_group->GetGroupRank(device.Rank().GlobalRank());
         }
+        const int64_t cp_start = nn::parallel::GetContextParallelSequenceStart(x1->Dims()[1]);
         int64_t t_local = sequence_parallel_enabled ? x1->Dims()[1] / tp_world_size : x1->Dims()[1];
-        int64_t start = sequence_parallel_enabled ? tp_rank * t_local : 0;
+        int64_t start = cp_start + (sequence_parallel_enabled ? tp_rank * t_local : 0);
         auto pos = nn::init::Arange(start, start + t_local, infini_train::DataType::kINT64, device);
 
         // (T) -> Embedding(T_max, C) -> (T, C)
@@ -140,15 +142,17 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
                                                          config_.use_scaled_rope, device);
         }
 
-        const auto t = x1->Dims()[1] * nn::parallel::global::GetSequenceParallelSize(); // full_seq_len
+        const auto local_t = x1->Dims()[1] * nn::parallel::global::GetSequenceParallelSize();
+        const auto full_t = local_t * nn::parallel::global::GetContextParallelSize();
 
-        // Dynamic start_pos (set to 0 for now)
-        int64_t start_pos = 0;
-        auto freqs_view = buffers_[kFreqsCisName]->Slice(0, start_pos, start_pos + t, 1);
+        int64_t start_pos = nn::parallel::GetContextParallelSequenceStart(local_t);
+        auto freqs_view = buffers_[kFreqsCisName]->Slice(0, start_pos, start_pos + local_t, 1);
 
         // Create causal mask
-        std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(device));
-        std::shared_ptr<Tensor> mask = nn::function::Triu(ones, 1)->View({1, 1, t, t});
+        std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({full_t, full_t})->To(device));
+        std::shared_ptr<Tensor> mask = nn::function::Triu(ones, 1)
+                                           ->Slice({start_pos, 0}, {start_pos + local_t, full_t}, {1, 1})
+                                           ->View({1, 1, local_t, full_t});
 
         std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 

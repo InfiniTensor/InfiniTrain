@@ -40,6 +40,15 @@ std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output, const
     return pg->ReduceScatter(output, input, reduce_op, async_op);
 }
 
+std::shared_ptr<Work> AllToAll(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                               const ProcessGroup *pg, bool async_op) {
+    auto device = output->GetDevice().type();
+    if (pg == nullptr) {
+        pg = ProcessGroupFactory::Instance(device)->GetDefaultProcessGroup();
+    }
+    return pg->AllToAll(output, input, async_op);
+}
+
 std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                                                           const std::vector<Device> &devices, int dim) {
     std::vector<std::vector<std::shared_ptr<Tensor>>> output_tensors;

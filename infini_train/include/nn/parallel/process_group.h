@@ -30,6 +30,17 @@ class Work;
 
 namespace infini_train::nn::parallel {
 
+enum class P2POpType {
+    kSend,
+    kRecv,
+};
+
+struct P2POp {
+    P2POpType type;
+    std::shared_ptr<Tensor> tensor;
+    int peer_rank;
+};
+
 class ProcessGroup {
 public:
     explicit ProcessGroup(Device::DeviceType backend, const std::string &process_group_name,
@@ -38,6 +49,8 @@ public:
     virtual ~ProcessGroup();
 
     virtual int GetGroupRank(int global_rank) const;
+
+    int WorldSize() const { return world_size_; }
 
     // Asynchronous communication APIs (Compute / Communication stream decoupled)
     virtual std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor,
@@ -52,11 +65,16 @@ public:
                                                 function::ReduceOpType reduce_op = function::ReduceOpType::kSum,
                                                 bool async_op = false) const;
 
+    virtual std::shared_ptr<Work> AllToAll(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                                           bool async_op = false) const;
+
     virtual std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
                                        bool async_op = false) const;
 
     virtual std::shared_ptr<Work> Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank,
                                        bool async_op = false) const;
+
+    virtual std::shared_ptr<Work> BatchSendRecv(const std::vector<P2POp> &ops, bool async_op = false) const;
 
     // Legacy communication APIs (Single-stream)
     virtual std::vector<std::shared_ptr<Tensor>>

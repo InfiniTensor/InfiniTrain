@@ -8,8 +8,8 @@
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/linear.h"
 #include "infini_train/include/autograd/matmul.h"
-#include "infini_train/include/autograd/normalization.h"
 #include "infini_train/include/autograd/no_op.h"
+#include "infini_train/include/autograd/normalization.h"
 #include "infini_train/include/autograd/outer.h"
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/softmax.h"
@@ -123,7 +123,8 @@ TEST_P(AutogradForwardTest, SavedOutputIsPackedWithoutAutogradMeta) {
 }
 
 TEST_P(AutogradForwardTest, FunctionCtxNeedsInputGradAndSaveForBackward) {
-    auto requires_grad_input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
+    auto requires_grad_input
+        = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
     auto no_grad_input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), false);
     requires_grad_input->Fill(1.0f);
     no_grad_input->Fill(2.0f);

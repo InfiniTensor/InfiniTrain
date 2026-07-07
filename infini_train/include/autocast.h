@@ -143,9 +143,16 @@ struct AutocastContext {
 // Global thread-local storage for autocast context
 inline thread_local AutocastContext tls_autocast_context;
 
+inline AutocastContext GetCurrentAutocastContext() { return tls_autocast_context; }
+
 // RAII guard to enable/disable autocast in a scope
 class AutocastGuard {
 public:
+    explicit AutocastGuard(const AutocastContext &context) {
+        saved_context_ = tls_autocast_context;
+        tls_autocast_context = context;
+    }
+
     AutocastGuard(Device::DeviceType device_type, DataType autocast_dtype) {
         saved_context_ = tls_autocast_context;
         tls_autocast_context.enabled = true;

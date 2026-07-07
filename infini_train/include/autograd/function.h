@@ -2,9 +2,12 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "infini_train/include/autocast.h"
 
 namespace infini_train {
 class Tensor;
@@ -46,6 +49,8 @@ public:
 
     const std::vector<bool> &needs_input_grad() const;
 
+    const AutocastContext &GetForwardAutocastContext() const;
+
 private:
     struct SavedTensorEntry {
         std::shared_ptr<Tensor> tensor;
@@ -56,6 +61,7 @@ private:
     friend class Function;
 
     void set_needs_input_grad(std::vector<bool> needs_input_grad);
+    void SaveForwardAutocastContext(const AutocastContext &context);
 
     void SaveVariables(const std::vector<std::shared_ptr<Tensor>> &outputs);
     void ReleaseVariables();
@@ -66,6 +72,7 @@ private:
     std::vector<SavedTensorEntry> saved_tensor_entries_;
     std::vector<bool> needs_input_grad_;
     std::vector<Tensor *> non_differentiable_;
+    std::optional<AutocastContext> forward_autocast_context_;
 };
 
 class Function : public std::enable_shared_from_this<Function> {
