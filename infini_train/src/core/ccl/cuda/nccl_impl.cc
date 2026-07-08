@@ -12,10 +12,6 @@
 #include "infini_train/src/core/ccl/cuda/nccl_common.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
-#ifndef NCCL_VERSION_CODE
-#define NCCL_VERSION_CODE NCCL_VERSION(NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH)
-#endif
-
 namespace infini_train::core::cuda {
 namespace {
 
