@@ -49,7 +49,7 @@ public:
 
     const std::vector<bool> &needs_input_grad() const;
 
-    const AutocastContext &GetForwardAutocastContext() const;
+    const AutocastContext &forward_autocast_context() const;
 
 private:
     struct SavedTensorEntry {
@@ -61,7 +61,7 @@ private:
     friend class Function;
 
     void set_needs_input_grad(std::vector<bool> needs_input_grad);
-    void SaveForwardAutocastContext(const AutocastContext &context);
+    void set_forward_autocast_context(const AutocastContext &context);
 
     void SaveVariables(const std::vector<std::shared_ptr<Tensor>> &outputs);
     void ReleaseVariables();

@@ -124,7 +124,7 @@ public:
     void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                       const std::vector<std::shared_ptr<Tensor>> &) override {
         ctx_.SaveForBackward({input_tensors[0]});
-        observed_forward_context_ = ctx_.GetForwardAutocastContext();
+        observed_forward_context_ = ctx_.forward_autocast_context();
     }
 
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
@@ -132,10 +132,10 @@ public:
     }
 
     const AutocastContext &ObservedForwardContext() const { return observed_forward_context_; }
-    const AutocastContext &ForwardAutocastContext() const { return ctx_.GetForwardAutocastContext(); }
+    const AutocastContext &ForwardAutocastContext() const { return ctx_.forward_autocast_context(); }
 
     AutocastContext SnapshotWithForwardAutocastContextRestored() const {
-        AutocastGuard guard(ctx_.GetForwardAutocastContext());
+        AutocastGuard guard(ctx_.forward_autocast_context());
         return GetCurrentAutocastContext();
     }
 

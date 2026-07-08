@@ -57,7 +57,7 @@ const std::vector<bool> &FunctionCtx::needs_input_grad() const { return needs_in
 
 void FunctionCtx::SaveForBackward(const std::vector<std::shared_ptr<Tensor>> &tensors) { to_save_ = tensors; }
 
-const AutocastContext &FunctionCtx::GetForwardAutocastContext() const {
+const AutocastContext &FunctionCtx::forward_autocast_context() const {
     CHECK(forward_autocast_context_.has_value()) << "Forward autocast context has not been saved";
     return *forward_autocast_context_;
 }
@@ -76,7 +76,7 @@ void FunctionCtx::set_needs_input_grad(std::vector<bool> needs_input_grad) {
     needs_input_grad_ = std::move(needs_input_grad);
 }
 
-void FunctionCtx::SaveForwardAutocastContext(const AutocastContext &context) { forward_autocast_context_ = context; }
+void FunctionCtx::set_forward_autocast_context(const AutocastContext &context) { forward_autocast_context_ = context; }
 
 void FunctionCtx::SaveVariables(const std::vector<std::shared_ptr<Tensor>> &outputs) {
     saved_tensor_entries_.clear();
@@ -178,7 +178,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     // original autograd graph (leaf -> AccumulateGrad / non-leaf -> grad_fn).
     // Also, save the autocast context in FunctionCtx so that custom backward can
     // explicitly restore the forward autocast context from FunctionCtx if needed.
-    ctx_.SaveForwardAutocastContext(GetCurrentAutocastContext());
+    ctx_.set_forward_autocast_context(GetCurrentAutocastContext());
     auto compute_inputs = input_tensors;
     for (auto &t : compute_inputs) { tls_autocast_context.Autocast(type_, t); }
 
