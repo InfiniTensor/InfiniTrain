@@ -11,9 +11,6 @@ class Tensor;
 
 namespace infini_train::autograd {
 
-// FIXME(dcj): Align this API with torch.topk and return both values and indices from Forward once
-// InfiniTrain autograd supports marking individual outputs as non-differentiable. Today indices
-// are exposed through TopIndices() to avoid waiting for gradients on metadata outputs.
 class TopK : public Function {
 public:
     static constexpr char kType[] = "TopKFunction";
@@ -26,14 +23,11 @@ public:
                       const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
-    std::shared_ptr<Tensor> TopIndices() const;
-
 private:
     int64_t topk_ = 1;
     int64_t dim_ = -1;
     bool largest_ = true;
     bool sorted_ = true;
-    std::shared_ptr<Tensor> top_indices_;
     std::vector<int64_t> input_dims_;
 };
 

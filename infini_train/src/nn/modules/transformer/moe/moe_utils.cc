@@ -26,19 +26,22 @@ TopkRoutingWithScoreFunction(const std::shared_ptr<Tensor> &logits, int64_t topk
         if (use_pre_softmax) {
             auto scores = function::Softmax(logits, -1);
             auto topk_function = std::make_shared<autograd::TopK>(topk);
-            top_probs = topk_function->Apply({scores})[0];
-            top_indices = topk_function->TopIndices();
+            auto topk_outputs = topk_function->Apply({scores});
+            top_probs = topk_outputs[0];
+            top_indices = topk_outputs[1];
         } else {
             auto topk_function = std::make_shared<autograd::TopK>(topk);
-            auto top_scores = topk_function->Apply({logits})[0];
-            top_indices = topk_function->TopIndices();
+            auto topk_outputs = topk_function->Apply({logits});
+            auto top_scores = topk_outputs[0];
+            top_indices = topk_outputs[1];
             top_probs = function::Softmax(top_scores, -1);
         }
     } else if (score_function == MoEConfig::RouterScoreFunction::kSigmoid) {
         auto sigmoid_scores = function::Sigmoid(logits);
         auto topk_function = std::make_shared<autograd::TopK>(topk);
-        top_probs = topk_function->Apply({sigmoid_scores})[0];
-        top_indices = topk_function->TopIndices();
+        auto topk_outputs = topk_function->Apply({sigmoid_scores});
+        top_probs = topk_outputs[0];
+        top_indices = topk_outputs[1];
         if (topk > 1) {
             top_probs = top_probs / (top_probs->Sum(-1, true) + 1e-20f);
         }
