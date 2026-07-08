@@ -277,8 +277,10 @@ TEST_P(TransformerModuleTest, TopKTorchInterface) {
     auto input = std::make_shared<Tensor>(data, std::vector<int64_t>{2, 3}, DataType::kFLOAT32);
 
     auto largest_topk = std::make_shared<autograd::TopK>(2, 1, true, true);
-    auto largest_values = largest_topk->Apply({input})[0];
-    auto largest_indices = largest_topk->TopIndices();
+    auto largest_output = largest_topk->Apply({input});
+    ASSERT_EQ(largest_output.size(), 2);
+    auto largest_values = largest_output[0];
+    auto largest_indices = largest_output[1];
     ASSERT_EQ(largest_values->Dims(), (std::vector<int64_t>{2, 2}));
     ASSERT_EQ(largest_indices->Dims(), (std::vector<int64_t>{2, 2}));
     const auto *largest_values_ptr = static_cast<const float *>(largest_values->DataPtr());
@@ -293,8 +295,10 @@ TEST_P(TransformerModuleTest, TopKTorchInterface) {
     EXPECT_EQ(largest_indices_ptr[3], 1);
 
     auto smallest_topk = std::make_shared<autograd::TopK>(1, 0, false, true);
-    auto smallest_values = smallest_topk->Apply({input})[0];
-    auto smallest_indices = smallest_topk->TopIndices();
+    auto smallest_output = smallest_topk->Apply({input});
+    ASSERT_EQ(smallest_output.size(), 2);
+    auto smallest_values = smallest_output[0];
+    auto smallest_indices = smallest_output[1];
     ASSERT_EQ(smallest_values->Dims(), (std::vector<int64_t>{1, 3}));
     ASSERT_EQ(smallest_indices->Dims(), (std::vector<int64_t>{1, 3}));
     const auto *smallest_values_ptr = static_cast<const float *>(smallest_values->DataPtr());

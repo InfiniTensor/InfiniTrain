@@ -19,13 +19,14 @@ std::vector<std::shared_ptr<Tensor>> ScatterAdd::Forward(const std::vector<std::
 
 void ScatterAdd::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                               const std::vector<std::shared_ptr<Tensor>> &) {
-    saved_tensors_ = {input_tensors[1]};
+    ctx_.SaveForBackward({input_tensors[1]});
 }
 
 std::vector<std::shared_ptr<Tensor>> ScatterAdd::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
-    const auto &indices = saved_tensors_[0];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    const auto &indices = saved_tensors[0];
     auto device = grad_output->GetDevice().type();
     auto grad_values
         = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "GatherForward"}, grad_output, indices, dim_);
