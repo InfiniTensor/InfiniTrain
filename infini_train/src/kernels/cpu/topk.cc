@@ -100,12 +100,12 @@ std::shared_ptr<Tensor> TopKBackward(const std::shared_ptr<Tensor> &grad_values,
     for (int64_t outer = 0; outer < outer_size; ++outer) {
         for (int64_t inner = 0; inner < inner_size; ++inner) {
             for (int64_t selected = 0; selected < topk; ++selected) {
-                const int64_t out_offset = outer * topk * inner_size + selected * inner_size + inner;
-                const int64_t selected_idx = idx_ptr[out_offset];
+                const int64_t src_offset = outer * topk * inner_size + selected * inner_size + inner;
+                const int64_t selected_idx = idx_ptr[src_offset];
                 CHECK_GE(selected_idx, 0);
                 CHECK_LT(selected_idx, dim_size);
-                std::memcpy(dst + (outer * dim_size * inner_size + selected_idx * inner_size + inner) * elem_size,
-                            src + out_offset * elem_size, elem_size);
+                const size_t dst_offset = outer * dim_size * inner_size + selected_idx * inner_size + inner;
+                std::memcpy(dst + dst_offset * elem_size, src + src_offset * elem_size, elem_size);
             }
         }
     }

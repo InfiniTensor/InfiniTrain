@@ -5,6 +5,8 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/tensor.h"
+
 namespace infini_train::nn::moe {
 
 MoETokenDispatcher::MoETokenDispatcher(const TransformerConfig &config) : config_(config) {}

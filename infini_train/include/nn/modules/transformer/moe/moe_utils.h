@@ -5,7 +5,10 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
-#include "infini_train/include/tensor.h"
+
+namespace infini_train {
+class Tensor;
+} // namespace infini_train
 
 namespace infini_train::nn::moe {
 
