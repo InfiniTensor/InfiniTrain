@@ -1,7 +1,5 @@
 #include "infini_train/include/nn/modules/transformer/moe/moe_utils.h"
 
-#include <algorithm>
-
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/scatter.h"
@@ -9,6 +7,7 @@
 #include "infini_train/include/autograd/topk.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::moe {
 

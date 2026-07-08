@@ -8,9 +8,6 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
-#include "example/common/tiny_shakespeare_dataset.h"
-#include "example/tiny_mixtral/checkpoint_loader.h"
-#include "example/tiny_mixtral/config.h"
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
@@ -20,6 +17,10 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
+
+#include "example/common/tiny_shakespeare_dataset.h"
+#include "example/tiny_mixtral/checkpoint_loader.h"
+#include "example/tiny_mixtral/config.h"
 
 DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_uint32(micro_batch_size, 4, "micro batch size per training step");

@@ -32,8 +32,7 @@ struct MoEConfig {
     };
 
     enum class TokenDispatcherType {
-        kAllGather, // Megatron-style AllGather dispatcher. Degenerates to local dispatch when TP=EP=1.
-        kAllToAll   // Megatron-style AllToAll dispatcher for expert parallel MoE.
+        kAllGather // Megatron-style AllGather dispatcher. Degenerates to local dispatch when TP=EP=1.
     };
 
     enum class ExpertImpl {
@@ -46,9 +45,6 @@ struct MoEConfig {
     bool router_pre_softmax = false;
     std::optional<float> router_topk_scaling_factor = std::nullopt;
     RouterScoreFunction router_score_function = RouterScoreFunction::kSoftmax;
-    float aux_loss_coeff = 0.0f;
-    std::optional<float> expert_capacity_factor = std::nullopt;
-    bool pad_expert_input_to_capacity = false;
     int64_t moe_ffn_hidden_size = 0;
     TokenDispatcherType token_dispatcher_type = TokenDispatcherType::kAllGather;
     ExpertImpl expert_impl = ExpertImpl::kSequential;
