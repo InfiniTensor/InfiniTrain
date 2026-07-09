@@ -15,8 +15,8 @@
         "RUN_PROFILE_TEST": "true",
         "MIXTRAL_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
         "MIXTRAL_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/mixtral/mixtral_megatron_export.bin",
-        "GPT2_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler",
-        "LLAMA3_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler",
+        "GPT2_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc",
+        "LLAMA3_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc",
         "MIXTRAL_TEST_GROUPS": "moe"
     },
     "basic_compile_commands": [
@@ -63,8 +63,7 @@
                     "id": "3",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120
@@ -74,8 +73,7 @@
                     "id": "3_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120
@@ -85,8 +83,7 @@
                     "id": "4",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -97,8 +94,7 @@
                     "id": "4_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -109,8 +105,7 @@
                     "id": "5",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -122,8 +117,7 @@
                     "id": "5_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -135,8 +129,7 @@
                     "id": "6",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -147,8 +140,7 @@
                     "id": "6_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -159,8 +151,7 @@
                     "id": "7",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 4,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 4,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -172,8 +163,7 @@
                     "id": "7_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 4,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 4,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -185,8 +175,7 @@
                     "id": "8",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -200,8 +189,7 @@
                     "id": "8_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -220,8 +208,7 @@
                     "id": "3_distopt",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -232,8 +219,7 @@
                     "id": "3_zero2",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -244,8 +230,7 @@
                     "id": "3_bfloat16_distopt",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -256,8 +241,7 @@
                     "id": "3_bfloat16_zero2",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -268,8 +252,7 @@
                     "id": "4_distopt",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -281,8 +264,7 @@
                     "id": "4_zero2",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -294,8 +276,7 @@
                     "id": "4_bfloat16_distopt",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -307,8 +288,7 @@
                     "id": "4_bfloat16_zero2",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -320,8 +300,7 @@
                     "id": "5_distopt",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -334,8 +313,7 @@
                     "id": "5_zero2",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -348,8 +326,7 @@
                     "id": "5_bfloat16_distopt",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -362,8 +339,7 @@
                     "id": "5_bfloat16_zero2",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -376,8 +352,7 @@
                     "id": "8_distopt",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -392,8 +367,7 @@
                     "id": "8_bfloat16_distopt",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -635,8 +609,7 @@
                     "id": "3_lora",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -650,8 +623,7 @@
                     "id": "3_lora_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -665,8 +637,7 @@
                     "id": "4_lora",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -681,8 +652,7 @@
                     "id": "4_lora_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -697,8 +667,7 @@
                     "id": "5_lora",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -713,8 +682,7 @@
                     "id": "5_lora_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -729,8 +697,7 @@
                     "id": "6_lora",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -744,8 +711,7 @@
                     "id": "6_lora_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -759,8 +725,7 @@
                     "id": "7_lora",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 4,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 4,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -775,8 +740,7 @@
                     "id": "7_lora_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 4,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 4,
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
@@ -791,8 +755,7 @@
                     "id": "8_lora",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -809,8 +772,7 @@
                     "id": "8_lora_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 40,
                         "total_batch_size": 5120,
@@ -867,8 +829,7 @@
                 {
                     "id": "ckpt_3d_ddp_tp_pp",
                     "args": {
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 50,
                         "save_interval": 10,
                         "batch_size": 40,
@@ -884,8 +845,7 @@
                 {
                     "id": "ckpt_3d_ddp_tp_pp_resume",
                     "args": {
-                        "nproc_per_node": 8,
-                        "nthread_per_process": 1,
+                        "nthread_per_process": 8,
                         "num_iteration": 50,
                         "save_interval": 10,
                         "batch_size": 40,
@@ -932,6 +892,137 @@
                         "num_iteration": 10,
                         "global_batch_size": 80,
                         "micro_batch_size": 80
+                    }
+                }
+            ]
+        },
+        {
+            "tag": "8_proc",
+            "tests": [
+                {
+                    "id": "3",
+                    "args": {
+                        "dtype": "float32",
+                        "nproc_per_node": 8,
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120
+                    }
+                },
+                {
+                    "id": "3_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nproc_per_node": 8,
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120
+                    }
+                },
+                {
+                    "id": "4",
+                    "args": {
+                        "dtype": "float32",
+                        "nproc_per_node": 8,
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4
+                    }
+                },
+                {
+                    "id": "4_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nproc_per_node": 8,
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4
+                    }
+                },
+                {
+                    "id": "5",
+                    "args": {
+                        "dtype": "float32",
+                        "nproc_per_node": 8,
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true
+                    }
+                },
+                {
+                    "id": "5_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nproc_per_node": 8,
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true
+                    }
+                },
+                {
+                    "id": "6",
+                    "args": {
+                        "dtype": "float32",
+                        "nproc_per_node": 8,
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 8
+                    }
+                },
+                {
+                    "id": "6_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nproc_per_node": 8,
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 8
+                    }
+                },
+                {
+                    "id": "8",
+                    "args": {
+                        "dtype": "float32",
+                        "nproc_per_node": 8,
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2
+                    }
+                },
+                {
+                    "id": "8_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nproc_per_node": 8,
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2
                     }
                 }
             ]
