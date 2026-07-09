@@ -7,55 +7,27 @@
 #include <random>
 #include <unordered_set>
 
-#ifdef USE_OMP
-#include <omp.h>
-#endif
-
 #include "glog/logging.h"
 
+#include "infini_train/include/core/distribution.h"
+#include "infini_train/include/core/generator.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::init {
-namespace {
-constexpr int kRandomSeed = 42;
-
-// FIXME: RNG design is incomplete.
-//
-// Current implementation lacks:
-//   - unified Generator abstraction
-//   - global default generator and seed control
-//   - reproducible / clonable RNG state
-//
-// TODO:
-//   - introduce Generator interface and backend impl
-//   - add default generator management (per device)
-//   - refactor random ops to consume Generator
-static std::mt19937 gen(kRandomSeed);
-} // namespace
 
 std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean, float std,
-                               std::optional<std::mt19937> generator) {
+                               std::optional<core::Generator> generator) {
+    // TODO(dcj): Support other floating point data types later.
+    CHECK_EQ(static_cast<int>(tensor->Dtype()), static_cast<int>(DataType::kFLOAT32))
+        << "Normal initialization currently only supports FLOAT32 tensors";
     const int64_t num_elements = tensor->NumElements();
     std::vector<float> buffer(num_elements);
 
-#ifdef USE_OMP
-#pragma omp parallel
-    {
-        std::mt19937 local_gen(kRandomSeed + omp_get_thread_num());
-        std::normal_distribution<float> local_dis(mean, std);
-#pragma omp for
-        for (int i = 0; i < buffer.size(); ++i) {
-            buffer[i] = generator ? local_dis(generator.value()) : local_dis(local_gen);
-        }
-    }
-#else
-    std::normal_distribution<float> dis(mean, std);
-    std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
-#endif
-
     auto device = tensor->GetDevice();
+    core::distribution::FillBuffer(buffer, device, generator, std::normal_distribution<float>(mean, std));
+
     core::DeviceGuard guard(device);
     auto impl = core::GetDeviceGuardImpl(device.type());
 
@@ -113,7 +85,7 @@ float CalculateGain(NonLinearityType nonlinearity, std::optional<float> param = 
 } // namespace
 
 std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor, float a, KaimingMode mode,
-                                       NonLinearityType nonlinearity, std::optional<std::mt19937> generator) {
+                                       NonLinearityType nonlinearity, std::optional<core::Generator> generator) {
     for (const auto dim : tensor->Dims()) {
         if (dim == 0) {
             LOG(WARNING) << "Initializing zero-element tensors is a no-op";
@@ -128,26 +100,15 @@ std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor, fl
 }
 
 std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, float b,
-                                std::optional<std::mt19937> generator) {
+                                std::optional<core::Generator> generator) {
+    // TODO(dcj): Support other floating point data types later.
+    CHECK_EQ(static_cast<int>(tensor->Dtype()), static_cast<int>(DataType::kFLOAT32))
+        << "Uniform initialization currently only supports FLOAT32 tensors";
     const int64_t num_elements = tensor->NumElements();
     std::vector<float> buffer(num_elements);
 
-#ifdef USE_OMP
-#pragma omp parallel
-    {
-        std::mt19937 local_gen(kRandomSeed + omp_get_thread_num());
-        std::uniform_real_distribution<float> local_dis(a, b);
-#pragma omp for
-        for (int i = 0; i < buffer.size(); ++i) {
-            buffer[i] = generator ? local_dis(generator.value()) : local_dis(local_gen);
-        }
-    }
-#else
-    std::uniform_real_distribution<float> dis(a, b);
-    std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
-#endif
-
     auto device = tensor->GetDevice();
+    core::distribution::FillBuffer(buffer, device, generator, std::uniform_real_distribution<float>(a, b));
 
     core::DeviceGuard guard(device);
     auto impl = core::GetDeviceGuardImpl(device.type());
@@ -156,6 +117,42 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
                       device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
                       impl->GetStream(device));
 
+    return tensor;
+}
+
+std::shared_ptr<Tensor> Dropout(const std::shared_ptr<Tensor> &tensor, float p,
+                                std::optional<core::Generator> generator) {
+    CHECK_GE(p, 0.0f) << "Dropout probability must be in [0, 1)";
+    CHECK_LT(p, 1.0f) << "Dropout probability must be in [0, 1)";
+    CHECK_EQ(static_cast<int>(tensor->Dtype()), static_cast<int>(DataType::kFLOAT32))
+        << "Dropout currently only supports FLOAT32 tensors";
+
+    const int64_t num_elements = tensor->NumElements();
+    auto device = tensor->GetDevice();
+
+    // Draw uniform values, then build an inverted dropout mask on the host.
+    std::vector<float> values(num_elements);
+    core::distribution::FillBuffer(values, device, generator, std::uniform_real_distribution<float>(0.0f, 1.0f));
+
+    const float scale = 1.0f / (1.0f - p);
+
+    core::DeviceGuard guard(device);
+    auto impl = core::GetDeviceGuardImpl(device.type());
+
+    // Pull current tensor data to host, apply the mask, and write it back. This
+    // keeps the operator backend-agnostic while still routing randomness through
+    // the Generator mechanism.
+    std::vector<float> data(num_elements);
+    impl->MemcpyAsync(data.data(), tensor->DataPtr(), num_elements * sizeof(float),
+                      device.IsCPU() ? core::MemcpyKind::kD2D : core::MemcpyKind::kD2H, impl->GetStream(device));
+    impl->SynchronizeStream(impl->GetStream(device));
+
+    for (int64_t i = 0; i < num_elements; ++i) {
+        data[i] = (values[i] < p) ? 0.0f : data[i] * scale;
+    }
+
+    impl->MemcpyAsync(tensor->DataPtr(), data.data(), num_elements * sizeof(float),
+                      device.IsCPU() ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D, impl->GetStream(device));
     return tensor;
 }
 
