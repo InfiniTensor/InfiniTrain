@@ -32,7 +32,6 @@ private:
     CheckpointForwardFn forward_fn_;
     std::vector<std::shared_ptr<Tensor>> saved_inputs_;
     std::vector<bool> saved_inputs_requires_grad_;
-    AutocastContext saved_autocast_;
 };
 
 struct SavedTensorMeta {
@@ -200,7 +199,6 @@ CheckpointFunction::CheckpointFunction(CheckpointForwardFn forward_fn)
 
 std::vector<std::shared_ptr<Tensor>>
 CheckpointFunction::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    saved_autocast_ = GetCurrentAutocastContext();
     saved_inputs_.clear();
     saved_inputs_requires_grad_.clear();
     saved_inputs_.reserve(input_tensors.size());
@@ -231,7 +229,7 @@ CheckpointFunction::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_ou
     CHECK(!saved_inputs_.empty());
     CHECK_EQ(grad_outputs.size(), 1) << "Checkpoint currently supports single-output forward only.";
 
-    AutocastGuard autocast_guard(saved_autocast_);
+    AutocastGuard autocast_guard(ctx_.forward_autocast_context());
     autograd::EnableGradGuard enable_grad;
 
     std::vector<std::shared_ptr<Tensor>> detached_inputs;
