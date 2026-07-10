@@ -94,7 +94,6 @@ std::shared_ptr<Tensor> AllToAllSeqToHead(const std::shared_ptr<Tensor> &input) 
     const int64_t H_per_cp = H / cp_size;
 
     // input: (B, H, T_l, D)
-    //
     // send_input: (H, B, T_l, D), split dim 0 into CP chunks of H_per_cp heads.
     auto send_input = input->Transpose(0, 1)->Contiguous();
     // exchanged: (H, B, T_l, D), dim 0 chunks are ordered by source sequence-owner rank.
@@ -119,7 +118,6 @@ std::shared_ptr<Tensor> AllToAllHeadToSeq(const std::shared_ptr<Tensor> &input) 
     const int64_t T_l = T_g / cp_size;
 
     // input: (B, H_per_cp, T_g, D)
-    //
     // send_input: (CP * H_per_cp, B, T_l, D), split dim 0 into CP sequence-owner chunks.
     auto send_input = input->View({B, H_per_cp, cp_size, T_l, D})
                           ->Transpose(0, 2)
@@ -282,8 +280,13 @@ public:
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
         CHECK_EQ(input_tensors.size(), 4);
         // Shape notation:
-        // B: batch size, H_q: local query heads after TP, H_kv: local KV heads before GQA repeat,
-        // T_l: CP-local sequence length, T_g: global sequence length, D: head dimension.
+        // - B: batch size
+        // - H_q: local query heads after TP
+        // - H_kv: local KV heads before GQA repeat
+        // - T_l: CP-local sequence length
+        // - T_g: global sequence length
+        // - D: head dimension.
+
         // q: (B, H_q, T_l, D)
         const auto &q = input_tensors[0];
         // k_local: (B, H_kv, T_l, D)
@@ -312,13 +315,13 @@ public:
         const int64_t n_rep = q->Dims()[1] / k_local->Dims()[1];
         const float scale = static_cast<float>(1.0 / std::sqrt(static_cast<double>(q->Dims().back())));
 
-        // current_k: (B, H_kv, T_l, D), owned by rank `(rank - step + cp_size) % cp_size`.
-        //
-        // K/V can be transposed views after attention input layout conversion. P2P communication sends raw
-        // contiguous memory through DataPtr(), so materialize K/V before entering the ring.
+        // current_k: (B, H_kv, T_l, D), owned by rank `(rank - step + cp_size) % cp_size`, init with step=0.
+        // current_v: (B, H_kv, T_l, D), owned by rank `(rank - step + cp_size) % cp_size`, init with step=0.
+        // K/V can be transposed views after attention input layout conversion. Make sure K/V are contiguous for P2P.
         auto current_k = k_local->Contiguous();
-        // current_v: (B, H_kv, T_l, D), owned by rank `(rank - step + cp_size) % cp_size`.
         auto current_v = v_local->Contiguous();
+
+        // Online Softmax variables
         // running_max: (B, H_q, T_l, 1)
         std::shared_ptr<Tensor> running_max;
         // running_sum: (B, H_q, T_l, 1)
@@ -326,10 +329,12 @@ public:
         // running_out: (B, H_q, T_l, D)
         std::shared_ptr<Tensor> running_out;
 
+        // Perform `cp_size` rounds to circulate K/V chunks across all CP ranks.
         for (int step = 0; step < cp_size; ++step) {
             std::shared_ptr<Tensor> next_k;
             std::shared_ptr<Tensor> next_v;
             std::vector<std::shared_ptr<Work>> p2p_works;
+            // Only performs `cp_size - 1` times of ring P2P, no comm is needed for the final round
             if (step + 1 < cp_size) {
                 // next_k: (B, H_kv, T_l, D)
                 next_k = std::make_shared<Tensor>(k_local->Dims(), k_local->Dtype(), k_local->GetDevice());
@@ -339,14 +344,20 @@ public:
                                            batch_p2p_comm);
             }
 
+            // Rank of owner of current K/V chunk in this step
             const int owner = (rank - step + cp_size) % cp_size;
+            // Token range of current K/V chunk
             const int64_t kv_start = static_cast<int64_t>(owner) * local_t;
             const int64_t kv_end = kv_start + local_t;
+            // NOTE(zbl): CP shards the sequence dimension in rank order: higher ranks own later token chunks.
+            //            Under causal attention, queries in this rank cannot attend to K/V from later chunks,
+            //            so a chunk is fully masked when its owner rank is greater than the query rank.
             const bool chunk_fully_masked = owner > rank;
 
             std::shared_ptr<Tensor> chunk_max;
             std::shared_ptr<Tensor> chunk_sum;
             std::shared_ptr<Tensor> chunk_out;
+
             if (chunk_fully_masked) {
                 auto stats_shape = q->Dims();
                 stats_shape.back() = 1;
@@ -365,19 +376,14 @@ public:
                 auto v_for_attn = RepeatKVHeads(current_v, n_rep);
                 // scores: (B, H_q, T_l, T_l)
                 auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
-                // invalid_mask: (1, 1, T_l, T_l)
-                auto invalid_mask = mask->Slice(3, kv_start, kv_end);
+                // invalid_mask: (1, 1, T_l, T_l), assume true values are invalid attention locations
+                auto invalid_mask = mask->Slice(-1, kv_start, kv_end);
                 scores = scores->MaskedFill(invalid_mask, std::numeric_limits<float>::lowest());
 
                 // chunk_max: (B, H_q, T_l, 1)
                 chunk_max = scores->Max(-1, true);
-                // shifted_scores: (B, H_q, T_l, T_l)
-                //
-                // Masked chunks can contain only invalid keys. Skip fully masked chunks above, and keep invalid
-                // shifted scores finite so masked entries never contribute to Exp/Sum.
-                auto shifted_scores = (scores - chunk_max)->MaskedFill(invalid_mask, 0.0f);
                 // probs: (B, H_q, T_l, T_l)
-                auto probs = shifted_scores->Exp()->MaskedFill(invalid_mask, 0.0f);
+                auto probs = (scores - chunk_max)->Exp();
                 // chunk_sum: (B, H_q, T_l, 1)
                 chunk_sum = probs->Sum(-1, true);
                 // chunk_out: (B, H_q, T_l, D)
@@ -385,10 +391,12 @@ public:
             }
 
             if (!running_out) {
+                // initialization
                 running_max = chunk_max;
                 running_sum = chunk_sum;
                 running_out = chunk_out;
             } else {
+                // Update Online Softmax variables
                 // new_max: (B, H_q, T_l, 1)
                 auto new_max
                     = nn::function::Stack(std::vector<std::shared_ptr<Tensor>>{running_max, chunk_max}, -1)->Max(-1);
@@ -401,8 +409,10 @@ public:
                 running_max = new_max;
             }
 
+            // Wait for P2P finish
             if (!p2p_works.empty()) {
                 for (const auto &work : p2p_works) { work->WaitNonBlocking(); }
+                // Update K/V chunks
                 current_k = next_k;
                 current_v = next_v;
             }
@@ -444,7 +454,7 @@ public:
         const auto &k_local = saved_tensors[1];
         // v_local: (B, H_kv, T_l, D)
         const auto &v_local = saved_tensors[2];
-        // mask: (1, 1, T_l, T_g), true values are invalid attention locations.
+        // mask: (1, 1, T_l, T_g), true values are invalid attention locations
         const auto &mask = saved_tensors[3];
         // output: (B, H_q, T_l, D)
         const auto &output = saved_tensors[4];
@@ -457,7 +467,8 @@ public:
 
         // NOTE(zbl): Backward recomputes per-chunk scores/probs instead of saving the full attn matrix.
         //            Saving probs would require O(B * H_q * T_l * T_g) activation memory and is against
-        //            the purpose of context parallel ring attention.
+        //            the purpose of context parallel ring attention. Therefore, we need to restore the
+        //            autocast context used in forward.
         auto forward_autocast_context = ctx_.GetForwardAutocastContext();
         std::unique_ptr<AutocastGuard> autocast_guard;
         if (forward_autocast_context.enabled) {
@@ -483,21 +494,24 @@ public:
         const int64_t n_rep = q->Dims()[1] / k_local->Dims()[1];
         const float scale = static_cast<float>(1.0 / std::sqrt(static_cast<double>(q->Dims().back())));
 
-        // current_k: (B, H_kv, T_l, D)
-        //
         // Keep the same contiguous P2P contract as forward; saved K/V may be transposed views.
-        auto current_k = k_local->Contiguous();
+        // current_k: (B, H_kv, T_l, D)
         // current_v: (B, H_kv, T_l, D)
+        auto current_k = k_local->Contiguous();
         auto current_v = v_local->Contiguous();
         // current_grad_k: (B, H_kv, T_l, D)
-        auto current_grad_k = NewZeroTensorLike(k_local);
         // current_grad_v: (B, H_kv, T_l, D)
+        auto current_grad_k = NewZeroTensorLike(k_local);
         auto current_grad_v = NewZeroTensorLike(v_local);
+
         // grad_q: (B, H_q, T_l, D)
-        std::shared_ptr<Tensor> grad_q;
+        auto grad_q = NewZeroTensorLike(q);
         // softmax_delta: (B, H_q, T_l, 1)
         const auto softmax_delta = (grad_output * output)->Sum(-1, true);
         const auto device = grad_output->GetDevice().type();
+
+        std::vector<std::shared_ptr<Work>> pending_grad_p2p_works;
+        std::vector<std::shared_ptr<Tensor>> pending_grad_send_tensors;
 
         for (int step = 0; step < cp_size; ++step) {
             const int owner = (rank - step + cp_size) % cp_size;
@@ -505,33 +519,49 @@ public:
             const int64_t kv_end = kv_start + local_t;
             const bool chunk_fully_masked = owner > rank;
 
-            std::shared_ptr<Tensor> grad_scores;
-            std::shared_ptr<Tensor> k_for_attn;
+            std::vector<std::shared_ptr<Work>> kv_p2p_works;
+            std::shared_ptr<Tensor> next_k;
+            std::shared_ptr<Tensor> next_v;
+            if (step + 1 < cp_size) {
+                // NOTE(zbl): For compute-comm overlap purposes, prefetch the next K/V chunk before computing the
+                //            current one.
+                // next_k: (B, H_kv, T_l, D)
+                next_k = std::make_shared<Tensor>(k_local->Dims(), k_local->Dtype(), k_local->GetDevice());
+                // next_v: (B, H_kv, T_l, D)
+                next_v = std::make_shared<Tensor>(v_local->Dims(), v_local->Dtype(), v_local->GetDevice());
+                kv_p2p_works = P2PCommunicate(rank, {current_k, current_v}, send_to, {next_k, next_v}, recv_from,
+                                              cp_group, batch_p2p_comm);
+            }
+
+            // local_grad_k: (B, H_kv, T_l, D)
+            // local_grad_v: (B, H_kv, T_l, D)
+            std::shared_ptr<Tensor> local_grad_k;
+            std::shared_ptr<Tensor> local_grad_v;
+
+            // If chunk is fully masked, all grads are zero.
             if (!chunk_fully_masked) {
+                // Recompute attention scores
                 // k_for_attn: (B, H_q, T_l, D)
-                k_for_attn = RepeatKVHeads(current_k, n_rep);
+                auto k_for_attn = RepeatKVHeads(current_k, n_rep);
                 // v_for_attn: (B, H_q, T_l, D)
                 auto v_for_attn = RepeatKVHeads(current_v, n_rep);
                 // scores: (B, H_q, T_l, T_l)
                 auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
-                // invalid_mask: (1, 1, T_l, T_l)
-                auto invalid_mask = mask->Slice(3, kv_start, kv_end);
+                // invalid_mask: (1, 1, T_l, T_l), assume true values are invalid attention locations
+                auto invalid_mask = mask->Slice(-1, kv_start, kv_end);
                 scores = scores->MaskedFill(invalid_mask, std::numeric_limits<float>::lowest());
 
-                // shifted_scores: (B, H_q, T_l, T_l)
-                //
-                // Match forward: invalid entries stay finite before Exp() and then are zeroed, which mirrors
-                // masked softmax semantics while avoiding bogus probability mass from masked positions.
-                auto shifted_scores = (scores - softmax_max)->MaskedFill(invalid_mask, 0.0f);
                 // probs: (B, H_q, T_l, T_l)
-                auto probs = shifted_scores->Exp()->MaskedFill(invalid_mask, 0.0f) / softmax_sum;
+                auto probs = (scores - softmax_max)->Exp() / softmax_sum;
                 if (probs->Dtype() != scores->Dtype()) {
                     // NOTE(zbl): Online softmax is decomposed into FP32-policy ops such as Exp, while standard
                     //            SoftmaxForward returns the same dtype as its input scores. Cast back before
                     //            using Matmul backward kernels.
                     probs = std::make_shared<Tensor>(probs->To(scores->Dtype()));
                 }
-                // NOTE(zbl): Must use MatmulBackward here because it will perform an upcast to FP32
+                // NOTE(zbl): MatmulBackwardXXX will perform a upcast to FP32. So use the same MatmulBackward kernels
+                //            as the standard autograd path instead of calling Tensor::Matmul() to ensure this custom
+                //            backward follows same dtype and accumulation policy as default MHA method.
                 // grad_v_repeated: (B, H_q, T_l, D)
                 auto grad_v_repeated = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
                     {device, "MatmulBackwardOther"}, probs, grad_output, v_for_attn->Dims());
@@ -539,13 +569,13 @@ public:
                 auto grad_probs = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
                     {device, "MatmulBackwardInput"}, v_for_attn, grad_output, probs->Dims());
                 // grad_scores: (B, H_q, T_l, T_l)
-                grad_scores = probs * (grad_probs - softmax_delta);
+                auto grad_scores = probs * (grad_probs - softmax_delta);
                 // grad_scores_scaled: (B, H_q, T_l, T_l)
                 auto grad_scores_scaled = grad_scores * scale;
                 // grad_q_chunk: (B, H_q, T_l, D)
                 auto grad_q_chunk = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
                     {device, "MatmulBackwardInput"}, k_for_attn->Transpose(-2, -1), grad_scores_scaled, q->Dims());
-                grad_q = grad_q ? grad_q + grad_q_chunk : grad_q_chunk;
+                grad_q = grad_q + grad_q_chunk;
                 // grad_k_transposed: (B, H_q, D, T_l)
                 auto grad_k_transposed = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
                     {device, "MatmulBackwardOther"}, q, grad_scores_scaled, k_for_attn->Transpose(-2, -1)->Dims());
@@ -553,52 +583,50 @@ public:
                 auto grad_k_repeated = grad_k_transposed->Transpose(-2, -1);
 
                 // SumRepeatedKVHeads maps repeated GQA gradients from (B, H_q, T_l, D) to (B, H_kv, T_l, D).
-                current_grad_k = current_grad_k + SumRepeatedKVHeads(grad_k_repeated, n_rep);
-                current_grad_v = current_grad_v + SumRepeatedKVHeads(grad_v_repeated, n_rep);
+                local_grad_k = SumRepeatedKVHeads(grad_k_repeated, n_rep);
+                local_grad_v = SumRepeatedKVHeads(grad_v_repeated, n_rep);
             }
 
-            std::vector<std::shared_ptr<Work>> p2p_works;
-            std::shared_ptr<Tensor> next_k;
-            std::shared_ptr<Tensor> next_v;
             std::shared_ptr<Tensor> next_grad_k;
             std::shared_ptr<Tensor> next_grad_v;
 
-            if (step + 1 < cp_size) {
-                // Send current K/V plus accumulated K/V grads to the next rank; receive the previous owner chunk.
-                // next_k: (B, H_kv, T_l, D)
-                next_k = std::make_shared<Tensor>(k_local->Dims(), k_local->Dtype(), k_local->GetDevice());
-                // next_v: (B, H_kv, T_l, D)
-                next_v = std::make_shared<Tensor>(v_local->Dims(), v_local->Dtype(), v_local->GetDevice());
-                // next_grad_k: (B, H_kv, T_l, D), same dtype as current_grad_k.
-                next_grad_k = NewZeroTensorLike(current_grad_k);
-                // next_grad_v: (B, H_kv, T_l, D), same dtype as current_grad_v.
-                next_grad_v = NewZeroTensorLike(current_grad_v);
-                p2p_works
-                    = P2PCommunicate(rank, {current_k, current_v, current_grad_k, current_grad_v}, send_to,
-                                     {next_k, next_v, next_grad_k, next_grad_v}, recv_from, cp_group, batch_p2p_comm);
-            } else {
-                // Last step only needs to rotate accumulated K/V grads back to the local owner rank.
-                // next_grad_k: (B, H_kv, T_l, D), same dtype as current_grad_k.
-                next_grad_k = NewZeroTensorLike(current_grad_k);
-                // next_grad_v: (B, H_kv, T_l, D), same dtype as current_grad_v.
-                next_grad_v = NewZeroTensorLike(current_grad_v);
-                p2p_works = P2PCommunicate(rank, {current_grad_k, current_grad_v}, send_to, {next_grad_k, next_grad_v},
-                                           recv_from, cp_group, batch_p2p_comm);
+            // NOTE(zbl): The pass of accumulated dK/dV for this chunk was launched at the end of the previous step.
+            //            For compute-comm overlap purposes, wait here before we are about to add into it.
+            for (const auto &work : pending_grad_p2p_works) { work->WaitNonBlocking(); }
+            pending_grad_p2p_works.clear();
+            pending_grad_send_tensors.clear();
+
+            if (local_grad_k) {
+                current_grad_k = current_grad_k + local_grad_k;
+                current_grad_v = current_grad_v + local_grad_v;
             }
 
-            for (const auto &work : p2p_works) { work->WaitNonBlocking(); }
+            // NOTE(zbl): For compute-comm overlap purposes, after dK/dV is accumulated, launch the pass of dK/dV.
+            // next_grad_k: (B, H_kv, T_l, D), same dtype as current_grad_k.
+            next_grad_k = NewZeroTensorLike(current_grad_k);
+            // next_grad_v: (B, H_kv, T_l, D), same dtype as current_grad_v.
+            next_grad_v = NewZeroTensorLike(current_grad_v);
+            pending_grad_send_tensors = {current_grad_k, current_grad_v};
+            pending_grad_p2p_works = P2PCommunicate(rank, pending_grad_send_tensors, send_to,
+                                                    {next_grad_k, next_grad_v}, recv_from, cp_group, batch_p2p_comm);
 
             if (step + 1 < cp_size) {
+                // NOTE(zbl): For compute-comm overlap purposes, update K/V to next step only after the prefetched
+                //            receive is complete.
+                for (const auto &work : kv_p2p_works) { work->WaitNonBlocking(); }
                 current_k = next_k;
                 current_v = next_v;
-                current_grad_k = next_grad_k;
-                current_grad_v = next_grad_v;
-            } else {
-                current_grad_k = next_grad_k;
-                current_grad_v = next_grad_v;
             }
+            current_grad_k = next_grad_k;
+            current_grad_v = next_grad_v;
         }
 
+        // NOTE(zbl): For compute-comm overlap purposes, wait for the last round of dK/dV pass before return.
+        for (const auto &work : pending_grad_p2p_works) { work->WaitNonBlocking(); }
+        pending_grad_p2p_works.clear();
+        pending_grad_send_tensors.clear();
+
+        // Input is {q, k, v, mask}
         return {grad_q, current_grad_k, current_grad_v, nullptr};
     }
 };
