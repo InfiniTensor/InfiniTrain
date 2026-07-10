@@ -68,14 +68,16 @@ void NcclImpl::GetAsyncError(const CclComm *comm, CclStatus *async_error) const 
     }
 }
 
-void NcclImpl::GetUniqueId(CclUniqueId **unique_id) const {
+void NcclImpl::CreateUniqueId(CclUniqueId **unique_id, bool generate_id) const {
     CHECK_NOTNULL(unique_id);
     if (*unique_id == nullptr) {
         *unique_id = new NcclUniqueId();
     }
     auto *nccl_unique_id = dynamic_cast<NcclUniqueId *>(*unique_id);
     CHECK_NOTNULL(nccl_unique_id);
-    NCCL_CHECK(ncclGetUniqueId(nccl_unique_id->nccl_unique_id()));
+    if (generate_id) {
+        NCCL_CHECK(ncclGetUniqueId(nccl_unique_id->nccl_unique_id()));
+    }
 }
 
 void NcclImpl::CommInitAll(CclComm **comms, int ndev, const int *devlist) const {

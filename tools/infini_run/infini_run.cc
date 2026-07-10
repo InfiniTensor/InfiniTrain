@@ -1,7 +1,10 @@
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
 #include <sys/wait.h>
+#include <system_error>
 #include <unistd.h>
 #include <vector>
 
@@ -51,6 +54,28 @@ void SetEnvInt(const char *name, int value) {
     setenv(name, value_str.c_str(), 1);
 }
 
+void CleanupRunUniqueIdFiles(const std::string &run_id) {
+    const std::string prefix = "cclUniqueId_" + run_id + "_";
+    for (const auto &entry : std::filesystem::directory_iterator(std::filesystem::current_path())) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+        const std::string filename = entry.path().filename().string();
+        if (filename.rfind(prefix, 0) == 0) {
+            std::error_code ec;
+            std::filesystem::remove(entry.path(), ec);
+            if (ec) {
+                LOG(WARNING) << "Failed to remove unique-id file " << entry.path() << ": " << ec.message();
+            }
+        }
+    }
+}
+
+std::string GenerateLocalRunId() {
+    const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+    return std::to_string(getpid()) + "_" + std::to_string(now);
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -77,6 +102,7 @@ int main(int argc, char **argv) {
     int proc_world_size = FLAGS_nnodes * FLAGS_nproc_per_node;
     std::string master_addr = FLAGS_rdzv_endpoint.substr(0, FLAGS_rdzv_endpoint.find(':'));
     std::string master_port = FLAGS_rdzv_endpoint.substr(FLAGS_rdzv_endpoint.find(':') + 1);
+    const std::string run_id = FLAGS_nnodes == 1 ? GenerateLocalRunId() : "";
 
     for (int local_proc_rank = 0; local_proc_rank < FLAGS_nproc_per_node; ++local_proc_rank) {
         pid_t pid = fork();
@@ -88,6 +114,9 @@ int main(int argc, char **argv) {
 
             setenv("MASTER_ADDR", master_addr.c_str(), 1);
             setenv("MASTER_PORT", master_port.c_str(), 1);
+            if (!run_id.empty()) {
+                setenv("INFINI_RUN_ID", run_id.c_str(), 1);
+            }
 
             SetEnvInt("GLOBAL_PROC_RANK", global_proc_rank);
             SetEnvInt("LOCAL_PROC_RANK", local_proc_rank);
@@ -112,7 +141,8 @@ int main(int argc, char **argv) {
         pid_t child = wait(&status);
         if (child < 0) {
             perror("wait failed");
-            return 1;
+            exit_code = 1;
+            break;
         }
 
         if (WIFEXITED(status)) {
@@ -130,5 +160,8 @@ int main(int argc, char **argv) {
         }
     }
 
+    if (!run_id.empty()) {
+        CleanupRunUniqueIdFiles(run_id);
+    }
     return exit_code;
 }

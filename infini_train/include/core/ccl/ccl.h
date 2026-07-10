@@ -28,7 +28,7 @@ public:
 
     virtual void GetAsyncError(const CclComm *comm, CclStatus *async_error) const;
 
-    virtual void GetUniqueId(CclUniqueId **unique_id) const;
+    virtual void CreateUniqueId(CclUniqueId **unique_id, bool generate_id) const;
 
     virtual void CommInitAll(CclComm **comms, int ndev, const int *devlist) const;
 
