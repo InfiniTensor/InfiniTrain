@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <iostream>
+#include <numeric>
 
 #include "glog/logging.h"
 

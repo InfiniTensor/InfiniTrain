@@ -10,3 +10,5 @@ build-full/
 
 server_code/
 .claude/
+pytorch_ref/
+CLAUDE.md

@@ -1,59 +1,26 @@
 #include "infini_train/include/nn/init.h"
 
-#include <cstring>
-#include <functional>
 #include <memory>
-#include <optional>
-#include <random>
+#include <numeric>
 #include <unordered_set>
-
-#ifdef USE_OMP
-#include <omp.h>
-#endif
+#include <vector>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/core/runtime/distribution_kernels.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::init {
-namespace {
-constexpr int kRandomSeed = 42;
-
-// FIXME: RNG design is incomplete.
-//
-// Current implementation lacks:
-//   - unified Generator abstraction
-//   - global default generator and seed control
-//   - reproducible / clonable RNG state
-//
-// TODO:
-//   - introduce Generator interface and backend impl
-//   - add default generator management (per device)
-//   - refactor random ops to consume Generator
-static std::mt19937 gen(kRandomSeed);
-} // namespace
 
 std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean, float std,
-                               std::optional<std::mt19937> generator) {
+                               std::optional<Generator> generator) {
     const int64_t num_elements = tensor->NumElements();
     std::vector<float> buffer(num_elements);
 
-#ifdef USE_OMP
-#pragma omp parallel
-    {
-        std::mt19937 local_gen(kRandomSeed + omp_get_thread_num());
-        std::normal_distribution<float> local_dis(mean, std);
-#pragma omp for
-        for (int i = 0; i < buffer.size(); ++i) {
-            buffer[i] = generator ? local_dis(generator.value()) : local_dis(local_gen);
-        }
-    }
-#else
-    std::normal_distribution<float> dis(mean, std);
-    std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
-#endif
+    // 始终在 CPU 上生成随机数，后续 MemcpyAsync 负责搬运到目标设备
+    normal_kernel(buffer.data(), num_elements, mean, std, Device::DeviceType::kCPU, generator);
 
     auto device = tensor->GetDevice();
     core::DeviceGuard guard(device);
@@ -113,7 +80,7 @@ float CalculateGain(NonLinearityType nonlinearity, std::optional<float> param = 
 } // namespace
 
 std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor, float a, KaimingMode mode,
-                                       NonLinearityType nonlinearity, std::optional<std::mt19937> generator) {
+                                       NonLinearityType nonlinearity, std::optional<Generator> generator) {
     for (const auto dim : tensor->Dims()) {
         if (dim == 0) {
             LOG(WARNING) << "Initializing zero-element tensors is a no-op";
@@ -128,24 +95,12 @@ std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor, fl
 }
 
 std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, float b,
-                                std::optional<std::mt19937> generator) {
+                                std::optional<Generator> generator) {
     const int64_t num_elements = tensor->NumElements();
     std::vector<float> buffer(num_elements);
 
-#ifdef USE_OMP
-#pragma omp parallel
-    {
-        std::mt19937 local_gen(kRandomSeed + omp_get_thread_num());
-        std::uniform_real_distribution<float> local_dis(a, b);
-#pragma omp for
-        for (int i = 0; i < buffer.size(); ++i) {
-            buffer[i] = generator ? local_dis(generator.value()) : local_dis(local_gen);
-        }
-    }
-#else
-    std::uniform_real_distribution<float> dis(a, b);
-    std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
-#endif
+    // 始终在 CPU 上生成随机数，后续 MemcpyAsync 负责搬运到目标设备
+    uniform_kernel(buffer.data(), num_elements, a, b, Device::DeviceType::kCPU, generator);
 
     auto device = tensor->GetDevice();
 
