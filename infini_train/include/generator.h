@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <stdexcept>
 
 #include "infini_train/include/device.h"
 
@@ -106,7 +108,9 @@ public:
     // ---- 线程安全 ----
     std::mutex &mutex() const { return impl_->mutex_; }
 
-    // ---- 类型安全 downcast ----
+    // ---- 非检查 downcast ----
+    // 调用方必须先确认 Impl 类型与 Generator 的设备类型匹配。
+    // 算子代码应使用 check_generator<T>()。
     template <typename T>
     T *get() const {
         return static_cast<T *>(impl_.get());
@@ -136,6 +140,32 @@ private:
 template <class Impl, class... Args>
 Generator make_generator(Args &&...args) {
     return Generator(std::make_shared<Impl>(std::forward<Args>(args)...));
+}
+
+// 检查 Generator 已定义且属于 T 对应的设备后端，再进行 downcast。
+template <typename T>
+T *check_generator(const Generator &generator) {
+    if (!generator.defined()) {
+        throw std::invalid_argument("Generator with undefined implementation is not allowed");
+    }
+    if (T::device_type() != generator.device().type()) {
+        throw std::invalid_argument("Generator device type does not match the requested backend");
+    }
+
+    auto *impl = dynamic_cast<T *>(generator.unsafeGetGeneratorImpl());
+    if (impl == nullptr) {
+        throw std::invalid_argument("Generator implementation does not match the requested backend");
+    }
+    return impl;
+}
+
+// 显式 Generator 优先；未提供或未定义时使用该设备的默认 Generator。
+template <typename T>
+T *get_generator_or_default(const std::optional<Generator> &generator,
+                            const Generator &default_generator) {
+    return generator.has_value() && generator->defined()
+        ? check_generator<T>(*generator)
+        : check_generator<T>(default_generator);
 }
 
 // Reset the default generators for all supported devices. CPU is currently

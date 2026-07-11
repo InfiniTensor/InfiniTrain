@@ -9,7 +9,6 @@
 /// 仿 PyTorch aten/src/ATen/native/cpu/DistributionKernels.cpp（253 行）
 
 #include <mutex>
-#include <optional>
 
 #include "infini_train/include/core/runtime/distribution_kernels.h"
 #include "infini_train/include/core/runtime/distribution_stubs.h"
@@ -17,29 +16,6 @@
 #include "infini_train/src/core/runtime/cpu/cpu_generator_impl.h"
 
 namespace infini_train {
-namespace {
-
-// ============================================================
-// get_generator_or_default — Generator Handle → 具体 Impl 指针
-// ============================================================
-// 仿 PyTorch at::native::get_generator_or_default
-//
-// 如果调用方显式传了 Generator，就用那个；
-// 否则 fallback 到当前设备的默认 Generator。
-//
-template <typename T>
-T *get_generator_or_default(const std::optional<Generator> &gen, const Generator &default_gen) {
-    if (gen.has_value() && gen->defined()) {
-        return gen->get<T>();
-    }
-    return default_gen.get<T>();
-}
-
-// ---- DEFINE_DISPATCH：为 stub 分配全局存储 ----
-// 注意：必须在 namespace infini_train 层级，与 DECLARE_DISPATCH 声明的 extern 匹配。
-// 不能放在匿名 namespace 里，否则会创建两个不同的变量。
-
-} // namespace
 
 DEFINE_DISPATCH(uniform_stub);
 DEFINE_DISPATCH(normal_stub);
