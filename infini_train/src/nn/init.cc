@@ -147,9 +147,7 @@ std::shared_ptr<Tensor> Dropout(const std::shared_ptr<Tensor> &tensor, float p,
                       device.IsCPU() ? core::MemcpyKind::kD2D : core::MemcpyKind::kD2H, impl->GetStream(device));
     impl->SynchronizeStream(impl->GetStream(device));
 
-    for (int64_t i = 0; i < num_elements; ++i) {
-        data[i] = (values[i] < p) ? 0.0f : data[i] * scale;
-    }
+    for (int64_t i = 0; i < num_elements; ++i) { data[i] = (values[i] < p) ? 0.0f : data[i] * scale; }
 
     impl->MemcpyAsync(tensor->DataPtr(), data.data(), num_elements * sizeof(float),
                       device.IsCPU() ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D, impl->GetStream(device));

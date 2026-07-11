@@ -2,8 +2,8 @@
 
 #include "infini_train/include/core/cuda_generator.h"
 
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 #include <random>
 #include <utility>
@@ -67,8 +67,8 @@ void CUDAGeneratorImpl::SetState(const std::vector<uint8_t> &state) {
     CHECK_EQ(magic, kCUDAStateMagic) << "Invalid CUDA generator state: backend magic mismatch "
                                         "(state may come from a non-CUDA generator)";
     const uint64_t version = ReadU64(state.data() + 8);
-    CHECK_EQ(version, kCUDAStateVersion) << "Invalid CUDA generator state: unsupported version "
-                                         << version << " (expected " << kCUDAStateVersion << ")";
+    CHECK_EQ(version, kCUDAStateVersion) << "Invalid CUDA generator state: unsupported version " << version
+                                         << " (expected " << kCUDAStateVersion << ")";
     // Truncation back to int8_t is safe: device indices are always in [0, 127].
     // The device_index check enforces that a state produced by a different CUDA
     // device cannot be loaded into this generator, preventing unintended

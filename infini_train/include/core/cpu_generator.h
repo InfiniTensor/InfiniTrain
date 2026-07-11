@@ -17,7 +17,7 @@ namespace infini_train::core {
  * magic, the current seed and the full engine state, allowing SetState() to
  * resume the exact same sequence and to reject states coming from other
  * backends.
- */  
+ */
 class CPUGeneratorImpl : public GeneratorImpl {
 public:
     static constexpr Device::DeviceType kDeviceType = Device::DeviceType::kCPU;

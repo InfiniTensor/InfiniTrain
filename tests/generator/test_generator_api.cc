@@ -24,37 +24,21 @@ public:
 
     explicit StubGeneratorImpl(uint64_t seed = 42) : seed_(seed), offset_(0) {}
 
-    void SetCurrentSeed(uint64_t seed) override {
-        seed_ = seed;
-    }
+    void SetCurrentSeed(uint64_t seed) override { seed_ = seed; }
 
-    uint64_t CurrentSeed() const override {
-        return seed_;
-    }
+    uint64_t CurrentSeed() const override { return seed_; }
 
-    uint64_t Seed() override {
-        return ++seed_;
-    }
+    uint64_t Seed() override { return ++seed_; }
 
-    void SetOffset(uint64_t offset) override {
-        offset_ = offset;
-    }
+    void SetOffset(uint64_t offset) override { offset_ = offset; }
 
-    uint64_t GetOffset() const override {
-        return offset_;
-    }
+    uint64_t GetOffset() const override { return offset_; }
 
-    std::vector<uint8_t> GetState() const override {
-        return std::vector<uint8_t>{0xBE, 0xEF};
-    }
+    std::vector<uint8_t> GetState() const override { return std::vector<uint8_t>{0xBE, 0xEF}; }
 
-    void SetState(const std::vector<uint8_t> &state) override {
-        (void)state;
-    }
+    void SetState(const std::vector<uint8_t> &state) override { (void)state; }
 
-    Device GetDevice() const override {
-        return Device(Device::DeviceType::kCPU, 0);
-    }
+    Device GetDevice() const override { return Device(Device::DeviceType::kCPU, 0); }
 
     std::shared_ptr<core::GeneratorImpl> Clone() const override {
         auto cloned = std::make_shared<StubGeneratorImpl>(seed_);
@@ -155,7 +139,7 @@ TEST(GeneratorAPITest, BasicAPIForwarding) {
 TEST(GeneratorAPITest, CheckGeneratorDeath) {
     std::optional<core::Generator> null_gen = std::nullopt;
     EXPECT_DEATH(core::CheckGenerator<StubGeneratorImpl>(null_gen), "Expected a Generator but received std::nullopt");
-    
+
     core::Generator undef_gen;
     EXPECT_DEATH(core::CheckGenerator<StubGeneratorImpl>(undef_gen), "undefined implementation");
 }
@@ -168,10 +152,10 @@ TEST(GeneratorAPITest, MakeGeneratorTest) {
 
 TEST(GeneratorAPITest, UnsafeGetImplBehavior) {
     auto gen = core::MakeGenerator<StubGeneratorImpl>(111);
-    auto* impl = gen.UnsafeGetImpl();
+    auto *impl = gen.UnsafeGetImpl();
     EXPECT_NE(impl, nullptr);
     EXPECT_EQ(impl->CurrentSeed(), 111u);
-    
+
     // Modifying via UnsafeGetImpl directly changes the generator state
     impl->SetCurrentSeed(222);
     EXPECT_EQ(gen.CurrentSeed(), 222u);

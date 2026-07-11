@@ -49,7 +49,7 @@ public:
 /*
  * Generator — User facing handle. Cheap to copy: copies share the same underlying impl,
  * matching the semantics of a generator reference (e.g. torch.Generator).
-*/
+ */
 class Generator {
 public:
     Generator() = default;
@@ -91,7 +91,7 @@ public:
         std::lock_guard<std::mutex> lock(impl_->mutex_);
         return impl_->GetState();
     }
-    void SetState(const std::vector<uint8_t> &state) {  
+    void SetState(const std::vector<uint8_t> &state) {
         std::lock_guard<std::mutex> lock(impl_->mutex_);
         impl_->SetState(state);
     }
@@ -126,28 +126,23 @@ const Generator &DefaultCUDAGenerator(int8_t device_index = 0);
 
 // Appends a little-endian uint64_t to the output byte vector.
 inline void AppendU64(std::vector<uint8_t> &out, uint64_t value) {
-    for (int i = 0; i < 8; ++i) {
-        out.push_back(static_cast<uint8_t>((value >> (i * 8)) & 0xFF));
-    }
+    for (int i = 0; i < 8; ++i) { out.push_back(static_cast<uint8_t>((value >> (i * 8)) & 0xFF)); }
 }
 
 // Reads a little-endian uint64_t from the given byte pointer.
 inline uint64_t ReadU64(const uint8_t *p) {
     uint64_t value = 0;
-    for (int i = 0; i < 8; ++i) {
-        value |= static_cast<uint64_t>(p[i]) << (i * 8);
-    }
+    for (int i = 0; i < 8; ++i) { value |= static_cast<uint64_t>(p[i]) << (i * 8); }
     return value;
 }
 } // namespace detail
 
-// Global random seed entry point. 
+// Global random seed entry point.
 void ManualSeed(uint64_t seed);
 
 // Casts the given Generator (or the device default when none is supplied) to a
 // concrete backend implementation, validating that the device type matches.
-template <typename T>
-T *GetGeneratorOrDefault(const std::optional<Generator> &gen, const Device &device) {
+template <typename T> T *GetGeneratorOrDefault(const std::optional<Generator> &gen, const Device &device) {
     const Generator &chosen = (gen.has_value() && gen->Defined()) ? *gen : detail::GetDefaultGenerator(device);
     CHECK(chosen.Defined()) << "Generator with undefined implementation is not allowed";
     CHECK(T::kDeviceType == chosen.GetDevice().type())
@@ -157,16 +152,14 @@ T *GetGeneratorOrDefault(const std::optional<Generator> &gen, const Device &devi
 }
 
 // Convenience factory — matches PyTorch's at::make_generator<Impl>(args...).
-template <class Impl, class... Args>
-Generator MakeGenerator(Args &&...args) {
+template <class Impl, class... Args> Generator MakeGenerator(Args &&...args) {
     return Generator(std::make_shared<Impl>(std::forward<Args>(args)...));
 }
 
 // Validates a Generator optional and casts to the concrete backend type.
 // Unlike GetGeneratorOrDefault, this does NOT fall back to a default — the
 // caller must supply a defined generator.  Matches PyTorch's check_generator.
-template <typename T>
-T *CheckGenerator(std::optional<Generator> gen) {
+template <typename T> T *CheckGenerator(std::optional<Generator> gen) {
     CHECK(gen.has_value()) << "Expected a Generator but received std::nullopt";
     CHECK(gen->Defined()) << "Generator with undefined implementation is not allowed";
     CHECK(T::kDeviceType == gen->GetDevice().type())

@@ -48,8 +48,8 @@ Generator &MutableDefaultCUDAGenerator(int8_t device_index) {
     if (it == generators.end()) {
         auto manual_seed = DefaultManualSeed();
         Generator generator = manual_seed.has_value()
-                                  ? Generator(std::make_shared<CUDAGeneratorImpl>(device_index, *manual_seed))
-                                  : Generator(std::make_shared<CUDAGeneratorImpl>(device_index));
+                                ? Generator(std::make_shared<CUDAGeneratorImpl>(device_index, *manual_seed))
+                                : Generator(std::make_shared<CUDAGeneratorImpl>(device_index));
         it = generators.emplace(device_index, std::move(generator)).first;
     }
     return it->second;
@@ -96,9 +96,7 @@ void ManualSeed(uint64_t seed) {
 #ifdef USE_CUDA
     // Seed already materialized CUDA generators. Future CUDA defaults read
     // DefaultManualSeed() when they are lazily created.
-    for (auto &[index, generator] : detail::MutableDefaultCUDAGenerators()) {
-        generator.SetCurrentSeed(seed);
-    }
+    for (auto &[index, generator] : detail::MutableDefaultCUDAGenerators()) { generator.SetCurrentSeed(seed); }
 #endif
 }
 

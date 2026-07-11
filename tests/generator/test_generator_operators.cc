@@ -4,7 +4,6 @@
 // KaimingUniform, and Dropout) correctly interact with the Generator mechanism
 // on both CPU and CUDA backends, leveraging GTest parameterization.
 
-#include "tests/common/test_utils.h"
 #include "infini_train/include/core/cpu_generator.h"
 #include "infini_train/include/core/generator.h"
 #include "infini_train/include/core/runtime/device_guard.h"
@@ -12,6 +11,7 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/tensor.h"
+#include "tests/common/test_utils.h"
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -23,9 +23,7 @@
 using namespace infini_train;
 
 namespace {
-Device CPUDevice() {
-    return Device(Device::DeviceType::kCPU, 0);
-}
+Device CPUDevice() { return Device(Device::DeviceType::kCPU, 0); }
 } // namespace
 
 class GeneratorOperatorsTest : public infini_train::test::InfiniTrainTest {
@@ -300,9 +298,7 @@ TEST_P(GeneratorOperatorsTest, DropoutBoundaryProbabilityZeroKeepsAllElements) {
     auto gen = MakeDeviceGenerator(3);
     nn::init::Dropout(tensor, 0.0f, gen);
 
-    for (float v : ReadFloats(tensor)) {
-        EXPECT_FLOAT_EQ(v, 1.0f);
-    }
+    for (float v : ReadFloats(tensor)) { EXPECT_FLOAT_EQ(v, 1.0f); }
 }
 
 TEST_P(GeneratorOperatorsTest, DropoutBoundaryProbabilityNearOneDropsMost) {

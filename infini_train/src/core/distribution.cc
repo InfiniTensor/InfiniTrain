@@ -17,4 +17,4 @@ namespace infini_train::core::distribution {
 //     CHECK_OUT_OF_BOUNDS / check_from_to_in_range)
 //   - Distribution registration for multi-dtype dispatch
 
-}  // namespace infini_train::core::distribution
+} // namespace infini_train::core::distribution

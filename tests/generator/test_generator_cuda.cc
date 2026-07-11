@@ -1,8 +1,8 @@
 // CUDA Generator unit tests.
 
-#include "gtest/gtest.h"
 #include "infini_train/include/core/generator.h"
 #include "infini_train/include/device.h"
+#include "gtest/gtest.h"
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -47,9 +47,7 @@ TEST(CUDAGeneratorTest, RejectsUnsupportedCUDAStateVersion) {
 
     // Corrupt version field (bytes 8-15) to 99.
     state[8] = 99;
-    for (int i = 9; i < 16; ++i) {
-        state[i] = 0;
-    }
+    for (int i = 9; i < 16; ++i) { state[i] = 0; }
 
     EXPECT_DEATH(gen.SetState(state), "unsupported version");
 }

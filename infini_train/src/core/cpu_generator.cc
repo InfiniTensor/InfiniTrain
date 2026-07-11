@@ -29,7 +29,7 @@ CPUGeneratorImpl::CPUGeneratorImpl(uint64_t seed) : seed_(seed), engine_(seed) {
 void CPUGeneratorImpl::SetCurrentSeed(uint64_t seed) {
     seed_ = seed;
     engine_.seed(seed);
-}  
+}
 
 uint64_t CPUGeneratorImpl::CurrentSeed() const { return seed_; }
 
@@ -68,8 +68,8 @@ void CPUGeneratorImpl::SetState(const std::vector<uint8_t> &state) {
     CHECK_EQ(magic, kCPUStateMagic) << "Invalid CPU generator state: backend magic mismatch "
                                        "(state may come from a non-CPU generator)";
     const uint64_t version = ReadU64(state.data() + 8);
-    CHECK_EQ(version, kCPUStateVersion) << "Invalid CPU generator state: unsupported version "
-                                        << version << " (expected " << kCPUStateVersion << ")";
+    CHECK_EQ(version, kCPUStateVersion) << "Invalid CPU generator state: unsupported version " << version
+                                        << " (expected " << kCPUStateVersion << ")";
     const uint64_t seed = ReadU64(state.data() + 16);
     const uint64_t text_len = ReadU64(state.data() + 24);
     CHECK_EQ(state.size(), static_cast<size_t>(32) + text_len) << "Invalid CPU generator state: length mismatch";

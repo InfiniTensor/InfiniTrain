@@ -1,9 +1,9 @@
 // CPU Generator unit tests.
 
-#include "gtest/gtest.h"
 #include "infini_train/include/core/cpu_generator.h"
 #include "infini_train/include/core/generator.h"
 #include "infini_train/include/device.h"
+#include "gtest/gtest.h"
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -22,9 +22,7 @@ std::vector<uint64_t> DrawCPU(core::Generator &generator, int64_t count) {
     std::lock_guard<std::mutex> lock(generator.Mutex());
     std::vector<uint64_t> values(count);
     auto &engine = impl->Engine();
-    for (auto &value : values) {
-        value = engine();
-    }
+    for (auto &value : values) { value = engine(); }
     return values;
 }
 
@@ -125,9 +123,7 @@ TEST(CPUGeneratorTest, RejectsUnsupportedCPUStateVersion) {
 
     // Corrupt version field (bytes 8-15) to 99.
     state[8] = 99;
-    for (int i = 9; i < 16; ++i) {
-        state[i] = 0;
-    }
+    for (int i = 9; i < 16; ++i) { state[i] = 0; }
 
     EXPECT_DEATH(gen.SetState(state), "unsupported version");
 }
@@ -143,7 +139,8 @@ TEST(CPUGeneratorTest, CPUOnlySupportsZeroOffset) {
 TEST(CPUGeneratorTest, GetWrongTypeDeath) {
     auto gen = MakeCPUGenerator(123);
     EXPECT_DEATH(core::CheckGenerator<FakeCUDAGeneratorImpl>(gen), "Generator device type mismatch");
-    EXPECT_DEATH(core::GetGeneratorOrDefault<FakeCUDAGeneratorImpl>(gen, Device(Device::DeviceType::kCPU, 0)), "Generator device type mismatch");
+    EXPECT_DEATH(core::GetGeneratorOrDefault<FakeCUDAGeneratorImpl>(gen, Device(Device::DeviceType::kCPU, 0)),
+                 "Generator device type mismatch");
 }
 
 TEST(CPUGeneratorTest, RejectsMalformedCPUState) {
@@ -176,8 +173,6 @@ TEST(CPUGeneratorTest, RejectsGarbageEngineData) {
     auto gen = MakeCPUGenerator(1);
     auto state = gen.GetState();
     size_t data_start = state.size() / 2;
-    for (size_t i = data_start; i < state.size(); ++i) {
-        state[i] = 0xFF;
-    }
+    for (size_t i = data_start; i < state.size(); ++i) { state[i] = 0xFF; }
     EXPECT_DEATH(gen.SetState(state), "engine deserialization failed");
 }

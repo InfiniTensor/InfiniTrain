@@ -1,8 +1,8 @@
 // Default generator management and ManualSeed tests.
 
-#include "gtest/gtest.h"
 #include "infini_train/include/core/generator.h"
 #include "infini_train/include/device.h"
+#include "gtest/gtest.h"
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -17,9 +17,7 @@ using namespace infini_train;
 
 namespace {
 
-Device CPUDevice() {
-    return Device(Device::DeviceType::kCPU, 0);
-}
+Device CPUDevice() { return Device(Device::DeviceType::kCPU, 0); }
 
 core::Generator MakeCPUGenerator(uint64_t seed) {
     return core::Generator(std::make_shared<core::CPUGeneratorImpl>(seed));
@@ -30,9 +28,7 @@ std::vector<uint64_t> DrawCPU(core::Generator &generator, int64_t count) {
     std::lock_guard<std::mutex> lock(generator.Mutex());
     std::vector<uint64_t> values(count);
     auto &engine = impl->Engine();
-    for (auto &value : values) {
-        value = engine();
-    }
+    for (auto &value : values) { value = engine(); }
     return values;
 }
 
