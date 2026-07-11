@@ -1,3 +1,5 @@
+#include <numeric>
+
 #include "glog/logging.h"
 
 #include "infini_train/include/dispatcher.h"

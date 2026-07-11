@@ -16,12 +16,13 @@
 
 namespace infini_train {
 
-// 填 n 个 float 到 data 指向的缓冲区
-DECLARE_DISPATCH(void (*)(void *data, int64_t n, double a, double b,
+class Tensor;
+
+DECLARE_DISPATCH(void (*)(Tensor &tensor, double a, double b,
                           const std::optional<Generator> &gen),
                  uniform_stub);
 
-DECLARE_DISPATCH(void (*)(void *data, int64_t n, double a, double b,
+DECLARE_DISPATCH(void (*)(Tensor &tensor, double a, double b,
                           const std::optional<Generator> &gen),
                  normal_stub);
 

@@ -5,6 +5,10 @@
 #include "infini_train/include/tensor.h"
 #include "infini_train/src/core/runtime/cpu/cpu_generator_impl.h"
 
+#ifdef USE_CUDA
+#include "infini_train/src/core/runtime/cuda/cuda_generator_impl.h"
+#endif
+
 namespace infini_train {
 
 // ============================================================
@@ -30,6 +34,10 @@ std::shared_ptr<Tensor> Generator::get_state() const {
 
 void manual_seed(uint64_t seed) {
     core::cpu::manual_seed(seed);
+
+#ifdef USE_CUDA
+    core::cuda::manual_seed_all(seed);
+#endif
 }
 
 } // namespace infini_train

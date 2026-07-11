@@ -16,19 +16,9 @@ namespace infini_train::nn::init {
 
 std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean, float std,
                                std::optional<Generator> generator) {
-    const int64_t num_elements = tensor->NumElements();
-    std::vector<float> buffer(num_elements);
-
-    // 始终在 CPU 上生成随机数，后续 MemcpyAsync 负责搬运到目标设备
-    normal_kernel(buffer.data(), num_elements, mean, std, Device::DeviceType::kCPU, generator);
-
     auto device = tensor->GetDevice();
     core::DeviceGuard guard(device);
-    auto impl = core::GetDeviceGuardImpl(device.type());
-
-    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
-                      impl->GetStream(device));
+    normal_kernel(*tensor, mean, std, generator);
     return tensor;
 }
 
@@ -96,20 +86,9 @@ std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor, fl
 
 std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, float b,
                                 std::optional<Generator> generator) {
-    const int64_t num_elements = tensor->NumElements();
-    std::vector<float> buffer(num_elements);
-
-    // 始终在 CPU 上生成随机数，后续 MemcpyAsync 负责搬运到目标设备
-    uniform_kernel(buffer.data(), num_elements, a, b, Device::DeviceType::kCPU, generator);
-
     auto device = tensor->GetDevice();
-
     core::DeviceGuard guard(device);
-    auto impl = core::GetDeviceGuardImpl(device.type());
-
-    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
-                      impl->GetStream(device));
+    uniform_kernel(*tensor, a, b, generator);
 
     return tensor;
 }
