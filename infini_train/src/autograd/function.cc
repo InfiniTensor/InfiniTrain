@@ -57,6 +57,11 @@ const std::vector<bool> &FunctionCtx::needs_input_grad() const { return needs_in
 
 void FunctionCtx::SaveForBackward(const std::vector<std::shared_ptr<Tensor>> &tensors) { to_save_ = tensors; }
 
+const AutocastContext &FunctionCtx::forward_autocast_context() const {
+    CHECK(forward_autocast_context_.has_value()) << "Forward autocast context has not been saved";
+    return *forward_autocast_context_;
+}
+
 void FunctionCtx::MarkNonDifferentiable(const std::vector<std::shared_ptr<Tensor>> &outputs) {
     non_differentiable_.clear();
     non_differentiable_.reserve(outputs.size());
@@ -70,6 +75,8 @@ void FunctionCtx::MarkNonDifferentiable(const std::vector<std::shared_ptr<Tensor
 void FunctionCtx::set_needs_input_grad(std::vector<bool> needs_input_grad) {
     needs_input_grad_ = std::move(needs_input_grad);
 }
+
+void FunctionCtx::set_forward_autocast_context(const AutocastContext &context) { forward_autocast_context_ = context; }
 
 void FunctionCtx::SaveVariables(const std::vector<std::shared_ptr<Tensor>> &outputs) {
     saved_tensor_entries_.clear();
@@ -106,6 +113,7 @@ void FunctionCtx::ReleaseVariables() {
     saved_tensor_entries_.clear();
     needs_input_grad_.clear();
     non_differentiable_.clear();
+    forward_autocast_context_.reset();
 }
 
 bool FunctionCtx::IsNonDifferentiable(const std::shared_ptr<Tensor> &output) const {
@@ -168,6 +176,9 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     // tensors already in the compute dtype. The shared_ptr copies are local; we keep
     // the caller's `input_tensors` untouched so next_functions_ wires up to the
     // original autograd graph (leaf -> AccumulateGrad / non-leaf -> grad_fn).
+    // Also, save the autocast context in FunctionCtx so that custom backward can
+    // explicitly restore the forward autocast context from FunctionCtx if needed.
+    ctx_.set_forward_autocast_context(GetCurrentAutocastContext());
     auto compute_inputs = input_tensors;
     for (auto &t : compute_inputs) { tls_autocast_context.Autocast(type_, t); }
 

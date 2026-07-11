@@ -3,13 +3,14 @@
 
 #include "gtest/gtest.h"
 
+#include "infini_train/include/autocast.h"
 #include "infini_train/include/autograd/activations.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/linear.h"
 #include "infini_train/include/autograd/matmul.h"
-#include "infini_train/include/autograd/normalization.h"
 #include "infini_train/include/autograd/no_op.h"
+#include "infini_train/include/autograd/normalization.h"
 #include "infini_train/include/autograd/outer.h"
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/softmax.h"
@@ -107,6 +108,41 @@ public:
     }
 };
 
+class ObserveAutocastContextFunction : public autograd::Function {
+public:
+    static constexpr char kType[] = "ObserveAutocastContextFunction";
+
+    ObserveAutocastContextFunction() : autograd::Function(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
+        const auto &input = input_tensors[0];
+        auto output = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());
+        output->CopyFrom(input);
+        return {output};
+    }
+
+    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                      const std::vector<std::shared_ptr<Tensor>> &) override {
+        ctx_.SaveForBackward({input_tensors[0]});
+        observed_forward_context_ = ctx_.forward_autocast_context();
+    }
+
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
+        return {grad_outputs[0]};
+    }
+
+    const AutocastContext &ObservedForwardContext() const { return observed_forward_context_; }
+    const AutocastContext &ForwardAutocastContext() const { return ctx_.forward_autocast_context(); }
+
+    AutocastContext SnapshotWithForwardAutocastContextRestored() const {
+        AutocastGuard guard(ctx_.forward_autocast_context());
+        return GetCurrentAutocastContext();
+    }
+
+private:
+    AutocastContext observed_forward_context_;
+};
+
 TEST_P(AutogradForwardTest, SavedOutputIsPackedWithoutAutogradMeta) {
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
     input->Fill(1.0f);
@@ -123,7 +159,8 @@ TEST_P(AutogradForwardTest, SavedOutputIsPackedWithoutAutogradMeta) {
 }
 
 TEST_P(AutogradForwardTest, FunctionCtxNeedsInputGradAndSaveForBackward) {
-    auto requires_grad_input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
+    auto requires_grad_input
+        = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
     auto no_grad_input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), false);
     requires_grad_input->Fill(1.0f);
     no_grad_input->Fill(2.0f);
@@ -191,6 +228,72 @@ TEST_P(AutogradForwardTest, FunctionCtxSavedTensorHooksPackAndUnpack) {
     auto saved = fn->GetSavedTensor();
     EXPECT_EQ(unpack_calls, 1);
     EXPECT_EQ(saved.get(), packed_tensor.get());
+}
+
+TEST_P(AutogradForwardTest, FunctionCtxRecordsForwardAutocastContext) {
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
+    input->Fill(1.0f);
+
+    auto fn = std::make_shared<ObserveAutocastContextFunction>();
+    const auto forward_dtype = kDeviceDefaultDtype[static_cast<size_t>(GetDevice().type())];
+    {
+        AutocastGuard autocast_guard(GetDevice().type(), forward_dtype);
+        auto outputs = fn->Apply({input});
+        ASSERT_EQ(outputs.size(), 1);
+    }
+
+    const auto &state = fn->ObservedForwardContext();
+    EXPECT_TRUE(state.enabled);
+    EXPECT_EQ(state.device_type, GetDevice().type());
+    EXPECT_EQ(state.autocast_dtype, forward_dtype);
+}
+
+TEST_P(AutogradForwardTest, FunctionCtxRestoresForwardAutocastContextForRecompute) {
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
+    input->Fill(1.0f);
+
+    auto fn = std::make_shared<ObserveAutocastContextFunction>();
+    const auto forward_dtype = kDeviceDefaultDtype[static_cast<size_t>(GetDevice().type())];
+    {
+        AutocastGuard autocast_guard(GetDevice().type(), forward_dtype);
+        auto outputs = fn->Apply({input});
+        ASSERT_EQ(outputs.size(), 1);
+    }
+
+    EXPECT_FALSE(GetCurrentAutocastContext().enabled);
+    const auto restored = fn->SnapshotWithForwardAutocastContextRestored();
+    EXPECT_TRUE(restored.enabled);
+    EXPECT_EQ(restored.device_type, GetDevice().type());
+    EXPECT_EQ(restored.autocast_dtype, forward_dtype);
+    EXPECT_FALSE(GetCurrentAutocastContext().enabled);
+}
+
+TEST_P(AutogradForwardTest, AutocastGuardRestoresCallerContextAfterForwardAutocastContext) {
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
+    input->Fill(1.0f);
+
+    auto fn = std::make_shared<ObserveAutocastContextFunction>();
+    const auto forward_dtype = kDeviceDefaultDtype[static_cast<size_t>(GetDevice().type())];
+    {
+        AutocastGuard autocast_guard(GetDevice().type(), forward_dtype);
+        auto outputs = fn->Apply({input});
+        ASSERT_EQ(outputs.size(), 1);
+    }
+
+    const auto backward_dtype = DataType::kFLOAT32;
+    AutocastGuard backward_autocast_guard(GetDevice().type(), backward_dtype);
+    {
+        AutocastGuard restore_guard(fn->ForwardAutocastContext());
+        const auto restored = GetCurrentAutocastContext();
+        EXPECT_TRUE(restored.enabled);
+        EXPECT_EQ(restored.device_type, GetDevice().type());
+        EXPECT_EQ(restored.autocast_dtype, forward_dtype);
+    }
+
+    const auto current = GetCurrentAutocastContext();
+    EXPECT_TRUE(current.enabled);
+    EXPECT_EQ(current.device_type, GetDevice().type());
+    EXPECT_EQ(current.autocast_dtype, backward_dtype);
 }
 
 TEST_P(AutogradForwardTest, AddForward) {
