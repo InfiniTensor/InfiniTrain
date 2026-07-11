@@ -1,8 +1,9 @@
 #include "infini_train/src/core/runtime/cpu/cpu_generator_impl.h"
 
 #include <cstring>
+#include <mutex>
 #include <random>
-#include <format>
+#include <sstream>
 
 #include "glog/logging.h"
 
@@ -224,6 +225,12 @@ const Generator &getDefaultCPUGenerator() {
 
 Generator createCPUGenerator(uint64_t seed) {
     return make_generator<CPUGeneratorImpl>(seed);
+}
+
+void manual_seed(uint64_t seed) {
+    const auto &default_gen = getDefaultCPUGenerator();
+    std::lock_guard<std::mutex> lock(default_gen.mutex());
+    default_gen.set_current_seed(seed);
 }
 
 } // namespace infini_train::core::cpu

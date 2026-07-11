@@ -89,7 +89,7 @@ public:
     ~Generator() = default;
 
     // ---- 种子 ----
-    void set_current_seed(uint64_t seed) { impl_->set_current_seed(seed); }
+    void set_current_seed(uint64_t seed) const { impl_->set_current_seed(seed); }
     uint64_t current_seed() const { return impl_->current_seed(); }
     uint64_t seed() { return impl_->seed(); }
 
@@ -104,7 +104,7 @@ public:
     Generator clone() const { return Generator(impl_->clone()); }
 
     // ---- 线程安全 ----
-    std::mutex &mutex() { return impl_->mutex_; }
+    std::mutex &mutex() const { return impl_->mutex_; }
 
     // ---- 类型安全 downcast ----
     template <typename T>
@@ -137,5 +137,9 @@ template <class Impl, class... Args>
 Generator make_generator(Args &&...args) {
     return Generator(std::make_shared<Impl>(std::forward<Args>(args)...));
 }
+
+// Reset the default generators for all supported devices. CPU is currently
+// supported; CUDA default generators will be added to this entry point later.
+void manual_seed(uint64_t seed);
 
 } // namespace infini_train

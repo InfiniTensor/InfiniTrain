@@ -59,5 +59,6 @@ private:
 // ---- 默认 Generator 管理（仿 PyTorch detail 命名空间）----
 const Generator &getDefaultCPUGenerator();
 Generator createCPUGenerator(uint64_t seed);
+void manual_seed(uint64_t seed);
 
 } // namespace infini_train::core::cpu

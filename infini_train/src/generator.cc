@@ -3,6 +3,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/runtime/cpu/cpu_generator_impl.h"
 
 namespace infini_train {
 
@@ -25,6 +26,10 @@ void Generator::set_state(const Tensor &state) {
 
 std::shared_ptr<Tensor> Generator::get_state() const {
     return impl_->get_state();
+}
+
+void manual_seed(uint64_t seed) {
+    core::cpu::manual_seed(seed);
 }
 
 } // namespace infini_train
