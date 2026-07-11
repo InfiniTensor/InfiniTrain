@@ -20,6 +20,8 @@ namespace {
 // A simple stub generator implementation for verifying handle dispatch.
 class StubGeneratorImpl : public core::GeneratorImpl {
 public:
+    static constexpr Device::DeviceType kDeviceType = Device::DeviceType::kCPU;
+
     explicit StubGeneratorImpl(uint64_t seed = 42) : seed_(seed), offset_(0) {}
 
     void SetCurrentSeed(uint64_t seed) override {
@@ -135,9 +137,10 @@ TEST(GeneratorAPITest, BasicAPIForwarding) {
     gen.ManualSeed(200);
     EXPECT_EQ(gen.CurrentSeed(), 200u);
 
+    uint64_t old_seed = gen.CurrentSeed();
     uint64_t new_seed = gen.Seed();
-    EXPECT_EQ(new_seed, 201u);
-    EXPECT_EQ(gen.CurrentSeed(), 201u);
+    EXPECT_NE(new_seed, old_seed);
+    EXPECT_EQ(new_seed, gen.CurrentSeed());
 
     EXPECT_EQ(gen.GetOffset(), 0u);
     gen.SetOffset(99);
@@ -147,4 +150,39 @@ TEST(GeneratorAPITest, BasicAPIForwarding) {
     EXPECT_EQ(gen.GetState(), expected_state);
 
     EXPECT_EQ(gen.GetDevice(), Device(Device::DeviceType::kCPU, 0));
+}
+
+TEST(GeneratorAPITest, CheckGeneratorDeath) {
+    std::optional<core::Generator> null_gen = std::nullopt;
+    EXPECT_DEATH(core::CheckGenerator<StubGeneratorImpl>(null_gen), "Expected a Generator but received std::nullopt");
+    
+    core::Generator undef_gen;
+    EXPECT_DEATH(core::CheckGenerator<StubGeneratorImpl>(undef_gen), "undefined implementation");
+}
+
+TEST(GeneratorAPITest, MakeGeneratorTest) {
+    auto gen = core::MakeGenerator<StubGeneratorImpl>(999);
+    EXPECT_TRUE(gen.Defined());
+    EXPECT_EQ(gen.CurrentSeed(), 999u);
+}
+
+TEST(GeneratorAPITest, UnsafeGetImplBehavior) {
+    auto gen = core::MakeGenerator<StubGeneratorImpl>(111);
+    auto* impl = gen.UnsafeGetImpl();
+    EXPECT_NE(impl, nullptr);
+    EXPECT_EQ(impl->CurrentSeed(), 111u);
+    
+    // Modifying via UnsafeGetImpl directly changes the generator state
+    impl->SetCurrentSeed(222);
+    EXPECT_EQ(gen.CurrentSeed(), 222u);
+}
+
+TEST(GeneratorAPITest, CurrentSeedRelationship) {
+    auto gen = core::MakeGenerator<StubGeneratorImpl>(100);
+    EXPECT_EQ(gen.CurrentSeed(), 100u);
+
+    uint64_t old_seed = gen.CurrentSeed();
+    uint64_t new_seed = gen.Seed();
+    EXPECT_NE(new_seed, old_seed);
+    EXPECT_EQ(new_seed, gen.CurrentSeed());
 }

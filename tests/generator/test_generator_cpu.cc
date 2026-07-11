@@ -28,6 +28,19 @@ std::vector<uint64_t> DrawCPU(core::Generator &generator, int64_t count) {
     return values;
 }
 
+struct FakeCUDAGeneratorImpl : public core::GeneratorImpl {
+    static constexpr Device::DeviceType kDeviceType = Device::DeviceType::kCUDA;
+    void SetCurrentSeed(uint64_t) override {}
+    uint64_t CurrentSeed() const override { return 0; }
+    uint64_t Seed() override { return 0; }
+    void SetOffset(uint64_t) override {}
+    uint64_t GetOffset() const override { return 0; }
+    std::vector<uint8_t> GetState() const override { return {}; }
+    void SetState(const std::vector<uint8_t> &) override {}
+    Device GetDevice() const override { return Device(Device::DeviceType::kCUDA, 0); }
+    std::shared_ptr<GeneratorImpl> Clone() const override { return nullptr; }
+};
+
 } // namespace
 
 TEST(CPUGeneratorTest, SeedSetAndGet) {
@@ -93,14 +106,16 @@ TEST(CPUGeneratorTest, StateRoundTripPreservesSeed) {
     EXPECT_EQ(other.CurrentSeed(), 0xABCDEFu);
 }
 
-TEST(CPUGeneratorTest, RejectsMalformedCPUState) {
+TEST(CPUGeneratorTest, RejectsStateTooShort) {
     auto gen = MakeCPUGenerator(1);
-    EXPECT_DEATH(gen.SetState(std::vector<uint8_t>{1, 2, 3}), "Invalid CPU generator state");
+    auto state = gen.GetState();
+    state.resize(state.size() / 2);
+    EXPECT_DEATH(gen.SetState(state), "too short|Invalid CPU generator state");
 }
 
 TEST(CPUGeneratorTest, RejectsForeignBackendState) {
     auto gen = MakeCPUGenerator(1);
-    std::vector<uint8_t> foreign(32, 0);
+    std::vector<uint8_t> foreign(gen.GetState().size(), 0);
     EXPECT_DEATH(gen.SetState(foreign), "backend magic mismatch");
 }
 
@@ -123,4 +138,46 @@ TEST(CPUGeneratorTest, CPUOnlySupportsZeroOffset) {
     gen.SetOffset(0);
     EXPECT_EQ(gen.GetOffset(), 0u);
     EXPECT_DEATH(gen.SetOffset(1), "non-zero offset");
+}
+
+TEST(CPUGeneratorTest, GetWrongTypeDeath) {
+    auto gen = MakeCPUGenerator(123);
+    EXPECT_DEATH(core::CheckGenerator<FakeCUDAGeneratorImpl>(gen), "Generator device type mismatch");
+    EXPECT_DEATH(core::GetGeneratorOrDefault<FakeCUDAGeneratorImpl>(gen, Device(Device::DeviceType::kCPU, 0)), "Generator device type mismatch");
+}
+
+TEST(CPUGeneratorTest, RejectsMalformedCPUState) {
+    auto gen = MakeCPUGenerator(1);
+    EXPECT_DEATH(gen.SetState(std::vector<uint8_t>{1, 2, 3}), "Invalid CPU generator state");
+}
+
+TEST(CPUGeneratorTest, RejectsStateLengthMismatchTruncated) {
+    auto gen = MakeCPUGenerator(1);
+    auto state = gen.GetState();
+    state.pop_back();
+    EXPECT_DEATH(gen.SetState(state), "length mismatch");
+}
+
+TEST(CPUGeneratorTest, RejectsStateLengthMismatchExtra) {
+    auto gen = MakeCPUGenerator(1);
+    auto state = gen.GetState();
+    state.push_back(0);
+    EXPECT_DEATH(gen.SetState(state), "length mismatch");
+}
+
+TEST(CPUGeneratorTest, RejectsInvalidMagic) {
+    auto gen = MakeCPUGenerator(1);
+    auto state = gen.GetState();
+    state[0] ^= 0xFF;
+    EXPECT_DEATH(gen.SetState(state), "backend magic mismatch");
+}
+
+TEST(CPUGeneratorTest, RejectsGarbageEngineData) {
+    auto gen = MakeCPUGenerator(1);
+    auto state = gen.GetState();
+    size_t data_start = state.size() / 2;
+    for (size_t i = data_start; i < state.size(); ++i) {
+        state[i] = 0xFF;
+    }
+    EXPECT_DEATH(gen.SetState(state), "engine deserialization failed");
 }
