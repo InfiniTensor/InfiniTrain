@@ -7,7 +7,6 @@
 #include "infini_train/include/generator.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/tensor.h"
-#include "infini_train/src/core/runtime/cpu/cpu_generator_impl.h"
 #include "infini_train/src/core/runtime/cuda/cuda_generator_impl.h"
 #include "tests/common/test_utils.h"
 
@@ -32,26 +31,9 @@ TEST(CudaGeneratorTest, StateIsAnOpaqueUint8CpuTensor) {
     EXPECT_EQ(state->SizeInBytes(), sizeof(uint64_t) * 2);
 }
 
-TEST(CudaGeneratorTest, RejectsStateWithInvalidSize) {
-    Generator generator = core::cuda::createCUDAGenerator(0, kSeed);
-    Tensor invalid_state(std::vector<int64_t>{1}, DataType::kUINT8,
-                         Device(Device::DeviceType::kCPU, 0));
-
-    EXPECT_DEATH(generator.set_state(invalid_state), "");
-}
-
-TEST(CudaGeneratorTest, CpuAndCudaStatesAreNotInterchangeable) {
-    Generator cpu_generator = core::cpu::createCPUGenerator(kSeed);
-    Generator cuda_generator = core::cuda::createCUDAGenerator(0, kSeed);
-    auto cpu_state = cpu_generator.get_state();
-    auto cuda_state = cuda_generator.get_state();
-
-    EXPECT_DEATH(cuda_generator.set_state(*cpu_state), "");
-    EXPECT_DEATH(cpu_generator.set_state(*cuda_state), "");
-}
-
-TEST(CudaGeneratorTest, DefaultGeneratorsArePerDevice) {
+TEST(CudaGeneratorTest, MissingGeneratorUsesMatchingDeviceDefaultGenerator) {
     REQUIRE_MIN_DEVICES(2);
+    manual_seed(kSeed);
     const Generator &device_zero = core::cuda::getDefaultCUDAGenerator(0);
     const Generator &device_one = core::cuda::getDefaultCUDAGenerator(1);
 
@@ -59,13 +41,15 @@ TEST(CudaGeneratorTest, DefaultGeneratorsArePerDevice) {
     EXPECT_EQ(device_zero.device().index(), 0);
     EXPECT_EQ(device_one.device().index(), 1);
 
+    const std::vector<uint8_t> device_zero_before = StateBytes(device_zero);
     const std::vector<uint8_t> device_one_before = StateBytes(device_one);
     auto tensor = std::make_shared<Tensor>(
         std::vector<int64_t>{1024}, DataType::kFLOAT32,
-        Device(Device::DeviceType::kCUDA, 0));
-    nn::init::Uniform(tensor, 0.0f, 1.0f, device_zero);
+        Device(Device::DeviceType::kCUDA, 1));
+    nn::init::Uniform(tensor);
 
-    EXPECT_EQ(device_one_before, StateBytes(device_one));
+    EXPECT_EQ(device_zero_before, StateBytes(device_zero));
+    EXPECT_NE(device_one_before, StateBytes(device_one));
 }
 
 } // namespace

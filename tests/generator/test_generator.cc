@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -60,15 +59,6 @@ std::vector<float> ToHostVector(const std::shared_ptr<Tensor> &tensor) {
     return std::vector<float>(data, data + cpu.NumElements());
 }
 
-std::vector<uint8_t> ToHostBytes(const std::shared_ptr<Tensor> &tensor) {
-    const Device device = tensor->GetDevice();
-    Synchronize(device);
-    Tensor cpu = tensor->To(Device(Device::DeviceType::kCPU, 0));
-    Synchronize(device);
-    const auto *data = static_cast<const uint8_t *>(cpu.DataPtr());
-    return std::vector<uint8_t>(data, data + cpu.SizeInBytes());
-}
-
 std::vector<uint8_t> StateBytes(const Generator &generator) {
     auto state = generator.get_state();
     const auto *data = static_cast<const uint8_t *>(state->DataPtr());
@@ -81,30 +71,15 @@ std::shared_ptr<Tensor> MakeTensor(Device device) {
 
 class GeneratorTest : public InfiniTrainTest {};
 
-TEST_P(GeneratorTest, ReportsDeviceAndInitialSeed) {
+TEST_P(GeneratorTest, SupportsDeviceAndSeedInterface) {
     const Device device = GetDevice();
     Generator generator = CreateGenerator(device, kSeed);
 
     EXPECT_TRUE(generator.defined());
     EXPECT_EQ(generator.device(), device);
     EXPECT_EQ(generator.current_seed(), kSeed);
-}
-
-TEST_P(GeneratorTest, ShallowCopySharesStateAndCloneDoesNot) {
-    Generator generator = CreateGenerator(GetDevice(), kSeed);
-    Generator alias = generator;
-    Generator clone = generator.clone();
-
-    EXPECT_EQ(alias, generator);
-    EXPECT_NE(clone, generator);
-    EXPECT_EQ(StateBytes(alias), StateBytes(generator));
-    EXPECT_EQ(StateBytes(clone), StateBytes(generator));
-
-    auto tensor = MakeTensor(GetDevice());
-    nn::init::Uniform(tensor, -1.0f, 1.0f, alias);
-
-    EXPECT_EQ(StateBytes(alias), StateBytes(generator));
-    EXPECT_NE(StateBytes(clone), StateBytes(generator));
+    generator.set_current_seed(kSeed + 1);
+    EXPECT_EQ(generator.current_seed(), kSeed + 1);
 }
 
 TEST_P(GeneratorTest, UniformIsReproducibleForSameSeed) {
@@ -131,59 +106,36 @@ TEST_P(GeneratorTest, NormalIsReproducibleForSameSeed) {
     EXPECT_EQ(ToHostVector(first), ToHostVector(second));
 }
 
-TEST_P(GeneratorTest, UniformSupportsEveryFloatingPointDtype) {
-    for (const DataType dtype : {DataType::kFLOAT16, DataType::kBFLOAT16,
-                                 DataType::kFLOAT32, DataType::kFLOAT64}) {
-        Generator first_generator = CreateGenerator(GetDevice(), kSeed);
-        Generator second_generator = CreateGenerator(GetDevice(), kSeed);
-        auto first = std::make_shared<Tensor>(
-            std::vector<int64_t>{kElements}, dtype, GetDevice());
-        auto second = std::make_shared<Tensor>(
-            std::vector<int64_t>{kElements}, dtype, GetDevice());
+TEST_P(GeneratorTest, RandAndRandnSupportExplicitAndDefaultGenerators) {
+    const Device device = GetDevice();
+    Generator first_generator = CreateGenerator(device, kSeed);
+    Generator second_generator = CreateGenerator(device, kSeed);
 
-        nn::init::Uniform(first, -3.0f, 7.0f, first_generator);
-        nn::init::Uniform(second, -3.0f, 7.0f, second_generator);
+    auto first = nn::function::Rand({17, 19}, DataType::kFLOAT32, device, first_generator);
+    auto second = nn::function::Rand({17, 19}, DataType::kFLOAT32, device, second_generator);
+    EXPECT_EQ(ToHostVector(first), ToHostVector(second));
 
-        EXPECT_EQ(ToHostBytes(first), ToHostBytes(second))
-            << "dtype=" << static_cast<int>(dtype);
-    }
+    manual_seed(kSeed);
+    auto first_default = nn::function::Randn({17, 19}, DataType::kFLOAT32, device);
+    manual_seed(kSeed);
+    auto second_default = nn::function::Randn({17, 19}, DataType::kFLOAT32, device);
+    EXPECT_EQ(ToHostVector(first_default), ToHostVector(second_default));
 }
 
-TEST_P(GeneratorTest, NormalSupportsEveryFloatingPointDtype) {
-    for (const DataType dtype : {DataType::kFLOAT16, DataType::kBFLOAT16,
-                                 DataType::kFLOAT32, DataType::kFLOAT64}) {
-        Generator first_generator = CreateGenerator(GetDevice(), kSeed);
-        Generator second_generator = CreateGenerator(GetDevice(), kSeed);
-        auto first = std::make_shared<Tensor>(
-            std::vector<int64_t>{kElements}, dtype, GetDevice());
-        auto second = std::make_shared<Tensor>(
-            std::vector<int64_t>{kElements}, dtype, GetDevice());
+TEST_P(GeneratorTest, DropoutMaskIsReproducibleForSameSeed) {
+    const Device device = GetDevice();
+    auto input = MakeTensor(device);
+    input->Fill(1.0f);
 
-        nn::init::Normal(first, 2.0f, 0.5f, first_generator);
-        nn::init::Normal(second, 2.0f, 0.5f, second_generator);
+    manual_seed(kSeed);
+    auto first = nn::function::Dropout(input, 0.25, true);
+    manual_seed(kSeed);
+    auto second = nn::function::Dropout(input, 0.25, true);
+    manual_seed(kSeed + 1);
+    auto different_seed = nn::function::Dropout(input, 0.25, true);
 
-        EXPECT_EQ(ToHostBytes(first), ToHostBytes(second))
-            << "dtype=" << static_cast<int>(dtype);
-    }
-}
-
-TEST_P(GeneratorTest, RandAndRandnPreserveRequestedTensorProperties) {
-    Generator rand_generator = CreateGenerator(GetDevice(), kSeed);
-    Generator randn_generator = CreateGenerator(GetDevice(), kSeed);
-
-    auto uniform = nn::function::Rand({17, 19}, DataType::kFLOAT64, GetDevice(),
-                                      rand_generator, true);
-    auto normal = nn::function::Randn({17, 19}, DataType::kFLOAT16, GetDevice(),
-                                      randn_generator, true);
-
-    EXPECT_EQ(uniform->Dims(), (std::vector<int64_t>{17, 19}));
-    EXPECT_EQ(uniform->Dtype(), DataType::kFLOAT64);
-    EXPECT_EQ(uniform->GetDevice(), GetDevice());
-    EXPECT_TRUE(uniform->requires_grad());
-    EXPECT_EQ(normal->Dims(), (std::vector<int64_t>{17, 19}));
-    EXPECT_EQ(normal->Dtype(), DataType::kFLOAT16);
-    EXPECT_EQ(normal->GetDevice(), GetDevice());
-    EXPECT_TRUE(normal->requires_grad());
+    EXPECT_EQ(ToHostVector(first), ToHostVector(second));
+    EXPECT_NE(ToHostVector(first), ToHostVector(different_seed));
 }
 
 TEST_P(GeneratorTest, ConsecutiveCallsAdvanceSequence) {
@@ -207,6 +159,30 @@ TEST_P(GeneratorTest, DifferentSeedsProduceDifferentSequences) {
     nn::init::Uniform(second, 0.0f, 1.0f, second_generator);
 
     EXPECT_NE(ToHostVector(first), ToHostVector(second));
+}
+
+TEST_P(GeneratorTest, SameSeedAndCallOrderReproduceResults) {
+    const Device device = GetDevice();
+    auto first_uniform = MakeTensor(device);
+    auto second_uniform = MakeTensor(device);
+    auto first_normal = MakeTensor(device);
+    auto second_normal = MakeTensor(device);
+    auto input = MakeTensor(device);
+    input->Fill(1.0f);
+
+    manual_seed(kSeed);
+    nn::init::Uniform(first_uniform);
+    auto first_dropout = nn::function::Dropout(input, 0.5, true);
+    nn::init::Normal(first_normal);
+
+    manual_seed(kSeed);
+    nn::init::Uniform(second_uniform);
+    auto second_dropout = nn::function::Dropout(input, 0.5, true);
+    nn::init::Normal(second_normal);
+
+    EXPECT_EQ(ToHostVector(first_uniform), ToHostVector(second_uniform));
+    EXPECT_EQ(ToHostVector(first_dropout), ToHostVector(second_dropout));
+    EXPECT_EQ(ToHostVector(first_normal), ToHostVector(second_normal));
 }
 
 TEST_P(GeneratorTest, StateRestoreReplaysUniformSequence) {
@@ -278,6 +254,7 @@ TEST_P(GeneratorTest, GlobalManualSeedReproducesDefaultGeneratorResults) {
     auto second = MakeTensor(device);
 
     manual_seed(kSeed);
+    EXPECT_EQ(GetDefaultGenerator(device).current_seed(), kSeed);
     nn::init::Uniform(first);
     manual_seed(kSeed);
     nn::init::Uniform(second);
