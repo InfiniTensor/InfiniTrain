@@ -14,8 +14,9 @@
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/function_hook.h"
+#include "infini_train/include/autograd/gather.h"
 #include "infini_train/include/autograd/matmul.h"
-#include "infini_train/include/autograd/misc.h"
+#include "infini_train/include/autograd/no_op.h"
 #include "infini_train/include/autograd/outer.h"
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/transform.h"
@@ -103,6 +104,8 @@ const std::vector<int64_t> &Tensor::Dims() const { return dims_; }
 size_t Tensor::NumElements() const { return num_elements_; }
 
 DataType Tensor::Dtype() const { return dtype_; }
+
+std::shared_ptr<Tensor> Tensor::Detach() const { return std::make_shared<Tensor>(*this, 0, dims_); }
 
 void Tensor::Fill(Scalar value) {
     auto device = GetDevice();
@@ -359,7 +362,7 @@ std::vector<std::shared_ptr<Tensor>> Tensor::Split(int split_size, int dim) {
 
 std::shared_ptr<Tensor> Tensor::Gather(int dim, const std::shared_ptr<Tensor> &index) {
     CHECK(GetDevice() == index->GetDevice()) << "index must be on the same device as input.";
-    return std::make_shared<autograd::IndexGather>(dim)->Apply({shared_from_this(), index})[0];
+    return std::make_shared<autograd::Gather>(dim)->Apply({shared_from_this(), index})[0];
 }
 
 std::shared_ptr<Tensor> Tensor::RepeatInterleave(int64_t repeat, int64_t dim) {
@@ -561,6 +564,16 @@ void Tensor::ResetAccumulator() {
         grad_accumulator_.reset();
     }
 }
+
+void Tensor::RegisterPreAccumulateGradHook(std::shared_ptr<autograd::PreAccumulateGradHook> hook) {
+    CHECK(requires_grad_) << "cannot register a hook on a tensor that doesn't require gradient";
+
+    CHECK_EQ(grad_fn_, nullptr) << "pre accumulate grad hooks cannot be registered on non-leaf tensors";
+
+    pre_accumulate_grad_hook_ = hook;
+}
+
+autograd::PreAccumulateGradHook *Tensor::pre_accumulate_grad_hook() const { return pre_accumulate_grad_hook_.get(); }
 
 void Tensor::RegisterPostAccumulateGradHook(std::shared_ptr<autograd::PostAccumulateGradHook> hook) {
     CHECK(requires_grad_) << "cannot register a hook on a tensor that doesn't require gradient";
@@ -779,7 +792,6 @@ void Tensor::Print(std::ostream &os) const {
     CHECK(dtype_ == DataType::kFLOAT32);
 
     const size_t num_elements = NumElements();
-    const size_t num_bytes = num_elements * sizeof(float);
 
     auto impl = core::GetDeviceGuardImpl(GetDevice().type());
 

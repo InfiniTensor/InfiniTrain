@@ -35,7 +35,6 @@ MLP::MLP(const TransformerConfig &config) : CloneableModule(kType) {
     }
 
     // Round up to multiple_of
-    int64_t before_round = ffn_hidden;
     ffn_hidden = (ffn_hidden + config.multiple_of - 1) / config.multiple_of * config.multiple_of;
 
     // c_fc: ColumnParallel (input full, output parallel)

@@ -8,11 +8,8 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
-// FIXME(zbl): This kernel aligns with torch.gather
-//             Currently named IndexGather to avoid conflict with communication operators
-//             Should be renamed to Gather later for interface consistency
-std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &index,
-                                           int64_t dim) {
+std::shared_ptr<Tensor> GatherForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &index,
+                                      int64_t dim) {
     const auto &in_dims = input->Dims();
     const auto &idx_dims = index->Dims();
     CHECK_EQ(in_dims.size(), idx_dims.size());
@@ -103,9 +100,8 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
     return out;
 }
 
-std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_output,
-                                            const std::shared_ptr<Tensor> &index, int64_t dim,
-                                            const std::vector<int64_t> &input_dims) {
+std::shared_ptr<Tensor> GatherBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &index,
+                                       int64_t dim, const std::vector<int64_t> &input_dims) {
     const auto &in_dims = input_dims;
     const auto &idx_dims = index->Dims();
     CHECK_EQ(in_dims.size(), idx_dims.size());
@@ -199,7 +195,7 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
 #define REGISTER_CPU_GATHER_KERNEL(kernel_name)                                                                        \
     REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
-REGISTER_CPU_GATHER_KERNEL(IndexGatherForward)
-REGISTER_CPU_GATHER_KERNEL(IndexGatherBackward)
+REGISTER_CPU_GATHER_KERNEL(GatherForward)
+REGISTER_CPU_GATHER_KERNEL(GatherBackward)
 
 #undef REGISTER_CPU_GATHER_KERNEL

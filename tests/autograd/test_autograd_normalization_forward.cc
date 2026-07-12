@@ -21,7 +21,11 @@ TEST_P(AutogradNormalizationForwardTest, LayerNormForward) {
     bias->Fill(0.0f);
     auto layernorm_fn = std::make_shared<autograd::LayerNorm>(1e-5f);
     auto result = layernorm_fn->Apply({a, weight, bias});
-    EXPECT_EQ(result.size(), 1);
+    EXPECT_EQ(result.size(), 3);
+    EXPECT_FALSE(result[1]->requires_grad());
+    EXPECT_EQ(result[1]->grad_fn(), nullptr);
+    EXPECT_FALSE(result[2]->requires_grad());
+    EXPECT_EQ(result[2]->grad_fn(), nullptr);
 }
 
 TEST_P(AutogradNormalizationForwardTest, LayerNormZeroBias) {
@@ -33,7 +37,11 @@ TEST_P(AutogradNormalizationForwardTest, LayerNormZeroBias) {
     bias->Fill(0.0f);
     auto layernorm_fn = std::make_shared<autograd::LayerNorm>(1e-5f);
     auto result = layernorm_fn->Apply({a, weight, bias});
-    EXPECT_EQ(result.size(), 1);
+    EXPECT_EQ(result.size(), 3);
+    EXPECT_FALSE(result[1]->requires_grad());
+    EXPECT_EQ(result[1]->grad_fn(), nullptr);
+    EXPECT_FALSE(result[2]->requires_grad());
+    EXPECT_EQ(result[2]->grad_fn(), nullptr);
 }
 
 TEST_P(AutogradNormalizationForwardTest, LayerNormThreeDim) {
@@ -45,7 +53,11 @@ TEST_P(AutogradNormalizationForwardTest, LayerNormThreeDim) {
     bias->Fill(0.0f);
     auto layernorm_fn = std::make_shared<autograd::LayerNorm>(1e-5f);
     auto result = layernorm_fn->Apply({a, weight, bias});
-    EXPECT_EQ(result.size(), 1);
+    EXPECT_EQ(result.size(), 3);
+    EXPECT_FALSE(result[1]->requires_grad());
+    EXPECT_EQ(result[1]->grad_fn(), nullptr);
+    EXPECT_FALSE(result[2]->requires_grad());
+    EXPECT_EQ(result[2]->grad_fn(), nullptr);
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 1, 4}));
 }
 

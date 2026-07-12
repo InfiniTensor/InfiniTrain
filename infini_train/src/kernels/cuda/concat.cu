@@ -103,7 +103,7 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
     int threads_per_block = 256;
     int num_blocks = static_cast<int>((total + threads_per_block - 1) / threads_per_block);
 
-    core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype,
         [=, &inputs, &host_offsets]<typename T>() {
             std::vector<const T *> host_input_ptrs;
@@ -208,7 +208,7 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
     int threads_per_block = 256;
     int num_blocks = static_cast<int>((total + threads_per_block - 1) / threads_per_block);
 
-    core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype,
         [=, &grads, &host_offsets]<typename T>() {
             std::vector<T *> host_ptrs;

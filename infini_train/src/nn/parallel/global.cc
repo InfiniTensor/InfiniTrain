@@ -13,11 +13,6 @@ int GetEnvAsInt(const std::string &name, int default_value) {
     return value ? std::atoi(value) : default_value;
 }
 
-std::string GetEnvAsStr(const std::string &name, const std::string &default_value) {
-    const char *value = std::getenv(name.c_str());
-    return value ? std::string(value) : default_value;
-}
-
 } // namespace
 
 namespace infini_train::nn::parallel::global {

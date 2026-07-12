@@ -35,10 +35,13 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads() {
     shard_params_.clear();
 
     for (const auto &group : bucket_groups_) {
-        for (const auto &bucket : group->buckets()) {
+        const bool use_grad_shard = group->config().zero_stage >= 2;
+        const auto &buckets = group->buckets();
+        for (size_t bucket_idx = 0; bucket_idx < buckets.size(); ++bucket_idx) {
+            const auto &bucket = buckets[bucket_idx];
 
             auto bucket_param = bucket->param_data();
-            auto bucket_grad = bucket->grad_data();
+            auto bucket_grad = use_grad_shard ? group->GetLocalGradShardBuffer(bucket_idx) : bucket->grad_data();
 
             CHECK(bucket_param) << "DistributedOptimizer requires param buffer.";
             CHECK(bucket_grad) << "DistributedOptimizer requires grad buffer.";
@@ -65,7 +68,9 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads() {
                 CHECK_GT(piece_numel, 0);
 
                 const size_t param_piece_offset_bytes = local_start * kDataTypeToSize.at(bucket_param->Dtype());
-                const size_t grad_piece_offset_bytes = local_start * kDataTypeToSize.at(bucket_grad->Dtype());
+                // Adjust the offset since bucket_grad is already the shard of grad under ZeRO-2.
+                auto offset = use_grad_shard ? (local_start - bucket_shard_start) : local_start;
+                size_t grad_piece_offset_bytes = offset * kDataTypeToSize.at(bucket_grad->Dtype());
 
                 auto param_piece = std::make_shared<Tensor>(*bucket_param, param_piece_offset_bytes,
                                                             std::vector<int64_t>{static_cast<int64_t>(piece_numel)});
@@ -74,6 +79,9 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads() {
                                                            std::vector<int64_t>{static_cast<int64_t>(piece_numel)});
 
                 param_piece->set_grad(grad_piece);
+                // NOTE(zbl): Do not call `param->set_grad(grad_piece);` under ZeRO-2.
+                //            The base optimizer updates param_piece views only; original param->grad()
+                //            would be a partial flattened shard and does not represent the full parameter grad.
                 shard_params_.push_back(param_piece);
             }
         }
@@ -114,6 +122,20 @@ void DistributedOptimizer::ZeroGrad(bool set_to_none) {
     }
 }
 
+void DistributedOptimizer::set_learning_rate(float lr) {
+    Optimizer::set_learning_rate(lr);
+    if (base_optimizer_) {
+        base_optimizer_->set_learning_rate(lr);
+    }
+}
+
+float DistributedOptimizer::learning_rate() const {
+    if (base_optimizer_) {
+        return base_optimizer_->learning_rate();
+    }
+    return Optimizer::learning_rate();
+}
+
 void DistributedOptimizer::Step() {
     // 1. Ensure grads are synced
     FinishGradSync();
@@ -124,8 +146,17 @@ void DistributedOptimizer::Step() {
 
     // 3. Gather updated param shards back to full params
     StartParamSync(/*force_sync=*/false);
-    // FIXME(zbl): Call sync before param is actually used in next step
+    // TODO(zbl): Delay sync call until param is actually used in next step
     FinishParamSync(/*skip_next_bucket_dispatch=*/true);
 }
 
+std::unordered_map<std::string, std::shared_ptr<Tensor>> DistributedOptimizer::StateDict() const {
+    CHECK(base_optimizer_) << "DistributedOptimizer: base optimizer is null.";
+    return base_optimizer_->StateDict();
+}
+
+void DistributedOptimizer::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
+    CHECK(base_optimizer_) << "DistributedOptimizer: base optimizer is null.";
+    base_optimizer_->LoadStateDict(state_dict);
+}
 } // namespace infini_train::nn::parallel

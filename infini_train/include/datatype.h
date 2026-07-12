@@ -84,6 +84,7 @@ struct alignas(2) BF16 {
 // DataType enum and metadata tables
 // -----------------------------------------------------------------------------
 enum class DataType : int8_t {
+    kBOOL,
     kUINT8,
     kINT8,
     kUINT16,
@@ -99,16 +100,18 @@ enum class DataType : int8_t {
 };
 
 inline const std::unordered_map<DataType, size_t> kDataTypeToSize = {
-    {DataType::kUINT8, 1},    {DataType::kINT8, 1},    {DataType::kUINT16, 2},  {DataType::kINT16, 2},
-    {DataType::kUINT32, 4},   {DataType::kINT32, 4},   {DataType::kUINT64, 8},  {DataType::kINT64, 8},
-    {DataType::kBFLOAT16, 2}, {DataType::kFLOAT16, 2}, {DataType::kFLOAT32, 4}, {DataType::kFLOAT64, 8},
+    {DataType::kBOOL, 1},    {DataType::kUINT8, 1},    {DataType::kINT8, 1},    {DataType::kUINT16, 2},
+    {DataType::kINT16, 2},   {DataType::kUINT32, 4},   {DataType::kINT32, 4},   {DataType::kUINT64, 8},
+    {DataType::kINT64, 8},   {DataType::kBFLOAT16, 2}, {DataType::kFLOAT16, 2}, {DataType::kFLOAT32, 4},
+    {DataType::kFLOAT64, 8},
 };
 
 inline const std::unordered_map<DataType, std::string> kDataTypeToDesc = {
-    {DataType::kUINT8, "uint8"},   {DataType::kINT8, "int8"},     {DataType::kUINT16, "uint16"},
-    {DataType::kINT16, "int16"},   {DataType::kUINT32, "uint32"}, {DataType::kINT32, "int32"},
-    {DataType::kUINT64, "uint64"}, {DataType::kINT64, "int64"},   {DataType::kBFLOAT16, "bf16"},
-    {DataType::kFLOAT16, "fp16"},  {DataType::kFLOAT32, "fp32"},  {DataType::kFLOAT64, "fp64"},
+    {DataType::kBOOL, "bool"},     {DataType::kUINT8, "uint8"},   {DataType::kINT8, "int8"},
+    {DataType::kUINT16, "uint16"}, {DataType::kINT16, "int16"},   {DataType::kUINT32, "uint32"},
+    {DataType::kINT32, "int32"},   {DataType::kUINT64, "uint64"}, {DataType::kINT64, "int64"},
+    {DataType::kBFLOAT16, "bf16"}, {DataType::kFLOAT16, "fp16"},  {DataType::kFLOAT32, "fp32"},
+    {DataType::kFLOAT64, "fp64"},
 };
 
 // =============================================================================

@@ -83,10 +83,10 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     }
 
     // When bs==1 and fp32, use cublasSgemv (more efficient than GEMM for matrix-vector).
-    // cublasSgemv does not support bf16, so bf16 falls through to GemmCuda.
+    // cublasSgemv does not support bf16, so bf16 falls through to Gemm.
     if (bs == 1 && dtype == DataType::kFLOAT32) {
         SgemvCuda(device, SgemvParams{
-                              .trans = transpose ? CUBLAS_OP_T : CUBLAS_OP_N,
+                              .trans = transpose ? GemmTranspose::kTranspose : GemmTranspose::kNoTranspose,
                               .m = static_cast<int>(transpose ? in_features : out_features),
                               .n = static_cast<int>(transpose ? out_features : in_features),
                               .A = static_cast<const float *>(weight->DataPtr()),
@@ -110,24 +110,26 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
         // C = output.T[out_features, bs]
         // A = weight.T[out_features, in_features]
         // B = input.T[in_features, bs]
-        GemmCuda(device, GemmParams{
-                             .trans_a = transpose ? CUBLAS_OP_T : CUBLAS_OP_N,
-                             .trans_b = CUBLAS_OP_N,
-                             .m = static_cast<int>(out_features),
-                             .n = static_cast<int>(bs),
-                             .k = static_cast<int>(in_features),
-                             .A = weight->DataPtr(),
-                             .lda = static_cast<int>(transpose ? in_features : out_features),
-                             .B = input->DataPtr(),
-                             .ldb = static_cast<int>(in_features),
-                             .C = output->DataPtr(),
-                             .ldc = static_cast<int>(out_features),
-                             .alpha = 1.0f,
-                             .beta = 1.0f, // bias already written into output; beta=1 accumulates
-                             .batch_count = 1,
-                             .input_dtype = dtype,
-                             .output_dtype = dtype,
-                         });
+        Dispatcher::Instance().Call<void>(
+            {device.type(), "Gemm"}, device,
+            GemmParams{
+                .trans_a = transpose ? GemmTranspose::kTranspose : GemmTranspose::kNoTranspose,
+                .trans_b = GemmTranspose::kNoTranspose,
+                .m = static_cast<int>(out_features),
+                .n = static_cast<int>(bs),
+                .k = static_cast<int>(in_features),
+                .A = weight->DataPtr(),
+                .lda = static_cast<int>(transpose ? in_features : out_features),
+                .B = input->DataPtr(),
+                .ldb = static_cast<int>(in_features),
+                .C = output->DataPtr(),
+                .ldc = static_cast<int>(out_features),
+                .alpha = 1.0f,
+                .beta = 1.0f, // bias already written into output; beta=1 accumulates
+                .batch_count = 1,
+                .input_dtype = dtype,
+                .output_dtype = dtype,
+            });
     }
 
     return output;
@@ -172,19 +174,20 @@ std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weigh
     auto grad_input = std::make_shared<Tensor>(input_dims, output_dtype, grad_output->GetDevice());
 
     // When bs==1 and fp32, use cublasSgemv (more efficient than GEMM for matrix-vector).
-    // cublasSgemv does not support bf16, so bf16 falls through to GemmCuda.
+    // cublasSgemv does not support bf16, so bf16 falls through to Gemm.
     if (bs == 1 && compute_dtype == DataType::kFLOAT32) {
-        SgemvCuda(grad_output->GetDevice(), SgemvParams{
-                                                .trans = transpose ? CUBLAS_OP_N : CUBLAS_OP_T,
-                                                .m = static_cast<int>(transpose ? in_features : out_features),
-                                                .n = static_cast<int>(transpose ? out_features : in_features),
-                                                .A = static_cast<const float *>(weight->DataPtr()),
-                                                .lda = static_cast<int>(transpose ? in_features : out_features),
-                                                .x = static_cast<const float *>(grad_output_promoted->DataPtr()),
-                                                .y = static_cast<float *>(grad_input->DataPtr()),
-                                                .alpha = 1.0f,
-                                                .beta = 0.0f,
-                                            });
+        SgemvCuda(grad_output->GetDevice(),
+                  SgemvParams{
+                      .trans = transpose ? GemmTranspose::kNoTranspose : GemmTranspose::kTranspose,
+                      .m = static_cast<int>(transpose ? in_features : out_features),
+                      .n = static_cast<int>(transpose ? out_features : in_features),
+                      .A = static_cast<const float *>(weight->DataPtr()),
+                      .lda = static_cast<int>(transpose ? in_features : out_features),
+                      .x = static_cast<const float *>(grad_output_promoted->DataPtr()),
+                      .y = static_cast<float *>(grad_input->DataPtr()),
+                      .alpha = 1.0f,
+                      .beta = 0.0f,
+                  });
     } else {
         // - if transpose:
         // weight is [out_features, in_features] here
@@ -199,24 +202,26 @@ std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weigh
         // C = d_input.T[in_features, bs]
         // A = weight.T[out_features, in_features]
         // B = d_output.T[out_features, bs]
-        GemmCuda(grad_output->GetDevice(), GemmParams{
-                                               .trans_a = transpose ? CUBLAS_OP_N : CUBLAS_OP_T,
-                                               .trans_b = CUBLAS_OP_N,
-                                               .m = static_cast<int>(in_features),
-                                               .n = static_cast<int>(bs),
-                                               .k = static_cast<int>(out_features),
-                                               .A = weight->DataPtr(),
-                                               .lda = static_cast<int>(transpose ? in_features : out_features),
-                                               .B = grad_output_promoted->DataPtr(),
-                                               .ldb = static_cast<int>(out_features),
-                                               .C = grad_input->DataPtr(),
-                                               .ldc = static_cast<int>(in_features),
-                                               .alpha = 1.0f,
-                                               .beta = 0.0f,
-                                               .batch_count = 1,
-                                               .input_dtype = compute_dtype,
-                                               .output_dtype = output_dtype,
-                                           });
+        Dispatcher::Instance().Call<void>(
+            {grad_output->GetDevice().type(), "Gemm"}, grad_output->GetDevice(),
+            GemmParams{
+                .trans_a = transpose ? GemmTranspose::kNoTranspose : GemmTranspose::kTranspose,
+                .trans_b = GemmTranspose::kNoTranspose,
+                .m = static_cast<int>(in_features),
+                .n = static_cast<int>(bs),
+                .k = static_cast<int>(out_features),
+                .A = weight->DataPtr(),
+                .lda = static_cast<int>(transpose ? in_features : out_features),
+                .B = grad_output_promoted->DataPtr(),
+                .ldb = static_cast<int>(out_features),
+                .C = grad_input->DataPtr(),
+                .ldc = static_cast<int>(in_features),
+                .alpha = 1.0f,
+                .beta = 0.0f,
+                .batch_count = 1,
+                .input_dtype = compute_dtype,
+                .output_dtype = output_dtype,
+            });
     }
 
     return grad_input;
@@ -258,24 +263,25 @@ std::shared_ptr<Tensor> LinearBackwardWeight(const std::shared_ptr<Tensor> &inpu
     const int lda = static_cast<int>(transpose ? in_features : out_features);
     const int ldb = static_cast<int>(transpose ? out_features : in_features);
 
-    GemmCuda(grad_output->GetDevice(), GemmParams{
-                                           .trans_a = CUBLAS_OP_N,
-                                           .trans_b = CUBLAS_OP_T,
-                                           .m = static_cast<int>(transpose ? in_features : out_features),
-                                           .n = static_cast<int>(transpose ? out_features : in_features),
-                                           .k = static_cast<int>(bs),
-                                           .A = a,
-                                           .lda = lda,
-                                           .B = b,
-                                           .ldb = ldb,
-                                           .C = grad_weight->DataPtr(),
-                                           .ldc = static_cast<int>(transpose ? in_features : out_features),
-                                           .alpha = 1.0f,
-                                           .beta = 0.0f,
-                                           .batch_count = 1,
-                                           .input_dtype = compute_dtype,
-                                           .output_dtype = output_dtype,
-                                       });
+    Dispatcher::Instance().Call<void>({grad_output->GetDevice().type(), "Gemm"}, grad_output->GetDevice(),
+                                      GemmParams{
+                                          .trans_a = GemmTranspose::kNoTranspose,
+                                          .trans_b = GemmTranspose::kTranspose,
+                                          .m = static_cast<int>(transpose ? in_features : out_features),
+                                          .n = static_cast<int>(transpose ? out_features : in_features),
+                                          .k = static_cast<int>(bs),
+                                          .A = a,
+                                          .lda = lda,
+                                          .B = b,
+                                          .ldb = ldb,
+                                          .C = grad_weight->DataPtr(),
+                                          .ldc = static_cast<int>(transpose ? in_features : out_features),
+                                          .alpha = 1.0f,
+                                          .beta = 0.0f,
+                                          .batch_count = 1,
+                                          .input_dtype = compute_dtype,
+                                          .output_dtype = output_dtype,
+                                      });
 
     return grad_weight;
 }

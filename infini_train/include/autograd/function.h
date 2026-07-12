@@ -2,8 +2,12 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
+#include <string>
 #include <utility>
 #include <vector>
+
+#include "infini_train/include/autocast.h"
 
 namespace infini_train {
 class Tensor;
@@ -12,6 +16,64 @@ template <typename HookType> class HookHandleImpl;
 } // namespace infini_train
 
 namespace infini_train::autograd {
+
+class FunctionCtx {
+public:
+    using SavedTensorPackHook = std::function<std::shared_ptr<void>(const std::shared_ptr<Tensor> &)>;
+    using SavedTensorUnpackHook = std::function<std::shared_ptr<Tensor>(const std::shared_ptr<void> &)>;
+
+    struct SavedTensorHooks {
+        SavedTensorPackHook pack;
+        SavedTensorUnpackHook unpack;
+    };
+
+    class SavedTensorHooksGuard {
+    public:
+        explicit SavedTensorHooksGuard(SavedTensorHooks hooks);
+        ~SavedTensorHooksGuard();
+
+        SavedTensorHooksGuard(const SavedTensorHooksGuard &) = delete;
+        SavedTensorHooksGuard &operator=(const SavedTensorHooksGuard &) = delete;
+
+    private:
+        size_t depth_ = 0;
+    };
+
+    FunctionCtx();
+
+    void SaveForBackward(const std::vector<std::shared_ptr<Tensor>> &tensors);
+
+    std::vector<std::shared_ptr<Tensor>> GetSavedTensors() const;
+
+    void MarkNonDifferentiable(const std::vector<std::shared_ptr<Tensor>> &outputs);
+
+    const std::vector<bool> &needs_input_grad() const;
+
+    const AutocastContext &forward_autocast_context() const;
+
+private:
+    struct SavedTensorEntry {
+        std::shared_ptr<Tensor> tensor;
+        std::shared_ptr<void> hook_state;
+        SavedTensorUnpackHook unpack;
+    };
+
+    friend class Function;
+
+    void set_needs_input_grad(std::vector<bool> needs_input_grad);
+    void set_forward_autocast_context(const AutocastContext &context);
+
+    void SaveVariables(const std::vector<std::shared_ptr<Tensor>> &outputs);
+    void ReleaseVariables();
+
+    bool IsNonDifferentiable(const std::shared_ptr<Tensor> &output) const;
+
+    std::vector<std::shared_ptr<Tensor>> to_save_;
+    std::vector<SavedTensorEntry> saved_tensor_entries_;
+    std::vector<bool> needs_input_grad_;
+    std::vector<Tensor *> non_differentiable_;
+    std::optional<AutocastContext> forward_autocast_context_;
+};
 
 class Function : public std::enable_shared_from_this<Function> {
 public:
@@ -23,14 +85,14 @@ public:
 
     static constexpr char kUndefinedType[] = "Undefined";
 
-    Function() : type_(kUndefinedType) {}
-    explicit Function(const std::string &type) : type_(type) {}
+    Function();
+    explicit Function(const std::string &type);
 
-    virtual ~Function() = default;
+    virtual ~Function();
 
     virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) = 0;
     virtual void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                              const std::vector<std::shared_ptr<Tensor>> &output_tensors) {}
+                              const std::vector<std::shared_ptr<Tensor>> &output_tensors);
     virtual std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) = 0;
 
     std::vector<std::shared_ptr<Tensor>> Apply(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
@@ -43,11 +105,10 @@ public:
     std::shared_ptr<infini_train::HookHandle> RegisterBackwardPreHook(FunctionPreHook hook);
     std::shared_ptr<infini_train::HookHandle> RegisterBackwardPostHook(FunctionPostHook hook);
 
-    const std::string &type() const { return type_; }
+    const std::string &type() const;
 
 protected:
-    std::vector<std::shared_ptr<Tensor>> saved_tensors_;
-    std::vector<bool> needs_input_grad_;
+    FunctionCtx ctx_;
 
 private:
     std::vector<std::pair<std::shared_ptr<Function>, int>> next_functions_;

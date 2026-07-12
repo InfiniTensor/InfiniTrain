@@ -11,9 +11,9 @@
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/common/hook.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/global_module_hook_registry.h"
+#include "infini_train/include/utils/string_utils.h"
 
 #ifndef UNLIKELY
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
@@ -145,6 +145,49 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() con
         for (auto &[sub_name, param] : module->StateDict()) { state.emplace(name + "." + sub_name, param); }
     }
     return state;
+}
+
+void Module::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
+    // Stage 1: Validate all keys, shapes, and dtypes without copying
+    std::vector<std::string> error_msgs;
+    std::unordered_set<std::string> visited_keys;
+    auto expected = StateDict();
+
+    for (const auto &[name, dst] : expected) {
+        visited_keys.insert(name);
+        if (!state_dict.contains(name)) {
+            error_msgs.push_back(std::format("Missing key: {}", name));
+            continue;
+        }
+        const auto &src = state_dict.at(name);
+        if (dst->Dims() != src->Dims()) {
+            error_msgs.push_back(std::format("Shape mismatch for '{}': expected={}, got={}", name,
+                                             infini_train::utils::DimsToString(dst->Dims()),
+                                             infini_train::utils::DimsToString(src->Dims())));
+        }
+        if (dst->Dtype() != src->Dtype()) {
+            error_msgs.push_back(std::format("Dtype mismatch for '{}': expected={}, got={}", name,
+                                             kDataTypeToDesc.at(dst->Dtype()), kDataTypeToDesc.at(src->Dtype())));
+        }
+    }
+
+    for (const auto &[name, src] : state_dict) {
+        if (!visited_keys.contains(name)) {
+            LOG(WARNING) << std::format("Unexpected key in state_dict: {}", name);
+        }
+    }
+
+    if (!error_msgs.empty()) {
+        std::string msg = "LoadStateDict failed:";
+        for (const auto &err : error_msgs) { msg += "\n  " + err; }
+        LOG(FATAL) << msg;
+    }
+
+    // Stage 2: All checks passed, now copy data
+    for (const auto &[name, dst] : expected) {
+        const auto &src = state_dict.at(name);
+        dst->CopyFrom(*src);
+    }
 }
 
 std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {

@@ -44,7 +44,7 @@ std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std:
                                                           const std::vector<Device> &devices, int dim) {
     std::vector<std::vector<std::shared_ptr<Tensor>>> output_tensors;
     for (const auto &tensor : input_tensors) {
-        output_tensors.emplace_back(std::make_shared<autograd::Scatter>(devices, dim)->Apply({tensor}));
+        output_tensors.emplace_back(std::make_shared<autograd::comm::Scatter>(devices, dim)->Apply({tensor}));
     }
     std::vector<std::vector<std::shared_ptr<Tensor>>> transposed_output_tensors;
     transposed_output_tensors.resize(devices.size());
@@ -59,7 +59,7 @@ std::vector<std::shared_ptr<Tensor>> Gather(const std::vector<std::vector<std::s
                                             Device target_device, int dim) {
     std::vector<std::shared_ptr<Tensor>> gather_tensors;
     for (const auto &tensor : tensors) { gather_tensors.push_back(tensor[0]); }
-    return std::make_shared<autograd::Gather>(target_device, dim)->Apply(gather_tensors);
+    return std::make_shared<autograd::comm::Gather>(target_device, dim)->Apply(gather_tensors);
 }
 
 std::vector<std::vector<std::shared_ptr<Tensor>>>
@@ -67,7 +67,7 @@ BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors, c
     if (tensors.empty()) {
         return {};
     }
-    auto tensor_copies = std::make_shared<autograd::Broadcast>(devices)->Apply(tensors);
+    auto tensor_copies = std::make_shared<autograd::comm::Broadcast>(devices)->Apply(tensors);
     std::vector<std::vector<std::shared_ptr<Tensor>>> tensor_copies_reshaped(devices.size());
     for (int replica_idx = 0; replica_idx < devices.size(); ++replica_idx) {
         tensor_copies_reshaped[replica_idx].resize(tensors.size());

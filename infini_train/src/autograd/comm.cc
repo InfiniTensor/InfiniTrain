@@ -8,7 +8,7 @@
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/tensor.h"
 
-namespace infini_train::autograd {
+namespace infini_train::autograd::comm {
 
 Scatter::Scatter(const std::vector<Device> &target_gpus, int64_t dim,
                  const infini_train::nn::parallel::ProcessGroup *pg)
@@ -18,7 +18,6 @@ Scatter::Scatter(const std::vector<Device> &target_gpus, int64_t dim,
 std::vector<std::shared_ptr<Tensor>> Scatter::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     const auto &input = input_tensors[0];
     std::vector<std::shared_ptr<Tensor>> output_tensors;
-    auto device = input->GetDevice().type();
     output_tensors = pg_->Scatter(input, target_gpus_, dim_);
     return output_tensors;
 }
@@ -51,7 +50,7 @@ std::vector<std::shared_ptr<Tensor>> Gather::Forward(const std::vector<std::shar
     } else {
         unsqueezed_scalar_ = false;
     }
-    auto device = input_tensors[0]->GetDevice().type();
+
     return {pg_->Gather(input_tensors, target_device_, dim_)};
 }
 
@@ -122,4 +121,4 @@ std::vector<std::shared_ptr<Tensor>>
 ReduceAddCoalesced::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     return std::make_shared<Broadcast>(target_gpus_)->Apply(grad_outputs);
 }
-} // namespace infini_train::autograd
+} // namespace infini_train::autograd::comm

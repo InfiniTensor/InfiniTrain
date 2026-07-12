@@ -1,24 +1,21 @@
 {
     "variables": {
         "BUILD_DIR": "../build",
-        "GPT2_INPUT_BIN": "/data/shared/InfiniTrain-dev/data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin",
-        "GPT2_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/gpt2/gpt2_124M.bin",
-        "LLAMA3_INPUT_BIN": "/data/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
-        "LLAMA3_LLMC_FILEPATH": "/data/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_fp32.bin",
+        "GPT2_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/gpt2/tinyshakespeare/tiny_shakespeare_train.bin",
+        "GPT2_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/gpt2/gpt2_124M.bin",
+        "LLAMA3_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
+        "LLAMA3_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_fp32.bin",
         "PROFILE_LOG_DIR": "./profile_logs",
         "LOG_DIR": "./logs",
-        "COMPARE_LOG_DIR": ""
+        "CKPT_ROOT_DIR": "/data1/ckpt",
+        "COMPARE_LOG_DIR": "",
+        "RUN_CTEST": "true",
+        "RUN_PROFILE_TEST": "true"
     },
-    "builds": [
+    "basic_compile_commands": [
         {
             "id": "build_1",
-            "profile": false,
             "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON .. && make -j"
-        },
-        {
-            "id": "build_2",
-            "profile": true,
-            "cmd": "cmake -DUSE_CUDA=ON -DUSE_NCCL=ON -DPROFILE_MODE=ON .. && make -j"
         }
     ],
     "test_groups": [
@@ -208,7 +205,18 @@
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
+                    }
+                },
+                {
+                    "id": "3_zero2",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "zero_stage": 2
                     }
                 },
                 {
@@ -219,7 +227,18 @@
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
+                    }
+                },
+                {
+                    "id": "3_bfloat16_zero2",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "zero_stage": 2
                     }
                 },
                 {
@@ -231,7 +250,19 @@
                         "batch_size": 40,
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
+                    }
+                },
+                {
+                    "id": "4_zero2",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "zero_stage": 2
                     }
                 },
                 {
@@ -243,7 +274,19 @@
                         "batch_size": 40,
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
+                    }
+                },
+                {
+                    "id": "4_bfloat16_zero2",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "zero_stage": 2
                     }
                 },
                 {
@@ -256,7 +299,20 @@
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
                         "sequence_parallel": true,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
+                    }
+                },
+                {
+                    "id": "5_zero2",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "zero_stage": 2
                     }
                 },
                 {
@@ -269,7 +325,20 @@
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
                         "sequence_parallel": true,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
+                    }
+                },
+                {
+                    "id": "5_bfloat16_zero2",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "zero_stage": 2
                     }
                 },
                 {
@@ -284,7 +353,7 @@
                         "sequence_parallel": true,
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
                     }
                 },
                 {
@@ -299,7 +368,183 @@
                         "sequence_parallel": true,
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
+                    }
+                }
+            ]
+        },
+        {
+            "tag": "lr_scheduler",
+            "tests": [
+                {
+                    "id": "3_none_zero2",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "zero_stage": 2,
+                        "learning_rate": 0.00001,
+                        "lr_decay_style": "none"
+                    }
+                },
+                {
+                    "id": "4_constant_tp4",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "constant",
+                        "lr_warmup_iters": 0,
+                        "lr_decay_iters": 0
+                    }
+                },
+                {
+                    "id": "5_linear_tp4_sp_distopt",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "zero_stage": 1,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "linear",
+                        "lr_warmup_iters": 2,
+                        "lr_warmup_init": 0.0,
+                        "lr_decay_iters": 10
+                    }
+                },
+                {
+                    "id": "6_cosine_pp8",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 8,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "cosine",
+                        "lr_warmup_iters": 2,
+                        "lr_warmup_init": 0.0,
+                        "lr_decay_iters": 10
+                    }
+                },
+                {
+                    "id": "7_inverse_sqrt_pp4_vpp2",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 4,
+                        "virtual_pipeline_parallel": 2,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "inverse-square-root",
+                        "lr_warmup_iters": 2,
+                        "lr_warmup_init": 0.0,
+                        "lr_decay_iters": 10
+                    }
+                },
+                {
+                    "id": "8_cosine_all_parallel_distopt",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "zero_stage": 1,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "cosine",
+                        "lr_warmup_iters": 2,
+                        "lr_warmup_init": 0.0,
+                        "lr_decay_iters": 10
+                    }
+                },
+                {
+                    "id": "3_bfloat16_linear",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "linear",
+                        "lr_warmup_iters": 2,
+                        "lr_warmup_init": 0.0,
+                        "lr_decay_iters": 0
+                    }
+                },
+                {
+                    "id": "4_bfloat16_inverse_sqrt_tp4_distopt",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "zero_stage": 1,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "inverse-square-root",
+                        "lr_warmup_iters": 2,
+                        "lr_warmup_init": 0.0,
+                        "lr_decay_iters": 10
+                    }
+                },
+                {
+                    "id": "5_bfloat16_constant_tp4_sp",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "learning_rate": 0.00001,
+                        "min_lr": 0.000001,
+                        "lr_decay_style": "constant",
+                        "lr_warmup_iters": 0,
+                        "lr_decay_iters": 10
+                    }
+                },
+                {
+                    "id": "8_bfloat16_none_all_parallel",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "learning_rate": 0.00001,
+                        "lr_decay_style": "none"
                     }
                 }
             ]
@@ -523,6 +768,82 @@
                         "lora_rank": 16,
                         "lora_alpha": 32.0,
                         "lora_target_modules": "c_fc,c_proj"
+                    }
+                }
+            ]
+        },
+        {
+            "tag": "checkpoint",
+            "tests": [
+                {
+                    "id": "ckpt_no_resume",
+                    "args": {
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "save": "@CKPT_ROOT_DIR@/no_resume"
+                    }
+                },
+                {
+                    "id": "ckpt_resume",
+                    "args": {
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "load": "@CKPT_ROOT_DIR@/no_resume/checkpoint_step_000030",
+                        "save": "@CKPT_ROOT_DIR@/base_resume"
+                    }
+                },
+                {
+                    "id": "ckpt_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "save": "@CKPT_ROOT_DIR@/bfloat16_no_resume"
+                    }
+                },
+                {
+                    "id": "ckpt_bfloat16_resume",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "load": "@CKPT_ROOT_DIR@/bfloat16_no_resume/checkpoint_step_000030",
+                        "save": "@CKPT_ROOT_DIR@/bfloat16_resume"
+                    }
+                },
+                {
+                    "id": "ckpt_3d_ddp_tp_pp",
+                    "args": {
+                        "nthread_per_process": 8,
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "save": "@CKPT_ROOT_DIR@/3d_ddp2_tp2_pp2_no_resume",
+                        "save_optimizer_state": true,
+                        "max_checkpoint_keep": 5
+                    }
+                },
+                {
+                    "id": "ckpt_3d_ddp_tp_pp_resume",
+                    "args": {
+                        "nthread_per_process": 8,
+                        "num_iteration": 50,
+                        "save_interval": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "load": "@CKPT_ROOT_DIR@/3d_ddp2_tp2_pp2_no_resume/checkpoint_step_000030",
+                        "save": "@CKPT_ROOT_DIR@/3d_tp2_pp2_resume",
+                        "save_optimizer_state": true,
+                        "max_checkpoint_keep": 5
                     }
                 }
             ]

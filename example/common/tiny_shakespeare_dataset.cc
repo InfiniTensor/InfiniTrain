@@ -68,6 +68,7 @@ TinyShakespeareFile ReadTinyShakespeareFile(const std::string &path, size_t sequ
     const auto header = ReadSeveralBytesFromIfstream(1024, &ifs);
     const int magic = BytesToType<int32_t>(header, 0);
     const int version = BytesToType<int32_t>(header, 4);
+    (void)version; // Read but unused; reserved in binary format specification
     const int num_tokens = BytesToType<int32_t>(header, 8);
     text_file.type = kTypeMap.at(magic);
 

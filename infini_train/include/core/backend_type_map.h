@@ -48,6 +48,9 @@ template <Device::DeviceType Dev, DataType DType> struct BackendTypeMap;
 // -----------------------------------------------------------------------------
 #define INFINI_REGISTER_STANDARD_BACKEND_TYPES(DEV)                                                                    \
     namespace infini_train::core {                                                                                     \
+    template <> struct BackendTypeMap<DEV, DataType::kBOOL> {                                                          \
+        using type = bool;                                                                                             \
+    };                                                                                                                 \
     template <> struct BackendTypeMap<DEV, DataType::kUINT8> {                                                         \
         using type = uint8_t;                                                                                          \
     };                                                                                                                 \

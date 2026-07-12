@@ -18,7 +18,6 @@ std::shared_ptr<Tensor> ReduceOpForward(const std::shared_ptr<Tensor> &input, co
     CHECK_LT(actual_dim, input_dims.size());
 
     std::vector<int64_t> output_dims = input_dims;
-    const int64_t reduce_size = input_dims[dim];
     if (keep_dim) {
         output_dims[actual_dim] = 1;
     } else {

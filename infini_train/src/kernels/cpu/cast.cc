@@ -13,7 +13,8 @@ std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
     auto device = input->GetDevice();
     auto dst_tensor = std::make_shared<Tensor>(input->Dims(), dtype, device);
 
-    core::cpu::DispatchCpuFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
+    core::cpu::DispatchCpuFunc<DataTypeList<INFINI_ALL_NUMERIC_TYPES, INFINI_LOGICAL_TYPES>,
+                               DataTypeList<INFINI_ALL_NUMERIC_TYPES, INFINI_LOGICAL_TYPES>>(
         {dtype, input->Dtype()},
         [=]<typename Tdst, typename Tsrc>() {
             auto dst = static_cast<Tdst *>(dst_tensor->DataPtr());

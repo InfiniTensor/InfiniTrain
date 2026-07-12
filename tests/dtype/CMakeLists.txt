@@ -7,4 +7,5 @@ list(FILTER DTYPE_SOURCES EXCLUDE REGEX ".*compile_fail.*")
 
 infini_train_add_test_suite(test_dtype
   SOURCES ${DTYPE_SOURCES}
+  TEST_TIMEOUT 40
 )

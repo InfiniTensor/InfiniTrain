@@ -442,7 +442,6 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     auto logits = std::make_shared<Tensor>(input_tensors[0]->To(DataType::kFLOAT32));
     auto target = input_tensors[1];
 
-    auto dtype = logits->Dtype();
     auto device = logits->GetDevice();
 
     CHECK(target->Dtype() == DataType::kINT64) << "target must be int64";
@@ -536,7 +535,7 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     }
 
     // 8. Save for backward
-    saved_tensors_ = {softmax_local, target_mask, masked_target, valid_mask_local};
+    ctx_.SaveForBackward({softmax_local, target_mask, masked_target, valid_mask_local});
 
     return {loss};
 }
@@ -546,10 +545,11 @@ VocabParallelCrossEntropy::Backward(const std::vector<std::shared_ptr<Tensor>> &
     CHECK_EQ(grad_outputs.size(), 1);
 
     auto grad_output = grad_outputs[0];
-    auto softmax_local = saved_tensors_[0];
-    auto target_mask = std::make_shared<Tensor>(saved_tensors_[1]->To(softmax_local->Dtype()));
-    auto masked_target = saved_tensors_[2];
-    auto valid_mask_local = saved_tensors_[3];
+    auto saved_tensors = ctx_.GetSavedTensors();
+    auto softmax_local = saved_tensors[0];
+    auto target_mask = std::make_shared<Tensor>(saved_tensors[1]->To(softmax_local->Dtype()));
+    auto masked_target = saved_tensors[2];
+    auto valid_mask_local = saved_tensors[3];
 
     auto device = grad_output->GetDevice().type();
     auto grad_input = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(

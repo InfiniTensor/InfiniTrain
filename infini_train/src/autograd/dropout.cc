@@ -17,17 +17,18 @@ std::vector<std::shared_ptr<Tensor>> Dropout::Forward(const std::vector<std::sha
 
 void Dropout::SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
                            const std::vector<std::shared_ptr<Tensor>> &) {
-    if (!needs_input_grad_.empty() && needs_input_grad_[0]) {
-        saved_tensors_ = {mask_};
+    if (!ctx_.needs_input_grad().empty() && ctx_.needs_input_grad()[0]) {
+        ctx_.SaveForBackward({mask_});
     }
     mask_.reset();
 }
 
 std::vector<std::shared_ptr<Tensor>> Dropout::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
-    CHECK_EQ(saved_tensors_.size(), 1);
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 1);
     const auto &grad_output = grad_outputs[0];
-    const auto &mask = saved_tensors_[0];
+    const auto &mask = saved_tensors[0];
 
     auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), grad_output->Dtype(), grad_output->GetDevice());
     dropout_backward_kernel(*grad_input, *grad_output, *mask, p_);

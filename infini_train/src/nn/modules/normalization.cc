@@ -22,8 +22,9 @@ LayerNorm::LayerNorm(const std::vector<int64_t> &normalized_shape, float eps, De
 }
 
 std::vector<std::shared_ptr<Tensor>> LayerNorm::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    return std::make_shared<autograd::LayerNorm>(eps_)->Apply(
+    auto outputs = std::make_shared<autograd::LayerNorm>(eps_)->Apply(
         {input_tensors[0], parameters_[kParamWeightName], parameters_[kParamBiasName]});
+    return {outputs[0]};
 }
 
 void LayerNorm::ResetParameters() {

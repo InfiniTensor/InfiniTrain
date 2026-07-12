@@ -6,7 +6,7 @@ option(USE_OMP "Use OpenMP as backend for Eigen" ON)
 option(USE_NCCL "Build project for distributed running" ON)
 option(BUILD_TEST "Build InfiniTrain tests" OFF)
 
-project(infini_train VERSION 0.5.0 LANGUAGES CXX)
+project(infini_train VERSION 0.6.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,6 +14,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+add_compile_options(-Wunused -Wunused-function)
 
 # ------------------------------------------------------------------------------
 # GoogleTest (submodule)
@@ -194,8 +196,8 @@ add_executable(gpt2
   example/gpt2/main.cc
   example/common/tiny_shakespeare_dataset.cc
   example/common/utils.cc
-  example/gpt2/checkpoint_loader.cc
   example/common/tokenizer.cc
+  example/gpt2/checkpoint_loader.cc
 )
 link_infini_train_exe(gpt2)
 
@@ -203,8 +205,8 @@ add_executable(llama3
   example/llama3/main.cc
   example/common/tiny_shakespeare_dataset.cc
   example/common/utils.cc
-  example/llama3/checkpoint_loader.cc
   example/common/tokenizer.cc
+  example/llama3/checkpoint_loader.cc
 )
 link_infini_train_exe(llama3)
 

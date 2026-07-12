@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <utility>
@@ -18,19 +19,25 @@
 namespace infini_train::nn::parallel {
 namespace {
 constexpr char kModuleName[] = "module";
+
 } // namespace
 
 DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, const Rank &rank,
                                                  const DistributedDataParallelConfig ddp_config)
     : ddp_config_(ddp_config),
       ddp_pg_(ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(rank.GlobalRank()))) {
+    CHECK(ddp_config_.zero_stage >= 0 && ddp_config_.zero_stage <= 3)
+        << "DistributedDataParallel: zero_stage must be in 0/1/2/3.";
+    if (ddp_config_.zero_stage == 3) {
+        LOG(FATAL) << "DistributedDataParallel: ZeRO-3 is not implemented yet.";
+    }
     for (auto &param : module->Parameters()) {
         if (!param->requires_grad()) {
             continue;
         }
         auto device = param->GetDevice();
         CHECK_EQ(device.index(), rank.thread_rank()) << "All parameters must be on the same device as the module";
-        if (!ddp_config.gradient_bucketing_enabled && !ddp_config.use_distributed_optimizer) {
+        if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
             auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(
                 function::ReduceOpType::kAvg, ddp_pg_);
             param->RegisterPostAccumulateGradHook(std::move(hook));
@@ -42,7 +49,7 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
     }
     modules_[kModuleName] = std::move(module);
 
-    if (ddp_config.use_distributed_optimizer) {
+    if (ddp_config.zero_stage >= 1) {
         BuildParamAndGradBuffers();
         RegisterBackwardHooks();
     } else if (ddp_config.gradient_bucketing_enabled) {
@@ -91,7 +98,7 @@ void DistributedDataParallel::BuildParamAndGradBuffers() {
     // TODO(zbl): option for disable bucketing
     bucket_groups_ = PartitionBuckets(param_grad_buffers_, /*force_single_bucket_group=*/false);
 
-    if (ddp_config_.use_distributed_optimizer && ddp_config_.overlap_param_gather) {
+    if (ddp_config_.zero_stage >= 1 && ddp_config_.overlap_param_gather) {
         auto num_bucket_groups = bucket_groups_.size();
         for (auto i = num_bucket_groups - 1; i > 0; --i) {
             bucket_groups_[i]->SetNextParamGatherBucketGroup(bucket_groups_[i - 1]);
@@ -116,6 +123,47 @@ void DistributedDataParallel::BuildParamAndGradBuffers() {
 }
 
 void DistributedDataParallel::RegisterBackwardHooks() {
+    if (ddp_config_.zero_stage >= 2) {
+        // NOTE(zbl): ZeRO-2 bypasses Tensor::grad accumulation: stash grads in the bucket group's
+        //            temporary full-grad buffer, then mark the bucket ready for reduce-scatter.
+        class Zero2PreAccumulateGradHook final : public autograd::PreAccumulateGradHook {
+        public:
+            explicit Zero2PreAccumulateGradHook(std::weak_ptr<ParamAndGradBucketGroup> group)
+                : group_(std::move(group)) {}
+
+            bool TryBypassAccumulate(const std::shared_ptr<Tensor> &param, const std::shared_ptr<Tensor> &grad_output,
+                                     bool overwrite, float learning_rate) override {
+                if (auto group = group_.lock(); group) {
+                    group->AccumulateParamGrad(param, grad_output, overwrite, learning_rate);
+                    if (group->config().overlap_grad_reduce) {
+                        group->RegisterGradReady(param);
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            void operator()(const std::shared_ptr<Tensor> &) override {}
+
+        private:
+            std::weak_ptr<ParamAndGradBucketGroup> group_;
+        };
+
+        auto &module = modules_.at(kModuleName);
+        for (auto &param : module->Parameters()) {
+            if (!param->requires_grad()) {
+                continue;
+            }
+            auto it = param_to_bucket_group_.find(param.get());
+            CHECK(it != param_to_bucket_group_.end());
+
+            std::weak_ptr<ParamAndGradBucketGroup> weak_group = it->second;
+            auto hook = std::make_unique<Zero2PreAccumulateGradHook>(weak_group);
+            param->RegisterPreAccumulateGradHook(std::move(hook));
+        }
+        return;
+    }
+
     class DDPPostAccumulateHook final : public autograd::PostAccumulateGradHook {
     public:
         DDPPostAccumulateHook(DistributedDataParallel *ddp, const std::weak_ptr<Tensor> param)
@@ -147,7 +195,7 @@ void DistributedDataParallel::OnGradReady(const std::shared_ptr<Tensor> &param) 
     auto it = param_to_bucket_group_.find(param.get());
     if (it != param_to_bucket_group_.end()) {
         CHECK(param->requires_grad());
-        if (ddp_config_.overlap_grad_reduce) {
+        if (ddp_config_.overlap_grad_reduce && (ddp_config_.zero_stage < 2)) {
             CHECK(param->grad()) << "param.grad being None is not safe when overlap_grad_reduce is True";
         }
 
@@ -163,7 +211,7 @@ DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &inp
     if (reducer_) {
         reducer_->PrepareForBackward();
     }
-    if (ddp_config_.use_distributed_optimizer) {
+    if (ddp_config_.zero_stage >= 1) {
         for (auto buffer : param_grad_buffers_) { buffer->RebindGradViews(); }
     }
     return outputs;

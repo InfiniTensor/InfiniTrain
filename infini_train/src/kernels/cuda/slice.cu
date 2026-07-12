@@ -92,7 +92,7 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
-    core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype,
         [=]<typename T>() {
             SliceForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
@@ -185,7 +185,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
-    core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
         grad_output_dtype,
         [=]<typename T>() {
             SliceBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(

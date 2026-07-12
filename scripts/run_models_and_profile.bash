@@ -70,11 +70,11 @@ BUILD_DIR="$(read_var BUILD_DIR)";              : "${BUILD_DIR:=../build}"
 LOG_DIR="$(read_var LOG_DIR)";                  : "${LOG_DIR:=logs}"
 PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_logs}"
 COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
+RUN_CTEST="$(read_var RUN_CTEST)";              : "${RUN_CTEST:=true}"
+RUN_PROFILE_TEST="$(read_var RUN_PROFILE_TEST)";  : "${RUN_PROFILE_TEST:=true}"
+CKPT_ROOT_DIR="$(read_var CKPT_ROOT_DIR)";      : "${CKPT_ROOT_DIR:=/data1/ckpt}"
 
-mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
-
-# export custom PATHs
-export BUILD_DIR LOG_DIR PROFILE_LOG_DIR
+# export custom variables from config first. LOG_DIR/PROFILE_LOG_DIR are normalized below.
 while IFS="=" read -r k v; do
     [[ -z "$k" || "$k" == "null" ]] && continue
     export "$k"="$v"
@@ -84,11 +84,78 @@ done < <(jq -r '.variables | to_entries[] | "\(.key)=\(.value)"' "$CONFIG_FILE")
 LAST_CMAKE_CMD=""
 declare -A SELECTED_TAGS=()
 
+RUN_STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
+RUN_ID="$(date '+%Y%m%d_%H%M%S')"
+RUN_DATE="$(date '+%Y%m%d')"
+GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+: "${GIT_BRANCH:=unknown}"
+GIT_COMMIT_FULL="$(git rev-parse HEAD 2>/dev/null || true)"
+: "${GIT_COMMIT_FULL:=unknown}"
+GIT_COMMIT_SHORT="${GIT_COMMIT_FULL:0:7}"
+SAFE_GIT_BRANCH="${GIT_BRANCH//\//_}"
+SAFE_GIT_BRANCH="${SAFE_GIT_BRANCH//[[:space:]]/_}"
+SAFE_GIT_BRANCH="$(printf '%s' "$SAFE_GIT_BRANCH" | tr -cd '[:alnum:]_.-')"
+: "${SAFE_GIT_BRANCH:=unknown}"
+
+LOG_DIR_PARENT="$(dirname "$LOG_DIR")"
+if [[ "$LOG_DIR_PARENT" == "." ]]; then
+    RUN_OUTPUT_DIR="${RUN_DATE}/${SAFE_GIT_BRANCH}_${GIT_COMMIT_SHORT}"
+else
+    RUN_OUTPUT_DIR="${LOG_DIR_PARENT}/${RUN_DATE}/${SAFE_GIT_BRANCH}_${GIT_COMMIT_SHORT}"
+fi
+LOG_DIR="${RUN_OUTPUT_DIR}/logs"
+PROFILE_LOG_DIR="${RUN_OUTPUT_DIR}/profile_logs"
+
+mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
+export BUILD_DIR LOG_DIR PROFILE_LOG_DIR
+
+RUN_METADATA_FILE="${LOG_DIR}/run_metadata.log"
+: > "$RUN_METADATA_FILE"
+RUN_METADATA_FILE="$(realpath "$RUN_METADATA_FILE")"
+{
+    echo "[RUN_STARTED_AT] $RUN_STARTED_AT"
+    echo "[RUN_ID] $RUN_ID"
+    echo "[GIT_BRANCH] $GIT_BRANCH"
+    echo "[GIT_COMMIT] $GIT_COMMIT_FULL"
+    echo "[GIT_COMMIT_SHORT] $GIT_COMMIT_SHORT"
+    echo "[CONFIG_FILE] $CONFIG_FILE"
+    echo "[LOG_DIR] $(realpath "$LOG_DIR")"
+    echo "[PROFILE_LOG_DIR] $(realpath "$PROFILE_LOG_DIR")"
+} > "$RUN_METADATA_FILE"
+echo -e "\033[1;33mRun metadata:\033[0m $RUN_METADATA_FILE"
+echo -e "\033[1;33mRun log dir:\033[0m $(realpath "$LOG_DIR")"
+echo -e "\033[1;33mRun profile log dir:\033[0m $(realpath "$PROFILE_LOG_DIR")"
+
 normalize_tag() {
     local raw="$1"
     raw="${raw#"${raw%%[![:space:]]*}"}"
     raw="${raw%"${raw##*[![:space:]]}"}"
     printf '%s' "$raw"
+}
+
+cmake_bool_value() {
+    if [[ "$1" == "true" ]]; then
+        printf 'ON'
+    else
+        printf 'OFF'
+    fi
+}
+
+set_cmake_option() {
+    local cmd="$1"
+    local option="$2"
+    local value="$3"
+    local flag="-D${option}=${value}"
+
+    if [[ "$cmd" =~ (^|[[:space:]])-D${option}= ]]; then
+        cmd="$(printf '%s' "$cmd" | sed -E "s#(^|[[:space:]])-D${option}=[^[:space:]]+#\1${flag}#")"
+    elif [[ "$cmd" == *" .."* ]]; then
+        cmd="${cmd/ ../ ${flag} ..}"
+    else
+        cmd="${cmd} ${flag}"
+    fi
+
+    printf '%s' "$cmd"
 }
 
 if [[ -n "$ONLY_RUN_TAGS" ]]; then
@@ -110,6 +177,83 @@ clean_build_dir() {
     echo -e "\033[1;31m[CLEAN] Removing all contents in: ${BUILD_DIR}\033[0m"
     mkdir -p "$BUILD_DIR"
     rm -rf "${BUILD_DIR:?}/"*
+}
+
+# Clean checkpoint directories (called once at start of script)
+clean_checkpoints() {
+    echo -e "\033[1;31m[CLEAN] Removing checkpoint directories from previous run\033[0m"
+    if [[ -d "$CKPT_ROOT_DIR" ]]; then
+        echo -e "\033[1;31m[CLEAN] Removing: ${CKPT_ROOT_DIR}\033[0m"
+        rm -rf "${CKPT_ROOT_DIR:?}"
+    fi
+}
+
+run_ctest() {
+    local gpu_list=()
+    local cuda_tests=()
+
+    if [[ -n "${CTEST_CUDA_GPUS:-}" ]]; then
+        IFS=',' read -r -a gpu_list <<< "$CTEST_CUDA_GPUS"
+    elif command -v nvidia-smi >/dev/null 2>&1; then
+        mapfile -t gpu_list < <(nvidia-smi --query-gpu=index --format=csv,noheader 2>/dev/null || true)
+    fi
+
+    if [[ ${#gpu_list[@]} -eq 0 ]]; then
+        gpu_list=(0)
+    fi
+
+    local filtered_gpu_list=()
+    local gpu
+    for gpu in "${gpu_list[@]}"; do
+        gpu="${gpu//[[:space:]]/}"
+        [[ -z "$gpu" ]] && continue
+        filtered_gpu_list+=("$gpu")
+    done
+
+    if [[ ${#filtered_gpu_list[@]} -eq 0 ]]; then
+        filtered_gpu_list=(0)
+    fi
+
+    ctest --output-on-failure -LE cuda -j"$(nproc)"
+
+    mapfile -t cuda_tests < <(ctest -N -L cuda | sed -n 's/^ *Test *#[0-9][0-9]*: //p')
+    if [[ ${#cuda_tests[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    local worker_count="${#filtered_gpu_list[@]}"
+    local pids=()
+    local worker_idx
+    for ((worker_idx = 0; worker_idx < worker_count; worker_idx++)); do
+        (
+            local worker_failed=0
+            local test_idx="$worker_idx"
+            local test_name
+            local assigned_gpu="${filtered_gpu_list[$worker_idx]}"
+
+            while ((test_idx < ${#cuda_tests[@]})); do
+                test_name="${cuda_tests[$test_idx]}"
+                echo "[CUDA GPU ${assigned_gpu}] ${test_name}"
+                if ! CUDA_VISIBLE_DEVICES="$assigned_gpu" ctest --output-on-failure -R "^${test_name}$" -j1; then
+                    worker_failed=1
+                fi
+                test_idx=$((test_idx + worker_count))
+            done
+
+            exit "$worker_failed"
+        ) &
+        pids+=("$!")
+    done
+
+    local failed=0
+    local pid
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then
+            failed=1
+        fi
+    done
+
+    return "$failed"
 }
 
 # Run a command and log output
@@ -155,6 +299,11 @@ run_and_log() {
     fi
 
     # Write the current run command to the log
+    echo "[RUN_METADATA] $RUN_METADATA_FILE" >> "$log_path"
+    echo "[RUN_STARTED_AT] $RUN_STARTED_AT" >> "$log_path"
+    echo "[GIT_BRANCH] $GIT_BRANCH" >> "$log_path"
+    echo "[GIT_COMMIT] $GIT_COMMIT_FULL" >> "$log_path"
+    echo "[GIT_COMMIT_SHORT] $GIT_COMMIT_SHORT" >> "$log_path"
     echo "[COMMAND] $cmd" >> "$log_path"
 
     # Run the command and append both stdout and stderr to the log file
@@ -206,20 +355,44 @@ move_profile_logs() {
     done
 }
 
-# Build "--key value" arg string from test_groups[gi].tests[ti].args (shell-escaped)
+# Build "--key value" arg string from tests[i].args.
+# For checkpoint-related args, automatically isolate by model and run mode
+# (resume/no_resume) to avoid cross-test overwrites in one-click runs.
 args_string_for_test() {
     local group_idx="$1"
     local test_idx="$2"
-    jq -r --argjson g "$group_idx" --argjson t "$test_idx" '
-      .test_groups[$g].tests[$t].args
-      | to_entries[]
-      | "--\(.key)=\(.value|tostring)"
-    ' "$CONFIG_FILE" | paste -sd' ' -
+    local model_name="$3"
+    local test_id="$4"
+
+    jq -r --argjson g "$group_idx" --argjson t "$test_idx" --arg model "$model_name" --arg test_id "$test_id" '
+    def namespaced_path($p; $model; $mode):
+        if ($p | test("/checkpoint_step_[0-9]+($|/)")) then
+            ($p | capture("^(?<prefix>.*)/(?<step>checkpoint_step_[0-9]+(?:/.*)?)$")) as $m
+            | ($m.prefix + "/" + $model + "/" + $mode + "/" + $m.step)
+        else
+            ($p + "/" + $model + "/" + $mode)
+        end;
+
+    .test_groups[$g].tests[$t].args as $args
+    | (if ($args | has("load")) then "resume" else "no_resume" end) as $run_mode
+    | (if (($args.load // "") | test("no_resume")) then "no_resume" else "resume" end) as $resume_src_mode
+    | $args
+    | (if has("save") then .save = namespaced_path(.save; $model; $run_mode) else . end)
+    | (if has("load") then .load = namespaced_path(.load; $model; $resume_src_mode) else . end)
+    | to_entries[]
+    | "--\(.key) \(.value|tostring)"
+    ' "$CONFIG_FILE" | paste -sd' ' - | \
+       sed "s|@CKPT_ROOT_DIR@|${CKPT_ROOT_DIR}|g"
 }
 
 # Run tests
-num_builds=$(jq '.builds | length' "$CONFIG_FILE")
+num_basic_compile_commands=$(jq '.basic_compile_commands | length' "$CONFIG_FILE")
 num_groups=$(jq '.test_groups | length' "$CONFIG_FILE")
+
+if [[ "$num_basic_compile_commands" -eq 0 ]]; then
+    echo "Error: No basic compile commands found in basic_compile_commands."
+    exit 1
+fi
 
 selected_group_count=0
 for ((gi=0; gi<num_groups; ++gi)); do
@@ -234,45 +407,67 @@ if [[ "$selected_group_count" -eq 0 ]]; then
     exit 1
 fi
 
-for ((id=0; id<num_builds; ++id)); do
-    build_id=$(jq -r ".builds[$id].id" "$CONFIG_FILE")
-    build_profile=$(jq -r ".builds[$id].profile" "$CONFIG_FILE")
-    build_cmake=$(jq -r ".builds[$id].cmd" "$CONFIG_FILE")
+for ((id=0; id<num_basic_compile_commands; ++id)); do
+    basic_compile_id=$(jq -r ".basic_compile_commands[$id].id" "$CONFIG_FILE")
+    basic_compile_cmake=$(jq -r ".basic_compile_commands[$id].cmd" "$CONFIG_FILE")
 
-    LAST_CMAKE_CMD="$build_cmake"
-
-    # always clean before another build
-    clean_build_dir
-    run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "build"
-
-    # profile flag for runs
-    profile_flag="no"
-    log_suffix=""
-    if [[ "$build_profile" == "true" ]]; then
-        profile_flag="yes"
-        log_suffix="_profile"
-    fi
-
-    for ((gi=0; gi<num_groups; ++gi)); do
-        group_tag=$(jq -r ".test_groups[$gi].tag" "$CONFIG_FILE")
-        if [[ ${#SELECTED_TAGS[@]} -gt 0 && -z "${SELECTED_TAGS[$group_tag]}" ]]; then
+    for build_profile in false true; do
+        if [[ "$build_profile" == "true" && "$RUN_PROFILE_TEST" != "true" ]]; then
             continue
         fi
 
-        num_tests=$(jq ".test_groups[$gi].tests | length" "$CONFIG_FILE")
-        echo -e "\033[1;36m[TEST GROUP] tag=${group_tag}, cases=${num_tests}\033[0m"
+        build_id="$basic_compile_id"
+        build_cmake="$basic_compile_cmake"
+        profile_flag="no"
+        log_suffix=""
 
-        for ((ti=0; ti<num_tests; ++ti)); do
-            test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
-            arg_str="$(args_string_for_test "$gi" "$ti")"
+        if [[ "$build_profile" == "true" ]]; then
+            build_id="${basic_compile_id}_profile"
+            profile_flag="yes"
+            log_suffix="_profile"
+        fi
 
-            # gpt2
-            gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${arg_str}"
-            run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+        if [[ "$build_profile" == "true" ]]; then
+            build_cmake="$(set_cmake_option "$build_cmake" "BUILD_TEST" "OFF")"
+        else
+            build_cmake="$(set_cmake_option "$build_cmake" "BUILD_TEST" "$(cmake_bool_value "$RUN_CTEST")")"
+        fi
+        build_cmake="$(set_cmake_option "$build_cmake" "PROFILE_MODE" "$(cmake_bool_value "$build_profile")")"
 
-            # llama3
-            llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${arg_str}"
-            run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+        LAST_CMAKE_CMD="$build_cmake"
+
+        # always clean before another build
+        clean_build_dir
+        run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "build"
+        if [[ "$RUN_CTEST" == "true" && "$build_profile" != "true" ]]; then
+            run_and_log "run_ctest" "ctest_${build_id}" "no" "ctest"
+        fi
+
+        for ((gi=0; gi<num_groups; ++gi)); do
+            group_tag=$(jq -r ".test_groups[$gi].tag" "$CONFIG_FILE")
+            if [[ ${#SELECTED_TAGS[@]} -gt 0 && -z "${SELECTED_TAGS[$group_tag]}" ]]; then
+                continue
+            fi
+
+            num_tests=$(jq ".test_groups[$gi].tests | length" "$CONFIG_FILE")
+            echo -e "\033[1;36m[TEST GROUP] tag=${group_tag}, cases=${num_tests}\033[0m"
+
+            for ((ti=0; ti<num_tests; ++ti)); do
+                test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
+                gpt2_arg_str="$(args_string_for_test "$gi" "$ti" "gpt2" "$test_id")"
+                llama3_arg_str="$(args_string_for_test "$gi" "$ti" "llama3" "$test_id")"
+
+                # gpt2
+                gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
+                run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+
+                # llama3
+                llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
+                run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+            done
+
+            # Clean checkpoints from previous run to avoid disk overflow and stale state
+            clean_checkpoints
         done
     done
 done
@@ -306,3 +501,6 @@ fi
 
 echo -e "\n\033[1;36m[END OF TEST] Cleaning build directory after all tests\033[0m"
 clean_build_dir
+
+echo -e "\n\033[1;33mNext step:\033[0m"
+echo "python3 write_to_feishu_sheet.py token.json --log-dir \"$(realpath "$RUN_OUTPUT_DIR")\""

@@ -28,7 +28,7 @@ void Fill(std::shared_ptr<Tensor> tensor, Scalar scalar) {
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->cuda_stream();
 
-    core::cuda::DispatchCudaFunc<INFINI_ALL_TYPES>(
+    core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
         tensor->Dtype(),
         [=]<typename T>() {
             const T casted_value = scalar.to<T>();

@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace infini_train {
@@ -15,14 +17,31 @@ using OptimizerCreator = std::function<std::shared_ptr<Optimizer>(const std::vec
 
 class Optimizer {
 public:
-    explicit Optimizer(const std::vector<std::shared_ptr<Tensor>> &params);
+    explicit Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate = 0.0f);
 
     virtual void ZeroGrad(bool set_to_none = true);
 
     virtual void Step() = 0;
 
+    virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const { return {}; };
+
+    virtual void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {}
+
+    virtual void set_learning_rate(float lr);
+
+    virtual float learning_rate() const;
+
+    float initial_learning_rate() const;
+
+    bool initial_lr_set() const;
+
+    void set_initial_learning_rate(float lr);
+
 protected:
     std::vector<std::shared_ptr<Tensor>> params_;
+    float learning_rate_ = 0.0f;
+    float initial_learning_rate_ = 0.0f;
+    bool initial_lr_set_ = false;
 };
 
 namespace optimizers {
@@ -32,14 +51,7 @@ public:
 
     void Step() override;
 
-    static OptimizerCreator Create(float learning_rate) {
-        return [learning_rate](const std::vector<std::shared_ptr<Tensor>> &params) {
-            return std::make_shared<SGD>(params, learning_rate);
-        };
-    }
-
-private:
-    const float learning_rate_ = 0.0;
+    static OptimizerCreator Create(float learning_rate);
 };
 
 class Adam : public Optimizer {
@@ -49,16 +61,14 @@ public:
 
     void Step() override;
 
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
+
+    void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
     static OptimizerCreator Create(float learning_rate = 1e-3, float beta1 = 0.9, float beta2 = 0.999,
-                                   float eps = 1e-8) {
-        return [=](const std::vector<std::shared_ptr<Tensor>> &params) {
-            return std::make_shared<Adam>(params, learning_rate, beta1, beta2, eps);
-        };
-    }
+                                   float eps = 1e-8);
 
 private:
     int64_t t_;
-    const float learning_rate_;
     const float beta1_;
     const float beta2_;
     const float eps_;

@@ -5,11 +5,6 @@
 
 namespace infini_train::nn {
 
-enum class ModelType {
-    kGPT2,   // GPT-2
-    kLLaMA3, // LLaMA3
-};
-
 enum class AttentionType {
     kStandard, // Standard attention
     kRoPE      // Rotary Position Embedding

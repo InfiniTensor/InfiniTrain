@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <filesystem>
 #include <format>
 #include <memory>
 #include <optional>
@@ -8,9 +9,12 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
+#include "infini_train/include/checkpoint/checkpoint.h"
+#include "infini_train/include/checkpoint/checkpoint_manager.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/lr_scheduler.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
@@ -38,6 +42,7 @@
 #include "example/llama3/checkpoint_loader.h"
 #include "example/llama3/config.h"
 
+// TODO(jym): Reorganize CLI flags into categories for better readability and maintainability.
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_string(input_val_bin, "", "input .bin to eval validation loss on");
@@ -55,8 +60,14 @@ DEFINE_uint32(num_iteration, 10, "number of iterations to run");
 DEFINE_uint32(freq_generate_txt, 10, "frequency of text generation");
 DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
-DEFINE_double(learning_rate, 1e-5, "learning rate warmup iterations");
-DEFINE_bool(use_distributed_optimizer, false, "Whether to enable DistributedOptimizer(only take effects when DP>1)");
+DEFINE_double(learning_rate, 1e-5, "Peak learning rate.");
+DEFINE_int32(zero_stage, 0, "ZeRO stage (0/1/2/3); 0 disables DistributedOptimizer");
+// lr scheduler
+DEFINE_double(min_lr, 0.0, "Minimum learning rate.");
+DEFINE_string(lr_decay_style, "constant", "LR decay style: none|constant|linear|cosine|inverse-square-root");
+DEFINE_int64(lr_warmup_iters, 0, "Number of linear warmup iterations.");
+DEFINE_double(lr_warmup_init, 0.0, "Initial learning rate at the start of warmup.");
+DEFINE_int64(lr_decay_iters, 0, "Number of iterations to decay LR over (0 = num_iteration).");
 // evaluation
 DEFINE_uint32(val_loss_every, 0, "every how many steps to evaluate val loss?");
 DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
@@ -75,6 +86,12 @@ DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
+DEFINE_uint32(save_interval, 0, "save checkpoint every N steps; 0 disables saving");
+DEFINE_string(load, "", "checkpoint directory to resume from");
+DEFINE_string(save, "", "root directory used to store checkpoints");
+DEFINE_uint32(max_checkpoint_keep, 3, "max number of checkpoint steps to keep");
+DEFINE_bool(save_optimizer_state, true, "whether optimizer state is persisted in checkpoints");
+
 // precision check
 DEFINE_string(
     precision_check, "",
@@ -95,14 +112,35 @@ constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
+const std::unordered_set<std::string> kSupportedLRDecayStyles
+    = {"none", "constant", "linear", "cosine", "inverse-square-root"};
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_validator(zero_stage, [](const char *, int32_t value) { return value >= 0 && value <= 3; });
+DEFINE_validator(lr_decay_style,
+                 [](const char *, const std::string &value) { return kSupportedLRDecayStyles.contains(value); });
 
 void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
+
+    {
+        if (rank.IsLastRank()) {
+            if (!FLAGS_save.empty() && FLAGS_save_interval == 0) {
+                LOG(FATAL) << "Invalid configuration: --save is set ('" << FLAGS_save
+                           << "'), but --save_interval is 0. "
+                           << "They must be set together.";
+            }
+
+            if (FLAGS_save.empty() && FLAGS_save_interval > 0) {
+                LOG(FATAL) << "Invalid configuration: --save_interval is set to " << FLAGS_save_interval
+                           << ", but --save is empty. "
+                           << "They must be set together.";
+            }
+        }
+    }
 
     // select the device
     Device device;
@@ -223,8 +261,7 @@ void Train(const nn::parallel::Rank &rank) {
         model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
                                                                  pp_rank, device, model_config.GetChunkSize());
         if (ddp_world_size > 1) {
-            auto ddp_config
-                = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
+            auto ddp_config = DistributedDataParallelConfig{.zero_stage = FLAGS_zero_stage};
             auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
             for (int chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
                 (*mutable_chunks)[chunk_id]
@@ -237,7 +274,7 @@ void Train(const nn::parallel::Rank &rank) {
         // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
         // are created during the conversion.
 
-        auto ddp_config = DistributedDataParallelConfig{.use_distributed_optimizer = FLAGS_use_distributed_optimizer};
+        auto ddp_config = DistributedDataParallelConfig{.zero_stage = FLAGS_zero_stage};
         model = std::make_shared<DistributedDataParallel>(model, rank, ddp_config);
     }
 
@@ -274,7 +311,7 @@ void Train(const nn::parallel::Rank &rank) {
         LOG(INFO) << "Optimizing " << params_to_optimize.size() << " model parameters";
     }
 
-    if (FLAGS_use_distributed_optimizer) {
+    if (FLAGS_zero_stage >= 1) {
         auto model_chunks = (pp_world_size > 1)
                               ? *(dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks())
                               : std::vector<std::shared_ptr<nn::Module>>{model};
@@ -283,6 +320,16 @@ void Train(const nn::parallel::Rank &rank) {
     } else {
         optimizer = optimizer_creator(params_to_optimize);
     }
+
+    const int64_t lr_decay_iters = FLAGS_lr_decay_iters > 0 ? FLAGS_lr_decay_iters : FLAGS_num_iteration;
+    TrainingLRSchedulerConfig sched_config;
+    sched_config.lr = static_cast<float>(FLAGS_learning_rate);
+    sched_config.min_lr = static_cast<float>(FLAGS_min_lr);
+    sched_config.lr_decay_style = FLAGS_lr_decay_style;
+    sched_config.lr_decay_iters = lr_decay_iters;
+    sched_config.lr_warmup_iters = FLAGS_lr_warmup_iters;
+    sched_config.lr_warmup_init = static_cast<float>(FLAGS_lr_warmup_init);
+    auto scheduler = CreateLRScheduler(optimizer, sched_config);
 
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
@@ -293,7 +340,55 @@ void Train(const nn::parallel::Rank &rank) {
 
     auto impl = core::GetDeviceGuardImpl(device.type());
 
-    for (int step = 0; step < FLAGS_num_iteration + 1; ++step) {
+    int start_step = 0;
+    TrainerState state;
+    const auto resume_result = ResumeFromCheckpoint({.resume_root = FLAGS_load,
+                                                     .rank = rank,
+                                                     .model = model,
+                                                     .optimizer = optimizer,
+                                                     .model_config = model_config,
+                                                     .state = state,
+                                                     .load_optimizer_state = true,
+                                                     .lr_scheduler = scheduler});
+
+    start_step = resume_result.global_step;
+    size_t consumed_batches = resume_result.consumed_batches;
+
+    // TODO(jym): Replace with Sampler abstraction when available.
+    // Skip dataloader to resume from the correct batch position.
+    if (consumed_batches > 0) {
+        size_t start = train_iter.BatchIndex();
+        // Each rank processes every ddp_world_size-th batch starting from its own rank.
+        // num_skips calculates how many ++ iterations to reach the saved batch position.
+        size_t num_skips = (consumed_batches - start) / ddp_world_size;
+        for (size_t i = 0; i < num_skips; ++i) { ++train_iter; }
+    }
+
+    auto save_checkpoint = [&](const std::filesystem::path &save_dir, int64_t global_step) {
+        SaveCheckpoint({
+            .save_dir = save_dir,
+            .global_step = global_step,
+            .consumed_batches = consumed_batches,
+            .n_layer = model_config.n_layer,
+            .n_head = model_config.n_head,
+            .n_kv_head = model_config.n_kv_head,
+            .n_embd = model_config.n_embd,
+            .vocab_size = model_config.vocab_size,
+            .ddp_size = ddp_world_size,
+            .tp_size = tp_world_size,
+            .sp_size = sp_world_size,
+            .pp_size = pp_world_size,
+            .save_optimizer_state = FLAGS_save_optimizer_state,
+            .checkpoint_root_dir = FLAGS_save,
+            .max_checkpoint_keep = FLAGS_max_checkpoint_keep,
+            .rank = rank,
+            .model = *model,
+            .optimizer = *optimizer,
+            .lr_scheduler = scheduler.get(),
+        });
+    };
+
+    for (int step = start_step; step < FLAGS_num_iteration + 1; ++step) {
         // Reset precision check counters at start of each iteration for file overwrite
         utils::PrecisionChecker::ResetCounters();
 
@@ -324,6 +419,7 @@ void Train(const nn::parallel::Rank &rank) {
         Profiler::Instance().SetTag("Step_" + std::to_string(step));
 #endif
 
+        const float current_lr = scheduler ? scheduler->learning_rate() : static_cast<float>(FLAGS_learning_rate);
         float lossf = 0.0f;
         if (pp_world_size == 1) {
             // model->Train();
@@ -343,6 +439,7 @@ void Train(const nn::parallel::Rank &rank) {
                 // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
                 // TODO(dcj): support dataloader.reset() later
                 ++train_iter;
+                consumed_batches = train_iter.BatchIndex();
                 x = std::make_shared<Tensor>(x->To(device));
                 y = std::make_shared<Tensor>(y->To(device));
 
@@ -367,15 +464,22 @@ void Train(const nn::parallel::Rank &rank) {
             }
 
             optimizer->Step();
+            if (scheduler) {
+                scheduler->Step();
+            }
         } else {
             auto [x, y] = *train_iter;
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
             // TODO(dcj): support dataloader.reset() later
             ++train_iter;
+            consumed_batches = train_iter.BatchIndex();
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
             lossf = model->TrainStep({x}, {y}, optimizer, loss_fn, dtype);
+            if (scheduler) {
+                scheduler->Step();
+            }
         }
 
         if (ddp_world_size > 1) {
@@ -391,11 +495,10 @@ void Train(const nn::parallel::Rank &rank) {
         if (rank.IsLastRank()) {
             size_t used_mb = 0, reserved_mb = 0;
             std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
-
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
                                       "peak used: {:5d} MB | peak reserved: {:5d} MB, DP={}, TP={}, SP={}, PP={})",
-                                      step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_us / 1e3f,
-                                      tps, used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size,
+                                      step + 1, FLAGS_num_iteration, lossf, current_lr, duration_us / 1e3f, tps,
+                                      used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size,
                                       pp_world_size);
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
@@ -404,6 +507,17 @@ void Train(const nn::parallel::Rank &rank) {
                     CHECK_EQ(pp_world_size, 1);
                     tokenizer->GenerateText(*model, FLAGS_batch_size, FLAGS_sequence_length, FLAGS_text_length, device);
                 }
+            }
+        }
+
+        if (!FLAGS_save.empty() && FLAGS_save_interval > 0) {
+            if ((step + 1) % FLAGS_save_interval == 0 || (step + 1) == FLAGS_num_iteration) {
+                std::filesystem::path step_dir
+                    = std::filesystem::path(FLAGS_save) / std::format("checkpoint_step_{:06d}", step + 1);
+                if (rank.IsParallel()) {
+                    step_dir /= std::format("rank_{:06d}", rank.GlobalRank());
+                }
+                save_checkpoint(step_dir, step + 1);
             }
         }
     }

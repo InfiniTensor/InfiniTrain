@@ -12,8 +12,6 @@
 
 #include "glog/logging.h"
 
-#include "example/common/utils.h"
-#include "example/gpt2/config.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
@@ -23,6 +21,9 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
+
+#include "example/common/utils.h"
+#include "example/gpt2/config.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
@@ -114,11 +115,8 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     // calculate xx_size_per_partition
     const int64_t vpp = model_vocab_size / tp_size;
     const int64_t v_start = static_cast<int64_t>(tp_rank) * vpp;
-    const int64_t v_end = v_start + vpp;
 
     const int64_t qkv_out = 3 * n_embd;
-    const int64_t qkv_pp = qkv_out / tp_size;
-    const int64_t qkv_start = static_cast<int64_t>(tp_rank) * qkv_pp;
 
     const int64_t fc_out = 4 * n_embd;
     const int64_t fc_pp = fc_out / tp_size;

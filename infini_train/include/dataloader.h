@@ -24,6 +24,8 @@ public:
     friend bool operator!=(const DataLoaderIterator &lhs, const DataLoaderIterator &rhs);
     friend bool operator==(const DataLoaderIterator &lhs, const DataLoaderIterator &rhs);
 
+    size_t BatchIndex() const;
+
 private:
     const Dataset *dataset_ = nullptr; // not owned
     size_t batch_size_ = 0;

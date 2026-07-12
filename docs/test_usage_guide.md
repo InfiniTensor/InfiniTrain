@@ -8,7 +8,7 @@
 
 ```bash
 mkdir build && cd build
-cmake -DBUILD_TEST=ON -DUSE_CUDA=ON ..
+cmake -DBUILD_TEST=ON -DUSE_CUDA=ON -DUSE_NCCL=ON ..
 make -j$(nproc)
 ```
 

@@ -2,7 +2,6 @@
 
 #include "gtest/gtest.h"
 
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 

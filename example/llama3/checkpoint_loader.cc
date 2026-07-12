@@ -12,8 +12,6 @@
 
 #include "glog/logging.h"
 
-#include "example/common/utils.h"
-#include "example/llama3/config.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
@@ -21,6 +19,9 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
+
+#include "example/common/utils.h"
+#include "example/llama3/config.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
@@ -155,7 +156,6 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     const int64_t q_local_rows = static_cast<int64_t>(n_embd) / tp_size; // = (n_head/world)*head_dim
     const int64_t kv_head_local = static_cast<int64_t>(n_kv_head) / tp_size;
     const int64_t kv_local_rows = kv_head_local * head_dim; // for K or V (each)
-    const int64_t attn_local_rows = q_local_rows + 2 * kv_local_rows;
 
     // RowParallel (proj)
     const int64_t in_pp = static_cast<int64_t>(n_embd) / tp_size;

@@ -28,11 +28,18 @@ public:
 
     void ZeroGrad(bool set_to_none = true) override;
 
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
+
+    void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
+
     void StartGradSync();
     void FinishGradSync();
 
     void StartParamSync(bool force_sync = false);
     void FinishParamSync(bool skip_next_bucket_dispatch = false);
+
+    virtual void set_learning_rate(float lr) override;
+    virtual float learning_rate() const override;
 
 private:
     void BuildShardParamsAndBindGrads();

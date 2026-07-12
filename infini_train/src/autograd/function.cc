@@ -2,6 +2,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/autocast.h"
 #include "infini_train/include/autograd/accumulate.h"
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/autograd/grad_mode.h"
@@ -14,6 +15,129 @@
 #include "infini_train/include/utils/precision_checker.h"
 
 namespace infini_train::autograd {
+
+namespace {
+thread_local std::vector<FunctionCtx::SavedTensorHooks> tls_saved_tensor_hooks;
+
+} // namespace
+
+FunctionCtx::SavedTensorHooksGuard::SavedTensorHooksGuard(SavedTensorHooks hooks) {
+    CHECK(hooks.pack) << "Saved tensor pack hook must be set";
+    CHECK(hooks.unpack) << "Saved tensor unpack hook must be set";
+    tls_saved_tensor_hooks.push_back(std::move(hooks));
+    depth_ = tls_saved_tensor_hooks.size();
+}
+
+FunctionCtx::SavedTensorHooksGuard::~SavedTensorHooksGuard() {
+    if (tls_saved_tensor_hooks.empty()) {
+        return;
+    }
+    CHECK_EQ(tls_saved_tensor_hooks.size(), depth_) << "SavedTensorHooksGuard destroyed out of order";
+    tls_saved_tensor_hooks.pop_back();
+}
+
+FunctionCtx::FunctionCtx() = default;
+
+std::vector<std::shared_ptr<Tensor>> FunctionCtx::GetSavedTensors() const {
+    std::vector<std::shared_ptr<Tensor>> saved_tensors;
+    saved_tensors.reserve(saved_tensor_entries_.size());
+    for (const auto &entry : saved_tensor_entries_) {
+        if (entry.tensor) {
+            saved_tensors.push_back(entry.tensor);
+        } else if (entry.unpack) {
+            saved_tensors.push_back(entry.unpack(entry.hook_state));
+        } else {
+            saved_tensors.push_back(nullptr);
+        }
+    }
+    return saved_tensors;
+}
+
+const std::vector<bool> &FunctionCtx::needs_input_grad() const { return needs_input_grad_; }
+
+void FunctionCtx::SaveForBackward(const std::vector<std::shared_ptr<Tensor>> &tensors) { to_save_ = tensors; }
+
+const AutocastContext &FunctionCtx::forward_autocast_context() const {
+    CHECK(forward_autocast_context_.has_value()) << "Forward autocast context has not been saved";
+    return *forward_autocast_context_;
+}
+
+void FunctionCtx::MarkNonDifferentiable(const std::vector<std::shared_ptr<Tensor>> &outputs) {
+    non_differentiable_.clear();
+    non_differentiable_.reserve(outputs.size());
+    for (const auto &output : outputs) {
+        if (output) {
+            non_differentiable_.push_back(output.get());
+        }
+    }
+}
+
+void FunctionCtx::set_needs_input_grad(std::vector<bool> needs_input_grad) {
+    needs_input_grad_ = std::move(needs_input_grad);
+}
+
+void FunctionCtx::set_forward_autocast_context(const AutocastContext &context) { forward_autocast_context_ = context; }
+
+void FunctionCtx::SaveVariables(const std::vector<std::shared_ptr<Tensor>> &outputs) {
+    saved_tensor_entries_.clear();
+    saved_tensor_entries_.reserve(to_save_.size());
+    for (const auto &tensor : to_save_) {
+        SavedTensorEntry entry;
+        if (!tensor) {
+            saved_tensor_entries_.push_back(std::move(entry));
+            continue;
+        }
+
+        bool is_output = false;
+        for (const auto &output : outputs) {
+            if (tensor.get() == output.get()) {
+                is_output = true;
+                break;
+            }
+        }
+        auto tensor_to_save = is_output ? tensor->Detach() : tensor;
+        if (tls_saved_tensor_hooks.empty()) {
+            entry.tensor = std::move(tensor_to_save);
+        } else {
+            const auto &hooks = tls_saved_tensor_hooks.back();
+            entry.hook_state = hooks.pack(tensor_to_save);
+            entry.unpack = hooks.unpack;
+        }
+        saved_tensor_entries_.push_back(std::move(entry));
+    }
+    to_save_.clear();
+}
+
+void FunctionCtx::ReleaseVariables() {
+    to_save_.clear();
+    saved_tensor_entries_.clear();
+    needs_input_grad_.clear();
+    non_differentiable_.clear();
+    forward_autocast_context_.reset();
+}
+
+bool FunctionCtx::IsNonDifferentiable(const std::shared_ptr<Tensor> &output) const {
+    if (!output) {
+        return false;
+    }
+    for (const auto *non_differentiable : non_differentiable_) {
+        if (output.get() == non_differentiable) {
+            return true;
+        }
+    }
+    return false;
+}
+
+Function::Function() : ctx_(), type_(kUndefinedType) {}
+
+Function::Function(const std::string &type) : ctx_(), type_(type) {}
+
+Function::~Function() = default;
+
+void Function::SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
+                            const std::vector<std::shared_ptr<Tensor>> &) {}
+
+const std::string &Function::type() const { return type_; }
 
 std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_GE(input_tensors.size(), 1);
@@ -36,22 +160,40 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         }
     }
 
-    // Populate needs_input_grad_ before Forward/SetupContext so that
+    // Populate needs_input_grad before Forward/SetupContext so that
     // SetupContext can use it for saved-tensor pruning.
     // Must be done before NoGradGuard since it checks GradMode.
+    ctx_.ReleaseVariables();
     if (autograd::GradMode::IsEnabled()) {
-        needs_input_grad_.resize(input_tensors.size());
+        std::vector<bool> needs_input_grad(input_tensors.size());
         for (size_t idx = 0; idx < input_tensors.size(); ++idx) {
-            needs_input_grad_[idx] = input_tensors[idx]->requires_grad();
+            needs_input_grad[idx] = input_tensors[idx]->requires_grad();
         }
+        ctx_.set_needs_input_grad(std::move(needs_input_grad));
     }
+
+    // Apply autocast once at the autograd boundary so Forward / SetupContext receive
+    // tensors already in the compute dtype. The shared_ptr copies are local; we keep
+    // the caller's `input_tensors` untouched so next_functions_ wires up to the
+    // original autograd graph (leaf -> AccumulateGrad / non-leaf -> grad_fn).
+    // Also, save the autocast context in FunctionCtx so that custom backward can
+    // explicitly restore the forward autocast context from FunctionCtx if needed.
+    ctx_.set_forward_autocast_context(GetCurrentAutocastContext());
+    auto compute_inputs = input_tensors;
+    for (auto &t : compute_inputs) { tls_autocast_context.Autocast(type_, t); }
 
     std::vector<std::shared_ptr<Tensor>> output_tensors;
     {
         autograd::NoGradGuard no_grad;
         // no_grad in autograd.Function.Forward()
-        output_tensors = Forward(input_tensors);
-        SetupContext(input_tensors, output_tensors);
+        output_tensors = Forward(compute_inputs);
+        SetupContext(compute_inputs, output_tensors);
+    }
+
+    if (autograd::GradMode::IsEnabled()) {
+        ctx_.SaveVariables(output_tensors);
+    } else {
+        ctx_.ReleaseVariables();
     }
 
     // Call forward post-hooks
@@ -67,6 +209,26 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     }
 
     bool output_requires_grad = false;
+    for (const auto &input_tensor : input_tensors) { output_requires_grad |= input_tensor->requires_grad(); }
+
+    grad_outputs_reached_ = 0;
+    grad_outputs_.resize(output_tensors.size(), nullptr);
+    std::vector<bool> differentiable_outputs(output_tensors.size(), false);
+    bool has_differentiable_output = false;
+    for (int output_idx = 0; output_idx < output_tensors.size(); ++output_idx) {
+        differentiable_outputs[output_idx]
+            = output_requires_grad && !ctx_.IsNonDifferentiable(output_tensors[output_idx]);
+        has_differentiable_output |= differentiable_outputs[output_idx];
+        if (!differentiable_outputs[output_idx]) {
+            ++grad_outputs_reached_;
+        }
+    }
+
+    if (!has_differentiable_output) {
+        next_functions_.clear();
+        return output_tensors;
+    }
+
     for (int idx = 0; idx < input_tensors.size(); ++idx) {
         const auto &input_tensor = input_tensors[idx];
         if (input_tensor->requires_grad() && input_tensor->is_leaf()) {
@@ -78,18 +240,14 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
                 input_tensor->grad_fn()->IncreaseDependenciesNumber();
             }
         }
-        output_requires_grad |= input_tensor->requires_grad();
     }
 
-    grad_outputs_reached_ = 0;
-    grad_outputs_.resize(output_tensors.size(), nullptr);
     for (int output_idx = 0; output_idx < output_tensors.size(); ++output_idx) {
         auto &output_tensor = output_tensors[output_idx];
-        // TODO(dcj): Mark if an output tensor need differentiable or not.
-        output_tensor->set_requires_grad(output_requires_grad);
-        output_tensor->set_grad_fn(output_requires_grad ? shared_from_this() : nullptr);
-        output_tensor->set_is_leaf(!output_requires_grad
-                                   || ((output_tensor->grad_fn() == nullptr) && output_requires_grad));
+        const bool differentiable_output = differentiable_outputs[output_idx];
+        output_tensor->set_requires_grad(differentiable_output);
+        output_tensor->set_grad_fn(differentiable_output ? shared_from_this() : nullptr);
+        output_tensor->set_is_leaf(!differentiable_output);
         output_tensor->set_output_idx(output_idx);
     }
 
@@ -137,9 +295,8 @@ void Function::BackwardPartial(std::shared_ptr<Tensor> grad_output, int grad_out
             }
         }
 
-        saved_tensors_.clear();
+        ctx_.ReleaseVariables();
         grad_outputs_.clear();
-        needs_input_grad_.clear();
         grad_outputs_reached_ = 0;
         dependencies_reached_ = 0;
 
