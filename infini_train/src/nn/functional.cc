@@ -27,6 +27,18 @@ std::shared_ptr<Tensor> Ones(const std::vector<int64_t> size) {
     return init::Ones(ones);
 }
 
+std::shared_ptr<Tensor> Rand(const std::vector<int64_t> &size, DataType dtype, Device device,
+                             std::optional<Generator> generator, bool requires_grad) {
+    auto result = std::make_shared<Tensor>(size, dtype, device, requires_grad);
+    return init::Uniform(result, 0.0f, 1.0f, generator);
+}
+
+std::shared_ptr<Tensor> Randn(const std::vector<int64_t> &size, DataType dtype, Device device,
+                              std::optional<Generator> generator, bool requires_grad) {
+    auto result = std::make_shared<Tensor>(size, dtype, device, requires_grad);
+    return init::Normal(result, 0.0f, 1.0f, generator);
+}
+
 std::shared_ptr<Tensor> Reciprocal(const std::shared_ptr<Tensor> &input) { return input->Reciprocal(); }
 
 std::shared_ptr<Tensor> Sin(const std::shared_ptr<Tensor> &input) { return input->Sin(); }

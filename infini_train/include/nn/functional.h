@@ -2,7 +2,12 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
+
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
+#include "infini_train/include/generator.h"
 
 namespace infini_train {
 class Tensor;
@@ -46,6 +51,16 @@ std::shared_ptr<Tensor> Triu(const std::shared_ptr<Tensor> &input, int64_t diago
 // Returns:
 //   A tensor of the given shape filled with the scalar value 1.
 std::shared_ptr<Tensor> Ones(const std::vector<int64_t> size);
+
+// Returns a tensor with uniformly distributed random values in [0, 1).
+std::shared_ptr<Tensor> Rand(const std::vector<int64_t> &size, DataType dtype = DataType::kFLOAT32,
+                             Device device = Device(), std::optional<Generator> generator = std::nullopt,
+                             bool requires_grad = false);
+
+// Returns a tensor with normally distributed random values with mean 0 and standard deviation 1.
+std::shared_ptr<Tensor> Randn(const std::vector<int64_t> &size, DataType dtype = DataType::kFLOAT32,
+                              Device device = Device(), std::optional<Generator> generator = std::nullopt,
+                              bool requires_grad = false);
 
 // Returns a new tensor with the reciprocal of the elements of input.
 //
