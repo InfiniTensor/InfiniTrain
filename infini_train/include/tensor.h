@@ -78,6 +78,7 @@ public:
     const std::vector<int64_t> &Dims() const;
     size_t NumElements() const;
     DataType Dtype() const;
+    bool defined() const { return buffer_ != nullptr; }
 
     void Fill(Scalar value);
 

@@ -13,6 +13,13 @@ namespace infini_train {
 // 前向声明，避免循环依赖（仿 PyTorch at::Tensor 前向声明）
 class Tensor;
 
+namespace detail {
+
+// Validates the common Tensor contract for serialized RNG states.
+void check_rng_state(const Tensor &state);
+
+} // namespace detail
+
 // ============================================================
 // GeneratorImpl — 抽象基类（仿 c10::GeneratorImpl）
 // ============================================================
@@ -168,8 +175,7 @@ T *get_generator_or_default(const std::optional<Generator> &generator,
         : check_generator<T>(default_generator);
 }
 
-// Reset the default generators for all supported devices. CPU is currently
-// supported; CUDA default generators will be added to this entry point later.
+// Reset the default generators for all enabled devices.
 void manual_seed(uint64_t seed);
 
 } // namespace infini_train

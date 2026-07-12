@@ -17,13 +17,13 @@
 
 在深度学习训练与推理框架中，随机数生成器（Generator）是支撑参数初始化、随机采样、Dropout、噪声注入等功能的重要基础设施。当前框架中相关能力尚不完善，缺少统一的 Generator 抽象、后端实现以及全局随机种子管理机制，导致随机相关算子的行为与主流框架存在差距，也难以满足后续功能扩展需求。
 
-当前框架在随机数相关能力上仍不完善，主要表现为：
+当前已完成 Generator 基础设施与初始化算子的首轮接入，进度如下：
 
-- [x] 缺少统一的 Generator 抽象，随机数状态、种子设置、状态获取与恢复等能力未形成标准接口；
-- [x] CPU 与 CUDA 后端缺少统一的 Generator 实现，不同设备上的随机行为缺乏一致的调用方式；（CPU ✅，CUDA ❌）
-- [x] 缺少全局默认 Generator 机制，随机算子在未显式传入 generator 时无法方便地使用当前设备的默认随机源；（CPU 默认 Generator 已实现，算子层未接入）
-- [ ] 缺少统一的全局随机种子控制入口，导致参数初始化、Dropout 等随机算子在多次运行间难以稳定复现；
-- [ ] 随机数相关能力与主流框架（如 PyTorch）存在差距，不利于后续算子扩展、模型对齐与测试验证。
+- [x] 已建立统一的 Generator 抽象，支持随机数状态、种子设置、状态获取与恢复；
+- [x] 已实现 CPU 与 CUDA 后端 Generator，并保持统一的调用接口；
+- [x] 已建立按设备维护的默认 Generator；未显式传入 generator 时，初始化算子使用目标 Tensor 所在设备的默认随机源；
+- [x] 已提供全局 `manual_seed(uint64_t)` 入口，重置 CPU 及所有 CUDA 默认 Generator；
+- [ ] Dropout、`rand`、`randn` 等训练期或通用随机算子尚未接入；distribution 当前仅支持 `FLOAT32`，也未实现 CUDA Graph 语义。
 
 为补齐这一基础能力，本题目要求参赛者参考主流深度学习框架的设计思路，完成一套可扩展的随机数生成器基础设施，实现 CPU 与 CUDA 后端的 Generator，并支持基于 Generator 的随机数生成与种子控制能力。
 
@@ -32,10 +32,10 @@
 参赛者需要围绕框架内的随机数生成体系，完成以下几个方面的工作：
 
 - [x] 1. 设计并实现统一的 Generator 抽象接口，支持随机数状态管理、种子设置、状态获取与恢复等基础能力。
-- [x] 2. 分别实现 CPU 与 CUDA 后端对应的 GeneratorImpl，使不同设备上的随机数生成具备统一的调用方式。（CPU ✅，CUDA ❌）
-- [ ] 3. 建立全局随机种子控制机制，支持通过统一入口固定随机种子，并使随机相关算子的行为可复现。
-- [ ] 4. 改造随机数相关算子，使其在未显式传入 generator 参数时，能够自动使用当前设备上的默认全局 Generator。
-- [ ] 5. 验证实现结果与主流框架在基本行为上的一致性，包括随机性、可复现性以及跨设备下的接口统一性。
+- [x] 2. 分别实现 CPU 与 CUDA 后端对应的 GeneratorImpl，使不同设备上的随机数生成具备统一的调用方式。
+- [x] 3. 建立全局随机种子控制机制，支持通过统一入口固定随机种子；已接入的初始化算子可稳定复现。
+- [x] 4. 改造初始化类随机算子，使其在未显式传入 generator 参数时，自动使用目标设备的默认全局 Generator。
+- [x] 5. 已完成 CPU/CUDA 初始化路径的基本行为、可复现性和接口语义冒烟验证；仓库内正式测试仍待补充。
 
 ## 三、任务拆解
 
@@ -56,7 +56,7 @@
 
 - [x] 提供用户侧可持有的 `Generator` 句柄类；
 - [x] 底层以 `GeneratorImpl` 作为多态实现基类；
-- [x] CPU / CUDA 分别派生对应实现；（CPU 已实现，CUDA 未实现）
+- [x] CPU / CUDA 分别派生对应实现；
 - [x] 公共接口不暴露 `std::mt19937`、curand、Philox 等后端细节；
 - [x] 为后续其他平台 Generator 接入预留扩展空间。
 
@@ -65,18 +65,18 @@
 基于现有设备后端，分别实现：
 
 - [x] `CPUGeneratorImpl`
-- [ ] `CUDAGeneratorImpl`
+- [x] `CUDAGeneratorImpl`
 
 两者应保持统一接口语义，但内部状态组织方式可以不同，且**不要求 CPU 与 CUDA 在相同 seed 下生成逐元素一致的随机结果**。
 
 实现时需重点关注：
 
-- [x] CPU 与 CUDA 随机数状态如何组织与保存；（CPU 已实现二进制序列化格式）
-- [ ] CUDA 侧应按设备维度维护独立 Generator；
-- [x] `GetState()` / `SetState()` 的状态序列化、反序列化与格式校验；（CPU 已实现）
-- [x] 多次随机调用后，随机序列是否连续推进；（CPU 已实现，`random()`/`random64()` 持续推进 `engine_`）
-- [x] 同一 seed、同一设备、同一调用顺序下结果是否可复现；（CPU 已实现，mt19937 确定性）
-- [ ] 显式传入 Generator 与使用默认 Generator 时，行为是否符合预期。（算子层尚未接入）
+- [x] CPU 与 CUDA 随机数状态如何组织与保存；CPU 保存 mt19937 状态与正态缓存，CUDA 保存 Philox seed 与 subsequence；
+- [x] CUDA 侧按设备维度维护独立默认 Generator；
+- [x] `GetState()` / `SetState()` 的状态序列化、反序列化与格式校验；CPU/CUDA 均校验 CPU `UINT8` state，CPU 额外校验 footer 与 mt19937 反序列化；
+- [x] 多次随机调用后，随机序列连续推进；CPU 推进 mt19937，CUDA 为每次 kernel 保留 Philox subsequence；
+- [x] 同一 seed、同一设备、同一调用顺序下结果可复现；
+- [x] 初始化算子已支持显式 Generator 和默认 Generator 两条调用路径。
 
 CUDA 后端建议在状态中考虑 seed、offset、counter 等信息，避免不同 kernel 调用之间随机序列重叠。此部分需要保证功能正确、语义清晰、状态可管理、接口一致，为后续随机算子和分布式扩展提供基础。
 
@@ -90,18 +90,19 @@ CUDA 后端建议在状态中考虑 seed、offset、counter 等信息，避免�
 该机制应包括：
 
 - [x] CPU 默认全局 Generator；
-- [ ] 各 CUDA 设备对应的默认 Generator；
-- [x] 获取默认 Generator 的统一入口；（`getDefaultCPUGenerator()` 已实现）
-- [ ] 统一的全局随机种子设置入口；
-- [ ] 设置全局随机种子时，同步更新默认 Generator 的初始状态。
+- [x] 各 CUDA 设备对应的默认 Generator；
+- [x] CPU/CUDA 均提供获取默认 Generator 的后端入口；
+- [x] 统一的全局随机种子设置入口：`manual_seed(uint64_t)`；
+- [x] 设置全局 seed 时同步重置 CPU 与所有 CUDA 默认 Generator 的状态。
 
 要求：
 
 - [x] 多次获取同一设备默认 Generator 时，应返回同一随机状态来源；（static 局部变量，单例模式）
-- [ ] 不同 CUDA 设备的默认 Generator 应相互独立；
-- [x] 用户显式传入 Generator 时，必须使用用户指定 Generator；（API 支持 `std::optional<Generator>`）
-- [ ] 未传入 Generator 时，才使用当前设备默认 Generator；（算子层尚未接入）
-- [ ] 设置统一 seed 后，参数初始化、Dropout、随机采样等行为应可稳定复现。（缺少全局 seed 入口）
+- [x] 不同 CUDA 设备的默认 Generator 相互独立；
+- [x] 用户显式传入 Generator 时，初始化算子使用用户指定 Generator；
+- [x] 未传入 Generator 时，初始化算子使用目标设备默认 Generator；
+- [x] 设置统一 seed 后，已接入的参数初始化和随机采样可稳定复现；
+- [ ] Dropout 等尚未接入的随机算子仍待完成。
 
 这一部分是本题的核心验收点。随机数系统最终服务于训练可复现性，因此必须通过统一入口稳定控制随机行为。
 
@@ -109,22 +110,26 @@ CUDA 后端建议在状态中考虑 seed、offset、counter 等信息，避免�
 
 改造框架中已有的随机相关使用，使其接入 Generator 机制。建议至少覆盖两类场景：
 
-- [ ] 初始化类随机算子，如 uniform、normal、kaiming 等；（init.cc 仍使用 raw std::mt19937）
+- [x] 初始化类随机算子：`Uniform`、`Normal`、`KaimingUniform` 已接入 Generator，并按 Tensor device 分发 CPU/CUDA kernel；
 - [ ] 训练过程中的随机算子，如 dropout、rand、randn 等；
 
 改造后的算子应满足：
 
-- [ ] 支持显式传入 Generator；
-- [ ] 未传入 Generator 时，自动使用当前设备默认 Generator；
-- [ ] 随机结果受统一 seed 入口控制；
-- [x] 多次调用会推进 Generator 状态；（CPUGeneratorImpl 引擎层已支持，算子层未接入）
-- [x] 同一 seed、同一调用顺序下结果可复现。（引擎层已支持，算子层未接入）
+- [x] 已接入初始化算子支持显式传入 Generator；
+- [x] 已接入初始化算子未传入 Generator 时，自动使用目标设备默认 Generator；
+- [x] 已接入初始化算子的随机结果受统一 `manual_seed` 入口控制；
+- [x] 已接入初始化算子多次调用会推进 Generator 状态；
+- [x] 已接入初始化算子在同一 seed、同一调用顺序下可复现。
 
 不要求一次性改造所有随机算子，但应至少完成一个初始化类算子和一个训练期随机算子，以证明 Generator 机制能够贯通框架层与算子层。
+
+当前仅完成初始化类算子接入；训练期随机算子仍是后续工作。
 
 ### 5. 测试与对齐验证
 
 为验证实现结果，需要补充系统化测试。测试重点应放在"语义是否正确"和"是否可复现"，而不是与 PyTorch 逐元素数值一致。
+
+当前已在 `/tmp` 完成 CPU/CUDA 构建和 Generator、初始化可复现性的冒烟验证；按项目约定尚未新增仓库内测试，因此以下正式测试清单仍未完成。
 
 建议至少覆盖以下内容：
 
@@ -216,10 +221,10 @@ CPU 后端必须覆盖该测试；CUDA 后端若已实现，也应覆盖。
 
 - [ ] 代码以 PR 形式提交，结构清晰，具备基本可 review 性；
 - [x] 完成统一 Generator 抽象设计；
-- [x] 实现 CPU Generator，CUDA Generator 建议实现；（CPU ✅，CUDA ❌）
-- [x] 建立默认 Generator 管理机制；（CPU 侧已完成）
-- [ ] 提供统一的全局随机种子设置入口；
-- [ ] 支持默认 Generator 与显式 Generator 两种使用方式；（API 层已支持，算子层未接入）
+- [x] 实现 CPU 与 CUDA Generator；
+- [x] 建立 CPU 与各 CUDA device 的默认 Generator 管理机制；
+- [x] 提供统一的全局随机种子设置入口；
+- [x] 初始化算子支持默认 Generator 与显式 Generator 两种使用方式；
 - [x] 支持 Generator 状态的获取与恢复（get_state / set_state）；
 - [ ] 至少改造一类初始化算子和一类框架内随机数生成调用，使其接入 Generator；
 - [ ] 提供测试或运行日志，验证随机行为具备基本可复现性（同 seed 一致、不同 seed 不同、状态恢复有效）。

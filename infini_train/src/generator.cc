@@ -25,12 +25,23 @@ Generator::Generator(std::shared_ptr<GeneratorImpl> impl)
 // ============================================================
 
 void Generator::set_state(const Tensor &state) {
+    CHECK(state.defined()) << "Undefined tensor is not allowed";
     impl_->set_state(state);
 }
 
 std::shared_ptr<Tensor> Generator::get_state() const {
     return impl_->get_state();
 }
+
+namespace detail {
+
+void check_rng_state(const Tensor &state) {
+    CHECK(state.GetDevice().IsCPU()) << "RNG state must be a CPU tensor";
+    CHECK_EQ(static_cast<int>(state.Dtype()), static_cast<int>(DataType::kUINT8))
+        << "RNG state must be a UINT8 tensor";
+}
+
+} // namespace detail
 
 void manual_seed(uint64_t seed) {
     core::cpu::manual_seed(seed);

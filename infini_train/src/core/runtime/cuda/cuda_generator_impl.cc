@@ -75,8 +75,7 @@ uint64_t CUDAGeneratorImpl::seed() {
 }
 
 void CUDAGeneratorImpl::set_state(const Tensor &state) {
-    CHECK(state.GetDevice().IsCPU());
-    CHECK_EQ(static_cast<int>(state.Dtype()), static_cast<int>(DataType::kUINT8));
+    ::infini_train::detail::check_rng_state(state);
     CHECK_EQ(state.SizeInBytes(), kStateSize);
 
     const auto *data = static_cast<const uint8_t *>(state.DataPtr());

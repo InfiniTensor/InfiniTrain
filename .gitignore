@@ -4,6 +4,25 @@ build-full/
 .cache/
 .vscode/
 
+# Local CMake output
+/cmake-build-*/
+/CMakeCache.txt
+/CMakeFiles/
+/cmake_install.cmake
+/CTestTestfile.cmake
+/CPackConfig.cmake
+/CPackSourceConfig.cmake
+/compile_commands.json
+/CMakeUserPresets.json
+/Makefile
+/Testing/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
 *.log
 *.report.rank*
 *.records.log.rank*

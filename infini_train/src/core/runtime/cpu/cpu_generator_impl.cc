@@ -10,6 +10,12 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::core::cpu {
+namespace {
+
+constexpr size_t kStateFooterSize = sizeof(uint64_t) + sizeof(uint8_t) + sizeof(float) + sizeof(uint8_t)
+    + sizeof(double);
+
+} // namespace
 
 // ============================================================
 // 非确定性随机数（仿 c10::detail::getNonDeterministicRandom）
@@ -65,44 +71,43 @@ uint64_t CPUGeneratorImpl::seed() {
 // 因此无法做到跨编译器/跨版本的固定格式。此实现在同一构建下是稳定的。
 
 void CPUGeneratorImpl::set_state(const Tensor &state) {
-    const uint8_t *data = static_cast<const uint8_t *>(state.DataPtr());
+    ::infini_train::detail::check_rng_state(state);
+
     const size_t data_size = state.SizeInBytes();
-    size_t offset = 0;
+    CHECK_GT(data_size, kStateFooterSize) << "CPU generator state is too small";
 
-    // 1. 恢复引擎（变长部分直到 seed_ 字段前 ~ 22 字节的固定尾部）
-    //    引擎的 operator<< 输出是变长的，我们把剩下的 data 一起给 stream
-    //    但流可能会多读。改用精确长度：data_size 减去尾部固定字段长度。
-    constexpr size_t kFooterSize = 8 + 1 + 4 + 1 + 8;  // seed + has_float + float + has_double + double
-
-    std::string engine_str;
-    if (data_size >= kFooterSize) {
-        engine_str.assign(reinterpret_cast<const char *>(data), data_size - kFooterSize);
-        offset = data_size - kFooterSize;
-    } else {
-        // 旧格式：没有 footer（向后兼容），整个 data 就是 engine 状态
-        engine_str.assign(reinterpret_cast<const char *>(data), data_size);
-        offset = data_size;
-    }
+    const uint8_t *data = static_cast<const uint8_t *>(state.DataPtr());
+    const size_t engine_size = data_size - kStateFooterSize;
+    std::string engine_str(reinterpret_cast<const char *>(data), engine_size);
 
     std::istringstream iss(engine_str);
-    iss >> engine_;
+    std::mt19937 restored_engine;
+    iss >> restored_engine;
+    CHECK(!iss.fail()) << "Invalid CPU generator engine state";
+    iss >> std::ws;
+    CHECK(iss.eof()) << "Invalid trailing bytes in CPU generator engine state";
 
-    // 2. 恢复种子和正态缓存
-    if (offset + kFooterSize <= data_size) {
-        std::memcpy(&seed_, data + offset, sizeof(seed_));
-        offset += sizeof(seed_);
+    size_t offset = engine_size;
+    uint64_t restored_seed = 0;
+    std::memcpy(&restored_seed, data + offset, sizeof(restored_seed));
+    offset += sizeof(restored_seed);
 
-        bool has_float = (data[offset++] != 0);
-        float float_val;
-        std::memcpy(&float_val, data + offset, sizeof(float_val));
-        offset += sizeof(float_val);
-        next_float_normal_sample_ = has_float ? std::optional<float>(float_val) : std::nullopt;
+    const uint8_t has_float = data[offset++];
+    CHECK_LE(has_float, 1) << "Invalid CPU generator float normal cache flag";
+    float restored_float = 0.0f;
+    std::memcpy(&restored_float, data + offset, sizeof(restored_float));
+    offset += sizeof(restored_float);
 
-        bool has_double = (data[offset++] != 0);
-        double double_val;
-        std::memcpy(&double_val, data + offset, sizeof(double_val));
-        next_double_normal_sample_ = has_double ? std::optional<double>(double_val) : std::nullopt;
-    }
+    const uint8_t has_double = data[offset++];
+    CHECK_LE(has_double, 1) << "Invalid CPU generator double normal cache flag";
+    double restored_double = 0.0;
+    std::memcpy(&restored_double, data + offset, sizeof(restored_double));
+
+    // Do not change the generator until the complete state has been validated.
+    engine_ = restored_engine;
+    seed_ = restored_seed;
+    next_float_normal_sample_ = has_float ? std::optional<float>(restored_float) : std::nullopt;
+    next_double_normal_sample_ = has_double ? std::optional<double>(restored_double) : std::nullopt;
 }
 
 std::shared_ptr<Tensor> CPUGeneratorImpl::get_state() const {
@@ -113,8 +118,7 @@ std::shared_ptr<Tensor> CPUGeneratorImpl::get_state() const {
 
     // 2. 计算总大小
     const size_t engine_size = engine_str.size();
-    constexpr size_t kFooterSize = 8 + 1 + 4 + 1 + 8;
-    const size_t total_size = engine_size + kFooterSize;
+    const size_t total_size = engine_size + kStateFooterSize;
 
     auto state_tensor = std::make_shared<Tensor>(
         std::vector<int64_t>{static_cast<int64_t>(total_size)},
