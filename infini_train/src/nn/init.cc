@@ -1,15 +1,12 @@
 #include "infini_train/include/nn/init.h"
 
-#include <cstring>
+#include <cmath>
 #include <functional>
+#include <limits>
 #include <memory>
+#include <numeric>
 #include <optional>
-#include <random>
 #include <unordered_set>
-
-#ifdef USE_OMP
-#include <omp.h>
-#endif
 
 #include "glog/logging.h"
 
@@ -17,45 +14,55 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
+#ifdef USE_CUDA
+namespace infini_train::kernels::cuda {
+void RandomUniformFloat32(void *data, int64_t num_elements, float from, float to, uint64_t seed, uint64_t offset,
+                          Device device);
+void RandomNormalFloat32(void *data, int64_t num_elements, float mean, float std, uint64_t seed, uint64_t offset,
+                         Device device);
+} // namespace infini_train::kernels::cuda
+#endif
+
 namespace infini_train::nn::init {
 namespace {
-constexpr int kRandomSeed = 42;
-
-// FIXME: RNG design is incomplete.
-//
-// Current implementation lacks:
-//   - unified Generator abstraction
-//   - global default generator and seed control
-//   - reproducible / clonable RNG state
-//
-// TODO:
-//   - introduce Generator interface and backend impl
-//   - add default generator management (per device)
-//   - refactor random ops to consume Generator
-static std::mt19937 gen(kRandomSeed);
+void CheckUniformBounds(float from, float to) {
+    CHECK_LE(from, to);
+    CHECK(std::isfinite(from)) << "Uniform lower bound must be finite";
+    CHECK(std::isfinite(to)) << "Uniform upper bound must be finite";
+    const double range = static_cast<double>(to) - static_cast<double>(from);
+    CHECK_LE(range, static_cast<double>(std::numeric_limits<float>::max()))
+        << "Uniform bounds range exceeds float maximum";
+}
 } // namespace
 
 std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean, float std,
-                               std::optional<std::mt19937> generator) {
+                               std::shared_ptr<Generator> generator) {
+    CHECK_GE(std, 0.0f);
+    CHECK(tensor->Dtype() == DataType::kFLOAT32) << "Random normal currently supports float32 tensors";
     const int64_t num_elements = tensor->NumElements();
-    std::vector<float> buffer(num_elements);
-
-#ifdef USE_OMP
-#pragma omp parallel
-    {
-        std::mt19937 local_gen(kRandomSeed + omp_get_thread_num());
-        std::normal_distribution<float> local_dis(mean, std);
-#pragma omp for
-        for (int i = 0; i < buffer.size(); ++i) {
-            buffer[i] = generator ? local_dis(generator.value()) : local_dis(local_gen);
-        }
-    }
-#else
-    std::normal_distribution<float> dis(mean, std);
-    std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
-#endif
 
     auto device = tensor->GetDevice();
+    auto resolved_generator = generator ? generator : GetDefaultGenerator(device);
+    CHECK(resolved_generator->GetDevice().type() == device.type())
+        << "Generator backend must match tensor device backend: generator=" << resolved_generator->GetDevice()
+        << " tensor=" << device;
+    if (num_elements == 0) {
+        return tensor;
+    }
+
+#ifdef USE_CUDA
+    if (device.IsCUDA()) {
+        CHECK_LE(num_elements, static_cast<int64_t>(std::numeric_limits<uint64_t>::max() / 2))
+            << "Random normal tensor is too large";
+        const auto [seed, offset] = resolved_generator->ReserveRandomOffset(static_cast<uint64_t>(num_elements) * 2);
+        core::DeviceGuard guard(device);
+        kernels::cuda::RandomNormalFloat32(tensor->DataPtr(), num_elements, mean, std, seed, offset, device);
+        return tensor;
+    }
+#endif
+
+    std::vector<float> buffer(num_elements);
+    resolved_generator->FillNormal(buffer, mean, std);
     core::DeviceGuard guard(device);
     auto impl = core::GetDeviceGuardImpl(device.type());
 
@@ -113,7 +120,7 @@ float CalculateGain(NonLinearityType nonlinearity, std::optional<float> param = 
 } // namespace
 
 std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor, float a, KaimingMode mode,
-                                       NonLinearityType nonlinearity, std::optional<std::mt19937> generator) {
+                                       NonLinearityType nonlinearity, std::shared_ptr<Generator> generator) {
     for (const auto dim : tensor->Dims()) {
         if (dim == 0) {
             LOG(WARNING) << "Initializing zero-element tensors is a no-op";
@@ -128,26 +135,31 @@ std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor, fl
 }
 
 std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, float b,
-                                std::optional<std::mt19937> generator) {
+                                std::shared_ptr<Generator> generator) {
+    CheckUniformBounds(a, b);
+    CHECK(tensor->Dtype() == DataType::kFLOAT32) << "Random uniform currently supports float32 tensors";
     const int64_t num_elements = tensor->NumElements();
-    std::vector<float> buffer(num_elements);
-
-#ifdef USE_OMP
-#pragma omp parallel
-    {
-        std::mt19937 local_gen(kRandomSeed + omp_get_thread_num());
-        std::uniform_real_distribution<float> local_dis(a, b);
-#pragma omp for
-        for (int i = 0; i < buffer.size(); ++i) {
-            buffer[i] = generator ? local_dis(generator.value()) : local_dis(local_gen);
-        }
-    }
-#else
-    std::uniform_real_distribution<float> dis(a, b);
-    std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
-#endif
 
     auto device = tensor->GetDevice();
+    auto resolved_generator = generator ? generator : GetDefaultGenerator(device);
+    CHECK(resolved_generator->GetDevice().type() == device.type())
+        << "Generator backend must match tensor device backend: generator=" << resolved_generator->GetDevice()
+        << " tensor=" << device;
+    if (num_elements == 0) {
+        return tensor;
+    }
+
+#ifdef USE_CUDA
+    if (device.IsCUDA()) {
+        const auto [seed, offset] = resolved_generator->ReserveRandomOffset(static_cast<uint64_t>(num_elements));
+        core::DeviceGuard guard(device);
+        kernels::cuda::RandomUniformFloat32(tensor->DataPtr(), num_elements, a, b, seed, offset, device);
+        return tensor;
+    }
+#endif
+
+    std::vector<float> buffer(num_elements);
+    resolved_generator->FillUniform(buffer, a, b);
 
     core::DeviceGuard guard(device);
     auto impl = core::GetDeviceGuardImpl(device.type());

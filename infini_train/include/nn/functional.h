@@ -4,9 +4,12 @@
 #include <memory>
 #include <vector>
 
+#include "infini_train/include/device.h"
+
 namespace infini_train {
+class Generator;
 class Tensor;
-}
+} // namespace infini_train
 
 namespace infini_train::nn::function {
 
@@ -46,6 +49,12 @@ std::shared_ptr<Tensor> Triu(const std::shared_ptr<Tensor> &input, int64_t diago
 // Returns:
 //   A tensor of the given shape filled with the scalar value 1.
 std::shared_ptr<Tensor> Ones(const std::vector<int64_t> size);
+
+std::shared_ptr<Tensor> Rand(const std::vector<int64_t> &size, Device device = Device(),
+                             std::shared_ptr<Generator> generator = nullptr);
+
+std::shared_ptr<Tensor> Randn(const std::vector<int64_t> &size, Device device = Device(),
+                              std::shared_ptr<Generator> generator = nullptr);
 
 // Returns a new tensor with the reciprocal of the elements of input.
 //
