@@ -1,6 +1,7 @@
 #include <cstddef>
 
 #include <cub/warp/warp_reduce.cuh>
+#include <numeric>
 
 #include "infini_train/include/common/common.h"
 #include "infini_train/include/common/cuda/common_cuda.h"

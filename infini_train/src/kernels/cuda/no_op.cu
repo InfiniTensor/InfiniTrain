@@ -1,4 +1,5 @@
 #include "glog/logging.h"
+#include <numeric>
 
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
