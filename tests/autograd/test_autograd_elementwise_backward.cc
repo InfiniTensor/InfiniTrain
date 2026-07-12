@@ -4,6 +4,7 @@
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autograd/elementwise.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 
@@ -117,7 +118,16 @@ TEST_P(AutogradElementwiseBackwardTest, ExpBackward) {
     auto grad = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
     grad->Fill(1.0f);
     auto grad_inputs = exp_fn->Backward({grad});
-    EXPECT_EQ(grad_inputs.size(), 1);
+    ASSERT_EQ(grad_inputs.size(), 1);
+
+    auto device = grad_inputs[0]->GetDevice();
+    core::GetDeviceGuardImpl(device.type())->SynchronizeDevice(device);
+    Tensor grad_input_cpu = grad_inputs[0]->To(Device(Device::DeviceType::kCPU, 0));
+    core::GetDeviceGuardImpl(device.type())->SynchronizeDevice(device);
+    const auto *grad_input = static_cast<const float *>(grad_input_cpu.DataPtr());
+    for (size_t i = 0; i < grad_input_cpu.NumElements(); ++i) {
+        EXPECT_FLOAT_EQ(grad_input[i], std::exp(1.0f));
+    }
 }
 
 TEST_P(AutogradElementwiseBackwardTest, LogBackward) {

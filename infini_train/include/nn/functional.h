@@ -62,6 +62,9 @@ std::shared_ptr<Tensor> Randn(const std::vector<int64_t> &size, DataType dtype =
                               Device device = Device(), std::optional<Generator> generator = std::nullopt,
                               bool requires_grad = false);
 
+std::shared_ptr<Tensor> Dropout(const std::shared_ptr<Tensor> &input, double p = 0.5, bool training = true,
+                                std::optional<Generator> generator = std::nullopt);
+
 // Returns a new tensor with the reciprocal of the elements of input.
 //
 // Args:

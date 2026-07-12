@@ -217,6 +217,12 @@ if(BUILD_TEST)
   add_subdirectory(tests)
 endif()
 
+# Benchmarks
+option(BUILD_BENCHMARK "Build InfiniTrain benchmarks" OFF)
+if(BUILD_BENCHMARK)
+  add_subdirectory(benchmarks)
+endif()
+
 # Negative compile test: missing dtype registration must fail at compile time.
 set(DTYPE_DISPATCH_COMPILE_FAIL_SOURCE
   ${PROJECT_SOURCE_DIR}/tests/dtype/test_dtype_dispatch_compile_fail.cc)

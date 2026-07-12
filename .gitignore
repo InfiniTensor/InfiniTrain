@@ -1,6 +1,7 @@
 build/
 build-cpu/
 build-full/
+/build-*/
 .cache/
 .vscode/
 
