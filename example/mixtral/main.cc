@@ -133,11 +133,13 @@ int main(int argc, char *argv[]) {
             auto y = std::make_shared<Tensor>(y_cpu->To(train_device));
             auto logits = (*model)({x})[0];
             auto loss = (*loss_fn)({logits, y})[0];
-            auto loss_cpu = loss->To(Device());
-            lossf += static_cast<const float *>(loss_cpu.DataPtr())[0] / grad_accum_steps;
             loss = loss / static_cast<float>(grad_accum_steps);
             autocast_guard.Disable();
             loss->Backward();
+            // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
+            // between forward and backward.
+            auto loss_cpu = loss->To(Device());
+            lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
         }
         optimizer->Step();
 

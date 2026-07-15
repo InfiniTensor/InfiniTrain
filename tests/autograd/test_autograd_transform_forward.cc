@@ -1,8 +1,10 @@
+#include <numeric>
 #include <vector>
 
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autograd/transform.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 
@@ -11,6 +13,18 @@
 using namespace infini_train;
 
 class AutogradTransformForwardTest : public infini_train::test::InfiniTrainTest {};
+
+namespace {
+void ExpectValues(const std::shared_ptr<Tensor> &tensor, const std::vector<float> &expected) {
+    auto cpu = std::make_shared<Tensor>(tensor->Dims(), tensor->Dtype(), Device());
+    cpu->CopyFrom(tensor);
+    core::GetDeviceGuardImpl(tensor->GetDevice().type())->SynchronizeDevice(tensor->GetDevice());
+
+    ASSERT_EQ(cpu->NumElements(), expected.size());
+    const float *actual = static_cast<const float *>(cpu->DataPtr());
+    for (size_t i = 0; i < expected.size(); ++i) { EXPECT_FLOAT_EQ(actual[i], expected[i]); }
+}
+} // namespace
 
 TEST_P(AutogradTransformForwardTest, TransposeForward) {
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
@@ -22,12 +36,14 @@ TEST_P(AutogradTransformForwardTest, TransposeForward) {
 }
 
 TEST_P(AutogradTransformForwardTest, SliceForward) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{4, 4}, DataType::kFLOAT32, GetDevice(), true);
-    a->Fill(1.0f);
+    std::vector<float> values(16);
+    std::iota(values.begin(), values.end(), 0.0f);
+    auto a = std::make_shared<Tensor>(values.data(), std::vector<int64_t>{4, 4}, DataType::kFLOAT32, GetDevice());
     auto slice_fn = std::make_shared<autograd::Slice>(std::vector<int64_t>{1, 1}, std::vector<int64_t>{3, 3},
                                                       std::vector<int64_t>{1, 1});
     auto result = slice_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
+    ExpectValues(result[0], {5.0f, 6.0f, 9.0f, 10.0f});
 }
 
 TEST_P(AutogradTransformForwardTest, SplitForward) {
