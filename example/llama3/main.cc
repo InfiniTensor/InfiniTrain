@@ -455,10 +455,12 @@ void Train(const nn::parallel::Rank &rank) {
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
 
-                auto loss_cpu = loss->To(Device());
-                lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
                 loss->Backward();
+                // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
+                // between forward and backward.
+                auto loss_cpu = loss->To(Device());
+                lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
             }
 

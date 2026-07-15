@@ -198,7 +198,7 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
     CHECK(dim >= 0 && dim < output->Dims().size());
 
     auto grad_input = std::make_shared<Tensor>(output_dims, promoted_type, output->GetDevice());
-    grad_input->Fill(0.0);
+    // For non-empty tensors, the grid covers every outer/axis/inner index exactly once; no Fill is needed.
 
     switch (promoted_type) {
         DISPATCH_CASE(WRAP(LaunchBackward<256, float>(grad_input, grad_output_promoted, output_promoted, dim);),

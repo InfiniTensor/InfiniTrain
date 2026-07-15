@@ -65,6 +65,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                  ->cuda_stream();
 
+    const float beta = bias ? 1.0f : 0.0f;
     if (bias) {
         CHECK_EQ(bias->Dims().size(), 1);
         CHECK_EQ(bias->Dims()[0], out_features);
@@ -78,9 +79,8 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
                     static_cast<T *>(output->DataPtr()), static_cast<const T *>(bias->DataPtr()), bs, out_features);
             },
             "CUDA LinearForward");
-    } else {
-        output->Fill(0.0);
     }
+    // In the no-bias path, beta=0 makes cuBLAS fully overwrite output; no Fill is needed.
 
     // When bs==1 and fp32, use cublasSgemv (more efficient than GEMM for matrix-vector).
     // cublasSgemv does not support bf16, so bf16 falls through to Gemm.
@@ -94,7 +94,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
                               .x = static_cast<const float *>(input->DataPtr()),
                               .y = static_cast<float *>(output->DataPtr()),
                               .alpha = 1.0f,
-                              .beta = 1.0f, // output already initialized with bias or zero above
+                              .beta = beta,
                           });
     } else {
         // cuBLAS is colmun-major
@@ -125,7 +125,7 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
                 .C = output->DataPtr(),
                 .ldc = static_cast<int>(out_features),
                 .alpha = 1.0f,
-                .beta = 1.0f, // bias already written into output; beta=1 accumulates
+                .beta = beta,
                 .batch_count = 1,
                 .input_dtype = dtype,
                 .output_dtype = dtype,

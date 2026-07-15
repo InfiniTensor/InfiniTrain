@@ -204,7 +204,7 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
                                  DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
         {target->Dtype(), input_casted->Dtype()},
         [=]<typename Ttarget, typename Tinput>() {
-            grad_input->Fill(0.0);
+            // One sample block writes all of its num_classes gradient elements; no Fill is needed.
             const Tinput *output_grad_ptr = static_cast<const Tinput *>(grad_output->DataPtr());
             const Ttarget *target_ptr = static_cast<const Ttarget *>(target->DataPtr());
             const Tinput *input_ptr = static_cast<const Tinput *>(input_casted->DataPtr());

@@ -113,7 +113,7 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
     std::vector<std::shared_ptr<Tensor>> grads;
     for (int i = 0; i < num_inputs; ++i) {
         auto t = std::make_shared<Tensor>(base_dims, dtype, grad_output->GetDevice());
-        t->Fill(0.0);
+        // StackBackwardKernel writes every element of every grad tensor exactly once; no Fill is needed.
         grads.push_back(t);
     }
 
