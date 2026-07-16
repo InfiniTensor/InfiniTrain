@@ -13,8 +13,8 @@
         "RUN_PROFILE_TEST": "true",
         "MIXTRAL_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
         "MIXTRAL_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/mixtral/mixtral_megatron_export.bin",
-        "GPT2_TEST_GROUPS": "basic,zero,lora,checkpoint",
-        "LLAMA3_TEST_GROUPS": "basic,zero,lora,checkpoint",
+        "GPT2_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler",
+        "LLAMA3_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler",
         "MIXTRAL_TEST_GROUPS": "moe"
     },
     "basic_compile_commands": [
