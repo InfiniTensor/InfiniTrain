@@ -6,7 +6,7 @@
 
 namespace nn = infini_train::nn;
 
-namespace tiny_mixtral {
+namespace mixtral {
 
 inline nn::TransformerConfig TinyMixtralConfig() {
     nn::TransformerConfig config;
@@ -73,4 +73,4 @@ inline void SanitizeTinyMixtralConfig(const nn::TransformerConfig &c) {
         << "tiny Mixtral validation uses SequentialMLP experts";
 }
 
-} // namespace tiny_mixtral
+} // namespace mixtral

@@ -23,8 +23,8 @@
 #endif
 
 #include "example/common/tiny_shakespeare_dataset.h"
-#include "example/tiny_mixtral/checkpoint_loader.h"
-#include "example/tiny_mixtral/config.h"
+#include "example/mixtral/checkpoint_loader.h"
+#include "example/mixtral/config.h"
 
 DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_uint32(micro_batch_size, 4, "micro batch size per training step");
@@ -70,11 +70,11 @@ int main(int argc, char *argv[]) {
         /*pipeline_parallel_size=*/1,
         /*virtual_pipeline_parallel_size=*/1);
 
-    infini_train::nn::TransformerConfig model_config = tiny_mixtral::TinyMixtralConfig();
-    tiny_mixtral::SanitizeTinyMixtralConfig(model_config);
+    infini_train::nn::TransformerConfig model_config = mixtral::TinyMixtralConfig();
+    mixtral::SanitizeTinyMixtralConfig(model_config);
     std::shared_ptr<infini_train::nn::TransformerModel> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        model = tiny_mixtral::LoadFromLLMC(FLAGS_llmc_filepath, model_config);
+        model = mixtral::LoadFromLLMC(FLAGS_llmc_filepath, model_config);
     } else {
         model = std::make_shared<infini_train::nn::TransformerModel>(model_config);
     }
@@ -170,9 +170,9 @@ int main(int argc, char *argv[]) {
     }
 
 #ifdef PROFILE_MODE
-    infini_train::Profiler::Instance().Report("tiny_mixtral.report",
+    infini_train::Profiler::Instance().Report("mixtral.report",
                                               infini_train::Profiler::SortBy::DeviceTimePercentage);
-    infini_train::Profiler::Instance().PrintRecords("tiny_mixtral.records.log");
+    infini_train::Profiler::Instance().PrintRecords("mixtral.records.log");
 #endif
 
     gflags::ShutDownCommandLineFlags();
