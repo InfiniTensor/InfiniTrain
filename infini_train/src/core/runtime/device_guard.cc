@@ -23,6 +23,11 @@ Stream *DeviceGuardImpl::GetStream(Device) const {
     return nullptr; // unreachable
 }
 
+Stream *DeviceGuardImpl::ExchangeStream(Device, Stream *) const {
+    LOG(FATAL) << "DeviceGuardImpl::ExchangeStream is not implemented.";
+    return nullptr; // unreachable
+}
+
 Stream *DeviceGuardImpl::CreateStream(Device) const {
     LOG(FATAL) << "DeviceGuardImpl::CreateStream is not implemented.";
     return nullptr; // unreachable
