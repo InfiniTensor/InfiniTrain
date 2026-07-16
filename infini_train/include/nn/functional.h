@@ -149,6 +149,12 @@ std::shared_ptr<Tensor> Sigmoid(const std::shared_ptr<Tensor> &input);
 //   A tensor with softmax applied along the specified dimension.
 std::shared_ptr<Tensor> Softmax(const std::shared_ptr<Tensor> &input, int64_t dim = -1);
 
+// Computes causal self-attention for q/k/v tensors in (B, H, T, D) layout.
+//
+// The current FlashAttention backend applies a causal mask (j <= i).
+std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
+                                                  const std::shared_ptr<Tensor> &v, float scale);
+
 // Returns a slice of the input tensor defined by start, end, and step per dimension.
 //
 // Args:

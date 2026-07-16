@@ -7,6 +7,7 @@
 #include "infini_train/include/autograd/activations.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/reduction.h"
+#include "infini_train/include/autograd/scaled_dot_product_attention.h"
 #include "infini_train/include/autograd/softmax.h"
 #include "infini_train/include/autograd/transform.h"
 #include "infini_train/include/nn/init.h"
@@ -73,6 +74,11 @@ std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &input
 
 std::shared_ptr<Tensor> Softmax(const std::shared_ptr<Tensor> &input, int64_t dim) {
     return std::make_shared<autograd::Softmax>(dim)->Apply({input})[0];
+}
+
+std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
+                                                  const std::shared_ptr<Tensor> &v, float scale) {
+    return std::make_shared<autograd::ScaledDotProductAttention>(scale)->Apply({q, k, v})[0];
 }
 
 std::shared_ptr<Tensor> Sigmoid(const std::shared_ptr<Tensor> &input) {
