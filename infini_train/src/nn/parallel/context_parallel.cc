@@ -4,12 +4,14 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/autograd/function.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/parallel/global.h"
@@ -139,6 +141,29 @@ std::shared_ptr<Tensor> NewZeroTensorLike(const std::shared_ptr<Tensor> &tensor)
     output->Fill(0.0f);
     return output;
 }
+
+core::Stream *GetCPComputeStream(Device device) {
+    thread_local std::unordered_map<int, std::unique_ptr<core::Stream>> cp_compute_streams;
+    auto [it, inserted] = cp_compute_streams.emplace(device.index(), nullptr);
+    if (inserted) {
+        it->second.reset(core::GetDeviceGuardImpl(device.type())->CreateStream(device));
+    }
+    return it->second.get();
+}
+
+class RuntimeStreamGuard {
+public:
+    RuntimeStreamGuard(Device device, core::Stream *stream)
+        : device_(device), impl_(core::GetDeviceGuardImpl(device.type())),
+          previous_stream_(impl_->ExchangeStream(device, stream)) {}
+
+    ~RuntimeStreamGuard() { impl_->ExchangeStream(device_, previous_stream_); }
+
+private:
+    Device device_;
+    core::DeviceGuardImpl *impl_;
+    core::Stream *previous_stream_;
+};
 
 std::vector<std::shared_ptr<Work>> P2PCommunicate(int rank, const std::vector<std::shared_ptr<Tensor>> &send_tensors,
                                                   int send_dst,
@@ -320,20 +345,37 @@ public:
         // K/V can be transposed views after attention input layout conversion. Make sure K/V are contiguous for P2P.
         auto current_k = k_local->Contiguous();
         auto current_v = v_local->Contiguous();
+        auto *runtime_impl = core::GetDeviceGuardImpl(q->GetDevice().type());
+        auto *main_compute_stream = runtime_impl->GetStream(q->GetDevice());
+        auto *cp_compute_stream = GetCPComputeStream(q->GetDevice());
+        core::Event *inputs_ready_event = nullptr;
+        runtime_impl->EventCreateWithFlags(&inputs_ready_event, core::EventFlag::kDisableTiming);
+        runtime_impl->EventRecord(inputs_ready_event, main_compute_stream);
+        runtime_impl->StreamWaitEvent(cp_compute_stream, inputs_ready_event, 0);
 
-        // Online Softmax variables
-        // running_max: (B, H_q, T_l, 1)
-        std::shared_ptr<Tensor> running_max;
-        // running_sum: (B, H_q, T_l, 1)
-        std::shared_ptr<Tensor> running_sum;
-        // running_out: (B, H_q, T_l, D)
-        std::shared_ptr<Tensor> running_out;
+        std::vector<std::shared_ptr<Tensor>> chunk_maxs;
+        std::vector<std::shared_ptr<Tensor>> chunk_sums;
+        std::vector<std::shared_ptr<Tensor>> chunk_outs;
+        chunk_maxs.reserve(cp_size);
+        chunk_sums.reserve(cp_size);
+        chunk_outs.reserve(cp_size);
+
+        std::shared_ptr<Tensor> next_k;
+        std::shared_ptr<Tensor> next_v;
+        std::vector<std::shared_ptr<Work>> p2p_works;
 
         // Perform `cp_size` rounds to circulate K/V chunks across all CP ranks.
         for (int step = 0; step < cp_size; ++step) {
-            std::shared_ptr<Tensor> next_k;
-            std::shared_ptr<Tensor> next_v;
-            std::vector<std::shared_ptr<Work>> p2p_works;
+            auto *compute_stream = step % 2 == 0 ? main_compute_stream : cp_compute_stream;
+            RuntimeStreamGuard stream_guard(q->GetDevice(), compute_stream);
+
+            if (!p2p_works.empty()) {
+                for (const auto &work : p2p_works) { work->WaitNonBlocking(); }
+                p2p_works.clear();
+                current_k = next_k;
+                current_v = next_v;
+            }
+
             // Only performs `cp_size - 1` times of ring P2P, no comm is needed for the final round
             if (step + 1 < cp_size) {
                 // next_k: (B, H_kv, T_l, D)
@@ -390,32 +432,37 @@ public:
                 chunk_out = probs->Matmul(v_for_attn);
             }
 
-            if (!running_out) {
-                // initialization
-                running_max = chunk_max;
-                running_sum = chunk_sum;
-                running_out = chunk_out;
-            } else {
-                // Update Online Softmax variables
-                // new_max: (B, H_q, T_l, 1)
-                auto new_max
-                    = nn::function::Stack(std::vector<std::shared_ptr<Tensor>>{running_max, chunk_max}, -1)->Max(-1);
-                // old_scale: (B, H_q, T_l, 1)
-                auto old_scale = (running_max - new_max)->Exp();
-                // new_scale: (B, H_q, T_l, 1)
-                auto new_scale = (chunk_max - new_max)->Exp();
-                running_sum = running_sum * old_scale + chunk_sum * new_scale;
-                running_out = running_out * old_scale + chunk_out * new_scale;
-                running_max = new_max;
-            }
+            chunk_maxs.push_back(chunk_max);
+            chunk_sums.push_back(chunk_sum);
+            chunk_outs.push_back(chunk_out);
+        }
 
-            // Wait for P2P finish
-            if (!p2p_works.empty()) {
-                for (const auto &work : p2p_works) { work->WaitNonBlocking(); }
-                // Update K/V chunks
-                current_k = next_k;
-                current_v = next_v;
-            }
+        core::Event *cp_compute_done_event = nullptr;
+        runtime_impl->EventCreateWithFlags(&cp_compute_done_event, core::EventFlag::kDisableTiming);
+        runtime_impl->EventRecord(cp_compute_done_event, cp_compute_stream);
+        runtime_impl->StreamWaitEvent(main_compute_stream, cp_compute_done_event, 0);
+        runtime_impl->EventDestroy(inputs_ready_event);
+        runtime_impl->EventDestroy(cp_compute_done_event);
+
+        // Online Softmax variables
+        // running_max: (B, H_q, T_l, 1)
+        auto running_max = chunk_maxs[0];
+        // running_sum: (B, H_q, T_l, 1)
+        auto running_sum = chunk_sums[0];
+        // running_out: (B, H_q, T_l, D)
+        auto running_out = chunk_outs[0];
+        for (int step = 1; step < cp_size; ++step) {
+            // Update Online Softmax variables
+            // new_max: (B, H_q, T_l, 1)
+            auto new_max
+                = nn::function::Stack(std::vector<std::shared_ptr<Tensor>>{running_max, chunk_maxs[step]}, -1)->Max(-1);
+            // old_scale: (B, H_q, T_l, 1)
+            auto old_scale = (running_max - new_max)->Exp();
+            // new_scale: (B, H_q, T_l, 1)
+            auto new_scale = (chunk_maxs[step] - new_max)->Exp();
+            running_sum = running_sum * old_scale + chunk_sums[step] * new_scale;
+            running_out = running_out * old_scale + chunk_outs[step] * new_scale;
+            running_max = new_max;
         }
 
         // output: (B, H_q, T_l, D)
@@ -509,19 +556,38 @@ public:
         // softmax_delta: (B, H_q, T_l, 1)
         const auto softmax_delta = (grad_output * output)->Sum(-1, true);
         const auto device = grad_output->GetDevice().type();
+        auto *runtime_impl = core::GetDeviceGuardImpl(device);
+        auto *main_compute_stream = runtime_impl->GetStream(q->GetDevice());
+        auto *cp_compute_stream = GetCPComputeStream(q->GetDevice());
+        core::Event *inputs_ready_event = nullptr;
+        runtime_impl->EventCreateWithFlags(&inputs_ready_event, core::EventFlag::kDisableTiming);
+        runtime_impl->EventRecord(inputs_ready_event, main_compute_stream);
+        runtime_impl->StreamWaitEvent(cp_compute_stream, inputs_ready_event, 0);
 
         std::vector<std::shared_ptr<Work>> pending_grad_p2p_works;
         std::vector<std::shared_ptr<Tensor>> pending_grad_send_tensors;
+        std::vector<std::shared_ptr<Work>> kv_p2p_works;
+        std::shared_ptr<Tensor> next_k;
+        std::shared_ptr<Tensor> next_v;
+        std::vector<std::shared_ptr<Tensor>> grad_q_chunks;
+        grad_q_chunks.reserve(cp_size);
 
         for (int step = 0; step < cp_size; ++step) {
+            auto *compute_stream = step % 2 == 0 ? main_compute_stream : cp_compute_stream;
+            RuntimeStreamGuard stream_guard(q->GetDevice(), compute_stream);
+
+            if (!kv_p2p_works.empty()) {
+                for (const auto &work : kv_p2p_works) { work->WaitNonBlocking(); }
+                kv_p2p_works.clear();
+                current_k = next_k;
+                current_v = next_v;
+            }
+
             const int owner = (rank - step + cp_size) % cp_size;
             const int64_t kv_start = static_cast<int64_t>(owner) * local_t;
             const int64_t kv_end = kv_start + local_t;
             const bool chunk_fully_masked = owner > rank;
 
-            std::vector<std::shared_ptr<Work>> kv_p2p_works;
-            std::shared_ptr<Tensor> next_k;
-            std::shared_ptr<Tensor> next_v;
             if (step + 1 < cp_size) {
                 // NOTE(zbl): For compute-comm overlap purposes, prefetch the next K/V chunk before computing the
                 //            current one.
@@ -575,7 +641,7 @@ public:
                 // grad_q_chunk: (B, H_q, T_l, D)
                 auto grad_q_chunk = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
                     {device, "MatmulBackwardInput"}, k_for_attn->Transpose(-2, -1), grad_scores_scaled, q->Dims());
-                grad_q = grad_q + grad_q_chunk;
+                grad_q_chunks.push_back(grad_q_chunk);
                 // grad_k_transposed: (B, H_q, D, T_l)
                 auto grad_k_transposed = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
                     {device, "MatmulBackwardOther"}, q, grad_scores_scaled, k_for_attn->Transpose(-2, -1)->Dims());
@@ -609,22 +675,23 @@ public:
             pending_grad_send_tensors = {current_grad_k, current_grad_v};
             pending_grad_p2p_works = P2PCommunicate(rank, pending_grad_send_tensors, send_to,
                                                     {next_grad_k, next_grad_v}, recv_from, cp_group, batch_p2p_comm);
-
-            if (step + 1 < cp_size) {
-                // NOTE(zbl): For compute-comm overlap purposes, update K/V to next step only after the prefetched
-                //            receive is complete.
-                for (const auto &work : kv_p2p_works) { work->WaitNonBlocking(); }
-                current_k = next_k;
-                current_v = next_v;
-            }
             current_grad_k = next_grad_k;
             current_grad_v = next_grad_v;
         }
+
+        core::Event *cp_compute_done_event = nullptr;
+        runtime_impl->EventCreateWithFlags(&cp_compute_done_event, core::EventFlag::kDisableTiming);
+        runtime_impl->EventRecord(cp_compute_done_event, cp_compute_stream);
+        runtime_impl->StreamWaitEvent(main_compute_stream, cp_compute_done_event, 0);
+        runtime_impl->EventDestroy(inputs_ready_event);
+        runtime_impl->EventDestroy(cp_compute_done_event);
 
         // NOTE(zbl): For compute-comm overlap purposes, wait for the last round of dK/dV pass before return.
         for (const auto &work : pending_grad_p2p_works) { work->WaitNonBlocking(); }
         pending_grad_p2p_works.clear();
         pending_grad_send_tensors.clear();
+
+        for (const auto &grad_q_chunk : grad_q_chunks) { grad_q = grad_q + grad_q_chunk; }
 
         // Input is {q, k, v, mask}
         return {grad_q, current_grad_k, current_grad_v, nullptr};
