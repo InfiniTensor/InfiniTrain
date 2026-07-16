@@ -74,7 +74,7 @@ RUN_CTEST="$(read_var RUN_CTEST)";              : "${RUN_CTEST:=true}"
 RUN_PROFILE_TEST="$(read_var RUN_PROFILE_TEST)";  : "${RUN_PROFILE_TEST:=true}"
 CKPT_ROOT_DIR="$(read_var CKPT_ROOT_DIR)";      : "${CKPT_ROOT_DIR:=/data1/ckpt}"
 MIXTRAL_INPUT_BIN="$(read_var MIXTRAL_INPUT_BIN)";       : "${MIXTRAL_INPUT_BIN:=/data/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin}"
-MIXTRAL_LLMC_FILEPATH="$(read_var MIXTRAL_LLMC_FILEPATH)"; : "${MIXTRAL_LLMC_FILEPATH:=/data/shared/InfiniTrain-dev/data/llmc/tiny_mixtral/tiny_mixtral_megatron_export.bin}"
+MIXTRAL_LLMC_FILEPATH="$(read_var MIXTRAL_LLMC_FILEPATH)"; : "${MIXTRAL_LLMC_FILEPATH:=/data/shared/InfiniTrain-dev/data/llmc/mixtral/mixtral_megatron_export.bin}"
 GPT2_TEST_GROUPS="$(read_var GPT2_TEST_GROUPS)";          : "${GPT2_TEST_GROUPS:=basic,zero,lora,checkpoint}"
 LLAMA3_TEST_GROUPS="$(read_var LLAMA3_TEST_GROUPS)";      : "${LLAMA3_TEST_GROUPS:=basic,zero,lora,checkpoint}"
 MIXTRAL_TEST_GROUPS="$(read_var MIXTRAL_TEST_GROUPS)";    : "${MIXTRAL_TEST_GROUPS:=moe}"
@@ -523,8 +523,8 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
 
                 if tag_enabled_for_model "$group_tag" "$MIXTRAL_TEST_GROUPS"; then
                     mixtral_arg_str="$(args_string_for_test "$gi" "$ti" "mixtral" "$test_id")"
-                    mixtral_cmd="${prefix}./tiny_mixtral --input_bin ${MIXTRAL_INPUT_BIN} --llmc_filepath ${MIXTRAL_LLMC_FILEPATH} --device cuda ${mixtral_arg_str}"
-                    run_and_log "$mixtral_cmd" "tiny_mixtral_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+                    mixtral_cmd="${prefix}./mixtral --input_bin ${MIXTRAL_INPUT_BIN} --llmc_filepath ${MIXTRAL_LLMC_FILEPATH} --device cuda ${mixtral_arg_str}"
+                    run_and_log "$mixtral_cmd" "mixtral_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
             done
 

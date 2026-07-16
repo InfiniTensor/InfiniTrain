@@ -1,4 +1,4 @@
-#include "example/tiny_mixtral/checkpoint_loader.h"
+#include "example/mixtral/checkpoint_loader.h"
 
 #include <cstdint>
 #include <fstream>
@@ -13,7 +13,7 @@
 #include "infini_train/include/tensor.h"
 
 #include "example/common/utils.h"
-#include "example/tiny_mixtral/config.h"
+#include "example/mixtral/config.h"
 
 namespace nn = infini_train::nn;
 
@@ -25,7 +25,7 @@ constexpr int64_t kLLMCHeaderEntries = 256;
 
 } // namespace
 
-namespace tiny_mixtral {
+namespace mixtral {
 
 namespace {
 
@@ -164,4 +164,4 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     return model;
 }
 
-} // namespace tiny_mixtral
+} // namespace mixtral

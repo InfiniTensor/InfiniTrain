@@ -11,11 +11,11 @@
         "COMPARE_LOG_DIR": "",
         "RUN_CTEST": "true",
         "RUN_PROFILE_TEST": "true",
-        "TINY_MIXTRAL_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
-        "TINY_MIXTRAL_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/tiny_mixtral/tiny_mixtral_megatron_export.bin",
+        "MIXTRAL_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
+        "MIXTRAL_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/mixtral/mixtral_megatron_export.bin",
         "GPT2_TEST_GROUPS": "basic,zero,lora,checkpoint",
         "LLAMA3_TEST_GROUPS": "basic,zero,lora,checkpoint",
-        "TINY_MIXTRAL_TEST_GROUPS": "moe"
+        "MIXTRAL_TEST_GROUPS": "moe"
     },
     "basic_compile_commands": [
         {
