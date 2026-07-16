@@ -3,6 +3,7 @@
 #include <format>
 #include <iostream>
 #include <memory>
+#include <tuple>
 #include <vector>
 
 #include "gflags/gflags.h"
@@ -17,6 +18,9 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
+#ifdef PROFILE_MODE
+#include "infini_train/include/profiler.h"
+#endif
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/tiny_mixtral/checkpoint_loader.h"
@@ -109,6 +113,10 @@ int main(int argc, char *argv[]) {
     const uint32_t grad_accum_steps = FLAGS_global_batch_size / FLAGS_micro_batch_size;
     const double tokens_per_step = static_cast<double>(FLAGS_global_batch_size) * FLAGS_sequence_length;
     for (uint32_t step = 0; step < FLAGS_num_iteration; ++step) {
+#ifdef PROFILE_MODE
+        infini_train::Profiler::Instance().SetTag("Step_" + std::to_string(step));
+#endif
+        device_impl->ResetMemPoolHighWatermarks(train_device);
         device_impl->SynchronizeDevice(train_device);
         const auto step_start_time = std::chrono::steady_clock::now();
 
@@ -139,9 +147,14 @@ int main(int argc, char *argv[]) {
         step_duration_ms.push_back(duration_ms);
 
         if (FLAGS_log_interval > 0 && ((step + 1) % FLAGS_log_interval == 0 || step + 1 == FLAGS_num_iteration)) {
+            size_t used_mb = 0;
+            size_t reserved_mb = 0;
+            std::tie(used_mb, reserved_mb) = device_impl->GetMemPoolPeakMB(train_device);
             std::cout << std::format(
-                "step {:4d}/{} | train loss {:.6f} | norm -1.0000 | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s)", step + 1,
-                FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_ms, tokens_per_step / (duration_ms / 1e3))
+                "step {:4d}/{} | train loss {:.6f} | norm -1.0000 | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
+                "peak used: {:5d} MB | peak reserved: {:5d} MB)",
+                step + 1, FLAGS_num_iteration, lossf, FLAGS_learning_rate, duration_ms,
+                tokens_per_step / (duration_ms / 1e3), used_mb, reserved_mb)
                       << std::endl;
         }
     }
@@ -155,6 +168,12 @@ int main(int argc, char *argv[]) {
         std::cout << std::format("final {} iters avg: {:.3f}ms", averaged_steps, duration_sum_ms / averaged_steps)
                   << std::endl;
     }
+
+#ifdef PROFILE_MODE
+    infini_train::Profiler::Instance().Report("tiny_mixtral.report",
+                                              infini_train::Profiler::SortBy::DeviceTimePercentage);
+    infini_train::Profiler::Instance().PrintRecords("tiny_mixtral.records.log");
+#endif
 
     gflags::ShutDownCommandLineFlags();
     google::ShutdownGoogleLogging();
