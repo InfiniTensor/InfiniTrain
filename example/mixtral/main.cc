@@ -68,7 +68,9 @@ int main(int argc, char *argv[]) {
         /*tensor_parallel_size=*/1,
         /*sequence_parallel_enabled=*/false,
         /*pipeline_parallel_size=*/1,
-        /*virtual_pipeline_parallel_size=*/1);
+        /*virtual_pipeline_parallel_size=*/1,
+        /*expert_parallel_size=*/1,
+        /*expert_tensor_parallel_size=*/std::nullopt);
 
     infini_train::nn::TransformerConfig model_config = mixtral::TinyMixtralConfig();
     mixtral::SanitizeTinyMixtralConfig(model_config);

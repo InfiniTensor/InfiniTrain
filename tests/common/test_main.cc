@@ -4,6 +4,6 @@
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
-    infini_train::nn::parallel::global::GlobalEnv::Instance().Init(1, 1, false, 1, 1);
+    infini_train::nn::parallel::global::GlobalEnv::Instance().Init(1, 1, false, 1, 1, 1, std::nullopt);
     return RUN_ALL_TESTS();
 }
