@@ -102,6 +102,10 @@ void LoRAColumnParallelLinear::InitLoRAWeights() {
                              ->Get(parallel::GetTensorParallelProcessGroupName(global_rank));
         const int tp_rank = tp_group->GetGroupRank(global_rank);
 
+        // FIXME: Each TP group's root initializes independently, so corresponding DP replicas are not guaranteed to
+        // start with identical parameters. They may currently match only because every rank uses the same default RNG
+        // seed. DDP should perform a generic parameter broadcast after model construction and before the first forward,
+        // rather than adding a LoRA-specific DP broadcast here.
         if (tp_rank == 0) {
             if (config_.use_kaiming_a) {
                 init::KaimingUniform(parameters_[kParamLoraAName], config_.kaiming_a_param);

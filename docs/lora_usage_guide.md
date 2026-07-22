@@ -10,9 +10,9 @@
 
 ```cpp
 #include "infini_train/include/nn/lora/lora_config.h"
-#include "infini_train/include/nn/lora/lora_linear.h"
-#include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
+#include "infini_train/include/optimizer.h"
+#include "infini_train/include/tensor.h"
 ```
 
 ### 最小示例
@@ -30,7 +30,7 @@ model = GetLoRAModel(model, config);
 PrintLoRASummary(model);
 
 auto params = GetLoRAParameters(model);
-auto optimizer = optimizers::Adam::Create(/*learning_rate=*/1e-4)(params);
+auto optimizer = infini_train::optimizers::Adam::Create(/*learning_rate=*/1e-4)(params);
 
 for (int step = 0; step < num_steps; ++step) {
     optimizer->ZeroGrad();
@@ -52,9 +52,10 @@ y = x @ W^T + b + (alpha / rank) * x @ A^T @ B^T
 ```
 
 - `W` 和 `bias` 来自原基础层，注入后默认冻结。
-- `lora_A` 形状为 `[rank, in_features]`，默认 Kaiming uniform 初始化。
-- `lora_B` 形状为 `[out_features, rank]`，零初始化，因此注入初始时不改变基础模型输出。
-- LoRA 参数当前固定创建为 `float32`。
+- 普通 `Linear` 的 `lora_A` / `lora_B` 形状分别为 `[rank, in_features]` / `[out_features, rank]`；
+  TP 下 ColumnParallel 的 B 和 RowParallel 的 A 是 local shard。
+- A 默认 Kaiming uniform 初始化，B 零初始化，因此注入初始时不改变模型输出。
+- LoRA 参数创建为 `float32`，当前 adapter 保存/加载也要求保持 `float32`。
 - `dropout` 字段存在于 `LoRAConfig`，当前未实现。
 
 `GetLoRAModel` 会遍历 `NamedModules()`，按 `target_modules` 匹配模块路径：
@@ -96,6 +97,8 @@ config.alpha = 16.0f;
 config.target_modules = ParseLoRATargetModules("c_attn,attn.c_proj");
 ```
 
+C++ API 要求 `rank > 0`；命令行中的 `--lora_rank=0` 表示不启用 LoRA。
+
 ### 注入与参数管理
 
 ```cpp
@@ -116,7 +119,8 @@ GetBaseParameters(const std::shared_ptr<Module> &model);
 ```
 
 - `GetLoRAModel` = 注入 + 冻结基础参数 + 重新打开 LoRA 参数。
-- `InjectLoRALayers` 只做结构替换，不冻结参数。
+- `InjectLoRALayers` 替换目标层并冻结其基础 weight/bias，但不冻结未命中的模块；`GetLoRAModel` 会进一步
+  冻结所有非 LoRA 参数。
 - 示例训练入口在启用 LoRA 时只把 `GetLoRAParameters(model)` 传给优化器。
 - 对 merged 状态的 LoRA 模块调用 `GetLoRAParameters` 会触发检查；继续训练前先
   `UnmergeLoRAWeights(model)`。
@@ -145,13 +149,18 @@ void LoadLoRAWeights(std::shared_ptr<Module> model,
 - `MergeLoRAWeights` 将 `W += (alpha / rank) * B @ A` 写回基础权重，并冻结 LoRA 参数。
 - `UnmergeLoRAWeights` 撤销一次已合并的 LoRA 增量，并恢复 LoRA 参数可训练。
 - `MergeAndUnload` 会先合并，再把 LoRA 模块替换回普通 `Linear` / TP Linear，并解冻返回模型参数。
-- `SaveLoRAWeights` 只保存名字包含 `lora_A` / `lora_B` 的参数；TP 下会先把分片参数 gather 成
-  full/unsharded tensor，再由主 TP rank 写文件。
-- LoRA 权重文件是二进制文件，包含 magic `"LORA"`、version `1`、tensor 名称、维度和 float 数据。
-- 加载前模型必须已经用相同目标层注入 LoRA；找不到的 LoRA 参数会打印 warning。
+- `LoRAStateDict` 中被 TP 分片的参数仍是当前 rank 的 local shard；直接对 DDP wrapper 调用时，key 带
+  `module.` 前缀。跨 TP 保存请用 `SaveLoRAWeights`。
+- TP 保存要求 `dp=0, pp=0` group 内所有 TP ranks 调用 `SaveLoRAWeights`，只有 `(dp=0, tp=0, pp=0)`
+  写文件。只在 writer rank 调用会卡在 collective；由全局所有 ranks 调用是安全的。
+- `pipeline_parallel > 1` 时不会聚合其他 PP stages，因此当前只支持在 `pipeline_parallel=1` 下保存 adapter。
+- 文件是原生二进制格式：magic `0x4C4F5241`、version `1`、名称、维度和 float32 数据；不包含 LoRA config、
+  基础模型或 dtype 信息。
+- 加载时应使用相同的基础模型、`rank`、`alpha` 和目标层。文件中多出的 key 会 warning，文件缺少的模型
+  参数则保留初始化值。
 - 加载时如果输入 tensor 和当前参数同形状，会直接拷贝；如果当前参数是 TP 分片，会按当前 `tp_rank`
-  切片后再拷贝。`c_attn.lora_B` 会按 packed QKV 的 `[Q | K | V]` 布局特殊处理，加载为本 rank 的
-  `[Qi | Ki | Vi]`，和 attention QKV 权重加载方式保持一致。
+  切片后再拷贝。`CausalSelfAttention` 中由 `LoRAColumnParallelLinear` 实现的 `c_attn.lora_B` 会按
+  packed QKV 的 `[Q | K | V]` 布局特殊处理，加载为本 rank 的 `[Qi | Ki | Vi]`。
 
 ### 统计和解析工具
 
@@ -178,10 +187,16 @@ ParseLoRATargetModules(const std::string &targets);
 如果模型用了 TP，不需要手动创建 `LoRAColumnParallelLinear` 或 `LoRARowParallelLinear`；
 只要正常调用 `GetLoRAModel(model, config)`，注入逻辑会根据基础层类型自动选择对应的 LoRA 实现。
 
-加载 LoRA 权重时，如果文件里保存的是完整 tensor，而当前模型在 TP 下只需要某个 rank 的分片，加载函数会自动按当前
-`tp_rank` 切片；attention 的 `c_attn.lora_B` 会按 Q/K/V 三段分别切片后再拼接。
-保存 LoRA 权重时，文件里的 tensor 默认也是完整 tensor；attention 的 `c_attn.lora_B` 会从各 rank 的
-`[Qi | Ki | Vi]` 还原成 `[Q | K | V]` 后写入。
+在 `pipeline_parallel=1` 时，TP adapter 使用完整 tensor：加载时自动切分，保存时自动 gather；
+`c_attn.lora_B` 还会处理 Q/K/V 顺序。目标 TP size 必须能整除相应维度。
+
+### 并行调用顺序与限制
+
+并行构造顺序应为：device/dtype 转换 -> LoRA 注入 -> adapter 加载 -> PP/DDP。DDP 只为构造时已有的参数注册通信；
+`LoadLoRAWeights` 也不会解包 DDP。`SaveLoRAWeights` 可解包根部 DDP，但不支持完整 PP adapter 导出。
+
+DDP 当前没有构造后的参数 broadcast，因此 fresh LoRA 初始化不保证 DP replicas 一致；在 DDP 前加载同一份完整
+adapter 可以覆盖该初值差异。
 
 ## 命令行示例
 
@@ -238,7 +253,8 @@ Llama3 默认 LoRA target 是 `"c_attn,c_proj,c_fc,c_fc2"`。
   --lora_load_path gpt2_lora.bin
 ```
 
-加载时请保持 `rank` 和 `lora_target_modules` 与保存这份 LoRA 权重时一致。
+加载时请使用相同的基础模型，并保持 `lora_rank`、`lora_alpha` 和 `lora_target_modules` 与保存该 adapter 时一致。
+当前文件格式不保存或校验这些配置元数据。
 
 ### 参数表
 
@@ -248,15 +264,13 @@ Llama3 默认 LoRA target 是 `"c_attn,c_proj,c_fc,c_fc2"`。
 | `--lora_alpha` | `16.0` | LoRA scaling 分子，实际缩放为 `alpha / rank` |
 | `--lora_target_modules` | 模型相关 | 逗号分隔的目标模块后缀 |
 | `--lora_load_path` | `""` | 启动时加载 LoRA 权重文件 |
-| `--lora_save_path` | `""` | 训练结束后保存 LoRA 权重文件 |
+| `--lora_save_path` | `""` | 训练结束后保存 LoRA 权重文件；当前要求 `pipeline_parallel=1` |
 
-示例入口在启用 LoRA 后会：
+示例入口会先注入并按需加载 LoRA，再构造并行 wrapper；优化器只接收 `GetLoRAParameters(model)`，保存时由所有
+ranks 调用 `SaveLoRAWeights`。
 
-1. 构造 `LoRAConfig{rank, alpha, 0.0f, ParseLoRATargetModules(...)}`。
-2. 调用 `model = GetLoRAModel(model, lora_config)`。
-3. 如果设置 `--lora_load_path`，调用 `LoadLoRAWeights`。
-4. 使用 `GetLoRAParameters(model)` 构建优化器参数列表。
-5. 如果设置 `--lora_save_path`，训练结束后调用 `SaveLoRAWeights`。
+`--lora_load_path` 只加载 adapter，`--load` 恢复训练 checkpoint 且执行得更晚，可能覆盖 adapter 或因结构不匹配
+而失败，因此不要同时设置。
 
 ## 目标模块建议
 
@@ -290,20 +304,16 @@ LoRA 单元测试位于 `tests/lora/test_lora.cc`，覆盖：
 ```bash
 cmake -S . -B build -DBUILD_TEST=ON -DUSE_CUDA=ON -DUSE_NCCL=ON
 cmake --build build -j
-ctest --test-dir build -R LoRATest --output-on-failure
+ctest --test-dir build -R 'LoRATest|test_lora_cuda' --output-on-failure
 ```
 
-`scripts/test_config.json` 还包含 `lora` 测试组，覆盖 fp32/bfloat16、LoRA 权重加载，以及 DP、TP、SP、PP 组合。
+`scripts/test_config.json` 的 `lora` 组还覆盖 fp32/bfloat16、权重加载及 DP/TP/SP/PP 训练；PP 用例不覆盖 adapter 保存。
 
 ## 常见注意事项
 
 - 直接用 `GetLoRAModel` 就好；现在没有单独的 `LoRAModel` 类，也没有 `lora_model.h`。
 - `LoRAConfig` 先默认创建再填字段；如果想一行构造，需要传完整的 4 个参数。
-- 保存和加载传的是具体文件名，比如 `gpt2_lora.bin`，不是目录。
-- LoRA 文件只存 `lora_A` / `lora_B`，不会保存基础模型权重；TP 下文件里保存的是可移植的完整 tensor，
-  不是某个 rank 的 local shard。
-- TP 运行时加载 LoRA 权重，如果文件里是完整 tensor、当前 rank 只需要分片，加载函数会自动按当前 `tp_rank`
-  切片；`c_attn.lora_B` 会按 Q/K/V 三段分别切片后再拼接。
+- 保存和加载传的是具体文件名，比如 `gpt2_lora.bin`，不是目录；保存函数不会自动创建父目录。
 - `MergeLoRAWeights` 适合推理前用；如果还要继续训练，先调用 `UnmergeLoRAWeights`。
 - `MergeAndUnload` 会把 LoRA 模块变回普通 Linear，之后模型里就没有 `lora_A` / `lora_B` 了。
 - 现在一次只支持一套 LoRA adapter，不支持多个 adapter 叠加。

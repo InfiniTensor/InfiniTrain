@@ -20,7 +20,6 @@
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
@@ -141,38 +140,6 @@ LoRATensorSharding GetLoRATensorSharding(const std::unordered_map<std::string, L
     return it == shardings.end() ? LoRATensorSharding::kReplicated : it->second;
 }
 
-std::shared_ptr<Tensor> GatherTensorParallelShard(const std::shared_ptr<Tensor> &tensor, int64_t dim) {
-    const int tp_size = parallel::global::GetTensorParallelSize();
-    CHECK_GT(tp_size, 0);
-    if (tp_size == 1) {
-        return tensor;
-    }
-
-    if (dim < 0) {
-        dim += static_cast<int64_t>(tensor->Dims().size());
-    }
-    CHECK_GE(dim, 0);
-    CHECK_LT(dim, static_cast<int64_t>(tensor->Dims().size()));
-
-    auto device = tensor->GetDevice();
-    auto *tp_group = parallel::ProcessGroupFactory::Instance(device.type())
-                         ->Get(parallel::GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
-
-    std::vector<int64_t> gathered_dims = tensor->Dims();
-    gathered_dims[0] *= tp_size;
-    auto gathered = std::make_shared<Tensor>(gathered_dims, tensor->Dtype(), device);
-    tp_group->AllGather(gathered, tensor, false);
-
-    if (dim == 0) {
-        return gathered;
-    }
-
-    // AllGather stacks shards along dim 0. For tensors sharded on another dim,
-    // split rank-major rows back into per-rank tensors and concatenate on dim.
-    auto rank_major_shards = gathered->Split(tensor->Dims()[0], 0);
-    return nn::function::Concat(rank_major_shards, dim)->Contiguous();
-}
-
 bool IsPrimarySaveTPGroupRank() {
     int dp = 0;
     int tp = 0;
@@ -201,7 +168,7 @@ ExportLoRATensorForSave(const std::string &name, const std::shared_ptr<Tensor> &
         // Packed QKV is still dim0-sharded like ColumnParallel; it only needs
         // an extra Q/K/V reorder after the common gather below.
     case LoRATensorSharding::kColumnParallelDim0: {
-        auto gathered = GatherTensorParallelShard(tensor, 0);
+        auto gathered = parallel::GatherTensorParallelShard(tensor, 0);
         if (sharding != LoRATensorSharding::kPackedQKVColumnParallelDim0) {
             return gathered;
         }
@@ -218,7 +185,7 @@ ExportLoRATensorForSave(const std::string &name, const std::shared_ptr<Tensor> &
                                                               parallel::global::GetTensorParallelSize());
     }
     case LoRATensorSharding::kRowParallelDim1:
-        return GatherTensorParallelShard(tensor, 1);
+        return parallel::GatherTensorParallelShard(tensor, 1);
     }
     LOG(FATAL) << "Unknown LoRA tensor sharding";
     return tensor;
@@ -283,6 +250,8 @@ void LoadLoRATensorIntoModel(const std::string &name, const std::shared_ptr<Tens
 
 namespace detail {
 
+// TODO: Reuse this packed-QKV sharding logic in TP checkpoint loading once the checkpoint infrastructure is stable.
+// The current TP loader reads rank-local weights directly by file offset instead of slicing a materialized full tensor.
 std::shared_ptr<Tensor> SlicePackedQKVRowsForTensorParallel(const std::shared_ptr<Tensor> &full_tensor, int64_t q_rows,
                                                             int tp_rank, int tp_size) {
     CHECK(full_tensor != nullptr);

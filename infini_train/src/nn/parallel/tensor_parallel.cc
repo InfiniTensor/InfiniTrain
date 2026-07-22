@@ -26,48 +26,11 @@ thread_local int tp_rank = 0;
 namespace {
 // Comm Kernel Call Functions
 std::shared_ptr<Tensor> GatherAlongFirstDim(const std::shared_ptr<Tensor> &tensor) {
-    int world_size = global::GetTensorParallelSize();
-    CHECK_GT(world_size, 0) << "Tensor Parallel group not initialized";
-    if (world_size == 1) {
-        // Bypass the function if we are using only 1 GPU.
-        return tensor;
-    }
-
-    auto device = tensor->GetDevice();
-    auto tp_group = ProcessGroupFactory::Instance(device.type())
-                        ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
-
-    std::vector<int64_t> output_shape = tensor->Dims();
-    output_shape[0] *= world_size;
-    auto gathered_output = std::make_shared<Tensor>(output_shape, tensor->Dtype(), device);
-
-    tp_group->AllGather(gathered_output, tensor, false);
-    return gathered_output;
+    return GatherTensorParallelShard(tensor, 0);
 }
 
 std::shared_ptr<Tensor> GatherAlongLastDim(const std::shared_ptr<Tensor> &tensor) {
-    int world_size = global::GetTensorParallelSize();
-    CHECK_GT(world_size, 0) << "Tensor Parallel group not initialized";
-    if (world_size == 1) {
-        // Bypass the function if we are using only 1 GPU.
-        return tensor;
-    }
-
-    auto device = tensor->GetDevice();
-    auto tp_group = ProcessGroupFactory::Instance(device.type())
-                        ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
-
-    std::vector<int64_t> output_shape = tensor->Dims();
-    output_shape[0] *= world_size;
-    auto gathered_output = std::make_shared<Tensor>(output_shape, tensor->Dtype(), device);
-
-    tp_group->AllGather(gathered_output, tensor, false);
-
-    // AllGather gather along dim 0 by default
-    auto output_list = gathered_output->Split(tensor->Dims()[0], 0);
-    auto output = nn::function::Concat(output_list, -1)->Contiguous();
-
-    return output;
+    return GatherTensorParallelShard(tensor, -1);
 }
 
 std::shared_ptr<Tensor> SplitAlongLastDim(const std::shared_ptr<Tensor> &tensor) {

@@ -56,22 +56,12 @@ static std::shared_ptr<Tensor> MakeRowLabeledTensor(int64_t rows, int64_t cols, 
     return device_tensor;
 }
 
-static std::shared_ptr<Tensor> ToCpuTensor(const std::shared_ptr<Tensor> &tensor) {
-    if (tensor->GetDevice().IsCPU()) {
-        return tensor;
-    }
-
-    auto cpu_tensor = std::make_shared<Tensor>(tensor->Dims(), tensor->Dtype(), Device(Device::DeviceType::kCPU, 0));
-    cpu_tensor->CopyFrom(tensor);
-    return cpu_tensor;
-}
-
 static void ExpectRows(const std::shared_ptr<Tensor> &tensor, const std::vector<int64_t> &source_rows) {
     ASSERT_EQ(tensor->Dims().size(), 2);
     ASSERT_EQ(tensor->Dims()[0], static_cast<int64_t>(source_rows.size()));
 
-    auto cpu_tensor = ToCpuTensor(tensor);
-    auto matrix = cpu_tensor->EigenMatrix();
+    auto cpu_tensor = tensor->To(Device(Device::DeviceType::kCPU, 0));
+    auto matrix = cpu_tensor.EigenMatrix();
     for (int64_t row = 0; row < static_cast<int64_t>(source_rows.size()); ++row) {
         for (int64_t col = 0; col < tensor->Dims()[1]; ++col) {
             EXPECT_FLOAT_EQ(matrix(row, col), RowValue(source_rows[row], col));
