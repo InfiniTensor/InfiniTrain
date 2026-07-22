@@ -9,12 +9,15 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/core/distribution.h"
+#include "infini_train/include/core/cpu_generator.h"
+#include "infini_train/include/core/cuda_generator.h"
 #include "infini_train/include/core/generator.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
+#include <cstdio>
 namespace infini_train::nn::init {
 
 std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean, float std,
@@ -22,19 +25,19 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
     // TODO(dcj): Support other floating point data types later.
     CHECK_EQ(static_cast<int>(tensor->Dtype()), static_cast<int>(DataType::kFLOAT32))
         << "Normal initialization currently only supports FLOAT32 tensors";
-    const int64_t num_elements = tensor->NumElements();
-    std::vector<float> buffer(num_elements);
-
     auto device = tensor->GetDevice();
-    core::distribution::FillBuffer(buffer, device, generator, std::normal_distribution<float>(mean, std));
-
-    core::DeviceGuard guard(device);
-    auto impl = core::GetDeviceGuardImpl(device.type());
-
-    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
-                      impl->GetStream(device));
-    return tensor;
+    auto kernel = Dispatcher::Instance().GetKernel({device.type(), "Normal"});
+    if (device.IsCPU()) {
+        auto gen = core::GetGeneratorOrDefault<core::CPUGeneratorImpl>(generator, device);
+        kernel.Call<void>(tensor, mean, std, gen);
+        return tensor;
+    } else if (device.IsCUDA()) {
+        auto gen = core::GetGeneratorOrDefault<core::CUDAGeneratorImpl>(generator, device);
+        kernel.Call<void>(tensor, mean, std, gen);
+        return tensor;
+    } else {
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device.type());
+    }
 }
 
 std::pair<int64_t, int64_t> CalculateFanInAndFanOut(const std::shared_ptr<Tensor> &tensor) {
@@ -104,20 +107,19 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
     // TODO(dcj): Support other floating point data types later.
     CHECK_EQ(static_cast<int>(tensor->Dtype()), static_cast<int>(DataType::kFLOAT32))
         << "Uniform initialization currently only supports FLOAT32 tensors";
-    const int64_t num_elements = tensor->NumElements();
-    std::vector<float> buffer(num_elements);
-
     auto device = tensor->GetDevice();
-    core::distribution::FillBuffer(buffer, device, generator, std::uniform_real_distribution<float>(a, b));
-
-    core::DeviceGuard guard(device);
-    auto impl = core::GetDeviceGuardImpl(device.type());
-
-    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
-                      impl->GetStream(device));
-
-    return tensor;
+    auto kernel = Dispatcher::Instance().GetKernel({device.type(), "Uniform"});
+    if (device.IsCPU()) {
+        auto gen = core::GetGeneratorOrDefault<core::CPUGeneratorImpl>(generator, device);
+        kernel.Call<void>(tensor, a, b, gen);
+        return tensor;
+    } else if (device.IsCUDA()) {
+        auto gen = core::GetGeneratorOrDefault<core::CUDAGeneratorImpl>(generator, device);
+        kernel.Call<void>(tensor, a, b, gen);
+        return tensor;
+    } else {
+        LOG(FATAL) << "Unsupported device type: " << static_cast<int>(device.type());
+    }
 }
 
 std::shared_ptr<Tensor> Dropout(const std::shared_ptr<Tensor> &tensor, float p,
@@ -127,31 +129,18 @@ std::shared_ptr<Tensor> Dropout(const std::shared_ptr<Tensor> &tensor, float p,
     CHECK_EQ(static_cast<int>(tensor->Dtype()), static_cast<int>(DataType::kFLOAT32))
         << "Dropout currently only supports FLOAT32 tensors";
 
-    const int64_t num_elements = tensor->NumElements();
     auto device = tensor->GetDevice();
+    auto kernel = Dispatcher::Instance().GetKernel({device.type(), "Dropout"});
 
-    // Draw uniform values, then build an inverted dropout mask on the host.
-    std::vector<float> values(num_elements);
-    core::distribution::FillBuffer(values, device, generator, std::uniform_real_distribution<float>(0.0f, 1.0f));
-
-    const float scale = 1.0f / (1.0f - p);
-
-    core::DeviceGuard guard(device);
-    auto impl = core::GetDeviceGuardImpl(device.type());
-
-    // Pull current tensor data to host, apply the mask, and write it back. This
-    // keeps the operator backend-agnostic while still routing randomness through
-    // the Generator mechanism.
-    std::vector<float> data(num_elements);
-    impl->MemcpyAsync(data.data(), tensor->DataPtr(), num_elements * sizeof(float),
-                      device.IsCPU() ? core::MemcpyKind::kD2D : core::MemcpyKind::kD2H, impl->GetStream(device));
-    impl->SynchronizeStream(impl->GetStream(device));
-
-    for (int64_t i = 0; i < num_elements; ++i) { data[i] = (values[i] < p) ? 0.0f : data[i] * scale; }
-
-    impl->MemcpyAsync(tensor->DataPtr(), data.data(), num_elements * sizeof(float),
-                      device.IsCPU() ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D, impl->GetStream(device));
-    return tensor;
+    if (device.IsCPU()) {
+        auto gen = core::GetGeneratorOrDefault<core::CPUGeneratorImpl>(generator, device);
+        return kernel.Call<std::shared_ptr<Tensor>>(tensor, p, gen);
+    } else if (device.IsCUDA()) {
+        auto gen = core::GetGeneratorOrDefault<core::CUDAGeneratorImpl>(generator, device);
+        return kernel.Call<std::shared_ptr<Tensor>>(tensor, p, gen);
+    } else {
+        LOG(FATAL) << "Unsupported device type";
+    }
 }
 
 std::shared_ptr<Tensor> Ones(const std::shared_ptr<Tensor> &tensor) {

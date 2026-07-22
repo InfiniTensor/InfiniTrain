@@ -33,6 +33,22 @@ TEST(CUDAGeneratorTest, OffsetAdvancesAndRestores) {
     EXPECT_EQ(gen.GetOffset(), 10u);
 }
 
+TEST(CUDAGeneratorTest, SetCurrentSeedResetsOffset) {
+    core::Generator gen(std::make_shared<core::CUDAGeneratorImpl>(0, 123));
+    auto *impl = gen.Get<core::CUDAGeneratorImpl>();
+
+    {
+        std::lock_guard<std::mutex> lock(impl->mutex_);
+        impl->PhiloxEngineInputs(32);
+    }
+
+    EXPECT_EQ(gen.GetOffset(), 32u);
+
+    gen.SetCurrentSeed(456);
+    EXPECT_EQ(gen.CurrentSeed(), 456u);
+    EXPECT_EQ(gen.GetOffset(), 0u);
+}
+
 TEST(CUDAGeneratorTest, RejectsDifferentDeviceState) {
     core::Generator gen0(std::make_shared<core::CUDAGeneratorImpl>(0, 123));
     core::Generator gen1(std::make_shared<core::CUDAGeneratorImpl>(1, 456));

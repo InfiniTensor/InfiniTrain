@@ -316,6 +316,16 @@ TEST_P(GeneratorOperatorsTest, DropoutBoundaryProbabilityNearOneDropsMost) {
     EXPECT_GT(zeros, 4096 * 9 / 10);
 }
 
+TEST_P(GeneratorOperatorsTest, DropoutEmptyTensorIsNoOp) {
+    auto tensor = MakeFloatTensor(0);
+    auto gen = MakeDeviceGenerator(321);
+
+    nn::init::Dropout(tensor, 0.5f, gen);
+
+    EXPECT_EQ(tensor->NumElements(), 0);
+    EXPECT_EQ(tensor->Dims(), (std::vector<int64_t>{0}));
+}
+
 TEST_P(GeneratorOperatorsTest, DropoutRejectsIllegalProbability) {
     auto gen = MakeDeviceGenerator(1);
     {
