@@ -68,6 +68,8 @@ public:
                                        bool async_op = false) const;
 
     // Legacy communication APIs (Single-stream)
+    // FIXME(dcj): BroadCast_ and Scatter_ are temporarily retained with trailing underscores for existing DP callers.
+    // Replace direct DP usage with a higher-level communication abstraction.
     virtual std::vector<std::shared_ptr<Tensor>>
     BroadCast_(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const;
 
