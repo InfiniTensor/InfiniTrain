@@ -9,6 +9,7 @@
 #include <cuda_runtime.h>
 #include <cutlass/numeric_types.h>
 
+#include "infini_train/include/common/common.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/dispatcher.h"
@@ -33,14 +34,13 @@ struct FlashAttentionContext {
     DataType flash_dtype = DataType::kBFLOAT16;
 };
 
-int64_t RoundUp(int64_t value, int64_t alignment) { return (value + alignment - 1) / alignment * alignment; }
-
 std::shared_ptr<Tensor> CastIfNeeded(const std::shared_ptr<Tensor> &tensor, DataType dtype) {
     return tensor->Dtype() == dtype ? tensor : std::make_shared<Tensor>(tensor->To(dtype));
 }
 
-std::shared_ptr<Tensor> CastGradIfNeeded(const std::shared_ptr<Tensor> &grad, DataType dtype) {
-    return CastIfNeeded(grad, dtype);
+std::shared_ptr<Tensor> CastGrad(const std::shared_ptr<Tensor> &grad, DataType original_dtype, DataType flash_dtype) {
+    const auto grad_dtype = flash_dtype == DataType::kBFLOAT16 ? DataType::kFLOAT32 : original_dtype;
+    return CastIfNeeded(grad, grad_dtype);
 }
 
 cudaStream_t GetCudaStream(Device device) {
@@ -70,7 +70,7 @@ void CheckQKV(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k
     CHECK_EQ(q_dims[2], kv_dims[2]);
     CHECK_EQ(q_dims[3], kv_dims[3]);
     // FIXME(zbl): Extend supported head dimensions together with the AOT kernel instances in CMakeLists.txt;
-    // the runtime checks/dispatch and FLASH_ATTN_CUDA_SOURCES must remain in sync.
+    //             the runtime checks/dispatch and FLASH_ATTN_CUDA_SOURCES must remain in sync.
     CHECK(q_dims[3] == 64 || q_dims[3] == 128) << "Native FlashAttention currently supports head_dim 64/128 only";
     CHECK_GT(kv_dims[1], 0);
     CHECK_EQ(q_dims[1] % kv_dims[1], 0) << "Q heads must be divisible by KV heads for GQA/MQA";
@@ -111,8 +111,8 @@ void SetForwardParams(flash::Flash_fwd_params *params, const Tensor &q, const Te
     params->h_h_k_ratio = q_heads / kv_heads;
     params->seqlen_q = seqlen;
     params->seqlen_k = seqlen;
-    params->seqlen_q_rounded = RoundUp(seqlen, kSequenceAlignment);
-    params->seqlen_k_rounded = RoundUp(seqlen, kSequenceAlignment);
+    params->seqlen_q_rounded = ROUND_UP(seqlen, kSequenceAlignment);
+    params->seqlen_k_rounded = ROUND_UP(seqlen, kSequenceAlignment);
     params->d = head_dim;
     params->d_rounded = head_dim;
     params->total_q = batch * seqlen;
@@ -300,7 +300,7 @@ ScaledDotProductAttentionBackward(const std::shared_ptr<Tensor> &grad_output, co
     const int64_t heads = dims[1];
     const int64_t seqlen = dims[2];
     const int64_t head_dim = dims[3];
-    const int64_t seqlen_rounded = RoundUp(seqlen, kSequenceAlignment);
+    const int64_t seqlen_rounded = ROUND_UP(seqlen, kSequenceAlignment);
 
     auto softmax_d
         = std::make_shared<Tensor>(std::vector<int64_t>{batch, heads, seqlen_rounded}, DataType::kFLOAT32, device);
@@ -334,8 +334,16 @@ ScaledDotProductAttentionBackward(const std::shared_ptr<Tensor> &grad_output, co
         ReduceGqaGrad(dv.get(), *dv_kernel, stream);
     }
 
-    return {CastGradIfNeeded(dq, ctx->q_original_dtype), CastGradIfNeeded(dk, ctx->k_original_dtype),
-            CastGradIfNeeded(dv, ctx->v_original_dtype)};
+    // FIXME(zbl): Forward autocast currently uses raw Tensor::To conversions and wires the Function directly
+    //             to the original autograd graph. Without an autograd cast-backward edge or generic mixed-dtype
+    //             grad normalization, native BF16 FlashAttention grads can be accumulated together with the FP32
+    //             grads propagated by Matmul/Linear backward paths. FlashAttention backward kernel performs in
+    //             BF16, so we manually promote them at the end of kernel to keep backward consistent with the
+    //             current forward autocast behavior. The proper fix belongs in autograd: once autocast and grad
+    //             accumulation preserve type semantics centrally, return grads in its native input dtype.
+    return {CastGrad(dq, ctx->q_original_dtype, ctx->flash_dtype),
+            CastGrad(dk, ctx->k_original_dtype, ctx->flash_dtype),
+            CastGrad(dv, ctx->v_original_dtype, ctx->flash_dtype)};
 }
 
 } // namespace infini_train::kernels::cuda
