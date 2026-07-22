@@ -17,7 +17,7 @@ inline nn::TransformerConfig TinyMixtralConfig() {
     config.n_head = 4;    // Scaled down; preserves Mixtral 4:1 GQA ratio.
     config.n_kv_head = 1; // Scaled down with n_head; real Mixtral uses 8 KV heads.
     config.n_embd = 512;  // Scaled down from Mixtral/Megatron --hidden-size 4096.
-    config.attention_type = nn::AttentionType::kRoPE;
+    config.position_embedding_type = nn::PositionEmbeddingType::kRoPE;
     config.activation_type = nn::MLPType::kSwiGLU;
     config.ffn_type = nn::FFNType::kMoE;
     config.norm_type = nn::NormType::kRMSNorm;
@@ -51,7 +51,8 @@ inline void SanitizeTinyMixtralConfig(const nn::TransformerConfig &c) {
     CHECK_EQ(c.n_head % c.n_kv_head, 0) << "n_head must be divisible by n_kv_head for GQA";
     CHECK_GT(c.n_embd, 0);
     CHECK_EQ(c.n_embd % c.n_head, 0) << "n_embd must be divisible by n_head";
-    CHECK(c.attention_type == nn::AttentionType::kRoPE) << "tiny Mixtral requires RoPE attention";
+    CHECK(c.position_embedding_type == nn::PositionEmbeddingType::kRoPE)
+        << "tiny Mixtral requires RoPE position embedding";
     CHECK(c.activation_type == nn::MLPType::kSwiGLU) << "tiny Mixtral requires SwiGLU activation";
     CHECK(c.ffn_type == nn::FFNType::kMoE) << "tiny Mixtral requires MoE FFN";
     CHECK(c.norm_type == nn::NormType::kRMSNorm) << "tiny Mixtral requires RMSNorm";
