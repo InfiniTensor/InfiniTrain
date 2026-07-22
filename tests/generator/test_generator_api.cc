@@ -170,3 +170,15 @@ TEST(GeneratorAPITest, CurrentSeedRelationship) {
     EXPECT_NE(new_seed, old_seed);
     EXPECT_EQ(new_seed, gen.CurrentSeed());
 }
+
+TEST(GeneratorAPITest, EqualityOperator) {
+    auto gen1 = core::MakeGenerator<StubGeneratorImpl>(1);
+
+    auto gen2 = gen1;
+
+    auto gen3 = gen1.Clone();
+
+    EXPECT_TRUE(gen1 == gen2);
+
+    EXPECT_FALSE(gen1 == gen3);
+}

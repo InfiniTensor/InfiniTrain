@@ -163,3 +163,38 @@ TEST(GeneratorThreadSafety, ConcurrentSeedAndDrawConsistency) {
     auto values2 = DrawCPU(gen, 64);
     EXPECT_EQ(values1, values2);
 }
+
+TEST(GeneratorThreadSafety, CloneConcurrentDraw) {
+    auto gen = MakeCPUGenerator(123);
+
+    auto cloned = gen.Clone();
+
+    std::thread t1([&]() { DrawCPU(gen, 1000); });
+
+    std::thread t2([&]() { DrawCPU(cloned, 1000); });
+
+    t1.join();
+
+    t2.join();
+
+    EXPECT_TRUE(gen.Defined());
+
+    EXPECT_TRUE(cloned.Defined());
+}
+
+TEST(GeneratorThreadSafety, ConcurrentClone) {
+    auto gen = MakeCPUGenerator(42);
+
+    constexpr int kThreads = 8;
+
+    std::vector<std::thread> threads;
+
+    for (int i = 0; i < kThreads; ++i) {
+        threads.emplace_back([&]() {
+            auto cloned = gen.Clone();
+            EXPECT_TRUE(cloned.Defined());
+        });
+    }
+
+    for (auto &t : threads) { t.join(); }
+}

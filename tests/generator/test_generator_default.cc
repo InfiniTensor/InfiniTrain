@@ -66,6 +66,22 @@ TEST(GeneratorDefaultTest, GlobalManualSeedResetsCPUDefault) {
     EXPECT_EQ(restored.CurrentSeed(), 555u);
 }
 
+TEST(GeneratorDefaultTest, DefaultGeneratorStateRoundTrip) {
+    core::ManualSeed(123);
+
+    auto gen = core::detail::DefaultCPUGenerator();
+
+    auto state = gen.GetState();
+
+    auto seq1 = DrawCPU(gen, 32);
+
+    gen.SetState(state);
+
+    auto seq2 = DrawCPU(gen, 32);
+
+    EXPECT_EQ(seq1, seq2);
+}
+
 #ifdef USE_CUDA
 
 TEST(GeneratorDefaultTest, FutureDefaultGeneratorUsesLastManualSeed) {
@@ -101,6 +117,25 @@ TEST(GeneratorDefaultTest, MultiDeviceIndependence) {
     }
     EXPECT_EQ(cuda3.GetOffset(), 42u);
     EXPECT_EQ(cuda4.GetOffset(), 0u);
+}
+
+TEST(GeneratorDefaultTest, DefaultCUDAGeneratorStateRoundTrip) {
+    core::ManualSeed(321);
+
+    auto gen = core::detail::DefaultCUDAGenerator(0);
+
+    auto state = gen.GetState();
+
+    auto *impl = gen.Get<core::CUDAGeneratorImpl>();
+
+    {
+        std::lock_guard<std::mutex> lock(impl->mutex_);
+        impl->PhiloxEngineInputs(128);
+    }
+
+    gen.SetState(state);
+
+    EXPECT_EQ(gen.GetOffset(), 0u);
 }
 
 #endif // USE_CUDA

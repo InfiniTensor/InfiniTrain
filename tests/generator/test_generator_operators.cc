@@ -338,4 +338,108 @@ TEST_P(GeneratorOperatorsTest, DropoutRejectsIllegalProbability) {
     }
 }
 
+// ============================================================================
+
+TEST_P(GeneratorOperatorsTest, DifferentTensorShapesAdvanceOffsetCorrectly) {
+    SKIP_CPU();
+    auto gen = MakeDeviceGenerator(123);
+
+    auto t1 = MakeFloatTensor(13);
+    auto t2 = MakeFloatTensor(257);
+
+    nn::init::Uniform(t1, 0.f, 1.f, gen);
+    auto offset1 = gen.GetOffset();
+
+    nn::init::Uniform(t2, 0.f, 1.f, gen);
+    auto offset2 = gen.GetOffset();
+
+    EXPECT_GT(offset1, 0u);
+    EXPECT_GT(offset2, offset1);
+}
+
+TEST_P(GeneratorOperatorsTest, RestoreGeneratorStateRestoresSequence) {
+    auto gen = MakeDeviceGenerator(777);
+
+    auto state = gen.GetState();
+
+    auto t1 = MakeFloatTensor(64);
+    auto t2 = MakeFloatTensor(64);
+
+    nn::init::Uniform(t1, 0, 1, gen);
+
+    gen.SetState(state);
+
+    nn::init::Uniform(t2, 0, 1, gen);
+
+    EXPECT_EQ(ReadFloats(t1), ReadFloats(t2));
+}
+
+// ============================================================================
+// Generator Offset Tests
+// ============================================================================
+TEST_P(GeneratorOperatorsTest, UniformOffsetMatchesExpected) {
+    SKIP_CPU();
+    auto gen = MakeDeviceGenerator(123);
+
+    auto tensor = MakeFloatTensor(1000);
+
+    nn::init::Uniform(tensor, 0.f, 1.f, gen);
+
+    EXPECT_GT(gen.GetOffset(), 0u);
+}
+TEST_P(GeneratorOperatorsTest, NormalOffsetMatchesExpected) {
+    SKIP_CPU();
+    auto gen = MakeDeviceGenerator(123);
+
+    auto tensor = MakeFloatTensor(1000);
+
+    nn::init::Normal(tensor, 0.f, 1.f, gen);
+
+    EXPECT_GT(gen.GetOffset(), 0u);
+}
+// ============================================================================
+
+TEST_P(GeneratorOperatorsTest, DropoutAdvancesGeneratorOffset) {
+    SKIP_CPU();
+    auto gen = MakeDeviceGenerator(123);
+
+    auto tensor = MakeOnesTensor(1000);
+
+    EXPECT_EQ(gen.GetOffset(), 0u);
+
+    nn::init::Dropout(tensor, 0.5f, gen);
+
+    EXPECT_GT(gen.GetOffset(), 0u);
+}
+TEST_P(GeneratorOperatorsTest, UniformUsesSameGeneratorAcrossTensorSizes) {
+    SKIP_CPU();
+    auto gen = MakeDeviceGenerator(123);
+
+    auto a = MakeFloatTensor(17);
+    auto b = MakeFloatTensor(31);
+
+    nn::init::Uniform(a, 0.f, 1.f, gen);
+
+    auto offset_after_first = gen.GetOffset();
+
+    nn::init::Uniform(b, 0.f, 1.f, gen);
+
+    EXPECT_GT(gen.GetOffset(), offset_after_first);
+}
+TEST_P(GeneratorOperatorsTest, DropoutUsesSameGeneratorAcrossTensorSizes) {
+    SKIP_CPU();
+    auto gen = MakeDeviceGenerator(123);
+
+    auto a = MakeOnesTensor(17);
+    auto b = MakeOnesTensor(31);
+
+    nn::init::Dropout(a, 0.5f, gen);
+
+    auto offset_after_first = gen.GetOffset();
+
+    nn::init::Dropout(b, 0.5f, gen);
+
+    EXPECT_GT(gen.GetOffset(), offset_after_first);
+}
+
 INFINI_TRAIN_REGISTER_TEST(GeneratorOperatorsTest);

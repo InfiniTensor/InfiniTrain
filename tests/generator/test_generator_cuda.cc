@@ -109,4 +109,59 @@ TEST(CUDAGeneratorTest, SetStateRoundTripPreservesSeed) {
     EXPECT_EQ(gen.GetOffset(), 100u);
 }
 
+TEST(CUDAGeneratorTest, ZeroIncrementDoesNotAdvanceOffset) {
+    core::Generator gen(std::make_shared<core::CUDAGeneratorImpl>(0, 1));
+
+    auto *impl = gen.Get<core::CUDAGeneratorImpl>();
+
+    {
+        std::lock_guard<std::mutex> lock(impl->mutex_);
+        auto state = impl->PhiloxEngineInputs(0);
+
+        EXPECT_EQ(state.first, 1u);
+        EXPECT_EQ(state.second, 0u);
+    }
+
+    EXPECT_EQ(gen.GetOffset(), 0u);
+}
+
+TEST(CUDAGeneratorTest, MultipleSmallIncrements) {
+    core::Generator gen(std::make_shared<core::CUDAGeneratorImpl>(0, 1));
+
+    auto *impl = gen.Get<core::CUDAGeneratorImpl>();
+
+    {
+        std::lock_guard<std::mutex> lock(impl->mutex_);
+
+        impl->PhiloxEngineInputs(3);
+        impl->PhiloxEngineInputs(5);
+        impl->PhiloxEngineInputs(7);
+    }
+
+    EXPECT_EQ(gen.GetOffset(), 15u);
+}
+
+TEST(CUDAGeneratorTest, LargeIncrement) {
+    core::Generator gen(std::make_shared<core::CUDAGeneratorImpl>(0, 1));
+
+    auto *impl = gen.Get<core::CUDAGeneratorImpl>();
+
+    constexpr uint64_t kIncrement = 1ull << 20;
+
+    {
+        std::lock_guard<std::mutex> lock(impl->mutex_);
+        impl->PhiloxEngineInputs(kIncrement);
+    }
+
+    EXPECT_EQ(gen.GetOffset(), kIncrement);
+}
+
+TEST(CUDAGeneratorTest, SetOffsetWorks) {
+    core::Generator gen(std::make_shared<core::CUDAGeneratorImpl>(0, 1));
+
+    gen.SetOffset(1234);
+
+    EXPECT_EQ(gen.GetOffset(), 1234u);
+}
+
 #endif // USE_CUDA
