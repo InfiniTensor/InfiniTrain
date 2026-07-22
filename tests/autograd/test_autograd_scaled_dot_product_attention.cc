@@ -22,6 +22,9 @@ struct AttentionResult {
     std::vector<float> dq;
     std::vector<float> dk;
     std::vector<float> dv;
+    DataType dq_dtype;
+    DataType dk_dtype;
+    DataType dv_dtype;
 };
 
 struct PackedAttentionResult {
@@ -48,14 +51,17 @@ public:
 
     bool TryBypassAccumulate(const std::shared_ptr<Tensor> &, const std::shared_ptr<Tensor> &grad_output, bool,
                              float) override {
+        dtype_ = grad_output->Dtype();
         values_ = ToFloatVector(grad_output);
         return true;
     }
 
     const std::vector<float> &Values() const { return values_; }
+    DataType Dtype() const { return dtype_; }
 
 private:
     std::vector<float> values_;
+    DataType dtype_ = DataType::kFLOAT32;
 };
 
 std::shared_ptr<Tensor> MakeTensor(const std::vector<float> &values, const std::vector<int64_t> &dims, Device device,
@@ -104,6 +110,9 @@ AttentionResult RunFlashAttention(Device device, bool expand_kv, float input_sca
         .dq = q_grad->Values(),
         .dk = k_grad->Values(),
         .dv = v_grad->Values(),
+        .dq_dtype = q_grad->Dtype(),
+        .dk_dtype = k_grad->Dtype(),
+        .dv_dtype = v_grad->Dtype(),
     };
 }
 
@@ -307,6 +316,16 @@ TEST_P(AutogradScaledDotProductAttentionTest, NativeGqaMatchesExpandedKv) {
     ExpectClose(native_gqa.dq, expanded_kv.dq, 0.001F, 0.9999F, "dQ");
     ExpectClose(native_gqa.dk, expanded_kv.dk, 0.01F, 0.9999F, "dK");
     ExpectClose(native_gqa.dv, expanded_kv.dv, 0.01F, 0.9999F, "dV");
+}
+
+TEST_P(AutogradScaledDotProductAttentionTest, Bfloat16BackwardPropagatesFloat32Gradients) {
+    ONLY_CUDA();
+
+    const auto result = RunFlashAttention(GetDevice(), false);
+
+    EXPECT_EQ(result.dq_dtype, DataType::kFLOAT32);
+    EXPECT_EQ(result.dk_dtype, DataType::kFLOAT32);
+    EXPECT_EQ(result.dv_dtype, DataType::kFLOAT32);
 }
 
 TEST_P(AutogradScaledDotProductAttentionTest, NativeGqaMatchesExpandedKvWithPackedInput) {
