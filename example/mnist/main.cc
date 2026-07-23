@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
             auto new_image = std::make_shared<Tensor>(image->To(device));
             auto new_label = std::make_shared<Tensor>(label->To(device));
 
-            auto outputs = network.Forward({new_image});
+            auto outputs = network({new_image});
             optimizer.ZeroGrad();
 
             auto loss = loss_fn.Forward({outputs[0], new_label});
@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
         auto new_label = std::make_shared<Tensor>(label->To(device));
 
         auto label_cpu = label->To(cpu_device);
-        auto outputs = network.Forward({new_image});
+        auto outputs = network({new_image});
         auto output_cpu = outputs[0]->To(cpu_device);
         auto loss = loss_fn.Forward({outputs[0], new_label});
         auto loss_cpu = loss[0]->To(cpu_device);
