@@ -31,7 +31,6 @@ inline nn::TransformerConfig TinyMixtralConfig() {
 
     nn::MoEConfig moe_config;
     moe_config.num_experts = 8;
-    moe_config.expert_parallel_size = 1; // Single-rank validation scale.
     moe_config.router_topk = 2;
     moe_config.moe_ffn_hidden_size = 1792; // Scaled down as 512 * 3.5; real Mixtral uses 14336.
     moe_config.token_dispatcher_type = nn::MoEConfig::TokenDispatcherType::kAllGather; // Single-rank validation path.
@@ -63,7 +62,6 @@ inline void SanitizeTinyMixtralConfig(const nn::TransformerConfig &c) {
 
     const auto &moe = c.moe_config.value();
     CHECK_GT(moe.num_experts, 0);
-    CHECK_EQ(moe.expert_parallel_size, 1) << "tiny Mixtral single-rank validation expects EP=1";
     CHECK_GT(moe.router_topk, 0);
     CHECK_LE(moe.router_topk, moe.num_experts);
     CHECK_GT(moe.moe_ffn_hidden_size, 0);

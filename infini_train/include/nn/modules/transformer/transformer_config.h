@@ -40,7 +40,6 @@ struct MoEConfig {
     };
 
     int64_t num_experts = 0;
-    int64_t expert_parallel_size = 1;
     int64_t router_topk = 1;
     bool router_pre_softmax = false;
     std::optional<float> router_topk_scaling_factor = std::nullopt;
