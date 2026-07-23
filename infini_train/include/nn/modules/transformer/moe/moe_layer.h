@@ -21,6 +21,7 @@ public:
 
 private:
     TransformerConfig config_;
+    int64_t num_local_experts_ = 0;
 };
 
 } // namespace infini_train::nn::moe
