@@ -44,9 +44,12 @@ CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config) : Clon
         /*skip_bias_add=*/false,
         /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 
-    // causal mask: (1, 1, block_size, block_size)
-    buffers_[kParamBiasName] = function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
-                                   ->View({1, 1, config_.block_size, config_.block_size});
+    // FIXME(zbl): Decouple causal-mask ownership from position embedding. For now, only learned-absolute models use
+    //             this precomputed buffer; RoPE callers provide a runtime-sized mask.
+    if (config_.position_embedding_type == PositionEmbeddingType::kLearnedAbsolute) {
+        buffers_[kParamBiasName] = function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
+                                       ->View({1, 1, config_.block_size, config_.block_size});
+    }
 }
 
 void CausalSelfAttention::SetupAttention(const TransformerConfig &config) {
