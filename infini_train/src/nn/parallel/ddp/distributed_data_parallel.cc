@@ -120,6 +120,7 @@ DistributedDataParallel::DistributedDataParallel(
     validate_device(buffer->GetDevice(), "buffer");
   }
   modules_[kModuleName] = std::move(module);
+  SynchronizeModuleState();
 
   if (ddp_config.zero_stage >= 1) {
     BuildParamAndGradBuffers(trainable_params);
@@ -149,6 +150,33 @@ DistributedDataParallel::DistributedDataParallel(
         reducers_.push_back(std::move(reducer));
       }
     }
+  }
+}
+
+void DistributedDataParallel::SynchronizeModuleState() {
+  auto state = modules_.at(kModuleName)->StateDict();
+  std::vector<std::string> names;
+  names.reserve(state.size());
+  for (const auto &[name, _] : state) {
+    names.push_back(name);
+  }
+  std::sort(names.begin(), names.end());
+
+  std::vector<std::shared_ptr<Tensor>> tensors;
+  tensors.reserve(names.size());
+  for (const auto &name : names) {
+    auto tensor = state.at(name);
+    CHECK(tensor != nullptr)
+        << "DDP module state tensor '" << name << "' is null";
+    if (!tensors.empty()) {
+      CHECK_EQ(tensor->GetDevice(), tensors.front()->GetDevice())
+          << "DDP module state tensors must be on one device";
+    }
+    tensors.push_back(std::move(tensor));
+  }
+
+  if (!tensors.empty() && dense_dp_pg_) {
+    dense_dp_pg_->Broadcast(tensors, 0);
   }
 }
 
