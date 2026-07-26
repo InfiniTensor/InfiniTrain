@@ -73,11 +73,13 @@ COMPARE_LOG_DIR="$(read_var COMPARE_LOG_DIR)";  : "${COMPARE_LOG_DIR:=}"
 RUN_CTEST="$(read_var RUN_CTEST)";              : "${RUN_CTEST:=true}"
 RUN_PROFILE_TEST="$(read_var RUN_PROFILE_TEST)";  : "${RUN_PROFILE_TEST:=true}"
 CKPT_ROOT_DIR="$(read_var CKPT_ROOT_DIR)";      : "${CKPT_ROOT_DIR:=/data1/ckpt}"
+MIXTRAL_INPUT_BIN="$(read_var MIXTRAL_INPUT_BIN)";       : "${MIXTRAL_INPUT_BIN:=/data/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin}"
+MIXTRAL_LLMC_FILEPATH="$(read_var MIXTRAL_LLMC_FILEPATH)"; : "${MIXTRAL_LLMC_FILEPATH:=/data/shared/InfiniTrain-dev/data/llmc/mixtral/mixtral_megatron_export.bin}"
+GPT2_TEST_GROUPS="$(read_var GPT2_TEST_GROUPS)";          : "${GPT2_TEST_GROUPS:=basic,zero,lora,checkpoint}"
+LLAMA3_TEST_GROUPS="$(read_var LLAMA3_TEST_GROUPS)";      : "${LLAMA3_TEST_GROUPS:=basic,zero,lora,checkpoint}"
+MIXTRAL_TEST_GROUPS="$(read_var MIXTRAL_TEST_GROUPS)";    : "${MIXTRAL_TEST_GROUPS:=moe}"
 
-mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
-
-# export custom PATHs
-export BUILD_DIR LOG_DIR PROFILE_LOG_DIR
+# export custom variables from config first. LOG_DIR/PROFILE_LOG_DIR are normalized below.
 while IFS="=" read -r k v; do
     [[ -z "$k" || "$k" == "null" ]] && continue
     export "$k"="$v"
@@ -86,6 +88,48 @@ done < <(jq -r '.variables | to_entries[] | "\(.key)=\(.value)"' "$CONFIG_FILE")
 # Global variable to save the last cmake command
 LAST_CMAKE_CMD=""
 declare -A SELECTED_TAGS=()
+
+RUN_STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
+RUN_ID="$(date '+%Y%m%d_%H%M%S')"
+RUN_DATE="$(date '+%Y%m%d')"
+GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+: "${GIT_BRANCH:=unknown}"
+GIT_COMMIT_FULL="$(git rev-parse HEAD 2>/dev/null || true)"
+: "${GIT_COMMIT_FULL:=unknown}"
+GIT_COMMIT_SHORT="${GIT_COMMIT_FULL:0:7}"
+SAFE_GIT_BRANCH="${GIT_BRANCH//\//_}"
+SAFE_GIT_BRANCH="${SAFE_GIT_BRANCH//[[:space:]]/_}"
+SAFE_GIT_BRANCH="$(printf '%s' "$SAFE_GIT_BRANCH" | tr -cd '[:alnum:]_.-')"
+: "${SAFE_GIT_BRANCH:=unknown}"
+
+LOG_DIR_PARENT="$(dirname "$LOG_DIR")"
+if [[ "$LOG_DIR_PARENT" == "." ]]; then
+    RUN_OUTPUT_DIR="${RUN_DATE}/${SAFE_GIT_BRANCH}_${GIT_COMMIT_SHORT}"
+else
+    RUN_OUTPUT_DIR="${LOG_DIR_PARENT}/${RUN_DATE}/${SAFE_GIT_BRANCH}_${GIT_COMMIT_SHORT}"
+fi
+LOG_DIR="${RUN_OUTPUT_DIR}/logs"
+PROFILE_LOG_DIR="${RUN_OUTPUT_DIR}/profile_logs"
+
+mkdir -p "$BUILD_DIR" "$LOG_DIR" "$PROFILE_LOG_DIR"
+export BUILD_DIR LOG_DIR PROFILE_LOG_DIR
+
+RUN_METADATA_FILE="${LOG_DIR}/run_metadata.log"
+: > "$RUN_METADATA_FILE"
+RUN_METADATA_FILE="$(realpath "$RUN_METADATA_FILE")"
+{
+    echo "[RUN_STARTED_AT] $RUN_STARTED_AT"
+    echo "[RUN_ID] $RUN_ID"
+    echo "[GIT_BRANCH] $GIT_BRANCH"
+    echo "[GIT_COMMIT] $GIT_COMMIT_FULL"
+    echo "[GIT_COMMIT_SHORT] $GIT_COMMIT_SHORT"
+    echo "[CONFIG_FILE] $CONFIG_FILE"
+    echo "[LOG_DIR] $(realpath "$LOG_DIR")"
+    echo "[PROFILE_LOG_DIR] $(realpath "$PROFILE_LOG_DIR")"
+} > "$RUN_METADATA_FILE"
+echo -e "\033[1;33mRun metadata:\033[0m $RUN_METADATA_FILE"
+echo -e "\033[1;33mRun log dir:\033[0m $(realpath "$LOG_DIR")"
+echo -e "\033[1;33mRun profile log dir:\033[0m $(realpath "$PROFILE_LOG_DIR")"
 
 normalize_tag() {
     local raw="$1"
@@ -260,7 +304,13 @@ run_and_log() {
     fi
 
     # Write the current run command to the log
-    echo "[COMMAND] $cmd" >> "$log_path"
+    echo "[RUN_METADATA] $RUN_METADATA_FILE" >> "$log_path"
+    echo "[RUN_STARTED_AT] $RUN_STARTED_AT" >> "$log_path"
+    echo "[GIT_BRANCH] $GIT_BRANCH" >> "$log_path"
+    echo "[GIT_COMMIT] $GIT_COMMIT_FULL" >> "$log_path"
+    echo "[GIT_COMMIT_SHORT] $GIT_COMMIT_SHORT" >> "$log_path"
+    local expanded_cmd="${cmd//\$LORA_WEIGHTS_DIR/$LORA_WEIGHTS_DIR}"
+    echo "[COMMAND] $expanded_cmd" >> "$log_path"
 
     # Run the command and append both stdout and stderr to the log file
     if ! eval "$cmd" >> "$log_path" 2>&1; then
@@ -341,6 +391,54 @@ args_string_for_test() {
        sed "s|@CKPT_ROOT_DIR@|${CKPT_ROOT_DIR}|g"
 }
 
+tag_enabled_for_model() {
+    local tag="$1"
+    local enabled_tags="$2"
+
+    if [[ "$enabled_tags" == "*" ]]; then
+        return 0
+    fi
+
+    IFS=',' read -r -a tags <<< "$enabled_tags"
+    for raw_tag in "${tags[@]}"; do
+        local enabled_tag
+        enabled_tag="$(normalize_tag "$raw_tag")"
+        if [[ "$enabled_tag" == "$tag" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+model_has_selected_group() {
+    local enabled_tags="$1"
+
+    for ((gi=0; gi<num_groups; ++gi)); do
+        local group_tag
+        group_tag=$(jq -r ".test_groups[$gi].tag" "$CONFIG_FILE")
+        if [[ ${#SELECTED_TAGS[@]} -gt 0 && -z "${SELECTED_TAGS[$group_tag]:-}" ]]; then
+            continue
+        fi
+        if tag_enabled_for_model "$group_tag" "$enabled_tags"; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+check_model_inputs() {
+    if model_has_selected_group "$MIXTRAL_TEST_GROUPS"; then
+        if [[ ! -f "$MIXTRAL_INPUT_BIN" ]]; then
+            echo "Error: missing MIXTRAL_INPUT_BIN: $MIXTRAL_INPUT_BIN" >&2
+            exit 1
+        fi
+        if [[ ! -f "$MIXTRAL_LLMC_FILEPATH" ]]; then
+            echo "Error: missing MIXTRAL_LLMC_FILEPATH: $MIXTRAL_LLMC_FILEPATH" >&2
+            exit 1
+        fi
+    fi
+}
+
 # Run tests
 num_basic_compile_commands=$(jq '.basic_compile_commands | length' "$CONFIG_FILE")
 num_groups=$(jq '.test_groups | length' "$CONFIG_FILE")
@@ -362,6 +460,8 @@ if [[ "$selected_group_count" -eq 0 ]]; then
     echo "Error: No matching test groups found for --only-run=${ONLY_RUN_TAGS}"
     exit 1
 fi
+
+check_model_inputs
 
 for ((id=0; id<num_basic_compile_commands; ++id)); do
     basic_compile_id=$(jq -r ".basic_compile_commands[$id].id" "$CONFIG_FILE")
@@ -410,16 +510,25 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
 
             for ((ti=0; ti<num_tests; ++ti)); do
                 test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
-                gpt2_arg_str="$(args_string_for_test "$gi" "$ti" "gpt2" "$test_id")"
-                llama3_arg_str="$(args_string_for_test "$gi" "$ti" "llama3" "$test_id")"
+                if tag_enabled_for_model "$group_tag" "$GPT2_TEST_GROUPS"; then
+                    LORA_WEIGHTS_DIR="$GPT2_LORA_WEIGHTS_DIR"
+                    gpt2_arg_str="$(args_string_for_test "$gi" "$ti" "gpt2" "$test_id")"
+                    gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
+                    run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+                fi
 
-                # gpt2
-                gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
-                run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+                if tag_enabled_for_model "$group_tag" "$LLAMA3_TEST_GROUPS"; then
+                    LORA_WEIGHTS_DIR="$LLAMA3_LORA_WEIGHTS_DIR"
+                    llama3_arg_str="$(args_string_for_test "$gi" "$ti" "llama3" "$test_id")"
+                    llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
+                    run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+                fi
 
-                # llama3
-                llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
-                run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+                if tag_enabled_for_model "$group_tag" "$MIXTRAL_TEST_GROUPS"; then
+                    mixtral_arg_str="$(args_string_for_test "$gi" "$ti" "mixtral" "$test_id")"
+                    mixtral_cmd="${prefix}./mixtral --input_bin ${MIXTRAL_INPUT_BIN} --llmc_filepath ${MIXTRAL_LLMC_FILEPATH} --device cuda ${mixtral_arg_str}"
+                    run_and_log "$mixtral_cmd" "mixtral_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+                fi
             done
 
             # Clean checkpoints from previous run to avoid disk overflow and stale state
@@ -457,3 +566,6 @@ fi
 
 echo -e "\n\033[1;36m[END OF TEST] Cleaning build directory after all tests\033[0m"
 clean_build_dir
+
+echo -e "\n\033[1;33mNext step:\033[0m"
+echo "python3 write_to_feishu_sheet.py token.json --log-dir \"$(realpath "$RUN_OUTPUT_DIR")\""

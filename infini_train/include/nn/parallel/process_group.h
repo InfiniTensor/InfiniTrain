@@ -52,6 +52,15 @@ public:
                                                 function::ReduceOpType reduce_op = function::ReduceOpType::kSum,
                                                 bool async_op = false) const;
 
+    // root_rank_in_group is ProcessGroup-local rank. Broadcast updates tensors in place.
+    virtual std::shared_ptr<Work> Broadcast(const std::vector<std::shared_ptr<Tensor>> &tensors, int root_rank_in_group,
+                                            bool async_op = false) const;
+
+    // Root provides rank-major input_tensors: rank * output_tensors.size() + tensor_index.
+    virtual std::shared_ptr<Work> Scatter(const std::vector<std::shared_ptr<Tensor>> &output_tensors,
+                                          const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                                          int root_rank_in_group, bool async_op = false) const;
+
     virtual std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
                                        bool async_op = false) const;
 
@@ -59,14 +68,16 @@ public:
                                        bool async_op = false) const;
 
     // Legacy communication APIs (Single-stream)
+    // FIXME(dcj): BroadCast_ and Scatter_ are temporarily retained with trailing underscores for existing DP callers.
+    // Replace direct DP usage with a higher-level communication abstraction.
     virtual std::vector<std::shared_ptr<Tensor>>
-    BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const;
+    BroadCast_(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const;
 
     virtual std::vector<std::shared_ptr<Tensor>>
     ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<Tensor>>> &grads, Device destination) const;
 
-    virtual std::vector<std::shared_ptr<Tensor>> Scatter(const std::shared_ptr<Tensor> &tensor,
-                                                         std::vector<Device> devices, int64_t dim) const;
+    virtual std::vector<std::shared_ptr<Tensor>> Scatter_(const std::shared_ptr<Tensor> &tensor,
+                                                          std::vector<Device> devices, int64_t dim) const;
 
     virtual std::shared_ptr<Tensor> Gather(const std::vector<std::shared_ptr<Tensor>> &tensors, Device destination,
                                            int64_t dim) const;
@@ -123,25 +134,26 @@ private:
     template <typename Creator, typename = std::enable_if_t<std::is_invocable_v<Creator>>>
     const ProcessGroup *GetOrCreate(const std::string &name, Creator &&creator) {
         std::unique_lock<std::mutex> lock(mutex_);
-        auto [it, inserted] = name_to_group_.emplace(name, nullptr);
+        const bool inserted = name_to_group_.emplace(name, nullptr).second;
         if (!inserted) {
-            while (it->second == nullptr) { cond_.wait(lock); }
-            return it->second.get();
+            cond_.wait(lock, [this, &name]() { return name_to_group_.at(name) != nullptr; });
+            return name_to_group_.at(name).get();
         }
 
         lock.unlock();
         auto new_group = creator();
         lock.lock();
 
-        it->second = std::move(new_group);
+        auto &group = name_to_group_.at(name);
+        group = std::move(new_group);
         cond_.notify_all();
-        return it->second.get();
+        return group.get();
     }
 
 private:
     // TODO(dcj): maybe RWLock later?
     mutable std::mutex mutex_;
-    std::condition_variable cond_;
+    mutable std::condition_variable cond_;
     std::unordered_map<std::string, std::unique_ptr<ProcessGroup>> name_to_group_;
     Device::DeviceType backend_ = Device::DeviceType::kInvalid;
 };

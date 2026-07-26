@@ -1,8 +1,10 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -17,26 +19,24 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
-namespace {
-constexpr char kModuleName[] = "module";
-
-} // namespace
 
 DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, const Rank &rank,
                                                  const DistributedDataParallelConfig ddp_config)
     : ddp_config_(ddp_config),
       ddp_pg_(ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(rank.GlobalRank()))) {
+    CHECK(module != nullptr) << "DistributedDataParallel: module must not be null";
     CHECK(ddp_config_.zero_stage >= 0 && ddp_config_.zero_stage <= 3)
         << "DistributedDataParallel: zero_stage must be in 0/1/2/3.";
     if (ddp_config_.zero_stage == 3) {
         LOG(FATAL) << "DistributedDataParallel: ZeRO-3 is not implemented yet.";
     }
     for (auto &param : module->Parameters()) {
+        CHECK(param != nullptr) << "DistributedDataParallel: module contains a null parameter";
+        auto device = param->GetDevice();
+        CHECK_EQ(device.index(), rank.thread_rank()) << "All parameters must be on the same device as the module";
         if (!param->requires_grad()) {
             continue;
         }
-        auto device = param->GetDevice();
-        CHECK_EQ(device.index(), rank.thread_rank()) << "All parameters must be on the same device as the module";
         if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
             auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(
                 function::ReduceOpType::kAvg, ddp_pg_);
@@ -44,10 +44,12 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         }
     }
     for (auto &buffer : module->Buffers()) {
+        CHECK(buffer != nullptr) << "DistributedDataParallel: module contains a null buffer";
         CHECK_EQ(buffer->GetDevice().index(), rank.thread_rank())
             << "All buffers must be on the same device as the module";
     }
     modules_[kModuleName] = std::move(module);
+    SynchronizeModuleState();
 
     if (ddp_config.zero_stage >= 1) {
         BuildParamAndGradBuffers();
@@ -63,6 +65,32 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         reducer_ = std::make_shared<Reducer>(params, bucket_indices, ddp_config);
         reducer_->AttachHooksToParameters();
     }
+}
+
+void DistributedDataParallel::SynchronizeModuleState() {
+    auto state = modules_.at(kModuleName)->StateDict();
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> named_tensors(state.begin(), state.end());
+    std::sort(named_tensors.begin(), named_tensors.end(),
+              [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
+
+    std::vector<std::shared_ptr<Tensor>> tensors;
+    tensors.reserve(named_tensors.size());
+    for (const auto &[_, tensor] : named_tensors) { tensors.push_back(tensor); }
+
+    if (tensors.empty()) {
+        return;
+    }
+    CHECK(tensors.front() != nullptr) << "DDP module state tensor '" << named_tensors.front().first << "' is null";
+    const auto expected_device = tensors.front()->GetDevice();
+    for (size_t i = 0; i < tensors.size(); ++i) {
+        CHECK(tensors[i] != nullptr) << "DDP module state tensor '" << named_tensors[i].first << "' is null";
+        CHECK_EQ(tensors[i]->GetDevice(), expected_device)
+            << "DDP module state tensors must be on one device; tensor '" << named_tensors[i].first << "' is on "
+            << tensors[i]->GetDevice() << ", expected " << expected_device;
+    }
+
+    constexpr int kDataParallelRootRank = 0;
+    ddp_pg_->Broadcast(tensors, kDataParallelRootRank);
 }
 
 void DistributedDataParallel::BuildParamAndGradBuffers() {
@@ -216,4 +244,6 @@ DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &inp
     }
     return outputs;
 }
+
+std::shared_ptr<nn::Module> DistributedDataParallel::module() const { return modules_.at(kModuleName); }
 } // namespace infini_train::nn::parallel

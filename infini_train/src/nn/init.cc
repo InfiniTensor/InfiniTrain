@@ -12,32 +12,37 @@
 
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/generator.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/generator_internal.h"
+#include "infini_train/src/random_utils.h"
 
 #ifdef USE_CUDA
 namespace infini_train::kernels::cuda {
 void RandomUniformFloat32(void *data, int64_t num_elements, float from, float to, uint64_t seed, uint64_t offset,
                           Device device);
-void RandomNormalFloat32(void *data, int64_t num_elements, float mean, float std, uint64_t seed, uint64_t offset,
+void RandomNormalFloat32(void *data, int64_t num_elements, float mean, float stddev, uint64_t seed, uint64_t offset,
                          Device device);
 } // namespace infini_train::kernels::cuda
 #endif
 
 namespace infini_train::nn::init {
+
 namespace {
-void CheckUniformBounds(float from, float to) {
-    CHECK_LE(from, to);
-    CHECK(std::isfinite(from)) << "Uniform lower bound must be finite";
-    CHECK(std::isfinite(to)) << "Uniform upper bound must be finite";
-    const double range = static_cast<double>(to) - static_cast<double>(from);
-    CHECK_LE(range, static_cast<double>(std::numeric_limits<float>::max()))
-        << "Uniform bounds range exceeds float maximum";
+int64_t CheckedMultiplyFanFactors(int64_t lhs, int64_t rhs) {
+    CHECK_GE(lhs, 0) << "Fan calculation requires non-negative tensor dimensions";
+    CHECK_GE(rhs, 0) << "Fan calculation requires non-negative tensor dimensions";
+    if (lhs == 0 || rhs == 0) {
+        return 0;
+    }
+    CHECK_LE(lhs, std::numeric_limits<int64_t>::max() / rhs) << "Fan calculation overflow";
+    return lhs * rhs;
 }
 } // namespace
 
-std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean, float std,
+std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean, float stddev,
                                std::shared_ptr<Generator> generator) {
-    CHECK_GE(std, 0.0f);
+    CHECK_GE(stddev, 0.0f);
     CHECK(tensor->Dtype() == DataType::kFLOAT32) << "Random normal currently supports float32 tensors";
     const int64_t num_elements = tensor->NumElements();
 
@@ -54,21 +59,17 @@ std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean
     if (device.IsCUDA()) {
         CHECK_LE(num_elements, static_cast<int64_t>(std::numeric_limits<uint64_t>::max() / 2))
             << "Random normal tensor is too large";
-        const auto [seed, offset] = resolved_generator->ReserveRandomOffset(static_cast<uint64_t>(num_elements) * 2);
+        const auto [seed, offset] = detail::GeneratorAccessor::ReserveCUDARandomOffset(
+            resolved_generator, static_cast<uint64_t>(num_elements) * 2);
         core::DeviceGuard guard(device);
-        kernels::cuda::RandomNormalFloat32(tensor->DataPtr(), num_elements, mean, std, seed, offset, device);
+        kernels::cuda::RandomNormalFloat32(tensor->DataPtr(), num_elements, mean, stddev, seed, offset, device);
         return tensor;
     }
 #endif
 
-    std::vector<float> buffer(num_elements);
-    resolved_generator->FillNormal(buffer, mean, std);
-    core::DeviceGuard guard(device);
-    auto impl = core::GetDeviceGuardImpl(device.type());
-
-    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
-                      impl->GetStream(device));
+    CHECK(device.IsCPU()) << "Random normal backend is not available for device " << device;
+    detail::GeneratorAccessor::FillCPUNormal(resolved_generator, static_cast<float *>(tensor->DataPtr()),
+                                             tensor->NumElements(), mean, stddev);
     return tensor;
 }
 
@@ -78,13 +79,10 @@ std::pair<int64_t, int64_t> CalculateFanInAndFanOut(const std::shared_ptr<Tensor
     }
     const auto num_input_fmaps = tensor->Dims()[1];
     const auto num_output_fmaps = tensor->Dims()[0];
-    int64_t receptive_field_size = 1;
-    if (tensor->Dims().size() > 2) {
-        receptive_field_size
-            *= std::accumulate(tensor->Dims().begin() + 2, tensor->Dims().end(), 1, std::multiplies<int64_t>());
-    }
-    const auto fan_in = num_input_fmaps * receptive_field_size;
-    const auto fan_out = num_output_fmaps * receptive_field_size;
+    const int64_t receptive_field_size
+        = std::accumulate(tensor->Dims().begin() + 2, tensor->Dims().end(), int64_t{1}, CheckedMultiplyFanFactors);
+    const int64_t fan_in = CheckedMultiplyFanFactors(num_input_fmaps, receptive_field_size);
+    const int64_t fan_out = CheckedMultiplyFanFactors(num_output_fmaps, receptive_field_size);
     return {fan_in, fan_out};
 }
 
@@ -129,14 +127,14 @@ std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor, fl
     }
     const auto fan = CalculateCorrectFan(tensor, mode);
     const auto gain = CalculateGain(nonlinearity, a);
-    const float std = gain / sqrt(fan);
-    const float bound = sqrt(3.0f) * std; // Calculate uniform bounds from standard deviation
+    const float stddev = gain / sqrt(fan);
+    const float bound = sqrt(3.0f) * stddev; // Calculate uniform bounds from standard deviation
     return tensor->Uniform(-bound, bound, generator);
 }
 
 std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, float b,
                                 std::shared_ptr<Generator> generator) {
-    CheckUniformBounds(a, b);
+    detail::CheckUniformBounds(a, b);
     CHECK(tensor->Dtype() == DataType::kFLOAT32) << "Random uniform currently supports float32 tensors";
     const int64_t num_elements = tensor->NumElements();
 
@@ -151,22 +149,17 @@ std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, 
 
 #ifdef USE_CUDA
     if (device.IsCUDA()) {
-        const auto [seed, offset] = resolved_generator->ReserveRandomOffset(static_cast<uint64_t>(num_elements));
+        const auto [seed, offset] = detail::GeneratorAccessor::ReserveCUDARandomOffset(
+            resolved_generator, static_cast<uint64_t>(num_elements));
         core::DeviceGuard guard(device);
         kernels::cuda::RandomUniformFloat32(tensor->DataPtr(), num_elements, a, b, seed, offset, device);
         return tensor;
     }
 #endif
 
-    std::vector<float> buffer(num_elements);
-    resolved_generator->FillUniform(buffer, a, b);
-
-    core::DeviceGuard guard(device);
-    auto impl = core::GetDeviceGuardImpl(device.type());
-
-    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
-                      impl->GetStream(device));
+    CHECK(device.IsCPU()) << "Random uniform backend is not available for device " << device;
+    detail::GeneratorAccessor::FillCPUUniform(resolved_generator, static_cast<float *>(tensor->DataPtr()),
+                                              tensor->NumElements(), a, b);
 
     return tensor;
 }

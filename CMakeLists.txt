@@ -201,6 +201,14 @@ add_executable(gpt2
 )
 link_infini_train_exe(gpt2)
 
+add_executable(mixtral
+  example/mixtral/main.cc
+  example/common/tiny_shakespeare_dataset.cc
+  example/common/utils.cc
+  example/mixtral/checkpoint_loader.cc
+)
+link_infini_train_exe(mixtral)
+
 add_executable(llama3
   example/llama3/main.cc
   example/common/tiny_shakespeare_dataset.cc

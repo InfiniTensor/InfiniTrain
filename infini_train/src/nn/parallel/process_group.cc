@@ -36,8 +36,8 @@ ProcessGroup::ProcessGroup(int world_size, const std::string &name) : world_size
 
 ProcessGroup::ProcessGroup(Device::DeviceType backend, const std::string &process_group_name,
                            const std::vector<int> &ranks)
-    : backend_(backend), runtime_impl_(core::GetDeviceGuardImpl(backend)), ccl_impl_(core::GetCclImpl(backend)),
-      world_size_(ranks.size()), name_(process_group_name) {
+    : world_size_(ranks.size()), name_(process_group_name), backend_(backend),
+      runtime_impl_(core::GetDeviceGuardImpl(backend)), ccl_impl_(core::GetCclImpl(backend)) {
     CHECK_GT(world_size_, 0);
     if (global::GetNnodes() == 1 && global::GetNprocPerNode() == 1) {
         InitSingleProcess(ranks);
@@ -63,8 +63,8 @@ void ProcessGroup::InitSingleProcess(const std::vector<int> &ranks) {
     std::vector<core::CclComm *> comm_ptrs(static_cast<size_t>(world_size_), nullptr);
     ccl_impl_->CommInitAll(comm_ptrs.data(), world_size_, ranks.data());
 
-    for (int i = 0; i < ranks.size(); ++i) {
-        auto *comm_raw = comm_ptrs[static_cast<size_t>(i)];
+    for (size_t i = 0; i < ranks.size(); ++i) {
+        auto *comm_raw = comm_ptrs[i];
         CHECK_NOTNULL(comm_raw);
         comms_.emplace_back(comm_raw);
 
@@ -72,7 +72,7 @@ void ProcessGroup::InitSingleProcess(const std::vector<int> &ranks) {
         devices_.push_back(device);
 
         device_comm_map_[device.index()] = comm_raw;
-        global_group_rank_map_[device.Rank().GlobalRank()] = i;
+        global_group_rank_map_[device.Rank().GlobalRank()] = static_cast<int>(i);
     }
 }
 
@@ -194,6 +194,119 @@ std::shared_ptr<Work> ProcessGroup::ReduceScatter(const std::shared_ptr<Tensor> 
     }
 }
 
+std::shared_ptr<Work> ProcessGroup::Broadcast(const std::vector<std::shared_ptr<Tensor>> &tensors,
+                                              int root_rank_in_group, bool async_op) const {
+    CHECK_GE(root_rank_in_group, 0);
+    CHECK_LT(root_rank_in_group, world_size_);
+    CHECK(!tensors.empty());
+    CHECK_NOTNULL(tensors[0]);
+
+    const auto device = tensors[0]->GetDevice();
+    CHECK(device.type() == backend_) << "Broadcast tensor backend must match ProcessGroup backend";
+    for (const auto &tensor : tensors) {
+        CHECK_NOTNULL(tensor);
+        CHECK_EQ(device, tensor->GetDevice());
+    }
+    auto group_rank = GetGroupRank(device.Rank().GlobalRank());
+    core::DeviceGuard guard(device);
+    auto *compute_stream = runtime_impl_->GetStream(device);
+    auto *comm_stream = device_stream_map_.at(device.index());
+    auto comm = device_comm_map_.at(device.index());
+
+    auto work = std::make_shared<Work>(device, comm);
+    runtime_impl_->EventRecord(work->ready_event(), compute_stream);
+    runtime_impl_->StreamWaitEvent(comm_stream, work->ready_event(), 0);
+    for (const auto &tensor : tensors) {
+        const void *send_buffer = (group_rank == root_rank_in_group) ? tensor->DataPtr() : nullptr;
+        ccl_impl_->Broadcast(send_buffer, tensor->DataPtr(), tensor->NumElements(), tensor->Dtype(), root_rank_in_group,
+                             comm, comm_stream);
+    }
+    runtime_impl_->EventRecord(work->done_event(), comm_stream);
+
+    if (async_op) {
+        return work;
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
+    }
+}
+
+std::shared_ptr<Work> ProcessGroup::Scatter(const std::vector<std::shared_ptr<Tensor>> &output_tensors,
+                                            const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                                            int root_rank_in_group, bool async_op) const {
+    CHECK_GE(root_rank_in_group, 0);
+    CHECK_LT(root_rank_in_group, world_size_);
+    CHECK_GT(output_tensors.size(), 0);
+    CHECK_NOTNULL(output_tensors[0]);
+
+    auto device = output_tensors[0]->GetDevice();
+    auto group_rank = GetGroupRank(device.Rank().GlobalRank());
+    core::DeviceGuard guard(device);
+    auto *compute_stream = runtime_impl_->GetStream(device);
+    auto *comm_stream = device_stream_map_.at(device.index());
+    auto comm = device_comm_map_.at(device.index());
+
+    for (const auto &output_tensor : output_tensors) {
+        CHECK_NOTNULL(output_tensor);
+        CHECK_EQ(device, output_tensor->GetDevice());
+    }
+
+    const bool is_root = group_rank == root_rank_in_group;
+    const size_t num_outputs = output_tensors.size();
+    if (is_root) {
+        CHECK_EQ(input_tensors.size(), static_cast<size_t>(world_size_) * num_outputs)
+            << "Root rank must provide rank-major input tensors for every rank.";
+        for (const auto &input_tensor : input_tensors) {
+            CHECK_NOTNULL(input_tensor);
+            CHECK_EQ(device, input_tensor->GetDevice());
+        }
+        for (size_t tensor_idx = 0; tensor_idx < num_outputs; ++tensor_idx) {
+            const auto &local_input = input_tensors[static_cast<size_t>(group_rank) * num_outputs + tensor_idx];
+            CHECK(local_input->Dtype() == output_tensors[tensor_idx]->Dtype());
+            CHECK(local_input->Dims() == output_tensors[tensor_idx]->Dims());
+        }
+    } else {
+        CHECK(input_tensors.empty()) << "Only root rank should provide scatter input tensors.";
+    }
+
+    auto work = std::make_shared<Work>(device, comm);
+    runtime_impl_->EventRecord(work->ready_event(), compute_stream);
+    runtime_impl_->StreamWaitEvent(comm_stream, work->ready_event(), 0);
+    if (is_root) {
+        for (size_t tensor_idx = 0; tensor_idx < num_outputs; ++tensor_idx) {
+            const auto &input_tensor = input_tensors[static_cast<size_t>(group_rank) * num_outputs + tensor_idx];
+            runtime_impl_->MemcpyAsync(output_tensors[tensor_idx]->DataPtr(), input_tensor->DataPtr(),
+                                       input_tensor->SizeInBytes(), core::MemcpyKind::kD2D, comm_stream);
+        }
+
+        core::CclGroupGuard ccl_group_guard(device.type());
+        for (int rank = 0; rank < world_size_; ++rank) {
+            if (rank == group_rank) {
+                continue;
+            }
+            for (size_t tensor_idx = 0; tensor_idx < num_outputs; ++tensor_idx) {
+                const auto &input_tensor = input_tensors[static_cast<size_t>(rank) * num_outputs + tensor_idx];
+                ccl_impl_->Send(input_tensor->DataPtr(), input_tensor->NumElements(), input_tensor->Dtype(), rank, comm,
+                                comm_stream);
+            }
+        }
+    } else {
+        core::CclGroupGuard ccl_group_guard(device.type());
+        for (const auto &output_tensor : output_tensors) {
+            ccl_impl_->Recv(output_tensor->DataPtr(), output_tensor->NumElements(), output_tensor->Dtype(),
+                            root_rank_in_group, comm, comm_stream);
+        }
+    }
+    runtime_impl_->EventRecord(work->done_event(), comm_stream);
+
+    if (async_op) {
+        return work;
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
+    }
+}
+
 std::shared_ptr<Work> ProcessGroup::Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
                                          bool async_op) const {
     CHECK_GT(tensors.size(), 0);
@@ -249,7 +362,7 @@ std::shared_ptr<Work> ProcessGroup::Recv(std::vector<std::shared_ptr<Tensor>> te
 }
 
 std::vector<std::shared_ptr<Tensor>>
-ProcessGroup::BroadCast(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const {
+ProcessGroup::BroadCast_(const std::vector<std::shared_ptr<Tensor>> &input_tensors) const {
     std::vector<std::shared_ptr<Tensor>> outputs;
     std::vector<core::Stream *> streams;
     std::vector<core::CclComm *> comms;
@@ -329,8 +442,8 @@ ProcessGroup::ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<T
     return outputs;
 }
 
-std::vector<std::shared_ptr<Tensor>> ProcessGroup::Scatter(const std::shared_ptr<Tensor> &tensor,
-                                                           std::vector<Device> devices, int64_t dim) const {
+std::vector<std::shared_ptr<Tensor>> ProcessGroup::Scatter_(const std::shared_ptr<Tensor> &tensor,
+                                                            std::vector<Device> devices, int64_t dim) const {
     std::vector<std::shared_ptr<Tensor>> outputs;
     auto split_tensors = tensor->Split(tensor->Dims()[dim] / devices.size(), dim);
     std::vector<core::Stream *> streams;
@@ -402,27 +515,20 @@ std::shared_ptr<Tensor> ProcessGroup::Gather(const std::vector<std::shared_ptr<T
 
 ProcessGroupFactory *ProcessGroupFactory::Instance() {
     // NOTE(zbl): Instance() with no arguments only gets initialized instance with a certain backend
+    std::lock_guard<std::mutex> lock(g_process_group_factory_mutex);
     auto &instance = g_process_group_factory_instance;
     if (instance == nullptr) {
-        std::lock_guard<std::mutex> lock(g_process_group_factory_mutex);
-        if (instance == nullptr) {
-            LOG(FATAL) << "ProcessGroupFactory is not initialized with backend. "
-                       << "Call ProcessGroupFactory::Instance(backend) first.";
-        }
+        LOG(FATAL) << "ProcessGroupFactory is not initialized with backend. "
+                   << "Call ProcessGroupFactory::Instance(backend) first.";
     }
     return instance.get();
 }
 
 ProcessGroupFactory *ProcessGroupFactory::Instance(Device::DeviceType backend) {
+    std::lock_guard<std::mutex> lock(g_process_group_factory_mutex);
     auto &instance = g_process_group_factory_instance;
     if (instance == nullptr) {
-        std::lock_guard<std::mutex> lock(g_process_group_factory_mutex);
-        if (instance == nullptr) {
-            instance.reset(new ProcessGroupFactory(backend));
-        } else if (instance->backend_ != backend) {
-            LOG(FATAL) << "ProcessGroupFactory backend mismatch. initialized=" << static_cast<int>(instance->backend_)
-                       << ", requested=" << static_cast<int>(backend);
-        }
+        instance.reset(new ProcessGroupFactory(backend));
     } else if (instance->backend_ != backend) {
         LOG(FATAL) << "ProcessGroupFactory backend mismatch. initialized=" << static_cast<int>(instance->backend_)
                    << ", requested=" << static_cast<int>(backend);
@@ -441,13 +547,12 @@ const ProcessGroup *ProcessGroupFactory::GetOrCreate(const std::string &name, co
 }
 
 const ProcessGroup *ProcessGroupFactory::Get(const std::string &name) const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::unique_lock<std::mutex> lock(mutex_);
+    cond_.wait(lock, [this, &name]() { return name_to_group_.at(name) != nullptr; });
     return name_to_group_.at(name).get();
 }
 
-const ProcessGroup *ProcessGroupFactory::GetDefaultProcessGroup() const {
-    return name_to_group_.at(kDefaltProcessGroupName).get();
-}
+const ProcessGroup *ProcessGroupFactory::GetDefaultProcessGroup() const { return Get(kDefaltProcessGroupName); }
 
 ProcessGroupFactory::ProcessGroupFactory(Device::DeviceType backend) : backend_(backend) {
     GetOrCreate(kDefaltProcessGroupName, global::GetWorldSize());

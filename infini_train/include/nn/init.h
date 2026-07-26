@@ -1,19 +1,19 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <utility>
 
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/generator.h"
 
 namespace infini_train {
+class Generator;
 class Tensor;
-class Device;
 } // namespace infini_train
 
 namespace infini_train::nn::init {
-std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean = 0.0, float std = 1.0,
+std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean = 0.0f, float stddev = 1.0f,
                                std::shared_ptr<Generator> generator = nullptr);
 
 std::pair<int64_t, int64_t> CalculateFanInAndFanOut(const std::shared_ptr<Tensor> &tensor);
