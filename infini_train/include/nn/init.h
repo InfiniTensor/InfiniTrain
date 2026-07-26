@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -10,7 +11,6 @@
 
 namespace infini_train {
 class Tensor;
-class Device;
 } // namespace infini_train
 
 namespace infini_train::nn::init {

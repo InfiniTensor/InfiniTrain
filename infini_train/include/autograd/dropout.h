@@ -2,6 +2,8 @@
 
 #include <memory>
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
