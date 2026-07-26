@@ -1,8 +1,10 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -44,6 +46,7 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
             << "All buffers must be on the same device as the module";
     }
     modules_[kModuleName] = std::move(module);
+    SynchronizeModuleState();
 
     if (ddp_config.zero_stage >= 1) {
         BuildParamAndGradBuffers();
@@ -58,6 +61,30 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
 
         reducer_ = std::make_shared<Reducer>(params, bucket_indices, ddp_config);
         reducer_->AttachHooksToParameters();
+    }
+}
+
+void DistributedDataParallel::SynchronizeModuleState() {
+    auto state = modules_.at(kModuleName)->StateDict();
+    std::vector<std::string> names;
+    names.reserve(state.size());
+    for (const auto &[name, _] : state) { names.push_back(name); }
+    std::sort(names.begin(), names.end());
+
+    std::vector<std::shared_ptr<Tensor>> tensors;
+    tensors.reserve(names.size());
+    for (const auto &name : names) {
+        auto tensor = state.at(name);
+        CHECK(tensor != nullptr) << "DDP module state tensor '" << name << "' is null";
+        if (!tensors.empty()) {
+            CHECK_EQ(tensor->GetDevice(), tensors.front()->GetDevice())
+                << "DDP module state tensors must be on one device";
+        }
+        tensors.push_back(std::move(tensor));
+    }
+
+    if (!tensors.empty()) {
+        ddp_pg_->Broadcast(tensors, 0);
     }
 }
 
