@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -91,7 +92,7 @@ void CheckFinite(const std::shared_ptr<Tensor> &tensor) {
     }
 }
 
-std::vector<std::vector<uint8_t>> RunFixedScript(const Device &device, Generator generator) {
+std::vector<std::vector<uint8_t>> RunRandomScript(const Device &device, std::optional<Generator> generator) {
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{257}, DataType::kFLOAT32, device);
     input->Fill(1.0f);
     return {
@@ -194,15 +195,80 @@ TEST_P(GeneratorRandomOpsTest, DropoutSupportsAllFloatingDtypesWithExplicitGener
 
 TEST_P(GeneratorRandomOpsTest, SameSeedReplaysRandRandnAndDropoutScript) {
     const Device device = GetDevice();
-    EXPECT_EQ(RunFixedScript(device, CreateGenerator(device, 5678)),
-              RunFixedScript(device, CreateGenerator(device, 5678)));
-    EXPECT_NE(RunFixedScript(device, CreateGenerator(device, 5678)),
-              RunFixedScript(device, CreateGenerator(device, 5679)));
+    EXPECT_EQ(RunRandomScript(device, CreateGenerator(device, 5678)),
+              RunRandomScript(device, CreateGenerator(device, 5678)));
+    EXPECT_NE(RunRandomScript(device, CreateGenerator(device, 5678)),
+              RunRandomScript(device, CreateGenerator(device, 5679)));
 
     auto generator = CreateGenerator(device, 6789);
     const auto first = TensorBytes(nn::function::Rand({256}, DataType::kFLOAT32, device, generator));
     const auto second = TensorBytes(nn::function::Rand({256}, DataType::kFLOAT32, device, generator));
     EXPECT_NE(first, second);
+}
+
+TEST_P(GeneratorRandomOpsTest, DefaultGeneratorReplaysRandRandnAndDropoutScript) {
+    const Device device = GetDevice();
+
+    manual_seed(7001);
+    const auto expected = RunRandomScript(device, std::nullopt);
+    manual_seed(7001);
+    EXPECT_EQ(expected, RunRandomScript(device, std::nullopt));
+
+    manual_seed(7001);
+    Generator undefined;
+    EXPECT_EQ(expected, RunRandomScript(device, undefined));
+}
+
+TEST_P(GeneratorRandomOpsTest, ExplicitRandomGeneratorsDoNotAdvanceDefaultGenerator) {
+    const Device device = GetDevice();
+    manual_seed(7101);
+    const auto default_state_before = TensorBytes(GetDefaultGenerator(device).get_state());
+
+    RunRandomScript(device, CreateGenerator(device, 7102));
+
+    EXPECT_EQ(default_state_before, TensorBytes(GetDefaultGenerator(device).get_state()));
+}
+
+TEST_P(GeneratorRandomOpsTest, OffsetViewsUseTheirOwnDataPointers) {
+    const Device device = GetDevice();
+    constexpr int64_t kStorageElements = 12;
+    constexpr int64_t kOffsetElements = 4;
+    constexpr int64_t kViewElements = 4;
+    constexpr size_t kOffsetBytes = kOffsetElements * sizeof(float);
+
+    auto storage = std::make_shared<Tensor>(std::vector<int64_t>{kStorageElements}, DataType::kFLOAT32, device);
+    storage->Fill(-1.0f);
+    auto uniform_view = std::make_shared<Tensor>(*storage, kOffsetBytes, std::vector<int64_t>{kViewElements});
+    nn::init::Uniform(uniform_view, 0.0f, 1.0f, CreateGenerator(device, 7201));
+
+    const auto uniform_storage = CopyToCPU(storage);
+    const auto *uniform_data = static_cast<const float *>(uniform_storage->DataPtr());
+    for (int64_t index = 0; index < kOffsetElements; ++index) { EXPECT_FLOAT_EQ(uniform_data[index], -1.0f); }
+    for (int64_t index = kOffsetElements; index < kOffsetElements + kViewElements; ++index) {
+        EXPECT_GE(uniform_data[index], 0.0f);
+        EXPECT_LT(uniform_data[index], 1.0f);
+    }
+    for (int64_t index = kOffsetElements + kViewElements; index < kStorageElements; ++index) {
+        EXPECT_FLOAT_EQ(uniform_data[index], -1.0f);
+    }
+
+    auto input_storage = std::make_shared<Tensor>(std::vector<int64_t>{kStorageElements}, DataType::kFLOAT32, device);
+    input_storage->Fill(-3.0f);
+    auto input_view = std::make_shared<Tensor>(*input_storage, kOffsetBytes, std::vector<int64_t>{kViewElements});
+    input_view->Fill(1.0f);
+    const auto output = nn::function::Dropout(input_view, 0.5, true, CreateGenerator(device, 7202));
+    const auto host_output = CopyToCPU(output);
+    const auto *output_data = static_cast<const float *>(host_output->DataPtr());
+    for (int64_t index = 0; index < kViewElements; ++index) {
+        EXPECT_TRUE(output_data[index] == 0.0f || std::abs(output_data[index] - 2.0f) < 1e-6f);
+    }
+
+    const auto input_storage_host = CopyToCPU(input_storage);
+    const auto *input_storage_data = static_cast<const float *>(input_storage_host->DataPtr());
+    for (int64_t index = 0; index < kOffsetElements; ++index) { EXPECT_FLOAT_EQ(input_storage_data[index], -3.0f); }
+    for (int64_t index = kOffsetElements + kViewElements; index < kStorageElements; ++index) {
+        EXPECT_FLOAT_EQ(input_storage_data[index], -3.0f);
+    }
 }
 
 TEST_P(GeneratorRandomOpsTest, DropoutBackwardSupportsAllFloatingDtypes) {
