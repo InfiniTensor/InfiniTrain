@@ -1,67 +1,77 @@
 #include "infini_train/include/nn/init.h"
 
-#include <cstring>
-#include <functional>
+#include <limits>
 #include <memory>
-#include <optional>
-#include <random>
+#include <numeric>
 #include <unordered_set>
-
-#ifdef USE_OMP
-#include <omp.h>
-#endif
+#include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::init {
 namespace {
-constexpr int kRandomSeed = 42;
 
-// FIXME: RNG design is incomplete.
-//
-// Current implementation lacks:
-//   - unified Generator abstraction
-//   - global default generator and seed control
-//   - reproducible / clonable RNG state
-//
-// TODO:
-//   - introduce Generator interface and backend impl
-//   - add default generator management (per device)
-//   - refactor random ops to consume Generator
-static std::mt19937 gen(kRandomSeed);
+struct DistributionBounds {
+    double lowest;
+    double max;
+};
+
+DistributionBounds GetDistributionBounds(DataType dtype) {
+    switch (dtype) {
+    case DataType::kFLOAT16: {
+        const double max = static_cast<float>(FP16(static_cast<uint16_t>(0x7bff), FP16::from_bits()));
+        return {-max, max};
+    }
+    case DataType::kBFLOAT16: {
+        const double max = static_cast<float>(BF16(static_cast<uint16_t>(0x7f7f), BF16::from_bits()));
+        return {-max, max};
+    }
+    case DataType::kFLOAT32:
+        return {-std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
+    case DataType::kFLOAT64:
+        return {-std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
+    default:
+        LOG(FATAL) << "Unsupported distribution dtype: " << kDataTypeToDesc.at(dtype);
+        return {};
+    }
+}
+
+void CheckDistributionTensor(const Tensor &tensor) {
+    CHECK(IsFloatingPointDType(tensor.Dtype()))
+        << "Uniform and Normal initialization support floating-point tensors only";
+}
+
+void CheckUniformParameters(const Tensor &tensor, double from, double to) {
+    const auto bounds = GetDistributionBounds(tensor.Dtype());
+    CHECK_GE(from, bounds.lowest) << "uniform expects from to be within the range of "
+                                  << kDataTypeToDesc.at(tensor.Dtype());
+    CHECK_LE(from, bounds.max) << "uniform expects from to be within the range of "
+                               << kDataTypeToDesc.at(tensor.Dtype());
+    CHECK_GE(to, bounds.lowest) << "uniform expects to to be within the range of "
+                                << kDataTypeToDesc.at(tensor.Dtype());
+    CHECK_LE(to, bounds.max) << "uniform expects to to be within the range of " << kDataTypeToDesc.at(tensor.Dtype());
+    CHECK_LE(from, to) << "uniform expects a [from, to) range, but found from=" << from << " > to=" << to;
+    CHECK_LE(to - from, bounds.max) << "uniform expects to - from to fit in " << kDataTypeToDesc.at(tensor.Dtype());
+}
+
+void CheckNormalParameters(double std) { CHECK_GE(std, 0.0) << "normal expects std >= 0.0, but found std=" << std; }
+
 } // namespace
 
 std::shared_ptr<Tensor> Normal(const std::shared_ptr<Tensor> &tensor, float mean, float std,
-                               std::optional<std::mt19937> generator) {
-    const int64_t num_elements = tensor->NumElements();
-    std::vector<float> buffer(num_elements);
-
-#ifdef USE_OMP
-#pragma omp parallel
-    {
-        std::mt19937 local_gen(kRandomSeed + omp_get_thread_num());
-        std::normal_distribution<float> local_dis(mean, std);
-#pragma omp for
-        for (int i = 0; i < buffer.size(); ++i) {
-            buffer[i] = generator ? local_dis(generator.value()) : local_dis(local_gen);
-        }
-    }
-#else
-    std::normal_distribution<float> dis(mean, std);
-    std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
-#endif
-
+                               std::optional<Generator> generator) {
+    CheckDistributionTensor(*tensor);
+    CheckNormalParameters(std);
     auto device = tensor->GetDevice();
     core::DeviceGuard guard(device);
-    auto impl = core::GetDeviceGuardImpl(device.type());
-
-    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
-                      impl->GetStream(device));
+    Dispatcher::Instance().Call<void>({device.type(), "Normal"}, tensor, static_cast<double>(mean),
+                                      static_cast<double>(std), generator);
     return tensor;
 }
 
@@ -113,7 +123,7 @@ float CalculateGain(NonLinearityType nonlinearity, std::optional<float> param = 
 } // namespace
 
 std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor, float a, KaimingMode mode,
-                                       NonLinearityType nonlinearity, std::optional<std::mt19937> generator) {
+                                       NonLinearityType nonlinearity, std::optional<Generator> generator) {
     for (const auto dim : tensor->Dims()) {
         if (dim == 0) {
             LOG(WARNING) << "Initializing zero-element tensors is a no-op";
@@ -128,34 +138,13 @@ std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor, fl
 }
 
 std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a, float b,
-                                std::optional<std::mt19937> generator) {
-    const int64_t num_elements = tensor->NumElements();
-    std::vector<float> buffer(num_elements);
-
-#ifdef USE_OMP
-#pragma omp parallel
-    {
-        std::mt19937 local_gen(kRandomSeed + omp_get_thread_num());
-        std::uniform_real_distribution<float> local_dis(a, b);
-#pragma omp for
-        for (int i = 0; i < buffer.size(); ++i) {
-            buffer[i] = generator ? local_dis(generator.value()) : local_dis(local_gen);
-        }
-    }
-#else
-    std::uniform_real_distribution<float> dis(a, b);
-    std::generate(buffer.begin(), buffer.end(), [&]() { return generator ? dis(generator.value()) : dis(gen); });
-#endif
-
+                                std::optional<Generator> generator) {
+    CheckDistributionTensor(*tensor);
+    CheckUniformParameters(*tensor, a, b);
     auto device = tensor->GetDevice();
-
     core::DeviceGuard guard(device);
-    auto impl = core::GetDeviceGuardImpl(device.type());
-
-    impl->MemcpyAsync(tensor->DataPtr(), buffer.data(), num_elements * sizeof(float),
-                      device.type() == Device::DeviceType::kCPU ? core::MemcpyKind::kD2D : core::MemcpyKind::kH2D,
-                      impl->GetStream(device));
-
+    Dispatcher::Instance().Call<void>({device.type(), "Uniform"}, tensor, static_cast<double>(a),
+                                      static_cast<double>(b), generator);
     return tensor;
 }
 
