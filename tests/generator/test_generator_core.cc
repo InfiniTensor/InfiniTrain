@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -141,6 +142,47 @@ TEST_P(GeneratorCoreTest, DefaultExplicitAndUndefinedPathsHaveExpectedState) {
     EXPECT_EQ(default_result, TensorBytes(nn::function::Rand({256}, DataType::kFLOAT32, device, undefined)));
 }
 
+TEST_P(GeneratorCoreTest, CrossBackendGeneratorsAreRejected) {
+    ONLY_CPU();
+#if defined(USE_CUDA)
+    const Device cpu;
+    const Device cuda(Device::DeviceType::kCUDA, 0);
+    const auto cpu_generator = CreateGenerator(cpu, 8001);
+    const auto cuda_generator = CreateGenerator(cuda, 8002);
+
+    auto cpu_input = std::make_shared<Tensor>(std::vector<int64_t>{8}, DataType::kFLOAT32, cpu);
+    auto cuda_input = std::make_shared<Tensor>(std::vector<int64_t>{8}, DataType::kFLOAT32, cuda);
+    cpu_input->Fill(1.0f);
+    cuda_input->Fill(1.0f);
+
+    EXPECT_THROW(nn::function::Rand({8}, DataType::kFLOAT32, cpu, cuda_generator), std::invalid_argument);
+    EXPECT_THROW(nn::function::Rand({8}, DataType::kFLOAT32, cuda, cpu_generator), std::invalid_argument);
+    EXPECT_THROW(nn::function::Dropout(cpu_input, 0.25, true, cuda_generator), std::invalid_argument);
+    EXPECT_THROW(nn::function::Dropout(cuda_input, 0.25, true, cpu_generator), std::invalid_argument);
+#else
+    GTEST_SKIP() << "CUDA disabled";
+#endif
+}
+
+TEST_P(GeneratorCoreTest, CUDAGeneratorCanDriveAnotherCUDADevice) {
+    ONLY_CUDA();
+#if defined(USE_CUDA)
+    REQUIRE_MIN_DEVICES(2);
+    const Device cuda0(Device::DeviceType::kCUDA, 0);
+    const Device cuda1(Device::DeviceType::kCUDA, 1);
+    auto generator = CreateGenerator(cuda0, 8401);
+    const auto state_before = TensorBytes(generator.get_state());
+
+    const auto output = nn::function::Rand({257}, DataType::kFLOAT32, cuda1, generator);
+    EXPECT_EQ(output->GetDevice(), cuda1);
+    EXPECT_NE(state_before, TensorBytes(generator.get_state()));
+    EXPECT_EQ(TensorBytes(output),
+              TensorBytes(nn::function::Rand({257}, DataType::kFLOAT32, cuda1, CreateGenerator(cuda0, 8401))));
+#else
+    GTEST_SKIP() << "CUDA disabled";
+#endif
+}
+
 TEST_P(GeneratorCoreTest, InitializerEntryPointsUseExplicitGenerator) {
     const Device device = GetDevice();
     auto make_tensor = [&] {
@@ -168,20 +210,47 @@ TEST_P(GeneratorCoreTest, InitializerEntryPointsUseExplicitGenerator) {
     EXPECT_EQ(TensorBytes(kaiming_a), TensorBytes(kaiming_b));
 }
 
-TEST_P(GeneratorCoreTest, DefaultCUDAGeneratorsAreIndependentPerDevice) {
+TEST_P(GeneratorCoreTest, DefaultCUDAGeneratorsAreIndependentAcrossAllDevices) {
     ONLY_CUDA();
-    REQUIRE_MIN_DEVICES(2);
-    const Device cuda0(Device::DeviceType::kCUDA, 0);
-    const Device cuda1(Device::DeviceType::kCUDA, 1);
-    manual_seed(8501);
+#if defined(USE_CUDA)
+    int device_count = 0;
+    ASSERT_EQ(cudaGetDeviceCount(&device_count), cudaSuccess);
+    if (device_count < 2) {
+        GTEST_SKIP() << "requires at least 2 GPUs (found " << device_count << ")";
+    }
 
-    EXPECT_EQ(GetDefaultGenerator(cuda0).device(), cuda0);
-    EXPECT_EQ(GetDefaultGenerator(cuda1).device(), cuda1);
-    EXPECT_EQ(GetDefaultGenerator(cuda0).current_seed(), 8501U);
-    EXPECT_EQ(GetDefaultGenerator(cuda1).current_seed(), 8501U);
-    const auto cuda1_before = TensorBytes(GetDefaultGenerator(cuda1).get_state());
-    nn::function::Rand({256}, DataType::kFLOAT32, cuda0);
-    EXPECT_EQ(cuda1_before, TensorBytes(GetDefaultGenerator(cuda1).get_state()));
+    manual_seed(8501);
+    std::vector<Device> devices;
+    devices.reserve(device_count);
+    for (int index = 0; index < device_count; ++index) {
+        const Device device(Device::DeviceType::kCUDA, index);
+        devices.push_back(device);
+        EXPECT_EQ(GetDefaultGenerator(device).device(), device);
+        EXPECT_EQ(GetDefaultGenerator(device).current_seed(), 8501U);
+    }
+
+    for (int active_index = 0; active_index < device_count; ++active_index) {
+        std::vector<std::vector<uint8_t>> states_before;
+        states_before.reserve(device_count);
+        for (const auto &device : devices) {
+            states_before.push_back(TensorBytes(GetDefaultGenerator(device).get_state()));
+        }
+
+        auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{64}, DataType::kFLOAT32, devices[active_index]);
+        nn::init::Uniform(tensor);
+
+        for (int observed_index = 0; observed_index < device_count; ++observed_index) {
+            const auto state_after = TensorBytes(GetDefaultGenerator(devices[observed_index]).get_state());
+            if (observed_index == active_index) {
+                EXPECT_NE(states_before[observed_index], state_after);
+            } else {
+                EXPECT_EQ(states_before[observed_index], state_after);
+            }
+        }
+    }
+#else
+    GTEST_SKIP() << "CUDA disabled";
+#endif
 }
 
 INFINI_TRAIN_REGISTER_TEST(GeneratorCoreTest);

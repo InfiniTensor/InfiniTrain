@@ -1,7 +1,10 @@
 #include "infini_train/include/generator.h"
 
+#include <ostream>
+
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/src/core/runtime/cpu/cpu_generator_impl.h"
 

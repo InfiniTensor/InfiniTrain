@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <numbers>
 #include <optional>
 #include <type_traits>
 
@@ -99,7 +100,7 @@ template <typename T> struct normal_distribution {
         const T u2 = uniform(generator);
 
         const T r = std::sqrt(static_cast<T>(-2.0) * std::log1p(-u2));
-        constexpr T kTwoPi = static_cast<T>(2.0 * M_PI);
+        constexpr T kTwoPi = static_cast<T>(2.0 * std::numbers::pi_v<double>);
         const T theta = kTwoPi * u1;
         const T sample = r * std::sin(theta);
 
