@@ -1,10 +1,12 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 
 namespace infini_train {
 class Tensor;
@@ -16,6 +18,35 @@ class ProcessGroup;
 } // namespace infini_train
 
 namespace infini_train::autograd::comm {
+class AllGather : public autograd::Function {
+public:
+    static constexpr char kType[] = "AllGatherFunction";
+
+    explicit AllGather(const nn::parallel::ProcessGroup *pg);
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+
+private:
+    const nn::parallel::ProcessGroup *pg_ = nullptr;
+};
+
+class ReduceScatter : public autograd::Function {
+public:
+    static constexpr char kType[] = "ReduceScatterFunction";
+
+    ReduceScatter(nn::parallel::comm::ReduceOpType reduce_op, const nn::parallel::ProcessGroup *pg);
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+
+private:
+    nn::parallel::comm::ReduceOpType reduce_op_;
+    const nn::parallel::ProcessGroup *pg_ = nullptr;
+};
+
 class Scatter : public autograd::Function {
 public:
     static constexpr char kType[] = "ScatterFunction";

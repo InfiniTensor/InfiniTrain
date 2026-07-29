@@ -4,7 +4,7 @@
 
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
@@ -65,27 +65,15 @@ std::vector<int> GetExpertTensorAndExpertParallelGroupRanks(int global_rank) {
     return global::GetExpertRankGenerator().GroupRanks({global::TP, global::EP}, global_rank);
 }
 
-std::shared_ptr<Tensor> GatherTensorParallelShard(const std::shared_ptr<Tensor> &tensor, int64_t dim) {
-    const int tp_size = global::GetTensorParallelSize();
-    CHECK_GT(tp_size, 0) << "Tensor Parallel group not initialized";
-    if (tp_size == 1) {
-        return tensor;
-    }
-
+std::shared_ptr<Tensor> AllGatherAlongDim(const std::shared_ptr<Tensor> &tensor, int64_t dim, const ProcessGroup *pg) {
+    CHECK_NOTNULL(pg);
     if (dim < 0) {
         dim += static_cast<int64_t>(tensor->Dims().size());
     }
     CHECK_GE(dim, 0);
     CHECK_LT(dim, static_cast<int64_t>(tensor->Dims().size()));
 
-    auto device = tensor->GetDevice();
-    auto *tp_group = ProcessGroupFactory::Instance(device.type())
-                         ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
-
-    std::vector<int64_t> gathered_dims = tensor->Dims();
-    gathered_dims[0] *= tp_size;
-    auto gathered = std::make_shared<Tensor>(gathered_dims, tensor->Dtype(), device);
-    tp_group->AllGather(gathered, tensor, false);
+    auto gathered = function::AllGather(tensor, pg);
 
     if (dim == 0) {
         return gathered;
@@ -94,6 +82,11 @@ std::shared_ptr<Tensor> GatherTensorParallelShard(const std::shared_ptr<Tensor> 
     // AllGather stacks shards along dim 0. Restore rank-major shards before concatenating on the requested dimension.
     auto rank_major_shards = gathered->Split(tensor->Dims()[0], 0);
     return nn::function::Concat(rank_major_shards, dim)->Contiguous();
+}
+
+std::shared_ptr<Tensor> ReduceScatterAlongFirstDim(const std::shared_ptr<Tensor> &tensor, comm::ReduceOpType reduce_op,
+                                                   const ProcessGroup *pg) {
+    return function::ReduceScatter(tensor, reduce_op, pg);
 }
 
 } // namespace infini_train::nn::parallel

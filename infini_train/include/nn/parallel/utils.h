@@ -5,11 +5,15 @@
 #include <string>
 #include <vector>
 
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
+
 namespace infini_train {
 class Tensor;
 } // namespace infini_train
 
 namespace infini_train::nn::parallel {
+class ProcessGroup;
+
 // DP group generated from the dense rank view.
 std::string GetDataParallelProcessGroupName(int global_rank);
 
@@ -42,13 +46,11 @@ std::vector<int> GetExpertParallelGroupRanks(int global_rank);
 
 std::vector<int> GetExpertTensorAndExpertParallelGroupRanks(int global_rank);
 
-// TP/SP Communication Helper Functions
-std::shared_ptr<Tensor> GatherTensorParallelShard(const std::shared_ptr<Tensor> &tensor, int64_t dim);
+// Gather rank-local shards and concatenate them along dim.
+std::shared_ptr<Tensor> AllGatherAlongDim(const std::shared_ptr<Tensor> &tensor, int64_t dim, const ProcessGroup *pg);
 
-std::vector<std::shared_ptr<Tensor>> GatherFromTPRegionFunc(const std::shared_ptr<Tensor> &input);
-std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(const std::shared_ptr<Tensor> &input);
-std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_ptr<Tensor> &input);
-std::vector<std::shared_ptr<Tensor>> ScatterToTPRegionFunc(const std::shared_ptr<Tensor> &input);
-std::vector<std::shared_ptr<Tensor>> ReduceFromTPRegionFunc(const std::shared_ptr<Tensor> &input);
-std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(const std::shared_ptr<Tensor> &input);
+// Reduce and scatter along the first dimension.
+std::shared_ptr<Tensor> ReduceScatterAlongFirstDim(const std::shared_ptr<Tensor> &tensor, comm::ReduceOpType reduce_op,
+                                                   const ProcessGroup *pg);
+
 } // namespace infini_train::nn::parallel

@@ -4,40 +4,32 @@
 #include <unordered_map>
 #include <vector>
 
+#include "glog/logging.h"
+
 #include "infini_train/include/autograd/comm.h"
+#include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/process_group.h"
-#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel::function {
 
-std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op, const ProcessGroup *pg,
-                                bool async_op) {
-    auto device = tensor->GetDevice().type();
-    if (pg == nullptr) {
-        pg = ProcessGroupFactory::Instance(device)->GetDefaultProcessGroup();
+std::shared_ptr<Tensor> AllGather(const std::shared_ptr<Tensor> &input, const ProcessGroup *pg) {
+    CHECK_NOTNULL(pg);
+    if (pg->GetGroupSize() == 1) {
+        return autograd::GradMode::IsEnabled() ? input : input->Detach();
     }
-    return pg->AllReduce(tensor, reduce_op, async_op);
+    return std::make_shared<autograd::comm::AllGather>(pg)->Apply({input})[0];
 }
 
-std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
-                                const ProcessGroup *pg, bool async_op) {
-    auto device = output->GetDevice().type();
-    if (pg == nullptr) {
-        pg = ProcessGroupFactory::Instance(device)->GetDefaultProcessGroup();
+std::shared_ptr<Tensor> ReduceScatter(const std::shared_ptr<Tensor> &input, comm::ReduceOpType reduce_op,
+                                      const ProcessGroup *pg) {
+    CHECK_NOTNULL(pg);
+    if (pg->GetGroupSize() == 1) {
+        return autograd::GradMode::IsEnabled() ? input : input->Detach();
     }
-    return pg->AllGather(output, input, async_op);
-}
-
-std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
-                                    ReduceOpType reduce_op, const ProcessGroup *pg, bool async_op) {
-    auto device = output->GetDevice().type();
-    if (pg == nullptr) {
-        pg = ProcessGroupFactory::Instance(device)->GetDefaultProcessGroup();
-    }
-    return pg->ReduceScatter(output, input, reduce_op, async_op);
+    return std::make_shared<autograd::comm::ReduceScatter>(reduce_op, pg)->Apply({input})[0];
 }
 
 std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std::shared_ptr<Tensor>> &input_tensors,

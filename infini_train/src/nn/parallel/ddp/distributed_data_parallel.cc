@@ -10,9 +10,9 @@
 
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
@@ -34,8 +34,8 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         auto device = param->GetDevice();
         CHECK_EQ(device.index(), rank.thread_rank()) << "All parameters must be on the same device as the module";
         if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
-            auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(
-                function::ReduceOpType::kAvg, ddp_pg_);
+            auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(comm::ReduceOpType::kAvg,
+                                                                                              ddp_pg_);
             param->RegisterPostAccumulateGradHook(std::move(hook));
         }
     }

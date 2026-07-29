@@ -250,7 +250,7 @@ void ParamAndGradBucketGroup::StartGradSync() {
 
     // TODO(zbl): Check NaN/Inf/too large in grad (options in DistributedDataParallelConfig)
 
-    auto reduce_op = ddp_config_.average_in_collective ? function::ReduceOpType::kAvg : function::ReduceOpType::kSum;
+    auto reduce_op = ddp_config_.average_in_collective ? comm::ReduceOpType::kAvg : comm::ReduceOpType::kSum;
     auto async_op = ddp_config_.overlap_grad_reduce && (ddp_config_.num_distributed_optimizer_instances == 1);
 
     for (auto i = 0; i < buckets_.size(); ++i) {

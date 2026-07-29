@@ -4,26 +4,28 @@
 #include <vector>
 
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 
 namespace infini_train {
 class Tensor;
 namespace nn {
 class Module;
+namespace parallel {
+class ProcessGroup;
 }
+} // namespace nn
 } // namespace infini_train
 
 namespace infini_train::nn::parallel::function {
 
-std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op,
-                                const ProcessGroup *pg = nullptr, bool async_op = false);
+// Concatenates equal-shaped tensors from the group along the first dimension.
+// Backward uses SUM ReduceScatter.
+std::shared_ptr<Tensor> AllGather(const std::shared_ptr<Tensor> &input, const ProcessGroup *pg);
 
-std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
-                                const ProcessGroup *pg = nullptr, bool async_op = false);
-
-std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
-                                    ReduceOpType reduce_op, const ProcessGroup *pg = nullptr, bool async_op = false);
+// Reduces and scatters input along the first dimension.
+// Backward is currently supported only for SUM reduction, where it is implemented as AllGather.
+std::shared_ptr<Tensor> ReduceScatter(const std::shared_ptr<Tensor> &input, comm::ReduceOpType reduce_op,
+                                      const ProcessGroup *pg);
 
 std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                                                           const std::vector<Device> &device_ids, int dim);
