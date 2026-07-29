@@ -7,13 +7,45 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/function.h"
+#include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::moe {
 
 namespace {
+
+// FIXME(dcj): Replace this wrapper when Tensor::To(DataType) supports autograd.
+class DtypeCast : public autograd::Function {
+public:
+    static constexpr char kType[] = "DtypeCastFunction";
+
+    explicit DtypeCast(DataType output_dtype) : autograd::Function(kType), output_dtype_(output_dtype) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) override {
+        CHECK_EQ(inputs.size(), 1);
+        input_dtype_ = inputs[0]->Dtype();
+        return {std::make_shared<Tensor>(inputs[0]->To(output_dtype_))->Detach()};
+    }
+
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grads) override {
+        CHECK_EQ(grads.size(), 1);
+        return {std::make_shared<Tensor>(grads[0]->To(input_dtype_))->Detach()};
+    }
+
+private:
+    DataType output_dtype_;
+    DataType input_dtype_;
+};
+
+std::shared_ptr<Tensor> CastWithAutograd(const std::shared_ptr<Tensor> &input, DataType dtype) {
+    if (input->Dtype() == dtype) {
+        return input;
+    }
+    return std::make_shared<DtypeCast>(dtype)->Apply({input})[0];
+}
 
 // FIXME(dcj): Support zero-tensor later.
 class EmptyExpertOutput : public autograd::Function {
@@ -100,15 +132,14 @@ MoEAllGatherTokenDispatcher::TokenDispatch(const std::shared_ptr<Tensor> &hidden
 
     // Gather routing_map without autograd. NCCL has no bool datatype, so keep it as uint8
     // until the local expert columns have been sliced.
-    auto gathered_shape = routing_map_->Dims();
-    gathered_shape[0] *= process_group_->GetGroupSize();
     auto routing_map_uint8 = std::make_shared<Tensor>(routing_map_->To(DataType::kUINT8));
-    auto gathered_map_uint8 = std::make_shared<Tensor>(gathered_shape, DataType::kUINT8, routing_map_->GetDevice());
-    parallel::function::AllGather(gathered_map_uint8, routing_map_uint8, process_group_);
-    routing_map_ = gathered_map_uint8;
+    {
+        autograd::NoGradGuard no_grad;
+        routing_map_ = parallel::function::AllGather(routing_map_uint8, process_group_);
+    }
 
-    auto global_probs = parallel::function::DifferentiableAllGather(probs, process_group_);
-    auto global_hidden_states = parallel::function::DifferentiableAllGather(hidden_states, process_group_);
+    auto global_probs = parallel::function::AllGather(probs, process_group_);
+    auto global_hidden_states = parallel::function::AllGather(hidden_states, process_group_);
     return {global_hidden_states, global_probs};
 }
 
@@ -163,7 +194,11 @@ std::shared_ptr<Tensor> MoEAllGatherTokenDispatcher::TokenCombine(const std::sha
     if (process_group_ == nullptr) {
         return hidden_states;
     }
-    return parallel::function::DifferentiableReduceScatter(hidden_states, process_group_, local_probs_dtype_);
+    const auto hidden_states_dtype = hidden_states->Dtype();
+    auto communication_input = CastWithAutograd(hidden_states, local_probs_dtype_);
+    auto output
+        = parallel::function::ReduceScatter(communication_input, parallel::comm::ReduceOpType::kSum, process_group_);
+    return CastWithAutograd(output, hidden_states_dtype);
 }
 
 std::shared_ptr<Tensor>
