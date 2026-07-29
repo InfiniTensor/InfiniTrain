@@ -1,5 +1,7 @@
 #include "infini_train/include/nn/modules/transformer/moe/moe_utils.h"
 
+#include <algorithm>
+
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/scatter.h"
@@ -104,14 +106,18 @@ PermutationMetadata BuildPermutationMetadata(const std::shared_ptr<Tensor> &rout
         = std::make_shared<Tensor>(std::vector<int64_t>{num_dispatched_tokens}, DataType::kINT64, Device());
     auto expanded_sorted_indices_cpu
         = std::make_shared<Tensor>(std::vector<int64_t>{num_dispatched_tokens, 1}, DataType::kINT64, Device());
+    auto tokens_per_expert_cpu
+        = std::make_shared<Tensor>(std::vector<int64_t>{num_experts}, DataType::kINT64, Device());
     auto *sorted_indices_ptr = static_cast<int64_t *>(sorted_indices_cpu->DataPtr());
     auto *selected_probs_indices_ptr = static_cast<int64_t *>(selected_probs_indices_cpu->DataPtr());
     auto *expanded_sorted_indices_ptr = static_cast<int64_t *>(expanded_sorted_indices_cpu->DataPtr());
+    auto *tokens_per_expert_ptr = static_cast<int64_t *>(tokens_per_expert_cpu->DataPtr());
     for (int64_t idx = 0; idx < num_dispatched_tokens; ++idx) {
         sorted_indices_ptr[idx] = sorted_indices_host[idx];
         selected_probs_indices_ptr[idx] = selected_probs_indices_host[idx];
         expanded_sorted_indices_ptr[idx] = sorted_indices_host[idx];
     }
+    std::copy(tokens_per_expert.begin(), tokens_per_expert.end(), tokens_per_expert_ptr);
     auto to_device = [&](const std::shared_ptr<Tensor> &cpu_tensor) -> std::shared_ptr<Tensor> {
         if (routing_map->GetDevice().type() == Device::DeviceType::kCPU) {
             return cpu_tensor;
@@ -120,7 +126,7 @@ PermutationMetadata BuildPermutationMetadata(const std::shared_ptr<Tensor> &rout
     };
 
     return {to_device(sorted_indices_cpu), to_device(expanded_sorted_indices_cpu),
-            to_device(selected_probs_indices_cpu), tokens_per_expert};
+            to_device(selected_probs_indices_cpu), tokens_per_expert_cpu};
 }
 
 PermutationResult Permute(const std::shared_ptr<Tensor> &tokens, const std::shared_ptr<Tensor> &probs,
@@ -152,21 +158,16 @@ PermutationResult Permute(const std::shared_ptr<Tensor> &tokens, const std::shar
     return {permuted_input, permuted_probs, metadata};
 }
 
-std::shared_ptr<Tensor> Unpermute(const std::shared_ptr<Tensor> &permuted_tokens,
-                                  const std::shared_ptr<Tensor> &permuted_probs, const PermutationMetadata &metadata,
+std::shared_ptr<Tensor> Unpermute(const std::shared_ptr<Tensor> &permuted_tokens, const PermutationMetadata &metadata,
                                   const std::vector<int64_t> &restore_shape) {
     CHECK_EQ(permuted_tokens->Dims().size(), 2);
-    CHECK_EQ(permuted_probs->Dims().size(), 1);
-    CHECK_EQ(permuted_tokens->Dims()[0], permuted_probs->Dims()[0]);
     CHECK_EQ(restore_shape.size(), 2);
-
-    auto weighted = permuted_tokens * permuted_probs->View({permuted_probs->Dims()[0], 1});
     auto scatter_indices = metadata.expanded_sorted_indices;
     const int64_t hidden_size = restore_shape[1];
     if (hidden_size != 1) {
         scatter_indices = metadata.expanded_sorted_indices->RepeatInterleave(hidden_size, 1);
     }
-    return std::make_shared<autograd::ScatterAdd>(0, restore_shape)->Apply({weighted, scatter_indices})[0];
+    return std::make_shared<autograd::ScatterAdd>(0, restore_shape)->Apply({permuted_tokens, scatter_indices})[0];
 }
 
 } // namespace infini_train::nn::moe
