@@ -7,7 +7,7 @@ usage() {
 Usage: run_models_and_profile.bash [--test-config path] [--only-run tag1,tag2]
 
 Options:
-  --test-config PATH  Path to test config JSON. Default: test_config.json.
+  --test-config PATH  Path to test config JSON. Default: test_config_maca.json.
   --only-run TAGS   Only run the specified tag groups, separated by commas.
   -h, --help        Show this help message.
 EOF
@@ -497,7 +497,10 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
 
         # always clean before another build
         clean_build_dir
-        run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "build"
+        if ! run_and_log "$LAST_CMAKE_CMD" "${build_id}" "no" "build"; then
+            echo -e "\033[1;31m[SKIP] Build failed; skipping tests for ${build_id}.\033[0m"
+            continue
+        fi
         if [[ "$RUN_CTEST" == "true" && "$build_profile" != "true" ]]; then
             run_and_log "run_ctest" "ctest_${build_id}" "no" "ctest"
         fi
@@ -538,7 +541,9 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
     done
 done
 
+run_exit_code=0
 if [[ ${#FAILED_TESTS[@]} -gt 0 ]]; then
+    run_exit_code=1
     echo -e "\n\033[1;31m============================================================\033[0m"
     echo -e "\033[1;31m[SUMMARY] ${#FAILED_TESTS[@]} test(s) FAILED:\033[0m"
     for f in "${FAILED_TESTS[@]}"; do
@@ -581,3 +586,5 @@ clean_build_dir
 
 echo -e "\n\033[1;33mNext step:\033[0m"
 echo "python3 write_to_feishu_sheet.py token.json --log-dir \"$(realpath "$RUN_OUTPUT_DIR")\""
+
+exit "$run_exit_code"

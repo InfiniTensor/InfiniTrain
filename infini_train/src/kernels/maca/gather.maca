@@ -90,12 +90,11 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
     int64_t *in_strides_dev = dev_buf + 1 * num_dims;
     int64_t *out_strides_dev = dev_buf + 2 * num_dims;
 
-    MACA_CHECK(
-        mcMemcpyAsync(out_dims_dev, idx_dims.data(), num_dims * sizeof(int64_t), mcMemcpyHostToDevice, stream));
+    MACA_CHECK(mcMemcpyAsync(out_dims_dev, idx_dims.data(), num_dims * sizeof(int64_t), mcMemcpyHostToDevice, stream));
     MACA_CHECK(
         mcMemcpyAsync(in_strides_dev, in_strides.data(), num_dims * sizeof(int64_t), mcMemcpyHostToDevice, stream));
-    MACA_CHECK(mcMemcpyAsync(out_strides_dev, out_strides.data(), num_dims * sizeof(int64_t), mcMemcpyHostToDevice,
-                               stream));
+    MACA_CHECK(
+        mcMemcpyAsync(out_strides_dev, out_strides.data(), num_dims * sizeof(int64_t), mcMemcpyHostToDevice, stream));
 
     const int threads = 256;
     const int blocks = (total_elements + threads - 1) / threads;
@@ -174,7 +173,7 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
 
     auto dtype = grad_output->Dtype();
     auto grad_input = std::make_shared<Tensor>(in_dims, dtype, grad_output->GetDevice());
-    core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+    core::maca::DispatchMacaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype, [=]<typename T>() { grad_input->Fill(0); }, "MACA IndexGatherBackwardZero");
 
     auto in_strides = ComputeStrides(in_dims);
@@ -200,10 +199,10 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
     int64_t *out_strides_dev = in_strides_dev + n_in_strides;
 
     MACA_CHECK(mcMemcpyAsync(out_dims_dev, idx_dims.data(), n_out * sizeof(int64_t), mcMemcpyHostToDevice, stream));
-    MACA_CHECK(mcMemcpyAsync(in_strides_dev, in_strides.data(), n_in_strides * sizeof(int64_t),
-                               mcMemcpyHostToDevice, stream));
-    MACA_CHECK(mcMemcpyAsync(out_strides_dev, out_strides.data(), n_out_strides * sizeof(int64_t),
-                               mcMemcpyHostToDevice, stream));
+    MACA_CHECK(
+        mcMemcpyAsync(in_strides_dev, in_strides.data(), n_in_strides * sizeof(int64_t), mcMemcpyHostToDevice, stream));
+    MACA_CHECK(mcMemcpyAsync(out_strides_dev, out_strides.data(), n_out_strides * sizeof(int64_t), mcMemcpyHostToDevice,
+                             stream));
 
     const int threads = 256;
     const int blocks = (int)((total_elements + threads - 1) / threads);

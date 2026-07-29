@@ -8,13 +8,15 @@
         "PROFILE_LOG_DIR": "./profile_logs",
         "LOG_DIR": "./logs",
         "COMPARE_LOG_DIR": "",
+        "RUN_CTEST": "false",
+        "RUN_PROFILE_TEST": "true",
+        "CKPT_ROOT_DIR": "/tmp/infini_train_maca_ckpt",
         "DEVICE_BACKEND": "maca"
     },
-    "builds": [
+    "basic_compile_commands": [
         {
             "id": "build_maca",
-            "profile": false,
-            "cmd": "cmake -DUSE_MACA=ON -DUSE_MCCL=ON .. && make -j"
+            "cmd": "cmake -DUSE_CUDA=OFF -DUSE_MACA=ON -DUSE_NCCL=OFF -DUSE_MCCL=ON -DCMAKE_HAVE_LIBC_PTHREAD=ON -DCMAKE_THREAD_LIBS_INIT=-lpthread .. && make -j"
         }
     ],
     "test_groups": [
@@ -204,7 +206,7 @@
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
                     }
                 },
                 {
@@ -215,7 +217,7 @@
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
                     }
                 },
                 {
@@ -227,7 +229,7 @@
                         "batch_size": 40,
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
                     }
                 },
                 {
@@ -239,7 +241,7 @@
                         "batch_size": 40,
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
                     }
                 },
                 {
@@ -252,7 +254,7 @@
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
                         "sequence_parallel": true,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
                     }
                 },
                 {
@@ -265,7 +267,7 @@
                         "total_batch_size": 5120,
                         "tensor_parallel": 4,
                         "sequence_parallel": true,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
                     }
                 },
                 {
@@ -280,7 +282,7 @@
                         "sequence_parallel": true,
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
                     }
                 },
                 {
@@ -295,7 +297,7 @@
                         "sequence_parallel": true,
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
-                        "use_distributed_optimizer": true
+                        "zero_stage": 1
                     }
                 }
             ]

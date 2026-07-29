@@ -59,7 +59,7 @@ std::vector<std::shared_ptr<Tensor>> SplitForward(const std::shared_ptr<Tensor> 
                                       infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                       ->maca_stream();
 
-        core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+        core::maca::DispatchMacaFunc<INFINI_ALL_NUMERIC_TYPES>(
             dtype,
             [=]<typename T>() {
                 SplitForwardKernel<<<num_blocks, threads_per_block, 0, maca_stream>>>(
@@ -138,8 +138,8 @@ std::shared_ptr<Tensor> LaunchSplitBackward(const std::vector<int64_t> &input_di
     device_grad_output_ptrs = (const T **)(device_ptr);
     device_H_outs = reinterpret_cast<int64_t *>(device_grad_output_ptrs + num_splits);
 
-    mcMemcpyAsync(device_grad_output_ptrs, host_grad_output_ptrs.data(), sizeof(T *) * num_splits,
-                    mcMemcpyHostToDevice, stream);
+    mcMemcpyAsync(device_grad_output_ptrs, host_grad_output_ptrs.data(), sizeof(T *) * num_splits, mcMemcpyHostToDevice,
+                  stream);
 
     // init H_out for each split
     std::vector<int64_t> H_outs(num_splits);
@@ -166,7 +166,7 @@ std::shared_ptr<Tensor> SplitBackward(const std::vector<int64_t> &input_dims, in
     CHECK_GE(dim, 0) << "Currently we do not support negative dimension";
     CHECK_LT(dim, input_dims.size());
 
-    return core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+    return core::maca::DispatchMacaFunc<INFINI_ALL_NUMERIC_TYPES>(
         grad_outputs[0]->Dtype(),
         [=]<typename T>() { return LaunchSplitBackward<T>(input_dims, split_size, dim, grad_outputs); },
         "MACA SplitBackward");

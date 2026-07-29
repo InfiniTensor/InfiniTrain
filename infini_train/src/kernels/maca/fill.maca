@@ -30,7 +30,7 @@ void Fill(std::shared_ptr<Tensor> tensor, Scalar scalar) {
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->maca_stream();
 
-    core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+    core::maca::DispatchMacaFunc<INFINI_ALL_NUMERIC_TYPES>(
         tensor->Dtype(),
         [=]<typename T>() {
             // Scalar::to<T> relies on static_cast, which is ambiguous when T is a

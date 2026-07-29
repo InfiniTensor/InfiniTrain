@@ -15,17 +15,18 @@ namespace infini_train::common::maca {
 // Common MACA Macros
 #define MACA_CHECK(call)                                                                                               \
     do {                                                                                                               \
-        mcError_t status = call;                                                                                       \
-        if (status != mcSuccess) {                                                                                     \
-            LOG(FATAL) << "MACA Error: " << mcGetErrorString(status) << " at " << __FILE__ << ":" << __LINE__;         \
+        mcError_t _maca_status = (call);                                                                               \
+        if (_maca_status != mcSuccess) {                                                                               \
+            LOG(FATAL) << "MACA Error: " << mcGetErrorString(_maca_status) << " at " << __FILE__ << ":" << __LINE__;   \
         }                                                                                                              \
     } while (0)
 
 #define MCBLAS_CHECK(call)                                                                                             \
     do {                                                                                                               \
-        mcblasStatus_t status = call;                                                                                  \
-        if (status != MCBLAS_STATUS_SUCCESS) {                                                                         \
-            LOG(FATAL) << "MCBLAS Error: " << mcblasGetStatusString(status) << " at " << __FILE__ << ":" << __LINE__;  \
+        mcblasStatus_t _mcblas_status = (call);                                                                        \
+        if (_mcblas_status != MCBLAS_STATUS_SUCCESS) {                                                                 \
+            LOG(FATAL) << "MCBLAS Error: " << mcblasGetStatusString(_mcblas_status) << " at " << __FILE__ << ":"       \
+                       << __LINE__;                                                                                    \
         }                                                                                                              \
     } while (0)
 

@@ -198,14 +198,15 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
     CHECK(dim >= 0 && dim < output->Dims().size());
 
     auto grad_input = std::make_shared<Tensor>(output_dims, promoted_type, output->GetDevice());
-    core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+    core::maca::DispatchMacaFunc<INFINI_ALL_NUMERIC_TYPES>(
         promoted_type, [=]<typename T>() { grad_input->Fill(0); }, "MACA SoftmaxBackward");
 
     switch (promoted_type) {
         DISPATCH_CASE(WRAP(LaunchBackward<256, float>(grad_input, grad_output_promoted, output_promoted, dim);),
                       DataType::kFLOAT32)
-        DISPATCH_CASE(WRAP(LaunchBackward<256, __maca_bfloat16>(grad_input, grad_output_promoted, output_promoted, dim);),
-                      DataType::kBFLOAT16)
+        DISPATCH_CASE(
+            WRAP(LaunchBackward<256, __maca_bfloat16>(grad_input, grad_output_promoted, output_promoted, dim);),
+            DataType::kBFLOAT16)
     default:
         LOG_LOC(FATAL, "MACA softmax backward: 'Unsupported data type'");
     }

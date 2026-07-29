@@ -103,7 +103,7 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
     int threads_per_block = 256;
     int num_blocks = static_cast<int>((total + threads_per_block - 1) / threads_per_block);
 
-    core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+    core::maca::DispatchMacaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype,
         [=, &inputs, &host_offsets]<typename T>() {
             std::vector<const T *> host_input_ptrs;
@@ -115,11 +115,12 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
 
             MACA_CHECK(mcMallocAsync(reinterpret_cast<void **>(&device_input_ptrs), sizeof(T *) * num_inputs, stream));
             MACA_CHECK(mcMemcpyAsync(device_input_ptrs, host_input_ptrs.data(), sizeof(T *) * num_inputs,
-                                       mcMemcpyHostToDevice, stream));
+                                     mcMemcpyHostToDevice, stream));
 
-            MACA_CHECK(mcMallocAsync(reinterpret_cast<void **>(&device_offsets), sizeof(int64_t) * (num_inputs + 1), stream));
+            MACA_CHECK(
+                mcMallocAsync(reinterpret_cast<void **>(&device_offsets), sizeof(int64_t) * (num_inputs + 1), stream));
             MACA_CHECK(mcMemcpyAsync(device_offsets, host_offsets.data(), sizeof(int64_t) * (num_inputs + 1),
-                                       mcMemcpyHostToDevice, stream));
+                                     mcMemcpyHostToDevice, stream));
 
             ConcatForwardKernel<T><<<num_blocks, threads_per_block, 0, stream>>>(
                 device_input_ptrs, static_cast<T *>(output->DataPtr()), device_offsets, N, D, num_inputs, K_total);
@@ -186,7 +187,7 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
     grads.reserve(input_dims_list.size());
     for (const auto &dvec : input_dims_list) {
         auto t = std::make_shared<Tensor>(dvec, dtype, device);
-        core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+        core::maca::DispatchMacaFunc<INFINI_ALL_NUMERIC_TYPES>(
             dtype, [=]<typename T>() { t->Fill(0); }, "MACA ConcatBackward");
         grads.push_back(t);
     }
@@ -209,7 +210,7 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
     int threads_per_block = 256;
     int num_blocks = static_cast<int>((total + threads_per_block - 1) / threads_per_block);
 
-    core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+    core::maca::DispatchMacaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype,
         [=, &grads, &host_offsets]<typename T>() {
             std::vector<T *> host_ptrs;
@@ -220,12 +221,13 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
             int64_t *device_offsets = nullptr;
 
             MACA_CHECK(mcMallocAsync(reinterpret_cast<void **>(&device_ptrs), sizeof(T *) * num_inputs, stream));
-            MACA_CHECK(mcMemcpyAsync(device_ptrs, host_ptrs.data(), sizeof(T *) * num_inputs, mcMemcpyHostToDevice,
-                                       stream));
+            MACA_CHECK(
+                mcMemcpyAsync(device_ptrs, host_ptrs.data(), sizeof(T *) * num_inputs, mcMemcpyHostToDevice, stream));
 
-            MACA_CHECK(mcMallocAsync(reinterpret_cast<void **>(&device_offsets), sizeof(int64_t) * (num_inputs + 1), stream));
+            MACA_CHECK(
+                mcMallocAsync(reinterpret_cast<void **>(&device_offsets), sizeof(int64_t) * (num_inputs + 1), stream));
             MACA_CHECK(mcMemcpyAsync(device_offsets, host_offsets.data(), sizeof(int64_t) * (num_inputs + 1),
-                                       mcMemcpyHostToDevice, stream));
+                                     mcMemcpyHostToDevice, stream));
 
             ConcatBackwardKernel<T><<<num_blocks, threads_per_block, 0, stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), device_ptrs, device_offsets, N, D, num_inputs, K_total);

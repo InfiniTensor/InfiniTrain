@@ -49,7 +49,7 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     auto dtype = input->Dtype();
     auto new_tensor = std::make_shared<Tensor>(new_dims, dtype, input->GetDevice());
     // NOTE(zbl): must initialize with 0
-    core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+    core::maca::DispatchMacaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype, [=]<typename T>() { new_tensor->Fill(0); }, "MACA SliceForward");
 
     std::vector<int64_t> src_strides(dims.size(), 0), dst_strides(new_dims.size(), 0);
@@ -75,8 +75,8 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
                              ->maca_stream();
 
     mcMallocAsync(reinterpret_cast<void **>(&new_dims_dev),
-                    (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
-                    stream);
+                  (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
+                  stream);
     starts_dev = new_dims_dev + ends.size();
     steps_dev = starts_dev + starts.size();
     input_strides_dev = steps_dev + steps.size();
@@ -85,15 +85,14 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     mcMemcpyAsync(new_dims_dev, new_dims.data(), ends.size() * sizeof(int64_t), mcMemcpyHostToDevice, stream);
     mcMemcpyAsync(starts_dev, starts.data(), starts.size() * sizeof(int64_t), mcMemcpyHostToDevice, stream);
     mcMemcpyAsync(steps_dev, steps.data(), steps.size() * sizeof(int64_t), mcMemcpyHostToDevice, stream);
-    mcMemcpyAsync(input_strides_dev, src_strides.data(), dims.size() * sizeof(int64_t), mcMemcpyHostToDevice,
-                    stream);
+    mcMemcpyAsync(input_strides_dev, src_strides.data(), dims.size() * sizeof(int64_t), mcMemcpyHostToDevice, stream);
     mcMemcpyAsync(output_strides_dev, dst_strides.data(), new_dims.size() * sizeof(int64_t), mcMemcpyHostToDevice,
-                    stream);
+                  stream);
 
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
-    core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+    core::maca::DispatchMacaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype,
         [=]<typename T>() {
             SliceForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
@@ -142,7 +141,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
 
     auto grad_output_dtype = grad_output->Dtype();
     auto grad_input = std::make_shared<Tensor>(input->Dims(), grad_output_dtype, grad_output->GetDevice());
-    core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+    core::maca::DispatchMacaFunc<INFINI_ALL_NUMERIC_TYPES>(
         grad_output_dtype, [=]<typename T>() { grad_input->Fill(0); }, "MACA SliceBackward");
 
     std::vector<int64_t> src_strides(dims.size());
@@ -169,8 +168,8 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
                              infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                              ->maca_stream();
     mcMallocAsync(reinterpret_cast<void **>(&new_dims_dev),
-                    (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
-                    stream);
+                  (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
+                  stream);
     starts_dev = new_dims_dev + ends.size();
     steps_dev = starts_dev + starts.size();
     input_strides_dev = steps_dev + steps.size();
@@ -179,15 +178,14 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     mcMemcpyAsync(new_dims_dev, new_dims.data(), ends.size() * sizeof(int64_t), mcMemcpyHostToDevice, stream);
     mcMemcpyAsync(starts_dev, starts.data(), starts.size() * sizeof(int64_t), mcMemcpyHostToDevice, stream);
     mcMemcpyAsync(steps_dev, steps.data(), steps.size() * sizeof(int64_t), mcMemcpyHostToDevice, stream);
-    mcMemcpyAsync(input_strides_dev, src_strides.data(), dims.size() * sizeof(int64_t), mcMemcpyHostToDevice,
-                    stream);
+    mcMemcpyAsync(input_strides_dev, src_strides.data(), dims.size() * sizeof(int64_t), mcMemcpyHostToDevice, stream);
     mcMemcpyAsync(output_strides_dev, dst_strides.data(), new_dims.size() * sizeof(int64_t), mcMemcpyHostToDevice,
-                    stream);
+                  stream);
 
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
 
-    core::maca::DispatchMacaFunc<INFINI_ALL_TYPES>(
+    core::maca::DispatchMacaFunc<INFINI_ALL_NUMERIC_TYPES>(
         grad_output_dtype,
         [=]<typename T>() {
             SliceBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
