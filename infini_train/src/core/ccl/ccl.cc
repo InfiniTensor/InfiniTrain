@@ -16,9 +16,7 @@ void CclImpl::GetAsyncError(const CclComm *comm, CclStatus *async_error) const {
     LOG(FATAL) << "CclImpl::GetAsyncError is not implemented.";
 }
 
-void CclImpl::CreateUniqueId(CclUniqueId **, bool) const {
-    LOG(FATAL) << "CclImpl::CreateUniqueId is not implemented.";
-}
+void CclImpl::GetUniqueId(CclUniqueId **unique_id) const { LOG(FATAL) << "CclImpl::GetUniqueId is not implemented."; }
 
 void CclImpl::CommInitAll(CclComm **comms, int ndev, const int *devlist) const {
     LOG(FATAL) << "CclImpl::CommInitAll is not implemented.";

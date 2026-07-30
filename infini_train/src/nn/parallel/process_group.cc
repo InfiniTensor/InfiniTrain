@@ -83,13 +83,11 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
     int upper_rank = (global_proc_rank + 1) * n_threads;
 
     core::CclUniqueId *unique_id_raw = nullptr;
-
-    int min_rank = std::ranges::min(ranks);
-    bool is_main_rank = min_rank < upper_rank && min_rank >= lower_rank;
-    ccl_impl_->CreateUniqueId(&unique_id_raw, is_main_rank);
+    ccl_impl_->GetUniqueId(&unique_id_raw);
     std::unique_ptr<core::CclUniqueId> unique_id(unique_id_raw);
 
-    if (is_main_rank) {
+    int min_rank = std::ranges::min(ranks);
+    if (min_rank < upper_rank && min_rank >= lower_rank) {
         is_main_process_ = true;
         core::WriteUniqueIdFile(*unique_id, name_);
     } else {

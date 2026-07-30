@@ -17,7 +17,7 @@ public:
 
     void GetAsyncError(const CclComm *comm, CclStatus *async_error) const override;
 
-    void CreateUniqueId(CclUniqueId **unique_id, bool generate_id) const override;
+    void GetUniqueId(CclUniqueId **unique_id) const override;
 
     void CommInitAll(CclComm **comms, int ndev, const int *devlist) const override;
 

@@ -13,8 +13,6 @@ int GetEnvAsInt(const std::string &name, int default_value) {
     return value ? std::atoi(value) : default_value;
 }
 
-bool HasEnv(const std::string &name) { return std::getenv(name.c_str()) != nullptr; }
-
 } // namespace
 
 namespace infini_train::nn::parallel::global {
@@ -94,21 +92,15 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
 
-    const int proc_world_size = GetEnvAsInt("PROC_WORLD_SIZE", GetEnvAsInt("WORLD_SIZE", 1));
-    nproc_per_node_ = GetEnvAsInt("NPROC_PER_NODE", GetEnvAsInt("LOCAL_WORLD_SIZE", 1));
+    const int proc_world_size = GetEnvAsInt("WORLD_SIZE", GetEnvAsInt("PROC_WORLD_SIZE", 1));
+    nproc_per_node_ = GetEnvAsInt("LOCAL_WORLD_SIZE", GetEnvAsInt("NPROC_PER_NODE", 1));
     CHECK_GT(nproc_per_node_, 0) << "NPROC_PER_NODE/LOCAL_WORLD_SIZE must be positive";
     CHECK_GT(proc_world_size, 0) << "PROC_WORLD_SIZE/WORLD_SIZE must be positive";
     CHECK_EQ(proc_world_size % nproc_per_node_, 0)
         << "PROC_WORLD_SIZE/WORLD_SIZE must be divisible by NPROC_PER_NODE/LOCAL_WORLD_SIZE";
-    const bool nnodes_env_set = HasEnv("NNODES");
-    nnodes_ = GetEnvAsInt("NNODES", proc_world_size / nproc_per_node_);
-    CHECK_GT(nnodes_, 0) << "NNODES must be positive";
-    if (nnodes_env_set) {
-        CHECK_EQ(nnodes_ * nproc_per_node_, proc_world_size)
-            << "NNODES * NPROC_PER_NODE/LOCAL_WORLD_SIZE must equal PROC_WORLD_SIZE/WORLD_SIZE";
-    }
-    global_proc_rank_ = GetEnvAsInt("GLOBAL_PROC_RANK", GetEnvAsInt("RANK", 0));
-    local_proc_rank_ = GetEnvAsInt("LOCAL_PROC_RANK", GetEnvAsInt("LOCAL_RANK", 0));
+    nnodes_ = proc_world_size / nproc_per_node_;
+    global_proc_rank_ = GetEnvAsInt("RANK", GetEnvAsInt("GLOBAL_PROC_RANK", 0));
+    local_proc_rank_ = GetEnvAsInt("LOCAL_RANK", GetEnvAsInt("LOCAL_PROC_RANK", 0));
     CHECK_GE(global_proc_rank_, 0) << "GLOBAL_PROC_RANK/RANK must be non-negative";
     CHECK_LT(global_proc_rank_, proc_world_size)
         << "GLOBAL_PROC_RANK/RANK must be less than PROC_WORLD_SIZE/WORLD_SIZE";
