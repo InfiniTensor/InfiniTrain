@@ -1,4 +1,6 @@
+#include <cerrno>
 #include <chrono>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -6,6 +8,7 @@
 #include <sys/wait.h>
 #include <system_error>
 #include <unistd.h>
+#include <unordered_set>
 #include <vector>
 
 #include "gflags/gflags.h"
@@ -52,6 +55,20 @@ std::vector<char *> BuildLauncherArgv(int train_program_index, char **argv) {
 void SetEnvInt(const char *name, int value) {
     const auto value_str = std::to_string(value);
     setenv(name, value_str.c_str(), 1);
+}
+
+void TerminateChildren(const std::unordered_set<pid_t> &child_pids) {
+    for (pid_t child_pid : child_pids) { kill(child_pid, SIGTERM); }
+}
+
+int ExitCodeFromStatus(int status) {
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+    if (WIFSIGNALED(status)) {
+        return 128 + WTERMSIG(status);
+    }
+    return 1;
 }
 
 void CleanupRunUniqueIdFiles(const std::string &run_id) {
@@ -104,12 +121,19 @@ int main(int argc, char **argv) {
     std::string master_port = FLAGS_rdzv_endpoint.substr(FLAGS_rdzv_endpoint.find(':') + 1);
     const std::string run_id = FLAGS_nnodes == 1 ? GenerateLocalRunId() : "";
 
+    std::unordered_set<pid_t> running_children;
+    int exit_code = 0;
+
     for (int local_proc_rank = 0; local_proc_rank < FLAGS_nproc_per_node; ++local_proc_rank) {
         pid_t pid = fork();
+        if (pid < 0) {
+            perror("fork failed");
+            exit_code = 1;
+            TerminateChildren(running_children);
+            break;
+        }
         if (pid == 0) {
             int global_proc_rank = FLAGS_node_rank * FLAGS_nproc_per_node + local_proc_rank;
-            SetEnvInt("NNODES", FLAGS_nnodes);
-            SetEnvInt("NPROC_PER_NODE", FLAGS_nproc_per_node);
             SetEnvInt("LOCAL_WORLD_SIZE", FLAGS_nproc_per_node);
 
             setenv("MASTER_ADDR", master_addr.c_str(), 1);
@@ -118,45 +142,38 @@ int main(int argc, char **argv) {
                 setenv("INFINI_RUN_ID", run_id.c_str(), 1);
             }
 
-            SetEnvInt("GLOBAL_PROC_RANK", global_proc_rank);
-            SetEnvInt("LOCAL_PROC_RANK", local_proc_rank);
             SetEnvInt("RANK", global_proc_rank);
             SetEnvInt("LOCAL_RANK", local_proc_rank);
 
-            SetEnvInt("PROC_WORLD_SIZE", proc_world_size);
             SetEnvInt("WORLD_SIZE", proc_world_size);
-            SetEnvInt("GROUP_RANK", FLAGS_node_rank);
-            SetEnvInt("ROLE_RANK", global_proc_rank);
-            SetEnvInt("ROLE_WORLD_SIZE", proc_world_size);
 
             execvp(train_program.c_str(), train_argv.data());
             perror("exec failed");
             exit(1);
         }
+        running_children.insert(pid);
     }
 
-    int exit_code = 0;
-    for (int i = 0; i < FLAGS_nproc_per_node; ++i) {
+    while (!running_children.empty()) {
         int status;
         pid_t child = wait(&status);
         if (child < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
             perror("wait failed");
-            exit_code = 1;
+            if (exit_code == 0) {
+                exit_code = 1;
+            }
+            TerminateChildren(running_children);
             break;
         }
 
-        if (WIFEXITED(status)) {
-            int child_exit_code = WEXITSTATUS(status);
-            if (child_exit_code != 0 && exit_code == 0) {
-                exit_code = child_exit_code;
-            }
-        } else if (WIFSIGNALED(status)) {
-            int signal = WTERMSIG(status);
-            if (exit_code == 0) {
-                exit_code = 128 + signal;
-            }
-        } else if (exit_code == 0) {
-            exit_code = 1;
+        running_children.erase(child);
+        const int child_exit_code = ExitCodeFromStatus(status);
+        if (child_exit_code != 0 && exit_code == 0) {
+            exit_code = child_exit_code;
+            TerminateChildren(running_children);
         }
     }
 
