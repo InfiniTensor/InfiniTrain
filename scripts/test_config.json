@@ -898,12 +898,14 @@
         },
         {
             "tag": "8_proc",
+            "launcher_args": {
+                "nproc_per_node": 8
+            },
             "tests": [
                 {
                     "id": "3",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
                         "nthread_per_process": 1,
                         "num_iteration": 10,
                         "batch_size": 10,
@@ -914,7 +916,6 @@
                     "id": "3_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
                         "nthread_per_process": 1,
                         "num_iteration": 10,
                         "batch_size": 10,
@@ -925,7 +926,6 @@
                     "id": "4",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
                         "nthread_per_process": 1,
                         "num_iteration": 10,
                         "batch_size": 40,
@@ -937,7 +937,6 @@
                     "id": "4_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
                         "nthread_per_process": 1,
                         "num_iteration": 10,
                         "batch_size": 40,
@@ -949,7 +948,6 @@
                     "id": "5",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
                         "nthread_per_process": 1,
                         "num_iteration": 10,
                         "batch_size": 40,
@@ -962,7 +960,6 @@
                     "id": "5_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
                         "nthread_per_process": 1,
                         "num_iteration": 10,
                         "batch_size": 40,
@@ -975,7 +972,6 @@
                     "id": "6",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
                         "nthread_per_process": 1,
                         "num_iteration": 10,
                         "batch_size": 10,
@@ -987,7 +983,6 @@
                     "id": "6_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
                         "nthread_per_process": 1,
                         "num_iteration": 10,
                         "batch_size": 10,
@@ -999,7 +994,6 @@
                     "id": "8",
                     "args": {
                         "dtype": "float32",
-                        "nproc_per_node": 8,
                         "nthread_per_process": 1,
                         "num_iteration": 10,
                         "batch_size": 40,
@@ -1014,7 +1008,6 @@
                     "id": "8_bfloat16",
                     "args": {
                         "dtype": "bfloat16",
-                        "nproc_per_node": 8,
                         "nthread_per_process": 1,
                         "num_iteration": 10,
                         "batch_size": 40,
