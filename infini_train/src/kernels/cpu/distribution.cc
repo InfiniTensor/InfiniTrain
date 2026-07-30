@@ -39,7 +39,7 @@ void NormalImpl(Tensor &tensor, double mean, double std, core::cpu::CPUGenerator
 
 } // namespace
 
-void Uniform(const std::shared_ptr<Tensor> &tensor, double from, double to, const std::optional<Generator> &gen) {
+void Uniform(const std::shared_ptr<Tensor> tensor, double from, double to, const std::optional<Generator> gen) {
     CHECK(tensor->GetDevice().IsCPU());
     auto *cpu_generator
         = get_generator_or_default<core::cpu::CPUGeneratorImpl>(gen, core::cpu::getDefaultCPUGenerator());
@@ -54,7 +54,7 @@ void Uniform(const std::shared_ptr<Tensor> &tensor, double from, double to, cons
         "CPU uniform");
 }
 
-void Normal(const std::shared_ptr<Tensor> &tensor, double mean, double std, const std::optional<Generator> &gen) {
+void Normal(const std::shared_ptr<Tensor> tensor, double mean, double std, const std::optional<Generator> gen) {
     CHECK(tensor->GetDevice().IsCPU());
     auto *cpu_generator
         = get_generator_or_default<core::cpu::CPUGeneratorImpl>(gen, core::cpu::getDefaultCPUGenerator());

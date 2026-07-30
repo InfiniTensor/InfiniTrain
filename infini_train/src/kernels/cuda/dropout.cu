@@ -81,7 +81,7 @@ const core::cuda::CudaStream *get_cuda_stream(const Device &device) {
 } // namespace
 
 std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
-DropoutForward(const std::shared_ptr<Tensor> &input, double p, const std::optional<Generator> &gen) {
+DropoutForward(const std::shared_ptr<Tensor> input, double p, const std::optional<Generator> gen) {
     const Device device = input->GetDevice();
     CHECK(device.IsCUDA());
     CHECK(IsFloatingPointDType(input->Dtype())) << "Dropout supports floating-point tensors only";
@@ -122,7 +122,7 @@ DropoutForward(const std::shared_ptr<Tensor> &input, double p, const std::option
     return {output, mask};
 }
 
-std::shared_ptr<Tensor> DropoutBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &mask,
+std::shared_ptr<Tensor> DropoutBackward(const std::shared_ptr<Tensor> grad_output, const std::shared_ptr<Tensor> mask,
                                         double p) {
     const Device device = grad_output->GetDevice();
     CHECK(device.IsCUDA());
