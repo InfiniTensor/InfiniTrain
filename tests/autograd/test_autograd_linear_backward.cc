@@ -3,6 +3,7 @@
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autograd/linear.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 
@@ -21,10 +22,15 @@ TEST_P(AutogradLinearBackwardTest, LinearBackward) {
     bias->Fill(0.0f);
     auto linear_fn = std::make_shared<autograd::Linear>();
     auto result = linear_fn->Apply({input, weight, bias});
-    auto grad = std::make_shared<Tensor>(std::vector<int64_t>{2, 4}, DataType::kFLOAT32, GetDevice(), true);
-    grad->Fill(1.0f);
+    const float grad_values[] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
+    auto grad = std::make_shared<Tensor>(grad_values, std::vector<int64_t>{2, 4}, DataType::kFLOAT32, GetDevice());
     auto grad_inputs = linear_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 3);
+    auto bias_grad_cpu = grad_inputs[2]->To(Device());
+    core::GetDeviceGuardImpl(GetDevice().type())->SynchronizeDevice(GetDevice());
+    const auto *bias_grad = static_cast<const float *>(bias_grad_cpu.DataPtr());
+    const float expected_bias_grad[] = {6.0f, 8.0f, 10.0f, 12.0f};
+    for (int idx = 0; idx < 4; ++idx) { EXPECT_FLOAT_EQ(bias_grad[idx], expected_bias_grad[idx]); }
 }
 
 TEST_P(AutogradLinearBackwardTest, LinearBackwardNoBias) {
