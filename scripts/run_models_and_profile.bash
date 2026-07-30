@@ -522,7 +522,7 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
 
             for ((ti=0; ti<num_tests; ++ti)); do
                 test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
-                nproc_per_node="$(jq -r ".test_groups[$gi].tests[$ti].args.nproc_per_node // empty" "$CONFIG_FILE")"
+                nproc_per_node="$(jq -r ".test_groups[$gi].launcher_args.nproc_per_node // empty" "$CONFIG_FILE")"
                 : "${nproc_per_node:=${INFINI_NPROC_PER_NODE:-1}}"
                 if tag_enabled_for_model "$group_tag" "$GPT2_TEST_GROUPS"; then
                     LORA_WEIGHTS_DIR="$GPT2_LORA_WEIGHTS_DIR"
