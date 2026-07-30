@@ -68,7 +68,7 @@ void DropoutBackwardImpl(Tensor &grad_input, const Tensor &grad_output, const Te
 } // namespace
 
 std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
-DropoutForward(const std::shared_ptr<Tensor> &input, double p, const std::optional<Generator> &gen) {
+DropoutForward(const std::shared_ptr<Tensor> input, double p, const std::optional<Generator> gen) {
     CHECK(input->GetDevice().IsCPU());
     CHECK(IsFloatingPointDType(input->Dtype())) << "Dropout supports floating-point tensors only";
     CHECK_GE(p, 0.0) << "dropout probability has to be between 0 and 1, but got " << p;
@@ -101,7 +101,7 @@ DropoutForward(const std::shared_ptr<Tensor> &input, double p, const std::option
     return {output, mask};
 }
 
-std::shared_ptr<Tensor> DropoutBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &mask,
+std::shared_ptr<Tensor> DropoutBackward(const std::shared_ptr<Tensor> grad_output, const std::shared_ptr<Tensor> mask,
                                         double p) {
     CHECK(grad_output->GetDevice().IsCPU());
     auto grad_input = std::make_shared<Tensor>(grad_output->Dims(), grad_output->Dtype(), grad_output->GetDevice());

@@ -75,7 +75,7 @@ const core::cuda::CudaStream *get_cuda_stream(const Device &device) {
 
 } // namespace
 
-void Uniform(const std::shared_ptr<Tensor> &tensor, double from, double to, const std::optional<Generator> &gen) {
+void Uniform(const std::shared_ptr<Tensor> tensor, double from, double to, const std::optional<Generator> gen) {
     const Device device = tensor->GetDevice();
     CHECK(device.IsCUDA());
     const int64_t n = tensor->NumElements();
@@ -108,7 +108,7 @@ void Uniform(const std::shared_ptr<Tensor> &tensor, double from, double to, cons
     CUDA_CHECK(cudaGetLastError());
 }
 
-void Normal(const std::shared_ptr<Tensor> &tensor, double mean, double std, const std::optional<Generator> &gen) {
+void Normal(const std::shared_ptr<Tensor> tensor, double mean, double std, const std::optional<Generator> gen) {
     const Device device = tensor->GetDevice();
     CHECK(device.IsCUDA());
     const int64_t n = tensor->NumElements();
