@@ -19,10 +19,13 @@ DEFINE_int32(nproc_per_node, 1, "Number of processes per node");
 DEFINE_int32(node_rank, 0, "Rank of this node");
 DEFINE_string(rdzv_endpoint, "127.0.0.1:29500", "Rendezvous endpoint (host:port)");
 
+DEFINE_string(rdzv_id, "", "Unique job ID shared by all nodes");
+
 namespace {
 
 bool IsLauncherFlag(const std::string &flag) {
-    return flag == "--nnodes" || flag == "--nproc_per_node" || flag == "--node_rank" || flag == "--rdzv_endpoint";
+    return flag == "--nnodes" || flag == "--nproc_per_node" || flag == "--node_rank" || flag == "--rdzv_endpoint"
+        || flag == "--rdzv_id";
 }
 
 int FindTrainProgramIndex(int argc, char **argv) {
@@ -106,6 +109,8 @@ int main(int argc, char **argv) {
     CHECK_GT(FLAGS_nnodes, 0) << "nnodes must be positive";
     CHECK_GT(FLAGS_nproc_per_node, 0) << "nproc_per_node must be positive";
     CHECK_NE(FLAGS_rdzv_endpoint.find(':'), std::string::npos) << "rdzv_endpoint must be host:port";
+    CHECK(FLAGS_nnodes == 1 || !FLAGS_rdzv_id.empty())
+        << "rdzv_id must be set to the same unique job ID on every node for multi-node training";
 
     CHECK_LT(train_program_index, argc) << "No training program specified!";
 
@@ -119,7 +124,7 @@ int main(int argc, char **argv) {
     int proc_world_size = FLAGS_nnodes * FLAGS_nproc_per_node;
     std::string master_addr = FLAGS_rdzv_endpoint.substr(0, FLAGS_rdzv_endpoint.find(':'));
     std::string master_port = FLAGS_rdzv_endpoint.substr(FLAGS_rdzv_endpoint.find(':') + 1);
-    const std::string run_id = FLAGS_nnodes == 1 ? GenerateLocalRunId() : "";
+    const std::string run_id = FLAGS_rdzv_id.empty() ? GenerateLocalRunId() : FLAGS_rdzv_id;
 
     std::unordered_set<pid_t> running_children;
     int exit_code = 0;
@@ -138,9 +143,7 @@ int main(int argc, char **argv) {
 
             setenv("MASTER_ADDR", master_addr.c_str(), 1);
             setenv("MASTER_PORT", master_port.c_str(), 1);
-            if (!run_id.empty()) {
-                setenv("INFINI_RUN_ID", run_id.c_str(), 1);
-            }
+            setenv("INFINI_RUN_ID", run_id.c_str(), 1);
 
             SetEnvInt("RANK", global_proc_rank);
             SetEnvInt("LOCAL_RANK", local_proc_rank);
@@ -177,7 +180,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (!run_id.empty()) {
+    if (FLAGS_nnodes == 1) {
         CleanupRunUniqueIdFiles(run_id);
     }
     return exit_code;
