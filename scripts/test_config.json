@@ -205,7 +205,67 @@
             "tag": "flash",
             "tests": [
                 {
-                    "id": "dp8_bs8_seq256",
+                    "id": "dp8_bs4_seq128_tb4096",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 4,
+                        "sequence_length": 128,
+                        "total_batch_size": 4096,
+                        "attention_backend": "flash"
+                    }
+                },
+                {
+                    "id": "dp8_bs8_seq128_tb8192",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 8,
+                        "sequence_length": 128,
+                        "total_batch_size": 8192,
+                        "attention_backend": "flash"
+                    }
+                },
+                {
+                    "id": "dp8_bs16_seq128_tb16384",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 16,
+                        "sequence_length": 128,
+                        "total_batch_size": 16384,
+                        "attention_backend": "flash"
+                    }
+                },
+                {
+                    "id": "dp8_bs4_seq256_tb8192",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 4,
+                        "sequence_length": 256,
+                        "total_batch_size": 8192,
+                        "attention_backend": "flash"
+                    }
+                },
+                {
+                    "id": "dp8_bs4_seq256_tb16384",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 4,
+                        "sequence_length": 256,
+                        "total_batch_size": 16384,
+                        "attention_backend": "flash"
+                    }
+                },
+                {
+                    "id": "dp8_bs8_seq256_tb16384",
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 8,
@@ -217,38 +277,26 @@
                     }
                 },
                 {
-                    "id": "dp8_bs16_seq256",
+                    "id": "dp8_bs4_seq512_tb16384",
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 8,
                         "num_iteration": 10,
-                        "batch_size": 16,
-                        "sequence_length": 256,
-                        "total_batch_size": 32768,
-                        "attention_backend": "flash"
-                    }
-                },
-                {
-                    "id": "dp8_bs8_seq512",
-                    "args": {
-                        "dtype": "bfloat16",
-                        "nthread_per_process": 8,
-                        "num_iteration": 10,
-                        "batch_size": 8,
+                        "batch_size": 4,
                         "sequence_length": 512,
-                        "total_batch_size": 32768,
+                        "total_batch_size": 16384,
                         "attention_backend": "flash"
                     }
                 },
                 {
-                    "id": "dp8_bs8_seq1024",
+                    "id": "dp8_bs2_seq1024_tb16384",
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 8,
                         "num_iteration": 10,
-                        "batch_size": 8,
+                        "batch_size": 2,
                         "sequence_length": 1024,
-                        "total_batch_size": 65536,
+                        "total_batch_size": 16384,
                         "attention_backend": "flash"
                     }
                 }
