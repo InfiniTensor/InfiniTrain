@@ -123,6 +123,7 @@ The following examples demonstrate **LLaMA 3 supervised fine-tuning (SFT)** usin
   --nproc_per_node=1 \
   --node_rank=[rank_id] \
   --rdzv_endpoint=[master_addr]:29500 \
+  --rdzv_id=[job_id] \
   ./llama3 \
      --device cuda \
      --input_bin [training_data_path] \
