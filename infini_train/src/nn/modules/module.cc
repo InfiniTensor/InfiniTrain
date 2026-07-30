@@ -48,6 +48,55 @@ std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
     return params;
 }
 
+std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
+Module::NamedParameters(const std::string &prefix, bool recurse, bool remove_duplicate) const {
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> named_parameters;
+    std::unordered_set<const Tensor *> visited;
+
+    std::function<void(const Module &, const std::string &)> collect
+        = [&](const Module &module, const std::string &module_prefix) {
+              std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> parameters;
+              parameters.reserve(module.parameters_.size());
+              for (const auto &[name, parameter] : module.parameters_) {
+                  if (parameter) {
+                      parameters.emplace_back(name, parameter);
+                  }
+              }
+              std::sort(parameters.begin(), parameters.end(),
+                        [](const auto &left, const auto &right) { return left.first < right.first; });
+
+              for (auto &[name, parameter] : parameters) {
+                  if (remove_duplicate && !visited.insert(parameter.get()).second) {
+                      continue;
+                  }
+                  const auto full_name = module_prefix.empty() ? name : module_prefix + "." + name;
+                  named_parameters.emplace_back(full_name, std::move(parameter));
+              }
+
+              if (!recurse) {
+                  return;
+              }
+
+              std::vector<std::pair<std::string, std::shared_ptr<Module>>> children;
+              children.reserve(module.modules_.size());
+              for (const auto &[name, child] : module.modules_) {
+                  if (child) {
+                      children.emplace_back(name, child);
+                  }
+              }
+              std::sort(children.begin(), children.end(),
+                        [](const auto &left, const auto &right) { return left.first < right.first; });
+
+              for (const auto &[name, child] : children) {
+                  const auto child_prefix = module_prefix.empty() ? name : module_prefix + "." + name;
+                  collect(*child, child_prefix);
+              }
+          };
+
+    collect(*this, prefix);
+    return named_parameters;
+}
+
 bool Module::has_parameter(const std::string &name) const { return parameters_.find(name) != parameters_.end(); }
 
 std::shared_ptr<Tensor> *Module::mutable_parameter(const std::string &name) {
