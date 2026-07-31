@@ -115,13 +115,23 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     //            use Slice() to work around here
     const int64_t q_size_local = H_local * D;
     const int64_t kv_size_local = KV_local * D;
-    // -> Split into q, k, v
-    // q: (B, T, H_local, D)
-    auto q = qkv->Slice(2, 0, q_size_local)->View({B, T, H_local, D});
-    // k: (B, T, KV_local, D)
-    auto k = qkv->Slice(2, q_size_local, q_size_local + kv_size_local)->View({B, T, KV_local, D});
-    // v: (B, T, KV_local, D)
-    auto v = qkv->Slice(2, q_size_local + kv_size_local, q_size_local + 2 * kv_size_local)->View({B, T, KV_local, D});
+    std::shared_ptr<Tensor> q;
+    std::shared_ptr<Tensor> k;
+    std::shared_ptr<Tensor> v;
+    if (q_size_local == kv_size_local) {
+        // Split uses one autograd node for equal-sized MHA projections. Three independent Slice nodes are
+        // considerably more expensive, especially in backward where each one materializes a full-size input grad.
+        auto qkv_chunks = qkv->Split(q_size_local, 2);
+        CHECK_EQ(qkv_chunks.size(), 3);
+        q = qkv_chunks[0]->View({B, T, H_local, D});
+        k = qkv_chunks[1]->View({B, T, KV_local, D});
+        v = qkv_chunks[2]->View({B, T, KV_local, D});
+    } else {
+        // GQA has unequal Q and K/V widths, which the fixed-size Split API cannot represent.
+        q = qkv->Slice(2, 0, q_size_local)->View({B, T, H_local, D});
+        k = qkv->Slice(2, q_size_local, q_size_local + kv_size_local)->View({B, T, KV_local, D});
+        v = qkv->Slice(2, q_size_local + kv_size_local, q_size_local + 2 * kv_size_local)->View({B, T, KV_local, D});
+    }
 
     if (config_.position_embedding_type == PositionEmbeddingType::kRoPE) {
         // q: (B, T, H_local, D), k: (B, T, KV_local, D)
