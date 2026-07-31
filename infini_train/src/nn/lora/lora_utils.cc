@@ -179,19 +179,16 @@ LoRATensorSharding GetLoRATensorSharding(const std::unordered_map<std::string, L
 }
 
 bool IsPrimarySaveTPGroupRank() {
-    int dp = 0;
-    int tp = 0;
-    int pp = 0;
-    parallel::global::GetCoordOf(parallel::global::thread_global_rank, dp, tp, pp);
-    return dp == 0 && pp == 0;
+    const int global_rank = parallel::global::thread_global_rank;
+    const auto dp_group_ranks = parallel::GetDataParallelGroupRanks(global_rank);
+    const auto pp_group_ranks = parallel::GetPipelineParallelGroupRanks(global_rank);
+    return global_rank == dp_group_ranks.front() && global_rank == pp_group_ranks.front();
 }
 
 bool IsSaveWriterRank() {
-    int dp = 0;
-    int tp = 0;
-    int pp = 0;
-    parallel::global::GetCoordOf(parallel::global::thread_global_rank, dp, tp, pp);
-    return dp == 0 && tp == 0 && pp == 0;
+    const int global_rank = parallel::global::thread_global_rank;
+    const auto tp_group_ranks = parallel::GetTensorParallelGroupRanks(global_rank);
+    return IsPrimarySaveTPGroupRank() && global_rank == tp_group_ranks.front();
 }
 
 std::shared_ptr<Tensor>
