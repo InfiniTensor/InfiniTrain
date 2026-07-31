@@ -9,6 +9,7 @@
 
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
@@ -393,8 +394,37 @@ void Reducer::FinalizeBucketDense(size_t bucket_index) {
         //            e.g. comm_hook_(GradBucket{bucket_view})[0];
         // FIXME(zbl): support custom hook later
         LOG(FATAL) << "Custom hook is not supported now";
-    } else {
-        bucket.work = ddp_pg->AllReduce(bucket.contents, function::ReduceOpType::kAvg, true);
+        return;
+    }
+
+    if (bucket.contents->NumElements() == 0) {
+        return;
+    }
+
+    // MCCL's native AVG path has much lower bandwidth than SUM on C550. Match
+    // PyTorch DDP by pre-dividing supported gradients and reducing with SUM.
+    const bool use_prescaled_sum = bucket.contents->GetDevice().type() == Device::DeviceType::kMACA
+                                && (bucket.dtype == DataType::kFLOAT32 || bucket.dtype == DataType::kBFLOAT16);
+    const auto reduce_op = use_prescaled_sum ? function::ReduceOpType::kSum : function::ReduceOpType::kAvg;
+    if (use_prescaled_sum) {
+        const float scale = 1.0f / static_cast<float>(ddp_pg->GetGroupSize());
+        Dispatcher::Instance().Call<void>({Device::DeviceType::kMACA, "MulScalarInplace"}, bucket.contents, scale);
+    }
+
+    const size_t element_size = kDataTypeToSize.at(bucket.dtype);
+    const size_t chunk_cap_bytes = ddp_config_.allreduce_chunk_size_mb * kBytesPerMB;
+    if (chunk_cap_bytes == 0 || bucket.contents->SizeInBytes() <= chunk_cap_bytes) {
+        bucket.works.push_back(ddp_pg->AllReduce(bucket.contents, reduce_op, true));
+        return;
+    }
+
+    const size_t chunk_cap_elements = std::max<size_t>(1, chunk_cap_bytes / element_size);
+    const size_t total_elements = bucket.contents->NumElements();
+    for (size_t offset = 0; offset < total_elements; offset += chunk_cap_elements) {
+        const size_t chunk_elements = std::min(chunk_cap_elements, total_elements - offset);
+        auto chunk = std::make_shared<Tensor>(*bucket.contents, offset * element_size,
+                                              std::vector<int64_t>{static_cast<int64_t>(chunk_elements)});
+        bucket.works.push_back(ddp_pg->AllReduce(chunk, reduce_op, true));
     }
 }
 
@@ -405,9 +435,7 @@ void Reducer::FinalizeBackward() {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         for (auto &bucket : buckets_) {
-            if (bucket.work) {
-                works.push_back(bucket.work);
-            }
+            for (const auto &work : bucket.works) { works.push_back(work); }
         }
     }
 
@@ -419,7 +447,7 @@ void Reducer::FinalizeBackward() {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         for (auto &bucket : buckets_) {
-            if (!bucket.work) {
+            if (bucket.works.empty()) {
                 continue;
             }
             if (!ddp_config_.gradient_as_bucket_view) {
@@ -429,7 +457,7 @@ void Reducer::FinalizeBackward() {
                     CopyBucketToGrad(bucket.contents, bucket.variables[i]->grad(), bucket.offsets[i]);
                 }
             }
-            bucket.work.reset();
+            bucket.works.clear();
         }
         all_buckets_ready_this_iter_ = false;
     }

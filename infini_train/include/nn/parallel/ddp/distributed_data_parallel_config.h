@@ -19,6 +19,10 @@ public:
     size_t first_bucket_cap_mb = kFirstBucketCapMB;
     size_t normal_bucket_cap_mb = kNormalBucketCapMB;
 
+    // Split an oversized bucketed classic-DDP bucket into fixed-size all-reduce calls. Zero disables hard chunking.
+    // This option does not apply to the ZeRO ParamAndGradBuffer path.
+    size_t allreduce_chunk_size_mb = 0;
+
     // When set true, map param.grad directly to the slice of bucket.flat(same address in memory) instead of memcpy.
     bool gradient_as_bucket_view = true;
 

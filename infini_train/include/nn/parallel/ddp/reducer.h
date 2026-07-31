@@ -113,8 +113,8 @@ private:
         // TODO(zbl): support logics for sparse gradient later
         bool expect_sparse_gradient = false;
 
-        // The result of async communication op
-        std::shared_ptr<Work> work = nullptr;
+        // Results of async communication ops. Oversized buckets may be reduced in multiple chunks.
+        std::vector<std::shared_ptr<Work>> works;
     };
 
 private:

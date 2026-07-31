@@ -11,7 +11,10 @@
         "RUN_CTEST": "false",
         "RUN_PROFILE_TEST": "true",
         "CKPT_ROOT_DIR": "/tmp/infini_train_maca_ckpt",
-        "DEVICE_BACKEND": "maca"
+        "DEVICE_BACKEND": "maca",
+        "GPT2_TEST_GROUPS": "basic,zero,lora",
+        "LLAMA3_TEST_GROUPS": "basic,zero,lora",
+        "MIXTRAL_TEST_GROUPS": "moe"
     },
     "basic_compile_commands": [
         {
@@ -60,7 +63,8 @@
                         "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
-                        "total_batch_size": 5120
+                        "total_batch_size": 5120,
+                        "allreduce_chunk_size_mb": 128
                     }
                 },
                 {
@@ -70,7 +74,8 @@
                         "nthread_per_process": 8,
                         "num_iteration": 10,
                         "batch_size": 10,
-                        "total_batch_size": 5120
+                        "total_batch_size": 5120,
+                        "allreduce_chunk_size_mb": 128
                     }
                 },
                 {
@@ -355,6 +360,7 @@
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
+                        "allreduce_chunk_size_mb": 128,
                         "lora_rank": 8,
                         "lora_alpha": 16.0,
                         "lora_target_modules": "c_attn,attn.c_proj"
@@ -368,6 +374,7 @@
                         "num_iteration": 10,
                         "batch_size": 10,
                         "total_batch_size": 5120,
+                        "allreduce_chunk_size_mb": 128,
                         "lora_rank": 8,
                         "lora_alpha": 16.0,
                         "lora_target_modules": "c_attn,attn.c_proj"

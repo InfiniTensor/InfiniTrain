@@ -67,6 +67,8 @@ DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
 DEFINE_double(learning_rate, 1e-4, "Peak learning rate.");
 DEFINE_int32(zero_stage, 0, "ZeRO stage (0/1/2/3); 0 disables DistributedOptimizer");
+DEFINE_uint32(allreduce_chunk_size_mb, 0,
+              "Hard cap for each bucketed classic-DDP all-reduce call in MiB; 0 disables chunking (ignored by ZeRO)");
 // lr scheduler
 DEFINE_double(min_lr, 0.0, "Minimum learning rate.");
 DEFINE_string(lr_decay_style, "constant", "LR decay style: none|constant|linear|cosine|inverse-square-root");
@@ -301,7 +303,8 @@ void Train(const nn::parallel::Rank &rank) {
         model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
                                                                  pp_rank, device, model_config.GetChunkSize());
         if (ddp_world_size > 1) {
-            auto ddp_config = DistributedDataParallelConfig{.zero_stage = FLAGS_zero_stage};
+            auto ddp_config = DistributedDataParallelConfig{.allreduce_chunk_size_mb = FLAGS_allreduce_chunk_size_mb,
+                                                            .zero_stage = FLAGS_zero_stage};
             auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
             for (int chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
                 (*mutable_chunks)[chunk_id]
@@ -313,7 +316,8 @@ void Train(const nn::parallel::Rank &rank) {
         // before wrapping the model with DistributedDataParallel (DDP).
         // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
         // are created during the conversion.
-        auto ddp_config = DistributedDataParallelConfig{.zero_stage = FLAGS_zero_stage};
+        auto ddp_config = DistributedDataParallelConfig{.allreduce_chunk_size_mb = FLAGS_allreduce_chunk_size_mb,
+                                                        .zero_stage = FLAGS_zero_stage};
         model = std::make_shared<DistributedDataParallel>(model, rank, ddp_config);
     }
 

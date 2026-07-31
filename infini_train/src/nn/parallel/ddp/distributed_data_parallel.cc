@@ -1,6 +1,7 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 
 #include <functional>
+#include <limits>
 #include <map>
 #include <memory>
 #include <utility>
@@ -28,6 +29,13 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
       ddp_pg_(ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(rank.GlobalRank()))) {
     CHECK(ddp_config_.zero_stage >= 0 && ddp_config_.zero_stage <= 3)
         << "DistributedDataParallel: zero_stage must be in 0/1/2/3.";
+    constexpr size_t kMaxBucketSizeMB = std::numeric_limits<size_t>::max() / kBytesPerMB;
+    CHECK_LE(ddp_config_.first_bucket_cap_mb, kMaxBucketSizeMB);
+    CHECK_LE(ddp_config_.normal_bucket_cap_mb, kMaxBucketSizeMB);
+    CHECK_LE(ddp_config_.allreduce_chunk_size_mb, kMaxBucketSizeMB);
+    CHECK(ddp_config_.allreduce_chunk_size_mb == 0 || ddp_config_.gradient_bucketing_enabled
+          || ddp_config_.zero_stage > 0)
+        << "DistributedDataParallel: allreduce_chunk_size_mb requires gradient bucketing in classic DDP.";
     if (ddp_config_.zero_stage == 3) {
         LOG(FATAL) << "DistributedDataParallel: ZeRO-3 is not implemented yet.";
     }

@@ -764,6 +764,15 @@ template <typename Func> std::shared_ptr<Tensor> UnaryForward(const std::shared_
     return output;
 }
 
+template <typename Func> void UnaryForwardInplace(const std::shared_ptr<Tensor> &input, Func unary_fn) {
+    switch (input->Dtype()) {
+        DISPATCH_CASE(WRAP(LaunchForward<256, float>(unary_fn, input, input);), DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(LaunchForward<256, __maca_bfloat16>(unary_fn, input, input);), DataType::kBFLOAT16)
+    default:
+        LOG_LOC(FATAL, "MACA unary forward inplace: unsupported data type");
+    }
+}
+
 template <typename Func>
 std::shared_ptr<Tensor> UnaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr<Tensor> &a,
                                       Func unary_fn) {
@@ -1176,6 +1185,10 @@ std::shared_ptr<Tensor> MulScalarForward(const std::shared_ptr<Tensor> &a, float
              , INFINI_ALL_FLOATING_TYPES)
 }
 
+void MulScalarInplace(const std::shared_ptr<Tensor> &a, float scalar) {
+    UnaryForwardInplace(a, [scalar] __device__(auto x) { return Mul(x, static_cast<decltype(x)>(scalar)); });
+}
+
 std::shared_ptr<Tensor> MulScalarBackward(const std::shared_ptr<Tensor> &grad_output, float scalar) {
     DISPATCH(grad_output->Dtype(),
              return UnaryBackward(grad_output, nullptr,
@@ -1258,6 +1271,7 @@ REGISTER_MACA_ELEMENTWISE_KERNEL(SubBackward)
 REGISTER_MACA_ELEMENTWISE_KERNEL(MulForward)
 REGISTER_MACA_ELEMENTWISE_KERNEL(MulBackward)
 REGISTER_MACA_ELEMENTWISE_KERNEL(MulScalarForward)
+REGISTER_MACA_ELEMENTWISE_KERNEL(MulScalarInplace)
 REGISTER_MACA_ELEMENTWISE_KERNEL(MulScalarBackward)
 REGISTER_MACA_ELEMENTWISE_KERNEL(DivForward)
 REGISTER_MACA_ELEMENTWISE_KERNEL(DivBackward)
