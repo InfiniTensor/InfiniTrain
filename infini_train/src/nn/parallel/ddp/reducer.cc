@@ -231,17 +231,10 @@ void Reducer::RebuildBuckets() {
         }
     }
 
-    std::vector<std::shared_ptr<Tensor>> tensors_in_order;
-    tensors_in_order.reserve(full_order.size());
-    for (auto global_idx : full_order) {
-        CHECK_LT(global_idx, params_.size());
-        tensors_in_order.push_back(params_[global_idx]);
-    }
-
     const size_t first_cap_bytes = ddp_config_.first_bucket_cap_mb * kBytesPerMB;
     const size_t normal_cap_bytes = ddp_config_.normal_bucket_cap_mb * kBytesPerMB;
     std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
-    auto new_bucket_indices = ComputeBucketAssignmentBySize(tensors_in_order, bucket_size_limits, full_order);
+    auto new_bucket_indices = ComputeBucketAssignmentBySize(params_, bucket_size_limits, full_order);
 
     InitializeBuckets(new_bucket_indices);
 }

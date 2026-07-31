@@ -31,10 +31,12 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
     if (ddp_config_.zero_stage == 3) {
         LOG(FATAL) << "DistributedDataParallel: ZeRO-3 is not implemented yet.";
     }
-    for (auto &param : module->Parameters()) {
+    std::vector<std::shared_ptr<Tensor>> trainable_params;
+    for (const auto &param : module->Parameters()) {
         if (!param->requires_grad()) {
             continue;
         }
+        trainable_params.push_back(param);
         auto device = param->GetDevice();
         CHECK_EQ(device.index(), rank.thread_rank()) << "All parameters must be on the same device as the module";
         if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
@@ -43,6 +45,7 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
             param->RegisterPostAccumulateGradHook(std::move(hook));
         }
     }
+    CHECK(!trainable_params.empty()) << "DistributedDataParallel requires at least one parameter that requires grad.";
     for (auto &buffer : module->Buffers()) {
         CHECK_EQ(buffer->GetDevice().index(), rank.thread_rank())
             << "All buffers must be on the same device as the module";
@@ -54,13 +57,12 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         RegisterBackwardHooks();
     } else if (ddp_config.gradient_bucketing_enabled) {
         // Bucket Assignment
-        auto params = modules_[kModuleName]->Parameters();
         const size_t first_cap_bytes = ddp_config.first_bucket_cap_mb * kBytesPerMB;
         const size_t normal_cap_bytes = ddp_config.normal_bucket_cap_mb * kBytesPerMB;
         std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
-        auto bucket_indices = ComputeBucketAssignmentBySize(params, bucket_size_limits);
+        auto bucket_indices = ComputeBucketAssignmentBySize(trainable_params, bucket_size_limits);
 
-        reducer_ = std::make_shared<Reducer>(params, bucket_indices, ddp_config);
+        reducer_ = std::make_shared<Reducer>(trainable_params, bucket_indices, ddp_config);
         reducer_->AttachHooksToParameters();
     }
 }
@@ -99,9 +101,8 @@ void DistributedDataParallel::BuildParamAndGradBuffers() {
     bucket_groups_ = PartitionBuckets(param_grad_buffers_, /*force_single_bucket_group=*/false);
 
     if (ddp_config_.zero_stage >= 1 && ddp_config_.overlap_param_gather) {
-        auto num_bucket_groups = bucket_groups_.size();
-        for (auto i = num_bucket_groups - 1; i > 0; --i) {
-            bucket_groups_[i]->SetNextParamGatherBucketGroup(bucket_groups_[i - 1]);
+        for (size_t i = bucket_groups_.size(); i > 1; --i) {
+            bucket_groups_[i - 1]->SetNextParamGatherBucketGroup(bucket_groups_[i - 2]);
         }
     }
 

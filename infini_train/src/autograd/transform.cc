@@ -155,6 +155,7 @@ std::vector<std::shared_ptr<Tensor>> Concat::Backward(const std::vector<std::sha
 
 std::vector<std::shared_ptr<Tensor>> Slice::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1);
+    for (const auto step : steps_) { CHECK_GT(step, 0) << "Slice step must be greater than zero."; }
     const auto &input = input_tensors[0];
 
     auto device = input->GetDevice().type();
