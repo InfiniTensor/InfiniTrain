@@ -3,7 +3,6 @@
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autograd/linear.h"
-#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 
@@ -12,15 +11,6 @@
 using namespace infini_train;
 
 class AutogradLinearForwardTest : public infini_train::test::InfiniTrainTest {};
-
-namespace {
-std::shared_ptr<Tensor> CopyToCPU(const std::shared_ptr<Tensor> &tensor) {
-    auto cpu = std::make_shared<Tensor>(tensor->Dims(), tensor->Dtype(), Device());
-    cpu->CopyFrom(tensor);
-    core::GetDeviceGuardImpl(tensor->GetDevice().type())->SynchronizeDevice(tensor->GetDevice());
-    return cpu;
-}
-} // namespace
 
 TEST_P(AutogradLinearForwardTest, LinearForward) {
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
@@ -33,25 +23,19 @@ TEST_P(AutogradLinearForwardTest, LinearForward) {
     auto result = linear_fn->Apply({input, weight, bias});
     EXPECT_EQ(result.size(), 1);
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
-
-    auto output = CopyToCPU(result[0]);
-    const float *actual = static_cast<const float *>(output->DataPtr());
-    for (int64_t i = 0; i < output->NumElements(); ++i) { EXPECT_FLOAT_EQ(actual[i], 5.0f); }
+    test::ExpectTensorEqual(result[0], 5.0f);
 }
 
 TEST_P(AutogradLinearForwardTest, LinearNoBias) {
-    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{1, 3}, DataType::kFLOAT32, GetDevice(), true);
     input->Fill(1.0f);
     auto weight = std::make_shared<Tensor>(std::vector<int64_t>{4, 3}, DataType::kFLOAT32, GetDevice(), true);
     weight->Fill(1.0f);
     auto linear_fn = std::make_shared<autograd::Linear>();
     auto result = linear_fn->Apply({input, weight});
     EXPECT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
-
-    auto output = CopyToCPU(result[0]);
-    const float *actual = static_cast<const float *>(output->DataPtr());
-    for (int64_t i = 0; i < output->NumElements(); ++i) { EXPECT_FLOAT_EQ(actual[i], 3.0f); }
+    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{1, 4}));
+    test::ExpectTensorEqual(result[0], 3.0f);
 }
 
 TEST_P(AutogradLinearForwardTest, LinearBatch) {
@@ -59,12 +43,11 @@ TEST_P(AutogradLinearForwardTest, LinearBatch) {
     input->Fill(1.0f);
     auto weight = std::make_shared<Tensor>(std::vector<int64_t>{64, 128}, DataType::kFLOAT32, GetDevice(), true);
     weight->Fill(1.0f);
-    auto bias = std::make_shared<Tensor>(std::vector<int64_t>{64}, DataType::kFLOAT32, GetDevice(), true);
-    bias->Fill(0.0f);
     auto linear_fn = std::make_shared<autograd::Linear>();
-    auto result = linear_fn->Apply({input, weight, bias});
+    auto result = linear_fn->Apply({input, weight});
     EXPECT_EQ(result.size(), 1);
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{32, 64}));
+    test::ExpectTensorEqual(result[0], 128.0f);
 }
 
 INFINI_TRAIN_REGISTER_TEST(AutogradLinearForwardTest);

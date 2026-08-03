@@ -3,7 +3,6 @@
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autograd/reduction.h"
-#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 
@@ -12,18 +11,6 @@
 using namespace infini_train;
 
 class AutogradReductionBackwardTest : public infini_train::test::InfiniTrainTest {};
-
-namespace {
-void ExpectValues(const std::shared_ptr<Tensor> &tensor, const std::vector<float> &expected) {
-    auto cpu = std::make_shared<Tensor>(tensor->Dims(), tensor->Dtype(), Device());
-    cpu->CopyFrom(tensor);
-    core::GetDeviceGuardImpl(tensor->GetDevice().type())->SynchronizeDevice(tensor->GetDevice());
-
-    ASSERT_EQ(cpu->NumElements(), expected.size());
-    const float *actual = static_cast<const float *>(cpu->DataPtr());
-    for (size_t i = 0; i < expected.size(); ++i) { EXPECT_FLOAT_EQ(actual[i], expected[i]); }
-}
-} // namespace
 
 TEST_P(AutogradReductionBackwardTest, SumBackward) {
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
@@ -34,7 +21,7 @@ TEST_P(AutogradReductionBackwardTest, SumBackward) {
     grad->Fill(1.0f);
     auto grad_inputs = sum_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 1);
-    ExpectValues(grad_inputs[0], {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f});
+    test::ExpectTensorEqual(grad_inputs[0], {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f});
 }
 
 TEST_P(AutogradReductionBackwardTest, MeanBackward) {
@@ -46,7 +33,8 @@ TEST_P(AutogradReductionBackwardTest, MeanBackward) {
     grad->Fill(1.0f);
     auto grad_inputs = mean_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 1);
-    ExpectValues(grad_inputs[0], {1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f});
+    test::ExpectTensorEqual(grad_inputs[0],
+                            {1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f});
 }
 
 TEST_P(AutogradReductionBackwardTest, MaxBackward) {
@@ -58,7 +46,7 @@ TEST_P(AutogradReductionBackwardTest, MaxBackward) {
     grad->Fill(1.0f);
     auto grad_inputs = max_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 1);
-    ExpectValues(grad_inputs[0], {0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f});
+    test::ExpectTensorEqual(grad_inputs[0], {0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f});
 }
 
 TEST_P(AutogradReductionBackwardTest, MinBackward) {
@@ -70,7 +58,7 @@ TEST_P(AutogradReductionBackwardTest, MinBackward) {
     grad->Fill(1.0f);
     auto grad_inputs = min_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 1);
-    ExpectValues(grad_inputs[0], {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f});
+    test::ExpectTensorEqual(grad_inputs[0], {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f});
 }
 
 TEST_P(AutogradReductionBackwardTest, SumBackwardKeepDim) {
@@ -82,7 +70,7 @@ TEST_P(AutogradReductionBackwardTest, SumBackwardKeepDim) {
     grad->Fill(1.0f);
     auto grad_inputs = sum_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 1);
-    ExpectValues(grad_inputs[0], {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f});
+    test::ExpectTensorEqual(grad_inputs[0], {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f});
 }
 
 TEST_P(AutogradReductionBackwardTest, MeanBackwardKeepDim) {
@@ -94,7 +82,8 @@ TEST_P(AutogradReductionBackwardTest, MeanBackwardKeepDim) {
     grad->Fill(1.0f);
     auto grad_inputs = mean_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 1);
-    ExpectValues(grad_inputs[0], {1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f});
+    test::ExpectTensorEqual(grad_inputs[0],
+                            {1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f});
 }
 
 INFINI_TRAIN_REGISTER_TEST(AutogradReductionBackwardTest);

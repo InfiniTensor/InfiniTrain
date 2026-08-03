@@ -47,9 +47,7 @@ TEST_P(CheckpointSerializationTest, SaveAndLoadModelFP32) {
     EXPECT_EQ(loaded.global_step, 42);
     EXPECT_EQ(loaded.consumed_batches, 100);
 
-    auto w1_cpu = model2->parameter("weight")->To(Device());
-    const float *data = static_cast<const float *>(w1_cpu.DataPtr());
-    for (int i = 0; i < 6; ++i) { EXPECT_NEAR(data[i], 0.42f, 1e-6); }
+    test::ExpectTensorNear(model2->parameter("weight"), 0.42f, 1e-6f);
 
     std::filesystem::remove_all(dir);
 }
