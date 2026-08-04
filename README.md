@@ -38,6 +38,9 @@ cmake .. -DUSE_CUDA=ON -DUSE_NCCL=ON
 make -j
 ```
 
+For Hygon BW1000 / DCU builds and validation, see
+[`docs/dcu_bw1000.md`](docs/dcu_bw1000.md).
+
 Build Options:
 
 - `USE_CUDA=ON`

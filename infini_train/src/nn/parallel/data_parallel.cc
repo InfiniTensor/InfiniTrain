@@ -1,6 +1,5 @@
 #include "infini_train/include/nn/parallel/data_parallel.h"
 
-#include <format>
 #include <memory>
 #include <optional>
 #include <thread>
@@ -22,8 +21,8 @@ constexpr char kModuleName[] = "module";
 std::vector<std::vector<std::shared_ptr<Tensor>>>
 ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
               const std::vector<std::vector<std::shared_ptr<Tensor>>> &inputs, const std::vector<Device> &devices) {
-    CHECK_EQ(modules.size(), inputs.size()) << std::format(
-        "The number of modules {} is not equal to the number of inputs {}", modules.size(), inputs.size());
+    CHECK_EQ(modules.size(), inputs.size()) << "The number of modules " << modules.size()
+                                            << " is not equal to the number of inputs " << inputs.size();
     CHECK_EQ(modules.size(), devices.size());
 
     // pre-allocate results so we do not need lock in the worker threads
@@ -80,9 +79,8 @@ std::vector<std::shared_ptr<Tensor>> DataParallel::Forward(const std::vector<std
 
     for (auto tensor : module->Parameters()) {
         if (tensor->GetDevice() != src_device_) {
-            LOG(FATAL) << std::format("module must have its Parameters on device {} (device_ids[0]) but found "
-                                      "one of them on device: {}",
-                                      src_device_.ToString(), tensor->GetDevice().ToString());
+            LOG(FATAL) << "module must have its Parameters on device " << src_device_.ToString()
+                       << " (device_ids[0]) but found one of them on device: " << tensor->GetDevice().ToString();
         }
     }
 

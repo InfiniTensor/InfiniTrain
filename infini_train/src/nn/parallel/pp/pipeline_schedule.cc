@@ -2,7 +2,9 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_schedule.h"
 
 #include <cstddef>
+#include <iomanip>
 #include <memory>
+#include <sstream>
 #include <vector>
 
 #include "glog/logging.h"
@@ -24,9 +26,9 @@ void PrintScheduleTable(const std::vector<PipelineParallelScheduler::Task> &sche
                         int vpp_size) {
     int total_global_chunks = num_stages * vpp_size;
 
-    LOG(INFO) << std::format("=== Schedule Table ===\n"
-                             "n: {}, stages: {}, vpp: {}, total_chunks: {}",
-                             n, num_stages, vpp_size, total_global_chunks);
+    LOG(INFO) << "=== Schedule Table ===\n"
+              << "n: " << n << ", stages: " << num_stages << ", vpp: " << vpp_size
+              << ", total_chunks: " << total_global_chunks;
     LOG(INFO) << "";
     LOG(INFO) << "Step |    Type   | Microbatch | Global Chunk | Local Chunk | Stage";
     LOG(INFO) << "-----|-----------|------------|--------------|-------------|-------";
@@ -37,9 +39,11 @@ void PrintScheduleTable(const std::vector<PipelineParallelScheduler::Task> &sche
 
         std::string type_str = task.is_forward ? "Forward" : "Backward";
 
-        auto s_info = std::format("{:4} | {:<9} | {:>10} | {:>12} | {:>11} | {:>5}", task.step, type_str,
-                                  task.microbatch_id, task.global_chunk_id, local_chunk, owning_stage);
-        LOG(INFO) << s_info;
+        std::ostringstream s_info;
+        s_info << std::setw(4) << task.step << " | " << std::left << std::setw(9) << type_str << std::right << " | "
+               << std::setw(10) << task.microbatch_id << " | " << std::setw(12) << task.global_chunk_id << " | "
+               << std::setw(11) << local_chunk << " | " << std::setw(5) << owning_stage;
+        LOG(INFO) << s_info.str();
     }
 }
 

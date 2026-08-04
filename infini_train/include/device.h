@@ -14,7 +14,8 @@ public:
         kCPU = 0,
         kCUDA = 1,
         kMACA = 2,
-        kCount = 3,
+        kDCU = 3,
+        kCount = 4,
         kInvalid = -1,
     };
 
@@ -32,6 +33,7 @@ public:
     bool IsCPU() const;
     bool IsCUDA() const;
     bool IsMACA() const;
+    bool IsDCU() const;
 
     std::string ToString() const;
 

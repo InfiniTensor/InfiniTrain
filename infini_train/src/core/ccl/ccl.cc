@@ -1,6 +1,5 @@
 #include "infini_train/include/core/ccl/ccl.h"
 
-#include <format>
 #include <memory>
 #include <utility>
 
@@ -74,12 +73,12 @@ CclImplRegistry &CclImplRegistry::Instance() {
 
 void CclImplRegistry::Register(Device::DeviceType type, std::unique_ptr<CclImpl> impl) {
     if (type != impl->Type()) {
-        LOG(FATAL) << std::format("Register CclImpl with type {}, but as type {}", static_cast<int>(impl->Type()),
-                                  static_cast<int>(type));
+        LOG(FATAL) << "Register CclImpl with type " << static_cast<int>(impl->Type()) << ", but as type "
+                   << static_cast<int>(type);
     }
 
     if (impls_.contains(type)) {
-        LOG(FATAL) << std::format("CclImpl for type {} already registered", static_cast<int>(type));
+        LOG(FATAL) << "CclImpl for type " << static_cast<int>(type) << " already registered";
     }
 
     impls_[type] = std::move(impl);

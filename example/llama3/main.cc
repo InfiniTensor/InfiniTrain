@@ -64,7 +64,7 @@ DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 // debugging
 DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 // memory management
-DEFINE_string(device, "cuda", "device type (cpu/cuda), useless if using parallel training mode");
+DEFINE_string(device, "cuda", "device type (cpu/cuda/maca/dcu), useless if using parallel training mode");
 // parallel
 DEFINE_int32(
     nthread_per_process, 1,
@@ -95,13 +95,14 @@ const std::unordered_set<std::string> kSupportedModels = {"llama3"};
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
 constexpr char kDeviceMACA[] = "maca";
+constexpr char kDeviceDCU[] = "dcu";
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
 DEFINE_validator(device, [](const char *, const std::string &value) {
-    return value == kDeviceCPU || value == kDeviceCUDA || value == kDeviceMACA;
+    return value == kDeviceCPU || value == kDeviceCUDA || value == kDeviceMACA || value == kDeviceDCU;
 });
 
 void Train(const nn::parallel::Rank &rank) {
@@ -132,8 +133,12 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *pp_pg = nullptr;
 
     if (rank.IsParallel()) {
-        auto parallel_device_type
-            = (FLAGS_device == kDeviceMACA) ? Device::DeviceType::kMACA : Device::DeviceType::kCUDA;
+        auto parallel_device_type = Device::DeviceType::kCUDA;
+        if (FLAGS_device == kDeviceMACA) {
+            parallel_device_type = Device::DeviceType::kMACA;
+        } else if (FLAGS_device == kDeviceDCU) {
+            parallel_device_type = Device::DeviceType::kDCU;
+        }
         device = Device(parallel_device_type, rank.thread_rank());
 
         auto *pg_factory = ProcessGroupFactory::Instance(device.type());
@@ -160,6 +165,8 @@ void Train(const nn::parallel::Rank &rank) {
             device = Device();
         } else if (FLAGS_device == kDeviceMACA) {
             device = Device(Device::DeviceType::kMACA, 0);
+        } else if (FLAGS_device == kDeviceDCU) {
+            device = Device(Device::DeviceType::kDCU, 0);
         } else {
             device = Device(Device::DeviceType::kCUDA, 0);
         }

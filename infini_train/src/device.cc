@@ -1,7 +1,6 @@
 #include "infini_train/include/device.h"
 
 #include <cstdint>
-#include <format>
 #include <sstream>
 #include <string>
 
@@ -28,6 +27,8 @@ bool Device::IsCUDA() const { return type_ == DeviceType::kCUDA; }
 
 bool Device::IsMACA() const { return type_ == DeviceType::kMACA; }
 
+bool Device::IsDCU() const { return type_ == DeviceType::kDCU; }
+
 std::string Device::ToString() const {
     const char *type_str = "Unknown";
     switch (type_) {
@@ -40,11 +41,14 @@ std::string Device::ToString() const {
     case DeviceType::kMACA:
         type_str = "MACA";
         break;
+    case DeviceType::kDCU:
+        type_str = "DCU";
+        break;
     default:
         break;
     }
     std::ostringstream oss;
-    oss << std::format("Device({}, {})", type_str, index_);
+    oss << "Device(" << type_str << ", " << static_cast<int>(index_) << ")";
     return oss.str();
 }
 
