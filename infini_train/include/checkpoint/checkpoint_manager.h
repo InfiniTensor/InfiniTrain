@@ -34,13 +34,13 @@ struct ResumeFromCheckpointArgs {
 
 struct ResumeFromCheckpointResult {
     int global_step = 0;
-    size_t consumed_batches = 0;
+    size_t consumed_micro_batches = 0;
 };
 
 struct SaveCheckpointArgs {
     std::filesystem::path save_dir;
     int64_t global_step = 0;
-    size_t consumed_batches = 0;
+    size_t consumed_micro_batches = 0;
     int64_t n_layer = 0;
     int64_t n_head = 0;
     int64_t n_kv_head = 0;
