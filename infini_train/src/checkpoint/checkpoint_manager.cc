@@ -63,10 +63,10 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
     CHECK_EQ(args.state.pp_size, pp_world_size)
         << "PP size mismatch: checkpoint has PP=" << args.state.pp_size << ", but current run has PP=" << pp_world_size;
 
-    result.consumed_batches = static_cast<size_t>(std::max<int64_t>(args.state.consumed_batches, 0));
+    result.consumed_micro_batches = static_cast<size_t>(std::max<int64_t>(args.state.consumed_micro_batches, 0));
     if (args.rank.IsMainRank()) {
-        LOG(INFO) << std::format("Resume training from step {}, consumed_batches  {}", args.state.global_step,
-                                 args.state.consumed_batches);
+        LOG(INFO) << std::format("Resume training from step {}, consumed_micro_batches {}", args.state.global_step,
+                                 args.state.consumed_micro_batches);
     }
 
     return result;
@@ -77,7 +77,7 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
 
     TrainerState state;
     state.global_step = args.global_step;
-    state.consumed_batches = static_cast<int64_t>(args.consumed_batches);
+    state.consumed_micro_batches = static_cast<int64_t>(args.consumed_micro_batches);
     state.n_layer = args.n_layer;
     state.n_head = args.n_head;
     state.n_kv_head = args.n_kv_head;

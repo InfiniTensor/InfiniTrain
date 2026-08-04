@@ -17,7 +17,7 @@ class Module;
 
 struct TrainerState {
     int64_t global_step = 0;
-    int64_t consumed_batches = 0;
+    int64_t consumed_micro_batches = 0;
     int64_t n_layer = 0;
     int64_t n_head = 0;
     int64_t n_kv_head = 0;

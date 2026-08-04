@@ -29,7 +29,7 @@ TEST_P(CheckpointSerializationTest, SaveAndLoadModelFP32) {
     *model1->mutable_parameter("bias") = p2;
 
     auto opt1 = std::make_shared<optimizers::Adam>(model1->Parameters(), 0.01);
-    TrainerState saved{.global_step = 42, .consumed_batches = 100};
+    TrainerState saved{.global_step = 42, .consumed_micro_batches = 100};
     Checkpoint::Save(dir, *model1, opt1.get(), saved, nullptr);
 
     auto model2 = std::make_shared<nn::Linear>(3, 2, true, GetDevice());
@@ -45,7 +45,7 @@ TEST_P(CheckpointSerializationTest, SaveAndLoadModelFP32) {
     Checkpoint::Load(dir, *model2, opt2.get(), loaded, nullptr);
 
     EXPECT_EQ(loaded.global_step, 42);
-    EXPECT_EQ(loaded.consumed_batches, 100);
+    EXPECT_EQ(loaded.consumed_micro_batches, 100);
 
     test::ExpectTensorNear(model2->parameter("weight"), 0.42f, 1e-6f);
 
