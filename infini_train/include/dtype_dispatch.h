@@ -1,6 +1,6 @@
 #pragma once
 
-#include <format>
+#include <sstream>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -325,8 +325,10 @@ auto DispatchByTypeMap(const std::vector<DataType> &dtypes, Functor &&func, std:
     constexpr size_t kNumLists = sizeof...(AllowedTypeLists);
 
     if (dtypes.size() != kNumLists) {
-        LOG(FATAL) << std::format("DispatchByTypeMap expects {} dtypes, but only got {} in {}", kNumLists,
-                                  dtypes.size(), context_identifier);
+        std::ostringstream oss;
+        oss << "DispatchByTypeMap expects " << kNumLists << " dtypes, but only got " << dtypes.size() << " in "
+            << context_identifier;
+        LOG(FATAL) << oss.str();
         std::abort();
     }
 

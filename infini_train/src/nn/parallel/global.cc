@@ -1,7 +1,7 @@
 #include "infini_train/include/nn/parallel/global.h"
 
 #include <cstdlib>
-#include <format>
+#include <sstream>
 #include <string>
 
 #include "glog/logging.h"
@@ -195,9 +195,9 @@ inline int NumGroups(const Layout &L, Axis target) {
 
 std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
     std::ostringstream oss;
-    oss << std::format("\n=== Parallel Communication Groups ===\n"
-                       "world_size = {}, config: {{DP={}, TP={}, PP={}}}, order: {{",
-                       GetWorldSize(), L.sizes[DP], L.sizes[TP], L.sizes[PP]);
+    oss << "\n=== Parallel Communication Groups ===\n"
+        << "world_size = " << GetWorldSize() << ", config: {DP=" << L.sizes[DP] << ", TP=" << L.sizes[TP]
+        << ", PP=" << L.sizes[PP] << "}, order: {";
 
     for (int i = 0; i < AXIS_COUNT; ++i) { oss << AxisName(L.order[i]) << (i + 1 == AXIS_COUNT ? "" : " -> "); }
     oss << "}\n";
@@ -205,7 +205,7 @@ std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
     for (int a = 0; a < AXIS_COUNT; ++a) {
         Axis ax = static_cast<Axis>(a);
         if (skip_trivial_axes && L.sizes[ax] <= 1) {
-            oss << std::format("[{}] size={}, unenabled\n", AxisName(ax), L.sizes[ax]);
+            oss << "[" << AxisName(ax) << "] size=" << L.sizes[ax] << ", unenabled\n";
             continue;
         }
         // Build <Group ID, <DP, TP, PP>> mapping
@@ -223,7 +223,7 @@ std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
 
         const int num_groups = NumGroups(L, ax);
         const auto name = AxisName(ax);
-        oss << std::format("[{}] size={}, num_groups={}\n", name, L.sizes[ax], num_groups);
+        oss << "[" << name << "] size=" << L.sizes[ax] << ", num_groups=" << num_groups << "\n";
 
         // Iterate and print in the order of Group ID
         for (const auto &pair : groups) {
@@ -245,8 +245,8 @@ std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
                 }
                 ranks_str += std::to_string(ranks[i]);
             }
-            oss << std::format("  - {} {} (dp={}, tp={}, pp={}): [{}]\n", name, gid, dp_size_str, tp_size_str,
-                               pp_size_str, ranks_str);
+            oss << "  - " << name << " " << gid << " (dp=" << dp_size_str << ", tp=" << tp_size_str
+                << ", pp=" << pp_size_str << "): [" << ranks_str << "]\n";
         }
         if (a + 1 < AXIS_COUNT) {
             oss << "\n";
