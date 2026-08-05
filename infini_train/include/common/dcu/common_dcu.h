@@ -15,20 +15,20 @@
 namespace infini_train::common::dcu {
 
 // Common HIP Macros
-#define HIP_CHECK(call)                                                                                               \
+#define HIP_CHECK(call)                                                                                                \
     do {                                                                                                               \
-        hipError_t status = call;                                                                                     \
-        if (status != hipSuccess) {                                                                                   \
-            LOG(FATAL) << "HIP Error: " << hipGetErrorString(status) << " at " << __FILE__ << ":" << __LINE__;       \
+        hipError_t status = call;                                                                                      \
+        if (status != hipSuccess) {                                                                                    \
+            LOG(FATAL) << "HIP Error: " << hipGetErrorString(status) << " at " << __FILE__ << ":" << __LINE__;         \
         }                                                                                                              \
     } while (0)
 
-#define HIPBLAS_CHECK(call)                                                                                             \
+#define HIPBLAS_CHECK(call)                                                                                            \
     do {                                                                                                               \
-        hipblasStatus_t status = call;                                                                                  \
-        if (status != HIPBLAS_STATUS_SUCCESS) {                                                                         \
-            LOG(FATAL) << "HIPBLAS Error: status=" << static_cast<int>(status) << " at " << __FILE__ << ":"             \
-                       << __LINE__;                                                                                     \
+        hipblasStatus_t status = call;                                                                                 \
+        if (status != HIPBLAS_STATUS_SUCCESS) {                                                                        \
+            LOG(FATAL) << "HIPBLAS Error: status=" << static_cast<int>(status) << " at " << __FILE__ << ":"            \
+                       << __LINE__;                                                                                    \
         }                                                                                                              \
     } while (0)
 

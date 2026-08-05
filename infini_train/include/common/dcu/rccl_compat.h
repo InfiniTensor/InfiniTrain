@@ -44,14 +44,7 @@ typedef enum {
     ncclNumTypes = 10
 } ncclDataType_t;
 
-typedef enum {
-    ncclSum = 0,
-    ncclProd = 1,
-    ncclMax = 2,
-    ncclMin = 3,
-    ncclAvg = 4,
-    ncclNumOps = 5
-} ncclRedOp_t;
+typedef enum { ncclSum = 0, ncclProd = 1, ncclMax = 2, ncclMin = 3, ncclAvg = 4, ncclNumOps = 5 } ncclRedOp_t;
 
 extern "C" {
 const char *ncclGetErrorString(ncclResult_t result);
@@ -62,8 +55,8 @@ ncclResult_t ncclCommDestroy(ncclComm_t comm);
 ncclResult_t ncclCommGetAsyncError(ncclComm_t comm, ncclResult_t *asyncError);
 ncclResult_t ncclGroupStart();
 ncclResult_t ncclGroupEnd();
-ncclResult_t ncclAllReduce(const void *sendbuff, void *recvbuff, size_t count, ncclDataType_t datatype,
-                           ncclRedOp_t op, ncclComm_t comm, hipStream_t stream);
+ncclResult_t ncclAllReduce(const void *sendbuff, void *recvbuff, size_t count, ncclDataType_t datatype, ncclRedOp_t op,
+                           ncclComm_t comm, hipStream_t stream);
 ncclResult_t ncclBroadcast(const void *sendbuff, void *recvbuff, size_t count, ncclDataType_t datatype, int root,
                            ncclComm_t comm, hipStream_t stream);
 ncclResult_t ncclReduce(const void *sendbuff, void *recvbuff, size_t count, ncclDataType_t datatype, ncclRedOp_t op,

@@ -43,7 +43,7 @@ auto DispatchDcuFunc(DataType dtype, Functor &&func, std::string_view context_id
 
 template <typename... AllowedTypeLists, typename Functor, typename... Args>
 auto DispatchDcuFunc(const std::vector<DataType> &dtypes, Functor &&func, std::string_view context_identifier = "",
-                      Args &&...args) {
+                     Args &&...args) {
     return infini_train::DispatchByTypeMap<DcuTypeMap, AllowedTypeLists...>(
         dtypes, std::forward<Functor>(func), context_identifier, std::forward<Args>(args)...);
 }

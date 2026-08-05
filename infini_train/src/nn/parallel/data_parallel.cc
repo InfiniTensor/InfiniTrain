@@ -21,8 +21,8 @@ constexpr char kModuleName[] = "module";
 std::vector<std::vector<std::shared_ptr<Tensor>>>
 ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
               const std::vector<std::vector<std::shared_ptr<Tensor>>> &inputs, const std::vector<Device> &devices) {
-    CHECK_EQ(modules.size(), inputs.size()) << "The number of modules " << modules.size()
-                                            << " is not equal to the number of inputs " << inputs.size();
+    CHECK_EQ(modules.size(), inputs.size())
+        << "The number of modules " << modules.size() << " is not equal to the number of inputs " << inputs.size();
     CHECK_EQ(modules.size(), devices.size());
 
     // pre-allocate results so we do not need lock in the worker threads

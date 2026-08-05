@@ -34,9 +34,7 @@ hipEvent_t DcuEvent::hip_event() const { return event_; }
 
 DcuStream::DcuStream() { HIP_CHECK(hipStreamCreate(&stream_)); }
 
-DcuStream::DcuStream(int priority) {
-    HIP_CHECK(hipStreamCreateWithPriority(&stream_, hipStreamNonBlocking, priority));
-}
+DcuStream::DcuStream(int priority) { HIP_CHECK(hipStreamCreateWithPriority(&stream_, hipStreamNonBlocking, priority)); }
 
 DcuStream::~DcuStream() {
     // Do nothing.

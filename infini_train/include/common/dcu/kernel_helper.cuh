@@ -28,8 +28,7 @@ __device__ __forceinline__ void AtomicAdd(hip_bfloat16 *address, hip_bfloat16 va
         hip_bfloat16 updated(static_cast<float>(current) + static_cast<float>(value));
         const unsigned int updated_bits = static_cast<unsigned int>(updated.data);
         const unsigned int replacement
-            = upper ? ((assumed & 0x0000ffffU) | (updated_bits << 16))
-                    : ((assumed & 0xffff0000U) | updated_bits);
+            = upper ? ((assumed & 0x0000ffffU) | (updated_bits << 16)) : ((assumed & 0xffff0000U) | updated_bits);
         old = atomicCAS(base, assumed, replacement);
     } while (old != assumed);
 }
