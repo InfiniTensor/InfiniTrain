@@ -38,9 +38,6 @@ cmake .. -DUSE_CUDA=ON -DUSE_NCCL=ON
 make -j
 ```
 
-For Hygon BW1000 / DCU builds and validation, see
-[`docs/dcu_bw1000.md`](docs/dcu_bw1000.md).
-
 Build Options:
 
 - `USE_CUDA=ON`
@@ -183,7 +180,6 @@ Multiple parallelism strategies (DDP, TP, SP, PP) can be freely combined to scal
   Added Autocast, multi-dimensional distributed parallelism
    (DDP, TP, SP, PP with GPipe / 1F1B / vPP),
    multi-node training, `no_grad` mode,
-<<<<<<< ours
    and communication–computation overlap with bucketed gradient synchronization.
 
 - **2026/06/08** — InfiniTrain **v0.6.0**
@@ -213,6 +209,3 @@ Multiple parallelism strategies (DDP, TP, SP, PP) can be freely combined to scal
 
   Integrated a CTest + GTest based testing infrastructure to strengthen the
    framework's automated test workflow.
-=======
-   and communication–computation overlap with bucketed gradient synchronization.
->>>>>>> theirs

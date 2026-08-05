@@ -25,13 +25,6 @@ bool Device::IsCPU() const { return type_ == DeviceType::kCPU; }
 
 bool Device::IsCUDA() const { return type_ == DeviceType::kCUDA; }
 
-<<<<<<< ours
-std::string Device::ToString() const {
-    std::ostringstream oss;
-    oss << std::format("Device({}, {})", type_ == DeviceType::kCPU ? "CPU" : "CUDA", index_);
-=======
-bool Device::IsMACA() const { return type_ == DeviceType::kMACA; }
-
 bool Device::IsDCU() const { return type_ == DeviceType::kDCU; }
 
 std::string Device::ToString() const {
@@ -43,9 +36,6 @@ std::string Device::ToString() const {
     case DeviceType::kCUDA:
         type_str = "CUDA";
         break;
-    case DeviceType::kMACA:
-        type_str = "MACA";
-        break;
     case DeviceType::kDCU:
         type_str = "DCU";
         break;
@@ -54,7 +44,6 @@ std::string Device::ToString() const {
     }
     std::ostringstream oss;
     oss << "Device(" << type_str << ", " << static_cast<int>(index_) << ")";
->>>>>>> theirs
     return oss.str();
 }
 
