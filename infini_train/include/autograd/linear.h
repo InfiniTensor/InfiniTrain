@@ -12,6 +12,12 @@ class Tensor;
 
 namespace infini_train::autograd {
 
+struct LinearGradFlags {
+    bool input = false;
+    bool weight = false;
+    bool bias = false;
+};
+
 class Linear : public Function {
 public:
     static constexpr char kType[] = "LinearFunction";

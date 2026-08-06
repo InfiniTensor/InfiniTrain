@@ -188,6 +188,123 @@ MatmulBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     return {grad_input, grad_other};
 }
 
+std::shared_ptr<Tensor> MatmulBackwardInput(const std::shared_ptr<Tensor> &other,
+                                            const std::shared_ptr<Tensor> &grad_output,
+                                            const std::vector<int64_t> &input_dims) {
+    /*
+       grad_input[*, m, k] = grad_output[*, m, n] * other[*, k, n]^T
+    */
+    const auto &other_dims = other->Dims();
+    const auto &grad_output_dims = grad_output->Dims();
+
+    CHECK_GE(other_dims.size(), 2);
+    CHECK_EQ(other_dims.size(), grad_output_dims.size());
+
+    const int64_t m = grad_output_dims[grad_output_dims.size() - 2];
+    const int64_t k = other_dims[other_dims.size() - 2];
+    const int64_t n = other_dims[other_dims.size() - 1];
+    CHECK_EQ(n, grad_output_dims[grad_output_dims.size() - 1]);
+
+    const int64_t bs
+        = std::accumulate(grad_output_dims.rbegin() + 2, grad_output_dims.rend(), 1, std::multiplies<int64_t>{});
+    for (int64_t i = 0; i < static_cast<int64_t>(grad_output_dims.size()) - 2; ++i) {
+        CHECK_EQ(grad_output_dims[i], other_dims[i]) << "Batch dims must match";
+    }
+
+    auto compute_dtype = other->Dtype();
+    auto grad_output_dtype = grad_output->Dtype();
+    auto grad_output_promoted
+        = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
+    auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
+    auto grad_input = std::make_shared<Tensor>(input_dims, output_dtype, grad_output->GetDevice());
+
+    auto device = grad_output->GetDevice();
+    hipblasHandle_t handle = dynamic_cast<infini_train::core::dcu::DcuBlasHandle *>(
+                                infini_train::core::GetDeviceGuardImpl(device.type())->GetBlasHandle(device))
+                                ->hipblas_handle();
+
+    const float alpha = 1.0f, beta = 0.0f;
+    const int lda = n, ldb = n, ldc = k;
+    const int64_t stride_a = k * n;
+    const int64_t stride_b = n * m;
+    const int64_t stride_c = m * k;
+    switch (compute_dtype) {
+        DISPATCH_CASE(WRAP(HIPBLAS_CHECK(hipblasGemmStridedBatchedEx(
+                          handle, HIPBLAS_OP_T, HIPBLAS_OP_N, k, m, n, &alpha, other->DataPtr(), HIPBLAS_R_32F, lda,
+                          stride_a, grad_output_promoted->DataPtr(), HIPBLAS_R_32F, ldb, stride_b, &beta,
+                          grad_input->DataPtr(), HIPBLAS_R_32F, ldc, stride_c, bs, HIPBLAS_R_32F,
+                          HIPBLAS_GEMM_DEFAULT));),
+                      DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(HIPBLAS_CHECK(hipblasGemmStridedBatchedEx(
+                          handle, HIPBLAS_OP_T, HIPBLAS_OP_N, k, m, n, &alpha, other->DataPtr(), HIPBLAS_R_16B, lda,
+                          stride_a, grad_output_promoted->DataPtr(), HIPBLAS_R_16B, ldb, stride_b, &beta,
+                          grad_input->DataPtr(), HIPBLAS_R_32F, ldc, stride_c, bs, HIPBLAS_R_32F,
+                          HIPBLAS_GEMM_DEFAULT));),
+                      DataType::kBFLOAT16)
+    }
+
+    return grad_input;
+}
+
+std::shared_ptr<Tensor> MatmulBackwardOther(const std::shared_ptr<Tensor> &input,
+                                            const std::shared_ptr<Tensor> &grad_output,
+                                            const std::vector<int64_t> &other_dims) {
+    /*
+       grad_other[*, k, n] = input[*, m, k]^T * grad_output[*, m, n]
+    */
+    const auto &input_dims = input->Dims();
+    const auto &grad_output_dims = grad_output->Dims();
+
+    CHECK_GE(input_dims.size(), 2);
+    CHECK_EQ(input_dims.size(), grad_output_dims.size());
+
+    const int64_t m = input_dims[input_dims.size() - 2];
+    const int64_t k = input_dims[input_dims.size() - 1];
+    const int64_t n = grad_output_dims[grad_output_dims.size() - 1];
+    CHECK_EQ(m, grad_output_dims[grad_output_dims.size() - 2]);
+    CHECK_EQ(k, other_dims[other_dims.size() - 2]);
+
+    const int64_t bs = std::accumulate(input_dims.rbegin() + 2, input_dims.rend(), 1, std::multiplies<int64_t>{});
+    for (int64_t i = 0; i < static_cast<int64_t>(input_dims.size()) - 2; ++i) {
+        CHECK_EQ(input_dims[i], grad_output_dims[i]) << "Batch dims must match";
+        CHECK_EQ(input_dims[i], other_dims[i]) << "Batch dims must match";
+    }
+
+    auto compute_dtype = input->Dtype();
+    auto grad_output_dtype = grad_output->Dtype();
+    auto grad_output_promoted
+        = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
+    auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
+    auto grad_other = std::make_shared<Tensor>(other_dims, output_dtype, grad_output->GetDevice());
+
+    auto device = grad_output->GetDevice();
+    hipblasHandle_t handle = dynamic_cast<infini_train::core::dcu::DcuBlasHandle *>(
+                                infini_train::core::GetDeviceGuardImpl(device.type())->GetBlasHandle(device))
+                                ->hipblas_handle();
+
+    const float alpha = 1.0f, beta = 0.0f;
+    const int lda = n, ldb = k, ldc = n;
+    const int64_t stride_a = n * m;
+    const int64_t stride_b = k * m;
+    const int64_t stride_c = n * k;
+    switch (compute_dtype) {
+        DISPATCH_CASE(WRAP(HIPBLAS_CHECK(hipblasGemmStridedBatchedEx(
+                          handle, HIPBLAS_OP_N, HIPBLAS_OP_T, n, k, m, &alpha, grad_output_promoted->DataPtr(),
+                          HIPBLAS_R_32F, lda, stride_a, input->DataPtr(), HIPBLAS_R_32F, ldb, stride_b, &beta,
+                          grad_other->DataPtr(), HIPBLAS_R_32F, ldc, stride_c, bs, HIPBLAS_R_32F,
+                          HIPBLAS_GEMM_DEFAULT));),
+                      DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(HIPBLAS_CHECK(hipblasGemmStridedBatchedEx(
+                          handle, HIPBLAS_OP_N, HIPBLAS_OP_T, n, k, m, &alpha, grad_output_promoted->DataPtr(),
+                          HIPBLAS_R_16B, lda, stride_a, input->DataPtr(), HIPBLAS_R_16B, ldb, stride_b, &beta,
+                          grad_other->DataPtr(), HIPBLAS_R_32F, ldc, stride_c, bs, HIPBLAS_R_32F,
+                          HIPBLAS_GEMM_DEFAULT));),
+                      DataType::kBFLOAT16)
+    }
+
+    return grad_other;
+}
+
 template <typename T> __global__ void BiasCopyKernel(T *output, const T *bias, int bs, int out_features) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= bs * out_features) {
@@ -491,6 +608,32 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
 
     return {grad_input, grad_weight, grad_bias};
 }
+
+std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weight,
+                                            const std::shared_ptr<Tensor> &grad_output, bool transpose,
+                                            int64_t in_features, int64_t out_features,
+                                            const std::vector<int64_t> &input_dims) {
+    auto [grad_input, grad_weight, grad_bias]
+        = LinearBackward(nullptr, weight, transpose, in_features, out_features, input_dims, grad_output, false,
+                         infini_train::autograd::LinearGradFlags{.input = true});
+    return grad_input;
+}
+
+std::shared_ptr<Tensor> LinearBackwardWeight(const std::shared_ptr<Tensor> &input,
+                                             const std::shared_ptr<Tensor> &grad_output, bool transpose,
+                                             int64_t in_features, int64_t out_features) {
+    auto [grad_input, grad_weight, grad_bias]
+        = LinearBackward(input, nullptr, transpose, in_features, out_features, input->Dims(), grad_output, false,
+                         infini_train::autograd::LinearGradFlags{.weight = true});
+    return grad_weight;
+}
+
+std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_output, int64_t out_features) {
+    auto [grad_input, grad_weight, grad_bias]
+        = LinearBackward(nullptr, nullptr, true, 0, out_features, grad_output->Dims(), grad_output, true,
+                         infini_train::autograd::LinearGradFlags{.bias = true});
+    return grad_bias;
+}
 } // namespace infini_train::kernels::dcu
 
 #define REGISTER_HIP_LINEAR_KERNEL(kernel_name)                                                                       \
@@ -498,7 +641,12 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
 
 REGISTER_HIP_LINEAR_KERNEL(MatmulForward)
 REGISTER_HIP_LINEAR_KERNEL(MatmulBackward)
+REGISTER_HIP_LINEAR_KERNEL(MatmulBackwardInput)
+REGISTER_HIP_LINEAR_KERNEL(MatmulBackwardOther)
 REGISTER_HIP_LINEAR_KERNEL(LinearForward)
 REGISTER_HIP_LINEAR_KERNEL(LinearBackward)
+REGISTER_HIP_LINEAR_KERNEL(LinearBackwardInput)
+REGISTER_HIP_LINEAR_KERNEL(LinearBackwardWeight)
+REGISTER_HIP_LINEAR_KERNEL(LinearBackwardBias)
 
 #undef REGISTER_HIP_LINEAR_KERNEL
