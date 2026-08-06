@@ -182,7 +182,7 @@ template <typename T> T ExtractNumberField(const std::string &content, const std
 } // namespace
 
 void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Module &model, const Optimizer *optimizer,
-                      const TrainerState &state, bool save_optimizer_state, const LRScheduler *lr_scheduler) {
+                      const TrainerState &state, const LRScheduler *lr_scheduler) {
     std::filesystem::create_directories(checkpoint_dir);
     LOG(INFO) << "[CKPT] Save begin: dir=" << checkpoint_dir << ", global_step=" << state.global_step;
 
@@ -190,8 +190,7 @@ void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Mod
 
     SaveStateDict(model_path, model.StateDict());
 
-    if (save_optimizer_state) {
-        CHECK(optimizer != nullptr) << "Optimizer pointer is null, cannot save optimizer state.";
+    if (optimizer != nullptr) {
         auto opt_state = optimizer->StateDict();
         if (!opt_state.empty()) {
             const auto opt_path = checkpoint_dir / "optimizer.ckpt";
@@ -208,14 +207,13 @@ void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Mod
 }
 
 void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &model, Optimizer *optimizer,
-                      TrainerState &state, bool load_optimizer_state, LRScheduler *lr_scheduler) {
+                      TrainerState &state, LRScheduler *lr_scheduler) {
     const auto model_path = checkpoint_dir / "model.ckpt";
     LOG(INFO) << "[CKPT] Loading model: " << model_path;
 
     model.LoadStateDict(LoadStateDict(model_path));
 
-    if (load_optimizer_state) {
-        CHECK(optimizer != nullptr) << "Optimizer pointer is null, cannot load optimizer state.";
+    if (optimizer != nullptr) {
         const auto opt_path = checkpoint_dir / "optimizer.ckpt";
         if (std::filesystem::exists(opt_path)) {
             LOG(INFO) << "[CKPT] Loading optimizer: " << opt_path;
