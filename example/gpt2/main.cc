@@ -92,7 +92,6 @@ DEFINE_uint32(save_interval, 0, "save checkpoint every N steps; 0 disables savin
 DEFINE_string(load, "", "checkpoint directory to resume from");
 DEFINE_string(save, "", "root directory used to store checkpoints");
 DEFINE_uint32(max_checkpoint_keep, 3, "max number of checkpoint steps to keep");
-DEFINE_bool(save_optimizer_state, true, "whether optimizer state is persisted in checkpoints");
 // precision check
 DEFINE_string(
     precision_check, "",
@@ -366,10 +365,9 @@ void Train(const nn::parallel::Rank &rank) {
     const auto resume_result = ResumeFromCheckpoint({.resume_root = FLAGS_load,
                                                      .rank = rank,
                                                      .model = model,
-                                                     .optimizer = optimizer,
+                                                     .optimizer = nullptr,
                                                      .model_config = model_config,
                                                      .state = state,
-                                                     .load_optimizer_state = false,
                                                      .lr_scheduler = scheduler});
     start_step = resume_result.global_step;
     size_t consumed_batches = resume_result.consumed_batches;
@@ -398,12 +396,11 @@ void Train(const nn::parallel::Rank &rank) {
             .tp_size = tp_world_size,
             .sp_size = sp_world_size,
             .pp_size = pp_world_size,
-            .save_optimizer_state = FLAGS_save_optimizer_state,
             .checkpoint_root_dir = FLAGS_save,
             .max_checkpoint_keep = FLAGS_max_checkpoint_keep,
             .rank = rank,
             .model = *model,
-            .optimizer = *optimizer,
+            .optimizer = nullptr,
             .lr_scheduler = scheduler.get(),
         });
     };

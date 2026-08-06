@@ -839,7 +839,6 @@
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
                         "save": "@CKPT_ROOT_DIR@/3d_ddp2_tp2_pp2_no_resume",
-                        "save_optimizer_state": true,
                         "max_checkpoint_keep": 5
                     }
                 },
@@ -857,7 +856,6 @@
                         "virtual_pipeline_parallel": 2,
                         "load": "@CKPT_ROOT_DIR@/3d_ddp2_tp2_pp2_no_resume/checkpoint_step_000030",
                         "save": "@CKPT_ROOT_DIR@/3d_tp2_pp2_resume",
-                        "save_optimizer_state": true,
                         "max_checkpoint_keep": 5
                     }
                 }

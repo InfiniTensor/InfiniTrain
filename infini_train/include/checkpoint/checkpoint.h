@@ -32,10 +32,10 @@ struct TrainerState {
 class Checkpoint {
 public:
     static void Save(const std::filesystem::path &checkpoint_dir, const nn::Module &model, const Optimizer *optimizer,
-                     const TrainerState &state, bool save_optimizer_state, const LRScheduler *lr_scheduler);
+                     const TrainerState &state, const LRScheduler *lr_scheduler);
 
     static void Load(const std::filesystem::path &checkpoint_dir, nn::Module &model, Optimizer *optimizer,
-                     TrainerState &state, bool load_optimizer_state, LRScheduler *lr_scheduler);
+                     TrainerState &state, LRScheduler *lr_scheduler);
 
 private:
     static void SaveStateDict(const std::filesystem::path &path,

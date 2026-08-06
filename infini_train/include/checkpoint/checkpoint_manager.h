@@ -29,7 +29,6 @@ struct ResumeFromCheckpointArgs {
     std::shared_ptr<Optimizer> optimizer;
     const nn::TransformerConfig &model_config;
     TrainerState &state;
-    bool load_optimizer_state;
     std::shared_ptr<LRScheduler> lr_scheduler = nullptr;
 };
 
@@ -51,12 +50,11 @@ struct SaveCheckpointArgs {
     int tp_size = 1;
     int sp_size = 1;
     int pp_size = 1;
-    bool save_optimizer_state = true;
     std::filesystem::path checkpoint_root_dir;
     size_t max_checkpoint_keep = 0;
     const nn::parallel::Rank &rank;
     const nn::Module &model;
-    const Optimizer &optimizer;
+    const Optimizer *optimizer = nullptr;
     const LRScheduler *lr_scheduler = nullptr;
 };
 
