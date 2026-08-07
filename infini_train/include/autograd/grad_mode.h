@@ -5,13 +5,12 @@ namespace infini_train::autograd {
 
 class GradMode {
 public:
-    // Whether to enable Autograd (enabled by default)
-    static bool IsEnabled() { return grad_enabled_; }
-    static void SetEnabled(bool enabled) { grad_enabled_ = enabled; }
+    // Whether to enable Autograd (enabled by default).
+    static bool IsEnabled() { return tls_grad_enabled_; }
+    static void SetEnabled(bool enabled) { tls_grad_enabled_ = enabled; }
 
 private:
-    // grad mode should be thread_local
-    static thread_local bool grad_enabled_;
+    static thread_local bool tls_grad_enabled_;
 };
 
 // RAII: Disable grad (align with torch.no_grad)

@@ -8,6 +8,35 @@ ColumnLimit: 120
 AllowShortBlocksOnASingleLine: Always 
 AllowShortLoopsOnASingleLine: true
 InsertBraces: true
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  # Paired headers are assigned priority 0 by clang-format.
+  # This is based on the file basename, so same-named headers from another
+  # module may be treated as paired headers, for example kernels/cpu/linear.cc
+  # and include/autograd/linear.h. clang-format only sorts existing includes;
+  # it does not add new includes.
+  # C and POSIX system headers.
+  - Regex: ^<(assert|complex|ctype|errno|fenv|fcntl|float|inttypes|iso646|limits|locale|math|pthread|semaphore|setjmp|signal|stdalign|stdarg|stdatomic|stdbool|stddef|stdint|stdio|stdlib|string|sys/.*|tgmath|threads|time|uchar|unistd|wchar|wctype)\.h>$
+    Priority: 1
+  # C++ standard library headers.
+  - Regex: ^<(algorithm|any|array|atomic|barrier|bit|bitset|cassert|ccomplex|cctype|cerrno|cfenv|cfloat|charconv|chrono|cinttypes|ciso646|climits|clocale|cmath|codecvt|compare|complex|concepts|condition_variable|coroutine|csetjmp|csignal|cstdalign|cstdarg|cstdbool|cstddef|cstdint|cstdio|cstdlib|cstring|ctgmath|ctime|cuchar|cwchar|cwctype|deque|exception|execution|expected|filesystem|format|forward_list|fstream|functional|future|initializer_list|iomanip|ios|iosfwd|iostream|istream|iterator|latch|limits|list|locale|map|memory|memory_resource|mutex|new|numbers|numeric|optional|ostream|queue|random|ranges|ratio|regex|scoped_allocator|semaphore|set|shared_mutex|source_location|span|sstream|stack|stdexcept|stop_token|streambuf|string|string_view|strstream|syncstream|system_error|thread|tuple|type_traits|typeindex|typeinfo|unordered_map|unordered_set|utility|valarray|variant|vector|version)>$
+    Priority: 2
+  # Other external library headers, for example CUDA/NCCL/MPI.
+  - Regex: ^<.*>$
+    Priority: 3
+  # third_party headers included with quotes.
+  - Regex: ^"(third_party/|Eigen/|gflags/|glog/|gtest/)
+    Priority: 4
+  # Public project interfaces.
+  - Regex: ^"infini_train/include/
+    Priority: 5
+  # Internal project implementation headers.
+  - Regex: ^"(infini_train/src/|tests/)
+    Priority: 6
+  # Other local quoted headers.
+  - Regex: ^".*"$
+    Priority: 7
 BreakBeforeBraces: Custom
 BraceWrapping:
   AfterCaseLabel: false

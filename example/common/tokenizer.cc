@@ -9,10 +9,11 @@
 
 #include "glog/logging.h"
 
-#include "example/common/utils.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
+
+#include "example/common/utils.h"
 
 namespace infini_train {
 

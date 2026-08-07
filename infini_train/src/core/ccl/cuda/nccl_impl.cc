@@ -1,7 +1,8 @@
 #include "infini_train/src/core/ccl/cuda/nccl_impl.h"
 
-#include <nccl.h>
 #include <vector>
+
+#include <nccl.h>
 
 #include "glog/logging.h"
 

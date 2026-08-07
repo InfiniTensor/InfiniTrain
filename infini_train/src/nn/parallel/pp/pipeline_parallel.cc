@@ -15,7 +15,7 @@ namespace {
 constexpr char kModuleName[] = "module";
 } // namespace
 
-thread_local int pp_rank = 0;
+thread_local int tls_pp_rank = 0;
 
 void PipelineParallel::BuildPipelineStage(const std::vector<std::vector<int64_t>> &recv_shape, Device device,
                                           std::vector<std::shared_ptr<Module>> &&chunks) {
