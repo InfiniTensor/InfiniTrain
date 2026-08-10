@@ -898,7 +898,7 @@
         },
         {
             "tag": "8_proc",
-            "launcher_args": {
+            "infini_run_args": {
                 "nproc_per_node": 8
             },
             "tests": [

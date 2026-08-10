@@ -92,21 +92,18 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
 
-    const int proc_world_size = GetEnvAsInt("WORLD_SIZE", GetEnvAsInt("PROC_WORLD_SIZE", 1));
-    nproc_per_node_ = GetEnvAsInt("LOCAL_WORLD_SIZE", GetEnvAsInt("NPROC_PER_NODE", 1));
-    CHECK_GT(nproc_per_node_, 0) << "NPROC_PER_NODE/LOCAL_WORLD_SIZE must be positive";
-    CHECK_GT(proc_world_size, 0) << "PROC_WORLD_SIZE/WORLD_SIZE must be positive";
-    CHECK_EQ(proc_world_size % nproc_per_node_, 0)
-        << "PROC_WORLD_SIZE/WORLD_SIZE must be divisible by NPROC_PER_NODE/LOCAL_WORLD_SIZE";
+    const int proc_world_size = GetEnvAsInt("WORLD_SIZE", 1);
+    nproc_per_node_ = GetEnvAsInt("LOCAL_WORLD_SIZE", 1);
+    CHECK_GT(nproc_per_node_, 0) << "LOCAL_WORLD_SIZE must be positive";
+    CHECK_GT(proc_world_size, 0) << "WORLD_SIZE must be positive";
+    CHECK_EQ(proc_world_size % nproc_per_node_, 0) << "WORLD_SIZE must be divisible by LOCAL_WORLD_SIZE";
     nnodes_ = proc_world_size / nproc_per_node_;
-    global_proc_rank_ = GetEnvAsInt("RANK", GetEnvAsInt("GLOBAL_PROC_RANK", 0));
-    local_proc_rank_ = GetEnvAsInt("LOCAL_RANK", GetEnvAsInt("LOCAL_PROC_RANK", 0));
-    CHECK_GE(global_proc_rank_, 0) << "GLOBAL_PROC_RANK/RANK must be non-negative";
-    CHECK_LT(global_proc_rank_, proc_world_size)
-        << "GLOBAL_PROC_RANK/RANK must be less than PROC_WORLD_SIZE/WORLD_SIZE";
-    CHECK_GE(local_proc_rank_, 0) << "LOCAL_PROC_RANK/LOCAL_RANK must be non-negative";
-    CHECK_LT(local_proc_rank_, nproc_per_node_)
-        << "LOCAL_PROC_RANK/LOCAL_RANK must be less than NPROC_PER_NODE/LOCAL_WORLD_SIZE";
+    global_proc_rank_ = GetEnvAsInt("RANK", 0);
+    local_proc_rank_ = GetEnvAsInt("LOCAL_RANK", 0);
+    CHECK_GE(global_proc_rank_, 0) << "RANK must be non-negative";
+    CHECK_LT(global_proc_rank_, proc_world_size) << "RANK must be less than WORLD_SIZE";
+    CHECK_GE(local_proc_rank_, 0) << "LOCAL_RANK must be non-negative";
+    CHECK_LT(local_proc_rank_, nproc_per_node_) << "LOCAL_RANK must be less than LOCAL_WORLD_SIZE";
 
     nthread_per_process_ = nthread_per_process;
     world_size_ = proc_world_size * nthread_per_process;

@@ -32,7 +32,7 @@ int FindTrainProgramIndex(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--") {
-            return i;
+            return i + 1;
         }
         if (arg.rfind("--", 0) != 0) {
             return i;
@@ -108,6 +108,8 @@ int main(int argc, char **argv) {
 
     CHECK_GT(FLAGS_nnodes, 0) << "nnodes must be positive";
     CHECK_GT(FLAGS_nproc_per_node, 0) << "nproc_per_node must be positive";
+    CHECK_GE(FLAGS_node_rank, 0) << "node_rank must be non-negative";
+    CHECK_LT(FLAGS_node_rank, FLAGS_nnodes) << "node_rank must be less than nnodes";
     CHECK_NE(FLAGS_rdzv_endpoint.find(':'), std::string::npos) << "rdzv_endpoint must be host:port";
     CHECK(FLAGS_nnodes == 1 || !FLAGS_rdzv_id.empty())
         << "rdzv_id must be set to the same unique job ID on every node for multi-node training";
@@ -115,8 +117,6 @@ int main(int argc, char **argv) {
     CHECK_LT(train_program_index, argc) << "No training program specified!";
 
     std::string train_program = argv[train_program_index];
-    CHECK_NE(train_program, "--") << "Explicit '--' separator is not supported; pass the training program directly "
-                                     "after infini_run launcher flags";
     std::vector<char *> train_argv;
     for (int i = train_program_index; i < argc; ++i) { train_argv.push_back(argv[i]); }
     train_argv.push_back(nullptr);
