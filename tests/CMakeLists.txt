@@ -12,6 +12,9 @@ add_subdirectory(distributed)
 # Module tests
 add_subdirectory(module)
 
+# DataLoader tests
+add_subdirectory(dataloader)
+
 # Tensor tests
 add_subdirectory(tensor)
 
