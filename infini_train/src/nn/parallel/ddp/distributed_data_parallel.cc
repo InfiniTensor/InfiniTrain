@@ -33,7 +33,7 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
             continue;
         }
         auto device = param->GetDevice();
-        CHECK_EQ(device.index(), global::GetLocalDeviceIndex(rank.thread_rank()))
+        CHECK_EQ(device.index(), global::GetDeviceIndex(rank.thread_rank()))
             << "All parameters must be on the same device as the module";
         if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
             auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(
@@ -42,7 +42,7 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         }
     }
     for (auto &buffer : module->Buffers()) {
-        CHECK_EQ(buffer->GetDevice().index(), global::GetLocalDeviceIndex(rank.thread_rank()))
+        CHECK_EQ(buffer->GetDevice().index(), global::GetDeviceIndex(rank.thread_rank()))
             << "All buffers must be on the same device as the module";
     }
     modules_[kModuleName] = std::move(module);

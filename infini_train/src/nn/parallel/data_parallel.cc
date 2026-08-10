@@ -61,8 +61,7 @@ ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
 DataParallel::DataParallel(const std::shared_ptr<Module> &module, int dim, Device::DeviceType device_type) : dim_(dim) {
     devices_.reserve(global::GetNthreadPerProc());
     for (int thread_rank = 0; thread_rank < global::GetNthreadPerProc(); ++thread_rank) {
-        const int device_index
-            = device_type == Device::DeviceType::kCUDA ? global::GetLocalDeviceIndex(thread_rank) : thread_rank;
+        const int device_index = global::GetDeviceIndex(thread_rank);
         devices_.emplace_back(device_type, device_index);
     }
 

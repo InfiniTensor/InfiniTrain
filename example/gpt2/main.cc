@@ -180,7 +180,7 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *pp_pg = nullptr;
 
     if (rank.IsParallel()) {
-        device = Device(Device::DeviceType::kCUDA, global::GetLocalDeviceIndex(rank.thread_rank()));
+        device = Device(Device::DeviceType::kCUDA, global::GetDeviceIndex(rank.thread_rank()));
         auto *pg_factory = ProcessGroupFactory::Instance(device.type());
 
         if (ddp_world_size > 1) {
