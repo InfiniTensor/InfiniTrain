@@ -903,7 +903,7 @@
             },
             "tests": [
                 {
-                    "id": "3",
+                    "id": "3_8proc",
                     "args": {
                         "dtype": "float32",
                         "nthread_per_process": 1,
@@ -913,7 +913,7 @@
                     }
                 },
                 {
-                    "id": "3_bfloat16",
+                    "id": "3_bfloat16_8proc",
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 1,
@@ -923,7 +923,7 @@
                     }
                 },
                 {
-                    "id": "4",
+                    "id": "4_8proc",
                     "args": {
                         "dtype": "float32",
                         "nthread_per_process": 1,
@@ -934,7 +934,7 @@
                     }
                 },
                 {
-                    "id": "4_bfloat16",
+                    "id": "4_bfloat16_8proc",
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 1,
@@ -945,7 +945,7 @@
                     }
                 },
                 {
-                    "id": "5",
+                    "id": "5_8proc",
                     "args": {
                         "dtype": "float32",
                         "nthread_per_process": 1,
@@ -957,7 +957,7 @@
                     }
                 },
                 {
-                    "id": "5_bfloat16",
+                    "id": "5_bfloat16_8proc",
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 1,
@@ -969,7 +969,7 @@
                     }
                 },
                 {
-                    "id": "6",
+                    "id": "6_8proc",
                     "args": {
                         "dtype": "float32",
                         "nthread_per_process": 1,
@@ -980,7 +980,7 @@
                     }
                 },
                 {
-                    "id": "6_bfloat16",
+                    "id": "6_bfloat16_8proc",
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 1,
@@ -991,7 +991,7 @@
                     }
                 },
                 {
-                    "id": "8",
+                    "id": "8_8proc",
                     "args": {
                         "dtype": "float32",
                         "nthread_per_process": 1,
@@ -1005,7 +1005,7 @@
                     }
                 },
                 {
-                    "id": "8_bfloat16",
+                    "id": "8_bfloat16_8proc",
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 1,

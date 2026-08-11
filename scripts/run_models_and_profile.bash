@@ -587,6 +587,10 @@ else
     echo -e "\033[1;33m         To enable comparison, set 'variables.COMPARE_LOG_DIR' in ${CONFIG_FILE}\033[0m"
     echo -e "\033[1;33m         or export COMPARE_LOG_DIR=/path/to/baseline_logs before running.\033[0m"
     echo -e "\033[1;33m============================================================\033[0m"
+
+    echo -e "\n\033[1;33mRun comparison manually:\033[0m"
+    echo "python3 compare_loss.py \"/path/to/baseline_logs\" \"$(realpath "$LOG_DIR")\""
+    echo "python3 compare_tps.py \"/path/to/baseline_logs\" \"$(realpath "$LOG_DIR")\""
 fi
 
 echo -e "\n\033[1;36m[END OF TEST] Cleaning build directory after all tests\033[0m"
