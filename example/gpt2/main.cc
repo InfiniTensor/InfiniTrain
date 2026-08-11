@@ -329,15 +329,16 @@ void Train(const nn::parallel::Rank &rank) {
     // auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
     auto optimizer_creator = optimizers::SGD::Create(FLAGS_learning_rate);
     std::shared_ptr<Optimizer> optimizer = nullptr;
+    const auto named_parameters = model->NamedParameters();
 
     if (FLAGS_zero_stage >= 1) {
         auto model_chunks = (pp_world_size > 1)
                               ? *(dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks())
                               : std::vector<std::shared_ptr<nn::Module>>{model};
-        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, params_to_optimize,
-                                                                         model_chunks, ddp_world_size, ddp_rank);
+        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(
+            optimizer_creator, params_to_optimize, named_parameters, model_chunks, ddp_world_size, ddp_rank);
     } else {
-        optimizer = optimizer_creator(params_to_optimize);
+        optimizer = optimizer_creator(params_to_optimize, named_parameters);
     }
 
     const int64_t lr_decay_iters = FLAGS_lr_decay_iters > 0 ? FLAGS_lr_decay_iters : FLAGS_num_iteration;
