@@ -1,6 +1,6 @@
 #include "infini_train/include/optimizer.h"
 
-#include <format>
+#include <unordered_map>
 #include <vector>
 
 #include "infini_train/include/core/runtime/device_guard.h"
@@ -9,8 +9,27 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
-Optimizer::Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate)
-    : params_(params), learning_rate_(learning_rate) {}
+Optimizer::Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate,
+                     const NamedParameterList &named_parameters)
+    : params_(params), learning_rate_(learning_rate) {
+    if (named_parameters.empty()) {
+        return;
+    }
+
+    std::unordered_map<const Tensor *, std::string> parameter_name_by_tensor;
+    parameter_name_by_tensor.reserve(named_parameters.size());
+    for (const auto &[name, parameter] : named_parameters) {
+        CHECK(parameter);
+        parameter_name_by_tensor.emplace(parameter.get(), name);
+    }
+
+    parameter_names_.reserve(params_.size());
+    for (const auto &parameter : params_) {
+        const auto it = parameter_name_by_tensor.find(parameter.get());
+        CHECK(it != parameter_name_by_tensor.end()) << "Optimizer parameter is not registered in the model";
+        parameter_names_.push_back(it->second);
+    }
+}
 
 void Optimizer::ZeroGrad(bool set_to_none) {
     for (auto param : params_) { param->ZeroGrad(set_to_none); }
@@ -33,9 +52,17 @@ void Optimizer::set_initial_learning_rate(float lr) {
     initial_learning_rate_ = lr;
     initial_lr_set_ = true;
 }
+
+void Optimizer::set_parameter_names(const std::vector<std::string> &names) {
+    CHECK_EQ(names.size(), params_.size());
+    parameter_names_ = names;
+}
+
 namespace optimizers {
 
-SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate) : Optimizer(params, learning_rate) {}
+SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate,
+         const NamedParameterList &named_parameters)
+    : Optimizer(params, learning_rate, named_parameters) {}
 
 void SGD::Step() {
     for (auto param : params_) {
@@ -51,13 +78,15 @@ void SGD::Step() {
 }
 
 OptimizerCreator SGD::Create(float learning_rate) {
-    return [learning_rate](const std::vector<std::shared_ptr<Tensor>> &params) {
-        return std::make_shared<SGD>(params, learning_rate);
+    return [learning_rate](const std::vector<std::shared_ptr<Tensor>> &params,
+                           const NamedParameterList &named_parameters) {
+        return std::make_shared<SGD>(params, learning_rate, named_parameters);
     };
 }
 
-Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate, float beta1, float beta2, float eps)
-    : Optimizer(params, learning_rate), t_(0), beta1_(beta1), beta2_(beta2), eps_(eps) {
+Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate, float beta1, float beta2, float eps,
+           const NamedParameterList &named_parameters)
+    : Optimizer(params, learning_rate, named_parameters), t_(0), beta1_(beta1), beta2_(beta2), eps_(eps) {
 
     for (const auto &param : params_) {
         m_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
@@ -88,16 +117,17 @@ void Adam::Step() {
 }
 
 OptimizerCreator Adam::Create(float learning_rate, float beta1, float beta2, float eps) {
-    return [=](const std::vector<std::shared_ptr<Tensor>> &params) {
-        return std::make_shared<Adam>(params, learning_rate, beta1, beta2, eps);
+    return [=](const std::vector<std::shared_ptr<Tensor>> &params, const NamedParameterList &named_parameters) {
+        return std::make_shared<Adam>(params, learning_rate, beta1, beta2, eps, named_parameters);
     };
 }
 
 std::unordered_map<std::string, std::shared_ptr<Tensor>> Adam::StateDict() const {
     std::unordered_map<std::string, std::shared_ptr<Tensor>> state;
     for (size_t i = 0; i < m_.size(); ++i) {
-        state.emplace(std::format("adam.m.{}", i), m_[i]);
-        state.emplace(std::format("adam.v.{}", i), v_[i]);
+        const auto suffix = parameter_names_.empty() ? std::to_string(i) : parameter_names_[i];
+        state.emplace("adam.m." + suffix, m_[i]);
+        state.emplace("adam.v." + suffix, v_[i]);
     }
 
     auto t_tensor = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kINT64, Device());
@@ -108,8 +138,9 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Adam::StateDict() const
 
 void Adam::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
     for (size_t i = 0; i < m_.size(); ++i) {
-        const auto m_key = std::format("adam.m.{}", i);
-        const auto v_key = std::format("adam.v.{}", i);
+        const auto suffix = parameter_names_.empty() ? std::to_string(i) : parameter_names_[i];
+        const auto m_key = "adam.m." + suffix;
+        const auto v_key = "adam.v." + suffix;
         CHECK(state_dict.contains(m_key)) << "Missing optimizer state: " << m_key;
         CHECK(state_dict.contains(v_key)) << "Missing optimizer state: " << v_key;
         m_[i]->CopyFrom(state_dict.at(m_key));

@@ -8,11 +8,18 @@
 namespace infini_train::nn::parallel {
 DistributedOptimizer::DistributedOptimizer(OptimizerCreator creator,
                                            const std::vector<std::shared_ptr<Tensor>> &full_params,
+                                           const NamedParameterList &named_parameters,
                                            const std::vector<std::shared_ptr<Module>> &model_chunks,
                                            size_t ddp_world_size, size_t ddp_rank)
-    : Optimizer(full_params), ddp_world_size_(ddp_world_size), ddp_rank_(ddp_rank) {
+    : Optimizer(full_params, /*learning_rate=*/0.0f, named_parameters), ddp_world_size_(ddp_world_size),
+      ddp_rank_(ddp_rank) {
 
     CHECK(ddp_world_size_ > 1) << "DistributedOptimizer: ddp_world_size must be greater than 1.";
+    parameter_name_by_tensor_.reserve(named_parameters.size());
+    for (const auto &[name, parameter] : named_parameters) {
+        CHECK(parameter);
+        parameter_name_by_tensor_.emplace(parameter.get(), name);
+    }
 
     for (size_t i = 0; i < model_chunks.size(); ++i) {
         auto ddp_chunk = std::dynamic_pointer_cast<DistributedDataParallel>(model_chunks[i]);
@@ -27,12 +34,13 @@ DistributedOptimizer::DistributedOptimizer(OptimizerCreator creator,
     BuildShardParamsAndBindGrads();
 
     // Build base optimizer
-    base_optimizer_ = creator(shard_params_);
+    base_optimizer_ = creator(shard_params_, shard_named_parameters_);
     CHECK(base_optimizer_) << "DistributedOptimizer: failed to create base optimizer.";
 }
 
 void DistributedOptimizer::BuildShardParamsAndBindGrads() {
     shard_params_.clear();
+    shard_named_parameters_.clear();
 
     for (const auto &group : bucket_groups_) {
         const bool use_grad_shard = group->config().zero_stage >= 2;
@@ -83,6 +91,10 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads() {
                 //            The base optimizer updates param_piece views only; original param->grad()
                 //            would be a partial flattened shard and does not represent the full parameter grad.
                 shard_params_.push_back(param_piece);
+                const auto name_it = parameter_name_by_tensor_.find(param.get());
+                CHECK(name_it != parameter_name_by_tensor_.end())
+                    << "DistributedOptimizer parameter is not registered in the model";
+                shard_named_parameters_.emplace_back(name_it->second, param_piece);
             }
         }
     }

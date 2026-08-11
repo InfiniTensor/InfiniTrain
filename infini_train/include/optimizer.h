@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace infini_train {
@@ -13,11 +14,15 @@ class Tensor;
 namespace infini_train {
 class Optimizer;
 
-using OptimizerCreator = std::function<std::shared_ptr<Optimizer>(const std::vector<std::shared_ptr<Tensor>> &params)>;
+using NamedParameter = std::pair<std::string, std::shared_ptr<Tensor>>;
+using NamedParameterList = std::vector<NamedParameter>;
+using OptimizerCreator = std::function<std::shared_ptr<Optimizer>(const std::vector<std::shared_ptr<Tensor>> &params,
+                                                                  const NamedParameterList &named_parameters)>;
 
 class Optimizer {
 public:
-    explicit Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate = 0.0f);
+    explicit Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate = 0.0f,
+                       const NamedParameterList &named_parameters = {});
 
     virtual void ZeroGrad(bool set_to_none = true);
 
@@ -37,8 +42,11 @@ public:
 
     void set_initial_learning_rate(float lr);
 
+    void set_parameter_names(const std::vector<std::string> &names);
+
 protected:
     std::vector<std::shared_ptr<Tensor>> params_;
+    std::vector<std::string> parameter_names_;
     float learning_rate_ = 0.0f;
     float initial_learning_rate_ = 0.0f;
     bool initial_lr_set_ = false;
@@ -47,7 +55,8 @@ protected:
 namespace optimizers {
 class SGD : public Optimizer {
 public:
-    SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate);
+    SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate,
+        const NamedParameterList &named_parameters = {});
 
     void Step() override;
 
@@ -57,7 +66,7 @@ public:
 class Adam : public Optimizer {
 public:
     Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate = 1e-3, float beta1 = 0.9,
-         float beta2 = 0.999, float eps = 1e-8);
+         float beta2 = 0.999, float eps = 1e-8, const NamedParameterList &named_parameters = {});
 
     void Step() override;
 

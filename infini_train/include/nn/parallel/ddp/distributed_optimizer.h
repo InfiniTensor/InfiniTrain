@@ -21,6 +21,7 @@ class DistributedOptimizer final : public infini_train::Optimizer {
 public:
     DistributedOptimizer(OptimizerCreator base_optimizer_creator,
                          const std::vector<std::shared_ptr<Tensor>> &full_params,
+                         const NamedParameterList &named_parameters,
                          const std::vector<std::shared_ptr<Module>> &model_chunks, size_t ddp_world_size,
                          size_t ddp_rank);
 
@@ -55,6 +56,8 @@ private:
 
     // shard params
     std::vector<std::shared_ptr<Tensor>> shard_params_;
+    NamedParameterList shard_named_parameters_;
+    std::unordered_map<const Tensor *, std::string> parameter_name_by_tensor_;
 
     // Base optimizer (SGD, Adam and etc.)
     std::shared_ptr<Optimizer> base_optimizer_;

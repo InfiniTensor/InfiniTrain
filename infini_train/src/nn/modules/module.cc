@@ -53,47 +53,35 @@ Module::NamedParameters(const std::string &prefix, bool recurse, bool remove_dup
     std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> named_parameters;
     std::unordered_set<const Tensor *> visited;
 
-    std::function<void(const Module &, const std::string &)> collect
-        = [&](const Module &module, const std::string &module_prefix) {
-              std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> parameters;
-              parameters.reserve(module.parameters_.size());
-              for (const auto &[name, parameter] : module.parameters_) {
-                  if (parameter) {
-                      parameters.emplace_back(name, parameter);
-                  }
-              }
-              std::sort(parameters.begin(), parameters.end(),
-                        [](const auto &left, const auto &right) { return left.first < right.first; });
+    std::vector<std::pair<std::string, std::shared_ptr<Module>>> named_modules;
+    if (recurse) {
+        // NamedModules only reads the hierarchy and provides its stable, name-sorted traversal order. Keep all module
+        // aliases here so parameter-level deduplication deterministically selects the first full parameter name.
+        named_modules
+            = const_cast<Module *>(this)->NamedModules(/*memory=*/nullptr, prefix, /*remove_duplicate=*/false);
+    } else {
+        named_modules.emplace_back(prefix, std::const_pointer_cast<Module>(shared_from_this()));
+    }
 
-              for (auto &[name, parameter] : parameters) {
-                  if (remove_duplicate && !visited.insert(parameter.get()).second) {
-                      continue;
-                  }
-                  const auto full_name = module_prefix.empty() ? name : module_prefix + "." + name;
-                  named_parameters.emplace_back(full_name, std::move(parameter));
-              }
+    for (const auto &[module_prefix, module] : named_modules) {
+        std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> local_parameters;
+        local_parameters.reserve(module->parameters_.size());
+        for (const auto &[name, parameter] : module->parameters_) {
+            if (parameter) {
+                local_parameters.emplace_back(name, parameter);
+            }
+        }
+        std::sort(local_parameters.begin(), local_parameters.end(),
+                  [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
 
-              if (!recurse) {
-                  return;
-              }
-
-              std::vector<std::pair<std::string, std::shared_ptr<Module>>> children;
-              children.reserve(module.modules_.size());
-              for (const auto &[name, child] : module.modules_) {
-                  if (child) {
-                      children.emplace_back(name, child);
-                  }
-              }
-              std::sort(children.begin(), children.end(),
-                        [](const auto &left, const auto &right) { return left.first < right.first; });
-
-              for (const auto &[name, child] : children) {
-                  const auto child_prefix = module_prefix.empty() ? name : module_prefix + "." + name;
-                  collect(*child, child_prefix);
-              }
-          };
-
-    collect(*this, prefix);
+        for (const auto &[name, parameter] : local_parameters) {
+            if (remove_duplicate && !visited.insert(parameter.get()).second) {
+                continue;
+            }
+            const auto full_name = module_prefix.empty() ? name : module_prefix + "." + name;
+            named_parameters.emplace_back(full_name, parameter);
+        }
+    }
     return named_parameters;
 }
 
