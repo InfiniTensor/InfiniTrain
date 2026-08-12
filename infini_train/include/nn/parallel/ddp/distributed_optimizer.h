@@ -43,7 +43,9 @@ public:
     virtual float learning_rate() const override;
 
 private:
-    void BuildShardParamsAndBindGrads();
+    void BuildShardParamsAndBindGrads(const NamedParameterList &named_parameters,
+                                      std::vector<std::shared_ptr<Tensor>> &shard_params,
+                                      NamedParameterList &shard_named_parameters);
 
 private:
     // Inherit from DDP model
@@ -53,11 +55,6 @@ private:
     // DP info
     size_t ddp_world_size_;
     size_t ddp_rank_;
-
-    // shard params
-    std::vector<std::shared_ptr<Tensor>> shard_params_;
-    NamedParameterList shard_named_parameters_;
-    std::unordered_map<const Tensor *, std::string> parameter_name_by_tensor_;
 
     // Base optimizer (SGD, Adam and etc.)
     std::shared_ptr<Optimizer> base_optimizer_;

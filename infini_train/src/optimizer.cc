@@ -53,11 +53,6 @@ void Optimizer::set_initial_learning_rate(float lr) {
     initial_lr_set_ = true;
 }
 
-void Optimizer::set_parameter_names(const std::vector<std::string> &names) {
-    CHECK_EQ(names.size(), params_.size());
-    parameter_names_ = names;
-}
-
 namespace optimizers {
 
 SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate,

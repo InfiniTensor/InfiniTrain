@@ -42,8 +42,6 @@ public:
 
     void set_initial_learning_rate(float lr);
 
-    void set_parameter_names(const std::vector<std::string> &names);
-
 protected:
     std::vector<std::shared_ptr<Tensor>> params_;
     std::vector<std::string> parameter_names_;

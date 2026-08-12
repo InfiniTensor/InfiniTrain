@@ -30,7 +30,7 @@ model = GetLoRAModel(model, config);
 PrintLoRASummary(model);
 
 auto params = GetLoRAParameters(model);
-auto optimizer = infini_train::optimizers::Adam::Create(/*learning_rate=*/1e-4)(params);
+auto optimizer = infini_train::optimizers::Adam::Create(/*learning_rate=*/1e-4)(params, model->NamedParameters());
 
 for (int step = 0; step < num_steps; ++step) {
     optimizer->ZeroGrad();
