@@ -323,6 +323,30 @@ void DistributedDataParallel::OnGradReady(
   }
 }
 
+std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
+DistributedDataParallel::NamedParameters(const std::string &prefix,
+                                         bool recurse,
+                                         bool remove_duplicate) const {
+  return modules_.at(kModuleName)
+      ->NamedParameters(prefix, recurse, remove_duplicate);
+}
+
+std::unordered_map<std::string, std::shared_ptr<Tensor>>
+DistributedDataParallel::StateDict() const {
+  return modules_.at(kModuleName)->StateDict();
+}
+
+checkpoint::ShardedStateDict DistributedDataParallel::ShardedStateDict(
+    const std::string &prefix) const {
+  return modules_.at(kModuleName)->ShardedStateDict(prefix);
+}
+
+void DistributedDataParallel::LoadStateDict(
+    const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+        &state_dict) {
+  modules_.at(kModuleName)->LoadStateDict(state_dict);
+}
+
 std::vector<std::shared_ptr<Tensor>> DistributedDataParallel::Forward(
     const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
   deferred_sync_pending_ = !deferred_sync_params_.empty();

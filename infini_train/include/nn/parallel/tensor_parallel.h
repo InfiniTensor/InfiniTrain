@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
+#include "infini_train/include/checkpoint/shard_spec.h"
 #include "infini_train/include/nn/modules/module.h"
 
 namespace infini_train {
@@ -57,6 +58,8 @@ class ColumnParallelLinear : public nn::CloneableModule<ColumnParallelLinear> {
   bool skip_bias_add() const;
   bool sequence_parallel() const;
 
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+
  protected:
   bool bias_ = true;
   bool gather_output_ = false;  // whether to return full local output tensor
@@ -91,6 +94,8 @@ class RowParallelLinear : public nn::CloneableModule<RowParallelLinear> {
   bool skip_bias_add() const;
   bool sequence_parallel() const;
 
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+
  protected:
   bool bias_ = true;
   bool reduce_output_ = false;  // whether to return full local output tensor
@@ -115,6 +120,8 @@ class VocabParallelEmbedding
 
   std::vector<std::shared_ptr<Tensor>> Forward(
       const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
 
  private:
   bool reduce_scatter_embeddings_ =
