@@ -85,6 +85,8 @@ void CclImplRegistry::Register(Device::DeviceType type, std::unique_ptr<CclImpl>
     impls_[type] = std::move(impl);
 }
 
+bool CclImplRegistry::Has(Device::DeviceType type) const { return impls_.contains(type); }
+
 CclImpl *CclImplRegistry::Get(Device::DeviceType type) const {
     auto it = impls_.find(type);
     if (it == impls_.end()) {

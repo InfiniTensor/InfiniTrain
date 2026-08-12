@@ -62,6 +62,10 @@ public:
 
     virtual ~DeviceGuardImpl() = default;
 
+    // Performs runtime initialization on first backend use. Implementations
+    // that need initialization should make this method idempotent.
+    virtual void Initialize();
+
     // ----------------------------------------------------------------------
     // Device management
     // ----------------------------------------------------------------------
@@ -201,6 +205,8 @@ public:
     static DeviceGuardImplRegistry &Instance();
 
     void Register(Device::DeviceType type, std::unique_ptr<DeviceGuardImpl> impl);
+
+    bool Has(Device::DeviceType type) const;
 
     DeviceGuardImpl *Get(Device::DeviceType type) const;
 

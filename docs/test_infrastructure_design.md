@@ -184,79 +184,20 @@ add_subdirectory(foo)
 | `ONLY_CUDA()` | 只在 CUDA 实例运行 |
 | `REQUIRE_MIN_DEVICES(n)` | 加速器设备不足时 skip |
 
-## 4. 扩展新设备平台（以沐曦 MACA 为例）
+## 4. 扩展新设备平台
 
-当前测试体系围绕 CPU / CUDA 两种设备参数化。如果需要支持新平台（以沐曦 MACA 为例），需要改动以下几处：
+第三方设备统一占用 `DeviceType::kPrivateUse1`，不再向框架枚举和根 CMake
+增加厂商类型或 SDK 选项。厂商仓库负责注册 runtime、kernel 和可选 CCL，
+并将 InfiniTrain 固定为同一链接图中的 submodule。
 
-### 4.1 框架层：注册新设备类型
+框架中的 `tests/backend/test_privateuse1_backend.cc` 使用不依赖硬件的 fake
+backend 验证扩展契约。厂商硬件测试应放在厂商目录中，单独链接并显式初始化
+provider；fake backend 与真实 backend 不能放进同一测试进程，因为一个进程
+只能注册一个 `kPrivateUse1` provider。
 
-在 `infini_train/include/device.h` 的 `DeviceType` 枚举中新增：
+厂商测试建议至少覆盖：
 
-```cpp
-enum class DeviceType : int8_t {
-    kCPU = 0,
-    kCUDA = 1,
-    kMACA = 2,  // 新增
-};
-```
-
-### 4.2 测试工具层：`test_utils.h`
-
-1. 新增 MACA 头文件的编译期引入（和 CUDA 对称）：
-
-```cpp
-#if defined(USE_MACA)
-#include <maca_runtime_api.h>
-#endif
-```
-
-2. 新增 `ONLY_MACA()` 宏：
-
-```cpp
-#define ONLY_MACA() \
-    do { if (GetParam() != infini_train::Device::DeviceType::kMACA) { GTEST_SKIP() << "MACA-only test"; } } while (0)
-```
-
-如果希望有类似 `REQUIRE_MIN_DEVICES(n)` 但针对 MACA 的语义，可以按 `USE_CUDA` 分支的写法增加一个新的宏；同理 `USE_MACA` 不开时该宏直接 skip 即可。
-
-### 4.3 注册宏：新增 MACA 实例
-
-沿用 `USE_CUDA` 的做法，未开启编译开关时不注册对应实例：
-
-```cpp
-#if defined(USE_CUDA) && defined(USE_MACA)
-#define INFINI_TRAIN_REGISTER_TEST(TestName)                                    \
-    INSTANTIATE_TEST_SUITE_P(CPU, TestName,                                     \
-        ::testing::Values(infini_train::Device::DeviceType::kCPU));             \
-    INSTANTIATE_TEST_SUITE_P(CUDA, TestName,                                    \
-        ::testing::Values(infini_train::Device::DeviceType::kCUDA));            \
-    INSTANTIATE_TEST_SUITE_P(MACA, TestName,                                    \
-        ::testing::Values(infini_train::Device::DeviceType::kMACA))
-#elif defined(USE_CUDA)
-#define INFINI_TRAIN_REGISTER_TEST(TestName) /* CPU + CUDA, 同现状 */
-#elif defined(USE_MACA)
-#define INFINI_TRAIN_REGISTER_TEST(TestName)                                    \
-    INSTANTIATE_TEST_SUITE_P(CPU, TestName,                                     \
-        ::testing::Values(infini_train::Device::DeviceType::kCPU));             \
-    INSTANTIATE_TEST_SUITE_P(MACA, TestName,                                    \
-        ::testing::Values(infini_train::Device::DeviceType::kMACA))
-#else
-#define INFINI_TRAIN_REGISTER_TEST(TestName) /* 仅 CPU */
-#endif
-```
-
-运行时如果机器上没有对应设备（例如 `USE_MACA` 编译但无 MACA 硬件），让测试直接报错而不是静默跳过。
-
-### 4.4 CMake 层：`test_macros.cmake`
-
-将默认 label 列表从 `cpu cuda` 扩展为 `cpu cuda maca`
-
-### 4.5 检查清单
-
-| 步骤 | 文件 | 改动 |
-|------|------|------|
-| 1 | `device.h` | `DeviceType` 枚举新增 `kMACA` |
-| 2 | `test_utils.h` | 新增 `USE_MACA` 下的 `<maca_runtime_api.h>` 引入、`ONLY_MACA()` 宏 |
-| 3 | `test_utils.h` | `INFINI_TRAIN_REGISTER_TEST` 按 `USE_MACA` 条件新增 MACA 实例 |
-| 4 | `test_macros.cmake` | 将默认 label 列表扩展为 `cpu cuda maca` |
-| 5 | `CMakeLists.txt`（根） | 新增 `USE_MACA` option + MACA SDK 查找 + kernel 编译 |
+1. `DeviceGuardImpl` 的设备、stream、event、allocator 和 copy 行为；
+2. `Cast`、`Fill`、`NoOpForward`、`NoOpBackward` 等基础 kernel；
+3. CCL 初始化和 collective 行为；
+4. provider 名称解析和重复初始化。
