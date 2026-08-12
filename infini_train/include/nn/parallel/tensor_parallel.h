@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
+#include "infini_train/include/checkpoint/shard_spec.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 
@@ -37,6 +38,8 @@ public:
     bool skip_bias_add() const;
     bool sequence_parallel() const;
 
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+
 protected:
     bool bias_ = true;
     bool gather_output_ = false;     // whether to return full local output tensor after forward (need gather)
@@ -66,6 +69,8 @@ public:
     bool skip_bias_add() const;
     bool sequence_parallel() const;
 
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+
 protected:
     bool bias_ = true;
     bool reduce_output_ = false;     // whether to return full local output tensor after forward (need reduce)
@@ -84,6 +89,8 @@ public:
     VocabParallelEmbedding(int64_t num_embeddings, int64_t embedding_dim, bool reduce_scatter_embeddings);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
 
 private:
     bool reduce_scatter_embeddings_ = false; // whether to perform ReduceScatter after embedding lookup
