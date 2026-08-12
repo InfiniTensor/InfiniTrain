@@ -32,6 +32,7 @@ struct TrainerState {
     int tp_size = 1;
     int sp_size = 1;
     int pp_size = 1;
+    int vpp_size = 1;
 };
 
 class Checkpoint {
@@ -63,6 +64,7 @@ public:
             int pp_size = 1;
             int dp_size = 1;
             int sp_size = 1;
+            int vpp_size = 1;
         } parallel_config;
 
         struct TensorEntry {

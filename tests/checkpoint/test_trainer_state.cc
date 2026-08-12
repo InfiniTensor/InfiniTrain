@@ -31,6 +31,7 @@ TEST_P(TrainerStateTest, DefaultValues) {
     EXPECT_EQ(state.tp_size, 1);
     EXPECT_EQ(state.sp_size, 1);
     EXPECT_EQ(state.pp_size, 1);
+    EXPECT_EQ(state.vpp_size, 1);
 }
 
 TEST_P(TrainerStateTest, TrainerStateFileCreated) {
@@ -73,6 +74,7 @@ TEST_P(TrainerStateTest, RoundTrip) {
         .tp_size = 1,
         .sp_size = 1,
         .pp_size = 2,
+        .vpp_size = 4,
     };
 
     auto model1 = std::make_shared<nn::Linear>(1, 3, true, GetDevice());
@@ -101,6 +103,7 @@ TEST_P(TrainerStateTest, RoundTrip) {
     EXPECT_EQ(loaded.vocab_size, 128256);
     EXPECT_EQ(loaded.ddp_size, 2);
     EXPECT_EQ(loaded.pp_size, 2);
+    EXPECT_EQ(loaded.vpp_size, 4);
 
     std::filesystem::remove_all(dir);
 }
