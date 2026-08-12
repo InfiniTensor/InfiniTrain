@@ -34,6 +34,8 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+
     void MergeWeights();
     void UnmergeWeights();
     bool IsMerged() const;
@@ -73,6 +75,8 @@ public:
     LoRARowParallelLinear(std::shared_ptr<parallel::RowParallelLinear> base_module, const LoRAConfig &config);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
 
     void MergeWeights();
     void UnmergeWeights();

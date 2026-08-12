@@ -7,11 +7,13 @@
 
 #include "infini_train/include/nn/lora/lora_config.h"
 #include "infini_train/include/nn/lora/lora_linear.h"
+#include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
@@ -76,6 +78,33 @@ TEST_P(LoRATest, LoRAConfigScaling) {
 
     float expected_scaling = 16.0f / 8.0f;
     EXPECT_EQ(config.Scaling(), expected_scaling);
+}
+
+TEST_P(LoRATest, ParallelLoRAShardedStateDictIncludesAdapterParameters) {
+    LoRAConfig config;
+    config.rank = 2;
+
+    auto column_base = std::make_shared<nn::parallel::ColumnParallelLinear>(
+        4, 6, /*bias=*/false, /*gather_output=*/false, /*input_is_parallel=*/false, /*skip_bias_add=*/false,
+        /*sequence_parallel=*/false);
+    auto column = std::make_shared<LoRAColumnParallelLinear>(column_base, config, 4, 6);
+    const auto column_state = column->ShardedStateDict("column");
+    ASSERT_TRUE(column_state.tensors.contains("column.lora_A"));
+    ASSERT_TRUE(column_state.tensors.contains("column.lora_B"));
+    EXPECT_EQ(column_state.tensors.at("column.lora_A").axis_fragmentations, (std::vector<int>{1, 1}));
+    EXPECT_EQ(column_state.tensors.at("column.lora_B").axis_fragmentations,
+              (std::vector<int>{nn::parallel::global::GetTensorParallelSize(), 1}));
+
+    auto row_base = std::make_shared<nn::parallel::RowParallelLinear>(
+        4, 6, /*bias=*/false, /*reduce_output=*/true, /*input_is_parallel=*/true, /*skip_bias_add=*/false,
+        /*sequence_parallel=*/false);
+    auto row = std::make_shared<LoRARowParallelLinear>(row_base, config, 4, 6);
+    const auto row_state = row->ShardedStateDict("row");
+    ASSERT_TRUE(row_state.tensors.contains("row.lora_A"));
+    ASSERT_TRUE(row_state.tensors.contains("row.lora_B"));
+    EXPECT_EQ(row_state.tensors.at("row.lora_A").axis_fragmentations,
+              (std::vector<int>{1, nn::parallel::global::GetTensorParallelSize()}));
+    EXPECT_EQ(row_state.tensors.at("row.lora_B").axis_fragmentations, (std::vector<int>{1, 1}));
 }
 
 TEST_P(LoRATest, PackedQKVShardGPTStyle) {
