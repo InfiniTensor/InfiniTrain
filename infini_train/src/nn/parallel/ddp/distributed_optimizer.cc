@@ -11,15 +11,9 @@ DistributedOptimizer::DistributedOptimizer(OptimizerCreator creator,
                                            const NamedParameterList &named_parameters,
                                            const std::vector<std::shared_ptr<Module>> &model_chunks,
                                            size_t ddp_world_size, size_t ddp_rank)
-    : Optimizer(full_params, /*learning_rate=*/0.0f, named_parameters), ddp_world_size_(ddp_world_size),
-      ddp_rank_(ddp_rank) {
+    : Optimizer(full_params, /*learning_rate=*/0.0f), ddp_world_size_(ddp_world_size), ddp_rank_(ddp_rank) {
 
     CHECK(ddp_world_size_ > 1) << "DistributedOptimizer: ddp_world_size must be greater than 1.";
-    parameter_name_by_tensor_.reserve(named_parameters.size());
-    for (const auto &[name, parameter] : named_parameters) {
-        CHECK(parameter);
-        parameter_name_by_tensor_.emplace(parameter.get(), name);
-    }
 
     for (size_t i = 0; i < model_chunks.size(); ++i) {
         auto ddp_chunk = std::dynamic_pointer_cast<DistributedDataParallel>(model_chunks[i]);
@@ -31,16 +25,24 @@ DistributedOptimizer::DistributedOptimizer(OptimizerCreator creator,
                               ddp_chunk->bucket_groups().end());
     }
 
-    BuildShardParamsAndBindGrads();
+    std::vector<std::shared_ptr<Tensor>> shard_params;
+    NamedParameterList shard_named_parameters;
+    BuildShardParamsAndBindGrads(named_parameters, shard_params, shard_named_parameters);
 
     // Build base optimizer
-    base_optimizer_ = creator(shard_params_, shard_named_parameters_);
+    base_optimizer_ = creator(shard_params, shard_named_parameters);
     CHECK(base_optimizer_) << "DistributedOptimizer: failed to create base optimizer.";
 }
 
-void DistributedOptimizer::BuildShardParamsAndBindGrads() {
-    shard_params_.clear();
-    shard_named_parameters_.clear();
+void DistributedOptimizer::BuildShardParamsAndBindGrads(const NamedParameterList &named_parameters,
+                                                        std::vector<std::shared_ptr<Tensor>> &shard_params,
+                                                        NamedParameterList &shard_named_parameters) {
+    std::unordered_map<const Tensor *, std::string> parameter_name_by_tensor;
+    parameter_name_by_tensor.reserve(named_parameters.size());
+    for (const auto &[name, parameter] : named_parameters) {
+        CHECK(parameter);
+        parameter_name_by_tensor.emplace(parameter.get(), name);
+    }
 
     for (const auto &group : bucket_groups_) {
         const bool use_grad_shard = group->config().zero_stage >= 2;
@@ -90,17 +92,17 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads() {
                 // NOTE(zbl): Do not call `param->set_grad(grad_piece);` under ZeRO-2.
                 //            The base optimizer updates param_piece views only; original param->grad()
                 //            would be a partial flattened shard and does not represent the full parameter grad.
-                shard_params_.push_back(param_piece);
-                const auto name_it = parameter_name_by_tensor_.find(param.get());
-                CHECK(name_it != parameter_name_by_tensor_.end())
+                shard_params.push_back(param_piece);
+                const auto name_it = parameter_name_by_tensor.find(param.get());
+                CHECK(name_it != parameter_name_by_tensor.end())
                     << "DistributedOptimizer parameter is not registered in the model";
-                shard_named_parameters_.emplace_back(name_it->second, param_piece);
+                shard_named_parameters.emplace_back(name_it->second, param_piece);
             }
         }
     }
 
-    CHECK(!shard_params_.empty()) << "DistributedOptimizer: this DP rank owns no param pieces. "
-                                  << "Check bucket padding/divisibility and param bucketing order.";
+    CHECK(!shard_params.empty()) << "DistributedOptimizer: this DP rank owns no param pieces. "
+                                 << "Check bucket padding/divisibility and param bucketing order.";
 }
 
 void DistributedOptimizer::StartGradSync() {

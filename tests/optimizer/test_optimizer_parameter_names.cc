@@ -23,8 +23,9 @@ class OptimizerParameterNamesTest : public test::InfiniTrainTest {};
 TEST_P(OptimizerParameterNamesTest, AdamStateDictUsesStableParameterNames) {
     auto first = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice());
     auto second = std::make_shared<Tensor>(std::vector<int64_t>{3}, DataType::kFLOAT32, GetDevice());
-    auto adam = std::make_shared<optimizers::Adam>(std::vector<std::shared_ptr<Tensor>>{first, second}, 0.001);
-    adam->set_parameter_names({"transformer.h.0.weight", "transformer.h.0.bias"});
+    const NamedParameterList named_parameters{{"transformer.h.0.weight", first},
+                                              {"transformer.h.0.bias", second}};
+    auto adam = optimizers::Adam::Create(0.001)({first, second}, named_parameters);
 
     const auto state = adam->StateDict();
     EXPECT_TRUE(state.contains("adam.m.transformer.h.0.weight"));
@@ -33,8 +34,7 @@ TEST_P(OptimizerParameterNamesTest, AdamStateDictUsesStableParameterNames) {
     EXPECT_TRUE(state.contains("adam.v.transformer.h.0.bias"));
     EXPECT_TRUE(state.contains("adam.t"));
 
-    auto restored = std::make_shared<optimizers::Adam>(std::vector<std::shared_ptr<Tensor>>{first, second}, 0.001);
-    restored->set_parameter_names({"transformer.h.0.weight", "transformer.h.0.bias"});
+    auto restored = optimizers::Adam::Create(0.001)({first, second}, named_parameters);
     restored->LoadStateDict(state);
     EXPECT_EQ(restored->StateDict().size(), state.size());
 }
@@ -93,13 +93,6 @@ TEST_P(OptimizerParameterNamesTest, PreservesNumericKeysWhenNamesAreNotSet) {
     const auto state = adam->StateDict();
     EXPECT_TRUE(state.contains("adam.m.0"));
     EXPECT_TRUE(state.contains("adam.v.0"));
-}
-
-TEST_P(OptimizerParameterNamesTest, RejectsWrongNumberOfParameterNames) {
-    auto parameter = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice());
-    auto adam = std::make_shared<optimizers::Adam>(std::vector<std::shared_ptr<Tensor>>{parameter}, 0.001);
-
-    EXPECT_DEATH(adam->set_parameter_names({"first", "second"}), "");
 }
 
 INFINI_TRAIN_REGISTER_TEST(OptimizerParameterNamesTest);
