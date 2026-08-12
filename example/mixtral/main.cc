@@ -9,6 +9,12 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
+// Out-of-tree builds inject the selected provider's declaration without adding
+// a vendor dependency to the upstream example.
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_HEADER
+#include INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_HEADER
+#endif
+
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
@@ -34,7 +40,7 @@ DEFINE_uint32(num_iteration, 10, "number of training iterations");
 DEFINE_double(learning_rate, 1e-4, "Adam learning rate");
 DEFINE_string(llmc_filepath, "",
               "optional PyTorch-generated tiny Mixtral LLMC model file path to load before training");
-DEFINE_string(device, "cpu", "Training device: cpu or cuda.");
+DEFINE_string(device, "cpu", "Training device.");
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 DEFINE_uint32(log_interval, 1, "Print train loss every N steps. 0 disables step loss logging.");
 DEFINE_bool(print_timing, false, "Print training-loop elapsed time and token throughput.");
@@ -60,8 +66,13 @@ void ValidateRuntimeFlags(const infini_train::nn::TransformerConfig &config) {
 } // namespace
 
 int main(int argc, char *argv[]) {
-    gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
+    // Register provider metadata and implementations before gflags validates
+    // --device. The device runtime initializes lazily on first DeviceGuard use.
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR
+    INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR();
+#endif
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
 
     infini_train::nn::parallel::global::InitAllEnv(
         /*nthread_per_process=*/1,
@@ -80,13 +91,11 @@ int main(int argc, char *argv[]) {
     }
     ValidateRuntimeFlags(model_config);
 
-    Device train_device;
-    if (FLAGS_device == "cuda") {
-        train_device = Device(Device::DeviceType::kCUDA, 0);
+    const auto device_type = Device::ParseType(FLAGS_device);
+    CHECK(device_type.has_value()) << "Unsupported training device: " << FLAGS_device;
+    Device train_device(*device_type, 0);
+    if (!train_device.IsCPU()) {
         model->To(train_device);
-    } else {
-        CHECK_EQ(FLAGS_device, "cpu") << "Unsupported training device: " << FLAGS_device;
-        train_device = Device();
     }
 
     infini_train::DistributedDataLoader train_loader(

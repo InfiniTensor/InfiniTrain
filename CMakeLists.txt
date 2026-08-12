@@ -41,7 +41,15 @@ include_directories(${gflags_SOURCE_DIR}/include)
 # glog
 set(WITH_GFLAGS OFF CACHE BOOL "Disable glog finding system gflags" FORCE)
 set(WITH_GTEST OFF CACHE BOOL "Disable glog finding system gtest" FORCE)
-add_subdirectory(third_party/glog)
+get_property(_infinitrain_build_testing_was_cached CACHE BUILD_TESTING PROPERTY TYPE SET)
+block()
+  set(BUILD_TESTING OFF)
+  add_subdirectory(third_party/glog)
+endblock()
+if(NOT _infinitrain_build_testing_was_cached)
+  unset(BUILD_TESTING CACHE)
+endif()
+unset(_infinitrain_build_testing_was_cached)
 include_directories(${glog_SOURCE_DIR}/src)
 
 # eigen
@@ -131,6 +139,11 @@ endif()
 # ------------------------------------------------------------------------------
 
 add_library(infini_train STATIC ${SRC})
+add_library(InfiniTrain::infini_train ALIAS infini_train)
+add_library(InfiniTrain::cpu_kernels ALIAS infini_train_cpu_kernels)
+target_include_directories(infini_train PUBLIC
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+)
 target_link_libraries(infini_train
   PUBLIC
     glog
@@ -188,6 +201,7 @@ endfunction()
 # Examples
 # ------------------------------------------------------------------------------
 
+if(PROJECT_IS_TOP_LEVEL)
 add_executable(mnist
   example/mnist/main.cc
   example/mnist/dataset.cc
@@ -220,10 +234,13 @@ add_executable(llama3
   example/llama3/checkpoint_loader.cc
 )
 link_infini_train_exe(llama3)
+endif()
 
 # Tools
+if(PROJECT_IS_TOP_LEVEL)
 add_subdirectory(tools/infini_run)
 set_target_properties(infini_run PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+endif()
 
 # Tests
 if(BUILD_TEST)
