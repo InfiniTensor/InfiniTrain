@@ -40,6 +40,8 @@ class LoRAColumnParallelLinear : public nn::parallel::ColumnParallelLinear {
   std::vector<std::shared_ptr<Tensor>> Forward(
       const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+
   void MergeWeights();
   void UnmergeWeights();
   bool IsMerged() const;
@@ -85,6 +87,8 @@ class LoRARowParallelLinear : public nn::parallel::RowParallelLinear {
 
   std::vector<std::shared_ptr<Tensor>> Forward(
       const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
 
   void MergeWeights();
   void UnmergeWeights();
