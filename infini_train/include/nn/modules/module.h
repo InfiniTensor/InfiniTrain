@@ -10,6 +10,8 @@
 #include <utility>
 #include <vector>
 
+#include "infini_train/include/checkpoint/shard_spec.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train {
@@ -71,9 +73,9 @@ class Module : public std::enable_shared_from_this<Module> {
   // InfiniTrain's NamedParameters returns results ordered by full parameter
   // name.
   // TODO: Align with PyTorch's ordering in the future.
-  std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> NamedParameters(
-      const std::string &prefix = "", bool recurse = true,
-      bool remove_duplicate = true) const;
+  virtual std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
+  NamedParameters(const std::string &prefix = "", bool recurse = true,
+                  bool remove_duplicate = true) const;
   bool has_parameter(const std::string &name) const;
   std::shared_ptr<Tensor> *mutable_parameter(const std::string &name);
   const std::shared_ptr<Tensor> &parameter(const std::string &name) const;
@@ -84,11 +86,16 @@ class Module : public std::enable_shared_from_this<Module> {
   std::shared_ptr<Module> &mutable_module(const std::string &name);
   const Module &module(const std::string &name) const;
 
-  std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
+  virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict()
+      const;
+
+  // Return state-dict metadata with global shard coordinates.
+  virtual checkpoint::ShardedStateDict ShardedStateDict(
+      const std::string &prefix = "") const;
 
   // Current behavior: missing keys / shape / dtype mismatches are FATAL errors;
   // unexpected keys in state_dict are WARNING-only and silently ignored.
-  void LoadStateDict(
+  virtual void LoadStateDict(
       const std::unordered_map<std::string, std::shared_ptr<Tensor>>
           &state_dict);
 
