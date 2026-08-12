@@ -104,4 +104,21 @@ PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num
 }
 
 std::vector<std::shared_ptr<Module>> *PipelineParallel::mutable_chunks() { return pipeline_stage_->mutable_chunks(); }
+
+std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
+PipelineParallel::NamedParameters(const std::string &prefix, bool recurse, bool remove_duplicate) const {
+    return modules_.at(kModuleName)->NamedParameters(prefix, recurse, remove_duplicate);
+}
+
+std::unordered_map<std::string, std::shared_ptr<Tensor>> PipelineParallel::StateDict() const {
+    return modules_.at(kModuleName)->StateDict();
+}
+
+checkpoint::ShardedStateDict PipelineParallel::ShardedStateDict(const std::string &prefix) const {
+    return modules_.at(kModuleName)->ShardedStateDict(prefix);
+}
+
+void PipelineParallel::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
+    modules_.at(kModuleName)->LoadStateDict(state_dict);
+}
 } // namespace infini_train::nn::parallel
