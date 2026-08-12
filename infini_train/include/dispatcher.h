@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -54,6 +55,8 @@ public:
         static Dispatcher instance;
         return instance;
     }
+
+    bool HasKernel(const KeyT &key) const { return key_to_kernel_map_.contains(key); }
 
     const KernelFunction &GetKernel(KeyT key) const {
         CHECK(key_to_kernel_map_.contains(key))
