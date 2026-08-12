@@ -139,6 +139,7 @@ checkpoint::ShardedStateDict CausalSelfAttention::ShardedStateDict(
   if (config_.add_bias_linear) {
     set_qkv_segments(parallel::ColumnParallelLinear::kParamBiasName);
   }
+    set_qkv_segments(lora::LoRAColumnParallelLinear::kParamLoraBName);
   return state;
 }
 

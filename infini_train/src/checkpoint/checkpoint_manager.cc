@@ -15,6 +15,7 @@
 
 #include "infini_train/include/checkpoint/checkpoint.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/rank.h"
 
@@ -106,6 +107,10 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(
                  "scratch.";
     return result;
   }
+  CHECK(dynamic_cast<nn::parallel::DistributedOptimizer *>(
+            args.optimizer.get()) == nullptr)
+      << "Checkpoint restore does not support DistributedOptimizer/ZeRO "
+         "optimizer state; use zero_stage=0";
 
   auto checkpoint_dir = ResolveCheckpointDirectory(args.resume_root);
   CHECK(std::filesystem::exists(checkpoint_dir / "metadata.json"))
@@ -138,6 +143,10 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(
 }
 
 void SaveCheckpoint(const SaveCheckpointArgs &args) {
+  CHECK(dynamic_cast<const nn::parallel::DistributedOptimizer *>(
+            args.optimizer) == nullptr)
+      << "Checkpoint save does not support DistributedOptimizer/ZeRO optimizer "
+         "state; use zero_stage=0";
   const auto checkpoint_start = std::chrono::high_resolution_clock::now();
   TrainerState state{.global_step = args.global_step,
                      .consumed_train_samples =
@@ -150,7 +159,8 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
                      .ddp_size = args.ddp_size,
                      .tp_size = args.tp_size,
                      .sp_size = args.sp_size,
-                     .pp_size = args.pp_size};
+                     .pp_size = args.pp_size,
+                     .vpp_size = args.vpp_size};
   const auto iteration_dir =
       args.checkpoint_root_dir.empty()
           ? args.save_dir

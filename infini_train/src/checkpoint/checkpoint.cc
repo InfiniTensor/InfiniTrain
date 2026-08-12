@@ -264,7 +264,7 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir,
              << ", consumed_train_samples=" << state.consumed_train_samples
              << ", topology(ddp,tp,sp,pp)=(" << state.ddp_size << ","
              << state.tp_size << "," << state.sp_size << "," << state.pp_size
-             << ")";
+             << "," << state.vpp_size << ")";
 }
 
 Checkpoint::SavedTensorLocations Checkpoint::SaveStateDict(
@@ -371,7 +371,8 @@ void Checkpoint::SaveTrainerState(const std::filesystem::path &path,
   ofs << "  \"ddp_size\": " << state.ddp_size << ",\n";
   ofs << "  \"tp_size\": " << state.tp_size << ",\n";
   ofs << "  \"sp_size\": " << state.sp_size << ",\n";
-  ofs << "  \"pp_size\": " << state.pp_size << "\n";
+  ofs << "  \"pp_size\": " << state.pp_size << ",\n";
+  ofs << "  \"vpp_size\": " << state.vpp_size << "\n";
   ofs << "}\n";
 }
 
@@ -396,6 +397,7 @@ TrainerState Checkpoint::LoadTrainerState(const std::filesystem::path &path) {
   state.tp_size = ExtractNumberField<int>(content, "tp_size", 1);
   state.sp_size = ExtractNumberField<int>(content, "sp_size", 1);
   state.pp_size = ExtractNumberField<int>(content, "pp_size", 1);
+  state.vpp_size = ExtractNumberField<int>(content, "vpp_size", 1);
   return state;
 }
 
@@ -500,7 +502,8 @@ void Checkpoint::SaveSharded(
     ofs << "    \"tp_size\": " << state.tp_size << ",\n";
     ofs << "    \"pp_size\": " << state.pp_size << ",\n";
     ofs << "    \"dp_size\": " << state.ddp_size << ",\n";
-    ofs << "    \"sp_size\": " << state.sp_size << "\n";
+    ofs << "    \"sp_size\": " << state.sp_size << ",\n";
+    ofs << "    \"vpp_size\": " << state.vpp_size << "\n";
     ofs << "  },\n";
     ofs << "  \"model_config\": {\n";
     ofs << "    \"n_layer\": " << state.n_layer << ",\n";
@@ -638,6 +641,8 @@ static Checkpoint::CheckpointMetadata LoadSingleMetadata(
   meta.parallel_config.pp_size = ExtractNumberField<int>(content, "pp_size", 1);
   meta.parallel_config.dp_size = ExtractNumberField<int>(content, "dp_size", 1);
   meta.parallel_config.sp_size = ExtractNumberField<int>(content, "sp_size", 1);
+  meta.parallel_config.vpp_size =
+      ExtractNumberField<int>(content, "vpp_size", 1);
 
   // Locate the tensors array.
   auto tensors_key = content.find("\"tensors\"");
@@ -855,7 +860,8 @@ void Checkpoint::SaveMetadataFile(const std::filesystem::path &path,
   ofs << "    \"tp_size\": " << metadata.parallel_config.tp_size << ",\n";
   ofs << "    \"pp_size\": " << metadata.parallel_config.pp_size << ",\n";
   ofs << "    \"dp_size\": " << metadata.parallel_config.dp_size << ",\n";
-  ofs << "    \"sp_size\": " << metadata.parallel_config.sp_size << "\n";
+  ofs << "    \"sp_size\": " << metadata.parallel_config.sp_size << ",\n";
+  ofs << "    \"vpp_size\": " << metadata.parallel_config.vpp_size << "\n";
   ofs << "  },\n";
   ofs << "  \"tensors\": [\n";
   for (size_t i = 0; i < metadata.tensors.size(); ++i) {
