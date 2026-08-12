@@ -30,7 +30,7 @@ TEST_P(AutogradTransformForwardTest, SliceForward) {
                                                       std::vector<int64_t>{1, 1});
     auto result = slice_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
-    test::ExpectTensorEqual(result[0], {5.0f, 6.0f, 9.0f, 10.0f});
+    test::ExpectTensorFloatEqual(result[0], {5.0f, 6.0f, 9.0f, 10.0f});
 }
 
 TEST_P(AutogradTransformForwardTest, SplitForward) {
