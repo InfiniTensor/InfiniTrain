@@ -148,6 +148,45 @@ TEST_P(CheckpointSerializationTest, DirectMetadataOffsetSupportsColumnSlices) {
     std::filesystem::remove_all(dir);
 }
 
+TEST_P(CheckpointSerializationTest, ConvertsSavedBF16TensorToFP32Target) {
+    auto dir = std::filesystem::temp_directory_path() / "test_ckpt_bf16_to_fp32";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+
+    auto source_fp32 = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, Device());
+    auto *source_data = static_cast<float *>(source_fp32->DataPtr());
+    source_data[0] = 1.0f;
+    source_data[1] = 2.0f;
+    source_data[2] = 3.0f;
+    source_data[3] = 4.0f;
+    auto source_bf16 = std::make_shared<Tensor>(source_fp32->To(DataType::kBFLOAT16));
+    Checkpoint::SaveStateDictFile(dir / "model.ckpt", {{"weight", source_bf16}});
+    constexpr uint64_t data_offset = sizeof(uint32_t) * 3 + sizeof(uint32_t) + sizeof("weight") - 1
+                                   + sizeof(int8_t) + sizeof(uint32_t) + sizeof(int64_t) * 2 + sizeof(uint64_t);
+
+    checkpoint::LoadPlan plan;
+    plan.tensors["weight"] = {.key = "weight",
+                               .dtype = DataType::kFLOAT32,
+                               .global_shape = {2, 2},
+                               .target_shape = {2, 2},
+                               .reads = {{.key = "weight",
+                                          .filename = "model.ckpt",
+                                          .dtype = DataType::kBFLOAT16,
+                                          .global_shape = {2, 2},
+                                          .byte_size = source_bf16->SizeInBytes(),
+                                          .data_offset = data_offset,
+                                          .shard_dim = -1,
+                                          .source_shape = {2, 2}}}};
+
+    checkpoint::IndexedRegionLoadStrategy strategy;
+    const auto loaded = strategy.Execute(dir, plan).at("weight");
+    ASSERT_EQ(loaded->Dtype(), DataType::kFLOAT32);
+    const auto *loaded_data = static_cast<const float *>(loaded->DataPtr());
+    for (int i = 0; i < 4; ++i) { EXPECT_FLOAT_EQ(loaded_data[i], source_data[i]); }
+
+    std::filesystem::remove_all(dir);
+}
+
 TEST(CheckpointLoadPlannerTest, PadsVocabularyTailWhenTargetTpUsesPaddedVocab) {
     const auto dir = std::filesystem::temp_directory_path() / "test_vocab_padding_reshard";
     std::filesystem::remove_all(dir);
@@ -199,7 +238,7 @@ TEST_P(CheckpointSerializationTest, GlobalMetadataRoundTrip) {
     metadata.version = 3;
     metadata.iteration = 17;
     metadata.has_metadata = true;
-    metadata.parallel_config = {.tp_size = 2, .pp_size = 2, .dp_size = 1, .sp_size = 1};
+    metadata.parallel_config = {.tp_size = 2, .pp_size = 2, .dp_size = 1, .sp_size = 1, .vpp_size = 2};
     metadata.tensors.push_back({.key = "layer.0.weight",
                                 .dtype_str = "float32",
                                 .global_shape = {8, 4},
@@ -218,6 +257,7 @@ TEST_P(CheckpointSerializationTest, GlobalMetadataRoundTrip) {
     EXPECT_EQ(loaded.iteration, 17);
     EXPECT_EQ(loaded.parallel_config.tp_size, 2);
     EXPECT_EQ(loaded.parallel_config.pp_size, 2);
+    EXPECT_EQ(loaded.parallel_config.vpp_size, 2);
     ASSERT_EQ(loaded.tensors.size(), 1);
     EXPECT_EQ(loaded.tensors[0].file, "rank_000000/model.ckpt");
     EXPECT_EQ(loaded.tensors[0].global_offset, std::vector<int64_t>({0, 0}));
@@ -285,9 +325,26 @@ TEST(CheckpointOptimizerShardingTest, AdamMomentsReuseModelShardMetadata) {
     EXPECT_EQ(m.local_shape, model.tensors.at("c_attn.weight").local_shape);
     EXPECT_EQ(m.segments, model.tensors.at("c_attn.weight").segments);
     EXPECT_EQ(m.local_key, "adam.m.c_attn.weight");
+    EXPECT_EQ(m.dtype, moment->Dtype());
     const auto &t = optimizer.tensors.at("adam.t");
     EXPECT_TRUE(t.global_shape.empty());
     EXPECT_TRUE(t.local_shape.empty());
+}
+
+TEST(CheckpointOptimizerShardingTest, AdamMomentUsesOptimizerStateDtype) {
+    checkpoint::ShardedStateDict model;
+    model.tensors["weight"] = {.key = "weight",
+                               .dtype = DataType::kBFLOAT16,
+                               .global_shape = {4, 4},
+                               .local_shape = {4, 4},
+                               .global_offset = {0, 0},
+                               .axis_fragmentations = {1, 1}};
+    auto moment = std::make_shared<Tensor>(std::vector<int64_t>{4, 4}, DataType::kFLOAT32, Device());
+
+    const auto optimizer
+        = checkpoint::BuildOptimizerShardedStateDict(model, {{"adam.m.weight", moment}, {"adam.v.weight", moment}});
+    EXPECT_EQ(optimizer.tensors.at("adam.m.weight").dtype, DataType::kFLOAT32);
+    EXPECT_EQ(optimizer.tensors.at("adam.v.weight").dtype, DataType::kFLOAT32);
 }
 
 TEST(CheckpointLoadPlannerTest, RejectsUnknownCheckpointDtype) {

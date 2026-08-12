@@ -100,7 +100,11 @@ LoadedStateDict IndexedRegionLoadStrategy::Execute(const std::filesystem::path &
             CHECK_GT(read.data_offset, 0) << "Checkpoint metadata lacks a valid tensor data offset for " << key
                                           << "; regenerate the checkpoint with the current format";
             auto &stream = GetFile(file_cache, checkpoint_dir, read.filename);
-            pieces.push_back(read.shard_dim < 0 ? ReadTensor(stream, read) : ReadTensorRegion(stream, read));
+            auto piece = read.shard_dim < 0 ? ReadTensor(stream, read) : ReadTensorRegion(stream, read);
+            if (piece->Dtype() != tensor_plan.dtype) {
+                piece = std::make_shared<Tensor>(piece->To(tensor_plan.dtype));
+            }
+            pieces.push_back(std::move(piece));
         }
 
         if (tensor_plan.trailing_zero_fill > 0) {

@@ -40,6 +40,7 @@ BuildOptimizerShardedStateDict(const ShardedStateDict &model_state,
         auto info = model_it->second;
         info.key = key;
         info.local_key = key;
+        info.dtype = tensor->Dtype();
         result.tensors.emplace(key, std::move(info));
     }
     return result;

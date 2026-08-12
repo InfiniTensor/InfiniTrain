@@ -10,6 +10,7 @@
 
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
+#include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
@@ -107,6 +108,7 @@ checkpoint::ShardedStateDict CausalSelfAttention::ShardedStateDict(const std::st
     if (config_.add_bias_linear) {
         set_qkv_segments(parallel::ColumnParallelLinear::kParamBiasName);
     }
+    set_qkv_segments(lora::LoRAColumnParallelLinear::kParamLoraBName);
     return state;
 }
 

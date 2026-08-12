@@ -329,12 +329,30 @@ checkpoint::ShardedStateDict TransformerModel::ShardedStateDict(const std::strin
 
 std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
 TransformerModel::NamedParameters(const std::string &prefix, bool recurse, bool remove_duplicate) const {
-    auto parameters = Module::NamedParameters(prefix, recurse, remove_duplicate);
+    if (!recurse) {
+        return Module::NamedParameters(prefix, false, remove_duplicate);
+    }
+
+    // Select public aliases so optimizer state keys match ShardedStateDict keys.
+    auto parameters = Module::NamedParameters(prefix, true, false);
+    const auto sharded_state = ShardedStateDict(prefix);
     const auto global_layers = GlobalLayerIndices(stage_info_);
     std::vector<int> local_layers(global_layers.size());
     std::iota(local_layers.begin(), local_layers.end(), 0);
-    for (auto &[name, parameter] : parameters) { name = RemapLayerKey(name, local_layers, global_layers); }
-    return parameters;
+
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> result;
+    std::unordered_set<const Tensor *> visited;
+    for (auto &[name, parameter] : parameters) {
+        name = RemapLayerKey(name, local_layers, global_layers);
+        if (!sharded_state.tensors.contains(name)) {
+            continue;
+        }
+        if (remove_duplicate && !visited.insert(parameter.get()).second) {
+            continue;
+        }
+        result.emplace_back(std::move(name), std::move(parameter));
+    }
+    return result;
 }
 
 void TransformerModel::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
