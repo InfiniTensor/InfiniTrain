@@ -28,7 +28,7 @@ TEST_P(TensorDeleteTest, MoveTransferKeepsData) {
     auto moved = std::move(tensor);
     EXPECT_EQ(tensor, nullptr);
     ASSERT_NE(moved, nullptr);
-    test::ExpectTensorEqual(moved, 5.0f);
+    test::ExpectTensorFloatEqual(moved, 5.0f);
 }
 
 TEST_P(TensorDeleteTest, NullifiesPointerOnMove) {

@@ -18,5 +18,5 @@ TEST_F(TensorCopyCpuTest, CopiesCPUToCPU) {
         = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, Device(Device::DeviceType::kCPU, 0));
     source->Fill(1.0f);
     target->CopyFrom(source);
-    test::ExpectTensorEqual(target, 1.0f);
+    test::ExpectTensorFloatEqual(target, 1.0f);
 }

@@ -23,7 +23,7 @@ TEST_P(AutogradLinearForwardTest, LinearForward) {
     auto result = linear_fn->Apply({input, weight, bias});
     EXPECT_EQ(result.size(), 1);
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
-    test::ExpectTensorEqual(result[0], 5.0f);
+    test::ExpectTensorFloatEqual(result[0], 5.0f);
 }
 
 TEST_P(AutogradLinearForwardTest, LinearNoBias) {
@@ -35,7 +35,7 @@ TEST_P(AutogradLinearForwardTest, LinearNoBias) {
     auto result = linear_fn->Apply({input, weight});
     EXPECT_EQ(result.size(), 1);
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{1, 4}));
-    test::ExpectTensorEqual(result[0], 3.0f);
+    test::ExpectTensorFloatEqual(result[0], 3.0f);
 }
 
 TEST_P(AutogradLinearForwardTest, LinearBatch) {
@@ -47,7 +47,7 @@ TEST_P(AutogradLinearForwardTest, LinearBatch) {
     auto result = linear_fn->Apply({input, weight});
     EXPECT_EQ(result.size(), 1);
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{32, 64}));
-    test::ExpectTensorEqual(result[0], 128.0f);
+    test::ExpectTensorFloatEqual(result[0], 128.0f);
 }
 
 INFINI_TRAIN_REGISTER_TEST(AutogradLinearForwardTest);

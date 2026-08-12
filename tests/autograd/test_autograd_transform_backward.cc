@@ -39,7 +39,7 @@ TEST_P(AutogradTransformBackwardTest, SplitBackwardValues) {
 
     auto grad_inputs = split->Backward(grad_outputs);
     ASSERT_EQ(grad_inputs.size(), 1);
-    test::ExpectTensorEqual(grad_inputs[0], {1.0f, 1.0f, 2.0f, 2.0f, 3.0f, 1.0f, 1.0f, 2.0f, 2.0f, 3.0f});
+    test::ExpectTensorFloatEqual(grad_inputs[0], {1.0f, 1.0f, 2.0f, 2.0f, 3.0f, 1.0f, 1.0f, 2.0f, 2.0f, 3.0f});
 }
 
 TEST_P(AutogradTransformBackwardTest, StackBackwardValues) {
@@ -55,8 +55,8 @@ TEST_P(AutogradTransformBackwardTest, StackBackwardValues) {
         = std::make_shared<Tensor>(grad_values.data(), outputs[0]->Dims(), DataType::kFLOAT32, GetDevice());
     auto grad_inputs = stack->Backward({grad_output});
     ASSERT_EQ(grad_inputs.size(), 2);
-    test::ExpectTensorEqual(grad_inputs[0], {0.0f, 1.0f, 2.0f, 6.0f, 7.0f, 8.0f});
-    test::ExpectTensorEqual(grad_inputs[1], {3.0f, 4.0f, 5.0f, 9.0f, 10.0f, 11.0f});
+    test::ExpectTensorFloatEqual(grad_inputs[0], {0.0f, 1.0f, 2.0f, 6.0f, 7.0f, 8.0f});
+    test::ExpectTensorFloatEqual(grad_inputs[1], {3.0f, 4.0f, 5.0f, 9.0f, 10.0f, 11.0f});
 }
 
 TEST_P(AutogradTransformBackwardTest, ConcatBackwardValues) {
@@ -72,8 +72,8 @@ TEST_P(AutogradTransformBackwardTest, ConcatBackwardValues) {
         = std::make_shared<Tensor>(grad_values.data(), outputs[0]->Dims(), DataType::kFLOAT32, GetDevice());
     auto grad_inputs = concat->Backward({grad_output});
     ASSERT_EQ(grad_inputs.size(), 2);
-    test::ExpectTensorEqual(grad_inputs[0], {0.0f, 1.0f, 3.0f, 4.0f});
-    test::ExpectTensorEqual(grad_inputs[1], {2.0f, 5.0f});
+    test::ExpectTensorFloatEqual(grad_inputs[0], {0.0f, 1.0f, 3.0f, 4.0f});
+    test::ExpectTensorFloatEqual(grad_inputs[1], {2.0f, 5.0f});
 }
 
 INFINI_TRAIN_REGISTER_TEST(AutogradTransformBackwardTest);
