@@ -70,8 +70,8 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
     {"Layernorm", CastPolicy::kFP32},
 };
 
-// Default autocast data types for each device type
-inline constexpr std::array<DataType, static_cast<size_t>(Device::DeviceType::kCount)> kDeviceDefaultDtype = {
+// Default autocast data types for built-in device types
+inline constexpr std::array kDeviceDefaultDtype = {
     DataType::kBFLOAT16, // CPU
     DataType::kFLOAT16,  // CUDA.
 };
@@ -160,8 +160,16 @@ public:
         tls_autocast_context.autocast_dtype = autocast_dtype;
     }
 
+    // PrivateUse1 is provider-defined, so the framework cannot choose its default autocast dtype.
+    // Callers must use the overload above and pass the dtype explicitly.
     AutocastGuard(Device::DeviceType device_type)
-        : AutocastGuard(device_type, kDeviceDefaultDtype[static_cast<size_t>(device_type)]) {}
+        : AutocastGuard(device_type, [device_type] {
+              CHECK(device_type != Device::DeviceType::kPrivateUse1)
+                  << "PrivateUse1 autocast requires an explicit dtype";
+              const auto index = static_cast<size_t>(device_type);
+              CHECK_LT(index, kDeviceDefaultDtype.size()) << "Invalid device type for autocast";
+              return kDeviceDefaultDtype[index];
+          }()) {}
 
     // Disable autocast (restore previous state)
     ~AutocastGuard() { tls_autocast_context = saved_context_; }

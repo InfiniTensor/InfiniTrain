@@ -7,6 +7,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/core/privateuse1_backend.h"
 #include "infini_train/include/nn/parallel/global.h"
 
 namespace infini_train {
@@ -26,9 +27,38 @@ bool Device::IsCPU() const { return type_ == DeviceType::kCPU; }
 
 bool Device::IsCUDA() const { return type_ == DeviceType::kCUDA; }
 
+bool Device::IsPrivateUse1() const { return type_ == DeviceType::kPrivateUse1; }
+
+std::optional<Device::DeviceType> Device::ParseType(std::string_view name) {
+    if (name == "cpu") {
+        return DeviceType::kCPU;
+    }
+    if (name == "cuda") {
+        return DeviceType::kCUDA;
+    }
+    if (name == "privateuse1" || (core::HasPrivateUse1Backend() && name == core::GetPrivateUse1BackendName())) {
+        return DeviceType::kPrivateUse1;
+    }
+    return std::nullopt;
+}
+
 std::string Device::ToString() const {
+    std::string type_str = "Unknown";
+    switch (type_) {
+    case DeviceType::kCPU:
+        type_str = "CPU";
+        break;
+    case DeviceType::kCUDA:
+        type_str = "CUDA";
+        break;
+    case DeviceType::kPrivateUse1:
+        type_str = core::GetPrivateUse1BackendName();
+        break;
+    default:
+        break;
+    }
     std::ostringstream oss;
-    oss << std::format("Device({}, {})", type_ == DeviceType::kCPU ? "CPU" : "CUDA", index_);
+    oss << std::format("Device({}, {})", type_str, index_);
     return oss.str();
 }
 

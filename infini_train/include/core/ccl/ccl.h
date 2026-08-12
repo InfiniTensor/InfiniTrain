@@ -79,6 +79,8 @@ public:
 
     void Register(Device::DeviceType type, std::unique_ptr<CclImpl> impl);
 
+    bool Has(Device::DeviceType type) const;
+
     CclImpl *Get(Device::DeviceType type) const;
 
 private:
