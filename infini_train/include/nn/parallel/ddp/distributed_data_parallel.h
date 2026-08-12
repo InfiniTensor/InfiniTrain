@@ -30,6 +30,11 @@ public:
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
     std::shared_ptr<nn::Module> module() const;
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
+    NamedParameters(const std::string &prefix = "", bool recurse = true, bool remove_duplicate = true) const override;
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
 
     DistributedDataParallelConfig ddp_config() const { return ddp_config_; }
 

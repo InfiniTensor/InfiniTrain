@@ -40,6 +40,12 @@ public:
 
     std::vector<std::shared_ptr<Module>> *mutable_chunks();
 
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
+    NamedParameters(const std::string &prefix = "", bool recurse = true, bool remove_duplicate = true) const override;
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
+
 private:
     void BuildPipelineStage(const std::vector<std::vector<int64_t>> &recv_shape, Device device,
                             std::vector<std::shared_ptr<Module>> &&chunks);

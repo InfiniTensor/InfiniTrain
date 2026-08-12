@@ -6,7 +6,6 @@
 #include <memory>
 
 #include "infini_train/include/checkpoint/checkpoint.h"
-#include "infini_train/include/dataloader.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/optimizer.h"
