@@ -10,6 +10,9 @@ add_subdirectory(common)
 # Tensor tests
 add_subdirectory(tensor)
 
+# Generator tests
+add_subdirectory(generator)
+
 # Optimizer tests
 add_subdirectory(optimizer)
 

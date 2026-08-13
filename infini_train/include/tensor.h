@@ -4,7 +4,6 @@
 #include <iostream>
 #include <memory>
 #include <optional>
-#include <random>
 #include <vector>
 
 #include "Eigen/Dense"
@@ -15,6 +14,7 @@
 #include "infini_train/include/scalar.h"
 
 namespace infini_train {
+class Generator;
 namespace autograd {
 class Function;
 class AccumulateGrad;
@@ -150,8 +150,7 @@ public:
     std::shared_ptr<Tensor> Unsqueeze(int64_t dim);
 
     // distribution
-    std::shared_ptr<Tensor> Uniform(float from = 0.0f, float to = 1.0f,
-                                    std::optional<std::mt19937> generator = std::nullopt);
+    std::shared_ptr<Tensor> Uniform(float from = 0.0f, float to = 1.0f, std::shared_ptr<Generator> generator = nullptr);
 
     std::shared_ptr<Tensor> Matmul(const std::shared_ptr<Tensor> &other);
     std::shared_ptr<Tensor> Outer(const std::shared_ptr<Tensor> &other);

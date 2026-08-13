@@ -38,6 +38,7 @@ public:
     const std::vector<std::shared_ptr<ParamAndGradBucketGroup>> &bucket_groups() const { return bucket_groups_; }
 
 private:
+    void SynchronizeModuleState();
     void BuildParamAndGradBuffers();
     void RegisterBackwardHooks();
     void OnGradReady(const std::shared_ptr<Tensor> &param);

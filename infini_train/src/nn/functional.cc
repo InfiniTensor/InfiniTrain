@@ -9,6 +9,7 @@
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/softmax.h"
 #include "infini_train/include/autograd/transform.h"
+#include "infini_train/include/generator.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/tensor.h"
 
@@ -24,6 +25,16 @@ std::shared_ptr<Tensor> Triu(const std::shared_ptr<Tensor> &input, int64_t diago
 std::shared_ptr<Tensor> Ones(const std::vector<int64_t> size) {
     auto ones = std::make_shared<Tensor>(size, DataType::kFLOAT32);
     return init::Ones(ones);
+}
+
+std::shared_ptr<Tensor> Rand(const std::vector<int64_t> &size, Device device, std::shared_ptr<Generator> generator) {
+    auto tensor = std::make_shared<Tensor>(size, DataType::kFLOAT32, device);
+    return init::Uniform(tensor, 0.0f, 1.0f, generator);
+}
+
+std::shared_ptr<Tensor> Randn(const std::vector<int64_t> &size, Device device, std::shared_ptr<Generator> generator) {
+    auto tensor = std::make_shared<Tensor>(size, DataType::kFLOAT32, device);
+    return init::Normal(tensor, 0.0f, 1.0f, generator);
 }
 
 std::shared_ptr<Tensor> Reciprocal(const std::shared_ptr<Tensor> &input) { return input->Reciprocal(); }

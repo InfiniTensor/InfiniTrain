@@ -134,25 +134,26 @@ private:
     template <typename Creator, typename = std::enable_if_t<std::is_invocable_v<Creator>>>
     const ProcessGroup *GetOrCreate(const std::string &name, Creator &&creator) {
         std::unique_lock<std::mutex> lock(mutex_);
-        auto [it, inserted] = name_to_group_.emplace(name, nullptr);
+        const bool inserted = name_to_group_.emplace(name, nullptr).second;
         if (!inserted) {
-            while (it->second == nullptr) { cond_.wait(lock); }
-            return it->second.get();
+            cond_.wait(lock, [this, &name]() { return name_to_group_.at(name) != nullptr; });
+            return name_to_group_.at(name).get();
         }
 
         lock.unlock();
         auto new_group = creator();
         lock.lock();
 
-        it->second = std::move(new_group);
+        auto &group = name_to_group_.at(name);
+        group = std::move(new_group);
         cond_.notify_all();
-        return it->second.get();
+        return group.get();
     }
 
 private:
     // TODO(dcj): maybe RWLock later?
     mutable std::mutex mutex_;
-    std::condition_variable cond_;
+    mutable std::condition_variable cond_;
     std::unordered_map<std::string, std::unique_ptr<ProcessGroup>> name_to_group_;
     Device::DeviceType backend_ = Device::DeviceType::kInvalid;
 };

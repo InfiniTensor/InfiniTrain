@@ -1,4 +1,5 @@
 #include <cub/cub.cuh>
+#include <numeric>
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/cub_compat.cuh"

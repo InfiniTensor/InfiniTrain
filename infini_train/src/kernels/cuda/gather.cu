@@ -1,4 +1,5 @@
 #include "glog/logging.h"
+#include <numeric>
 
 #include "infini_train/include/common/common.h"
 #include "infini_train/include/common/cuda/common_cuda.h"
