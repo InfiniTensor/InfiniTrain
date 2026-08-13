@@ -38,10 +38,11 @@ public:
     virtual ~ProcessGroup();
 
     virtual int GetGroupRank(int global_rank) const;
+    int GetGroupSize() const;
 
     // Asynchronous communication APIs (Compute / Communication stream decoupled)
     virtual std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor,
-                                            function::ReduceOpType reduce_op = function::ReduceOpType::kSum,
+                                            comm::ReduceOpType reduce_op = comm::ReduceOpType::kSum,
                                             bool async_op = false) const;
 
     virtual std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
@@ -49,7 +50,7 @@ public:
 
     virtual std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output,
                                                 const std::shared_ptr<Tensor> &input,
-                                                function::ReduceOpType reduce_op = function::ReduceOpType::kSum,
+                                                comm::ReduceOpType reduce_op = comm::ReduceOpType::kSum,
                                                 bool async_op = false) const;
 
     // root_rank_in_group is ProcessGroup-local rank. Broadcast updates tensors in place.

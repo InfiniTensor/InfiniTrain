@@ -14,6 +14,7 @@
 #include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
 
@@ -31,6 +32,8 @@ std::unique_ptr<ProcessGroupFactory> g_process_group_factory_instance = nullptr;
 } // namespace
 
 int ProcessGroup::GetGroupRank(int global_rank) const { return global_group_rank_map_.at(global_rank); }
+
+int ProcessGroup::GetGroupSize() const { return world_size_; }
 
 ProcessGroup::ProcessGroup(int world_size, const std::string &name) : world_size_(world_size), name_(name) {}
 
@@ -125,7 +128,7 @@ void ProcessGroup::InitStreams() {
     }
 }
 
-std::shared_ptr<Work> ProcessGroup::AllReduce(const std::shared_ptr<Tensor> &tensor, function::ReduceOpType reduce_op,
+std::shared_ptr<Work> ProcessGroup::AllReduce(const std::shared_ptr<Tensor> &tensor, comm::ReduceOpType reduce_op,
                                               bool async_op) const {
     auto device = tensor->GetDevice();
     core::DeviceGuard guard(device);
@@ -171,8 +174,8 @@ std::shared_ptr<Work> ProcessGroup::AllGather(const std::shared_ptr<Tensor> &out
 }
 
 std::shared_ptr<Work> ProcessGroup::ReduceScatter(const std::shared_ptr<Tensor> &output,
-                                                  const std::shared_ptr<Tensor> &input,
-                                                  function::ReduceOpType reduce_op, bool async_op) const {
+                                                  const std::shared_ptr<Tensor> &input, comm::ReduceOpType reduce_op,
+                                                  bool async_op) const {
     auto device = input->GetDevice();
     core::DeviceGuard guard(device);
     auto *compute_stream = runtime_impl_->GetStream(device);
@@ -432,7 +435,7 @@ ProcessGroup::ReduceAddCoalesced(const std::vector<std::vector<std::shared_ptr<T
         for (size_t j = 0; j < grads[i].size(); ++j) {
             const auto &grad = grads[i][j];
             ccl_impl_->Reduce(grad->DataPtr(), outputs[j]->DataPtr(), grad->NumElements(), grad->Dtype(),
-                              function::ReduceOpType::kSum, root, comms[i], streams[i]);
+                              comm::ReduceOpType::kSum, root, comms[i], streams[i]);
         }
     }
 

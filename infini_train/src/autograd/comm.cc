@@ -10,6 +10,47 @@
 
 namespace infini_train::autograd::comm {
 
+AllGather::AllGather(const nn::parallel::ProcessGroup *pg) : autograd::Function(kType), pg_(pg) { CHECK_NOTNULL(pg_); }
+
+std::vector<std::shared_ptr<Tensor>> AllGather::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1);
+    const auto &input = input_tensors[0];
+    auto output_shape = input->Dims();
+    CHECK(!output_shape.empty());
+    output_shape[0] *= pg_->GetGroupSize();
+    auto output = std::make_shared<Tensor>(output_shape, input->Dtype(), input->GetDevice());
+    pg_->AllGather(output, input, false);
+    return {output};
+}
+
+std::vector<std::shared_ptr<Tensor>> AllGather::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    CHECK_EQ(grad_outputs.size(), 1);
+    return std::make_shared<ReduceScatter>(nn::parallel::comm::ReduceOpType::kSum, pg_)->Apply(grad_outputs);
+}
+
+ReduceScatter::ReduceScatter(nn::parallel::comm::ReduceOpType reduce_op, const nn::parallel::ProcessGroup *pg)
+    : autograd::Function(kType), reduce_op_(reduce_op), pg_(pg) {
+    CHECK_NOTNULL(pg_);
+}
+
+std::vector<std::shared_ptr<Tensor>> ReduceScatter::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1);
+    const auto &input = input_tensors[0];
+    auto output_shape = input->Dims();
+    CHECK(!output_shape.empty());
+    CHECK_EQ(output_shape[0] % pg_->GetGroupSize(), 0);
+    output_shape[0] /= pg_->GetGroupSize();
+    auto output = std::make_shared<Tensor>(output_shape, input->Dtype(), input->GetDevice());
+    pg_->ReduceScatter(output, input, reduce_op_, false);
+    return {output};
+}
+
+std::vector<std::shared_ptr<Tensor>> ReduceScatter::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    CHECK_EQ(grad_outputs.size(), 1);
+    CHECK(reduce_op_ == nn::parallel::comm::ReduceOpType::kSum) << "ReduceScatter backward requires SUM reduction";
+    return std::make_shared<AllGather>(pg_)->Apply(grad_outputs);
+}
+
 Scatter::Scatter(const std::vector<Device> &target_gpus, int64_t dim,
                  const infini_train::nn::parallel::ProcessGroup *pg)
     : autograd::Function(kType), target_gpus_(target_gpus), dim_(dim),

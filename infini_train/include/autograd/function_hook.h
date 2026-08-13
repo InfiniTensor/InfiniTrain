@@ -35,13 +35,13 @@ public:
 
 class AllReducePostAccumulateHook : public PostAccumulateGradHook {
 public:
-    AllReducePostAccumulateHook(infini_train::nn::parallel::function::ReduceOpType reduce_op,
+    AllReducePostAccumulateHook(infini_train::nn::parallel::comm::ReduceOpType reduce_op,
                                 const infini_train::nn::parallel::ProcessGroup *pg = nullptr);
 
     void operator()(const std::shared_ptr<Tensor> &tensor) override;
 
 private:
-    infini_train::nn::parallel::function::ReduceOpType reduce_op_;
+    infini_train::nn::parallel::comm::ReduceOpType reduce_op_;
     const infini_train::nn::parallel::ProcessGroup *pg_ = nullptr;
 };
 } // namespace infini_train::autograd

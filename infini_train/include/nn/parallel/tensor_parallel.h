@@ -1,11 +1,11 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/process_group.h"
 
 namespace infini_train {
 class Tensor;
@@ -17,6 +17,15 @@ namespace infini_train::nn::parallel {
 // NOTE(zbl): Reserved for VocabParallelEmbedding, since rank is needed in its constructor before any Device exists
 //            On other occasions, should use Device::Rank()
 extern thread_local int tp_rank;
+
+// TP/SP communication helpers.
+std::shared_ptr<Tensor> GatherTensorParallelShard(const std::shared_ptr<Tensor> &tensor, int64_t dim);
+std::vector<std::shared_ptr<Tensor>> GatherFromTPRegionFunc(const std::shared_ptr<Tensor> &input);
+std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(const std::shared_ptr<Tensor> &input);
+std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_ptr<Tensor> &input);
+std::vector<std::shared_ptr<Tensor>> ScatterToTPRegionFunc(const std::shared_ptr<Tensor> &input);
+std::vector<std::shared_ptr<Tensor>> ReduceFromTPRegionFunc(const std::shared_ptr<Tensor> &input);
+std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(const std::shared_ptr<Tensor> &input);
 
 class ColumnParallelLinear : public nn::CloneableModule<ColumnParallelLinear> {
 public:

@@ -20,10 +20,10 @@
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
+#include "infini_train/include/nn/parallel/comm.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
@@ -506,7 +506,7 @@ void Train(const nn::parallel::Rank &rank) {
 
         if (ddp_world_size > 1) {
             auto lossf_tensor = std::make_shared<Tensor>(&lossf, std::vector<int64_t>{}, DataType::kFLOAT32, device);
-            function::AllReduce(lossf_tensor, function::ReduceOpType::kAvg, ddp_pg);
+            comm::AllReduce(lossf_tensor, comm::ReduceOpType::kAvg, ddp_pg);
             lossf = static_cast<const float *>(lossf_tensor->To(Device()).DataPtr())[0];
         }
 
@@ -562,7 +562,9 @@ int main(int argc, char *argv[]) {
 
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
-                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
+                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel,
+                                     /*expert_parallel_size=*/1,
+                                     /*expert_tensor_parallel_size=*/std::nullopt);
     utils::PrecisionCheckEnv::Instance().Init(precision_config);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();

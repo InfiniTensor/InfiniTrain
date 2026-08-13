@@ -32,7 +32,7 @@ struct PermutationMetadata {
     // Number of dispatched tokens assigned to each expert. Kept on host because the
     // current local SequentialMLP uses it only for CPU-side slicing decisions.
     // Shape: [num_experts].
-    std::vector<int64_t> tokens_per_expert;
+    std::shared_ptr<Tensor> tokens_per_expert;
 };
 
 struct PermutationResult {
@@ -82,13 +82,10 @@ PermutationResult Permute(const std::shared_ptr<Tensor> &tokens, const std::shar
                           const std::shared_ptr<Tensor> &routing_map);
 
 // Restore permuted expert outputs to token order, matching Megatron moe_utils.unpermute.
-// Each expert output row is weighted by its aligned permuted_probs value before scatter-add.
 // Args:
 //   permuted_tokens: [num_dispatched_tokens, hidden_size] expert outputs in permuted order.
-//   permuted_probs:  [num_dispatched_tokens] routing probability for each expert output row.
 //   restore_shape:   [num_tokens, hidden_size] output shape before permutation.
-std::shared_ptr<Tensor> Unpermute(const std::shared_ptr<Tensor> &permuted_tokens,
-                                  const std::shared_ptr<Tensor> &permuted_probs, const PermutationMetadata &metadata,
+std::shared_ptr<Tensor> Unpermute(const std::shared_ptr<Tensor> &permuted_tokens, const PermutationMetadata &metadata,
                                   const std::vector<int64_t> &restore_shape);
 
 } // namespace infini_train::nn::moe

@@ -141,17 +141,17 @@ __global__ void ReduceColumnsKernel(const TIn *__restrict__ input, TOut *__restr
     using BlockReduce = cub::BlockReduce<float, BLOCK_SIZE>;
     __shared__ typename BlockReduce::TempStorage temp_storage;
 
-    int row = blockIdx.x;
+    int col = blockIdx.x;
     float sum = 0.0f;
 
-    for (int col = threadIdx.x; col < num_cols; col += blockDim.x) {
+    for (int row = threadIdx.x; row < num_rows; row += blockDim.x) {
         sum += common::cuda::Cast<float>(input[row * num_cols + col]);
     }
 
     float reduced = BlockReduce(temp_storage).Sum(sum);
 
     if (threadIdx.x == 0) {
-        output[row] = reduced;
+        output[col] = reduced;
     }
 }
 
@@ -309,13 +309,13 @@ std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_o
         DISPATCH_CASE(WRAP({
                           ReduceColumnsKernel<BLOCK_SIZE><<<out_features, BLOCK_SIZE, 0, cuda_stream>>>(
                               static_cast<const float *>(grad_output->DataPtr()),
-                              static_cast<float *>(grad_bias->DataPtr()), out_features, bs);
+                              static_cast<float *>(grad_bias->DataPtr()), bs, out_features);
                       }),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
                           ReduceColumnsKernel<BLOCK_SIZE><<<out_features, BLOCK_SIZE, 0, cuda_stream>>>(
                               static_cast<const nv_bfloat16 *>(grad_output->DataPtr()),
-                              static_cast<float *>(grad_bias->DataPtr()), out_features, bs);
+                              static_cast<float *>(grad_bias->DataPtr()), bs, out_features);
                       }),
                       DataType::kBFLOAT16)
     }

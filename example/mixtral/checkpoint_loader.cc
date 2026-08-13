@@ -61,7 +61,6 @@ nn::TransformerConfig ConfigFromLLMC(const std::string &filepath) {
 
     nn::MoEConfig moe_config;
     moe_config.num_experts = infini_train::BytesToType<int32_t>(header, 8 * sizeof(int32_t));
-    moe_config.expert_parallel_size = 1;
     moe_config.router_topk = infini_train::BytesToType<int32_t>(header, 15 * sizeof(int32_t));
     moe_config.moe_ffn_hidden_size = infini_train::BytesToType<int32_t>(header, 16 * sizeof(int32_t));
     moe_config.token_dispatcher_type = nn::MoEConfig::TokenDispatcherType::kAllGather;

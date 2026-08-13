@@ -13,7 +13,8 @@
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/nn/parallel/parallel_functional.h"
+#include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
@@ -22,6 +23,19 @@ namespace infini_train::nn::parallel {
 // NOTE(zbl): Reserved for VocabParallelEmbedding, since rank is needed in its constructor before any Device exists
 //            On other occasions, should use Device::Rank()
 thread_local int tp_rank = 0;
+
+std::shared_ptr<Tensor> GatherTensorParallelShard(const std::shared_ptr<Tensor> &tensor, int64_t dim) {
+    const int tp_size = global::GetTensorParallelSize();
+    CHECK_GT(tp_size, 0) << "Tensor Parallel group not initialized";
+    if (tp_size == 1) {
+        return tensor;
+    }
+
+    auto device = tensor->GetDevice();
+    auto *tp_group = ProcessGroupFactory::Instance(device.type())
+                         ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+    return AllGatherAlongDim(tensor, dim, tp_group);
+}
 
 namespace {
 // Comm Kernel Call Functions
@@ -65,7 +79,7 @@ std::shared_ptr<Tensor> Reduce(const std::shared_ptr<Tensor> &tensor) {
 
     auto output = std::make_shared<Tensor>(*tensor);
 
-    tp_group->AllReduce(output, function::ReduceOpType::kSum, false);
+    tp_group->AllReduce(output, comm::ReduceOpType::kSum, false);
     return output;
 }
 
@@ -80,16 +94,7 @@ std::shared_ptr<Tensor> ReduceScatterAlongFirstDim(const std::shared_ptr<Tensor>
     auto device = tensor->GetDevice();
     auto tp_group = ProcessGroupFactory::Instance(device.type())
                         ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
-
-    auto output_shape = tensor->Dims();
-    CHECK_EQ(output_shape[0] % world_size, 0) << "First dimension of the tensor should be divisible by TP world size";
-    output_shape[0] /= world_size;
-
-    auto output = std::make_shared<Tensor>(output_shape, tensor->Dtype(), device);
-
-    tp_group->ReduceScatter(output, tensor, function::ReduceOpType::kSum, false);
-
-    return output;
+    return infini_train::nn::parallel::ReduceScatterAlongFirstDim(tensor, comm::ReduceOpType::kSum, tp_group);
 }
 
 // Autograd Function definitions
@@ -444,7 +449,7 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     auto local_max = logits_masked->Max(-1);
     auto global_max = local_max;
     if (tp_size > 1) {
-        tp_group->AllReduce(global_max, function::ReduceOpType::kMax, false);
+        tp_group->AllReduce(global_max, comm::ReduceOpType::kMax, false);
     }
     auto shifted = logits_masked->Sub(global_max->Unsqueeze(-1));
 
