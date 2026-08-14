@@ -98,6 +98,7 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
     CHECK(dynamic_cast<nn::parallel::DistributedOptimizer *>(args.optimizer.get()) == nullptr)
         << "Checkpoint restore does not support DistributedOptimizer/ZeRO optimizer state; use zero_stage=0";
 
+    // Resolve the checkpoint generation and load the global shard metadata.
     auto checkpoint_dir = ResolveCheckpointDirectory(args.resume_root);
     CHECK(std::filesystem::exists(checkpoint_dir / "metadata.json"))
         << "Checkpoint metadata.json not found: " << checkpoint_dir;
@@ -105,9 +106,11 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
 
     CHECK(metadata.has_metadata);
     CHECK_EQ(metadata.version, 3) << "Unsupported distributed checkpoint version: " << metadata.version;
+    // Reconstruct model and optimizer state for the current parallel topology.
     checkpoint::LoadDistributedCheckpoint(checkpoint_dir, *args.model, args.optimizer.get(), args.state,
                                           args.lr_scheduler.get(), metadata);
 
+    // Validate architecture invariants before restoring training progress.
     CHECK_EQ(args.state.n_layer, args.model_config.n_layer);
     CHECK_EQ(args.state.n_head, args.model_config.n_head);
     CHECK_EQ(args.state.n_kv_head, args.model_config.n_kv_head);
@@ -127,6 +130,7 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
     CHECK(dynamic_cast<const nn::parallel::DistributedOptimizer *>(args.optimizer) == nullptr)
         << "Checkpoint save does not support DistributedOptimizer/ZeRO optimizer state; use zero_stage=0";
     const auto checkpoint_start = std::chrono::high_resolution_clock::now();
+    // Snapshot training progress and the topology that produced this checkpoint.
     TrainerState state{.global_step = args.global_step,
                        .consumed_train_samples = static_cast<int64_t>(args.consumed_train_samples),
                        .n_layer = args.n_layer,
@@ -144,6 +148,7 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
                                  : args.checkpoint_root_dir / std::format("iter_{:07d}", args.global_step);
     std::filesystem::create_directories(iteration_dir);
 
+    // Reset the manifest staging area before writer ranks publish their metadata.
     const auto staging_root = iteration_dir / ".metadata_tmp";
     if (args.rank.IsMainRank()) {
         std::filesystem::remove_all(staging_root);
@@ -152,12 +157,14 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
 
     int dp_rank = 0, tp_rank = 0, pp_rank = 0;
     nn::parallel::global::GetCoordOf(args.rank.GlobalRank(), dp_rank, tp_rank, pp_rank);
+    // DP ranks hold replicas; only one DP replica writes each TP/PP shard.
     if (dp_rank != 0) {
         return;
     }
 
     const auto rank_dir = iteration_dir / std::format("rank_{:06d}", args.rank.GlobalRank());
     std::filesystem::create_directories(rank_dir);
+    // Describe logical shards, plan their physical layout, and write this rank shard.
     auto sharded_state = args.model.ShardedStateDict();
     std::unordered_map<std::string, std::shared_ptr<Tensor>> optimizer_state;
     if (args.optimizer != nullptr) {
@@ -171,6 +178,7 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
 
     const auto staging_rank_dir = staging_root / std::format("rank_{:06d}", args.rank.GlobalRank());
     std::filesystem::create_directories(staging_rank_dir);
+    // Stage the local manifest until all writer ranks have completed their shards.
     const auto local_manifest = staging_rank_dir / "metadata.json";
     if (std::filesystem::exists(local_manifest)) {
         std::filesystem::remove(local_manifest);
@@ -182,6 +190,7 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
         if (args.lr_scheduler != nullptr) {
             Checkpoint::SaveLRSchedulerStateFile(iteration_dir / "lr_scheduler.ckpt", args.lr_scheduler->StateDict());
         }
+        // Aggregate writer manifests and atomically publish the global metadata.
         WaitForWriterManifests(staging_root, args.tp_size, args.pp_size, args.global_step);
         auto global_metadata = Checkpoint::LoadMetadata(staging_root);
         CHECK(global_metadata.has_metadata);
