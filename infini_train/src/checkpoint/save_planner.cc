@@ -36,7 +36,7 @@ BuildOptimizerShardedStateDict(const ShardedStateDict &model_state,
         auto model_it = model_state.tensors.find(parameter_key);
         CHECK(model_it != model_state.tensors.end())
             << "Optimizer state " << key << " has no matching named model parameter. "
-            << "Optimizer resharding requires set_parameter_names().";
+            << "Optimizer resharding requires named parameters.";
         auto info = model_it->second;
         info.key = key;
         info.local_key = key;

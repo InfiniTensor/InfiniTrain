@@ -95,6 +95,8 @@ public:
 private:
     bool reduce_scatter_embeddings_ = false; // whether to perform ReduceScatter after embedding lookup
 
+    int64_t vocab_size_global_ = 0;
+
     int64_t embedding_dim_ = 0;
 
     int64_t vocab_size_per_partition_ = 0;
