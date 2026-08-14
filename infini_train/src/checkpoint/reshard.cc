@@ -20,12 +20,15 @@ void LoadDistributedCheckpoint(const std::filesystem::path &checkpoint_dir, nn::
                                const Checkpoint::CheckpointMetadata &metadata) {
     CHECK(metadata.has_metadata);
     CHECK_EQ(metadata.version, 3) << "Unsupported distributed checkpoint version: " << metadata.version;
+    // Build this rank's target shard layout and plan overlap reads from the saved source shards.
     auto model_sharded_state = model.ShardedStateDict();
     auto plan = LoadPlanner::PlanReshard(metadata, model_sharded_state);
+    // Execute the read plan, assemble target tensors, and load the reconstructed model state.
     IndexedRegionLoadStrategy strategy;
     auto result = strategy.Execute(checkpoint_dir, plan);
     model.LoadStateDict(result);
 
+    // Restore training progress, but rewrite topology fields to describe the current runtime.
     state = Checkpoint::LoadTrainerStateFile(checkpoint_dir / "trainer_state.json");
     const int current_tp = nn::parallel::global::GetTensorParallelSize();
     const int current_pp = nn::parallel::global::GetPipelineParallelSize();
@@ -36,6 +39,7 @@ void LoadDistributedCheckpoint(const std::filesystem::path &checkpoint_dir, nn::
     state.ddp_size = nn::parallel::global::GetDataParallelSize();
     state.sp_size = nn::parallel::global::GetSequenceParallelEnabled() ? current_tp : 1;
 
+    // Reshard optimizer tensors only when TP or PP changed; otherwise load the matching writer shard directly.
     if (optimizer != nullptr) {
         if (topology_changed) {
             const auto initialized_optimizer_state = optimizer->StateDict();
@@ -60,6 +64,7 @@ void LoadDistributedCheckpoint(const std::filesystem::path &checkpoint_dir, nn::
             optimizer->LoadStateDict(Checkpoint::LoadStateDictFile(optimizer_path));
         }
     }
+    // Scheduler state is topology-independent and can be restored directly.
     if (lr_scheduler != nullptr && std::filesystem::exists(checkpoint_dir / "lr_scheduler.ckpt")) {
         lr_scheduler->LoadStateDict(Checkpoint::LoadLRSchedulerStateFile(checkpoint_dir / "lr_scheduler.ckpt"));
     }
