@@ -499,8 +499,14 @@ checkpoint::ShardedStateDict RowParallelLinear::ShardedStateDict(
 VocabParallelEmbedding::VocabParallelEmbedding(int64_t num_embeddings,
                                                int64_t embedding_dim,
                                                bool reduce_scatter_embeddings)
+<<<<<<< HEAD
     : CloneableModule(kType),
       embedding_dim_(embedding_dim),
+=======
+    : CloneableModule(kType),
+      vocab_size_global_(num_embeddings),
+      embedding_dim_(embedding_dim),
+>>>>>>> 8ea672e (fix: update checkpoint tests for named optimizer API)
       reduce_scatter_embeddings_(reduce_scatter_embeddings) {
   auto tp_size = global::GetTensorParallelSize();
   CHECK_GT(tp_size, 0)
