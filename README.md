@@ -97,52 +97,158 @@ For example, the `llama3` example produces a binary named `llama3`.
 To view available runtime options:
 
 ```bash
-./llama3 --help
+./build/llama3 --help
 ```
 
 ### Getting Started
 
-The following examples demonstrate **LLaMA 3 supervised fine-tuning (SFT)** using InfiniTrain.
+#### Prepare Datasets and Weights
 
-#### Single-node Training Example
+Run the asset preparation script from the repository root. Prepared files are
+written to `data/` by default.
 
 ```bash
-./llama3 \
-  --device cuda \
-  --input_bin [training_data_path] \
-  --llmc_filepath [model_path] \
-  --num_iteration 10
+# MNIST dataset
+./scripts/assets/prepare-infinitrain-assets.sh mnist
 
+# GPT-2 124M weights, tokenizer, and tokenized TinyShakespeare data
+./scripts/assets/prepare-infinitrain-assets.sh gpt2
+
+# LLaMA 3.2 1B weights and tokenized TinyShakespeare data
+HF_TOKEN=hf_xxx ./scripts/assets/prepare-infinitrain-assets.sh llama3
 ```
 
-#### Multi-nodes Training Example (3D parallel)
+Preparing LLaMA requires access to the gated
+`meta-llama/Llama-3.2-1B` repository. Accept its license on Hugging Face and
+provide `HF_TOKEN`, or authenticate with `hf auth login`, before running the
+command. The complete LLaMA preparation requires approximately 8.5 GB of free
+disk space, including the downloaded checkpoint and converted FP32 weights.
+
+Use `DATA_DIR` to write the assets elsewhere, or prepare all supported assets
+in one invocation:
 
 ```bash
-./infini_run \
+DATA_DIR=/path/to/data \
+HF_TOKEN=hf_xxx \
+./scripts/assets/prepare-infinitrain-assets.sh all
+```
+
+#### Model Examples
+
+The generated files can be passed directly to the corresponding executables:
+
+##### MNIST
+
+```bash
+./build/mnist \
+  --device cpu \
+  --dataset data/mnist
+```
+
+##### GPT-2 124M
+
+```bash
+./build/gpt2 \
+  --device cuda \
+  --input_bin data/gpt2/tiny_shakespeare_train.bin \
+  --input_val_bin data/gpt2/tiny_shakespeare_val.bin \
+  --tokenizer_bin data/gpt2/gpt2_tokenizer.bin \
+  --llmc_filepath data/gpt2/gpt2_124M.bin \
+  --num_iteration 10
+```
+
+##### LLaMA 3.2 1B
+
+```bash
+./build/llama3 \
+  --device cuda \
+  --input_bin data/llama3/tiny_shakespeare_train.bin \
+  --input_val_bin data/llama3/tiny_shakespeare_val.bin \
+  --llmc_filepath data/llama3/llama3.2_1B_fp32.bin \
+  --num_iteration 10
+```
+
+### Launch Modes
+
+GPT-2 and LLaMA training support both thread-based and process-based launches.
+The examples below use LLaMA, but the same launch modes also apply to GPT-2.
+
+#### Direct Launch
+
+Running a model executable directly uses one process and one device by default.
+Set `--nthread_per_process` to use multiple execution threads and devices in the
+same process:
+
+```bash
+./build/llama3 \
+  --device cuda \
+  --input_bin data/llama3/tiny_shakespeare_train.bin \
+  --llmc_filepath data/llama3/llama3.2_1B_fp32.bin \
+  --nthread_per_process 8 \
+  --num_iteration 10
+```
+
+#### Single-node Multi-process Launch
+
+Use `infini_run` to start multiple training processes on one node. Each process
+uses one execution thread by default:
+
+```bash
+./build/infini_run \
+  --nnodes=1 \
+  --nproc_per_node=8 \
+  ./build/llama3 \
+    --device cuda \
+    --input_bin data/llama3/tiny_shakespeare_train.bin \
+    --llmc_filepath data/llama3/llama3.2_1B_fp32.bin \
+    --num_iteration 10
+```
+
+#### Multi-node Multi-process Launch
+
+Run the following command on every node with the same rendezvous settings and
+a distinct `node_rank`:
+
+```bash
+./build/infini_run \
   --nnodes=2 \
-  --nproc_per_node=1 \
+  --nproc_per_node=4 \
   --node_rank=[rank_id] \
   --rdzv_endpoint=[master_addr]:29500 \
   --rdzv_id=[job_id] \
-  ./llama3 \
-     --device cuda \
-     --input_bin [training_data_path] \
-     --llmc_filepath [model_path] \
-     --num_iteration 10 \
-     --nthread_per_process 8 \
-     --batch_size 40 \
-     --total_batch_size 10240 \
-     --tensor_parallel 2 \
-     --pipeline_parallel 2 \
-     --sequence_parallel
+  ./build/llama3 \
+    --device cuda \
+    --input_bin data/llama3/tiny_shakespeare_train.bin \
+    --llmc_filepath data/llama3/llama3.2_1B_fp32.bin \
+    --num_iteration 10 \
+    --tensor_parallel 2 \
+    --pipeline_parallel 2 \
+    --sequence_parallel
+```
+
+`--nproc_per_node` and `--nthread_per_process` can be combined. The total
+training world size is:
+
+```text
+world_size = nnodes × nproc_per_node × nthread_per_process
 ```
 
 ### Parallelism Strategies
 
 #### Distributed Data Parallelism (DDP)
 
+For a direct launch with TP and PP disabled, the following starts eight
+data-parallel workers in one process:
+
 ```bash
---nthread_per_process 8 	# ddp_size = nthread_per_process / (tensor_parallel × pipeline_parallel)
+--nthread_per_process 8  # 8-way DDP when TP=1 and PP=1
+```
+
+For all launch modes, the data-parallel size is derived from the total world
+size after accounting for tensor and pipeline parallelism:
+
+```text
+data_parallel_size = world_size / (tensor_parallel × pipeline_parallel)
 ```
 
 #### Tensor Parallelism (TP)
