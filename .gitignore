@@ -5,3 +5,6 @@ build/
 *.log
 *.report.rank*
 *.records.log.rank*
+
+__pycache__/
+/data/
