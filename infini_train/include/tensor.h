@@ -10,6 +10,7 @@
 #include "Eigen/Dense"
 #include "glog/logging.h"
 
+#include "infini_train/include/core/generator.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/scalar.h"
@@ -151,7 +152,7 @@ public:
 
     // distribution
     std::shared_ptr<Tensor> Uniform(float from = 0.0f, float to = 1.0f,
-                                    std::optional<std::mt19937> generator = std::nullopt);
+                                    std::optional<core::Generator> generator = std::nullopt);
 
     std::shared_ptr<Tensor> Matmul(const std::shared_ptr<Tensor> &other);
     std::shared_ptr<Tensor> Outer(const std::shared_ptr<Tensor> &other);

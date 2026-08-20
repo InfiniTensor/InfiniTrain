@@ -33,3 +33,6 @@ add_subdirectory(transformer)
 
 # Checkpoint tests
 add_subdirectory(checkpoint)
+
+# Generator (random number generator) tests
+add_subdirectory(generator)
