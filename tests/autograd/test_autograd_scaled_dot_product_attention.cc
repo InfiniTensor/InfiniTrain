@@ -307,8 +307,6 @@ void ExpectErrorBoundedByBfloat16Reference(const std::vector<float> &flash, cons
 class AutogradScaledDotProductAttentionTest : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(AutogradScaledDotProductAttentionTest, NativeGqaMatchesExpandedKv) {
-    ONLY_CUDA();
-
     const auto native_gqa = RunFlashAttention(GetDevice(), false);
     const auto expanded_kv = RunFlashAttention(GetDevice(), true);
 
@@ -319,8 +317,6 @@ TEST_P(AutogradScaledDotProductAttentionTest, NativeGqaMatchesExpandedKv) {
 }
 
 TEST_P(AutogradScaledDotProductAttentionTest, Bfloat16BackwardPropagatesFloat32Gradients) {
-    ONLY_CUDA();
-
     const auto result = RunFlashAttention(GetDevice(), false);
 
     EXPECT_EQ(result.dq_dtype, DataType::kFLOAT32);
@@ -329,8 +325,6 @@ TEST_P(AutogradScaledDotProductAttentionTest, Bfloat16BackwardPropagatesFloat32G
 }
 
 TEST_P(AutogradScaledDotProductAttentionTest, NativeGqaMatchesExpandedKvWithPackedInput) {
-    ONLY_CUDA();
-
     const auto native_gqa = RunPackedFlashAttention(GetDevice(), false);
     const auto expanded_kv = RunPackedFlashAttention(GetDevice(), true);
 
@@ -339,8 +333,6 @@ TEST_P(AutogradScaledDotProductAttentionTest, NativeGqaMatchesExpandedKvWithPack
 }
 
 TEST_P(AutogradScaledDotProductAttentionTest, NativeGqaMatchesUnfusedReferenceWithPackedInput) {
-    ONLY_CUDA();
-
     const auto native_gqa = RunPackedFlashAttention(GetDevice(), false);
     const auto unfused = RunPackedUnfusedAttention(GetDevice());
 
@@ -349,8 +341,6 @@ TEST_P(AutogradScaledDotProductAttentionTest, NativeGqaMatchesUnfusedReferenceWi
 }
 
 TEST_P(AutogradScaledDotProductAttentionTest, NativeGqaMatchesUnfusedReference) {
-    ONLY_CUDA();
-
     const auto native_gqa = RunFlashAttention(GetDevice(), false);
     const auto unfused = RunUnfusedAttention(GetDevice());
 
@@ -361,8 +351,6 @@ TEST_P(AutogradScaledDotProductAttentionTest, NativeGqaMatchesUnfusedReference) 
 }
 
 TEST_P(AutogradScaledDotProductAttentionTest, NativeGqaErrorIsBoundedByUnfusedBfloat16Error) {
-    ONLY_CUDA();
-
     const auto native_gqa = RunFlashAttention(GetDevice(), false, 1.0F, 1.0F);
     const auto bfloat16 = RunUnfusedAttention(GetDevice(), false, 1.0F, 1.0F);
     const auto float32 = RunUnfusedAttention(GetDevice(), true, 1.0F, 1.0F);

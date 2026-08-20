@@ -10,9 +10,10 @@ infini_train_add_test_suite(test_autograd
 )
 
 if(USE_FLASH_ATTENTION)
-  infini_train_add_test(test_flash_attention_cuda
+  infini_train_add_test_suite(test_flash_attention
     SOURCES test_autograd_scaled_dot_product_attention.cc
     LABELS cuda
+    EXCLUDE_PRIVATEUSE1
     TEST_TIMEOUT 60
   )
 endif()
