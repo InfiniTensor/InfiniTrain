@@ -28,22 +28,12 @@ Module::Module(const std::string &type) : type_(type), device_(Device()) {}
 const std::string &Module::type() const { return type_; }
 
 std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
+    const auto &named_parameters = NamedParameters();
+
     std::vector<std::shared_ptr<Tensor>> params;
-    std::unordered_set<const Tensor *> visited;
+    params.reserve(named_parameters.size());
 
-    auto AddIfUnvisited = [&](const std::shared_ptr<Tensor> &param) {
-        if (visited.insert(param.get()).second) {
-            params.push_back(param);
-        }
-    };
-
-    // Add parameters of this module
-    for (const auto &[_, param] : parameters_) { AddIfUnvisited(param); }
-
-    // Recursively add parameters of submodules
-    for (const auto &[_, module] : modules_) {
-        for (const auto &param : module->Parameters()) { AddIfUnvisited(param); }
-    }
+    for (const auto &[_, param] : named_parameters) { params.emplace_back(param); }
 
     return params;
 }
@@ -51,39 +41,41 @@ std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
 std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
 Module::NamedParameters(const std::string &prefix, bool recurse, bool remove_duplicate) const {
     std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> named_parameters;
+    std::unordered_set<const Tensor *> visited_parameters;
 
-    std::function<void(const Module &, const std::string &)> collect
-        = [&](const Module &module, const std::string &module_prefix) {
-              for (const auto &[name, parameter] : module.parameters_) {
-                  if (!parameter) {
-                      continue;
-                  }
-                  const auto full_name = module_prefix.empty() ? name : module_prefix + "." + name;
-                  named_parameters.emplace_back(full_name, parameter);
-              }
+    std::vector<std::pair<std::string, std::shared_ptr<Module>>> named_modules;
 
-              if (!recurse) {
-                  return;
-              }
-              for (const auto &[name, child] : module.modules_) {
-                  if (!child) {
-                      continue;
-                  }
-                  const auto child_prefix = module_prefix.empty() ? name : module_prefix + "." + name;
-                  collect(*child, child_prefix);
-              }
-          };
-
-    collect(*this, prefix);
-    std::sort(named_parameters.begin(), named_parameters.end(),
-              [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
-
-    if (remove_duplicate) {
-        std::unordered_set<const Tensor *> visited;
-        std::erase_if(named_parameters, [&](const auto &named_parameter) {
-            return !visited.insert(named_parameter.second.get()).second;
-        });
+    if (recurse) {
+        named_modules = const_cast<Module *>(this)->NamedModules(
+            /*memory=*/nullptr, prefix, remove_duplicate);
+    } else {
+        named_modules.emplace_back(prefix, std::const_pointer_cast<Module>(shared_from_this()));
     }
+
+    for (const auto &[module_prefix, module] : named_modules) {
+        std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> local_parameters;
+        local_parameters.reserve(module->parameters_.size());
+
+        for (const auto &[name, parameter] : module->parameters_) {
+            if (parameter != nullptr) {
+                local_parameters.emplace_back(name, parameter);
+            }
+        }
+
+        std::sort(local_parameters.begin(), local_parameters.end(),
+                  [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
+
+        for (const auto &[name, parameter] : local_parameters) {
+            if (remove_duplicate && !visited_parameters.insert(parameter.get()).second) {
+                continue;
+            }
+
+            const std::string full_name = module_prefix.empty() ? name : module_prefix + "." + name;
+
+            named_parameters.emplace_back(full_name, parameter);
+        }
+    }
+
     return named_parameters;
 }
 

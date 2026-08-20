@@ -327,18 +327,28 @@ void Train(const nn::parallel::Rank &rank) {
 
     // TODO(dcj): support more complex optimizer later
     // auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
-    auto optimizer_creator = optimizers::SGD::Create(FLAGS_learning_rate);
+    auto optimizer_creator = optimizers::SGD::CreateNamed(FLAGS_learning_rate);
     std::shared_ptr<Optimizer> optimizer = nullptr;
-    const auto named_parameters = model->NamedParameters();
+    std::unordered_set<const Tensor *> params_to_optimize_set;
+    params_to_optimize_set.reserve(params_to_optimize.size());
+    for (const auto &param : params_to_optimize) { params_to_optimize_set.insert(param.get()); }
+
+    NamedParameterList named_parameters;
+    for (const auto &[name, param] : model->NamedParameters()) {
+        if (params_to_optimize_set.contains(param.get())) {
+            named_parameters.emplace_back(name, param);
+        }
+    }
+    CHECK_EQ(named_parameters.size(), params_to_optimize.size());
 
     if (FLAGS_zero_stage >= 1) {
         auto model_chunks = (pp_world_size > 1)
                               ? *(dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks())
                               : std::vector<std::shared_ptr<nn::Module>>{model};
-        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(
-            optimizer_creator, params_to_optimize, named_parameters, model_chunks, ddp_world_size, ddp_rank);
+        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, named_parameters,
+                                                                         model_chunks, ddp_world_size, ddp_rank);
     } else {
-        optimizer = optimizer_creator(params_to_optimize, named_parameters);
+        optimizer = optimizer_creator(named_parameters);
     }
 
     const int64_t lr_decay_iters = FLAGS_lr_decay_iters > 0 ? FLAGS_lr_decay_iters : FLAGS_num_iteration;

@@ -23,9 +23,8 @@ class OptimizerParameterNamesTest : public test::InfiniTrainTest {};
 TEST_P(OptimizerParameterNamesTest, AdamStateDictUsesStableParameterNames) {
     auto first = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice());
     auto second = std::make_shared<Tensor>(std::vector<int64_t>{3}, DataType::kFLOAT32, GetDevice());
-    const NamedParameterList named_parameters{{"transformer.h.0.weight", first},
-                                              {"transformer.h.0.bias", second}};
-    auto adam = optimizers::Adam::Create(0.001)({first, second}, named_parameters);
+    const NamedParameterList named_parameters{{"transformer.h.0.weight", first}, {"transformer.h.0.bias", second}};
+    auto adam = optimizers::Adam::CreateNamed(0.001)(named_parameters);
 
     const auto state = adam->StateDict();
     EXPECT_TRUE(state.contains("adam.m.transformer.h.0.weight"));
@@ -34,7 +33,7 @@ TEST_P(OptimizerParameterNamesTest, AdamStateDictUsesStableParameterNames) {
     EXPECT_TRUE(state.contains("adam.v.transformer.h.0.bias"));
     EXPECT_TRUE(state.contains("adam.t"));
 
-    auto restored = optimizers::Adam::Create(0.001)({first, second}, named_parameters);
+    auto restored = optimizers::Adam::CreateNamed(0.001)(named_parameters);
     restored->LoadStateDict(state);
     EXPECT_EQ(restored->StateDict().size(), state.size());
 }
@@ -42,9 +41,9 @@ TEST_P(OptimizerParameterNamesTest, AdamStateDictUsesStableParameterNames) {
 TEST_P(OptimizerParameterNamesTest, ConstructorMatchesNamesToOptimizerParameterOrder) {
     auto first = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice());
     auto second = std::make_shared<Tensor>(std::vector<int64_t>{3}, DataType::kFLOAT32, GetDevice());
-    const NamedParameterList named_parameters{{"first", first}, {"second", second}};
+    const NamedParameterList named_parameters{{"second", second}, {"first", first}};
 
-    auto adam = optimizers::Adam::Create(0.001)({second, first}, named_parameters);
+    auto adam = optimizers::Adam::CreateNamed(0.001)(named_parameters);
     const auto state = adam->StateDict();
 
     EXPECT_TRUE(state.contains("adam.m.second"));
@@ -66,7 +65,6 @@ TEST_P(OptimizerParameterNamesTest, DistributedOptimizerPropagatesNamesToShardOp
                             nn::parallel::GetDataParallelGroupRanks(rank.GlobalRank()));
 
     auto model = std::make_shared<nn::Linear>(4, 4, /*bias=*/false, GetDevice());
-    const auto params = model->Parameters();
     const auto named_parameters = model->NamedParameters();
 
     nn::parallel::DistributedDataParallelConfig ddp_config;
@@ -75,7 +73,7 @@ TEST_P(OptimizerParameterNamesTest, DistributedOptimizerPropagatesNamesToShardOp
     ddp_config.overlap_param_gather = false;
     auto ddp_model = std::make_shared<nn::parallel::DistributedDataParallel>(model, rank, ddp_config);
 
-    nn::parallel::DistributedOptimizer optimizer(optimizers::Adam::Create(0.001), params, named_parameters,
+    nn::parallel::DistributedOptimizer optimizer(optimizers::Adam::CreateNamed(0.001), named_parameters,
                                                  std::vector<std::shared_ptr<nn::Module>>{ddp_model},
                                                  /*ddp_world_size=*/2, /*ddp_rank=*/0);
     const auto state = optimizer.StateDict();
