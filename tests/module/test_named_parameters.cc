@@ -36,11 +36,7 @@ TEST_P(ModuleNamedParametersTest, SupportsRecursionAndSharedParameterDeduplicati
     EXPECT_EQ(deduplicated[0].first, "model.0.bias");
     EXPECT_EQ(deduplicated[1].first, "model.0.weight");
     std::unordered_set<const Tensor *> tensors;
-    for (const auto &[name, parameter] : deduplicated) {
-        EXPECT_TRUE(name == "model.0.weight" || name == "model.0.bias" || name == "model.1.weight"
-                    || name == "model.1.bias");
-        tensors.insert(parameter.get());
-    }
+    for (const auto &[name, parameter] : deduplicated) { tensors.insert(parameter.get()); }
     EXPECT_TRUE(tensors.contains(shared->parameter(nn::Linear::kParamWeightName).get()));
     EXPECT_TRUE(tensors.contains(shared->parameter(nn::Linear::kParamBiasName).get()));
 
@@ -55,20 +51,18 @@ TEST_P(ModuleNamedParametersTest, ReturnsNestedParametersInStableNameOrder) {
     auto first = std::make_shared<nn::Linear>(2, 3, /*bias=*/false, GetDevice());
     auto second = std::make_shared<nn::Linear>(3, 4, /*bias=*/false, GetDevice());
     auto nested = std::make_shared<nn::Sequential>(std::vector<std::shared_ptr<nn::Module>>{first, second});
-    auto root = std::make_shared<nn::Sequential>(
-        std::vector<std::shared_ptr<nn::Module>>{std::make_shared<nn::Linear>(2, 2, false, GetDevice()), nested});
+    auto root_linear = std::make_shared<nn::Linear>(2, 2, false, GetDevice());
+    auto root = std::make_shared<nn::Sequential>(std::vector<std::shared_ptr<nn::Module>>{root_linear, nested});
 
     const auto parameters = root->NamedParameters();
-    const std::unordered_map<std::string, std::shared_ptr<Tensor>> by_name(parameters.begin(), parameters.end());
 
-    ASSERT_EQ(by_name.size(), 3);
     ASSERT_EQ(parameters.size(), 3);
     EXPECT_EQ(parameters[0].first, "0.weight");
     EXPECT_EQ(parameters[1].first, "1.0.weight");
     EXPECT_EQ(parameters[2].first, "1.1.weight");
-    EXPECT_TRUE(by_name.contains("0.weight"));
-    EXPECT_TRUE(by_name.contains("1.0.weight"));
-    EXPECT_TRUE(by_name.contains("1.1.weight"));
+    EXPECT_EQ(parameters[0].second, root_linear->parameter(nn::Linear::kParamWeightName));
+    EXPECT_EQ(parameters[1].second, first->parameter(nn::Linear::kParamWeightName));
+    EXPECT_EQ(parameters[2].second, second->parameter(nn::Linear::kParamWeightName));
 }
 
 TEST_P(ModuleNamedParametersTest, SkipsNullSubmodules) {

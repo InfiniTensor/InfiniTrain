@@ -9,25 +9,19 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
-Optimizer::Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate,
-                     const NamedParameterList &named_parameters)
-    : params_(params), learning_rate_(learning_rate) {
-    if (named_parameters.empty()) {
+Optimizer::Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate)
+    : params_(params), learning_rate_(learning_rate) {}
+
+Optimizer::Optimizer(const NamedParameterList &named_params, float learning_rate) : learning_rate_(learning_rate) {
+    if (named_params.empty()) {
         return;
     }
 
-    std::unordered_map<const Tensor *, std::string> parameter_name_by_tensor;
-    parameter_name_by_tensor.reserve(named_parameters.size());
-    for (const auto &[name, parameter] : named_parameters) {
-        CHECK(parameter);
-        parameter_name_by_tensor.emplace(parameter.get(), name);
-    }
-
-    parameter_names_.reserve(params_.size());
-    for (const auto &parameter : params_) {
-        const auto it = parameter_name_by_tensor.find(parameter.get());
-        CHECK(it != parameter_name_by_tensor.end()) << "Optimizer parameter is not registered in the model";
-        parameter_names_.push_back(it->second);
+    params_.reserve(named_params.size());
+    parameter_names_.reserve(named_params.size());
+    for (const auto &[name, parameter] : named_params) {
+        params_.push_back(parameter);
+        parameter_names_.push_back(name);
     }
 }
 
@@ -55,9 +49,9 @@ void Optimizer::set_initial_learning_rate(float lr) {
 
 namespace optimizers {
 
-SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate,
-         const NamedParameterList &named_parameters)
-    : Optimizer(params, learning_rate, named_parameters) {}
+SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate) : Optimizer(params, learning_rate) {}
+
+SGD::SGD(const NamedParameterList &named_params, float learning_rate) : Optimizer(named_params, learning_rate) {}
 
 void SGD::Step() {
     for (auto param : params_) {
@@ -73,17 +67,31 @@ void SGD::Step() {
 }
 
 OptimizerCreator SGD::Create(float learning_rate) {
-    return [learning_rate](const std::vector<std::shared_ptr<Tensor>> &params,
-                           const NamedParameterList &named_parameters) {
-        return std::make_shared<SGD>(params, learning_rate, named_parameters);
+    return [learning_rate](const std::vector<std::shared_ptr<Tensor>> &params) {
+        return std::make_shared<SGD>(params, learning_rate);
     };
 }
 
-Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate, float beta1, float beta2, float eps,
-           const NamedParameterList &named_parameters)
-    : Optimizer(params, learning_rate, named_parameters), t_(0), beta1_(beta1), beta2_(beta2), eps_(eps) {
+OptimizerCreatorNamed SGD::CreateNamed(float learning_rate) {
+    return [learning_rate](const NamedParameterList &named_params) {
+        return std::make_shared<SGD>(named_params, learning_rate);
+    };
+}
+
+Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate, float beta1, float beta2, float eps)
+    : Optimizer(params, learning_rate), t_(0), beta1_(beta1), beta2_(beta2), eps_(eps) {
 
     for (const auto &param : params_) {
+        m_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
+        v_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
+        m_.back()->Fill(0.0);
+        v_.back()->Fill(0.0);
+    }
+}
+
+Adam::Adam(const NamedParameterList &named_params, float learning_rate, float beta1, float beta2, float eps)
+    : Optimizer(named_params, learning_rate), t_(0), beta1_(beta1), beta2_(beta2), eps_(eps) {
+    for (const auto &[name, param] : named_params) {
         m_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
         v_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
         m_.back()->Fill(0.0);
@@ -112,8 +120,14 @@ void Adam::Step() {
 }
 
 OptimizerCreator Adam::Create(float learning_rate, float beta1, float beta2, float eps) {
-    return [=](const std::vector<std::shared_ptr<Tensor>> &params, const NamedParameterList &named_parameters) {
-        return std::make_shared<Adam>(params, learning_rate, beta1, beta2, eps, named_parameters);
+    return [=](const std::vector<std::shared_ptr<Tensor>> &params) {
+        return std::make_shared<Adam>(params, learning_rate, beta1, beta2, eps);
+    };
+}
+
+OptimizerCreatorNamed Adam::CreateNamed(float learning_rate, float beta1, float beta2, float eps) {
+    return [=](const NamedParameterList &named_params) {
+        return std::make_shared<Adam>(named_params, learning_rate, beta1, beta2, eps);
     };
 }
 

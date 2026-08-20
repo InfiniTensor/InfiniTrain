@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -21,7 +22,10 @@ class DistributedOptimizer final : public infini_train::Optimizer {
 public:
     DistributedOptimizer(OptimizerCreator base_optimizer_creator,
                          const std::vector<std::shared_ptr<Tensor>> &full_params,
-                         const NamedParameterList &named_parameters,
+                         const std::vector<std::shared_ptr<Module>> &model_chunks, size_t ddp_world_size,
+                         size_t ddp_rank);
+
+    DistributedOptimizer(OptimizerCreatorNamed base_optimizer_creator, const NamedParameterList &named_parameters,
                          const std::vector<std::shared_ptr<Module>> &model_chunks, size_t ddp_world_size,
                          size_t ddp_rank);
 
@@ -43,9 +47,10 @@ public:
     virtual float learning_rate() const override;
 
 private:
-    void BuildShardParamsAndBindGrads(const NamedParameterList &named_parameters,
-                                      std::vector<std::shared_ptr<Tensor>> &shard_params,
-                                      NamedParameterList &shard_named_parameters);
+    using AddShardParam = std::function<void(const std::shared_ptr<Tensor> &, const std::shared_ptr<Tensor> &)>;
+
+    void InitializeModelChunks(const std::vector<std::shared_ptr<Module>> &model_chunks);
+    void BuildShardParamsAndBindGrads(const AddShardParam &add_shard_param);
 
 private:
     // Inherit from DDP model

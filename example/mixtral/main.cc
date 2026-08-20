@@ -104,8 +104,8 @@ int main(int argc, char *argv[]) {
     }
 
     auto loss_fn = std::make_shared<infini_train::nn::CrossEntropyLoss>();
-    auto optimizer = infini_train::optimizers::Adam::Create(static_cast<float>(FLAGS_learning_rate))(
-        model->Parameters(), model->NamedParameters());
+    auto optimizer = infini_train::optimizers::Adam::CreateNamed(static_cast<float>(FLAGS_learning_rate))(
+        model->NamedParameters());
 
     auto device_impl = infini_train::core::GetDeviceGuardImpl(train_device.type());
     std::vector<double> step_duration_ms;
