@@ -5,7 +5,7 @@ option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
 option(USE_NCCL "Build project for distributed running" ON)
 option(BUILD_TEST "Build InfiniTrain tests" OFF)
-option(USE_FLASH_ATTENTION "Enable FlashAttention 2 CUDA backend" ON)
+option(USE_FLASH_ATTENTION "Enable FlashAttention 2 CUDA backend" OFF)
 
 project(infini_train VERSION 0.6.0 LANGUAGES CXX)
 

@@ -522,6 +522,7 @@ void Train(const nn::parallel::Rank &rank) {
                 // FIXME(jym): to support PP
                 if (tokenizer) {
                     CHECK_EQ(pp_world_size, 1);
+                    infini_train::AutocastGuard autocast_guard(device.type(), dtype);
                     tokenizer->GenerateText(*model, FLAGS_batch_size, FLAGS_sequence_length, FLAGS_text_length, device);
                 }
             }

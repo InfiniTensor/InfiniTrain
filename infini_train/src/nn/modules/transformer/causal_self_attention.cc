@@ -141,7 +141,15 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     // TODO(zbl): use kv cache during inference
     // if (use_kv_) { ... }
 
-    if (!config_.flash) {
+    if (config_.flash) {
+        CHECK(start_pos == nullptr)
+            << "FlashAttention does not support start_pos/incremental decoding; use full-sequence attention";
+    }
+    // Custom masks are supported by the unfused implementation. Standard full-sequence causal attention omits
+    // the explicit mask when FlashAttention is enabled and uses the kernel's built-in causal masking instead.
+    const bool use_flash = config_.flash && mask == nullptr;
+
+    if (!use_flash) {
         // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
         k = RepeatKV(k, n_rep_);
         v = RepeatKV(v, n_rep_);
@@ -153,9 +161,8 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     v = v->Transpose(1, 2);
 
     std::shared_ptr<Tensor> y;
-    if (config_.flash) {
-        // FIXME(zbl): FlashAttention assumes start_pos=0 and uses its built-in causal mask;
-        // start_pos and mask are ignored until incremental decoding and custom masks are supported.
+    if (use_flash) {
+        // FlashAttention uses its built-in causal mask.
         y = nn::function::ScaledDotProductAttention(q, k, v, 1.0f / std::sqrt(static_cast<float>(D)));
     } else {
         // manual implementation of attention
