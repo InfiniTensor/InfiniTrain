@@ -49,6 +49,7 @@ public:
 
 private:
     const TransformerConfig config_;
+    const int start_layer_;
 };
 
 class TransformerLastStage : public CloneableModule<TransformerLastStage> {

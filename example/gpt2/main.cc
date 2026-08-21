@@ -1,4 +1,5 @@
 #include <chrono>
+#include <charconv>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
@@ -6,6 +7,7 @@
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
+#include <string_view>
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -85,6 +87,14 @@ DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
+DEFINE_string(pipeline_layer_partition, "",
+              "Comma-separated Transformer layer counts for each pipeline stage (for example: 4,8,6,6).");
+DEFINE_string(pipeline_layer_costs, "",
+              "Comma-separated positive compute costs for every Transformer layer; generates a balanced layout.");
+DEFINE_string(pipeline_chunk_layout, "", "Ordered STAGE:LAYER_COUNT chunks for an arbitrary vPP mapping.");
+DEFINE_string(pipeline_model_parallel_layout, "", "Megatron-style E/t/N/L pipeline layout expression.");
+DEFINE_string(dump_gradients, "",
+              "Directory for canonical per-parameter gradient .npy files (validation/debugging only).");
 
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
@@ -125,6 +135,68 @@ const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
     {"d36", {.block_size = 1024, .vocab_size = 50257, .n_layer = 36, .n_head = 20, .n_embd = 1280}},
     {"d48", {.block_size = 1024, .vocab_size = 50257, .n_layer = 48, .n_head = 25, .n_embd = 1600}},
 };
+
+std::string CanonicalGradientName(std::string name, int pp_rank) {
+    constexpr std::string_view wrapper_prefix = "module.";
+    if (name.starts_with(wrapper_prefix)) { name.erase(0, wrapper_prefix.size()); }
+
+    const auto &layout = nn::parallel::GetPipelineLayout();
+    const auto &ranges = layout.layer_ranges(pp_rank);
+    if (!ranges.empty()) {
+        constexpr std::string_view layer_marker = ".h.";
+        const size_t marker = name.find(layer_marker);
+        if (marker != std::string::npos) {
+            const size_t index_begin = marker + layer_marker.size();
+            const size_t index_end = name.find('.', index_begin);
+            if (index_end != std::string::npos) {
+                int local_layer = 0;
+                const std::string local_text = name.substr(index_begin, index_end - index_begin);
+                const auto [ptr, ec] = std::from_chars(local_text.data(), local_text.data() + local_text.size(),
+                                                       local_layer);
+                if (ec == std::errc() && ptr == local_text.data() + local_text.size()) {
+                    int chunk_id = 0;
+                    const size_t chunk_marker = name.rfind("__pp_chunk_", marker);
+                    if (chunk_marker != std::string::npos) {
+                        const size_t chunk_begin = chunk_marker + std::string_view("__pp_chunk_").size();
+                        const size_t chunk_end = name.find('.', chunk_begin);
+                        const std::string chunk_text = name.substr(chunk_begin, chunk_end - chunk_begin);
+                        const auto [chunk_ptr, chunk_ec]
+                            = std::from_chars(chunk_text.data(), chunk_text.data() + chunk_text.size(), chunk_id);
+                        if (chunk_ec != std::errc() || chunk_ptr != chunk_text.data() + chunk_text.size()
+                            || chunk_id < 0 || chunk_id >= static_cast<int>(ranges.size())) {
+                            return name;
+                        }
+                    }
+                    const auto [start, end] = ranges[chunk_id];
+                    if (local_layer < end - start) {
+                        name.replace(index_begin, index_end - index_begin, std::to_string(start + local_layer));
+                        if (chunk_marker != std::string::npos) {
+                            name.replace(chunk_marker + std::string_view("__pp_chunk_").size(),
+                                         name.find('.', chunk_marker + std::string_view("__pp_chunk_").size())
+                                             - (chunk_marker + std::string_view("__pp_chunk_").size()),
+                                         "0");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return name;
+}
+
+void DumpGradients(const std::shared_ptr<nn::Module> &model, int pp_rank, int step) {
+    if (FLAGS_dump_gradients.empty() || step != 0) { return; }
+    std::filesystem::create_directories(FLAGS_dump_gradients);
+    size_t count = 0;
+    for (const auto &[raw_name, parameter] : model->NamedParameters()) {
+        if (!parameter->grad()) { continue; }
+        const auto path = std::filesystem::path(FLAGS_dump_gradients)
+                        / (CanonicalGradientName(raw_name, pp_rank) + ".npy");
+        parameter->grad()->To(Device()).SaveAsNpy(path.string());
+        ++count;
+    }
+    LOG(INFO) << "PP rank " << pp_rank << ": dumped " << count << " gradients to " << FLAGS_dump_gradients;
+}
 
 } // namespace
 
@@ -223,12 +295,20 @@ void Train(const nn::parallel::Rank &rank) {
     std::shared_ptr<nn::Module> model = nullptr;
 
     if (!FLAGS_llmc_filepath.empty()) {
-        model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath);
+        model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath, FLAGS_pipeline_layer_partition, FLAGS_pipeline_layer_costs,
+                                   FLAGS_pipeline_chunk_layout, FLAGS_pipeline_model_parallel_layout);
     } else if (kModelToConfigs.count(FLAGS_model)) {
         model_config = kModelToConfigs.at(FLAGS_model);
         gpt2::SanitizeGPT2Config(model_config);
+        SetPipelineLayout(ResolvePipelineLayout(model_config.n_layer, pp_world_size, FLAGS_virtual_pipeline_parallel,
+                                                FLAGS_pipeline_layer_partition, FLAGS_pipeline_layer_costs,
+                                                FLAGS_pipeline_chunk_layout, FLAGS_pipeline_model_parallel_layout));
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
+    auto local_transformer = std::dynamic_pointer_cast<nn::TransformerModel>(model);
+    CHECK(local_transformer) << "GPT2 example expects a TransformerModel.";
+    model_config = local_transformer->Config();
+    if (rank.IsMainRank()) { LOG(INFO) << GetPipelineLayout().ToString(); }
 
     model->To(device);
 
@@ -514,6 +594,7 @@ void Train(const nn::parallel::Rank &rank) {
                 scheduler->Step();
             }
         }
+        DumpGradients(model, pp_rank, step);
 
         if (ddp_world_size > 1) {
             auto lossf_tensor = std::make_shared<Tensor>(&lossf, std::vector<int64_t>{}, DataType::kFLOAT32, device);
@@ -525,7 +606,10 @@ void Train(const nn::parallel::Rank &rank) {
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
-        if (rank.IsLastRank()) {
+        const int reporting_rank
+            = global::GetRankOf(ddp_world_size - 1, tp_world_size - 1, GetPipelineLayout().stage_for_chunk(
+                                                                         GetPipelineLayout().num_global_chunks() - 1));
+        if (rank.GlobalRank() == reporting_rank) {
             size_t used_mb = 0, reserved_mb = 0;
             std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "

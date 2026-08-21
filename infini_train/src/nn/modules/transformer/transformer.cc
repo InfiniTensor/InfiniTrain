@@ -21,8 +21,24 @@
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
+#ifdef PROFILE_MODE
+#include "infini_train/include/profiler.h"
+#endif
 
 namespace infini_train::nn {
+
+namespace {
+parallel::StageInfo ResolveTransformerStageInfo(const TransformerConfig &config) {
+    const int pp_size = parallel::global::GetPipelineParallelSize();
+    const int vpp_size = parallel::global::GetVirtualPipelineParallelSize();
+    if (!parallel::HasPipelineLayout() || parallel::GetPipelineLayout().total_layers() != config.n_layer
+        || parallel::GetPipelineLayout().num_stages() != pp_size
+        || parallel::GetPipelineLayout().chunks_per_stage() != vpp_size) {
+        parallel::SetPipelineLayout(parallel::PipelineLayout::Uniform(config.n_layer, pp_size, vpp_size));
+    }
+    return parallel::PipelineParallel::GetStageInfo(config.n_layer, pp_size, parallel::pp_rank, vpp_size);
+}
+} // namespace
 
 TransformerFirstStage::TransformerFirstStage(const TransformerConfig &config)
     : CloneableModule(kType), config_(config) {
@@ -123,7 +139,7 @@ std::vector<std::shared_ptr<Tensor>> TransformerLayer::Forward(const std::vector
 }
 
 TransformerChunk::TransformerChunk(const TransformerConfig &config, int start_layer, int end_layer)
-    : CloneableModule(kType), config_(config) {
+    : CloneableModule(kType), config_(config), start_layer_(start_layer) {
     std::vector<std::shared_ptr<nn::Module>> h;
     for (int64_t i = start_layer; i < end_layer; ++i) {
         auto layer = std::make_shared<TransformerLayer>(config);
@@ -160,12 +176,32 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
         std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 
         // Pass RoPE parameters to each transformer block
+        int local_layer = 0;
         for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName])) {
+#ifdef PROFILE_MODE
+            const std::string profile_name = "TransformerLayer." + std::to_string(start_layer_ + local_layer);
+            Profiler::Instance().StartRecord(profile_name, device.type());
+#endif
             x1 = (*h)({x1, freqs_view, start_pos_ptr, mask})[0];
+#ifdef PROFILE_MODE
+            Profiler::Instance().EndRecord(profile_name, device.type());
+#endif
+            ++local_layer;
         }
     } else if (config_.position_embedding_type == PositionEmbeddingType::kLearnedAbsolute) {
         // Learned absolute position embedding models (GPT-2 style).
-        for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName])) { x1 = (*h)({x1})[0]; }
+        int local_layer = 0;
+        for (auto &h : *std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName])) {
+#ifdef PROFILE_MODE
+            const std::string profile_name = "TransformerLayer." + std::to_string(start_layer_ + local_layer);
+            Profiler::Instance().StartRecord(profile_name, x1->GetDevice().type());
+#endif
+            x1 = (*h)({x1})[0];
+#ifdef PROFILE_MODE
+            Profiler::Instance().EndRecord(profile_name, x1->GetDevice().type());
+#endif
+            ++local_layer;
+        }
     } else {
         LOG(FATAL) << "Unsupported position embedding type";
     }
@@ -205,10 +241,7 @@ std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(const std::ve
 }
 
 TransformerModel::TransformerModel(const TransformerConfig config)
-    : CloneableModule(kType), config_(config),
-      stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
-          config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
-          nn::parallel::global::GetVirtualPipelineParallelSize())) {
+    : CloneableModule(kType), config_(config), stage_info_(ResolveTransformerStageInfo(config_)) {
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
 
     // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
@@ -228,21 +261,14 @@ TransformerModel::TransformerModel(const TransformerConfig config)
     }
 
     {
-        std::map<int, std::pair<int, std::shared_ptr<TransformerChunk>>> start_layer_to_layer_size_and_chunk;
+        std::vector<std::shared_ptr<nn::Module>> h;
         for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
             const auto [start_layer, end_layer] = stage_info_.layer_ranges_per_chunk[chunk_idx];
             auto chunk = std::make_shared<TransformerChunk>(config_, start_layer, end_layer);
-            start_layer_to_layer_size_and_chunk[start_layer] = std::make_pair(end_layer - start_layer, chunk);
-        }
-        std::vector<std::shared_ptr<nn::Module>> h;
-        int chunk_idx = 0;
-        for (auto &[start_layer, layer_size_and_chunk] : start_layer_to_layer_size_and_chunk) {
-            auto [layer_size, chunk] = layer_size_and_chunk;
-            for (int idx = 0; idx < layer_size; ++idx) {
+            for (int idx = 0; idx < end_layer - start_layer; ++idx) {
                 h.push_back(chunk->mutable_module(TransformerChunk::kHLayerName)->mutable_module(std::to_string(idx)));
             }
             modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)] = std::move(chunk);
-            ++chunk_idx;
         }
         transformer[TransformerChunk::kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
     }
