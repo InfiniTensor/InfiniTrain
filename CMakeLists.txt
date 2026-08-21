@@ -267,6 +267,14 @@ add_executable(llama3
 link_infini_train_exe(llama3)
 endif()
 
+add_executable(qwen3
+  example/qwen3/main.cc
+  example/common/tiny_shakespeare_dataset.cc
+  example/common/utils.cc
+  example/qwen3/checkpoint_loader.cc
+  example/common/tokenizer.cc
+)
+link_infini_train_exe(qwen3)
 # Tools
 if(PROJECT_IS_TOP_LEVEL)
 add_subdirectory(tools/infini_run)
