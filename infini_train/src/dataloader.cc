@@ -111,11 +111,11 @@ DataLoader::DataLoader(const std::shared_ptr<Dataset> &dataset, size_t batch_siz
     : dataset_(dataset), batch_size_(batch_size), num_global_batches_(CheckedCeilDiv(dataset_->Size(), batch_size_)) {}
 
 DataLoaderIterator DataLoader::begin() const {
-    return DataLoaderIterator(*dataset_, batch_size_, 0, num_global_batches_);
+    return DataLoaderIterator(*dataset_, batch_size_, 0, num_global_batches_, 0, 1);
 }
 
 DataLoaderIterator DataLoader::end() const {
-    return DataLoaderIterator(*dataset_, batch_size_, num_global_batches_, num_global_batches_);
+    return DataLoaderIterator(*dataset_, batch_size_, num_global_batches_, num_global_batches_, 0, 1);
 }
 
 size_t DataLoader::NumGlobalBatches() const { return num_global_batches_; }

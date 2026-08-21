@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <memory>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -10,6 +11,8 @@
 #include "infini_train/include/tensor.h"
 
 using namespace infini_train;
+
+static_assert(!std::is_constructible_v<DataLoaderIterator, const Dataset &, size_t, size_t, size_t, size_t, size_t>);
 
 namespace {
 class IndexDataset : public Dataset {
@@ -46,6 +49,10 @@ TEST(DataLoaderTest, RegularDataLoaderKeepsPartialLastBatch) {
     EXPECT_EQ(batches[0], (std::vector<int64_t>{0, 1}));
     EXPECT_EQ(batches[1], (std::vector<int64_t>{2, 3}));
     EXPECT_EQ(batches[2], (std::vector<int64_t>{4}));
+
+    auto iter = loader.begin();
+    iter.SeekGlobalBatch(2);
+    EXPECT_EQ(TensorValues((*iter).first), (std::vector<int64_t>{4}));
 }
 
 TEST(DataLoaderTest, DistributedDataLoaderSlicesFullGlobalBatchesByRank) {
@@ -82,20 +89,35 @@ TEST(DataLoaderTest, DistributedDataLoaderSlicesFullGlobalBatchesByRank) {
     EXPECT_EQ(r2, rank2.end());
 }
 
-TEST(DataLoaderTest, DistributedDataLoaderCyclesOnGlobalBatchBoundary) {
+TEST(DataLoaderTest, SeekGlobalBatchSupportsResumeAndEnd) {
     DistributedDataLoader loader(std::make_shared<IndexDataset>(13), 2, 2, 3);
     auto iter = loader.begin();
 
     EXPECT_EQ(loader.NumGlobalBatches(), 2);
 
-    EXPECT_EQ(TensorValues((*iter).first), (std::vector<int64_t>{4, 5}));
-    ++iter;
+    iter.SeekGlobalBatch(1);
     EXPECT_EQ(iter.GlobalBatchIndex(), 1);
-
     EXPECT_EQ(TensorValues((*iter).first), (std::vector<int64_t>{10, 11}));
-    ++iter;
-    EXPECT_EQ(iter, loader.end());
 
+    iter.SeekGlobalBatch(loader.NumGlobalBatches());
+    EXPECT_EQ(iter, loader.end());
+    EXPECT_DEATH(iter.SeekGlobalBatch(loader.NumGlobalBatches() + 1), "Cannot seek past DataLoader end");
+
+    size_t consumed_global_batches = 5;
     iter = loader.begin();
-    EXPECT_EQ(TensorValues((*iter).first), (std::vector<int64_t>{4, 5}));
+    iter.SeekGlobalBatch(consumed_global_batches % loader.NumGlobalBatches());
+    auto next_batch = [&]() {
+        auto batch = *iter;
+        ++iter;
+        if (iter == loader.end()) {
+            iter = loader.begin();
+        }
+        ++consumed_global_batches;
+        return batch;
+    };
+
+    EXPECT_EQ(TensorValues(next_batch().first), (std::vector<int64_t>{10, 11}));
+    EXPECT_EQ(iter.GlobalBatchIndex(), 0);
+    EXPECT_EQ(TensorValues(next_batch().first), (std::vector<int64_t>{4, 5}));
+    EXPECT_EQ(consumed_global_batches, 7);
 }
