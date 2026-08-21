@@ -34,7 +34,7 @@ std::shared_ptr<Tensor> PrecomputeFreqsCis(int64_t dim, int64_t end, float theta
 
 std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
 ApplyRotaryEmbedding(const std::shared_ptr<Tensor> &xq, const std::shared_ptr<Tensor> &xk,
-                     const std::shared_ptr<Tensor> &freqs_cis) {
+                     const std::shared_ptr<Tensor> &freqs_cis, bool rotary_interleaved) {
     const auto &x_shape = xq->Dims(); // (B, T, H, D)
     const int64_t T = x_shape[1];
     const int64_t D = x_shape[3];
@@ -45,24 +45,25 @@ ApplyRotaryEmbedding(const std::shared_ptr<Tensor> &xq, const std::shared_ptr<Te
     auto cos = cos_sin->Slice(-1, 0, 1, 1)->Squeeze(-1); // (1, T, 1, D/2)
     auto sin = cos_sin->Slice(-1, 1, 2, 1)->Squeeze(-1); // (1, T, 1, D/2)
 
-    auto slice_pair = [](const std::shared_ptr<Tensor> &x) {
-        auto even = x->Slice(-1, 0, x->Dims().back(), 2);
-        auto odd = x->Slice(-1, 1, x->Dims().back(), 2);
-        return std::make_pair(even, odd);
+    auto slice_pair = [rotary_interleaved](const std::shared_ptr<Tensor> &x) {
+        const auto dim = x->Dims().back();
+        if (rotary_interleaved) {
+            return std::make_pair(x->Slice(-1, 0, dim, 2), x->Slice(-1, 1, dim, 2));
+        }
+        return std::make_pair(x->Slice(-1, 0, dim / 2), x->Slice(-1, dim / 2, dim));
     };
 
-    auto [q_even, q_odd] = slice_pair(xq);
-    auto q_rotated_left = q_even * cos - q_odd * sin;
-    auto q_rotated_right = q_even * sin + q_odd * cos;
-    auto q_rotated
-        = nn::function::Stack(std::vector<std::shared_ptr<Tensor>>{q_rotated_left, q_rotated_right}, -1)->Flatten(-2);
+    auto rotate = [&](const std::shared_ptr<Tensor> &x) {
+        auto [left, right] = slice_pair(x);
+        auto rotated_left = left * cos - right * sin;
+        auto rotated_right = left * sin + right * cos;
+        if (rotary_interleaved) {
+            return nn::function::Stack(std::vector<std::shared_ptr<Tensor>>{rotated_left, rotated_right}, -1)
+                ->Flatten(-2);
+        }
+        return nn::function::Concat(std::vector<std::shared_ptr<Tensor>>{rotated_left, rotated_right}, -1);
+    };
 
-    auto [k_even, k_odd] = slice_pair(xk);
-    auto k_rotated_left = k_even * cos - k_odd * sin;
-    auto k_rotated_right = k_even * sin + k_odd * cos;
-    auto k_rotated
-        = nn::function::Stack(std::vector<std::shared_ptr<Tensor>>{k_rotated_left, k_rotated_right}, -1)->Flatten(-2);
-
-    return {q_rotated, k_rotated};
+    return {rotate(xq), rotate(xk)};
 }
 } // namespace infini_train

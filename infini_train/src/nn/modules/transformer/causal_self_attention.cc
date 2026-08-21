@@ -23,6 +23,13 @@ namespace infini_train::nn {
 CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config) : CloneableModule(kType), config_(config) {
     SetupAttention(config);
 
+    if (config_.use_qk_norm) {
+        q_norm_ = std::make_shared<nn::RMSNorm>(head_dim_, config_.qk_norm_eps);
+        k_norm_ = std::make_shared<nn::RMSNorm>(head_dim_, config_.qk_norm_eps);
+        modules_[kQNormLayerName] = q_norm_;
+        modules_[kKNormLayerName] = k_norm_;
+    }
+
     int64_t qkv_dim = (config.n_head + 2 * n_kv_head_) * head_dim_;
     // qkv: ColumnParallel (do not gather output)
     modules_[kCAttnLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
@@ -122,10 +129,17 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     auto k = qkv->Slice(2, q_size_local, q_size_local + kv_size_local)->View({B, T, KV_local, D});
     // v: (B, T, KV_local, D)
     auto v = qkv->Slice(2, q_size_local + kv_size_local, q_size_local + 2 * kv_size_local)->View({B, T, KV_local, D});
+    if (config_.use_qk_norm) {
+        auto q_shape = q->Dims();
+        q = (*q_norm_)({q->View({B * T * H_local, D})})[0]->View(q_shape);
+
+        auto k_shape = k->Dims();
+        k = (*k_norm_)({k->View({B * T * KV_local, D})})[0]->View(k_shape);
+    }
 
     if (config_.position_embedding_type == PositionEmbeddingType::kRoPE) {
         // q: (B, T, H_local, D), k: (B, T, KV_local, D)
-        std::tie(q, k) = ApplyRotaryEmbedding(q, k, freqs_cis);
+        std::tie(q, k) = ApplyRotaryEmbedding(q, k, freqs_cis, config_.rotary_interleaved);
     }
 
     // TODO(zbl): use kv cache during inference
