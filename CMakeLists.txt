@@ -104,7 +104,8 @@ if(USE_CUDA)
   file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
 
   add_library(infini_train_cuda_kernels STATIC ${CUDA_KERNELS})
-  set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "75;80;90")
+  set(INFINITRAIN_CUDA_ARCHITECTURES "75;80;90" CACHE STRING "CUDA architectures for kernel compilation")
+  set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "${INFINITRAIN_CUDA_ARCHITECTURES}")
 
   target_link_libraries(infini_train_cuda_kernels
     PUBLIC
