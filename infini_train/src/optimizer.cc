@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "infini_train/include/autocast.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
@@ -63,6 +64,8 @@ void SGD::Step() {
         core::DeviceGuard guard(device);
         auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
         kernel.Call<void>(param->grad(), -learning_rate_, param);
+        // The parameter was updated in place; any autocast-cached demoted copy is stale.
+        InvalidateAutocastWeightCacheEntry(param.get());
     }
 }
 
@@ -116,6 +119,8 @@ void Adam::Step() {
         core::DeviceGuard guard(device);
         auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGrad"});
         kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
+        // The parameter was updated in place; any autocast-cached demoted copy is stale.
+        InvalidateAutocastWeightCacheEntry(param.get());
     }
 }
 

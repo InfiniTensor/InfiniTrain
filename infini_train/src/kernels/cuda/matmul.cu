@@ -105,8 +105,9 @@ std::shared_ptr<Tensor> MatmulBackwardInput(const std::shared_ptr<Tensor> &other
     auto grad_output_promoted
         = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
 
-    // For bf16 compute, output in fp32 to preserve accumulation precision.
-    auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
+    // GEMM runs with fp32 compute but writes the gradient directly in the compute
+    // dtype (bf16 under autocast), matching PyTorch autocast backward semantics.
+    auto output_dtype = compute_dtype;
     auto grad_input = std::make_shared<Tensor>(input_dims, output_dtype, grad_output->GetDevice());
 
     // No Fill(0) needed: cuBLAS beta=0.0f means C is fully overwritten, never read.
@@ -175,8 +176,8 @@ std::shared_ptr<Tensor> MatmulBackwardOther(const std::shared_ptr<Tensor> &input
     auto grad_output_promoted
         = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
 
-    // For bf16 compute, output in fp32 to preserve accumulation precision.
-    auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
+    // See MatmulBackwardInput: bf16 GEMM writes the gradient directly in bf16.
+    auto output_dtype = compute_dtype;
     auto grad_other = std::make_shared<Tensor>(other_dims, output_dtype, grad_output->GetDevice());
 
     // No Fill(0) needed: cuBLAS beta=0.0f means C is fully overwritten, never read.

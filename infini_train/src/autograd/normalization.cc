@@ -45,10 +45,19 @@ std::vector<std::shared_ptr<Tensor>> LayerNorm::Backward(const std::vector<std::
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice().type();
+
+    // GEMM backwards emit gradients in the compute dtype (bf16 under autocast)
+    // while this op runs in fp32 (autocast kFP32 policy); promote the incoming
+    // grad back to the saved input dtype. This preserves the kernel's pre-existing
+    // single-dtype behavior bit-for-bit.
+    auto grad_output_promoted = grad_output->Dtype() == input->Dtype()
+                                  ? grad_output
+                                  : std::make_shared<Tensor>(grad_output->To(input->Dtype()));
+
     auto [grad_input, grad_weight, grad_bias]
         = Dispatcher::Instance()
               .Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
-                  {device, "LayerNormBackward"}, input, weight, bias, mean, rstd, grad_output);
+                  {device, "LayerNormBackward"}, input, weight, bias, mean, rstd, grad_output_promoted);
     return {grad_input, grad_weight, grad_bias};
 }
 } // namespace infini_train::autograd

@@ -151,7 +151,7 @@ __global__ void ReduceColumnsKernel(const TIn *__restrict__ input, TOut *__restr
     float reduced = BlockReduce(temp_storage).Sum(sum);
 
     if (threadIdx.x == 0) {
-        output[row] = reduced;
+        output[row] = common::cuda::Cast<TOut>(reduced);
     }
 }
 
@@ -168,8 +168,10 @@ std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weigh
     auto grad_output_promoted
         = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
 
-    // FIXME(cx): output dtype promotion is a temporary hack; revisit when autograd/autocast is fixed.
-    auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
+    // GEMM runs with fp32 compute but writes the gradient directly in the compute
+    // dtype (bf16 under autocast), matching PyTorch autocast backward semantics;
+    // the fp32 master-weight accumulation casts it back in AccumulateGrad.
+    auto output_dtype = compute_dtype;
     // No Fill(0) needed: cuBLAS beta=0.0f fully overwrites output.
     auto grad_input = std::make_shared<Tensor>(input_dims, output_dtype, grad_output->GetDevice());
 
@@ -240,8 +242,8 @@ std::shared_ptr<Tensor> LinearBackwardWeight(const std::shared_ptr<Tensor> &inpu
     auto grad_output_promoted
         = grad_output_dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
 
-    // FIXME(cx): output dtype promotion is a temporary hack; revisit when autograd/autocast is fixed.
-    auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
+    // See LinearBackwardInput: bf16 GEMM writes the gradient directly in bf16.
+    auto output_dtype = compute_dtype;
     const std::vector<int64_t> weight_dims
         = transpose ? std::vector<int64_t>{out_features, in_features} : std::vector<int64_t>{in_features, out_features};
     // No Fill(0) needed: cuBLAS beta=0.0f fully overwrites output.
@@ -292,8 +294,9 @@ std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_o
     const int64_t bs = std::accumulate(dims.rbegin() + 1, dims.rend(), 1, std::multiplies<int64_t>{});
 
     auto compute_dtype = grad_output->Dtype();
-    // FIXME(cx): output dtype promotion is a temporary hack; revisit when autograd/autocast is fixed.
-    auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
+    // Same as the GEMM backwards: emit the gradient in the compute dtype (bf16
+    // under autocast); the fp32 master-weight accumulation casts it back.
+    auto output_dtype = compute_dtype;
     auto grad_bias
         = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, output_dtype, grad_output->GetDevice());
 
@@ -315,7 +318,7 @@ std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_o
         DISPATCH_CASE(WRAP({
                           ReduceColumnsKernel<BLOCK_SIZE><<<out_features, BLOCK_SIZE, 0, cuda_stream>>>(
                               static_cast<const nv_bfloat16 *>(grad_output->DataPtr()),
-                              static_cast<float *>(grad_bias->DataPtr()), out_features, bs);
+                              static_cast<nv_bfloat16 *>(grad_bias->DataPtr()), out_features, bs);
                       }),
                       DataType::kBFLOAT16)
     }

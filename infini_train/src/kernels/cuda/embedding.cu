@@ -1,4 +1,6 @@
+#include <cstdint>
 #include <memory>
+#include <type_traits>
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/core/runtime/device_guard.h"
@@ -63,22 +65,48 @@ std::shared_ptr<Tensor> EmbeddingForward(const std::shared_ptr<Tensor> &input, c
     return output;
 }
 
+// One thread block per token: threads in the block split the embedding dimension and atomically accumulate the
+// token's gradient row into grad_weight. This lifts the grid-level parallelism from ceil(num_tokens/256) blocks
+// to num_tokens blocks. Rows untouched by any token keep the zero value written by the Fill below.
 template <typename T>
 __global__ void EmbeddingBackwardKernel(const int64_t *input_ptr, const T *grad_output_ptr, T *grad_weight_ptr,
                                         int num_tokens, int embedding_dim, int vocab_size) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int idx = blockIdx.x;
     if (idx >= num_tokens) {
         return;
     }
 
-    int token_id = static_cast<int>(input_ptr[idx]);
+    const int token_id = static_cast<int>(input_ptr[idx]);
     if (token_id < 0 || token_id >= vocab_size) {
         return;
     }
 
-    for (int j = 0; j < embedding_dim; ++j) {
-        atomicAdd(&grad_weight_ptr[token_id * embedding_dim + j], grad_output_ptr[idx * embedding_dim + j]);
+    const T *grad_row = grad_output_ptr + static_cast<int64_t>(idx) * embedding_dim;
+    T *weight_row = grad_weight_ptr + static_cast<int64_t>(token_id) * embedding_dim;
+
+    if constexpr (std::is_same_v<T, float>) {
+        // 128-bit fast path for fp32: vectorized loads plus one vector atomicAdd per 16B chunk (sm_90+).
+        if ((embedding_dim & 3) == 0 && (reinterpret_cast<uintptr_t>(grad_row) & 0xF) == 0
+            && (reinterpret_cast<uintptr_t>(weight_row) & 0xF) == 0) {
+            const float4 *grad_row4 = reinterpret_cast<const float4 *>(grad_row);
+            float4 *weight_row4 = reinterpret_cast<float4 *>(weight_row);
+            for (int j = threadIdx.x; j < embedding_dim / 4; j += blockDim.x) {
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900)
+                atomicAdd(&weight_row4[j], grad_row4[j]);
+#else
+                const float4 grad = grad_row4[j];
+                float *weight = &weight_row[j * 4];
+                atomicAdd(&weight[0], grad.x);
+                atomicAdd(&weight[1], grad.y);
+                atomicAdd(&weight[2], grad.z);
+                atomicAdd(&weight[3], grad.w);
+#endif
+            }
+            return;
+        }
     }
+
+    for (int j = threadIdx.x; j < embedding_dim; j += blockDim.x) { atomicAdd(&weight_row[j], grad_row[j]); }
 }
 
 std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, const std::vector<int64_t> &weight_dims,
@@ -100,15 +128,18 @@ std::shared_ptr<Tensor> EmbeddingBackward(const std::shared_ptr<Tensor> &input, 
     auto grad_weight = std::make_shared<Tensor>(weight_dims, dtype, grad_output->GetDevice());
     const int num_tokens = input->NumElements();
     const int threads_per_block = 256;
-    const int num_blocks = (num_tokens + threads_per_block - 1) / threads_per_block;
+    // One block per token; each block cooperatively accumulates a whole gradient row.
+    const int num_blocks = num_tokens;
 
     core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
             grad_weight->Fill(0.0);
-            EmbeddingBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
-                static_cast<const int64_t *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
-                static_cast<T *>(grad_weight->DataPtr()), num_tokens, embedding_dim, vocab_size);
+            if (num_tokens > 0) {
+                EmbeddingBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
+                    static_cast<const int64_t *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
+                    static_cast<T *>(grad_weight->DataPtr()), num_tokens, embedding_dim, vocab_size);
+            }
         },
         "CUDA EmbeddingBackward");
 

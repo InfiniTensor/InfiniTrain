@@ -1,6 +1,7 @@
 #include "infini_train/src/core/runtime/cuda/cuda_guard_impl.h"
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 
@@ -49,6 +50,17 @@ void CudaGuardImpl::InitSingleStream(Device device) {
     CUDA_CHECK(cudaSetDevice(device.index()));
 
     cuda_streams[device.index()] = std::make_unique<CudaStream>();
+
+    // Keep the default memory pool's cached blocks mapped across stream/device
+    // synchronizations. With the default release threshold (0), every sync returns
+    // cached blocks to the OS and the next cudaMallocAsync re-maps physical pages,
+    // which is extremely slow on WSL2 (~5ms per allocation) and is hit on every
+    // profiled kernel launch (the profiler synchronizes the stream per kernel).
+    // On native Linux this only keeps the pool from shrinking back at sync points.
+    cudaMemPool_t default_pool;
+    CUDA_CHECK(cudaDeviceGetDefaultMemPool(&default_pool, device.index()));
+    cuuint64_t release_threshold = UINT64_MAX;
+    CUDA_CHECK(cudaMemPoolSetAttribute(default_pool, cudaMemPoolAttrReleaseThreshold, &release_threshold));
 
     CUDA_CHECK(cudaSetDevice(current_device));
 }

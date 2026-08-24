@@ -2,6 +2,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/autocast.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/tensor.h"
 
@@ -182,6 +183,11 @@ void DistributedOptimizer::Step() {
     StartParamSync(/*force_sync=*/false);
     // TODO(zbl): Delay sync call until param is actually used in next step
     FinishParamSync(/*skip_next_bucket_dispatch=*/true);
+
+    // Shards are views into bucket storage, so the in-place base-optimizer update
+    // and the param-sync gather do not hit the per-tensor autocast cache
+    // invalidation hooks of the full params. Invalidate them explicitly.
+    for (const auto &param : params_) { InvalidateAutocastWeightCacheEntry(param.get()); }
 }
 
 std::unordered_map<std::string, std::shared_ptr<Tensor>> DistributedOptimizer::StateDict() const {

@@ -76,6 +76,31 @@ inline constexpr std::array<DataType, static_cast<size_t>(Device::DeviceType::kC
     DataType::kFLOAT16,  // CUDA.
 };
 
+// Thread-local cache of autocast-casted leaf parameters (e.g. FP32 master weights
+// demoted to BF16/FP16 by the kLowerPrecision policy). Keyed by the source tensor's
+// address; the weak_ptr guards against address reuse after the source is freed.
+//
+// Threading model: training is single-threaded per rank, so the cache is
+// thread_local (same as tls_autocast_context) and needs no locking. The
+// invalidation entry points below must be called on the thread that mutates the
+// parameter (all in-place parameter mutations in this codebase -- optimizer
+// kernels, CopyFrom/Fill/SetData, checkpoint LoadStateDict -- run on the training
+// thread). Raw writes through Tensor::DataPtr() bypass these hooks, as do
+// initializer helpers; both only happen before training starts in practice.
+struct AutocastWeightCacheEntry {
+    std::weak_ptr<Tensor> source; // detects source destruction / pointer reuse
+    DataType target_dtype;
+    std::shared_ptr<Tensor> casted;
+};
+
+inline thread_local std::unordered_map<const Tensor *, AutocastWeightCacheEntry> tls_autocast_weight_cache;
+
+// Drop the cached cast of one tensor (call after any in-place mutation of it).
+inline void InvalidateAutocastWeightCacheEntry(const Tensor *tensor) { tls_autocast_weight_cache.erase(tensor); }
+
+// Drop the whole cache (e.g. after bulk parameter replacement).
+inline void ClearAutocastWeightCache() { tls_autocast_weight_cache.clear(); }
+
 // Thread-local context to track autocast state
 struct AutocastContext {
     bool enabled = false;                                      // Whether autocast is active in the current thread
@@ -113,6 +138,12 @@ struct AutocastContext {
             }
         };
 
+        // Only kLowerPrecision casts of FP32 leaf parameters are cacheable: those
+        // tensors are owned by the module (stable address) and are re-cast every
+        // forward without this cache. Non-leaf activations are short-lived, so keying
+        // on their address would risk stale hits after allocator reuse.
+        const bool cache_weights = policy == CastPolicy::kLowerPrecision;
+
         auto cast_arg = [&](auto &arg) {
             using T = std::decay_t<decltype(arg)>;
             if constexpr (std::is_same_v<T, std::shared_ptr<Tensor>>) {
@@ -121,7 +152,27 @@ struct AutocastContext {
                     if (is_floating_point(current_dtype)) {
                         DataType target_dtype = get_target_dtype();
                         if (current_dtype != target_dtype) {
-                            arg = std::make_shared<Tensor>(arg->To(target_dtype));
+                            if (cache_weights && current_dtype == DataType::kFLOAT32 && arg->is_leaf()
+                                && arg->requires_grad()) {
+                                auto it = tls_autocast_weight_cache.find(arg.get());
+                                if (it != tls_autocast_weight_cache.end()) {
+                                    auto source = it->second.source.lock();
+                                    if (source && source.get() == arg.get()
+                                        && it->second.target_dtype == target_dtype) {
+                                        arg = it->second.casted;
+                                        return;
+                                    }
+                                    // Stale entry (source freed or target changed): drop it.
+                                    tls_autocast_weight_cache.erase(it);
+                                }
+                                auto casted = std::make_shared<Tensor>(arg->To(target_dtype));
+                                tls_autocast_weight_cache.emplace(
+                                    arg.get(),
+                                    AutocastWeightCacheEntry{std::weak_ptr<Tensor>(arg), target_dtype, casted});
+                                arg = std::move(casted);
+                            } else {
+                                arg = std::make_shared<Tensor>(arg->To(target_dtype));
+                            }
                         }
                     }
                 }

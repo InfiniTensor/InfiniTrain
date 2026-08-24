@@ -9,6 +9,7 @@
 #include "Eigen/Dense"
 #include "glog/logging.h"
 
+#include "infini_train/include/autocast.h"
 #include "infini_train/include/autograd/accumulate.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/function.h"
@@ -79,6 +80,9 @@ void Tensor::SetData(const Tensor &tensor, size_t offset, bool preserve_data) {
     CHECK(tensor.Dtype() == Dtype());
     CHECK_LE(tensor.offset_ + offset + SizeInBytes(), tensor.buffer_->Size());
 
+    // The storage backing this tensor is being replaced/rebound.
+    InvalidateAutocastWeightCacheEntry(this);
+
     if (preserve_data) {
         // Create a view of original tensor buffer
         auto new_tensor = Tensor(tensor, offset, Dims());
@@ -107,6 +111,7 @@ DataType Tensor::Dtype() const { return dtype_; }
 std::shared_ptr<Tensor> Tensor::Detach() const { return std::make_shared<Tensor>(*this, 0, dims_); }
 
 void Tensor::Fill(Scalar value) {
+    InvalidateAutocastWeightCacheEntry(this);
     auto device = GetDevice();
     core::DeviceGuard guard(device);
     auto kernel = Dispatcher::Instance().GetKernel({device.type(), "Fill"});
@@ -201,6 +206,9 @@ void Tensor::CopyFrom(const Tensor &src) {
                                   << " src=" << static_cast<int>(src.Dtype());
     CHECK_EQ(NumElements(), src.NumElements()) << "Tensor::CopyFrom element count mismatch";
     CHECK(Dims() == src.Dims()) << "Tensor::CopyFrom shape mismatch";
+
+    // In-place overwrite of this tensor's data (also used by checkpoint loading).
+    InvalidateAutocastWeightCacheEntry(this);
 
     const size_t nbytes = SizeInBytes();
     const Device dst_dev = GetDevice();
