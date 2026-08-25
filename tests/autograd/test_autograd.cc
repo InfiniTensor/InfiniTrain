@@ -235,7 +235,7 @@ TEST_P(AutogradForwardTest, FunctionCtxRecordsForwardAutocastContext) {
     input->Fill(1.0f);
 
     auto fn = std::make_shared<ObserveAutocastContextFunction>();
-    const auto forward_dtype = kDeviceDefaultDtype[static_cast<size_t>(GetDevice().type())];
+    const auto forward_dtype = GetDefaultAutocastDtype(GetDevice().type());
     {
         AutocastGuard autocast_guard(GetDevice().type(), forward_dtype);
         auto outputs = fn->Apply({input});
@@ -253,7 +253,7 @@ TEST_P(AutogradForwardTest, FunctionCtxRestoresForwardAutocastContextForRecomput
     input->Fill(1.0f);
 
     auto fn = std::make_shared<ObserveAutocastContextFunction>();
-    const auto forward_dtype = kDeviceDefaultDtype[static_cast<size_t>(GetDevice().type())];
+    const auto forward_dtype = GetDefaultAutocastDtype(GetDevice().type());
     {
         AutocastGuard autocast_guard(GetDevice().type(), forward_dtype);
         auto outputs = fn->Apply({input});
@@ -273,7 +273,7 @@ TEST_P(AutogradForwardTest, AutocastGuardRestoresCallerContextAfterForwardAutoca
     input->Fill(1.0f);
 
     auto fn = std::make_shared<ObserveAutocastContextFunction>();
-    const auto forward_dtype = kDeviceDefaultDtype[static_cast<size_t>(GetDevice().type())];
+    const auto forward_dtype = GetDefaultAutocastDtype(GetDevice().type());
     {
         AutocastGuard autocast_guard(GetDevice().type(), forward_dtype);
         auto outputs = fn->Apply({input});

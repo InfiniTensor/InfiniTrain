@@ -9,7 +9,8 @@ tests/
 ├── CMakeLists.txt              # 顶层：include 宏 + add_subdirectory
 ├── common/
 │   ├── CMakeLists.txt          # 公共 test_main target
-│   └── test_utils.h            # C++ 基类、skip 宏、填充工具函数
+│   └── test_utils.h            # 设备测试基类与 skip 宏
+├── backend/                    # PrivateUse1 扩展契约测试
 ├── tensor/                     # Tensor 创建 / 拷贝 / 销毁 / 算子
 ├── optimizer/                  # Optimizer 创建 / step
 ├── autograd/                   # 各 autograd op 的 forward / backward
@@ -20,16 +21,18 @@ tests/
 └── checkpoint/                 # Checkpoint 序列化测试
 
 cmake/
-└── test_macros.cmake           # CMake 宏：infini_train_add_test / infini_train_add_test_suite
+└── test_macros.cmake           # CMake 测试目标与设备注入接口
 ```
 
 ### 核心设计：设备参数化
 
-测试不区分 CPU / CUDA 平台。一个测试定义通过 GTest 参数化自动在所有可用设备上运行：
+测试不区分具体平台。一个测试定义通过 GTest 参数化，由 CMake 为每个已配置设备生成独立测试目标：
 
-- `INFINI_TRAIN_REGISTER_TEST(TestName)` — 注册 CPU + CUDA 两个实例
+- `INFINI_TRAIN_REGISTER_TEST(TestName)` — 注册当前目标注入的设备实例
+- 内建目标注入 CPU，以及 `USE_CUDA=ON` 时的 CUDA
+- 外部仓库可注入 `kPrivateUse1` provider，无需修改测试源码
 
-无 GPU 时 CUDA 实例在注册阶段直接跳过（不会出现在测试列表里），并打印一条 `LOG(INFO)` 提示。
+每个测试二进制只包含一种设备实例。`USE_CUDA=OFF` 时不会创建 CUDA 目标，避免空测试被误报为成功。
 
 ### 基类层次
 
@@ -58,19 +61,24 @@ SKIP_CPU();
 // 只在 CPU 实例运行（用于硬编码 CPU 设备的测试）
 ONLY_CPU();
 
-// 只在 CUDA 实例运行（用于硬编码 CUDA 设备的测试）
-ONLY_CUDA();
-
 // 需要 ≥n 个加速器设备
 REQUIRE_MIN_DEVICES(n);
 ```
 
-### CMake 宏
+### CMake 接口
 
-`test_macros.cmake` 提供两个宏减少 CMakeLists 样板：
+`test_macros.cmake` 提供三类接口减少 CMakeLists 样板：
 
 - `infini_train_add_test(name SOURCES ... LABELS ...)` — 创建可执行文件、链接 GTest + 框架库、用 `gtest_discover_tests` 自动发现用例
-- `infini_train_add_test_suite(name SOURCES ... LABELS ...)` — 按 label（cpu/cuda）拆分为多个 CTest target，通过 `TEST_FILTER` 路由到对应的参数化前缀（`CPU/*`, `CUDA/*`）
+- `infini_train_add_test_suite(name SOURCES ... LABELS ...)` — 只登记公共 suite 及其 source/timeout 元数据
+- `infini_train_add_privateuse1_test_suites(...)` — 以统一的 PrivateUse1 accelerator 身份复用所有公共 suite
+
+所有 suite 登记完成后，InfiniTrain 统一实例化 CPU，以及 `USE_CUDA=ON` 时的
+CUDA。嵌入方可在此基础上追加 PrivateUse1 provider 目标。由于 PrivateUse1
+要求 `USE_CUDA=OFF`，Backends 测试构建包含 CPU 和 provider 变体，不包含 CUDA。
+
+不应由 PrivateUse1 复用的框架内部 suite，可在
+`infini_train_add_test_suite(... EXCLUDE_PRIVATEUSE1)` 中显式排除。
 
 ## 2. 构建与运行
 
@@ -96,7 +104,7 @@ ctest -L cuda --output-on-failure
 ./tests/tensor/test_tensor_cpu --gtest_filter="CPU/TensorCreateTest.*"
 ```
 
-无 GPU 机器上 `cmake -DBUILD_TEST=ON -DUSE_CUDA=OFF ..` 即可，CUDA 测试实例不会注册。
+无 GPU 机器上 `cmake -DBUILD_TEST=ON -DUSE_CUDA=OFF ..` 即可，CUDA 测试目标不会生成。
 
 ## 3. 新增测试
 
@@ -127,9 +135,9 @@ TEST_P(FooBasicTest, CreateTensor) {
     EXPECT_NE(tensor, nullptr);
 }
 
-TEST_P(FooBasicTest, CUDAOnlyFeature) {
+TEST_P(FooBasicTest, AcceleratorOnlyFeature) {
     SKIP_CPU();
-    // CUDA-specific logic ...
+    // Accelerator-specific logic ...
 }
 
 INFINI_TRAIN_REGISTER_TEST(FooBasicTest);
@@ -160,7 +168,9 @@ infini_train_add_test_suite(test_foo
 add_subdirectory(foo)
 ```
 
-**生成的 CTest target：** `test_foo_cpu`、`test_foo_cuda`，可通过 `ctest -L cpu` 等按标签筛选。
+InfiniTrain 会生成 `test_foo_cpu`；启用 CUDA 时还生成 `test_foo_cuda`。
+PrivateUse1 provider 再使用其 `BACKEND_NAME` 追加对应目标，例如下游传入
+`maca` 时生成 `test_foo_maca`，并可通过 `maca` 标签筛选。
 
 ### 3.2 在已有目录新增测试文件
 
@@ -181,23 +191,17 @@ add_subdirectory(foo)
 | `GetDevice()` | 返回当前参数化的 `Device`（基类方法） |
 | `SKIP_CPU()` | 跳过 CPU 实例 |
 | `ONLY_CPU()` | 只在 CPU 实例运行 |
-| `ONLY_CUDA()` | 只在 CUDA 实例运行 |
 | `REQUIRE_MIN_DEVICES(n)` | 加速器设备不足时 skip |
 
 ## 4. 扩展新设备平台
 
 第三方设备统一占用 `DeviceType::kPrivateUse1`，不再向框架枚举和根 CMake
 增加厂商类型或 SDK 选项。厂商仓库负责注册 runtime、kernel 和可选 CCL，
-并将 InfiniTrain 固定为同一链接图中的 submodule。
+并通过 `infini_train_add_privateuse1_test_suites()` 追加公共 suite。该接口要求
+`USE_CUDA=OFF`，保留上游 CPU 测试，并使用 `BACKEND_NAME` 作为 target 后缀和
+CTest 标签；`DEVICE_INDEX` 默认为 `0`。调用方式见
+[测试使用指南](test_usage_guide.md#外部-privateuse1-后端复用测试)。
 
 框架中的 `tests/backend/test_privateuse1_backend.cc` 使用不依赖硬件的 fake
-backend 验证扩展契约。厂商硬件测试应放在厂商目录中，单独链接并显式初始化
-provider；fake backend 与真实 backend 不能放进同一测试进程，因为一个进程
-只能注册一个 `kPrivateUse1` provider。
-
-厂商测试建议至少覆盖：
-
-1. `DeviceGuardImpl` 的设备、stream、event、allocator 和 copy 行为；
-2. `Cast`、`Fill`、`NoOpForward`、`NoOpBackward` 等基础 kernel；
-3. CCL 初始化和 collective 行为；
-4. provider 名称解析和重复初始化。
+backend 验证扩展契约。它与真实 provider 使用不同测试进程，避免重复注册
+`kPrivateUse1` provider。

@@ -37,3 +37,26 @@ add_subdirectory(transformer)
 
 # Checkpoint tests
 add_subdirectory(checkpoint)
+
+# Suite declaration above is device-independent. Instantiate the built-in
+# devices after every test subdirectory has registered its sources.
+_infini_train_instantiate_test_suites(
+  SUITE_REGISTRY INFINI_TRAIN_CPU_TEST_SUITES
+  TARGET_SUFFIX cpu
+  GTEST_PREFIX CPU
+  DEVICE_TYPE kCPU
+  DEVICE_INDEX 0
+  LABELS cpu
+)
+
+if(USE_CUDA)
+  _infini_train_instantiate_test_suites(
+    SUITE_REGISTRY INFINI_TRAIN_CUDA_TEST_SUITES
+    TARGET_SUFFIX cuda
+    GTEST_PREFIX CUDA
+    DEVICE_TYPE kCUDA
+    DEVICE_INDEX 0
+    LABELS cuda accelerator hardware
+    ACCELERATOR
+  )
+endif()

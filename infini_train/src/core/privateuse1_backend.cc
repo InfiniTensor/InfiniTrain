@@ -23,6 +23,7 @@ struct PrivateUse1BackendState {
 
     Status status = Status::kUnregistered;
     std::string name;
+    std::optional<DataType> default_autocast_dtype;
 };
 
 PrivateUse1BackendState g_backend_state;
@@ -47,6 +48,11 @@ void RegisterPrivateUse1Backend(const PrivateUse1BackendRegistration &registrati
     CHECK(IsValidBackendName(registration.name))
         << "PrivateUse1 backend name must be non-reserved and contain only lowercase ASCII letters, digits, and "
            "underscores";
+    CHECK(registration.default_autocast_dtype.has_value())
+        << "PrivateUse1 backend must declare a default autocast dtype";
+    CHECK(*registration.default_autocast_dtype == DataType::kFLOAT16
+          || *registration.default_autocast_dtype == DataType::kBFLOAT16)
+        << "PrivateUse1 default autocast dtype must be float16 or bfloat16";
     CHECK(registration.register_runtime != nullptr) << "PrivateUse1 backend must register a runtime";
     CHECK(registration.register_kernels != nullptr) << "PrivateUse1 backend must register kernels";
 
@@ -56,6 +62,7 @@ void RegisterPrivateUse1Backend(const PrivateUse1BackendRegistration &registrati
             << "PrivateUse1 backend is already registered or registration is in progress as " << g_backend_state.name;
         g_backend_state.status = PrivateUse1BackendState::Status::kRegistering;
         g_backend_state.name = registration.name;
+        g_backend_state.default_autocast_dtype = registration.default_autocast_dtype;
     }
 
     // Backend callbacks may query the provider metadata, so they must run
@@ -92,6 +99,14 @@ std::string GetPrivateUse1BackendName() {
     std::lock_guard<std::mutex> lock(g_backend_mutex);
     return g_backend_state.status == PrivateUse1BackendState::Status::kUnregistered ? "privateuse1"
                                                                                     : g_backend_state.name;
+}
+
+DataType GetPrivateUse1BackendDefaultAutocastDtype() {
+    std::lock_guard<std::mutex> lock(g_backend_mutex);
+    CHECK(g_backend_state.status != PrivateUse1BackendState::Status::kUnregistered)
+        << "PrivateUse1 backend is not registered";
+    CHECK(g_backend_state.default_autocast_dtype.has_value()) << "PrivateUse1 backend has no default autocast dtype";
+    return *g_backend_state.default_autocast_dtype;
 }
 
 } // namespace infini_train::core

@@ -140,6 +140,7 @@ void InitializeFakeBackend() {
     std::call_once(once, [] {
         core::PrivateUse1BackendRegistration registration;
         registration.name = "fake";
+        registration.default_autocast_dtype = DataType::kBFLOAT16;
         registration.register_runtime = &RegisterFakeRuntime;
         registration.register_kernels = &RegisterFakeKernels;
         core::RegisterPrivateUse1Backend(registration);
@@ -152,6 +153,10 @@ TEST(PrivateUse1BackendTest, RegistersRuntimeMetadataAndBasicKernels) {
     EXPECT_EQ(g_fake_runtime_initialize_count, 0);
     EXPECT_TRUE(core::HasPrivateUse1Backend());
     EXPECT_EQ(core::GetPrivateUse1BackendName(), "fake");
+    EXPECT_EQ(core::GetPrivateUse1BackendDefaultAutocastDtype(), DataType::kBFLOAT16);
+    EXPECT_EQ(GetDefaultAutocastDtype(Device::DeviceType::kCPU), DataType::kBFLOAT16);
+    EXPECT_EQ(GetDefaultAutocastDtype(Device::DeviceType::kCUDA), DataType::kFLOAT16);
+    EXPECT_EQ(GetDefaultAutocastDtype(Device::DeviceType::kPrivateUse1), DataType::kBFLOAT16);
     EXPECT_EQ(Device::ParseType("fake"), Device::DeviceType::kPrivateUse1);
     EXPECT_EQ(Device::ParseType("privateuse1"), Device::DeviceType::kPrivateUse1);
     EXPECT_FALSE(Device::ParseType("missing").has_value());
@@ -163,10 +168,9 @@ TEST(PrivateUse1BackendTest, RegistersRuntimeMetadataAndBasicKernels) {
     EXPECT_EQ(g_fake_runtime_initialize_count, 1);
 
     {
-        AutocastGuard guard(device.type(), DataType::kBFLOAT16);
+        AutocastGuard guard(device.type());
         EXPECT_EQ(GetCurrentAutocastContext().autocast_dtype, DataType::kBFLOAT16);
     }
-    EXPECT_DEATH({ AutocastGuard guard(device.type()); }, "requires an explicit dtype");
 
     auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, device);
     tensor->Fill(Scalar(3.0F));
