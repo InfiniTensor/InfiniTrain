@@ -3,10 +3,7 @@
 #include <memory>
 #include <vector>
 
-#if defined(USE_CUDA)
-#include <cuda_runtime_api.h>
-#endif
-
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 #include "gtest/gtest.h"
@@ -70,54 +67,54 @@ inline void ExpectTensorNear(const std::shared_ptr<Tensor> &val1, float val2, fl
     }
 }
 
-#if defined(USE_CUDA)
 #define REQUIRE_MIN_DEVICES(n)                                                                                         \
     do {                                                                                                               \
-        int available_gpus = 0;                                                                                        \
-        cudaGetDeviceCount(&available_gpus);                                                                           \
-        if (available_gpus < (n)) {                                                                                    \
-            GTEST_SKIP() << "requires at least " << (n) << " GPUs (found " << available_gpus << ")";                   \
+        const int required_devices = (n);                                                                              \
+        const int available_devices = DeviceCount();                                                                   \
+        if (available_devices < required_devices) {                                                                    \
+            GTEST_SKIP() << "requires at least " << required_devices << " devices (found " << available_devices        \
+                         << ")";                                                                                       \
         }                                                                                                              \
     } while (0)
-#else
-#define REQUIRE_MIN_DEVICES(n)                                                                                         \
-    do { GTEST_SKIP() << "requires at least " << (n) << " GPUs (CUDA disabled)"; } while (0)
-#endif
 
 #define SKIP_CPU()                                                                                                     \
     do {                                                                                                               \
-        if (GetParam() == infini_train::Device::DeviceType::kCPU) {                                                    \
+        if (!IsAccelerator()) {                                                                                        \
             GTEST_SKIP() << "skipped on CPU";                                                                          \
         }                                                                                                              \
     } while (0)
 
 #define ONLY_CPU()                                                                                                     \
     do {                                                                                                               \
-        if (GetParam() != infini_train::Device::DeviceType::kCPU) {                                                    \
+        if (IsAccelerator()) {                                                                                         \
             GTEST_SKIP() << "CPU-only test";                                                                           \
-        }                                                                                                              \
-    } while (0)
-
-#define ONLY_CUDA()                                                                                                    \
-    do {                                                                                                               \
-        if (GetParam() != infini_train::Device::DeviceType::kCUDA) {                                                   \
-            GTEST_SKIP() << "CUDA-only test";                                                                          \
         }                                                                                                              \
     } while (0)
 
 class InfiniTrainTest : public ::testing::TestWithParam<Device::DeviceType> {
 protected:
-    Device GetDevice() const { return Device(GetParam(), 0); }
+    Device GetDevice() const {
+#if defined(INFINI_TRAIN_TEST_DEVICE_INDEX)
+        return Device(GetParam(), INFINI_TRAIN_TEST_DEVICE_INDEX);
+#else
+        return Device(GetParam(), 0);
+#endif
+    }
+
+    int DeviceCount() const { return core::GetDeviceGuardImpl(GetDevice().type())->DeviceCount(); }
+
+    bool IsAccelerator() const { return GetDevice().type() != Device::DeviceType::kCPU; }
 };
 
 } // namespace test
 } // namespace infini_train
 
-#if defined(USE_CUDA)
-#define INFINI_TRAIN_REGISTER_TEST(TestName)                                                                           \
-    INSTANTIATE_TEST_SUITE_P(CPU, TestName, ::testing::Values(infini_train::Device::DeviceType::kCPU));                \
-    INSTANTIATE_TEST_SUITE_P(CUDA, TestName, ::testing::Values(infini_train::Device::DeviceType::kCUDA))
-#else
-#define INFINI_TRAIN_REGISTER_TEST(TestName)                                                                           \
-    INSTANTIATE_TEST_SUITE_P(CPU, TestName, ::testing::Values(infini_train::Device::DeviceType::kCPU))
+#define INFINI_TRAIN_INSTANTIATE_TEST(Prefix, TestName, DeviceType)                                                    \
+    INSTANTIATE_TEST_SUITE_P(Prefix, TestName, ::testing::Values(DeviceType))
+
+#if defined(INFINI_TRAIN_TEST_DEVICE_TYPE) != defined(INFINI_TRAIN_TEST_DEVICE_PREFIX)
+#error "INFINI_TRAIN_TEST_DEVICE_TYPE and INFINI_TRAIN_TEST_DEVICE_PREFIX must be defined together"
 #endif
+
+#define INFINI_TRAIN_REGISTER_TEST(TestName)                                                                           \
+    INFINI_TRAIN_INSTANTIATE_TEST(INFINI_TRAIN_TEST_DEVICE_PREFIX, TestName, INFINI_TRAIN_TEST_DEVICE_TYPE)

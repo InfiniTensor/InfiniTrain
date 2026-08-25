@@ -67,8 +67,8 @@ INFINI_TRAIN_REGISTER_TEST(TensorCopyTest);
 
 注意事项：
 - 继承 `InfiniTrainTest`。
-- 使用 `TEST_P`，设备参数由框架自动注入。
-- 文件末尾调用 `INFINI_TRAIN_REGISTER_TEST`，自动实例化 CPU 和 CUDA 两个变体。
+- 使用 `TEST_P`，设备参数由测试目标注入。
+- 文件末尾调用 `INFINI_TRAIN_REGISTER_TEST`；CMake 为每个已配置设备生成独立变体。
 
 ### 2. 在 CMakeLists.txt 中注册
 
@@ -80,7 +80,12 @@ infini_train_add_test_suite(test_tensor_copy
 )
 ```
 
-这会生成两个 CTest 目标：`test_tensor_copy_cpu`（标签 `cpu`）和 `test_tensor_copy_cuda`（标签 `cuda`）。
+这一步只登记 suite。InfiniTrain 在所有登记完成后生成
+`test_tensor_copy_cpu`；`USE_CUDA=ON` 时还生成 `test_tensor_copy_cuda`。外部
+PrivateUse1 provider 可通过通用接口追加自己的目标。
+
+若某个 suite 只验证框架内部实现、不适用于 PrivateUse1，在注册时添加
+`EXCLUDE_PRIVATEUSE1`；否则默认进入 PrivateUse1 公共测试集合。
 
 ---
 
@@ -90,7 +95,9 @@ infini_train_add_test_suite(test_tensor_copy
 
 | 方法 | 说明 |
 |---|---|
-| `GetDevice()` | 返回当前测试实例的设备（CPU 或 CUDA） |
+| `GetDevice()` | 返回当前测试目标注入的设备 |
+| `DeviceCount()` | 通过 `DeviceGuardImpl` 查询当前后端设备数 |
+| `IsAccelerator()` | 当前设备是否为非 CPU 加速器 |
 | `tensor->Fill(value)` | 用常量填充张量所有元素（`Tensor` 内置方法） |
 
 张量创建直接使用 `std::make_shared<Tensor>(shape, dtype, GetDevice(), requires_grad)`，`requires_grad` 参数默认 `false`，需要梯度的测试传 `true` 即可。
@@ -102,18 +109,18 @@ infini_train_add_test_suite(test_tensor_copy
 在 `TEST_P` 体内使用，跳过不适用的场景：
 
 ```cpp
-TEST_P(MyTest, 仅CUDA) {
-    ONLY_CUDA();   // 在 CPU 上跳过
+TEST_P(MyTest, 仅加速器) {
+    SKIP_CPU();    // 在 CPU 上跳过
     // ...
 }
 
 TEST_P(MyTest, 仅CPU) {
-    ONLY_CPU();    // 在 CUDA 上跳过
+    ONLY_CPU();    // 在所有加速器上跳过
     // ...
 }
 
 TEST_P(MyTest, 需要多卡) {
-    REQUIRE_MIN_DEVICES(2);  // GPU 数量不足时跳过
+    REQUIRE_MIN_DEVICES(2);  // 当前后端设备数量不足时跳过
     // ...
 }
 ```
@@ -125,6 +132,31 @@ TEST_P(MyTest, 需要多卡) {
 1. 在 `tests/` 下新建子目录，例如 `tests/mymodule/`。
 2. 在其中创建 `CMakeLists.txt`，对每个测试文件调用 `infini_train_add_test_suite()`。
 3. 在 `tests/CMakeLists.txt` 中添加 `add_subdirectory(mymodule)`。
+
+## 外部 PrivateUse1 后端复用测试
+
+外部仓库以 `BUILD_TEST=ON`、`USE_CUDA=OFF` 添加 InfiniTrain，并在 provider
+链接 target 创建后调用：
+
+```cmake
+infini_train_add_privateuse1_test_suites(
+  BACKEND_NAME ${INFINITRAIN_BACKEND}
+  DEVICE_INDEX 0
+  LINK_LIBRARIES PrivateUse1Backend::Executable
+  BACKEND_HEADER "privateuse1_backend/backend.h"
+  BACKEND_REGISTRAR privateuse1_backend::RegisterBackend
+  RUN_SERIAL
+)
+```
+
+该调用为公共 suite 追加 `test_*_<BACKEND_NAME>` 目标；`DEVICE_INDEX` 默认为
+`0`。例如 `BACKEND_NAME=maca` 使用 `maca;accelerator;hardware` CTest 标签：
+
+```bash
+ctest -L maca --output-on-failure  # MACA
+ctest -L cpu --output-on-failure   # 上游 CPU
+ctest --output-on-failure          # 全部
+```
 
 ---
 
