@@ -77,7 +77,7 @@ TEST_P(AutogradElementwiseBackwardTest, MulBackward) {
 }
 
 TEST_P(AutogradElementwiseBackwardTest, BFloat16MulBroadcastBackwardLargeBlock) {
-    ONLY_CUDA();
+    SKIP_CPU();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{512, 8192}, DataType::kBFLOAT16, GetDevice(), true);
     a->Fill(2.0f);
     auto b = std::make_shared<Tensor>(std::vector<int64_t>{8192}, DataType::kBFLOAT16, GetDevice(), true);
