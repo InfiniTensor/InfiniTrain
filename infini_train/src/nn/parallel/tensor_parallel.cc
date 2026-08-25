@@ -341,8 +341,7 @@ bool RowParallelLinear::sequence_parallel() const { return sequence_parallel_; }
 
 VocabParallelEmbedding::VocabParallelEmbedding(int64_t num_embeddings, int64_t embedding_dim,
                                                bool reduce_scatter_embeddings)
-    : CloneableModule(kType), vocab_size_global_(num_embeddings), embedding_dim_(embedding_dim),
-      reduce_scatter_embeddings_(reduce_scatter_embeddings) {
+    : CloneableModule(kType), embedding_dim_(embedding_dim), reduce_scatter_embeddings_(reduce_scatter_embeddings) {
     auto tp_size = global::GetTensorParallelSize();
     CHECK_GT(tp_size, 0) << "No available devices found for VocabParallelEmbedding";
     CHECK_GT(num_embeddings, 0);
