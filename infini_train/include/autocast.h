@@ -1,9 +1,11 @@
 #pragma once
 
+#include <array>
 #include <string_view>
 #include <unordered_map>
 
 #include "infini_train/include/common/common.h"
+#include "infini_train/include/core/privateuse1_backend.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
@@ -70,11 +72,19 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
     {"Layernorm", CastPolicy::kFP32},
 };
 
-// Default autocast data types for built-in device types
-inline constexpr std::array kDeviceDefaultDtype = {
-    DataType::kBFLOAT16, // CPU
-    DataType::kFLOAT16,  // CUDA.
-};
+inline DataType GetDefaultAutocastDtype(Device::DeviceType device_type) {
+    if (device_type == Device::DeviceType::kPrivateUse1) {
+        return core::GetPrivateUse1BackendDefaultAutocastDtype();
+    }
+
+    static constexpr std::array kDeviceDefaultDtype = {
+        DataType::kBFLOAT16, // CPU
+        DataType::kFLOAT16,  // CUDA
+    };
+    const auto index = static_cast<size_t>(device_type);
+    CHECK_LT(index, kDeviceDefaultDtype.size()) << "Invalid device type for autocast";
+    return kDeviceDefaultDtype[index];
+}
 
 // Thread-local context to track autocast state
 struct AutocastContext {
@@ -160,16 +170,7 @@ public:
         tls_autocast_context.autocast_dtype = autocast_dtype;
     }
 
-    // PrivateUse1 is provider-defined, so the framework cannot choose its default autocast dtype.
-    // Callers must use the overload above and pass the dtype explicitly.
-    AutocastGuard(Device::DeviceType device_type)
-        : AutocastGuard(device_type, [device_type] {
-              CHECK(device_type != Device::DeviceType::kPrivateUse1)
-                  << "PrivateUse1 autocast requires an explicit dtype";
-              const auto index = static_cast<size_t>(device_type);
-              CHECK_LT(index, kDeviceDefaultDtype.size()) << "Invalid device type for autocast";
-              return kDeviceDefaultDtype[index];
-          }()) {}
+    AutocastGuard(Device::DeviceType device_type) : AutocastGuard(device_type, GetDefaultAutocastDtype(device_type)) {}
 
     // Disable autocast (restore previous state)
     ~AutocastGuard() { tls_autocast_context = saved_context_; }
