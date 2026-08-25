@@ -60,12 +60,12 @@ std::vector<std::shared_ptr<Tensor>> PipelineSchedule::ReceiveFromPrev(int peer_
         recv_tensors.push_back(tensor);
     }
 
-    return IRecv(recv_tensors, stage_->device(), stage_->stage_index(), peer_rank);
+    return IRecv(recv_tensors, stage_->device(), peer_rank);
 }
 
 std::vector<std::shared_ptr<Tensor>> PipelineSchedule::SendToNext(const std::vector<std::shared_ptr<Tensor>> &tensors,
                                                                   int peer_rank) {
-    return ISend(tensors, stage_->device(), stage_->stage_index(), peer_rank, stage_->recv_shape());
+    return ISend(tensors, stage_->device(), peer_rank, stage_->recv_shape());
 }
 
 PipelineParallelScheduler::Task PipelineParallelScheduler::CreateTask(int step, int mb, int global_chunk,
