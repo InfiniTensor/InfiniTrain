@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <random>
+
 #include <vector>
 
 #include "Eigen/Dense"
@@ -12,6 +13,7 @@
 
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/generator.h"
 #include "infini_train/include/scalar.h"
 
 namespace infini_train {
@@ -73,6 +75,8 @@ public:
 
     void *DataPtr();
     const void *DataPtr() const;
+
+    bool defined() const { return buffer_ != nullptr; }
 
     size_t SizeInBytes() const;
 
@@ -151,7 +155,7 @@ public:
 
     // distribution
     std::shared_ptr<Tensor> Uniform(float from = 0.0f, float to = 1.0f,
-                                    std::optional<std::mt19937> generator = std::nullopt);
+                                    std::optional<Generator> generator = std::nullopt);
 
     std::shared_ptr<Tensor> Matmul(const std::shared_ptr<Tensor> &other);
     std::shared_ptr<Tensor> Outer(const std::shared_ptr<Tensor> &other);

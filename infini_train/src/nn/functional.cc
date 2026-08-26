@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "infini_train/include/autograd/activations.h"
+#include "infini_train/include/autograd/dropout.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/softmax.h"
@@ -24,6 +25,29 @@ std::shared_ptr<Tensor> Triu(const std::shared_ptr<Tensor> &input, int64_t diago
 std::shared_ptr<Tensor> Ones(const std::vector<int64_t> size) {
     auto ones = std::make_shared<Tensor>(size, DataType::kFLOAT32);
     return init::Ones(ones);
+}
+
+std::shared_ptr<Tensor> Rand(const std::vector<int64_t> &size, DataType dtype, Device device,
+                             std::optional<Generator> generator, bool requires_grad) {
+    auto result = std::make_shared<Tensor>(size, dtype, device, requires_grad);
+    return init::Uniform(result, 0.0f, 1.0f, generator);
+}
+
+std::shared_ptr<Tensor> Randn(const std::vector<int64_t> &size, DataType dtype, Device device,
+                              std::optional<Generator> generator, bool requires_grad) {
+    auto result = std::make_shared<Tensor>(size, dtype, device, requires_grad);
+    return init::Normal(result, 0.0f, 1.0f, generator);
+}
+
+std::shared_ptr<Tensor> Dropout(const std::shared_ptr<Tensor> &input, double p, bool training,
+                                std::optional<Generator> generator) {
+    CHECK(input != nullptr);
+    CHECK_GE(p, 0.0) << "dropout probability has to be between 0 and 1, but got " << p;
+    CHECK_LE(p, 1.0) << "dropout probability has to be between 0 and 1, but got " << p;
+    if (!training || p == 0.0 || input->NumElements() == 0) {
+        return input;
+    }
+    return std::make_shared<autograd::Dropout>(p, std::move(generator))->Apply({input})[0];
 }
 
 std::shared_ptr<Tensor> Reciprocal(const std::shared_ptr<Tensor> &input) { return input->Reciprocal(); }
