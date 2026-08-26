@@ -34,13 +34,13 @@ struct ResumeFromCheckpointArgs {
 
 struct ResumeFromCheckpointResult {
     int global_step = 0;
-    size_t consumed_micro_batches = 0;
+    size_t consumed_train_samples = 0;
 };
 
 struct SaveCheckpointArgs {
     std::filesystem::path save_dir;
     int64_t global_step = 0;
-    size_t consumed_micro_batches = 0;
+    size_t consumed_train_samples = 0;
     int64_t n_layer = 0;
     int64_t n_head = 0;
     int64_t n_kv_head = 0;
@@ -61,3 +61,5 @@ struct SaveCheckpointArgs {
 ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &args);
 
 void SaveCheckpoint(const SaveCheckpointArgs &args);
+
+size_t DataLoaderBatchesToSkip(size_t consumed_train_samples, size_t local_batch_size, size_t ddp_world_size);
