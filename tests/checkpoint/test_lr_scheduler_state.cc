@@ -59,7 +59,7 @@ TEST_P(LRSchedulerCheckpointTest, SaveAndLoadLRSchedulerState) {
     auto sched1 = CreateLRScheduler(opt1, MakeSchedulerConfig());
     StepTimes(sched1, 3);
 
-    TrainerState saved{.global_step = 3, .consumed_micro_batches = 12};
+    TrainerState saved{.global_step = 3, .consumed_train_samples = 12};
     Checkpoint::Save(dir, *model1, nullptr, saved, sched1.get());
     EXPECT_TRUE(std::filesystem::exists(dir / "lr_scheduler.ckpt"));
 
@@ -71,7 +71,7 @@ TEST_P(LRSchedulerCheckpointTest, SaveAndLoadLRSchedulerState) {
     Checkpoint::Load(dir, *model2, nullptr, loaded, sched2.get());
 
     EXPECT_EQ(loaded.global_step, 3);
-    EXPECT_EQ(loaded.consumed_micro_batches, 12);
+    EXPECT_EQ(loaded.consumed_train_samples, 12);
     EXPECT_EQ(sched2->last_step(), sched1->last_step());
     EXPECT_NEAR(sched2->learning_rate(), sched1->learning_rate(), kEps);
 
