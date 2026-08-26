@@ -454,12 +454,11 @@ void Train(const nn::parallel::Rank &rank) {
                 // (bs, seq_len, vocab_size)
                 auto logits = (*model)({x, y})[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish model forward, start loss forward";
+                // Cross entropy accepts BF16 logits and performs its reductions in FP32.
+                autocast_guard.Disable();
                 auto loss = (*loss_fn)({logits, y})[0];
                 // FIXME(jym): verify gradient accumulation precision
                 loss = loss / grad_accum_steps;
-
-                // disable autocast for the current step (backward is not under autocast)
-                autocast_guard.Disable();
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
 
