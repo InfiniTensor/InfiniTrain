@@ -84,6 +84,12 @@ DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
+DEFINE_string(pipeline_layer_partition, "",
+              "Comma-separated Transformer layer counts for each pipeline stage (for example: 4,8,4).");
+DEFINE_string(pipeline_layer_costs, "",
+              "Comma-separated positive compute costs for every Transformer layer; generates a balanced layout.");
+DEFINE_string(pipeline_chunk_layout, "", "Ordered STAGE:LAYER_COUNT chunks for an arbitrary vPP mapping.");
+DEFINE_string(pipeline_model_parallel_layout, "", "Megatron-style E/t/N/L pipeline layout expression.");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 DEFINE_uint32(save_interval, 0, "save checkpoint every N steps; 0 disables saving");
@@ -211,11 +217,19 @@ void Train(const nn::parallel::Rank &rank) {
     nn::TransformerConfig model_config = llama3::LLaMA3Config();
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        model = llama3::LoadFromLLMC(FLAGS_llmc_filepath);
+        model = llama3::LoadFromLLMC(FLAGS_llmc_filepath, FLAGS_pipeline_layer_partition, FLAGS_pipeline_layer_costs,
+                                     FLAGS_pipeline_chunk_layout, FLAGS_pipeline_model_parallel_layout);
     } else {
         llama3::SanitizeLLaMA3Config(model_config);
+        SetPipelineLayout(ResolvePipelineLayout(model_config.n_layer, pp_world_size, FLAGS_virtual_pipeline_parallel,
+                                                FLAGS_pipeline_layer_partition, FLAGS_pipeline_layer_costs,
+                                                FLAGS_pipeline_chunk_layout, FLAGS_pipeline_model_parallel_layout));
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
+    auto local_transformer = std::dynamic_pointer_cast<nn::TransformerModel>(model);
+    CHECK(local_transformer) << "LLaMA3 example expects a TransformerModel.";
+    model_config = local_transformer->Config();
+    if (rank.IsMainRank()) { LOG(INFO) << GetPipelineLayout().ToString(); }
 
     model->To(device);
 
@@ -502,7 +516,10 @@ void Train(const nn::parallel::Rank &rank) {
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
-        if (rank.IsLastRank()) {
+        const int reporting_rank
+            = global::GetRankOf(ddp_world_size - 1, tp_world_size - 1, GetPipelineLayout().stage_for_chunk(
+                                                                         GetPipelineLayout().num_global_chunks() - 1));
+        if (rank.GlobalRank() == reporting_rank) {
             size_t used_mb = 0, reserved_mb = 0;
             std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "

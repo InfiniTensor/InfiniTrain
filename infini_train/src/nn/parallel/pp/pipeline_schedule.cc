@@ -13,6 +13,7 @@
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
 #include "infini_train/include/nn/parallel/pp/send_recv.h"
 #include "infini_train/include/optimizer.h"
@@ -32,13 +33,10 @@ void PrintScheduleTable(const std::vector<PipelineParallelScheduler::Task> &sche
     LOG(INFO) << "-----|-----------|------------|--------------|-------------|-------";
 
     for (const auto &task : schedule) {
-        int owning_stage = task.global_chunk_id % num_stages;
-        int local_chunk = task.global_chunk_id / num_stages;
-
         std::string type_str = task.is_forward ? "Forward" : "Backward";
 
         auto s_info = std::format("{:4} | {:<9} | {:>10} | {:>12} | {:>11} | {:>5}", task.step, type_str,
-                                  task.microbatch_id, task.global_chunk_id, local_chunk, owning_stage);
+                                  task.microbatch_id, task.global_chunk_id, task.local_chunk_idx, task.stage_id);
         LOG(INFO) << s_info;
     }
 }
@@ -75,9 +73,10 @@ PipelineParallelScheduler::Task PipelineParallelScheduler::CreateTask(int step, 
     task.step = step;
     task.microbatch_id = mb;
     task.global_chunk_id = global_chunk;
-    task.local_chunk_idx = global_chunk / num_stages;
+    const auto &layout = GetPipelineLayout();
+    task.local_chunk_idx = layout.local_chunk_index(global_chunk);
     task.is_forward = is_forward;
-    task.stage_id = global_chunk % num_stages;
+    task.stage_id = layout.stage_for_chunk(global_chunk);
     task.is_last_chunk = (global_chunk == total_chunks - 1);
     task.is_first_chunk = (global_chunk == 0);
     return task;
@@ -86,7 +85,7 @@ PipelineParallelScheduler::Task PipelineParallelScheduler::CreateTask(int step, 
 std::vector<PipelineParallelScheduler::Task> PipelineParallelScheduler::GenerateGPipeSchedule(int n, int num_stages,
                                                                                               int vpp_size) {
     std::vector<Task> schedule;
-    int total_global_chunks = num_stages * vpp_size;
+    int total_global_chunks = GetPipelineLayout().num_global_chunks();
     int total_steps = n + total_global_chunks - 1;
 
     // ======== Forward Pass ========
@@ -134,7 +133,7 @@ PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(int n, int num_stages
         return schedule;
     }
 
-    int total_global_chunks = num_stages * vpp_size;
+    int total_global_chunks = GetPipelineLayout().num_global_chunks();
 
     int warmup_steps = total_global_chunks - 1;
     int total_steps = 2 * warmup_steps + n;
@@ -197,7 +196,8 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
     int n = num_micro_batches_;
     int num_stages = stage_->num_stages();
     int stage_idx = stage_->stage_index();
-    int vpp_size = global::GetVirtualPipelineParallelSize();
+    const auto &layout = GetPipelineLayout();
+    int vpp_size = layout.chunks_per_stage();
 
     auto schedule = PipelineParallelScheduler::GenerateGPipeSchedule(n, num_stages, vpp_size);
 
@@ -227,20 +227,21 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
             if (task.is_first_chunk) {
                 inputs = {microbatch_inputs[mb]};
             } else {
-                if (stage_->IsFirstStage()) {
-                    inputs = ReceiveFromPrev(num_stages - 1);
+                const int previous_stage = layout.stage_for_chunk(task.global_chunk_id - 1);
+                if (previous_stage == stage_idx) {
+                    const int previous_local_chunk = layout.local_chunk_index(task.global_chunk_id - 1);
+                    inputs = activations[previous_local_chunk][mb];
                 } else {
-                    inputs = ReceiveFromPrev(stage_->prev_rank());
+                    inputs = ReceiveFromPrev(previous_stage);
                 }
             }
 
             activations[task.local_chunk_idx][mb] = stage_->ForwardOneChunk(inputs, task.local_chunk_idx);
 
             if (!task.is_last_chunk) {
-                if (stage_->IsLastStage()) {
-                    SendToNext(activations[task.local_chunk_idx][mb], 0);
-                } else {
-                    SendToNext(activations[task.local_chunk_idx][mb], stage_->next_rank());
+                const int next_stage = layout.stage_for_chunk(task.global_chunk_id + 1);
+                if (next_stage != stage_idx) {
+                    SendToNext(activations[task.local_chunk_idx][mb], next_stage);
                 }
             }
         } else {
@@ -260,12 +261,13 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 // between forward and backward.
                 total_loss += static_cast<const float *>(loss->To(Device()).DataPtr())[0];
             } else {
-                auto out_tensor = activations[task.local_chunk_idx][mb][0];
-
-                auto dummy_gradient
-                    = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
-
-                out_tensor->Backward(dummy_gradient);
+                const int next_stage = layout.stage_for_chunk(task.global_chunk_id + 1);
+                if (next_stage != stage_idx) {
+                    auto out_tensor = activations[task.local_chunk_idx][mb][0];
+                    auto dummy_gradient
+                        = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
+                    out_tensor->Backward(dummy_gradient);
+                }
             }
         }
     }
@@ -278,11 +280,12 @@ float PipelineSchedule::Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tens
                              DataType dtype) {
     std::vector<std::shared_ptr<Tensor>> micro_batches(num_micro_batches_);
     std::vector<std::shared_ptr<Tensor>> target_mbs(num_micro_batches_);
-    if (stage_->IsFirstStage()) {
+    const auto &layout = GetPipelineLayout();
+    if (layout.owns_embedding(stage_->stage_index())) {
         micro_batches = input->Split(input->Dims()[0] / num_micro_batches_);
     }
 
-    if (stage_->IsLastStage()) {
+    if (layout.owns_lm_head(stage_->stage_index())) {
         target_mbs = target->Split(target->Dims()[0] / num_micro_batches_);
     }
 
