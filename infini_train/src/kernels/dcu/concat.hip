@@ -186,7 +186,7 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
     grads.reserve(input_dims_list.size());
     for (const auto &dvec : input_dims_list) {
         auto t = std::make_shared<Tensor>(dvec, dtype, device);
-        t->Fill(0.0);
+        // ConcatBackwardKernel writes every element of every grad tensor exactly once.
         grads.push_back(t);
     }
 

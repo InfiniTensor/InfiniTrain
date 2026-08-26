@@ -181,7 +181,7 @@ std::shared_ptr<Tensor> ReduceOpBackward(const std::shared_ptr<Tensor> &grad_out
     core::dcu::DispatchDcuFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            grad_input->Fill(0.0);
+            // GenericReduceBackwardKernel assigns every grad_input element.
             GenericReduceBackwardKernel<<<num_blocks, threads_per_block, 0, hip_stream>>>(
                 static_cast<T *>(grad_input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
                 input ? static_cast<const T *>(input->DataPtr()) : nullptr,
