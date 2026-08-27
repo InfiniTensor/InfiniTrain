@@ -20,6 +20,22 @@ template <typename HookType> class HookHandleImpl;
 namespace infini_train::nn {
 class Module;
 
+class NoSyncGuard {
+public:
+    explicit NoSyncGuard(std::function<void()> exit_func) : exit_func_(std::move(exit_func)) {}
+    ~NoSyncGuard() {
+        if (exit_func_) {
+            exit_func_();
+        }
+    }
+
+    NoSyncGuard(const NoSyncGuard &) = delete;
+    NoSyncGuard &operator=(const NoSyncGuard &) = delete;
+
+private:
+    std::function<void()> exit_func_;
+};
+
 namespace parallel::function {
 std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &network,
                                                const std::vector<Device> &devices);
@@ -81,6 +97,10 @@ public:
                             DataType dtype) {
         return 0.0f;
     };
+
+    virtual std::unique_ptr<NoSyncGuard> no_sync() {
+        return std::make_unique<NoSyncGuard>([] {});
+    }
 
     virtual void To(Device device);
 
