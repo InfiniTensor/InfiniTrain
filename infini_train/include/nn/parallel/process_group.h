@@ -30,6 +30,17 @@ class Work;
 
 namespace infini_train::nn::parallel {
 
+enum class P2POpType {
+    kSend,
+    kRecv,
+};
+
+struct P2POp {
+    P2POpType type;
+    std::shared_ptr<Tensor> tensor;
+    int peer_rank;
+};
+
 class ProcessGroup {
 public:
     explicit ProcessGroup(Device::DeviceType backend, const std::string &process_group_name,
@@ -61,11 +72,16 @@ public:
                                           const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                                           int root_rank_in_group, bool async_op = false) const;
 
+    virtual std::shared_ptr<Work> AlltoAll(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                                           bool async_op = false) const;
+
     virtual std::shared_ptr<Work> Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
                                        bool async_op = false) const;
 
     virtual std::shared_ptr<Work> Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank,
                                        bool async_op = false) const;
+
+    virtual std::shared_ptr<Work> BatchSendRecv(const std::vector<P2POp> &ops, bool async_op = false) const;
 
     // Legacy communication APIs (Single-stream)
     // FIXME(dcj): BroadCast_ and Scatter_ are temporarily retained with trailing underscores for existing DP callers.
