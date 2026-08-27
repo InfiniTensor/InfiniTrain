@@ -3,6 +3,7 @@
 #include <format>
 #include <memory>
 #include <optional>
+#include <thread>
 #include <unordered_set>
 
 #include "gflags/gflags.h"

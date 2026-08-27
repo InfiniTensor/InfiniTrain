@@ -136,22 +136,22 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
 }
 
 template <int BLOCK_SIZE, typename TIn, typename TOut>
-__global__ void ReduceColumnsKernel(const TIn *__restrict__ input, TOut *__restrict__ output, int num_rows,
-                                    int num_cols) {
+__global__ void ReduceRowsKernel(const TIn *__restrict__ input, TOut *__restrict__ output, int64_t num_rows,
+                                 int64_t num_cols) {
     using BlockReduce = cub::BlockReduce<float, BLOCK_SIZE>;
     __shared__ typename BlockReduce::TempStorage temp_storage;
 
-    int row = blockIdx.x;
+    const int64_t col = blockIdx.x;
     float sum = 0.0f;
 
-    for (int col = threadIdx.x; col < num_cols; col += blockDim.x) {
+    for (int64_t row = threadIdx.x; row < num_rows; row += blockDim.x) {
         sum += common::cuda::Cast<float>(input[row * num_cols + col]);
     }
 
     float reduced = BlockReduce(temp_storage).Sum(sum);
 
     if (threadIdx.x == 0) {
-        output[row] = reduced;
+        output[col] = common::cuda::Cast<TOut>(reduced);
     }
 }
 
@@ -289,7 +289,8 @@ std::shared_ptr<Tensor> LinearBackwardWeight(const std::shared_ptr<Tensor> &inpu
 std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_output, int64_t out_features) {
     const auto &dims = grad_output->Dims();
     CHECK_GE(dims.size(), 2);
-    const int64_t bs = std::accumulate(dims.rbegin() + 1, dims.rend(), 1, std::multiplies<int64_t>{});
+    CHECK_EQ(dims.back(), out_features);
+    const int64_t bs = std::accumulate(dims.rbegin() + 1, dims.rend(), int64_t{1}, std::multiplies<int64_t>{});
 
     auto compute_dtype = grad_output->Dtype();
     // FIXME(cx): output dtype promotion is a temporary hack; revisit when autograd/autocast is fixed.
@@ -307,15 +308,15 @@ std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_o
     constexpr int BLOCK_SIZE = 256;
     switch (compute_dtype) {
         DISPATCH_CASE(WRAP({
-                          ReduceColumnsKernel<BLOCK_SIZE><<<out_features, BLOCK_SIZE, 0, cuda_stream>>>(
+                          ReduceRowsKernel<BLOCK_SIZE><<<out_features, BLOCK_SIZE, 0, cuda_stream>>>(
                               static_cast<const float *>(grad_output->DataPtr()),
-                              static_cast<float *>(grad_bias->DataPtr()), out_features, bs);
+                              static_cast<float *>(grad_bias->DataPtr()), bs, out_features);
                       }),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
-                          ReduceColumnsKernel<BLOCK_SIZE><<<out_features, BLOCK_SIZE, 0, cuda_stream>>>(
+                          ReduceRowsKernel<BLOCK_SIZE><<<out_features, BLOCK_SIZE, 0, cuda_stream>>>(
                               static_cast<const nv_bfloat16 *>(grad_output->DataPtr()),
-                              static_cast<float *>(grad_bias->DataPtr()), out_features, bs);
+                              static_cast<float *>(grad_bias->DataPtr()), bs, out_features);
                       }),
                       DataType::kBFLOAT16)
     }
