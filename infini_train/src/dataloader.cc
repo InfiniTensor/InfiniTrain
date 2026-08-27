@@ -42,27 +42,27 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &tensor
 }
 } // namespace
 
-DataLoaderIterator::DataLoaderIterator(const Dataset &dataset, size_t batch_size, size_t global_batch_idx,
-                                       size_t num_global_batches, size_t ddp_rank, size_t ddp_world_size)
-    : dataset_(&dataset), batch_size_(batch_size), global_batch_idx_(global_batch_idx),
-      num_global_batches_(num_global_batches), ddp_rank_(ddp_rank), ddp_world_size_(ddp_world_size){};
+DataLoaderIterator::DataLoaderIterator(const Dataset &dataset, size_t batch_size, size_t dataloader_step,
+                                       size_t num_dataloader_steps, size_t ddp_rank, size_t ddp_world_size)
+    : dataset_(&dataset), batch_size_(batch_size), dataloader_step_(dataloader_step),
+      num_dataloader_steps_(num_dataloader_steps), ddp_rank_(ddp_rank), ddp_world_size_(ddp_world_size){};
 
 std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DataLoaderIterator::operator*() const {
     /*
       0,         1,            ..., x,                  ...
       [0, bs-1], [bs, 2*bs-1], ..., [x*bs, (x+1)*bs-1], ...
                                     ^
-                                    global_batch_idx
+                                    dataloader_step
     */
     std::vector<std::shared_ptr<Tensor>> data_vec;
     std::vector<std::shared_ptr<Tensor>> label_vec;
-    CHECK_LT(global_batch_idx_, num_global_batches_)
-        << "Cannot dereference DataLoader end iterator. global_batch_idx=" << global_batch_idx_
-        << ", num_global_batches=" << num_global_batches_ << ", ddp_rank=" << ddp_rank_
+    CHECK_LT(dataloader_step_, num_dataloader_steps_)
+        << "Cannot dereference DataLoader end iterator. dataloader_step=" << dataloader_step_
+        << ", num_dataloader_steps=" << num_dataloader_steps_ << ", ddp_rank=" << ddp_rank_
         << ", ddp_world_size=" << ddp_world_size_;
-    const size_t start_idx = (global_batch_idx_ * ddp_world_size_ + ddp_rank_) * batch_size_;
+    const size_t start_idx = (dataloader_step_ * ddp_world_size_ + ddp_rank_) * batch_size_;
     CHECK_LT(start_idx, dataset_->Size())
-        << "DataLoader batch starts past dataset end. global_batch_idx=" << global_batch_idx_
+        << "DataLoader batch starts past dataset end. dataloader_step=" << dataloader_step_
         << ", start_idx=" << start_idx << ", dataset_size=" << dataset_->Size() << ", batch_size=" << batch_size_
         << ", ddp_rank=" << ddp_rank_ << ", ddp_world_size=" << ddp_world_size_;
     const size_t end_idx = std::min(start_idx + batch_size_, dataset_->Size());
@@ -75,7 +75,7 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DataLoaderIterator::
 }
 
 DataLoaderIterator &DataLoaderIterator::operator++() {
-    global_batch_idx_ = std::min(global_batch_idx_ + 1, num_global_batches_);
+    dataloader_step_ = std::min(dataloader_step_ + 1, num_dataloader_steps_);
     return *this;
 }
 
@@ -86,59 +86,63 @@ DataLoaderIterator DataLoaderIterator::operator++(int) {
 }
 
 bool operator<(const DataLoaderIterator &lhs, const DataLoaderIterator &rhs) {
-    return lhs.global_batch_idx_ < rhs.global_batch_idx_;
+    return lhs.dataloader_step_ < rhs.dataloader_step_;
 }
 
 bool operator!=(const DataLoaderIterator &lhs, const DataLoaderIterator &rhs) {
-    return lhs.global_batch_idx_ != rhs.global_batch_idx_;
+    return lhs.dataloader_step_ != rhs.dataloader_step_;
 }
 
 bool operator==(const DataLoaderIterator &lhs, const DataLoaderIterator &rhs) {
-    return lhs.global_batch_idx_ == rhs.global_batch_idx_;
+    return lhs.dataloader_step_ == rhs.dataloader_step_;
 }
 
-size_t DataLoaderIterator::GlobalBatchIndex() const { return global_batch_idx_; }
+size_t DataLoaderIterator::DataLoaderStep() const { return dataloader_step_; }
 
-DataLoaderIterator &DataLoaderIterator::SeekGlobalBatch(size_t global_batch_idx) {
-    CHECK_LE(global_batch_idx, num_global_batches_)
-        << "Cannot seek past DataLoader end. global_batch_idx=" << global_batch_idx
-        << ", num_global_batches=" << num_global_batches_;
-    global_batch_idx_ = global_batch_idx;
+DataLoaderIterator &DataLoaderIterator::SeekDataLoaderStep(size_t dataloader_step) {
+    CHECK_LE(dataloader_step, num_dataloader_steps_)
+        << "Cannot seek past DataLoader end. dataloader_step=" << dataloader_step
+        << ", num_dataloader_steps=" << num_dataloader_steps_;
+    dataloader_step_ = dataloader_step;
     return *this;
 }
 
 DataLoader::DataLoader(const std::shared_ptr<Dataset> &dataset, size_t batch_size)
-    : dataset_(dataset), batch_size_(batch_size), num_global_batches_(CheckedCeilDiv(dataset_->Size(), batch_size_)) {}
+    : dataset_(dataset), batch_size_(batch_size) {
+    CHECK(dataset_ != nullptr) << "DataLoader dataset must not be null";
+    CHECK_GT(batch_size_, 0) << "DataLoader batch_size must be greater than zero";
+    num_dataloader_steps_ = CheckedCeilDiv(dataset_->Size(), batch_size_);
+}
 
 DataLoaderIterator DataLoader::begin() const {
-    return DataLoaderIterator(*dataset_, batch_size_, 0, num_global_batches_, 0, 1);
+    return DataLoaderIterator(*dataset_, batch_size_, 0, num_dataloader_steps_, 0, 1);
 }
 
 DataLoaderIterator DataLoader::end() const {
-    return DataLoaderIterator(*dataset_, batch_size_, num_global_batches_, num_global_batches_, 0, 1);
+    return DataLoaderIterator(*dataset_, batch_size_, num_dataloader_steps_, num_dataloader_steps_, 0, 1);
 }
 
-size_t DataLoader::NumGlobalBatches() const { return num_global_batches_; }
+size_t DataLoader::NumDataLoaderSteps() const { return num_dataloader_steps_; }
 
 DistributedDataLoader::DistributedDataLoader(const std::shared_ptr<Dataset> &dataset, size_t batch_size,
                                              size_t ddp_rank, size_t ddp_world_size)
     : DataLoader(dataset, batch_size), ddp_rank_(ddp_rank), ddp_world_size_(ddp_world_size) {
     CHECK_GT(ddp_world_size_, 0);
     CHECK_LT(ddp_rank_, ddp_world_size_);
-    const size_t global_batch_size = ddp_world_size_ * batch_size_;
-    CHECK_GE(dataset_->Size(), global_batch_size)
-        << "DistributedDataLoader needs at least one full global batch. dataset_size=" << dataset_->Size()
-        << ", global_batch_size=" << global_batch_size << " (" << batch_size_ << " per rank * " << ddp_world_size_
-        << " ranks). Reduce batch size/world size or use a larger dataset.";
-    num_global_batches_ = dataset_->Size() / global_batch_size;
+    const size_t samples_per_dataloader_step = ddp_world_size_ * batch_size_;
+    CHECK_GE(dataset_->Size(), samples_per_dataloader_step)
+        << "DistributedDataLoader needs enough samples for one DataLoader step. dataset_size=" << dataset_->Size()
+        << ", samples_per_dataloader_step=" << samples_per_dataloader_step << " (" << batch_size_ << " per rank * "
+        << ddp_world_size_ << " ranks). Reduce batch size/world size or use a larger dataset.";
+    num_dataloader_steps_ = dataset_->Size() / samples_per_dataloader_step;
 }
 
 DataLoaderIterator DistributedDataLoader::begin() const {
-    return DataLoaderIterator(*dataset_, batch_size_, 0, num_global_batches_, ddp_rank_, ddp_world_size_);
+    return DataLoaderIterator(*dataset_, batch_size_, 0, num_dataloader_steps_, ddp_rank_, ddp_world_size_);
 }
 
 DataLoaderIterator DistributedDataLoader::end() const {
-    return DataLoaderIterator(*dataset_, batch_size_, num_global_batches_, num_global_batches_, ddp_rank_,
+    return DataLoaderIterator(*dataset_, batch_size_, num_dataloader_steps_, num_dataloader_steps_, ddp_rank_,
                               ddp_world_size_);
 }
 } // namespace infini_train
