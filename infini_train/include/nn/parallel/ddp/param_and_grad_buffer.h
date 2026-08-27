@@ -97,6 +97,8 @@ public:
     // When all params in a bucket group are ready, will call StartGradSync()
     void RegisterGradReady(const std::shared_ptr<Tensor> &parameter);
 
+    void SetIsLastMicrobatch(bool is_last_microbatch) { is_last_microbatch_ = is_last_microbatch; }
+
     // Start grad reduce
     void StartGradSync();
 
