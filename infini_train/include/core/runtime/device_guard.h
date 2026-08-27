@@ -4,6 +4,7 @@
 #include <memory>
 #include <unordered_map>
 
+#include "infini_train/include/common/common.h"
 #include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
 
@@ -233,7 +234,7 @@ DeviceGuardImpl *GetDeviceGuardImpl(Device::DeviceType type);
 //   INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL(Device::DeviceType::kCUDA, CudaGuardImpl)
 //
 #define INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL(device_type, class_impl)                                               \
-    static const bool __infini_train_device_guard_registered##__COUNTER__ = []() {                                     \
+    [[maybe_unused]] static const bool CAT(infini_train_device_guard_registered_, __COUNTER__) = []() {                \
         infini_train::core::DeviceGuardImplRegistry::Instance().Register(device_type, std::make_unique<class_impl>()); \
         return true;                                                                                                   \
     }();

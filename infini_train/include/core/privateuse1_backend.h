@@ -7,6 +7,9 @@
 
 namespace infini_train::core {
 
+// A PrivateUse1 provider must expose an explicitly referenced, idempotent registration entry point
+// (conventionally RegisterBackend) and call it before parsing or using the provider device. Registration must not
+// rely solely on file-scope static initialization because an unreferenced static archive member may be discarded.
 using PrivateUse1RegistrationCallback = void (*)();
 
 struct PrivateUse1BackendRegistration {

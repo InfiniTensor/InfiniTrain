@@ -619,12 +619,12 @@ int main(int argc, char *argv[]) {
     }
 
     const bool bypass_maca_static_teardown
-        = IsMacaBackend(Device::ParseType(FLAGS_device).value()) && FLAGS_nthread_per_process > 1;
+        = IsMacaBackend(Device::ParseType(FLAGS_device).value()) && nn::parallel::global::GetWorldSize() > 1;
 
     gflags::ShutDownCommandLineFlags();
     google::ShutdownGoogleLogging();
 
-    // FIXME(cx): MACA multi-thread DDP bypasses static destruction to avoid teardown failures.
+    // FIXME(cx): MACA parallel execution bypasses static destruction to avoid teardown failures.
     // Replace this backend-name check with a provider shutdown hook.
     if (bypass_maca_static_teardown) {
         std::_Exit(0);
