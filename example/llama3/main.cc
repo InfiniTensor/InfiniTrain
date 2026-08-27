@@ -365,9 +365,9 @@ void Train(const nn::parallel::Rank &rank) {
     start_step = resume_result.global_step;
     size_t consumed_train_samples = resume_result.consumed_train_samples;
 
-    const size_t consumed_loader_batches
-        = DataLoaderBatchesToSkip(consumed_train_samples, train_loader_batch_size, ddp_world_size);
-    train_iter.SeekGlobalBatch(consumed_loader_batches % train_loader.NumGlobalBatches());
+    const size_t consumed_dataloader_steps
+        = DataLoaderStepsToSkip(consumed_train_samples, train_loader_batch_size, ddp_world_size);
+    train_iter.SeekDataLoaderStep(consumed_dataloader_steps % train_loader.NumDataLoaderSteps());
     auto next_train_batch = [&]() {
         auto batch = *train_iter;
         // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below

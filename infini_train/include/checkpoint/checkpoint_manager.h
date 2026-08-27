@@ -62,4 +62,4 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
 
 void SaveCheckpoint(const SaveCheckpointArgs &args);
 
-size_t DataLoaderBatchesToSkip(size_t consumed_train_samples, size_t local_batch_size, size_t ddp_world_size);
+size_t DataLoaderStepsToSkip(size_t consumed_train_samples, size_t local_batch_size, size_t ddp_world_size);

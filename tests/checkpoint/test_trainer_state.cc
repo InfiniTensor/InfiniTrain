@@ -105,18 +105,18 @@ TEST_P(TrainerStateTest, RoundTrip) {
     std::filesystem::remove_all(dir);
 }
 
-TEST_P(TrainerStateTest, DataLoaderSkipUsesCurrentBatchConfiguration) {
-    EXPECT_EQ(DataLoaderBatchesToSkip(/*consumed_train_samples=*/400, /*local_batch_size=*/4,
-                                      /*ddp_world_size=*/2),
+TEST_P(TrainerStateTest, DataLoaderStepsToSkipUsesCurrentBatchConfiguration) {
+    EXPECT_EQ(DataLoaderStepsToSkip(/*consumed_train_samples=*/400, /*local_batch_size=*/4,
+                                    /*ddp_world_size=*/2),
               50);
-    EXPECT_EQ(DataLoaderBatchesToSkip(/*consumed_train_samples=*/400, /*local_batch_size=*/8,
-                                      /*ddp_world_size=*/2),
+    EXPECT_EQ(DataLoaderStepsToSkip(/*consumed_train_samples=*/400, /*local_batch_size=*/8,
+                                    /*ddp_world_size=*/2),
               25);
 }
 
-TEST_P(TrainerStateTest, DataLoaderSkipRejectsUnalignedConfiguration) {
-    EXPECT_DEATH(DataLoaderBatchesToSkip(/*consumed_train_samples=*/400, /*local_batch_size=*/6,
-                                         /*ddp_world_size=*/4),
+TEST_P(TrainerStateTest, DataLoaderStepsToSkipRejectsUnalignedConfiguration) {
+    EXPECT_DEATH(DataLoaderStepsToSkip(/*consumed_train_samples=*/400, /*local_batch_size=*/6,
+                                       /*ddp_world_size=*/4),
                  "does not align");
 }
 

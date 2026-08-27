@@ -39,6 +39,11 @@ std::vector<int64_t> TensorValues(const std::shared_ptr<Tensor> &tensor) {
 }
 } // namespace
 
+TEST(DataLoaderTest, RejectsInvalidConstructorArguments) {
+    EXPECT_DEATH({ DataLoader loader(nullptr, 2); }, "dataset must not be null");
+    EXPECT_DEATH({ DataLoader loader(std::make_shared<IndexDataset>(5), 0); }, "batch_size must be greater than zero");
+}
+
 TEST(DataLoaderTest, RegularDataLoaderKeepsPartialLastBatch) {
     DataLoader loader(std::make_shared<IndexDataset>(5), 2);
 
@@ -51,11 +56,11 @@ TEST(DataLoaderTest, RegularDataLoaderKeepsPartialLastBatch) {
     EXPECT_EQ(batches[2], (std::vector<int64_t>{4}));
 
     auto iter = loader.begin();
-    iter.SeekGlobalBatch(2);
+    iter.SeekDataLoaderStep(2);
     EXPECT_EQ(TensorValues((*iter).first), (std::vector<int64_t>{4}));
 }
 
-TEST(DataLoaderTest, DistributedDataLoaderSlicesFullGlobalBatchesByRank) {
+TEST(DataLoaderTest, DistributedDataLoaderPartitionsEachStepByRank) {
     const auto dataset = std::make_shared<IndexDataset>(13);
     const size_t batch_size = 2;
     const size_t world_size = 3;
@@ -89,35 +94,35 @@ TEST(DataLoaderTest, DistributedDataLoaderSlicesFullGlobalBatchesByRank) {
     EXPECT_EQ(r2, rank2.end());
 }
 
-TEST(DataLoaderTest, SeekGlobalBatchSupportsResumeAndEnd) {
+TEST(DataLoaderTest, SeekDataLoaderStepSupportsResumeAndEnd) {
     DistributedDataLoader loader(std::make_shared<IndexDataset>(13), 2, 2, 3);
     auto iter = loader.begin();
 
-    EXPECT_EQ(loader.NumGlobalBatches(), 2);
+    EXPECT_EQ(loader.NumDataLoaderSteps(), 2);
 
-    iter.SeekGlobalBatch(1);
-    EXPECT_EQ(iter.GlobalBatchIndex(), 1);
+    iter.SeekDataLoaderStep(1);
+    EXPECT_EQ(iter.DataLoaderStep(), 1);
     EXPECT_EQ(TensorValues((*iter).first), (std::vector<int64_t>{10, 11}));
 
-    iter.SeekGlobalBatch(loader.NumGlobalBatches());
+    iter.SeekDataLoaderStep(loader.NumDataLoaderSteps());
     EXPECT_EQ(iter, loader.end());
-    EXPECT_DEATH(iter.SeekGlobalBatch(loader.NumGlobalBatches() + 1), "Cannot seek past DataLoader end");
+    EXPECT_DEATH(iter.SeekDataLoaderStep(loader.NumDataLoaderSteps() + 1), "Cannot seek past DataLoader end");
 
-    size_t consumed_global_batches = 5;
+    size_t consumed_dataloader_steps = 5;
     iter = loader.begin();
-    iter.SeekGlobalBatch(consumed_global_batches % loader.NumGlobalBatches());
+    iter.SeekDataLoaderStep(consumed_dataloader_steps % loader.NumDataLoaderSteps());
     auto next_batch = [&]() {
         auto batch = *iter;
         ++iter;
         if (iter == loader.end()) {
             iter = loader.begin();
         }
-        ++consumed_global_batches;
+        ++consumed_dataloader_steps;
         return batch;
     };
 
     EXPECT_EQ(TensorValues(next_batch().first), (std::vector<int64_t>{10, 11}));
-    EXPECT_EQ(iter.GlobalBatchIndex(), 0);
+    EXPECT_EQ(iter.DataLoaderStep(), 0);
     EXPECT_EQ(TensorValues(next_batch().first), (std::vector<int64_t>{4, 5}));
-    EXPECT_EQ(consumed_global_batches, 7);
+    EXPECT_EQ(consumed_dataloader_steps, 7);
 }
