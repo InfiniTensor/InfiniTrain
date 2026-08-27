@@ -1,6 +1,7 @@
 // pipeline_parallel.h
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -39,6 +40,8 @@ public:
     static StageInfo GetStageInfo(int total_layers, int pp_size, int pp_rank, int chunks_per_stage = 1);
 
     std::vector<std::shared_ptr<Module>> *mutable_chunks();
+
+    void SetNoSyncFunc(std::function<std::vector<std::unique_ptr<nn::NoSyncGuard>>()> func);
 
 private:
     void BuildPipelineStage(const std::vector<std::vector<int64_t>> &recv_shape, Device device,
