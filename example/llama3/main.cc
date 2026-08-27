@@ -75,6 +75,7 @@ DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 // memory management
 DEFINE_string(device, "cuda", "device type (cpu/cuda), useless if using parallel training mode");
+DEFINE_string(attention_backend, "unfused", "attention backend: unfused|flash");
 // parallel
 DEFINE_int32(
     nthread_per_process, 1,
@@ -115,11 +116,16 @@ constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles
     = {"none", "constant", "linear", "cosine", "inverse-square-root"};
+constexpr char kAttentionBackendUnfused[] = "unfused";
+constexpr char kAttentionBackendFlash[] = "flash";
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_validator(attention_backend, [](const char *, const std::string &value) {
+    return value == kAttentionBackendUnfused || value == kAttentionBackendFlash;
+});
 DEFINE_validator(zero_stage, [](const char *, int32_t value) { return value >= 0 && value <= 3; });
 DEFINE_validator(lr_decay_style,
                  [](const char *, const std::string &value) { return kSupportedLRDecayStyles.contains(value); });
@@ -196,6 +202,11 @@ void Train(const nn::parallel::Rank &rank) {
         device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
     }
 
+    const bool use_flash_attention = FLAGS_attention_backend == kAttentionBackendFlash;
+    if (use_flash_attention && device.type() != Device::DeviceType::kCUDA) {
+        LOG(FATAL) << "--attention_backend=flash requires --device=cuda";
+    }
+
     // calculate gradient accumulation from the desired total batch size and the current run configuration
     const auto tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size;
     CHECK_EQ(FLAGS_total_batch_size % tokens_per_fwdbwd, 0);
@@ -211,8 +222,9 @@ void Train(const nn::parallel::Rank &rank) {
     nn::TransformerConfig model_config = llama3::LLaMA3Config();
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_llmc_filepath.empty()) {
-        model = llama3::LoadFromLLMC(FLAGS_llmc_filepath);
+        model = llama3::LoadFromLLMC(FLAGS_llmc_filepath, use_flash_attention);
     } else {
+        model_config.flash = use_flash_attention;
         llama3::SanitizeLLaMA3Config(model_config);
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
@@ -249,6 +261,10 @@ void Train(const nn::parallel::Rank &rank) {
         dtype = DataType::kBFLOAT16;
     } else {
         LOG(FATAL) << "Rank " << rank.GlobalRank() << ": Datatype " << FLAGS_dtype << " not supported.";
+    }
+    if (use_flash_attention && dtype != DataType::kBFLOAT16) {
+        LOG(FATAL) << "--attention_backend=flash currently requires --dtype=bfloat16 because FlashAttention 2 "
+                      "supports fp16/bf16 kernels only";
     }
 
     auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
@@ -515,6 +531,7 @@ void Train(const nn::parallel::Rank &rank) {
                 // FIXME(jym): to support PP
                 if (tokenizer) {
                     CHECK_EQ(pp_world_size, 1);
+                    infini_train::AutocastGuard autocast_guard(device.type(), dtype);
                     tokenizer->GenerateText(*model, FLAGS_batch_size, FLAGS_sequence_length, FLAGS_text_length, device);
                 }
             }

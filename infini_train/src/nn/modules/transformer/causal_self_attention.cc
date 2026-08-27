@@ -115,13 +115,23 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     //            use Slice() to work around here
     const int64_t q_size_local = H_local * D;
     const int64_t kv_size_local = KV_local * D;
-    // -> Split into q, k, v
-    // q: (B, T, H_local, D)
-    auto q = qkv->Slice(2, 0, q_size_local)->View({B, T, H_local, D});
-    // k: (B, T, KV_local, D)
-    auto k = qkv->Slice(2, q_size_local, q_size_local + kv_size_local)->View({B, T, KV_local, D});
-    // v: (B, T, KV_local, D)
-    auto v = qkv->Slice(2, q_size_local + kv_size_local, q_size_local + 2 * kv_size_local)->View({B, T, KV_local, D});
+    std::shared_ptr<Tensor> q;
+    std::shared_ptr<Tensor> k;
+    std::shared_ptr<Tensor> v;
+    if (q_size_local == kv_size_local) {
+        // Split uses one autograd node for equal-sized MHA projections. Three independent Slice nodes are
+        // considerably more expensive, especially in backward where each one materializes a full-size input grad.
+        auto qkv_chunks = qkv->Split(q_size_local, 2);
+        CHECK_EQ(qkv_chunks.size(), 3);
+        q = qkv_chunks[0]->View({B, T, H_local, D});
+        k = qkv_chunks[1]->View({B, T, KV_local, D});
+        v = qkv_chunks[2]->View({B, T, KV_local, D});
+    } else {
+        // GQA has unequal Q and K/V widths, which the fixed-size Split API cannot represent.
+        q = qkv->Slice(2, 0, q_size_local)->View({B, T, H_local, D});
+        k = qkv->Slice(2, q_size_local, q_size_local + kv_size_local)->View({B, T, KV_local, D});
+        v = qkv->Slice(2, q_size_local + kv_size_local, q_size_local + 2 * kv_size_local)->View({B, T, KV_local, D});
+    }
 
     if (config_.position_embedding_type == PositionEmbeddingType::kRoPE) {
         // q: (B, T, H_local, D), k: (B, T, KV_local, D)
@@ -131,38 +141,50 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     // TODO(zbl): use kv cache during inference
     // if (use_kv_) { ... }
 
-    // align n_head in GQA
-    // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
-    k = RepeatKV(k, n_rep_);
-    v = RepeatKV(v, n_rep_);
+    if (config_.flash) {
+        CHECK(start_pos == nullptr)
+            << "FlashAttention does not support start_pos/incremental decoding; use full-sequence attention";
+    }
+    // Custom masks are supported by the unfused implementation. Standard full-sequence causal attention omits
+    // the explicit mask when FlashAttention is enabled and uses the kernel's built-in causal masking instead.
+    const bool use_flash = config_.flash && mask == nullptr;
+
+    if (!use_flash) {
+        // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
+        k = RepeatKV(k, n_rep_);
+        v = RepeatKV(v, n_rep_);
+    }
 
     // (B, T, H_local, D) -> (B, H_local, T, D)
     q = q->Transpose(1, 2);
     k = k->Transpose(1, 2);
     v = v->Transpose(1, 2);
 
-    // TODO(zbl): support flash attention later
-    // if (flash_) { ... }
-
-    // manual implementation of attention
-    // this materializes the large (T,T) matrix for all the queries and keys
-
-    // q: (B, H_local, T, D)
-    // k: (B, H_local, T, D) -> (B, H_local, D, T)
-    // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
-    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
-    if (mask) {
-        // mask: (1, 1, T, T)
-        att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+    std::shared_ptr<Tensor> y;
+    if (use_flash) {
+        // FlashAttention uses its built-in causal mask.
+        y = nn::function::ScaledDotProductAttention(q, k, v, 1.0f / std::sqrt(static_cast<float>(D)));
     } else {
-        // fallback causal mask: (1, 1, T, T)
-        auto causal_mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
-        att = att->MaskedFill(causal_mask == 0, -std::numeric_limits<float>::infinity());
+        // manual implementation of attention
+        // this materializes the large (T,T) matrix for all the queries and keys
+
+        // q: (B, H_local, T, D)
+        // k: (B, H_local, T, D) -> (B, H_local, D, T)
+        // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
+        auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(D)));
+        if (mask) {
+            // mask: (1, 1, T, T)
+            att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+        } else {
+            // fallback causal mask: (1, 1, T, T)
+            auto causal_mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
+            att = att->MaskedFill(causal_mask == 0, -std::numeric_limits<float>::infinity());
+        }
+        // (B, H_local, T, T)
+        att = nn::function::Softmax(att, -1);
+        // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
+        y = att->Matmul(v);
     }
-    // (B, H_local, T, T)
-    att = nn::function::Softmax(att, -1);
-    // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
-    auto y = att->Matmul(v);
     // (B, H_local, T, D) -> Transpose(1, 2) -> (B, T, H_local, D) -> (B, T, C_local)
     y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});
     // output projection
