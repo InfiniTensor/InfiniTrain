@@ -28,23 +28,30 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
     if (ddp_config_.zero_stage == 3) {
         LOG(FATAL) << "DistributedDataParallel: ZeRO-3 is not implemented yet.";
     }
+    CHECK_NOTNULL(ddp_pg_);
+    const auto expected_backend = ddp_pg_->backend();
+    const int expected_device_index = global::GetDeviceIndex(rank.thread_rank());
+    const auto validate_device = [expected_backend, expected_device_index](Device device, const char *kind) {
+        CHECK_EQ(static_cast<int>(device.type()), static_cast<int>(expected_backend))
+            << "DistributedDataParallel " << kind << " backend must match the process group backend";
+        CHECK_EQ(device.index(), expected_device_index)
+            << "DistributedDataParallel " << kind << " must use the device assigned to this rank";
+    };
+
     for (auto &param : module->Parameters()) {
+        auto device = param->GetDevice();
+        validate_device(device, "parameter");
         if (!param->requires_grad()) {
             continue;
         }
-        auto device = param->GetDevice();
-        CHECK_EQ(device.index(), global::GetDeviceIndex(rank.thread_rank()))
-            << "All parameters must be on the same device as the module";
         if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
-            auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(
-                function::ReduceOpType::kAvg, ddp_pg_);
+            const auto reduce_op
+                = ddp_config.average_in_collective ? function::ReduceOpType::kAvg : function::ReduceOpType::kSum;
+            auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(reduce_op, ddp_pg_);
             param->RegisterPostAccumulateGradHook(std::move(hook));
         }
     }
-    for (auto &buffer : module->Buffers()) {
-        CHECK_EQ(buffer->GetDevice().index(), global::GetDeviceIndex(rank.thread_rank()))
-            << "All buffers must be on the same device as the module";
-    }
+    for (auto &buffer : module->Buffers()) { validate_device(buffer->GetDevice(), "buffer"); }
     modules_[kModuleName] = std::move(module);
 
     if (ddp_config.zero_stage >= 1) {

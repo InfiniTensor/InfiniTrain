@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.28)
 option(USE_CUDA "Support NVIDIA CUDA" OFF)
 option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
-option(USE_NCCL "Build project for distributed running" ON)
+option(USE_NCCL "Build project for distributed running on CUDA using NCCL" ON)
 option(BUILD_TEST "Build InfiniTrain tests" OFF)
 
 project(infini_train VERSION 0.6.0 LANGUAGES CXX)
@@ -64,12 +64,15 @@ endif()
 # Framework core sources (*.cc), excluding cpu kernels (they are built separately)
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
 list(FILTER SRC EXCLUDE REGEX ".*kernels/cpu/.*")
+
+# Exclude backend-specific runtime/ccl translation units when the corresponding
+# backend is disabled. This keeps each build self-contained and avoids pulling
+# in headers (e.g. <cuda_runtime.h> / <mcr/mc_runtime.h>) that are not on the
+# include path.
 if(NOT USE_CUDA)
-  list(FILTER SRC EXCLUDE REGEX ".*runtime/cuda/.*")
-  list(FILTER SRC EXCLUDE REGEX ".*ccl/cuda/.*")
-endif()
-if(NOT USE_NCCL)
-  list(FILTER SRC EXCLUDE REGEX ".*infini_train/src/core/ccl/cuda/.*")
+  list(FILTER SRC EXCLUDE REGEX ".*/(ccl|runtime)/cuda/.*")
+elseif(NOT USE_NCCL)
+  list(FILTER SRC EXCLUDE REGEX ".*/ccl/cuda/.*")
 endif()
 
 # CPU kernels (*.cc)

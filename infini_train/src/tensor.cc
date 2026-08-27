@@ -157,6 +157,8 @@ Tensor Tensor::To(Device device) {
         //  1. D2H
         Tensor cpu_tensor = To(Device());
         //  2. H2D
+        // FIXME: Use the destination device for the guard, runtime implementation, and stream
+        // when cross-backend copies are supported.
         core::DeviceGuard guard(buffer_device);
         auto *impl = core::GetDeviceGuardImpl(buffer_device.type());
         impl->MemcpyAsync(new_tensor.DataPtr(), cpu_tensor.DataPtr(), SizeInBytes(), core::MemcpyKind::kH2D,
