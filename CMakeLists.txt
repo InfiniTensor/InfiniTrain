@@ -141,6 +141,7 @@ endif()
 add_library(infini_train STATIC ${SRC})
 add_library(InfiniTrain::infini_train ALIAS infini_train)
 add_library(InfiniTrain::cpu_kernels ALIAS infini_train_cpu_kernels)
+target_compile_features(infini_train PUBLIC cxx_std_20)
 target_include_directories(infini_train PUBLIC
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
 )
@@ -148,15 +149,17 @@ target_link_libraries(infini_train
   PUBLIC
     glog
     gflags
-    infini_train_cpu_kernels
+    Eigen3::Eigen
 )
+if(USE_OMP)
+  target_link_libraries(infini_train PUBLIC OpenMP::OpenMP_CXX)
+endif()
 
 if(USE_CUDA)
   # infini_train contains cuda runtime wrappers (*.cc) like cuda_blas_handle.cc/cuda_guard.cc
   # Those may need CUDA runtime/driver/cublas symbols at final link, so attach them here too.
   target_link_libraries(infini_train
     PUBLIC
-      infini_train_cuda_kernels
       CUDA::cudart
       CUDA::cublas
       CUDA::cuda_driver
@@ -170,32 +173,60 @@ if(USE_CUDA)
 endif()
 
 # ------------------------------------------------------------------------------
-# Helper: link libraries in a group to fix static lib one-pass resolution
-# (THIS is what fixes "undefined reference" from cuda_kernels -> core symbols)
+# Final executable link interface
 # ------------------------------------------------------------------------------
+
+set(_infini_train_executable_archives
+  infini_train
+  infini_train_cpu_kernels
+)
+if(USE_CUDA)
+  list(APPEND _infini_train_executable_archives infini_train_cuda_kernels)
+endif()
+set_property(GLOBAL PROPERTY INFINI_TRAIN_EXECUTABLE_ARCHIVES
+  ${_infini_train_executable_archives})
+
 function(link_infini_train_exe target_name)
-  if(USE_CUDA)
-    target_link_libraries(${target_name} PRIVATE
-      "-Wl,--start-group"
-      "-Wl,--whole-archive"
-        infini_train
-        infini_train_cpu_kernels
-        infini_train_cuda_kernels
-      "-Wl,--no-whole-archive"
-      "-Wl,--end-group"
-    )
-  else()
-    target_link_libraries(${target_name} PRIVATE
-      "-Wl,--start-group"
-      "-Wl,--whole-archive"
-        infini_train
-        infini_train_cpu_kernels
-      "-Wl,--no-whole-archive"
-      "-Wl,--end-group"
-    )
+  cmake_parse_arguments(LINK "" "" "EXTRA_ARCHIVES" ${ARGN})
+  if(LINK_KEYWORDS_MISSING_VALUES)
+    message(FATAL_ERROR
+      "link_infini_train_exe: missing values for ${LINK_KEYWORDS_MISSING_VALUES}")
   endif()
+  if(LINK_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR
+      "link_infini_train_exe: unexpected arguments: ${LINK_UNPARSED_ARGUMENTS}")
+  endif()
+
+  get_target_property(_target_type ${target_name} TYPE)
+  if(_target_type STREQUAL "INTERFACE_LIBRARY")
+    set(_link_scope INTERFACE)
+  elseif(_target_type STREQUAL "EXECUTABLE")
+    set(_link_scope PRIVATE)
+  else()
+    message(FATAL_ERROR
+      "link_infini_train_exe requires an executable or interface library target")
+  endif()
+
+  get_property(_framework_archives GLOBAL PROPERTY INFINI_TRAIN_EXECUTABLE_ARCHIVES)
+  target_link_libraries(${target_name} ${_link_scope}
+    "-Wl,--start-group"
+    "-Wl,--whole-archive"
+    ${_framework_archives}
+    ${LINK_EXTRA_ARCHIVES}
+    "-Wl,--no-whole-archive"
+    "-Wl,--end-group"
+  )
 endfunction()
 
+# Libraries and providers link InfiniTrain::infini_train for the core API. Final
+# executables must link InfiniTrain::infini_train_executable or a provider-specific
+# executable interface; linking only InfiniTrain::infini_train may discard static
+# registration objects.
+# EXTRA_ARCHIVES is reserved for archives that still rely on static initialization.
+add_library(infini_train_executable INTERFACE)
+link_infini_train_exe(infini_train_executable)
+add_library(InfiniTrain::infini_train_executable ALIAS infini_train_executable)
+unset(_infini_train_executable_archives)
 
 # ------------------------------------------------------------------------------
 # Examples

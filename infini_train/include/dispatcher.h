@@ -7,6 +7,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/common/common.h"
 #include "infini_train/include/device.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
@@ -88,7 +89,8 @@ private:
 } // namespace infini_train
 
 #define REGISTER_KERNEL(device, kernel_name, kernel_func)                                                              \
-    static const bool _##kernel_name##_registered##__COUNTER__ = []() {                                                \
-        infini_train::Dispatcher::Instance().Register({device, #kernel_name}, kernel_func);                            \
-        return true;                                                                                                   \
-    }();
+    [[maybe_unused]] static const bool CAT(infini_train_kernel_, CAT(kernel_name, CAT(_registered_, __COUNTER__)))     \
+        = []() {                                                                                                       \
+              infini_train::Dispatcher::Instance().Register({device, #kernel_name}, kernel_func);                      \
+              return true;                                                                                             \
+          }();
