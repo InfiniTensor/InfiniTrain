@@ -253,7 +253,6 @@ void Train(const nn::parallel::Rank &rank) {
 
     auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
 
-    std::shared_ptr<DistributedDataParallel> ddp_model = nullptr;
     if (pp_world_size > 1) {
         // NOTE(dcj): To ensure that the tensor shapes at the pipeline stage boundaries remain correct
         // when sequence parallelism (SP) is enabled, we need to divide by sp_world_size.
@@ -266,19 +265,15 @@ void Train(const nn::parallel::Rank &rank) {
             auto ddp_config = DistributedDataParallelConfig{.zero_stage = FLAGS_zero_stage};
             auto *pipeline_model = dynamic_cast<nn::parallel::PipelineParallel *>(model.get());
             auto *mutable_chunks = pipeline_model->mutable_chunks();
-            std::vector<std::shared_ptr<DistributedDataParallel>> ddp_chunks;
-            ddp_chunks.reserve(mutable_chunks->size());
             for (int chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
-                auto ddp_chunk
+                (*mutable_chunks)[chunk_id]
                     = std::make_shared<DistributedDataParallel>(mutable_chunks->at(chunk_id), rank, ddp_config);
-                (*mutable_chunks)[chunk_id] = ddp_chunk;
-                ddp_chunks.push_back(std::move(ddp_chunk));
             }
             if (FLAGS_zero_stage >= 1) {
-                pipeline_model->SetNoSyncFunc([ddp_chunks = std::move(ddp_chunks)] {
+                pipeline_model->SetNoSyncFunc([mutable_chunks] {
                     std::vector<std::unique_ptr<nn::NoSyncGuard>> guards;
-                    guards.reserve(ddp_chunks.size());
-                    for (const auto &chunk : ddp_chunks) { guards.push_back(chunk->no_sync()); }
+                    guards.reserve(mutable_chunks->size());
+                    for (const auto &chunk : *mutable_chunks) { guards.push_back(chunk->no_sync()); }
                     return guards;
                 });
             }
@@ -290,8 +285,7 @@ void Train(const nn::parallel::Rank &rank) {
         // are created during the conversion.
 
         auto ddp_config = DistributedDataParallelConfig{.zero_stage = FLAGS_zero_stage};
-        ddp_model = std::make_shared<DistributedDataParallel>(model, rank, ddp_config);
-        model = ddp_model;
+        model = std::make_shared<DistributedDataParallel>(model, rank, ddp_config);
     }
 
     const size_t train_loader_batch_size = pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size;
@@ -481,8 +475,8 @@ void Train(const nn::parallel::Rank &rank) {
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
                 std::unique_ptr<nn::NoSyncGuard> no_sync_guard;
-                if (ddp_model && FLAGS_zero_stage >= 1 && micro_step != grad_accum_steps - 1) {
-                    no_sync_guard = ddp_model->no_sync();
+                if (ddp_world_size > 1 && FLAGS_zero_stage >= 1 && micro_step != grad_accum_steps - 1) {
+                    no_sync_guard = model->no_sync();
                 }
                 loss->Backward();
                 // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
