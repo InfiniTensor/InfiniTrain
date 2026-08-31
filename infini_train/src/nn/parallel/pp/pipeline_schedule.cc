@@ -201,15 +201,6 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
 
     auto schedule = PipelineParallelScheduler::GenerateGPipeSchedule(n, num_stages, vpp_size);
 
-    // Backward order can differ from microbatch ID order, so find the final task for each local model chunk.
-    std::vector<size_t> last_backward_task(vpp_size, schedule.size());
-    for (size_t i = 0; i < schedule.size(); ++i) {
-        const auto &task = schedule[i];
-        if (task.stage_id == stage_idx && !task.is_forward) {
-            last_backward_task[task.local_chunk_idx] = i;
-        }
-    }
-
     static bool has_printed = false;
     if (!has_printed && stage_idx == 0) {
         PrintScheduleTable(schedule, n, num_stages, vpp_size);
@@ -225,6 +216,7 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
     if (no_sync_func_) {
         no_sync_guards = no_sync_func_();
     }
+    std::vector<int> backward_counts(vpp_size, 0);
 
     for (size_t i = 0; i < schedule.size(); ++i) {
         const auto &task = schedule[i];
@@ -258,9 +250,9 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 }
             }
         } else {
-            const bool is_last_microbatch = last_backward_task[task.local_chunk_idx] == i;
-            if (is_last_microbatch) {
-                no_sync_guards.clear();
+            const bool is_last_microbatch = ++backward_counts[task.local_chunk_idx] == n;
+            if (is_last_microbatch && no_sync_func_) {
+                no_sync_guards[task.local_chunk_idx].reset();
             }
             if (task.is_last_chunk) {
                 auto target = microbatch_targets[mb];
@@ -285,13 +277,8 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
 
                 out_tensor->Backward(dummy_gradient);
             }
-            if (is_last_microbatch && no_sync_func_) {
-                no_sync_guards = no_sync_func_();
-            }
         }
     }
-
-    no_sync_guards.clear();
 
     return total_loss;
 }
