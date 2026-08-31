@@ -160,7 +160,18 @@ void ParamAndGradBucketGroup::RegisterGradReady(const std::shared_ptr<Tensor> &p
             return;
         }
 
-        params_with_grad_.insert(parameter.get());
+        if (grad_reduce_dispatched_) {
+            LOG(FATAL) << "ParamAndGradBucketGroup: RegisterGradReady() was called after grad sync was dispatched.";
+            return;
+        }
+
+        auto [_, inserted] = params_with_grad_.insert(parameter.get());
+        if (!inserted) {
+            LOG(FATAL) << "ParamAndGradBucketGroup: RegisterGradReady() was called twice for the same parameter in a "
+                          "bucket group.";
+            return;
+        }
+
         if (params_with_grad_.size() == params_.size()) {
             // All param grads are ready in this group, trigger grad sync
             StartGradSync();
