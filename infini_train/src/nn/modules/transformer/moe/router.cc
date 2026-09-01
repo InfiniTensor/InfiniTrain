@@ -20,16 +20,16 @@ TopKRouter::TopKRouter(const TransformerConfig &config) : CloneableModule(kType)
     CHECK_GT(moe_config.num_experts, 0);
     CHECK_GT(moe_config.router_topk, 0);
     CHECK_LE(moe_config.router_topk, moe_config.num_experts);
-    parameters_[kParamWeightName]
-        = std::make_shared<Tensor>(std::vector<int64_t>{moe_config.num_experts, config_.n_embd}, DataType::kFLOAT32,
-                                   device_)
-              ->RequiresGrad();
+    RegisterParameter(kParamWeightName,
+                      std::make_shared<Tensor>(std::vector<int64_t>{moe_config.num_experts, config_.n_embd},
+                                               DataType::kFLOAT32, device_)
+                          ->RequiresGrad());
     init::KaimingUniform(parameters_[kParamWeightName]);
 
     if (config_.add_bias_linear) {
-        parameters_[kParamBiasName]
-            = std::make_shared<Tensor>(std::vector<int64_t>{moe_config.num_experts}, DataType::kFLOAT32, device_)
-                  ->RequiresGrad();
+        RegisterParameter(kParamBiasName, std::make_shared<Tensor>(std::vector<int64_t>{moe_config.num_experts},
+                                                                   DataType::kFLOAT32, device_)
+                                              ->RequiresGrad());
         parameters_[kParamBiasName]->Fill(0.0f);
     }
 }

@@ -25,30 +25,30 @@ CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config) : Clon
 
     int64_t qkv_dim = (config.n_head + 2 * n_kv_head_) * head_dim_;
     // qkv: ColumnParallel (do not gather output)
-    modules_[kCAttnLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
-        /*in_features=*/n_embd_,
-        /*out_features=*/qkv_dim,
-        /*bias=*/config_.add_bias_linear,
-        /*gather_output=*/false,
-        /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false,
-        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+    RegisterModule(kCAttnLayerName, std::make_shared<nn::parallel::ColumnParallelLinear>(
+                                        /*in_features=*/n_embd_,
+                                        /*out_features=*/qkv_dim,
+                                        /*bias=*/config_.add_bias_linear,
+                                        /*gather_output=*/false,
+                                        /*input_is_parallel=*/false,
+                                        /*skip_bias_add=*/false,
+                                        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled()));
 
     // proj: RowParallel (input is parallel and output is full)
-    modules_[kCProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(
-        /*in_features=*/n_embd_,
-        /*out_features=*/n_embd_,
-        /*bias=*/config_.add_bias_linear,
-        /*reduce_output=*/true,
-        /*input_is_parallel=*/true,
-        /*skip_bias_add=*/false,
-        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+    RegisterModule(kCProjLayerName, std::make_shared<nn::parallel::RowParallelLinear>(
+                                        /*in_features=*/n_embd_,
+                                        /*out_features=*/n_embd_,
+                                        /*bias=*/config_.add_bias_linear,
+                                        /*reduce_output=*/true,
+                                        /*input_is_parallel=*/true,
+                                        /*skip_bias_add=*/false,
+                                        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled()));
 
     // FIXME(zbl): Decouple causal-mask ownership from position embedding. For now, only learned-absolute models use
     //             this precomputed buffer; RoPE callers provide a runtime-sized mask.
     if (config_.position_embedding_type == PositionEmbeddingType::kLearnedAbsolute) {
-        buffers_[kParamBiasName] = function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
-                                       ->View({1, 1, config_.block_size, config_.block_size});
+        RegisterBuffer(kParamBiasName, function::Tril(nn::function::Ones({config_.block_size, config_.block_size}))
+                                           ->View({1, 1, config_.block_size, config_.block_size}));
     }
 }
 
