@@ -47,10 +47,16 @@ public:
 
     const std::string &type() const;
 
-    virtual std::vector<std::shared_ptr<Tensor>> Parameters() const;
+    // PyTorch-style registration APIs. Names are unique across parameters, buffers, and child modules.
+    // Re-registering an existing name in the same registry replaces its value without changing insertion order.
+    std::shared_ptr<Tensor> RegisterParameter(const std::string &name, std::shared_ptr<Tensor> parameter);
+    std::shared_ptr<Tensor> RegisterBuffer(const std::string &name, std::shared_ptr<Tensor> buffer,
+                                           bool persistent = true);
+    std::shared_ptr<Module> RegisterModule(const std::string &name, std::shared_ptr<Module> module);
 
-    // InfiniTrain's NamedParameters returns results ordered by full parameter name.
-    // TODO: Align with PyTorch's ordering in the future.
+    virtual std::vector<std::shared_ptr<Tensor>> Parameters(bool recurse = true) const;
+
+    // Results follow parameter and module registration order, matching torch.nn.Module.named_parameters().
     std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
     NamedParameters(const std::string &prefix = "", bool recurse = true, bool remove_duplicate = true) const;
     bool has_parameter(const std::string &name) const;
@@ -106,6 +112,10 @@ protected:
     std::unordered_map<std::string, std::shared_ptr<Module>> modules_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> buffers_;
+    std::vector<std::string> module_order_;
+    std::vector<std::string> parameter_order_;
+    std::vector<std::string> buffer_order_;
+    std::unordered_set<std::string> non_persistent_buffers_;
 
     std::vector<ModulePreHook> forward_pre_hooks_;
     std::vector<ModulePostHook> forward_post_hooks_;

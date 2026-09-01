@@ -18,8 +18,8 @@ MoELayer::MoELayer(const TransformerConfig &config) : CloneableModule(kType), co
     CHECK(moe_config.token_dispatcher_type == MoEConfig::TokenDispatcherType::kAllGather)
         << "Current InfiniTrain MoE implementation supports AllGather dispatcher only";
 
-    modules_[kRouterLayerName] = std::make_shared<TopKRouter>(config_);
-    modules_[kExpertsLayerName] = std::make_shared<SequentialMLP>(config_);
+    RegisterModule(kRouterLayerName, std::make_shared<TopKRouter>(config_));
+    RegisterModule(kExpertsLayerName, std::make_shared<SequentialMLP>(config_));
 }
 
 std::vector<std::shared_ptr<Tensor>> MoELayer::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {

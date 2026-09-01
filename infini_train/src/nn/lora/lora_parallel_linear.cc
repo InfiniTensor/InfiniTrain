@@ -34,7 +34,7 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<parallel::Col
     device_ = base_module->parameter(kParamWeightName)->GetDevice();
 
     // Transfer weight from base module (overwrite base-created one)
-    parameters_[kParamWeightName] = base_module->parameter(kParamWeightName);
+    RegisterParameter(kParamWeightName, base_module->parameter(kParamWeightName));
 
     // Get dimensions from weight shape [out_features_per_partition, in_features]
     const auto &weight_dims = parameters_[kParamWeightName]->Dims();
@@ -42,7 +42,7 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<parallel::Col
 
     // Transfer bias if exists
     if (base_module->has_parameter(kParamBiasName)) {
-        parameters_[kParamBiasName] = base_module->parameter(kParamBiasName);
+        RegisterParameter(kParamBiasName, base_module->parameter(kParamBiasName));
     }
 
     // Initialize LoRA weights
@@ -66,7 +66,7 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<parallel::Col
     device_ = base_module->parameter(kParamWeightName)->GetDevice();
 
     // Transfer weight from base module (overwrite base-created one)
-    parameters_[kParamWeightName] = base_module->parameter(kParamWeightName);
+    RegisterParameter(kParamWeightName, base_module->parameter(kParamWeightName));
 
     // Get dimensions from weight shape [out_features_per_partition, in_features]
     const auto &weight_dims = parameters_[kParamWeightName]->Dims();
@@ -79,7 +79,7 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<parallel::Col
 
     // Transfer bias if exists
     if (base_module->has_parameter(kParamBiasName)) {
-        parameters_[kParamBiasName] = base_module->parameter(kParamBiasName);
+        RegisterParameter(kParamBiasName, base_module->parameter(kParamBiasName));
     }
 
     // Initialize LoRA weights
@@ -92,9 +92,9 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(std::shared_ptr<parallel::Col
 void LoRAColumnParallelLinear::InitLoRAWeights() {
     // lora_A: [rank, in_features] - replicated across TP ranks
     // lora_B: [out_features_per_partition, rank] - sharded like base weight
-    parameters_[kParamLoraAName]
-        = std::make_shared<Tensor>(std::vector<int64_t>{config_.rank, in_features_}, DataType::kFLOAT32, device_)
-              ->RequiresGrad();
+    RegisterParameter(kParamLoraAName, std::make_shared<Tensor>(std::vector<int64_t>{config_.rank, in_features_},
+                                                                DataType::kFLOAT32, device_)
+                                           ->RequiresGrad());
 
     if (parallel::global::GetTensorParallelSize() > 1) {
         const auto global_rank = device_.Rank().GlobalRank();
@@ -122,10 +122,10 @@ void LoRAColumnParallelLinear::InitLoRAWeights() {
         }
     }
 
-    parameters_[kParamLoraBName]
-        = std::make_shared<Tensor>(std::vector<int64_t>{out_features_per_partition_, config_.rank}, DataType::kFLOAT32,
-                                   device_)
-              ->RequiresGrad();
+    RegisterParameter(kParamLoraBName,
+                      std::make_shared<Tensor>(std::vector<int64_t>{out_features_per_partition_, config_.rank},
+                                               DataType::kFLOAT32, device_)
+                          ->RequiresGrad());
     init::Zeros(parameters_[kParamLoraBName]);
 }
 
@@ -243,7 +243,7 @@ LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<parallel::RowParall
     device_ = base_module->parameter(kParamWeightName)->GetDevice();
 
     // Transfer weight from base module (overwrite base-created one)
-    parameters_[kParamWeightName] = base_module->parameter(kParamWeightName);
+    RegisterParameter(kParamWeightName, base_module->parameter(kParamWeightName));
 
     // Get dimensions from weight shape [out_features, in_features_per_partition]
     const auto &weight_dims = parameters_[kParamWeightName]->Dims();
@@ -251,7 +251,7 @@ LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<parallel::RowParall
 
     // Transfer bias if exists
     if (base_module->has_parameter(kParamBiasName)) {
-        parameters_[kParamBiasName] = base_module->parameter(kParamBiasName);
+        RegisterParameter(kParamBiasName, base_module->parameter(kParamBiasName));
     }
 
     // Initialize LoRA weights
@@ -275,7 +275,7 @@ LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<parallel::RowParall
     device_ = base_module->parameter(kParamWeightName)->GetDevice();
 
     // Transfer weight from base module (overwrite base-created one)
-    parameters_[kParamWeightName] = base_module->parameter(kParamWeightName);
+    RegisterParameter(kParamWeightName, base_module->parameter(kParamWeightName));
 
     // Get dimensions from weight shape [out_features, in_features_per_partition]
     const auto &weight_dims = parameters_[kParamWeightName]->Dims();
@@ -288,7 +288,7 @@ LoRARowParallelLinear::LoRARowParallelLinear(std::shared_ptr<parallel::RowParall
 
     // Transfer bias if exists
     if (base_module->has_parameter(kParamBiasName)) {
-        parameters_[kParamBiasName] = base_module->parameter(kParamBiasName);
+        RegisterParameter(kParamBiasName, base_module->parameter(kParamBiasName));
     }
 
     // Initialize LoRA weights
@@ -303,10 +303,10 @@ void LoRARowParallelLinear::InitLoRAWeights() {
     // lora_B: [out_features, rank] - replicated
 
     // lora_A: [rank, in_features_per_partition]
-    parameters_[kParamLoraAName]
-        = std::make_shared<Tensor>(std::vector<int64_t>{config_.rank, in_features_per_partition_}, DataType::kFLOAT32,
-                                   device_)
-              ->RequiresGrad();
+    RegisterParameter(kParamLoraAName,
+                      std::make_shared<Tensor>(std::vector<int64_t>{config_.rank, in_features_per_partition_},
+                                               DataType::kFLOAT32, device_)
+                          ->RequiresGrad());
     if (parallel::global::GetTensorParallelSize() > 1) {
         const auto global_rank = device_.Rank().GlobalRank();
         auto *tp_group = parallel::ProcessGroupFactory::Instance(device_.type())
@@ -334,9 +334,9 @@ void LoRARowParallelLinear::InitLoRAWeights() {
     }
 
     // lora_B: [out_features, rank]
-    parameters_[kParamLoraBName]
-        = std::make_shared<Tensor>(std::vector<int64_t>{out_features_, config_.rank}, DataType::kFLOAT32, device_)
-              ->RequiresGrad();
+    RegisterParameter(kParamLoraBName, std::make_shared<Tensor>(std::vector<int64_t>{out_features_, config_.rank},
+                                                                DataType::kFLOAT32, device_)
+                                           ->RequiresGrad());
     init::Zeros(parameters_[kParamLoraBName]);
 }
 

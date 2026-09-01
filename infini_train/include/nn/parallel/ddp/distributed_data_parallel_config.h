@@ -57,7 +57,7 @@ public:
     // TODO(zbl): Unused by now, to be implemented in ParamAndGradBucketGroup
     int num_distributed_optimizer_instances = 1;
 
-    // Maximum number of parameters in each ParamAndGradBucket.
+    // Target maximum number of elements in each ParamAndGradBucket.
     // NOTE(zbl): This is distinct from DDP Reducer's MB-based bucket caps.
     size_t bucket_size_in_elements = 1000000;
 

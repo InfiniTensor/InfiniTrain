@@ -26,12 +26,13 @@ namespace infini_train::nn {
 
 TransformerFirstStage::TransformerFirstStage(const TransformerConfig &config)
     : CloneableModule(kType), config_(config) {
-    modules_[kWTELayerName] = std::make_shared<parallel::VocabParallelEmbedding>(
-        config_.vocab_size, config_.n_embd, parallel::global::GetSequenceParallelEnabled());
+    RegisterModule(kWTELayerName,
+                   std::make_shared<parallel::VocabParallelEmbedding>(config_.vocab_size, config_.n_embd,
+                                                                      parallel::global::GetSequenceParallelEnabled()));
 
     // Only learned absolute position embedding uses a trainable WPE table.
     if (config_.position_embedding_type == PositionEmbeddingType::kLearnedAbsolute) {
-        modules_[kWPELayerName] = std::make_shared<Embedding>(config_.block_size, config_.n_embd);
+        RegisterModule(kWPELayerName, std::make_shared<Embedding>(config_.block_size, config_.n_embd));
     } else if (config_.position_embedding_type != PositionEmbeddingType::kRoPE) {
         LOG(FATAL) << "Unsupported position embedding type";
     }
@@ -77,22 +78,32 @@ std::vector<std::shared_ptr<Tensor>> TransformerFirstStage::Forward(const std::v
 TransformerLayer::TransformerLayer(const nn::TransformerConfig &config) : CloneableModule(kType) {
     switch (config.norm_type) {
     case NormType::kLayerNorm:
-        modules_[kLn1LayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
-        modules_[kLn2LayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
+        RegisterModule(kLn1LayerName, std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd}));
         break;
     case NormType::kRMSNorm:
-        modules_[kLn1LayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
-        modules_[kLn2LayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
+        RegisterModule(kLn1LayerName, std::make_shared<RMSNorm>(config.n_embd, config.norm_eps));
         break;
     default:
         LOG(FATAL) << "Unsupported norm type";
     }
 
-    modules_[kAttnLayerName] = std::make_shared<CausalSelfAttention>(config);
+    RegisterModule(kAttnLayerName, std::make_shared<CausalSelfAttention>(config));
+
+    switch (config.norm_type) {
+    case NormType::kLayerNorm:
+        RegisterModule(kLn2LayerName, std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd}));
+        break;
+    case NormType::kRMSNorm:
+        RegisterModule(kLn2LayerName, std::make_shared<RMSNorm>(config.n_embd, config.norm_eps));
+        break;
+    default:
+        LOG(FATAL) << "Unsupported norm type";
+    }
+
     if (config.ffn_type == FFNType::kMoE) {
-        modules_[kMlpLayerName] = std::make_shared<moe::MoELayer>(config);
+        RegisterModule(kMlpLayerName, std::make_shared<moe::MoELayer>(config));
     } else {
-        modules_[kMlpLayerName] = std::make_shared<MLP>(config);
+        RegisterModule(kMlpLayerName, std::make_shared<MLP>(config));
     }
 }
 
@@ -129,7 +140,7 @@ TransformerChunk::TransformerChunk(const TransformerConfig &config, int start_la
         auto layer = std::make_shared<TransformerLayer>(config);
         h.push_back(layer);
     }
-    modules_[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
+    RegisterModule(kHLayerName, std::make_shared<nn::ModuleList>(std::move(h)));
 }
 
 std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
@@ -141,10 +152,10 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
         const auto device = x1->GetDevice();
 
         // Init freqs_cis on device only once
-        if (buffers_[kFreqsCisName] == nullptr) {
+        if (!buffers_.contains(kFreqsCisName) || !buffers_.at(kFreqsCisName)) {
             int64_t head_dim = config_.n_embd / config_.n_head;
-            buffers_[kFreqsCisName] = PrecomputeFreqsCis(head_dim, config_.block_size * 2, config_.rope_theta,
-                                                         config_.use_scaled_rope, device);
+            RegisterBuffer(kFreqsCisName, PrecomputeFreqsCis(head_dim, config_.block_size * 2, config_.rope_theta,
+                                                             config_.use_scaled_rope, device));
         }
 
         const auto t = x1->Dims()[1] * nn::parallel::global::GetSequenceParallelSize(); // full_seq_len
@@ -176,23 +187,23 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
 TransformerLastStage::TransformerLastStage(const TransformerConfig &config) : CloneableModule(kType), config_(config) {
     switch (config.norm_type) {
     case NormType::kLayerNorm:
-        modules_[kLnFLayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd});
+        RegisterModule(kLnFLayerName, std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd}));
         break;
     case NormType::kRMSNorm:
-        modules_[kLnFLayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
+        RegisterModule(kLnFLayerName, std::make_shared<RMSNorm>(config.n_embd, config.norm_eps));
         break;
     default:
         LOG(FATAL) << "Unsupported norm type";
     }
     // NOTE(zbl): weight-tying is possible but torch script did not do so
-    modules_[kLMHeadLayerName] = std::make_shared<parallel::ColumnParallelLinear>(
-        /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
-        /*bias=*/config_.add_bias_lm_head,
-        // NOTE(zbl): each rank would get sharded [B, T, V_local] as logits
-        /*gather_output=*/false,
-        /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false,
-        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+    RegisterModule(kLMHeadLayerName, std::make_shared<parallel::ColumnParallelLinear>(
+                                         /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
+                                         /*bias=*/config_.add_bias_lm_head,
+                                         // NOTE(zbl): each rank would get sharded [B, T, V_local] as logits
+                                         /*gather_output=*/false,
+                                         /*input_is_parallel=*/false,
+                                         /*skip_bias_add=*/false,
+                                         /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled()));
 }
 
 std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
@@ -216,14 +227,14 @@ TransformerModel::TransformerModel(const TransformerConfig config)
     //            Here we introduce padding by default, might need modify Tokenizer correspondingly later
     CHECK_EQ(config.vocab_size % tp_world_size, 0) << "Vocab size should be divisible by TP world size";
 
-    std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
+    std::vector<nn::ModuleDict::Item> transformer;
     if (stage_info_.is_first_stage) {
-        modules_[kPPFirstStageName] = std::make_shared<TransformerFirstStage>(config_);
-        transformer[TransformerFirstStage::kWTELayerName]
-            = modules_[kPPFirstStageName]->mutable_module(TransformerFirstStage::kWTELayerName);
+        RegisterModule(kPPFirstStageName, std::make_shared<TransformerFirstStage>(config_));
+        transformer.emplace_back(TransformerFirstStage::kWTELayerName,
+                                 modules_[kPPFirstStageName]->mutable_module(TransformerFirstStage::kWTELayerName));
         if (config_.position_embedding_type == PositionEmbeddingType::kLearnedAbsolute) {
-            transformer[TransformerFirstStage::kWPELayerName]
-                = modules_[kPPFirstStageName]->mutable_module(TransformerFirstStage::kWPELayerName);
+            transformer.emplace_back(TransformerFirstStage::kWPELayerName,
+                                     modules_[kPPFirstStageName]->mutable_module(TransformerFirstStage::kWPELayerName));
         }
     }
 
@@ -241,20 +252,20 @@ TransformerModel::TransformerModel(const TransformerConfig config)
             for (int idx = 0; idx < layer_size; ++idx) {
                 h.push_back(chunk->mutable_module(TransformerChunk::kHLayerName)->mutable_module(std::to_string(idx)));
             }
-            modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)] = std::move(chunk);
+            RegisterModule(kPPChunkNamePrefix + std::to_string(chunk_idx), std::move(chunk));
             ++chunk_idx;
         }
-        transformer[TransformerChunk::kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
+        transformer.emplace_back(TransformerChunk::kHLayerName, std::make_shared<nn::ModuleList>(std::move(h)));
     }
 
     if (stage_info_.is_last_stage) {
-        modules_[kPPLastStageName] = std::make_shared<TransformerLastStage>(config_);
-        transformer[TransformerLastStage::kLnFLayerName]
-            = modules_[kPPLastStageName]->mutable_module(TransformerLastStage::kLnFLayerName);
-        modules_[TransformerLastStage::kLMHeadLayerName]
-            = modules_[kPPLastStageName]->mutable_module(TransformerLastStage::kLMHeadLayerName);
+        RegisterModule(kPPLastStageName, std::make_shared<TransformerLastStage>(config_));
+        transformer.emplace_back(TransformerLastStage::kLnFLayerName,
+                                 modules_[kPPLastStageName]->mutable_module(TransformerLastStage::kLnFLayerName));
+        RegisterModule(TransformerLastStage::kLMHeadLayerName,
+                       modules_[kPPLastStageName]->mutable_module(TransformerLastStage::kLMHeadLayerName));
     }
-    modules_[kTransformerModelName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
+    RegisterModule(kTransformerModelName, std::make_shared<nn::ModuleDict>(std::move(transformer)));
 
     // FIXME(jym): Assigning the parameter values of wte to LMHead, which is not real tying operation
     // TODO: Implement real GPT-2 weight tying: make lm_head.weight share the exact same Parameter/Tensor (same
