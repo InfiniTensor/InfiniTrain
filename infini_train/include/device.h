@@ -13,13 +13,8 @@ public:
     enum class DeviceType : int8_t {
         kCPU = 0,
         kCUDA = 1,
-<<<<<<< ours
-        kCount = 2,
-=======
-        kMACA = 2,
-        kDCU = 3,
-        kCount = 4,
->>>>>>> theirs
+        kDCU = 2,
+        kCount = 3,
         kInvalid = -1,
     };
 
@@ -36,11 +31,7 @@ public:
 
     bool IsCPU() const;
     bool IsCUDA() const;
-<<<<<<< ours
-=======
-    bool IsMACA() const;
     bool IsDCU() const;
->>>>>>> theirs
 
     std::string ToString() const;
 

@@ -200,10 +200,7 @@ inline size_t ChooseBlockSize(size_t num_elements) {
     if (num_elements < 65536) {
         return 128;
     }
-    if (num_elements < 1048576) {
-        return 256;
-    }
-    return 512;
+    return 256;
 }
 
 // launch the given kernel function with the given output and inputs

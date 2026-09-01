@@ -21,6 +21,9 @@ __global__ void AccumulateGradKernel(const T *grad_ptr, float rate, T *tensor_pt
 
 void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const std::shared_ptr<Tensor> &tensor) {
     size_t num_elements = gradient->NumElements();
+    CHECK_EQ(num_elements, tensor->NumElements())
+        << "AccumulateGrad requires gradient and destination to have the same number of elements";
+    CHECK(gradient->Dtype() == tensor->Dtype()) << "AccumulateGrad requires matching dtypes";
 
     int threads_per_block = 256;
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;

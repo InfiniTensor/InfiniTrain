@@ -1,25 +1,12 @@
-<<<<<<< ours
 cmake_minimum_required(VERSION 3.28)
-=======
-# Platforms
-option(USE_CUDA "Support NVIDIA CUDA" OFF)
-option(USE_MACA "Support MetaX MACA" OFF)
-option(USE_DCU "Support Hygon DCU through DTK/HIP" OFF)
->>>>>>> theirs
 
 option(USE_CUDA "Support NVIDIA CUDA" OFF)
+option(USE_DCU "Support Hygon DCU through DTK/HIP" OFF)
 option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
-<<<<<<< ours
 option(USE_NCCL "Build project for distributed running" ON)
-option(BUILD_TEST "Build InfiniTrain tests" OFF)
-=======
-option(USE_NCCL "Build project for distributed running on CUDA using NCCL" ON)
-option(USE_MCCL "Build project for distributed running on MACA using MCCL" ON)
 option(USE_RCCL "Build project for distributed running on DCU using RCCL" OFF)
-option(USE_MPI "Enable MPI for inter-node CPU communication" ON)
-cmake_minimum_required(VERSION 3.28)
->>>>>>> theirs
+option(BUILD_TEST "Build InfiniTrain tests" OFF)
 
 project(infini_train VERSION 0.6.0 LANGUAGES CXX)
 
@@ -87,9 +74,9 @@ if(NOT USE_NCCL)
   list(FILTER SRC EXCLUDE REGEX ".*infini_train/src/core/ccl/cuda/.*")
 endif()
 if(NOT USE_DCU)
-    list(FILTER SRC EXCLUDE REGEX ".*/(ccl|runtime)/dcu/.*")
+  list(FILTER SRC EXCLUDE REGEX ".*/(ccl|runtime)/dcu/.*")
 elseif(NOT USE_RCCL)
-    list(FILTER SRC EXCLUDE REGEX ".*/ccl/dcu/.*")
+  list(FILTER SRC EXCLUDE REGEX ".*/ccl/dcu/.*")
 endif()
 
 # CPU kernels (*.cc)
@@ -144,10 +131,53 @@ if(USE_CUDA)
 endif()
 
 # ------------------------------------------------------------------------------
+# DCU kernels library (optional)
+# ------------------------------------------------------------------------------
+
+if(USE_DCU)
+  add_compile_definitions(USE_DCU=1)
+
+  set(DCU_PATH "$ENV{DTK_PATH}" CACHE PATH "Hygon DTK installation root")
+  set(DCU_ARCH "" CACHE STRING "Optional HIP offload architecture reported by rocminfo")
+  if(NOT DCU_PATH)
+    set(DCU_PATH /opt/dtk)
+  endif()
+
+  find_program(HIPCC_EXECUTABLE hipcc
+    HINTS "${DCU_PATH}/bin" "${DCU_PATH}/llvm/bin" /opt/rocm/bin
+    REQUIRED)
+  if(NOT CMAKE_CXX_COMPILER MATCHES "hipcc")
+    message(WARNING
+      "DCU kernels must be compiled by hipcc. Reconfigure with "
+      "-DCMAKE_CXX_COMPILER=${HIPCC_EXECUTABLE}")
+  endif()
+
+  include_directories("${DCU_PATH}/include")
+  link_directories("${DCU_PATH}/lib" "${DCU_PATH}/lib64")
+
+  find_library(DCU_RUNTIME_LIB NAMES amdhip64 hip_hcc
+    HINTS "${DCU_PATH}/lib" "${DCU_PATH}/lib64" /opt/rocm/lib /opt/rocm/lib64
+    REQUIRED)
+  find_library(DCU_BLAS_LIB NAMES hipblas
+    HINTS "${DCU_PATH}/lib" "${DCU_PATH}/lib64" /opt/rocm/lib /opt/rocm/lib64
+    REQUIRED)
+
+  file(GLOB_RECURSE DCU_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/kernels/dcu/*.hip)
+  set_source_files_properties(${DCU_KERNELS} PROPERTIES
+    LANGUAGE CXX
+    COMPILE_OPTIONS "-x;hip"
+  )
+  add_library(infini_train_dcu_kernels STATIC ${DCU_KERNELS})
+  if(DCU_ARCH)
+    target_compile_options(infini_train_dcu_kernels PRIVATE "--offload-arch=${DCU_ARCH}")
+  endif()
+  target_link_libraries(infini_train_dcu_kernels PUBLIC glog ${DCU_RUNTIME_LIB} ${DCU_BLAS_LIB})
+endif()
+
+# ------------------------------------------------------------------------------
 # Main framework library
 # ------------------------------------------------------------------------------
 
-<<<<<<< ours
 add_library(infini_train STATIC ${SRC})
 target_link_libraries(infini_train
   PUBLIC
@@ -172,128 +202,24 @@ if(USE_CUDA)
     # keep this. Otherwise it's harmless.
     target_link_libraries(infini_train PUBLIC nccl)
   endif()
-=======
-# =========================
-# DCU backend (Hygon DTK/HIP)
-# =========================
-elseif(USE_DCU)
-    add_compile_definitions(USE_DCU=1)
+endif()
 
-    set(DCU_PATH "$ENV{DTK_PATH}" CACHE PATH "Hygon DTK installation root")
-    set(DCU_ARCH "" CACHE STRING "Optional HIP offload architecture reported by rocminfo")
-    if(NOT DCU_PATH)
-        set(DCU_PATH /opt/dtk)
-    endif()
+if(USE_DCU)
+  target_link_libraries(infini_train PUBLIC infini_train_dcu_kernels ${DCU_RUNTIME_LIB} ${DCU_BLAS_LIB})
 
-    find_program(HIPCC_EXECUTABLE hipcc
-        HINTS "${DCU_PATH}/bin" "${DCU_PATH}/llvm/bin" /opt/rocm/bin
-        REQUIRED)
-    if(NOT CMAKE_CXX_COMPILER MATCHES "hipcc")
-        message(WARNING
-            "DCU kernels must be compiled by hipcc. Reconfigure with "
-            "-DCMAKE_CXX_COMPILER=${HIPCC_EXECUTABLE}")
-    endif()
-
-    include_directories("${DCU_PATH}/include")
-    link_directories("${DCU_PATH}/lib" "${DCU_PATH}/lib64")
-
-    find_library(DCU_RUNTIME_LIB NAMES amdhip64 hip_hcc
-        HINTS "${DCU_PATH}/lib" "${DCU_PATH}/lib64" /opt/rocm/lib /opt/rocm/lib64
-        REQUIRED)
-    find_library(DCU_BLAS_LIB NAMES hipblas
-        HINTS "${DCU_PATH}/lib" "${DCU_PATH}/lib64" /opt/rocm/lib /opt/rocm/lib64
-        REQUIRED)
-
-    file(GLOB_RECURSE DCU_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/kernels/dcu/*.hip)
-    set_source_files_properties(${DCU_KERNELS} PROPERTIES
-        LANGUAGE CXX
-        COMPILE_OPTIONS "-x;hip"
-    )
-    add_library(infini_train_dcu_kernels STATIC ${DCU_KERNELS})
-    if(DCU_ARCH)
-        target_compile_options(infini_train_dcu_kernels PRIVATE "--offload-arch=${DCU_ARCH}")
-    endif()
-    target_link_libraries(infini_train_dcu_kernels glog ${DCU_RUNTIME_LIB} ${DCU_BLAS_LIB})
-
-    add_library(infini_train STATIC ${SRC})
-    target_link_libraries(infini_train glog gflags infini_train_cpu_kernels infini_train_dcu_kernels)
-
-    if(USE_RCCL)
-        message(STATUS "Add USE_RCCL under DCU backend")
-        find_library(DCU_COMM_LIB NAMES rccl nccl
-            HINTS
-                "${DCU_PATH}/lib"
-                "${DCU_PATH}/lib64"
-                "${DCU_PATH}/rccl/lib"
-                "${DCU_PATH}/cuda/cuda-12/targets/x86_64-linux/lib"
-                "${DCU_PATH}/cuda/targets/x86_64-linux/lib"
-                /opt/rocm/lib
-                /opt/rocm/lib64
-            REQUIRED)
-        target_compile_definitions(infini_train PRIVATE USE_RCCL=1)
-        target_link_libraries(infini_train ${DCU_COMM_LIB})
-    endif()
-
-    if(USE_MPI)
-        target_link_libraries(infini_train ${MPI_LIBS})
-    endif()
-
-# =========================
-# MACA backend (MetaX)
-# =========================
-elseif(USE_MACA)
-    add_compile_definitions(USE_MACA=1)
-
-    # ---- configure MACA SDK paths ----
-    # Typical: /opt/maca (can be overridden by -DMACA_PATH=...)
-    set(MACA_PATH $ENV{MACA_PATH})
-    set(CMAKE_C_COMPILER ${MACA_PATH}/mxgpu_llvm/bin/mxcc)
-    set(CMAKE_CXX_COMPILER ${MACA_PATH}/mxgpu_llvm/bin/mxcc)
-
-    include_directories("${MACA_PATH}/include")
-    link_directories("${MACA_PATH}/lib")
-
-    # Libraries: mcruntime / mcdnn / mcblas
-    find_library(MACA_RUNTIME_LIB NAMES mcruntime HINTS "${MACA_PATH}/lib" REQUIRED)
-    find_library(MACA_DNN_LIB     NAMES mcdnn     HINTS "${MACA_PATH}/lib" REQUIRED)
-    find_library(MACA_BLAS_LIB    NAMES mcblas    HINTS "${MACA_PATH}/lib" REQUIRED)
-
-    file(GLOB_RECURSE MACA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/kernels/maca/*.maca)
-    set_source_files_properties(${MACA_KERNELS} PROPERTIES
-        LANGUAGE CXX
-        COMPILE_OPTIONS "-x;maca"
-    )
-    add_library(infini_train_maca_kernels STATIC ${MACA_KERNELS})
-    target_link_libraries(infini_train_maca_kernels glog ${MACA_RUNTIME_LIB} ${MACA_DNN_LIB} ${MACA_BLAS_LIB})
-
-    add_library(infini_train STATIC ${SRC})
-    target_link_libraries(infini_train glog gflags infini_train_cpu_kernels infini_train_maca_kernels)
-
-    if (USE_MCCL)
-        message(STATUS "Add USE_MCCL under MACA backend, use MCCL (mccl)")
-        find_library(MACA_COMM_LIB NAMES mccl HINTS "${MACA_PATH}/lib" REQUIRED)
-        add_compile_definitions(USE_MCCL=1)
-        target_link_libraries(infini_train ${MACA_COMM_LIB})
-    endif()
-
-    if (USE_MPI)
-        target_link_libraries(infini_train ${MPI_LIBS} Threads::Threads)
-
-        # 有些 MPI 还需要额外 link flags（比如 -Wl,...），也一并带上
-        if (MPI_CXX_LINK_FLAGS)
-            set_target_properties(infini_train PROPERTIES
-                LINK_FLAGS "${MPI_CXX_LINK_FLAGS}"
-            )
-        endif()
-    endif()
-
-# =========================
-# CPU-only backend
-# =========================
-else()
-    add_library(infini_train STATIC ${SRC})
-    target_link_libraries(infini_train glog gflags infini_train_cpu_kernels)
->>>>>>> theirs
+  if(USE_RCCL)
+    message(STATUS "Add USE_RCCL, use RCCL with DCU")
+    find_library(DCU_COMM_LIB NAMES rccl nccl
+      HINTS
+        "${DCU_PATH}/lib"
+        "${DCU_PATH}/lib64"
+        "${DCU_PATH}/rccl/lib"
+        /opt/rocm/lib
+        /opt/rocm/lib64
+      REQUIRED)
+    add_compile_definitions(USE_RCCL=1)
+    target_link_libraries(infini_train PUBLIC ${DCU_COMM_LIB})
+  endif()
 endif()
 
 # ------------------------------------------------------------------------------
@@ -311,18 +237,6 @@ function(link_infini_train_exe target_name)
       "-Wl,--no-whole-archive"
       "-Wl,--end-group"
     )
-<<<<<<< ours
-=======
-  elseif(USE_MACA)
-    target_link_libraries(${target_name} PRIVATE
-      "-Wl,--start-group"
-      "-Wl,--whole-archive"
-        infini_train
-        infini_train_cpu_kernels
-        infini_train_maca_kernels
-      "-Wl,--no-whole-archive"
-      "-Wl,--end-group"
-    )
   elseif(USE_DCU)
     target_link_libraries(${target_name} PRIVATE
       "-Wl,--start-group"
@@ -333,7 +247,6 @@ function(link_infini_train_exe target_name)
       "-Wl,--no-whole-archive"
       "-Wl,--end-group"
     )
->>>>>>> theirs
   else()
     target_link_libraries(${target_name} PRIVATE
       "-Wl,--start-group"
@@ -381,6 +294,7 @@ add_executable(llama3
   example/common/utils.cc
   example/common/tokenizer.cc
   example/llama3/checkpoint_loader.cc
+  example/fm9gv/checkpoint_loader.cc
 )
 link_infini_train_exe(llama3)
 
