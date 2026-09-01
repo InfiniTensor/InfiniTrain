@@ -52,6 +52,23 @@ TEST_P(AutogradElementwiseBackwardTest, MulBackward) {
     EXPECT_EQ(grad_inputs.size(), 2);
 }
 
+TEST_P(AutogradElementwiseBackwardTest, Float32MulBroadcastBackwardAcrossLogicalWarps) {
+    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 64}, DataType::kFLOAT32, GetDevice(), true);
+    a->Fill(1.0f);
+    auto b = std::make_shared<Tensor>(std::vector<int64_t>{2, 1}, DataType::kFLOAT32, GetDevice(), true);
+    b->Fill(2.0f);
+    auto mul_fn = std::make_shared<autograd::Mul>();
+    auto result = mul_fn->Apply({a, b});
+    auto grad = std::make_shared<Tensor>(std::vector<int64_t>{2, 64}, DataType::kFLOAT32, GetDevice(), true);
+    grad->Fill(1.0f);
+
+    auto grad_inputs = mul_fn->Backward({grad});
+    ASSERT_EQ(grad_inputs.size(), 2);
+
+    test::ExpectTensorFloatEqual(grad_inputs[0], 2.0f);
+    test::ExpectTensorFloatEqual(grad_inputs[1], std::vector<float>{64.0f, 64.0f});
+}
+
 TEST_P(AutogradElementwiseBackwardTest, BFloat16MulBroadcastBackwardLargeBlock) {
     ONLY_CUDA();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{512, 8192}, DataType::kBFLOAT16, GetDevice(), true);
