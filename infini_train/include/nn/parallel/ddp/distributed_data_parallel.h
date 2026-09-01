@@ -53,6 +53,8 @@ class DistributedDataParallel : public nn::Module {
   const std::vector<std::shared_ptr<ParamAndGradBucketGroup>> &bucket_groups()
       const;
 
+  void RegisterForwardPreHooks();
+
  private:
   // Dense parameters synchronize over DP; sharded expert parameters over EDP.
   // A null group denotes a single replica, which still needs gradient scaling.
