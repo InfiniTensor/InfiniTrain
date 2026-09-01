@@ -86,8 +86,7 @@ GlobalEnv &GlobalEnv::Instance() {
     return instance;
 }
 
-void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                     int pipeline_parallel_size, int virtual_pipeline_parallel_size) {
+void GlobalEnv::Init(int nthread_per_process, const ModelParallelConfig &model_parallel_config) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
@@ -107,16 +106,19 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
 
     nthread_per_process_ = nthread_per_process;
     world_size_ = proc_world_size * nthread_per_process;
-    CHECK_GE(tensor_parallel_size, 1) << "Tensor Parallel size must be >= 1";
-    tensor_parallel_size_ = tensor_parallel_size;
-    sequence_parallel_enabled_ = sequence_parallel_enabled;
-    pipeline_parallel_size_ = pipeline_parallel_size;
-    virtual_pipeline_parallel_size_ = virtual_pipeline_parallel_size;
-    data_parallel_size_ = world_size_ / tensor_parallel_size_ / pipeline_parallel_size_;
+    CHECK_GE(model_parallel_config.tensor_model_parallel_size, 1) << "Tensor Parallel size must be >= 1";
+    CHECK_GE(model_parallel_config.pipeline_model_parallel_size, 1) << "Pipeline Parallel size must be >= 1";
+    CHECK_GE(model_parallel_config.virtual_pipeline_model_parallel_size, 1)
+        << "Virtual Pipeline Parallel size must be >= 1";
+    const int model_parallel_size
+        = model_parallel_config.tensor_model_parallel_size * model_parallel_config.pipeline_model_parallel_size;
+    CHECK_EQ(world_size_ % model_parallel_size, 0) << "World size must be divisible by TP * PP";
+    model_parallel_config_ = model_parallel_config;
+    data_parallel_size_ = world_size_ / model_parallel_size;
 
     layout_.sizes[DP] = data_parallel_size_;
-    layout_.sizes[TP] = tensor_parallel_size_;
-    layout_.sizes[PP] = pipeline_parallel_size_;
+    layout_.sizes[TP] = model_parallel_config_.tensor_model_parallel_size;
+    layout_.sizes[PP] = model_parallel_config_.pipeline_model_parallel_size;
     layout_.InitStrides();
 
     initialized_ = true;
@@ -154,17 +156,22 @@ int GlobalEnv::local_proc_rank() const {
 
 int GlobalEnv::tensor_parallel_size() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return tensor_parallel_size_;
+    return model_parallel_config_.tensor_model_parallel_size;
 }
 
 int GlobalEnv::sequence_parallel_size() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return sequence_parallel_enabled_ ? tensor_parallel_size_ : 1;
+    return model_parallel_config_.sequence_parallel ? model_parallel_config_.tensor_model_parallel_size : 1;
 }
 
 bool GlobalEnv::sequence_parallel_enabled() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return sequence_parallel_enabled_;
+    return model_parallel_config_.sequence_parallel;
+}
+
+const ModelParallelConfig &GlobalEnv::model_parallel_config() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return model_parallel_config_;
 }
 
 int GlobalEnv::data_parallel_size() const {
@@ -174,12 +181,12 @@ int GlobalEnv::data_parallel_size() const {
 
 int GlobalEnv::pipeline_parallel_size() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return pipeline_parallel_size_;
+    return model_parallel_config_.pipeline_model_parallel_size;
 }
 
 int GlobalEnv::virtual_pipeline_parallel_size() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return virtual_pipeline_parallel_size_;
+    return model_parallel_config_.virtual_pipeline_model_parallel_size;
 }
 
 Layout GlobalEnv::layout() const {

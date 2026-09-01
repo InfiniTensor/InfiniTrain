@@ -12,6 +12,21 @@ class Tensor;
 
 namespace infini_train::autograd {
 
+// Raw dispatcher operations for custom autograd Functions. These calls do not create autograd nodes.
+namespace linear {
+void ForwardOut(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &bias = nullptr);
+std::shared_ptr<Tensor> Forward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                                const std::shared_ptr<Tensor> &bias = nullptr);
+std::shared_ptr<Tensor> BackwardInput(const std::shared_ptr<Tensor> &weight, const std::shared_ptr<Tensor> &grad_output,
+                                      const std::vector<int64_t> &input_dims);
+void BackwardInputOut(const std::shared_ptr<Tensor> &weight, const std::shared_ptr<Tensor> &grad_output,
+                      const std::shared_ptr<Tensor> &grad_input);
+std::shared_ptr<Tensor> BackwardWeight(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &grad_output,
+                                       int64_t in_features, int64_t out_features);
+std::shared_ptr<Tensor> BackwardBias(const std::shared_ptr<Tensor> &grad_output, int64_t out_features);
+} // namespace linear
+
 class Linear : public Function {
 public:
     static constexpr char kType[] = "LinearFunction";
@@ -24,7 +39,6 @@ public:
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
 private:
-    bool transpose_ = false;
     bool bias_ = false;
     int64_t in_features_ = 0;
     int64_t out_features_ = 0;

@@ -46,6 +46,11 @@ public:
                                             function::ReduceOpType reduce_op = function::ReduceOpType::kSum,
                                             bool async_op = false) const;
 
+    virtual std::shared_ptr<Work> Reduce(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                                         int root_rank_in_group,
+                                         function::ReduceOpType reduce_op = function::ReduceOpType::kSum,
+                                         bool async_op = false) const;
+
     virtual std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
                                             bool async_op = false) const;
 
@@ -68,6 +73,10 @@ public:
 
     virtual std::shared_ptr<Work> Recv(std::vector<std::shared_ptr<Tensor>> tensors, int src_rank,
                                        bool async_op = false) const;
+
+    virtual std::shared_ptr<Work> SendRecv(const std::shared_ptr<Tensor> &send_tensor, int dest_rank,
+                                           const std::shared_ptr<Tensor> &recv_tensor, int src_rank,
+                                           bool async_op = false) const;
 
     // Legacy communication APIs (Single-stream)
     // FIXME(dcj): BroadCast_ and Scatter_ are temporarily retained with trailing underscores for existing DP callers.

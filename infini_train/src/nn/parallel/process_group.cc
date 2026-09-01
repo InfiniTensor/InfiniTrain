@@ -157,6 +157,37 @@ std::shared_ptr<Work> ProcessGroup::AllReduce(const std::shared_ptr<Tensor> &ten
     }
 }
 
+std::shared_ptr<Work> ProcessGroup::Reduce(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                                           int root_rank_in_group, function::ReduceOpType reduce_op,
+                                           bool async_op) const {
+    CHECK_NOTNULL(output);
+    CHECK_NOTNULL(input);
+    CHECK(output->GetDevice() == input->GetDevice());
+    CHECK(output->Dtype() == input->Dtype());
+    CHECK_EQ(output->NumElements(), input->NumElements());
+    CHECK_GE(root_rank_in_group, 0);
+    CHECK_LT(root_rank_in_group, world_size_);
+
+    auto device = input->GetDevice();
+    core::DeviceGuard guard(device);
+    auto *compute_stream = runtime_impl_->GetStream(device);
+    auto *comm_stream = device_stream_map_.at(device.index());
+    auto comm = device_comm_map_.at(device.index());
+
+    auto work = std::make_shared<Work>(device, comm);
+    runtime_impl_->EventRecord(work->ready_event(), compute_stream);
+    runtime_impl_->StreamWaitEvent(comm_stream, work->ready_event(), 0);
+    ccl_impl_->Reduce(input->DataPtr(), output->DataPtr(), input->NumElements(), input->Dtype(), reduce_op,
+                      root_rank_in_group, comm, comm_stream);
+    runtime_impl_->EventRecord(work->done_event(), comm_stream);
+
+    if (async_op) {
+        return work;
+    }
+    work->WaitNonBlocking();
+    return nullptr;
+}
+
 std::shared_ptr<Work> ProcessGroup::AllGather(const std::shared_ptr<Tensor> &output,
                                               const std::shared_ptr<Tensor> &input, bool async_op) const {
     auto device = input->GetDevice();
@@ -365,6 +396,44 @@ std::shared_ptr<Work> ProcessGroup::Recv(std::vector<std::shared_ptr<Tensor>> te
         work->WaitNonBlocking();
         return nullptr;
     }
+}
+
+std::shared_ptr<Work> ProcessGroup::SendRecv(const std::shared_ptr<Tensor> &send_tensor, int dest_rank,
+                                             const std::shared_ptr<Tensor> &recv_tensor, int src_rank,
+                                             bool async_op) const {
+    CHECK_NOTNULL(send_tensor);
+    CHECK_NOTNULL(recv_tensor);
+    CHECK(send_tensor->GetDevice() == recv_tensor->GetDevice());
+    CHECK(send_tensor->Dtype() == recv_tensor->Dtype());
+    CHECK_EQ(send_tensor->NumElements(), recv_tensor->NumElements());
+    CHECK_GE(dest_rank, 0);
+    CHECK_LT(dest_rank, world_size_);
+    CHECK_GE(src_rank, 0);
+    CHECK_LT(src_rank, world_size_);
+
+    auto device = send_tensor->GetDevice();
+    core::DeviceGuard guard(device);
+    auto *compute_stream = runtime_impl_->GetStream(device);
+    auto *comm_stream = device_stream_map_.at(device.index());
+    auto comm = device_comm_map_.at(device.index());
+
+    auto work = std::make_shared<Work>(device, comm);
+    runtime_impl_->EventRecord(work->ready_event(), compute_stream);
+    runtime_impl_->StreamWaitEvent(comm_stream, work->ready_event(), 0);
+    {
+        core::CclGroupGuard ccl_group_guard(device.type());
+        ccl_impl_->Send(send_tensor->DataPtr(), send_tensor->NumElements(), send_tensor->Dtype(), dest_rank, comm,
+                        comm_stream);
+        ccl_impl_->Recv(recv_tensor->DataPtr(), recv_tensor->NumElements(), recv_tensor->Dtype(), src_rank, comm,
+                        comm_stream);
+    }
+    runtime_impl_->EventRecord(work->done_event(), comm_stream);
+
+    if (async_op) {
+        return work;
+    }
+    work->WaitNonBlocking();
+    return nullptr;
 }
 
 std::vector<std::shared_ptr<Tensor>>

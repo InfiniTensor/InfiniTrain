@@ -27,8 +27,8 @@ template <typename T> __global__ void BiasCopyKernel(T *output, const T *bias, i
     output[idx] = bias[j];
 }
 
-std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
-                                      bool transpose, const std::shared_ptr<Tensor> &bias) {
+void LinearForwardOut(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                      const std::shared_ptr<Tensor> &output, bool transpose, const std::shared_ptr<Tensor> &bias) {
 
     /*
         !transpose: output = input * weight + bias
@@ -58,7 +58,9 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
     auto dtype = input->Dtype();
     auto output_dims = input_dims;
     *output_dims.rbegin() = out_features;
-    auto output = std::make_shared<Tensor>(output_dims, dtype, input->GetDevice());
+    CHECK(output->Dims() == output_dims);
+    CHECK(output->Dtype() == dtype);
+    CHECK(output->GetDevice() == input->GetDevice());
 
     auto device = input->GetDevice();
     const auto cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
@@ -131,7 +133,14 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
                 .output_dtype = dtype,
             });
     }
+}
 
+std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                                      bool transpose, const std::shared_ptr<Tensor> &bias) {
+    auto output_dims = input->Dims();
+    *output_dims.rbegin() = weight->Dims()[transpose ? 0 : 1];
+    auto output = std::make_shared<Tensor>(output_dims, input->Dtype(), input->GetDevice());
+    LinearForwardOut(input, weight, output, transpose, bias);
     return output;
 }
 
@@ -155,10 +164,10 @@ __global__ void ReduceRowsKernel(const TIn *__restrict__ input, TOut *__restrict
     }
 }
 
-std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weight,
-                                            const std::shared_ptr<Tensor> &grad_output, bool transpose,
-                                            int64_t in_features, int64_t out_features,
-                                            const std::vector<int64_t> &input_dims) {
+void LinearBackwardInputOut(const std::shared_ptr<Tensor> &weight, const std::shared_ptr<Tensor> &grad_output,
+                            const std::shared_ptr<Tensor> &grad_input, bool transpose, int64_t in_features,
+                            int64_t out_features) {
+    const auto &input_dims = grad_input->Dims();
     CHECK_GE(input_dims.size(), 2);
     const int64_t bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
 
@@ -170,8 +179,8 @@ std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weigh
 
     // FIXME(cx): output dtype promotion is a temporary hack; revisit when autograd/autocast is fixed.
     auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
-    // No Fill(0) needed: cuBLAS beta=0.0f fully overwrites output.
-    auto grad_input = std::make_shared<Tensor>(input_dims, output_dtype, grad_output->GetDevice());
+    CHECK(grad_input->Dtype() == output_dtype);
+    CHECK(grad_input->GetDevice() == grad_output->GetDevice());
 
     // When bs==1 and fp32, use cublasSgemv (more efficient than GEMM for matrix-vector).
     // cublasSgemv does not support bf16, so bf16 falls through to Gemm.
@@ -223,7 +232,15 @@ std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weigh
                 .output_dtype = output_dtype,
             });
     }
+}
 
+std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weight,
+                                            const std::shared_ptr<Tensor> &grad_output, bool transpose,
+                                            int64_t in_features, int64_t out_features,
+                                            const std::vector<int64_t> &input_dims) {
+    auto output_dtype = weight->Dtype() == DataType::kBFLOAT16 ? DataType::kFLOAT32 : weight->Dtype();
+    auto grad_input = std::make_shared<Tensor>(input_dims, output_dtype, grad_output->GetDevice());
+    LinearBackwardInputOut(weight, grad_output, grad_input, transpose, in_features, out_features);
     return grad_input;
 }
 
@@ -329,7 +346,9 @@ std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_o
     REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_LINEAR_KERNEL(LinearForward)
+REGISTER_CUDA_LINEAR_KERNEL(LinearForwardOut)
 REGISTER_CUDA_LINEAR_KERNEL(LinearBackwardInput)
+REGISTER_CUDA_LINEAR_KERNEL(LinearBackwardInputOut)
 REGISTER_CUDA_LINEAR_KERNEL(LinearBackwardWeight)
 REGISTER_CUDA_LINEAR_KERNEL(LinearBackwardBias)
 

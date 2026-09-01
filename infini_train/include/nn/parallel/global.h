@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "infini_train/include/nn/parallel/model_parallel_config.h"
+
 namespace infini_train::nn::parallel::global {
 
 extern thread_local int thread_global_rank;
@@ -28,8 +30,7 @@ class GlobalEnv {
 public:
     static GlobalEnv &Instance();
 
-    void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-              int pipeline_parallel_size, int virtual_pipeline_parallel_size);
+    void Init(int threads_per_process, const ModelParallelConfig &model_parallel_config);
 
     int nnodes() const;
 
@@ -48,6 +49,8 @@ public:
     int sequence_parallel_size() const;
 
     bool sequence_parallel_enabled() const;
+
+    const ModelParallelConfig &model_parallel_config() const;
 
     int data_parallel_size() const;
 
@@ -73,13 +76,9 @@ private:
     int global_proc_rank_ = 0;
     int local_proc_rank_ = 0;
 
-    int tensor_parallel_size_ = 1;
-    bool sequence_parallel_enabled_ = false;
+    ModelParallelConfig model_parallel_config_;
 
     int data_parallel_size_ = 1;
-
-    int pipeline_parallel_size_ = 1;
-    int virtual_pipeline_parallel_size_ = 1;
 
     mutable std::mutex mutex_;
     bool initialized_ = false;
@@ -87,10 +86,8 @@ private:
     Layout layout_;
 };
 
-inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                       int pipeline_parallel_size, int virtual_pipeline_parallel) {
-    GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
-                               pipeline_parallel_size, virtual_pipeline_parallel);
+inline void InitAllEnv(int nthread_per_process, const ModelParallelConfig &model_parallel_config = {}) {
+    GlobalEnv::Instance().Init(nthread_per_process, model_parallel_config);
 }
 inline int GetNnodes() { return GlobalEnv::Instance().nnodes(); }
 inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }
@@ -103,6 +100,7 @@ inline int GetDeviceIndex(int thread_rank) { return GetLocalProcRank() * GetNthr
 inline int GetTensorParallelSize() { return GlobalEnv::Instance().tensor_parallel_size(); }
 inline int GetSequenceParallelSize() { return GlobalEnv::Instance().sequence_parallel_size(); }
 inline bool GetSequenceParallelEnabled() { return GlobalEnv::Instance().sequence_parallel_enabled(); }
+inline const ModelParallelConfig &GetModelParallelConfig() { return GlobalEnv::Instance().model_parallel_config(); }
 inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
 inline int GetPipelineParallelSize() { return GlobalEnv::Instance().pipeline_parallel_size(); }
 inline int GetVirtualPipelineParallelSize() { return GlobalEnv::Instance().virtual_pipeline_parallel_size(); }

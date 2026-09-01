@@ -18,6 +18,12 @@ namespace infini_train::nn::parallel {
 //            On other occasions, should use Device::Rank()
 extern thread_local int tp_rank;
 
+enum class TPCommBufferRole {
+    kDefault,
+    kQKV,
+    kFC1,
+};
+
 class ColumnParallelLinear : public nn::CloneableModule<ColumnParallelLinear> {
 public:
     static constexpr char kType[] = "ColumnParallelLinear";
@@ -26,7 +32,8 @@ public:
     static constexpr char kParamBiasName[] = "bias";
 
     ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool gather_output,
-                         bool input_is_parallel, bool skip_bias_add, bool sequence_parallel = false);
+                         bool input_is_parallel, bool skip_bias_add, bool sequence_parallel = false,
+                         TPCommBufferRole tp_comm_buffer_role = TPCommBufferRole::kDefault);
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
@@ -36,6 +43,7 @@ public:
     bool input_is_parallel() const;
     bool skip_bias_add() const;
     bool sequence_parallel() const;
+    TPCommBufferRole tp_comm_buffer_role() const;
 
 protected:
     bool bias_ = true;
@@ -43,6 +51,7 @@ protected:
     bool input_is_parallel_ = false; // will perform an autograd-aware copy when false
     bool skip_bias_add_ = false;     // will return {out, bias} if true (for fusion purpose)
     bool sequence_parallel_ = false; // whether to enable sequence parallel
+    TPCommBufferRole tp_comm_buffer_role_ = TPCommBufferRole::kDefault;
 
     int64_t output_size_per_partition_ = 0;
 };

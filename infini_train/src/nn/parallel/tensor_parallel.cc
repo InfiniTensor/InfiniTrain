@@ -1,6 +1,7 @@
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 
 #include <memory>
+#include <numeric>
 #include <vector>
 
 #include "glog/logging.h"
@@ -8,6 +9,7 @@
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/linear.h"
 #include "infini_train/include/autograd/sparse.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
@@ -15,6 +17,7 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/utils.h"
+#include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
@@ -203,7 +206,409 @@ void LinearResetParameters(std::shared_ptr<Tensor> weight, std::shared_ptr<Tenso
     }
 }
 
-} // anonymous namespace
+struct GatherGemmResult {
+    std::shared_ptr<Tensor> output_sequence_major;
+    std::shared_ptr<Tensor> gathered_input_sequence_major;
+};
+
+struct AsyncGatherResult {
+    std::shared_ptr<Tensor> gathered_sequence_major;
+    std::shared_ptr<Work> work;
+};
+
+struct DgradReduceScatterResult {
+    std::shared_ptr<Tensor> grad_input_sequence_major;
+    std::shared_ptr<Work> work;
+};
+
+const ProcessGroup *GetTPGroup(const Device &device) {
+    return ProcessGroupFactory::Instance(device.type())
+        ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+}
+
+std::shared_ptr<Tensor> MakeFirstDimChunk(const std::shared_ptr<Tensor> &tensor, int chunk_id,
+                                          const std::vector<int64_t> &chunk_dims) {
+    const size_t chunk_bytes
+        = std::accumulate(chunk_dims.begin(), chunk_dims.end(), size_t{1}, std::multiplies<size_t>{})
+        * kDataTypeToSize.at(tensor->Dtype());
+    return std::make_shared<Tensor>(*tensor, static_cast<size_t>(chunk_id) * chunk_bytes, chunk_dims);
+}
+
+std::shared_ptr<Tensor> GatherSequenceMajor(const std::shared_ptr<Tensor> &local_sequence_major) {
+    const int tp_size = global::GetTensorParallelSize();
+    auto gathered_dims = local_sequence_major->Dims();
+    gathered_dims[0] *= tp_size;
+    auto gathered
+        = std::make_shared<Tensor>(gathered_dims, local_sequence_major->Dtype(), local_sequence_major->GetDevice());
+    GetTPGroup(local_sequence_major->GetDevice())->AllGather(gathered, local_sequence_major, false);
+    return gathered;
+}
+
+AsyncGatherResult GatherSequenceMajorAsync(const std::shared_ptr<Tensor> &local_sequence_major) {
+    const int tp_size = global::GetTensorParallelSize();
+    auto gathered_dims = local_sequence_major->Dims();
+    gathered_dims[0] *= tp_size;
+    auto gathered
+        = std::make_shared<Tensor>(gathered_dims, local_sequence_major->Dtype(), local_sequence_major->GetDevice());
+    auto work = GetTPGroup(local_sequence_major->GetDevice())->AllGather(gathered, local_sequence_major, true);
+    return {.gathered_sequence_major = gathered, .work = work};
+}
+
+bool ShouldOverlapAllGather(TPCommBufferRole role) {
+    const auto &config = global::GetModelParallelConfig();
+    const bool disable_all_gather_overlap = (role == TPCommBufferRole::kQKV && config.tp_comm_overlap_disable_qkv)
+                                         || (role == TPCommBufferRole::kFC1 && config.tp_comm_overlap_disable_fc1);
+    return config.tp_comm_overlap_ag && !disable_all_gather_overlap;
+}
+
+GatherGemmResult RingAllGatherForward(const std::shared_ptr<Tensor> &local_input_sequence_major,
+                                      const std::shared_ptr<Tensor> &weight, const std::shared_ptr<Tensor> &bias) {
+    const int tp_size = global::GetTensorParallelSize();
+    auto *tp_group = GetTPGroup(local_input_sequence_major->GetDevice());
+    const int rank = tp_group->GetGroupRank(local_input_sequence_major->GetDevice().Rank().GlobalRank());
+    const int next_rank = (rank + 1) % tp_size;
+    const int prev_rank = (rank + tp_size - 1) % tp_size;
+
+    auto chunk_dims = local_input_sequence_major->Dims();
+    auto gathered_dims = chunk_dims;
+    gathered_dims[0] *= tp_size;
+    auto output_dims = gathered_dims;
+    output_dims.back() = weight->Dims()[0];
+
+    auto gathered_input = std::make_shared<Tensor>(gathered_dims, local_input_sequence_major->Dtype(),
+                                                   local_input_sequence_major->GetDevice());
+    auto output = std::make_shared<Tensor>(output_dims, local_input_sequence_major->Dtype(),
+                                           local_input_sequence_major->GetDevice());
+    MakeFirstDimChunk(gathered_input, rank, chunk_dims)->CopyFrom(local_input_sequence_major);
+
+    auto output_chunk_dims = chunk_dims;
+    output_chunk_dims.back() = weight->Dims()[0];
+    std::vector<std::shared_ptr<Work>> works;
+    works.reserve(static_cast<size_t>(tp_size - 1));
+
+    for (int step = 0; step < tp_size; ++step) {
+        const int chunk_id = (rank + tp_size - step) % tp_size;
+        auto input_chunk = MakeFirstDimChunk(gathered_input, chunk_id, chunk_dims);
+        if (step + 1 < tp_size) {
+            const int recv_chunk_id = (chunk_id + tp_size - 1) % tp_size;
+            auto recv_chunk = MakeFirstDimChunk(gathered_input, recv_chunk_id, chunk_dims);
+            works.push_back(tp_group->SendRecv(input_chunk, next_rank, recv_chunk, prev_rank, true));
+        }
+
+        auto output_chunk = MakeFirstDimChunk(output, chunk_id, output_chunk_dims);
+        autograd::linear::ForwardOut(input_chunk, weight, output_chunk, bias);
+        if (step + 1 < tp_size) {
+            works.back()->WaitNonBlocking();
+        }
+    }
+    return {.output_sequence_major = output, .gathered_input_sequence_major = gathered_input};
+}
+
+GatherGemmResult RingAllGatherDgrad(const std::shared_ptr<Tensor> &local_grad_output_sequence_major,
+                                    const std::shared_ptr<Tensor> &weight) {
+    const int tp_size = global::GetTensorParallelSize();
+    auto *tp_group = GetTPGroup(local_grad_output_sequence_major->GetDevice());
+    const int rank = tp_group->GetGroupRank(local_grad_output_sequence_major->GetDevice().Rank().GlobalRank());
+    const int next_rank = (rank + 1) % tp_size;
+    const int prev_rank = (rank + tp_size - 1) % tp_size;
+
+    auto chunk_dims = local_grad_output_sequence_major->Dims();
+    auto gathered_dims = chunk_dims;
+    gathered_dims[0] *= tp_size;
+    auto grad_input_dims = gathered_dims;
+    grad_input_dims.back() = weight->Dims()[1];
+    const auto grad_input_dtype = weight->Dtype() == DataType::kBFLOAT16 ? DataType::kFLOAT32 : weight->Dtype();
+
+    auto gathered_grad_output = std::make_shared<Tensor>(gathered_dims, local_grad_output_sequence_major->Dtype(),
+                                                         local_grad_output_sequence_major->GetDevice());
+    auto grad_input
+        = std::make_shared<Tensor>(grad_input_dims, grad_input_dtype, local_grad_output_sequence_major->GetDevice());
+    MakeFirstDimChunk(gathered_grad_output, rank, chunk_dims)->CopyFrom(local_grad_output_sequence_major);
+
+    auto grad_input_chunk_dims = chunk_dims;
+    grad_input_chunk_dims.back() = weight->Dims()[1];
+    std::vector<std::shared_ptr<Work>> works;
+    works.reserve(static_cast<size_t>(tp_size - 1));
+
+    for (int step = 0; step < tp_size; ++step) {
+        const int chunk_id = (rank + tp_size - step) % tp_size;
+        auto grad_output_chunk = MakeFirstDimChunk(gathered_grad_output, chunk_id, chunk_dims);
+        if (step + 1 < tp_size) {
+            const int recv_chunk_id = (chunk_id + tp_size - 1) % tp_size;
+            auto recv_chunk = MakeFirstDimChunk(gathered_grad_output, recv_chunk_id, chunk_dims);
+            works.push_back(tp_group->SendRecv(grad_output_chunk, next_rank, recv_chunk, prev_rank, true));
+        }
+
+        auto grad_input_chunk = MakeFirstDimChunk(grad_input, chunk_id, grad_input_chunk_dims);
+        autograd::linear::BackwardInputOut(weight, grad_output_chunk, grad_input_chunk);
+        if (step + 1 < tp_size) {
+            works.back()->WaitNonBlocking();
+        }
+    }
+    return {.output_sequence_major = grad_input, .gathered_input_sequence_major = gathered_grad_output};
+}
+
+std::shared_ptr<Tensor> PipelinedGemmReduceScatter(const std::shared_ptr<Tensor> &input_sequence_major,
+                                                   const std::shared_ptr<Tensor> &weight) {
+    const int tp_size = global::GetTensorParallelSize();
+    auto *tp_group = GetTPGroup(input_sequence_major->GetDevice());
+    const int rank = tp_group->GetGroupRank(input_sequence_major->GetDevice().Rank().GlobalRank());
+    CHECK_EQ(input_sequence_major->Dims()[0] % tp_size, 0);
+
+    auto input_chunk_dims = input_sequence_major->Dims();
+    input_chunk_dims[0] /= tp_size;
+    auto output_chunk_dims = input_chunk_dims;
+    output_chunk_dims.back() = weight->Dims()[0];
+    auto full_output_dims = output_chunk_dims;
+    full_output_dims[0] *= tp_size;
+    auto full_output
+        = std::make_shared<Tensor>(full_output_dims, input_sequence_major->Dtype(), input_sequence_major->GetDevice());
+
+    std::vector<std::shared_ptr<Work>> works;
+    works.reserve(static_cast<size_t>(tp_size));
+    for (int chunk_id = 0; chunk_id < tp_size; ++chunk_id) {
+        auto input_chunk = MakeFirstDimChunk(input_sequence_major, chunk_id, input_chunk_dims);
+        auto output_chunk = MakeFirstDimChunk(full_output, chunk_id, output_chunk_dims);
+        autograd::linear::ForwardOut(input_chunk, weight, output_chunk);
+        works.push_back(tp_group->Reduce(output_chunk, output_chunk, chunk_id, function::ReduceOpType::kSum, true));
+    }
+    works.back()->WaitNonBlocking();
+    return MakeFirstDimChunk(full_output, rank, output_chunk_dims);
+}
+
+DgradReduceScatterResult PipelinedDgradReduceScatter(const std::shared_ptr<Tensor> &grad_output_sequence_major,
+                                                     const std::shared_ptr<Tensor> &weight) {
+    const int tp_size = global::GetTensorParallelSize();
+    auto *tp_group = GetTPGroup(grad_output_sequence_major->GetDevice());
+    const int rank = tp_group->GetGroupRank(grad_output_sequence_major->GetDevice().Rank().GlobalRank());
+    CHECK_EQ(grad_output_sequence_major->Dims()[0] % tp_size, 0);
+
+    auto grad_output_chunk_dims = grad_output_sequence_major->Dims();
+    grad_output_chunk_dims[0] /= tp_size;
+    auto grad_input_chunk_dims = grad_output_chunk_dims;
+    grad_input_chunk_dims.back() = weight->Dims()[1];
+    auto full_grad_input_dims = grad_input_chunk_dims;
+    full_grad_input_dims[0] *= tp_size;
+    const auto grad_input_dtype = weight->Dtype() == DataType::kBFLOAT16 ? DataType::kFLOAT32 : weight->Dtype();
+    auto full_grad_input
+        = std::make_shared<Tensor>(full_grad_input_dims, grad_input_dtype, grad_output_sequence_major->GetDevice());
+
+    // FIXME(zbl): This is a functional split-dgrad implementation. It launches one cuBLAS GEMM and one rooted
+    // Reduce per TP chunk, which can lose large-GEMM efficiency and pay extra launch/event overhead. A performant
+    // implementation should consider grouped/split GEMM scheduling, reusable workspace/events, and userbuffer or
+    // multicast/P2P communication that can expose chunk readiness without independent high-level collectives.
+    std::vector<std::shared_ptr<Work>> works;
+    works.reserve(static_cast<size_t>(tp_size));
+    for (int chunk_id = 0; chunk_id < tp_size; ++chunk_id) {
+        auto grad_output_chunk = MakeFirstDimChunk(grad_output_sequence_major, chunk_id, grad_output_chunk_dims);
+        auto grad_input_chunk = MakeFirstDimChunk(full_grad_input, chunk_id, grad_input_chunk_dims);
+        autograd::linear::BackwardInputOut(weight, grad_output_chunk, grad_input_chunk);
+        works.push_back(
+            tp_group->Reduce(grad_input_chunk, grad_input_chunk, chunk_id, function::ReduceOpType::kSum, true));
+    }
+    return {.grad_input_sequence_major = MakeFirstDimChunk(full_grad_input, rank, grad_input_chunk_dims),
+            .work = works.back()};
+}
+
+class ColumnParallelLinearOverlap : public autograd::Function {
+public:
+    static constexpr char kType[] = "ColumnParallelLinearFunction";
+
+    ColumnParallelLinearOverlap(bool bias, TPCommBufferRole role)
+        : autograd::Function(kType), bias_(bias), role_(role) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) override {
+        CHECK_EQ(inputs.size(), bias_ ? 3 : 2);
+        const auto local_input_sequence_major = inputs[0]->Transpose(0, 1);
+        const auto &weight = inputs[1];
+        const auto bias = bias_ ? inputs[2] : nullptr;
+
+        GatherGemmResult result;
+        if (ShouldOverlapAllGather(role_)) {
+            result = RingAllGatherForward(local_input_sequence_major, weight, bias);
+        } else {
+            result.gathered_input_sequence_major = GatherSequenceMajor(local_input_sequence_major);
+            result.output_sequence_major
+                = autograd::linear::Forward(result.gathered_input_sequence_major, weight, bias);
+        }
+        wgrad_input_sequence_major_ = local_input_sequence_major;
+        return {result.output_sequence_major->Transpose(0, 1)};
+    }
+
+    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &inputs,
+                      const std::vector<std::shared_ptr<Tensor>> &) override {
+        const bool need_input = ctx_.needs_input_grad()[0];
+        const bool need_weight = ctx_.needs_input_grad()[1];
+        ctx_.SaveForBackward({need_weight ? wgrad_input_sequence_major_ : nullptr, need_input ? inputs[1] : nullptr});
+        in_features_ = inputs[1]->Dims()[1];
+        out_features_ = inputs[1]->Dims()[0];
+        wgrad_input_sequence_major_.reset();
+    }
+
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
+        CHECK_EQ(grad_outputs.size(), 1);
+        const auto grad_output_sequence_major = grad_outputs[0]->Transpose(0, 1);
+        const auto saved = ctx_.GetSavedTensors();
+        const auto &saved_input_sequence_major = saved[0];
+        const auto &weight = saved[1];
+        const bool need_input = ctx_.needs_input_grad()[0];
+        const bool need_weight = ctx_.needs_input_grad()[1];
+        const bool need_bias = bias_ && ctx_.needs_input_grad()[2];
+        const auto &config = global::GetModelParallelConfig();
+
+        std::shared_ptr<Tensor> input_sequence_major = saved_input_sequence_major;
+        std::shared_ptr<Work> input_gather_work;
+        if (need_weight) {
+            if (config.tp_comm_bulk_wgrad) {
+                auto result = GatherSequenceMajorAsync(saved_input_sequence_major);
+                input_sequence_major = result.gathered_sequence_major;
+                input_gather_work = result.work;
+            } else {
+                input_sequence_major = GatherSequenceMajor(saved_input_sequence_major);
+            }
+        }
+
+        std::shared_ptr<Tensor> grad_input;
+        // Keep the communication input alive until ReduceScatter has been ordered back onto the compute stream.
+        std::shared_ptr<Tensor> grad_input_full;
+        std::shared_ptr<Work> reduce_scatter_work;
+        if (need_input) {
+            if (config.tp_comm_overlap_rs_dgrad) {
+                auto result = PipelinedDgradReduceScatter(grad_output_sequence_major, weight);
+                grad_input = result.grad_input_sequence_major;
+                reduce_scatter_work = result.work;
+            } else {
+                grad_input_full = autograd::linear::BackwardInput(
+                    weight, grad_output_sequence_major,
+                    {grad_output_sequence_major->Dims()[0], grad_output_sequence_major->Dims()[1], in_features_});
+                auto local_dims = grad_input_full->Dims();
+                local_dims[0] /= global::GetTensorParallelSize();
+                auto grad_input_local
+                    = std::make_shared<Tensor>(local_dims, grad_input_full->Dtype(), grad_input_full->GetDevice());
+                const bool overlap_reduce_scatter = config.tp_comm_bulk_dgrad && (need_weight || need_bias);
+                reduce_scatter_work = GetTPGroup(grad_input_full->GetDevice())
+                                          ->ReduceScatter(grad_input_local, grad_input_full,
+                                                          function::ReduceOpType::kSum, overlap_reduce_scatter);
+                grad_input = grad_input_local;
+            }
+        }
+
+        if (input_gather_work) {
+            input_gather_work->WaitNonBlocking();
+        }
+
+        auto grad_weight = need_weight ? autograd::linear::BackwardWeight(
+                               input_sequence_major, grad_output_sequence_major, in_features_, out_features_)
+                                       : nullptr;
+        auto grad_bias
+            = need_bias ? autograd::linear::BackwardBias(grad_output_sequence_major, out_features_) : nullptr;
+        if (reduce_scatter_work) {
+            reduce_scatter_work->WaitNonBlocking();
+        }
+        if (grad_input) {
+            grad_input = grad_input->Transpose(0, 1);
+        }
+        return bias_ ? std::vector<std::shared_ptr<Tensor>>{grad_input, grad_weight, grad_bias}
+                     : std::vector<std::shared_ptr<Tensor>>{grad_input, grad_weight};
+    }
+
+private:
+    bool bias_ = false;
+    TPCommBufferRole role_ = TPCommBufferRole::kDefault;
+    int64_t in_features_ = 0;
+    int64_t out_features_ = 0;
+    std::shared_ptr<Tensor> wgrad_input_sequence_major_;
+};
+
+class RowParallelLinearOverlap : public autograd::Function {
+public:
+    static constexpr char kType[] = "RowParallelLinearFunction";
+
+    RowParallelLinearOverlap() : autograd::Function(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) override {
+        CHECK_EQ(inputs.size(), 2);
+        input_sequence_major_ = inputs[0]->Transpose(0, 1);
+        const auto &weight = inputs[1];
+
+        std::shared_ptr<Tensor> output_sequence_major;
+        if (global::GetModelParallelConfig().tp_comm_overlap_rs) {
+            output_sequence_major = PipelinedGemmReduceScatter(input_sequence_major_, weight);
+        } else {
+            auto partial_output = autograd::linear::Forward(input_sequence_major_, weight);
+            auto output_dims = partial_output->Dims();
+            output_dims[0] /= global::GetTensorParallelSize();
+            output_sequence_major
+                = std::make_shared<Tensor>(output_dims, partial_output->Dtype(), partial_output->GetDevice());
+            GetTPGroup(partial_output->GetDevice())
+                ->ReduceScatter(output_sequence_major, partial_output, function::ReduceOpType::kSum, false);
+        }
+        return {output_sequence_major->Transpose(0, 1)};
+    }
+
+    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &inputs,
+                      const std::vector<std::shared_ptr<Tensor>> &) override {
+        const bool need_input = ctx_.needs_input_grad()[0];
+        const bool need_weight = ctx_.needs_input_grad()[1];
+        ctx_.SaveForBackward({need_weight ? input_sequence_major_ : nullptr, need_input ? inputs[1] : nullptr});
+        in_features_ = inputs[1]->Dims()[1];
+        out_features_ = inputs[1]->Dims()[0];
+        input_sequence_major_.reset();
+    }
+
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
+        CHECK_EQ(grad_outputs.size(), 1);
+        const auto local_grad_output_sequence_major = grad_outputs[0]->Transpose(0, 1);
+        const auto saved = ctx_.GetSavedTensors();
+        const auto &input_sequence_major = saved[0];
+        const auto &weight = saved[1];
+        const bool need_input = ctx_.needs_input_grad()[0];
+        const bool need_weight = ctx_.needs_input_grad()[1];
+
+        std::shared_ptr<Tensor> grad_input_sequence_major;
+        std::shared_ptr<Tensor> gathered_grad_output_sequence_major;
+        if (need_input && global::GetModelParallelConfig().tp_comm_overlap_ag) {
+            auto result = RingAllGatherDgrad(local_grad_output_sequence_major, weight);
+            grad_input_sequence_major = result.output_sequence_major;
+            gathered_grad_output_sequence_major = result.gathered_input_sequence_major;
+        } else {
+            gathered_grad_output_sequence_major = GatherSequenceMajor(local_grad_output_sequence_major);
+            if (need_input) {
+                auto input_dims = gathered_grad_output_sequence_major->Dims();
+                input_dims.back() = in_features_;
+                grad_input_sequence_major
+                    = autograd::linear::BackwardInput(weight, gathered_grad_output_sequence_major, input_dims);
+            }
+        }
+
+        auto grad_weight = need_weight ? autograd::linear::BackwardWeight(
+                               input_sequence_major, gathered_grad_output_sequence_major, in_features_, out_features_)
+                                       : nullptr;
+        auto grad_input = grad_input_sequence_major ? grad_input_sequence_major->Transpose(0, 1) : nullptr;
+        return {grad_input, grad_weight};
+    }
+
+private:
+    int64_t in_features_ = 0;
+    int64_t out_features_ = 0;
+    std::shared_ptr<Tensor> input_sequence_major_;
+};
+
+std::vector<std::shared_ptr<Tensor>> ColumnParallelLinearOverlapFunc(const std::shared_ptr<Tensor> &input,
+                                                                     const std::shared_ptr<Tensor> &weight,
+                                                                     const std::shared_ptr<Tensor> &bias,
+                                                                     TPCommBufferRole role) {
+    return std::make_shared<ColumnParallelLinearOverlap>(bias != nullptr, role)
+        ->Apply(bias ? std::vector<std::shared_ptr<Tensor>>{input, weight, bias}
+                     : std::vector<std::shared_ptr<Tensor>>{input, weight});
+}
+
+std::vector<std::shared_ptr<Tensor>> RowParallelLinearOverlapFunc(const std::shared_ptr<Tensor> &input,
+                                                                  const std::shared_ptr<Tensor> &weight) {
+    return std::make_shared<RowParallelLinearOverlap>()->Apply({input, weight});
+}
+
+} // namespace
 
 // TP/SP Communication Helper Functions (defined in utils.h)
 std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(const std::shared_ptr<Tensor> &input) {
@@ -231,9 +636,10 @@ std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_pt
 }
 
 ColumnParallelLinear::ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool gather_output,
-                                           bool input_is_parallel, bool skip_bias_add, bool sequence_parallel)
+                                           bool input_is_parallel, bool skip_bias_add, bool sequence_parallel,
+                                           TPCommBufferRole tp_comm_buffer_role)
     : CloneableModule(kType), bias_(bias), gather_output_(gather_output), input_is_parallel_(input_is_parallel),
-      skip_bias_add_(skip_bias_add), sequence_parallel_(sequence_parallel) {
+      skip_bias_add_(skip_bias_add), sequence_parallel_(sequence_parallel), tp_comm_buffer_role_(tp_comm_buffer_role) {
     auto tp_size = global::GetTensorParallelSize();
     CHECK_GT(tp_size, 0) << "No available devices found";
     CHECK_EQ(out_features % tp_size, 0) << "out_features must be divisible by TP world size for ColumnParallel";
@@ -261,14 +667,25 @@ ColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_
     auto input
         = (input_is_parallel_ || sequence_parallel_) ? input_tensors[0] : CopyToTPRegionFunc(input_tensors[0])[0];
 
-    if (sequence_parallel_) {
+    const auto &model_parallel_config = global::GetModelParallelConfig();
+    const bool use_overlap = sequence_parallel_ && model_parallel_config.tp_comm_overlap
+                          && global::GetTensorParallelSize() > 1
+                          && input_tensors[0]->GetDevice().type() == Device::DeviceType::kCUDA;
+
+    if (sequence_parallel_ && !use_overlap) {
         input = GatherFromSPRegionFunc(input)[0];
     }
 
-    auto sharded_output = std::make_shared<autograd::Linear>()->Apply(
-        (bias_ && !skip_bias_add_)
-            ? std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName), parameters_[kParamBiasName]}
-            : std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
+    auto sharded_output
+        = use_overlap
+            ? ColumnParallelLinearOverlapFunc(input, parameters_.at(kParamWeightName),
+                                              (bias_ && !skip_bias_add_) ? parameters_[kParamBiasName] : nullptr,
+                                              tp_comm_buffer_role_)[0]
+            : std::make_shared<autograd::Linear>()->Apply(
+                (bias_ && !skip_bias_add_)
+                    ? std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName),
+                                                           parameters_[kParamBiasName]}
+                    : std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
 
     std::shared_ptr<Tensor> output = gather_output_ ? GatherFromTPRegionFunc(sharded_output)[0] : sharded_output;
 
@@ -283,6 +700,7 @@ bool ColumnParallelLinear::gather_output() const { return gather_output_; }
 bool ColumnParallelLinear::input_is_parallel() const { return input_is_parallel_; }
 bool ColumnParallelLinear::skip_bias_add() const { return skip_bias_add_; }
 bool ColumnParallelLinear::sequence_parallel() const { return sequence_parallel_; }
+TPCommBufferRole ColumnParallelLinear::tp_comm_buffer_role() const { return tp_comm_buffer_role_; }
 
 RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool reduce_output,
                                      bool input_is_parallel, bool skip_bias_add, bool sequence_parallel)
@@ -316,12 +734,20 @@ RowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_ten
 
     auto input = input_is_parallel_ ? input_tensors[0] : ScatterToTPRegionFunc(input_tensors[0])[0];
 
-    auto sharded_output = std::make_shared<autograd::Linear>()->Apply(
-        std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
-
-    auto output = reduce_output_ ? (sequence_parallel_ ? ReduceScatterToSPRegionFunc(sharded_output)[0]
-                                                       : ReduceFromTPRegionFunc(sharded_output)[0])
-                                 : sharded_output;
+    const auto &model_parallel_config = global::GetModelParallelConfig();
+    const bool use_overlap = sequence_parallel_ && reduce_output_ && model_parallel_config.tp_comm_overlap
+                          && global::GetTensorParallelSize() > 1
+                          && input_tensors[0]->GetDevice().type() == Device::DeviceType::kCUDA;
+    std::shared_ptr<Tensor> output;
+    if (use_overlap) {
+        output = RowParallelLinearOverlapFunc(input, parameters_.at(kParamWeightName))[0];
+    } else {
+        auto sharded_output = std::make_shared<autograd::Linear>()->Apply(
+            std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
+        output = reduce_output_ ? (sequence_parallel_ ? ReduceScatterToSPRegionFunc(sharded_output)[0]
+                                                      : ReduceFromTPRegionFunc(sharded_output)[0])
+                                : sharded_output;
+    }
 
     if (bias_ && !skip_bias_add_) {
         output = output->Add(parameters_[kParamBiasName]);
