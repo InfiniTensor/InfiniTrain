@@ -39,6 +39,8 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
+#include "example/fm9gv/checkpoint_loader.h"
+#include "example/fm9gv/config.h"
 #include "example/llama3/checkpoint_loader.h"
 #include "example/llama3/config.h"
 
@@ -50,6 +52,8 @@ DEFINE_string(tokenizer_bin, "", "input .bin to tokenizer");
 // model bin file is downloaded and processed using the script at
 // https://github.com/karpathy/llm.c/blob/master/train_llama3.py
 DEFINE_string(llmc_filepath, "", "llmc model file path to load from");
+DEFINE_string(fm9gv_filepath, "", "converted FM9G text-only FP32 checkpoint");
+DEFINE_bool(fm9gv_tiny, false, "use a small FM9G-shaped model for integration smoke tests");
 DEFINE_string(model, "llama3", "meta-llama/Meta-Llama-3.1-8B");
 // token layout for each step of the optimization
 DEFINE_uint32(batch_size, 4, "batch size, in units of #batch dimensions");
@@ -74,7 +78,7 @@ DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 // debugging
 DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 // memory management
-DEFINE_string(device, "cuda", "device type (cpu/cuda/maca/dcu), useless if using parallel training mode");
+DEFINE_string(device, "cuda", "device type (cpu/cuda/dcu), useless if using parallel training mode");
 // parallel
 DEFINE_int32(
     nthread_per_process, 1,
@@ -107,14 +111,10 @@ using namespace infini_train;
 
 namespace {
 // validation
-const std::unordered_set<std::string> kSupportedModels = {"llama3"};
+const std::unordered_set<std::string> kSupportedModels = {"llama3", "fm9gv"};
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
-<<<<<<< ours
-=======
-constexpr char kDeviceMACA[] = "maca";
 constexpr char kDeviceDCU[] = "dcu";
->>>>>>> theirs
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles
@@ -122,17 +122,12 @@ const std::unordered_set<std::string> kSupportedLRDecayStyles
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
-<<<<<<< ours
-DEFINE_validator(device,
-                 [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_validator(device, [](const char *, const std::string &value) {
+    return value == kDeviceCPU || value == kDeviceCUDA || value == kDeviceDCU;
+});
 DEFINE_validator(zero_stage, [](const char *, int32_t value) { return value >= 0 && value <= 3; });
 DEFINE_validator(lr_decay_style,
                  [](const char *, const std::string &value) { return kSupportedLRDecayStyles.contains(value); });
-=======
-DEFINE_validator(device, [](const char *, const std::string &value) {
-    return value == kDeviceCPU || value == kDeviceCUDA || value == kDeviceMACA || value == kDeviceDCU;
-});
->>>>>>> theirs
 
 void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
@@ -178,18 +173,8 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *pp_pg = nullptr;
 
     if (rank.IsParallel()) {
-<<<<<<< ours
-        device = Device(Device::DeviceType::kCUDA, rank.thread_rank());
-=======
-        auto parallel_device_type = Device::DeviceType::kCUDA;
-        if (FLAGS_device == kDeviceMACA) {
-            parallel_device_type = Device::DeviceType::kMACA;
-        } else if (FLAGS_device == kDeviceDCU) {
-            parallel_device_type = Device::DeviceType::kDCU;
-        }
+        auto parallel_device_type = FLAGS_device == kDeviceDCU ? Device::DeviceType::kDCU : Device::DeviceType::kCUDA;
         device = Device(parallel_device_type, rank.thread_rank());
-
->>>>>>> theirs
         auto *pg_factory = ProcessGroupFactory::Instance(device.type());
 
         if (ddp_world_size > 1) {
@@ -213,20 +198,12 @@ void Train(const nn::parallel::Rank &rank) {
 
             nn::parallel::pp_rank = pp_rank;
         }
+    } else if (FLAGS_device == kDeviceCPU) {
+        device = Device();
+    } else if (FLAGS_device == kDeviceDCU) {
+        device = Device(Device::DeviceType::kDCU, 0);
     } else {
-<<<<<<< ours
-        device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
-=======
-        if (FLAGS_device == kDeviceCPU) {
-            device = Device();
-        } else if (FLAGS_device == kDeviceMACA) {
-            device = Device(Device::DeviceType::kMACA, 0);
-        } else if (FLAGS_device == kDeviceDCU) {
-            device = Device(Device::DeviceType::kDCU, 0);
-        } else {
-            device = Device(Device::DeviceType::kCUDA, 0);
-        }
->>>>>>> theirs
+        device = Device(Device::DeviceType::kCUDA, 0);
     }
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
@@ -241,15 +218,36 @@ void Train(const nn::parallel::Rank &rank) {
     // rng / reproducibility
     // ManualSeed(42);
 
-    nn::TransformerConfig model_config = llama3::LLaMA3Config();
+    nn::TransformerConfig model_config
+        = FLAGS_model == "fm9gv"
+              ? (FLAGS_fm9gv_tiny ? fm9gv::FM9GVTinyTextConfig() : fm9gv::FM9GVTextConfig())
+              : llama3::LLaMA3Config();
     std::shared_ptr<nn::Module> model = nullptr;
-    if (!FLAGS_llmc_filepath.empty()) {
+    if (FLAGS_model == "fm9gv" && !FLAGS_fm9gv_filepath.empty()) {
+        model = fm9gv::LoadFromFM9GBin(FLAGS_fm9gv_filepath);
+        model_config = std::dynamic_pointer_cast<nn::TransformerModel>(model)->Config();
+    } else if (FLAGS_model == "llama3" && !FLAGS_llmc_filepath.empty()) {
         model = llama3::LoadFromLLMC(FLAGS_llmc_filepath);
     } else {
-        llama3::SanitizeLLaMA3Config(model_config);
+        if (FLAGS_model == "fm9gv") {
+            fm9gv::SanitizeFM9GVTextConfig(model_config);
+        } else {
+            llama3::SanitizeLLaMA3Config(model_config);
+        }
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
 
+    DataType dtype;
+    if (FLAGS_dtype == kDtypeFP32) {
+        dtype = DataType::kFLOAT32;
+    } else if (FLAGS_dtype == kDtypeBF16) {
+        dtype = DataType::kBFLOAT16;
+    } else {
+        LOG(FATAL) << "Rank " << rank.GlobalRank() << ": Datatype " << FLAGS_dtype << " not supported.";
+    }
+
+    // Convert before the device transfer so large models do not temporarily occupy FP32 device memory.
+    model->To(dtype);
     model->To(device);
 
     utils::PrecisionChecker::BuildNameMap(model.get());
@@ -274,15 +272,6 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": Model loaded to device.";
-
-    DataType dtype;
-    if (FLAGS_dtype == kDtypeFP32) {
-        dtype = DataType::kFLOAT32;
-    } else if (FLAGS_dtype == kDtypeBF16) {
-        dtype = DataType::kBFLOAT16;
-    } else {
-        LOG(FATAL) << "Rank " << rank.GlobalRank() << ": Datatype " << FLAGS_dtype << " not supported.";
-    }
 
     auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
 
@@ -535,7 +524,7 @@ void Train(const nn::parallel::Rank &rank) {
                                       used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size,
                                       pp_world_size);
 
-            if ((step + 1) % FLAGS_freq_generate_txt == 0) {
+            if (FLAGS_freq_generate_txt > 0 && (step + 1) % FLAGS_freq_generate_txt == 0) {
                 // FIXME(jym): to support PP
                 if (tokenizer) {
                     CHECK_EQ(pp_world_size, 1);
