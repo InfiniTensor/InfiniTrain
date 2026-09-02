@@ -89,8 +89,7 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
     core::dcu::DispatchDcuFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            mean->Fill(0.0);
-            rstd->Fill(0.0);
+            // Each token block writes mean and rstd exactly once.
             LayerNormForwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, hip_stream>>>(
                 static_cast<const T *>(input->DataPtr()), static_cast<const T *>(weight->DataPtr()),
                 static_cast<const T *>(bias->DataPtr()), static_cast<float *>(mean->DataPtr()),
@@ -183,7 +182,7 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     core::dcu::DispatchDcuFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            grad_input->Fill(0.0);
+            // Each token block writes its complete grad_input slice.
             grad_weight->Fill(0.0);
             grad_bias->Fill(0.0);
             LayerNormBackwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, hip_stream>>>(

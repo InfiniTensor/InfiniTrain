@@ -22,7 +22,7 @@ constexpr float kNegativeInfinity = -std::numeric_limits<float>::infinity();
 
 template <size_t BLOCK_SIZE, typename TargetType, typename InputType>
 __global__ void CrossEntropyForwardKernel(const InputType *__restrict__ input_ptr,
-                                          const TargetType *__restrict__ target_ptr, InputType *__restrict__ loss_ptr,
+                                          const TargetType *__restrict__ target_ptr, float *__restrict__ loss_ptr,
                                           int bs, int num_classes) {
     __shared__ struct {
         float max_logit;
@@ -82,7 +82,9 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
     const int bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
     const int num_classes = *input_dims.rbegin();
 
-    auto batched_output = std::make_shared<Tensor>(std::vector<int64_t>{bs}, input->Dtype(), input->GetDevice());
+    // Keep logits in their input dtype while accumulating and returning loss in FP32.
+    auto batched_output
+        = std::make_shared<Tensor>(std::vector<int64_t>{bs}, DataType::kFLOAT32, input->GetDevice());
 
     constexpr int threads_per_block = 256;
     int num_blocks = bs;
@@ -98,30 +100,29 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
         [=]<typename Ttarget, typename Tinput>() {
             const Ttarget *target_ptr = static_cast<const Ttarget *>(target->DataPtr());
             const Tinput *input_ptr = static_cast<const Tinput *>(input->DataPtr());
-            Tinput *batched_loss_ptr = static_cast<Tinput *>(batched_output->DataPtr());
+            float *batched_loss_ptr = static_cast<float *>(batched_output->DataPtr());
             // FIXME(dcj): do reduce on GPU
             CrossEntropyForwardKernel<threads_per_block, Ttarget, Tinput>
                 <<<num_blocks, threads_per_block, 0, hip_stream>>>(input_ptr, target_ptr, batched_loss_ptr, bs,
                                                                     num_classes);
 
             auto loss_cpu = batched_output->To(Device());
-            auto loss = std::make_shared<Tensor>(std::vector<int64_t>{}, input->Dtype(), Device());
-            auto loss_cpu_typed_ptr = static_cast<const Tinput *>(loss_cpu.DataPtr());
-            static_cast<Tinput *>(loss->DataPtr())[0]
-                = std::accumulate(loss_cpu_typed_ptr, loss_cpu_typed_ptr + bs, 0.0f,
-                                  [](float acc, const Tinput &val) { return acc + common::dcu::Cast<float>(val); })
-                / bs;
+            auto loss = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kFLOAT32, Device());
+            auto loss_cpu_typed_ptr = static_cast<const float *>(loss_cpu.DataPtr());
+            static_cast<float *>(loss->DataPtr())[0]
+                = std::accumulate(loss_cpu_typed_ptr, loss_cpu_typed_ptr + bs, 0.0f) / bs;
 
             return std::make_shared<Tensor>(loss->To(input->GetDevice()));
         },
         "HIP CrossEntropyForward");
 }
 
-template <size_t BLOCK_SIZE, typename TargetType, typename InputType>
+template <size_t BLOCK_SIZE, typename TargetType, typename InputType, typename OutputGradType>
 __global__ void CrossEntropyBackwardKernel(const InputType *__restrict__ input_ptr,
                                            InputType *__restrict__ input_grad_ptr,
                                            const TargetType *__restrict__ target_ptr,
-                                           const InputType *__restrict__ output_grad_ptr, int bs, int num_classes) {
+                                           const OutputGradType *__restrict__ output_grad_ptr, int bs,
+                                           int num_classes) {
     __shared__ struct {
         float max_logit;
         float sum_exp;
@@ -187,10 +188,8 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
     const int bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
     const int num_classes = *input_dims.rbegin();
 
-    auto input_casted = std::make_shared<Tensor>(input->To(grad_output->Dtype()));
-
     CHECK_EQ(grad_output->Dims().size(), 0);
-    auto grad_input = std::make_shared<Tensor>(input_casted->Dims(), input_casted->Dtype(), grad_output->GetDevice());
+    auto grad_input = std::make_shared<Tensor>(input_dims, input->Dtype(), input->GetDevice());
 
     constexpr int threads_per_block = 256;
     int num_blocks = bs;
@@ -201,16 +200,16 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
                                   ->hip_stream();
 
     core::dcu::DispatchDcuFunc<DataTypeList<DataType::kUINT8, DataType::kINT64>,
-                                 DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
-        {target->Dtype(), input_casted->Dtype()},
-        [=]<typename Ttarget, typename Tinput>() {
-            grad_input->Fill(0.0);
-            const Tinput *output_grad_ptr = static_cast<const Tinput *>(grad_output->DataPtr());
+                                DataTypeList<INFINI_ALL_FLOATING_TYPES>,
+                                DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
+        {target->Dtype(), input->Dtype(), grad_output->Dtype()},
+        [=]<typename Ttarget, typename Tinput, typename Toutput_grad>() {
+            const Toutput_grad *output_grad_ptr = static_cast<const Toutput_grad *>(grad_output->DataPtr());
             const Ttarget *target_ptr = static_cast<const Ttarget *>(target->DataPtr());
-            const Tinput *input_ptr = static_cast<const Tinput *>(input_casted->DataPtr());
+            const Tinput *input_ptr = static_cast<const Tinput *>(input->DataPtr());
             Tinput *input_grad_ptr = static_cast<Tinput *>(grad_input->DataPtr());
 
-            CrossEntropyBackwardKernel<threads_per_block, Ttarget, Tinput>
+            CrossEntropyBackwardKernel<threads_per_block, Ttarget, Tinput, Toutput_grad>
                 <<<num_blocks, threads_per_block, 0, hip_stream>>>(input_ptr, input_grad_ptr, target_ptr,
                                                                     output_grad_ptr, bs, num_classes);
         },

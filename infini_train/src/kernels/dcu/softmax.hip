@@ -198,7 +198,7 @@ std::shared_ptr<Tensor> SoftmaxBackward(const std::shared_ptr<Tensor> &grad_outp
     CHECK(dim >= 0 && dim < output->Dims().size());
 
     auto grad_input = std::make_shared<Tensor>(output_dims, promoted_type, output->GetDevice());
-    grad_input->Fill(0.0);
+    // LaunchBackward covers every outer/axis/inner output index exactly once.
 
     switch (promoted_type) {
         DISPATCH_CASE(WRAP(LaunchBackward<256, float>(grad_input, grad_output_promoted, output_promoted, dim);),

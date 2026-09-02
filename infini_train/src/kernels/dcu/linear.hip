@@ -365,12 +365,12 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
                     static_cast<T *>(output->DataPtr()), static_cast<const T *>(bias->DataPtr()), bs, out_features);
             },
             "HIP LinearForward");
-    } else {
-        output->Fill(0.0);
     }
 
     const float alpha = 1.0f;
-    const float beta = 1.0f;
+    // With no bias the GEMM fully overwrites output, so skip the redundant
+    // output fill and use beta=0. With bias, retain the prefilled-bias path.
+    const float beta = bias ? 1.0f : 0.0f;
     auto trans_a = transpose ? HIPBLAS_OP_T : HIPBLAS_OP_N;
     auto trans_b = HIPBLAS_OP_N;
     auto lda = transpose ? in_features : out_features;
@@ -458,8 +458,10 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     auto grad_output_promoted
         = dtype == compute_dtype ? grad_output : std::make_shared<Tensor>(grad_output->To(compute_dtype));
 
-    // For bf16 compute, accumulate in fp32 to preserve precision (matches PyTorch behavior).
-    auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
+    // Keep activation gradients in the forward compute dtype. Parameter gradients remain
+    // fp32 for bf16 compute, while hipBLAS still performs the GEMM accumulation in fp32.
+    auto grad_input_dtype = compute_dtype;
+    auto parameter_grad_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
 
     // Allocate only needed gradient tensors (selective save: input/weight may be nullptr).
     std::shared_ptr<Tensor> grad_input = nullptr;
@@ -467,15 +469,16 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     std::shared_ptr<Tensor> grad_bias = nullptr;
 
     if (compute_grad_input) {
-        grad_input = std::make_shared<Tensor>(input_dims, output_dtype, grad_output->GetDevice());
+        grad_input = std::make_shared<Tensor>(input_dims, grad_input_dtype, grad_output->GetDevice());
     }
     if (compute_grad_weight) {
-        grad_weight = std::make_shared<Tensor>(weight_dims, output_dtype, grad_output->GetDevice());
+        grad_weight = std::make_shared<Tensor>(weight_dims, parameter_grad_dtype, grad_output->GetDevice());
     }
     // No Fill(0) needed: cuBLAS beta=0.0f fully overwrites output, and ReduceColumnsKernel assigns directly.
     if (compute_grad_bias && bias) {
         grad_bias
-            = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, output_dtype, grad_output->GetDevice());
+            = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, parameter_grad_dtype,
+                                       grad_output->GetDevice());
     }
 
     auto device = grad_output->GetDevice();
@@ -572,7 +575,7 @@ LinearBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
                               HIPBLAS_CHECK(hipblasGemmEx(handle, trans_a1, HIPBLAS_OP_N, in_features, bs, out_features,
                                                         &alpha, weight_promoted->DataPtr(), HIPBLAS_R_16B, lda1,
                                                         grad_output_promoted->DataPtr(), HIPBLAS_R_16B, out_features,
-                                                        &beta, grad_input->DataPtr(), HIPBLAS_R_32F, in_features,
+                                                        &beta, grad_input->DataPtr(), HIPBLAS_R_16B, in_features,
                                                         HIPBLAS_R_32F, HIPBLAS_GEMM_DEFAULT));
                           }
                           if (compute_grad_weight) {
