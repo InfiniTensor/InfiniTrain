@@ -296,7 +296,6 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
         // Copy tensor to CPU if it's on GPU
         std::shared_ptr<Tensor> cpu_tensor = std::make_shared<Tensor>(tensor->To(Device()));
 
-        const float *float_data = static_cast<const float *>(cpu_tensor->DataPtr());
         const size_t byte_size = cpu_tensor->SizeInBytes();
         const size_t num_elements = cpu_tensor->NumElements();
 
@@ -343,6 +342,13 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
                        << "md5=" << md5 << std::endl;
         } else {
             // Simple format (default)
+            // Statistics are computed as float32. Reading BF16/FP16 storage through a
+            // float pointer corrupts values and can also read past the tensor buffer.
+            std::shared_ptr<Tensor> stats_tensor = cpu_tensor;
+            if (cpu_tensor->Dtype() != DataType::kFLOAT32) {
+                stats_tensor = std::make_shared<Tensor>(cpu_tensor->To(DataType::kFLOAT32));
+            }
+            const float *float_data = static_cast<const float *>(stats_tensor->DataPtr());
             TensorStats stats = ComputeStats(float_data, num_elements);
 
             const bool has_error

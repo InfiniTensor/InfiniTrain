@@ -21,22 +21,27 @@ namespace infini_train::nn {
 
 MLP::MLP(const TransformerConfig &config) : CloneableModule(kType) {
     // Compute hidden dimension
-    // Base dimension: n_embd * ffn_expansion_ratio
-    int64_t ffn_hidden = static_cast<int64_t>(config.n_embd * config.ffn_expansion_ratio);
+    // Some model families, including FM9G, specify the exact intermediate size.
+    int64_t ffn_hidden = config.ffn_hidden_size;
+
+    if (ffn_hidden == 0) {
+        // Base dimension: n_embd * ffn_expansion_ratio
+        ffn_hidden = static_cast<int64_t>(config.n_embd * config.ffn_expansion_ratio);
 
     // Apply SwiGLU adjustment
-    if (config.activation_type == MLPType::kSwiGLU) {
-        ffn_hidden = int(2 * ffn_hidden) / 3; // SwiGLU intermediate
-    }
+        if (config.activation_type == MLPType::kSwiGLU) {
+            ffn_hidden = int(2 * ffn_hidden) / 3; // SwiGLU intermediate
+        }
 
     // Apply multiplier
-    if (config.ffn_dim_multiplier.has_value()) {
-        ffn_hidden
-            = static_cast<int64_t>(std::llround(static_cast<double>(ffn_hidden) * config.ffn_dim_multiplier.value()));
-    }
+        if (config.ffn_dim_multiplier.has_value()) {
+            ffn_hidden = static_cast<int64_t>(
+                std::llround(static_cast<double>(ffn_hidden) * config.ffn_dim_multiplier.value()));
+        }
 
     // Round up to multiple_of
-    ffn_hidden = (ffn_hidden + config.multiple_of - 1) / config.multiple_of * config.multiple_of;
+        ffn_hidden = (ffn_hidden + config.multiple_of - 1) / config.multiple_of * config.multiple_of;
+    }
 
     if (config.ffn_type == FFNType::kMoE) {
         const auto &moe_config = moe::RequireMoEConfig(config);

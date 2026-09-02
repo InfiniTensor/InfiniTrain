@@ -294,6 +294,7 @@ add_executable(llama3
   example/common/utils.cc
   example/common/tokenizer.cc
   example/llama3/checkpoint_loader.cc
+  example/fm9gv/checkpoint_loader.cc
 )
 link_infini_train_exe(llama3)
 

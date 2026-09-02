@@ -10,12 +10,19 @@
 #include "infini_train/include/nn/init.h"
 
 namespace infini_train {
-std::shared_ptr<Tensor> PrecomputeFreqsCis(int64_t dim, int64_t end, float theta, bool use_scaled, Device device) {
+std::shared_ptr<Tensor> PrecomputeFreqsCis(int64_t dim, int64_t end, float theta, bool use_scaled, Device device,
+                                           const std::vector<float> &freq_factors) {
     auto dtype = DataType::kFLOAT32;
     CHECK_GE(dim, 2) << "dim must be >= 2 for slicing";
 
     auto arange = nn::init::Arange(0, dim, dtype, device)->Slice(0, 0, dim, 2);
     auto freqs = 1.0f / nn::function::Pow(theta, arange / float(dim));
+    if (!freq_factors.empty()) {
+        CHECK_EQ(static_cast<int64_t>(freq_factors.size()), dim / 2);
+        Tensor factors_cpu(freq_factors.data(), std::vector<int64_t>{dim / 2}, dtype);
+        auto factors = std::make_shared<Tensor>(factors_cpu.To(device));
+        freqs = freqs / factors;
+    }
     // TODO(zbl): use_scaled
     // if (use_scaled) {
     //     freqs = ApplyScaling(freqs, 8192.0f);
@@ -30,6 +37,25 @@ std::shared_ptr<Tensor> PrecomputeFreqsCis(int64_t dim, int64_t end, float theta
     auto freqs_cis = nn::function::Stack(std::vector<std::shared_ptr<Tensor>>{cos, sin}, -1)->Contiguous();
 
     return freqs_cis;
+}
+
+std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>
+ApplyFM9GRotaryEmbedding(const std::shared_ptr<Tensor> &xq, const std::shared_ptr<Tensor> &xk,
+                         const std::shared_ptr<Tensor> &freqs_cis) {
+    const int64_t T = xq->Dims()[1];
+    const int64_t D = xq->Dims()[3];
+    CHECK(xq->Dtype() == xk->Dtype()) << "FM9G rotary Q/K dtype mismatch";
+    auto cis = std::make_shared<Tensor>(freqs_cis->To(xq->Dtype()))->View({1, T, 1, D / 2, 2});
+    auto cos_half = cis->Slice(-1, 0, 1, 1)->Squeeze(-1);
+    auto sin_half = cis->Slice(-1, 1, 2, 1)->Squeeze(-1);
+    auto cos = nn::function::Concat(std::vector<std::shared_ptr<Tensor>>{cos_half, cos_half}, -1);
+    auto sin = nn::function::Concat(std::vector<std::shared_ptr<Tensor>>{sin_half, sin_half}, -1);
+    auto rotate_half = [D](const std::shared_ptr<Tensor> &x) {
+        auto first = x->Slice(-1, 0, D / 2);
+        auto second = x->Slice(-1, D / 2, D);
+        return nn::function::Concat(std::vector<std::shared_ptr<Tensor>>{-second, first}, -1);
+    };
+    return {xq * cos + rotate_half(xq) * sin, xk * cos + rotate_half(xk) * sin};
 }
 
 std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>

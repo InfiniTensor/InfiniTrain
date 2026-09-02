@@ -267,8 +267,12 @@ void Function::BackwardPartial(std::shared_ptr<Tensor> grad_output, int grad_out
         grad_outputs_[grad_output_idx] = std::move(grad_output);
         ++grad_outputs_reached_;
     } else {
+        const auto &accumulation_buffer = grad_outputs_.at(grad_output_idx);
+        if (grad_output->Dtype() != accumulation_buffer->Dtype()) {
+            grad_output = std::make_shared<Tensor>(grad_output->To(accumulation_buffer->Dtype()));
+        }
         auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
-        kernel.Call<void>(grad_output, 1.0f, grad_outputs_.at(grad_output_idx));
+        kernel.Call<void>(grad_output, 1.0f, accumulation_buffer);
     }
     ++dependencies_reached_;
     if (grad_outputs_reached_ == grad_outputs_.size()
