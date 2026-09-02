@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -39,8 +40,7 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
         }
     }
 
-    Checkpoint::Load(resume_dir, *args.model, args.optimizer.get(), args.state, args.load_optimizer_state,
-                     args.lr_scheduler.get());
+    Checkpoint::Load(resume_dir, *args.model, args.optimizer.get(), args.state, args.lr_scheduler.get());
 
     result.global_step = static_cast<int>(args.state.global_step);
 
@@ -64,10 +64,10 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
     CHECK_EQ(args.state.pp_size, pp_world_size)
         << "PP size mismatch: checkpoint has PP=" << args.state.pp_size << ", but current run has PP=" << pp_world_size;
 
-    result.consumed_batches = static_cast<size_t>(std::max<int64_t>(args.state.consumed_batches, 0));
+    result.consumed_train_samples = static_cast<size_t>(std::max<int64_t>(args.state.consumed_train_samples, 0));
     if (args.rank.IsMainRank()) {
-        LOG(INFO) << std::format("Resume training from step {}, consumed_batches  {}", args.state.global_step,
-                                 args.state.consumed_batches);
+        LOG(INFO) << std::format("Resume training from step {}, consumed_train_samples {}", args.state.global_step,
+                                 args.state.consumed_train_samples);
     }
 
     return result;
@@ -78,7 +78,7 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
 
     TrainerState state;
     state.global_step = args.global_step;
-    state.consumed_batches = static_cast<int64_t>(args.consumed_batches);
+    state.consumed_train_samples = static_cast<int64_t>(args.consumed_train_samples);
     state.n_layer = args.n_layer;
     state.n_head = args.n_head;
     state.n_kv_head = args.n_kv_head;
@@ -89,7 +89,7 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
     state.sp_size = args.sp_size;
     state.pp_size = args.pp_size;
 
-    Checkpoint::Save(args.save_dir, args.model, &args.optimizer, state, args.save_optimizer_state, args.lr_scheduler);
+    Checkpoint::Save(args.save_dir, args.model, args.optimizer, state, args.lr_scheduler);
 
     const auto ckpt_end = std::chrono::high_resolution_clock::now();
     const double ckpt_ms = std::chrono::duration<double, std::milli>(ckpt_end - ckpt_start).count();
@@ -118,4 +118,17 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
             ckpts.erase(ckpts.begin());
         }
     }
+}
+
+size_t DataLoaderBatchesToSkip(size_t consumed_train_samples, size_t local_batch_size, size_t ddp_world_size) {
+    CHECK_GT(local_batch_size, 0);
+    CHECK_GT(ddp_world_size, 0);
+    CHECK_LE(local_batch_size, std::numeric_limits<size_t>::max() / ddp_world_size)
+        << "Data loader batch size overflows size_t";
+    const size_t global_loader_batch_size = local_batch_size * ddp_world_size;
+    CHECK_EQ(consumed_train_samples % global_loader_batch_size, 0)
+        << "consumed_train_samples=" << consumed_train_samples
+        << " does not align with current local_batch_size=" << local_batch_size
+        << " and ddp_world_size=" << ddp_world_size;
+    return consumed_train_samples / global_loader_batch_size;
 }

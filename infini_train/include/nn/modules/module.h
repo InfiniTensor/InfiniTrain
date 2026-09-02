@@ -47,8 +47,12 @@ public:
 
     const std::string &type() const;
 
-    // TODO: Change return type to filterable iterator (like PyTorch's named_parameters with prefix matching)
     virtual std::vector<std::shared_ptr<Tensor>> Parameters() const;
+
+    // InfiniTrain's NamedParameters returns results ordered by full parameter name.
+    // TODO: Align with PyTorch's ordering in the future.
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
+    NamedParameters(const std::string &prefix = "", bool recurse = true, bool remove_duplicate = true) const;
     bool has_parameter(const std::string &name) const;
     std::shared_ptr<Tensor> *mutable_parameter(const std::string &name);
     const std::shared_ptr<Tensor> &parameter(const std::string &name) const;

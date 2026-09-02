@@ -48,7 +48,11 @@ std::string Device::ToString() const {
 }
 
 nn::parallel::Rank Device::Rank() const {
-    return {nn::parallel::global::GetGlobalProcRank(), index_, nn::parallel::global::GetNprocPerNode(),
+    const int thread_rank = index_ - nn::parallel::global::GetDeviceIndex(0);
+    CHECK_GE(thread_rank, 0) << "Device index is outside the current process rank range";
+    CHECK_LT(thread_rank, nn::parallel::global::GetNthreadPerProc())
+        << "Device index is outside the current process rank range";
+    return {nn::parallel::global::GetGlobalProcRank(), thread_rank, nn::parallel::global::GetNprocPerNode(),
             nn::parallel::global::GetNthreadPerProc()};
 }
 

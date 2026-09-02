@@ -181,7 +181,7 @@ std::shared_ptr<Tensor> ReduceOpBackward(const std::shared_ptr<Tensor> &grad_out
     core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            grad_input->Fill(0.0);
+            // The backward kernel assigns every grad_input element on all reduction branches; no Fill is needed.
             GenericReduceBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<T *>(grad_input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
                 input ? static_cast<const T *>(input->DataPtr()) : nullptr,

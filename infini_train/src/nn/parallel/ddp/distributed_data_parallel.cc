@@ -10,6 +10,7 @@
 
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
@@ -32,7 +33,8 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
             continue;
         }
         auto device = param->GetDevice();
-        CHECK_EQ(device.index(), rank.thread_rank()) << "All parameters must be on the same device as the module";
+        CHECK_EQ(device.index(), global::GetDeviceIndex(rank.thread_rank()))
+            << "All parameters must be on the same device as the module";
         if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
             auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(
                 function::ReduceOpType::kAvg, ddp_pg_);
@@ -40,7 +42,7 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         }
     }
     for (auto &buffer : module->Buffers()) {
-        CHECK_EQ(buffer->GetDevice().index(), rank.thread_rank())
+        CHECK_EQ(buffer->GetDevice().index(), global::GetDeviceIndex(rank.thread_rank()))
             << "All buffers must be on the same device as the module";
     }
     modules_[kModuleName] = std::move(module);

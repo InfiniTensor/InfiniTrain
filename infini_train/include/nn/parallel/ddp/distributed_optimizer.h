@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -24,6 +25,10 @@ public:
                          const std::vector<std::shared_ptr<Module>> &model_chunks, size_t ddp_world_size,
                          size_t ddp_rank);
 
+    DistributedOptimizer(OptimizerCreatorNamed base_optimizer_creator, const NamedParameterList &named_parameters,
+                         const std::vector<std::shared_ptr<Module>> &model_chunks, size_t ddp_world_size,
+                         size_t ddp_rank);
+
     void Step() override;
 
     void ZeroGrad(bool set_to_none = true) override;
@@ -42,7 +47,10 @@ public:
     virtual float learning_rate() const override;
 
 private:
-    void BuildShardParamsAndBindGrads();
+    using AddShardParam = std::function<void(const std::shared_ptr<Tensor> &, const std::shared_ptr<Tensor> &)>;
+
+    void InitializeModelChunks(const std::vector<std::shared_ptr<Module>> &model_chunks);
+    void BuildShardParamsAndBindGrads(const AddShardParam &add_shard_param);
 
 private:
     // Inherit from DDP model
@@ -52,9 +60,6 @@ private:
     // DP info
     size_t ddp_world_size_;
     size_t ddp_rank_;
-
-    // shard params
-    std::vector<std::shared_ptr<Tensor>> shard_params_;
 
     // Base optimizer (SGD, Adam and etc.)
     std::shared_ptr<Optimizer> base_optimizer_;

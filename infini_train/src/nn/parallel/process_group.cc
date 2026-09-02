@@ -99,7 +99,7 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
         int global_thread_rank = lower_rank + i;
         auto it = std::ranges::find(ranks, global_thread_rank);
         if (it != ranks.end()) {
-            auto device = Device(backend_, i);
+            auto device = Device(backend_, global::GetDeviceIndex(i));
             core::DeviceGuard guard(device);
 
             core::CclComm *comm_raw = nullptr;

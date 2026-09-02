@@ -89,8 +89,7 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
     core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            mean->Fill(0.0);
-            rstd->Fill(0.0);
+            // Each token block writes its mean and rstd exactly once; no Fill is needed.
             LayerNormForwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(input->DataPtr()), static_cast<const T *>(weight->DataPtr()),
                 static_cast<const T *>(bias->DataPtr()), static_cast<float *>(mean->DataPtr()),
@@ -183,7 +182,7 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            grad_input->Fill(0.0);
+            // Each token block writes its complete grad_input slice; no Fill is needed.
             grad_weight->Fill(0.0);
             grad_bias->Fill(0.0);
             LayerNormBackwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, cuda_stream>>>(

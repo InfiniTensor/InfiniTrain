@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -11,13 +12,21 @@
 
 namespace infini_train::core {
 namespace {
-std::string UniqueIdFileName(const std::string &name, bool tmp = false) {
-    return "cclUniqueId_" + name + (tmp ? ".tmp" : ".bin");
+std::string UniqueIdFileName(const std::string &pg_name) {
+    const char *run_id = std::getenv("INFINI_RUN_ID");
+    const std::string prefix = run_id == nullptr ? "" : std::string(run_id) + "_";
+    return "cclUniqueId_" + prefix + pg_name + ".bin";
+}
+
+std::string UniqueIdTmpFileName(const std::string &pg_name) {
+    const char *run_id = std::getenv("INFINI_RUN_ID");
+    const std::string prefix = run_id == nullptr ? "" : std::string(run_id) + "_";
+    return "cclUniqueId_" + prefix + pg_name + ".tmp";
 }
 } // namespace
 
 void WriteUniqueIdFile(const CclUniqueId &unique_id, const std::string &pg_name) {
-    const std::string tmp_path = UniqueIdFileName(pg_name, true);
+    const std::string tmp_path = UniqueIdTmpFileName(pg_name);
 
     std::ofstream ofs(tmp_path, std::ios::binary);
     CHECK(ofs.good()) << "Failed to open unique_id tmp file for write: " << tmp_path;
@@ -25,7 +34,9 @@ void WriteUniqueIdFile(const CclUniqueId &unique_id, const std::string &pg_name)
     ofs.write(reinterpret_cast<const char *>(unique_id.Data()), static_cast<std::streamsize>(size));
     ofs.close();
 
-    std::rename(tmp_path.c_str(), UniqueIdFileName(pg_name).c_str());
+    const std::string file_path = UniqueIdFileName(pg_name);
+    CHECK_EQ(std::rename(tmp_path.c_str(), file_path.c_str()), 0)
+        << "Failed to rename unique_id file from " << tmp_path << " to " << file_path;
 }
 
 void ReadUniqueIdFile(CclUniqueId *unique_id, const std::string &pg_name) {
@@ -49,6 +60,11 @@ void CleanupUniqueIdFile(const std::string &pg_name) {
     const std::string file_path = UniqueIdFileName(pg_name);
     if (std::filesystem::exists(file_path)) {
         std::filesystem::remove(file_path);
+    }
+
+    const std::string tmp_path = UniqueIdTmpFileName(pg_name);
+    if (std::filesystem::exists(tmp_path)) {
+        std::filesystem::remove(tmp_path);
     }
 }
 

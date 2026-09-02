@@ -439,6 +439,18 @@ check_model_inputs() {
     fi
 }
 
+infini_run_cmd_for_test() {
+    local model_bin="$1"
+    local input_bin="$2"
+    local llmc_filepath="$3"
+    local arg_str="$4"
+    local nproc_per_node="$5"
+
+    printf './infini_run --nproc_per_node=%s %s --input_bin %q --llmc_filepath %q --device cuda %s' \
+        "$nproc_per_node" "$model_bin" \
+        "$input_bin" "$llmc_filepath" "$arg_str"
+}
+
 # Run tests
 num_basic_compile_commands=$(jq '.basic_compile_commands | length' "$CONFIG_FILE")
 num_groups=$(jq '.test_groups | length' "$CONFIG_FILE")
@@ -510,23 +522,36 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
 
             for ((ti=0; ti<num_tests; ++ti)); do
                 test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
+                nproc_per_node="$(jq -r ".test_groups[$gi].infini_run_args.nproc_per_node // empty" "$CONFIG_FILE")"
                 if tag_enabled_for_model "$group_tag" "$GPT2_TEST_GROUPS"; then
                     LORA_WEIGHTS_DIR="$GPT2_LORA_WEIGHTS_DIR"
                     gpt2_arg_str="$(args_string_for_test "$gi" "$ti" "gpt2" "$test_id")"
-                    gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
+                    if [[ -n "$nproc_per_node" ]]; then
+                        gpt2_cmd="$(infini_run_cmd_for_test "./gpt2" "$GPT2_INPUT_BIN" "$GPT2_LLMC_FILEPATH" "$gpt2_arg_str" "$nproc_per_node")"
+                    else
+                        gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
+                    fi
                     run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
 
                 if tag_enabled_for_model "$group_tag" "$LLAMA3_TEST_GROUPS"; then
                     LORA_WEIGHTS_DIR="$LLAMA3_LORA_WEIGHTS_DIR"
                     llama3_arg_str="$(args_string_for_test "$gi" "$ti" "llama3" "$test_id")"
-                    llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
+                    if [[ -n "$nproc_per_node" ]]; then
+                        llama3_cmd="$(infini_run_cmd_for_test "./llama3" "$LLAMA3_INPUT_BIN" "$LLAMA3_LLMC_FILEPATH" "$llama3_arg_str" "$nproc_per_node")"
+                    else
+                        llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
+                    fi
                     run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
 
                 if tag_enabled_for_model "$group_tag" "$MIXTRAL_TEST_GROUPS"; then
                     mixtral_arg_str="$(args_string_for_test "$gi" "$ti" "mixtral" "$test_id")"
-                    mixtral_cmd="${prefix}./mixtral --input_bin ${MIXTRAL_INPUT_BIN} --llmc_filepath ${MIXTRAL_LLMC_FILEPATH} --device cuda ${mixtral_arg_str}"
+                    if [[ -n "$nproc_per_node" ]]; then
+                        mixtral_cmd="$(infini_run_cmd_for_test "./mixtral" "$MIXTRAL_INPUT_BIN" "$MIXTRAL_LLMC_FILEPATH" "$mixtral_arg_str" "$nproc_per_node")"
+                    else
+                        mixtral_cmd="${prefix}./mixtral --input_bin ${MIXTRAL_INPUT_BIN} --llmc_filepath ${MIXTRAL_LLMC_FILEPATH} --device cuda ${mixtral_arg_str}"
+                    fi
                     run_and_log "$mixtral_cmd" "mixtral_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
             done
@@ -562,6 +587,10 @@ else
     echo -e "\033[1;33m         To enable comparison, set 'variables.COMPARE_LOG_DIR' in ${CONFIG_FILE}\033[0m"
     echo -e "\033[1;33m         or export COMPARE_LOG_DIR=/path/to/baseline_logs before running.\033[0m"
     echo -e "\033[1;33m============================================================\033[0m"
+
+    echo -e "\n\033[1;33mRun comparison manually:\033[0m"
+    echo "python3 compare_loss.py \"/path/to/baseline_logs\" \"$(realpath "$LOG_DIR")\""
+    echo "python3 compare_tps.py \"/path/to/baseline_logs\" \"$(realpath "$LOG_DIR")\""
 fi
 
 echo -e "\n\033[1;36m[END OF TEST] Cleaning build directory after all tests\033[0m"

@@ -92,7 +92,6 @@ DEFINE_uint32(save_interval, 0, "save checkpoint every N steps; 0 disables savin
 DEFINE_string(load, "", "checkpoint directory to resume from");
 DEFINE_string(save, "", "root directory used to store checkpoints");
 DEFINE_uint32(max_checkpoint_keep, 3, "max number of checkpoint steps to keep");
-DEFINE_bool(save_optimizer_state, true, "whether optimizer state is persisted in checkpoints");
 // precision check
 DEFINE_string(
     precision_check, "",
@@ -184,7 +183,7 @@ void Train(const nn::parallel::Rank &rank) {
 
     if (rank.IsParallel()) {
         auto parallel_device_type = FLAGS_device == kDeviceDCU ? Device::DeviceType::kDCU : Device::DeviceType::kCUDA;
-        device = Device(parallel_device_type, rank.thread_rank());
+        device = Device(parallel_device_type, global::GetDeviceIndex(rank.thread_rank()));
         auto *pg_factory = ProcessGroupFactory::Instance(device.type());
 
         if (ddp_world_size > 1) {
@@ -313,9 +312,9 @@ void Train(const nn::parallel::Rank &rank) {
         model = std::make_shared<DistributedDataParallel>(model, rank, ddp_config);
     }
 
+    const size_t train_loader_batch_size = pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size;
     DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
-                                       pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size,
-                                       ddp_rank, ddp_world_size);
+                                       train_loader_batch_size, ddp_rank, ddp_world_size);
 
     std::optional<DistributedDataLoader> val_loader = std::nullopt;
     if (!FLAGS_input_val_bin.empty()) {
@@ -335,17 +334,28 @@ void Train(const nn::parallel::Rank &rank) {
 
     // TODO(dcj): support more complex optimizer later
     // auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
-    auto optimizer_creator = optimizers::SGD::Create(FLAGS_learning_rate);
+    auto optimizer_creator = optimizers::SGD::CreateNamed(FLAGS_learning_rate);
     std::shared_ptr<Optimizer> optimizer = nullptr;
+    std::unordered_set<const Tensor *> params_to_optimize_set;
+    params_to_optimize_set.reserve(params_to_optimize.size());
+    for (const auto &param : params_to_optimize) { params_to_optimize_set.insert(param.get()); }
+
+    NamedParameterList named_parameters;
+    for (const auto &[name, param] : model->NamedParameters()) {
+        if (params_to_optimize_set.contains(param.get())) {
+            named_parameters.emplace_back(name, param);
+        }
+    }
+    CHECK_EQ(named_parameters.size(), params_to_optimize.size());
 
     if (FLAGS_zero_stage >= 1) {
         auto model_chunks = (pp_world_size > 1)
                               ? *(dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks())
                               : std::vector<std::shared_ptr<nn::Module>>{model};
-        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, params_to_optimize,
+        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, named_parameters,
                                                                          model_chunks, ddp_world_size, ddp_rank);
     } else {
-        optimizer = optimizer_creator(params_to_optimize);
+        optimizer = optimizer_creator(named_parameters);
     }
 
     const int64_t lr_decay_iters = FLAGS_lr_decay_iters > 0 ? FLAGS_lr_decay_iters : FLAGS_num_iteration;
@@ -373,21 +383,18 @@ void Train(const nn::parallel::Rank &rank) {
     const auto resume_result = ResumeFromCheckpoint({.resume_root = FLAGS_load,
                                                      .rank = rank,
                                                      .model = model,
-                                                     .optimizer = optimizer,
+                                                     .optimizer = nullptr,
                                                      .model_config = model_config,
                                                      .state = state,
-                                                     .load_optimizer_state = false,
                                                      .lr_scheduler = scheduler});
     start_step = resume_result.global_step;
-    size_t consumed_batches = resume_result.consumed_batches;
+    size_t consumed_train_samples = resume_result.consumed_train_samples;
 
     // TODO(jym): Replace with Sampler abstraction when available.
     // Skip dataloader to resume from the correct batch position.
-    if (consumed_batches > 0) {
-        size_t start = train_iter.BatchIndex();
-        // Each rank processes every ddp_world_size-th batch starting from its own rank.
-        // num_skips calculates how many ++ iterations to reach the saved batch position.
-        size_t num_skips = (consumed_batches - start) / ddp_world_size;
+    if (consumed_train_samples > 0) {
+        const size_t num_skips
+            = DataLoaderBatchesToSkip(consumed_train_samples, train_loader_batch_size, ddp_world_size);
         for (size_t i = 0; i < num_skips; ++i) { ++train_iter; }
     }
 
@@ -395,7 +402,7 @@ void Train(const nn::parallel::Rank &rank) {
         SaveCheckpoint({
             .save_dir = save_dir,
             .global_step = global_step,
-            .consumed_batches = consumed_batches,
+            .consumed_train_samples = consumed_train_samples,
             .n_layer = model_config.n_layer,
             .n_head = model_config.n_head,
             .n_kv_head = model_config.n_kv_head,
@@ -405,12 +412,11 @@ void Train(const nn::parallel::Rank &rank) {
             .tp_size = tp_world_size,
             .sp_size = sp_world_size,
             .pp_size = pp_world_size,
-            .save_optimizer_state = FLAGS_save_optimizer_state,
             .checkpoint_root_dir = FLAGS_save,
             .max_checkpoint_keep = FLAGS_max_checkpoint_keep,
             .rank = rank,
             .model = *model,
-            .optimizer = *optimizer,
+            .optimizer = nullptr,
             .lr_scheduler = scheduler.get(),
         });
     };
@@ -468,7 +474,7 @@ void Train(const nn::parallel::Rank &rank) {
                 // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
                 // TODO(dcj): support dataloader.reset() later
                 ++train_iter;
-                consumed_batches = train_iter.BatchIndex();
+                consumed_train_samples += static_cast<size_t>(FLAGS_batch_size) * ddp_world_size;
                 x = std::make_shared<Tensor>(x->To(device));
                 y = std::make_shared<Tensor>(y->To(device));
 
@@ -486,10 +492,12 @@ void Train(const nn::parallel::Rank &rank) {
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
 
-                auto loss_cpu = loss->To(Device());
-                lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
                 loss->Backward();
+                // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
+                // between forward and backward.
+                auto loss_cpu = loss->To(Device());
+                lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
             }
 
@@ -502,7 +510,7 @@ void Train(const nn::parallel::Rank &rank) {
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
             // TODO(dcj): support dataloader.reset() later
             ++train_iter;
-            consumed_batches = train_iter.BatchIndex();
+            consumed_train_samples += train_loader_batch_size * ddp_world_size;
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
@@ -575,7 +583,6 @@ int main(int argc, char *argv[]) {
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 
-    // NOTE(dcj): currently we only support single process
     if (FLAGS_nthread_per_process > 1) {
         std::vector<std::thread> threads;
         for (int idx = 0; idx < FLAGS_nthread_per_process; ++idx) {
@@ -586,7 +593,9 @@ int main(int argc, char *argv[]) {
 
         for (auto &thread : threads) { thread.join(); }
     } else {
-        Train({0, 0, 1, 1});
+        nn::parallel::Rank rank(nn::parallel::global::GetGlobalProcRank(), 0, nn::parallel::global::GetNprocPerNode(),
+                                FLAGS_nthread_per_process);
+        Train(rank);
     }
 
     gflags::ShutDownCommandLineFlags();

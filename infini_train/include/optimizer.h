@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace infini_train {
@@ -13,11 +14,16 @@ class Tensor;
 namespace infini_train {
 class Optimizer;
 
+using NamedParameter = std::pair<std::string, std::shared_ptr<Tensor>>;
+using NamedParameterList = std::vector<NamedParameter>;
 using OptimizerCreator = std::function<std::shared_ptr<Optimizer>(const std::vector<std::shared_ptr<Tensor>> &params)>;
+using OptimizerCreatorNamed = std::function<std::shared_ptr<Optimizer>(const NamedParameterList &named_params)>;
 
 class Optimizer {
 public:
-    explicit Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate = 0.0f);
+    explicit Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate);
+
+    Optimizer(const NamedParameterList &named_params, float learning_rate);
 
     virtual void ZeroGrad(bool set_to_none = true);
 
@@ -39,6 +45,7 @@ public:
 
 protected:
     std::vector<std::shared_ptr<Tensor>> params_;
+    std::vector<std::string> parameter_names_;
     float learning_rate_ = 0.0f;
     float initial_learning_rate_ = 0.0f;
     bool initial_lr_set_ = false;
@@ -48,16 +55,20 @@ namespace optimizers {
 class SGD : public Optimizer {
 public:
     SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate);
+    SGD(const NamedParameterList &named_params, float learning_rate);
 
     void Step() override;
 
     static OptimizerCreator Create(float learning_rate);
+    static OptimizerCreatorNamed CreateNamed(float learning_rate);
 };
 
 class Adam : public Optimizer {
 public:
     Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate = 1e-3, float beta1 = 0.9,
          float beta2 = 0.999, float eps = 1e-8);
+    Adam(const NamedParameterList &named_params, float learning_rate = 1e-3, float beta1 = 0.9, float beta2 = 0.999,
+         float eps = 1e-8);
 
     void Step() override;
 
@@ -66,6 +77,8 @@ public:
     void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
     static OptimizerCreator Create(float learning_rate = 1e-3, float beta1 = 0.9, float beta2 = 0.999,
                                    float eps = 1e-8);
+    static OptimizerCreatorNamed CreateNamed(float learning_rate = 1e-3, float beta1 = 0.9, float beta2 = 0.999,
+                                             float eps = 1e-8);
 
 private:
     int64_t t_;

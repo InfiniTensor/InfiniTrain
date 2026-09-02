@@ -7,6 +7,11 @@ include(${CMAKE_SOURCE_DIR}/cmake/test_macros.cmake)
 # Common test utilities
 add_subdirectory(common)
 
+# Distributed tests
+add_subdirectory(distributed)
+# Module tests
+add_subdirectory(module)
+
 # Tensor tests
 add_subdirectory(tensor)
 
