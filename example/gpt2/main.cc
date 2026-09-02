@@ -75,7 +75,7 @@ DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 // debugging
 DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 // memory management
-DEFINE_string(device, "cuda", "device type (cpu/cuda), useless if using parallel training mode");
+DEFINE_string(device, "cuda", "device type (cpu/cuda/dcu), useless if using parallel training mode");
 // parallel
 DEFINE_int32(
     nthread_per_process, 1,
@@ -113,6 +113,7 @@ const std::unordered_set<std::string> kSupportedModels
     = {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "d12", "d24", "d36", "d48"};
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
+constexpr char kDeviceDCU[] = "dcu";
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles
@@ -129,8 +130,9 @@ const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
-DEFINE_validator(device,
-                 [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_validator(device, [](const char *, const std::string &value) {
+    return value == kDeviceCPU || value == kDeviceCUDA || value == kDeviceDCU;
+});
 DEFINE_validator(zero_stage, [](const char *, int32_t value) { return value >= 0 && value <= 3; });
 DEFINE_validator(lr_decay_style,
                  [](const char *, const std::string &value) { return kSupportedLRDecayStyles.contains(value); });
@@ -180,7 +182,8 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *pp_pg = nullptr;
 
     if (rank.IsParallel()) {
-        device = Device(Device::DeviceType::kCUDA, global::GetDeviceIndex(rank.thread_rank()));
+        auto parallel_device_type = FLAGS_device == kDeviceDCU ? Device::DeviceType::kDCU : Device::DeviceType::kCUDA;
+        device = Device(parallel_device_type, global::GetDeviceIndex(rank.thread_rank()));
         auto *pg_factory = ProcessGroupFactory::Instance(device.type());
 
         if (ddp_world_size > 1) {
@@ -204,8 +207,12 @@ void Train(const nn::parallel::Rank &rank) {
 
             nn::parallel::pp_rank = pp_rank;
         }
+    } else if (FLAGS_device == kDeviceCPU) {
+        device = Device();
+    } else if (FLAGS_device == kDeviceDCU) {
+        device = Device(Device::DeviceType::kDCU, 0);
     } else {
-        device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
+        device = Device(Device::DeviceType::kCUDA, 0);
     }
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration

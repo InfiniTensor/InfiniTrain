@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <vector>
 
 namespace infini_train::nn {
 
@@ -27,6 +28,11 @@ enum class FFNType {
 enum class NormType {
     kLayerNorm, // LayerNorm
     kRMSNorm    // RMSNorm
+};
+
+enum class AttentionVariant {
+    kPackedQKV,
+    kFM9G
 };
 
 struct MoEConfig {
@@ -67,6 +73,7 @@ struct TransformerConfig {
     MLPType activation_type = MLPType::kGELU;                                                // MLP activation type
     FFNType ffn_type = FFNType::kDense;                                                      // Feed-forward module type
     NormType norm_type = NormType::kLayerNorm;                                               // Normalization type
+    AttentionVariant attention_variant = AttentionVariant::kPackedQKV;
 
     bool add_bias_linear = true; // Whether to add learnable bias to all Linear layers in the Transformer block,
                                  // including: attention QKV projection, attention output projection, MLP FC layers (and
@@ -78,11 +85,23 @@ struct TransformerConfig {
     float ffn_expansion_ratio = 4.0f;               // MLP output: n_embd * ffn_expansion_ratio
     std::optional<float> ffn_dim_multiplier = 1.5f; // FFN dim multiplier
     int64_t multiple_of = 256;                      // FFN dims must be multiple of this number
+    int64_t ffn_hidden_size = 0;                    // Explicit FFN size; 0 keeps the derived-size behavior
     std::optional<MoEConfig> moe_config = std::nullopt;
 
     // RoPE config
     float rope_theta = 500000.0f; // theta in RoPE
     bool use_scaled_rope = false; // scaled RoPE
+
+    // FM9G MLA-like text attention
+    int64_t q_lora_rank = 0;
+    int64_t kv_lora_rank = 0;
+    int64_t qk_nope_head_dim = 0;
+    int64_t qk_rope_head_dim = 0;
+    int64_t v_head_dim = 0;
+    float scale_emb = 1.0f;
+    float scale_depth = 1.0f;
+    int64_t dim_model_base = 0; // Non-zero enables hidden / (n_embd / dim_model_base) before the LM head.
+    std::vector<float> rope_short_factors;
 
     // Normalization
     float norm_eps = 1e-5f; // epsilon in RMSNorm

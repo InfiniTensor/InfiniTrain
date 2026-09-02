@@ -1,6 +1,5 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 
-#include <format>
 #include <memory>
 #include <utility>
 
@@ -135,19 +134,19 @@ DeviceGuardImplRegistry &DeviceGuardImplRegistry::Instance() {
 
 void DeviceGuardImplRegistry::Register(Device::DeviceType type, std::unique_ptr<DeviceGuardImpl> impl) {
     if (type != impl->Type()) {
-        LOG(FATAL) << std::format("Register device guard impl with type {}, but as type {}",
-                                  static_cast<int>(impl->Type()), static_cast<int>(type));
+        LOG(FATAL) << "Register device guard impl with type " << static_cast<int>(impl->Type()) << ", but as type "
+                   << static_cast<int>(type);
     }
 
     if (impls_.contains(type)) {
-        LOG(FATAL) << std::format("DeviceGuardImpl for type {} already registrered", static_cast<int>(type));
+        LOG(FATAL) << "DeviceGuardImpl for type " << static_cast<int>(type) << " already registrered";
     }
 
     if (!impls_.empty()) {
         for (auto &kv : impls_) {
             if (kv.first != Device::DeviceType::kCPU) {
-                LOG(FATAL) << std::format("Only CPU and one GPU backend allowed. Already have GPU={}, new={} rejected.",
-                                          static_cast<int>(kv.first), static_cast<int>(type));
+                LOG(FATAL) << "Only CPU and one GPU backend allowed. Already have GPU=" << static_cast<int>(kv.first)
+                           << ", new=" << static_cast<int>(type) << " rejected.";
             }
         }
     }

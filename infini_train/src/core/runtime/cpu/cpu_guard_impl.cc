@@ -2,7 +2,6 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <format>
 #include <utility>
 
 #include "glog/logging.h"
@@ -133,9 +132,8 @@ void CpuGuardImpl::FreeAsync(void *dev_ptr, Stream *stream) {
 }
 
 void CpuGuardImpl::Memcpy(void *dst, const void *src, size_t count, MemcpyKind kind) {
-    CHECK(kind == MemcpyKind::kD2D) << std::format("CpuGuardImpl::Memcpy only supports kD2D (host-to-host) memcpy, "
-                                                   "but got MemcpyKind={}",
-                                                   MemcpyKindToString(kind));
+    CHECK(kind == MemcpyKind::kD2D) << "CpuGuardImpl::Memcpy only supports kD2D (host-to-host) memcpy, but got "
+                                    << MemcpyKindToString(kind);
     std::memcpy(dst, src, count);
 }
 

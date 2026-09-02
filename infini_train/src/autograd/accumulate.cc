@@ -26,10 +26,7 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
 
     if (grad_output) {
         if (grad_output->Dtype() != tensor_->Dtype()) {
-            LOG(WARNING) << "AccumulateGrad: grad dtype (" << kDataTypeToDesc.at(grad_output->Dtype())
-                         << ") does not match parameter dtype (" << kDataTypeToDesc.at(tensor_->Dtype())
-                         << "). This indicates a dtype mismatch in the autograd graph (e.g. autocast "
-                            "running before autograd). The grad is not cast and will be used as-is.";
+            grad_output = std::make_shared<Tensor>(grad_output->To(tensor_->Dtype()));
         }
 
         const bool overwrite = tensor_->ConsumeGradOverwriteFlag();

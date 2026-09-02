@@ -1,6 +1,6 @@
 #pragma once
 
-#include <format>
+#include <sstream>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -184,6 +184,7 @@ namespace infini_train {
 #define INFINI_SIGNED_INTEGRAL_TYPES DataType::kINT8, DataType::kINT16, DataType::kINT32, DataType::kINT64
 #define INFINI_UNSIGNED_INTEGRAL_TYPES DataType::kUINT8, DataType::kUINT16, DataType::kUINT32, DataType::kUINT64
 #define INFINI_ALL_INTEGRAL_TYPES INFINI_SIGNED_INTEGRAL_TYPES, INFINI_UNSIGNED_INTEGRAL_TYPES
+#define INFINI_ALL_TYPES INFINI_ALL_FLOATING_TYPES, INFINI_ALL_INTEGRAL_TYPES
 #define INFINI_ALL_NUMERIC_TYPES INFINI_ALL_FLOATING_TYPES, INFINI_ALL_INTEGRAL_TYPES
 #define INFINI_8_BIT_TYPES DataType::kINT8, DataType::kUINT8
 #define INFINI_16_BIT_TYPES DataType::kINT16, DataType::kUINT16, DataType::kFLOAT16, DataType::kBFLOAT16
@@ -325,8 +326,10 @@ auto DispatchByTypeMap(const std::vector<DataType> &dtypes, Functor &&func, std:
     constexpr size_t kNumLists = sizeof...(AllowedTypeLists);
 
     if (dtypes.size() != kNumLists) {
-        LOG(FATAL) << std::format("DispatchByTypeMap expects {} dtypes, but only got {} in {}", kNumLists,
-                                  dtypes.size(), context_identifier);
+        std::ostringstream oss;
+        oss << "DispatchByTypeMap expects " << kNumLists << " dtypes, but only got " << dtypes.size() << " in "
+            << context_identifier;
+        LOG(FATAL) << oss.str();
         std::abort();
     }
 

@@ -70,11 +70,14 @@ std::vector<std::shared_ptr<Tensor>> TransformerFirstStage::Forward(const std::v
     } else {
         // For RoPE-based models (LLaMA3), no absolute position embedding is needed.
         // (B, T, C)
+        if (config_.attention_variant == AttentionVariant::kFM9G) {
+            return {tok_emb[0] * config_.scale_emb};
+        }
         return tok_emb;
     }
 }
 
-TransformerLayer::TransformerLayer(const nn::TransformerConfig &config) : CloneableModule(kType) {
+TransformerLayer::TransformerLayer(const nn::TransformerConfig &config) : CloneableModule(kType), config_(config) {
     switch (config.norm_type) {
     case NormType::kLayerNorm:
         modules_[kLn1LayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
@@ -112,11 +115,14 @@ std::vector<std::shared_ptr<Tensor>> TransformerLayer::Forward(const std::vector
     }
 
     auto attn_out = (*modules_[kAttnLayerName])(attn_input)[0];
-    auto x1 = x[0] + attn_out;
+    const float residual_scale = config_.attention_variant == AttentionVariant::kFM9G
+                                     ? config_.scale_depth / std::sqrt(static_cast<float>(config_.n_layer))
+                                     : 1.0f;
+    auto x1 = x[0] + attn_out * residual_scale;
 
     // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd) -> MLP -> (bs, seq_len, n_embd) -> Add -> (bs,
     // seq_len, n_embd)
-    auto x2 = x1 + (*modules_[kMlpLayerName])((*modules_[kLn2LayerName])({x1}))[0];
+    auto x2 = x1 + (*modules_[kMlpLayerName])((*modules_[kLn2LayerName])({x1}))[0] * residual_scale;
 
     // (bs, seq_len, n_embd)
     return {x2};
@@ -142,9 +148,14 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
 
         // Init freqs_cis on device only once
         if (buffers_[kFreqsCisName] == nullptr) {
-            int64_t head_dim = config_.n_embd / config_.n_head;
-            buffers_[kFreqsCisName] = PrecomputeFreqsCis(head_dim, config_.block_size * 2, config_.rope_theta,
-                                                         config_.use_scaled_rope, device);
+            int64_t rope_dim = config_.attention_variant == AttentionVariant::kFM9G
+                                   ? config_.qk_rope_head_dim
+                                   : config_.n_embd / config_.n_head;
+            buffers_[kFreqsCisName] = PrecomputeFreqsCis(rope_dim, config_.block_size * 2, config_.rope_theta,
+                                                         config_.use_scaled_rope, device,
+                                                         config_.attention_variant == AttentionVariant::kFM9G
+                                                             ? config_.rope_short_factors
+                                                             : std::vector<float>{});
         }
 
         const auto t = x1->Dims()[1] * nn::parallel::global::GetSequenceParallelSize(); // full_seq_len
@@ -198,6 +209,12 @@ TransformerLastStage::TransformerLastStage(const TransformerConfig &config) : Cl
 std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     // (B, T, C) -> Layernorm -> (B, T, C)
     auto x1 = (*modules_[kLnFLayerName])(x);
+
+    // FM9G scales the normalized hidden state before the vocabulary projection:
+    // hidden / (hidden_size / dim_model_base). Other model families leave this disabled.
+    if (config_.dim_model_base > 0) {
+        x1[0] = x1[0] / (static_cast<float>(config_.n_embd) / config_.dim_model_base);
+    }
 
     // TODO(dcj): add inference-time mini-optimization
     // (B, T, C) -> Linear(C, V) -> (B, T, V)

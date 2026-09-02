@@ -19,6 +19,9 @@ public:
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+private:
+    TransformerConfig config_;
 };
 
 class TransformerFirstStage : public CloneableModule<TransformerFirstStage> {

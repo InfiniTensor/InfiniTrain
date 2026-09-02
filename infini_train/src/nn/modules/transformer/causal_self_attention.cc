@@ -10,6 +10,7 @@
 
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
+#include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
@@ -22,6 +23,24 @@ namespace infini_train::nn {
 
 CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config) : CloneableModule(kType), config_(config) {
     SetupAttention(config);
+
+    if (config_.attention_variant == AttentionVariant::kFM9G) {
+        modules_[kQAProjLayerName] = std::make_shared<nn::Linear>(n_embd_, q_lora_rank_, false);
+        modules_[kQALayerNormLayerName] = std::make_shared<nn::RMSNorm>(q_lora_rank_, config_.norm_eps);
+        modules_[kQBProjLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
+            q_lora_rank_, n_head_ * q_head_dim_, false, false, false, false,
+            nn::parallel::global::GetSequenceParallelEnabled());
+        modules_[kKVAProjWithMQALayerName]
+            = std::make_shared<nn::Linear>(n_embd_, kv_lora_rank_ + qk_rope_head_dim_, false);
+        modules_[kKVALayerNormLayerName] = std::make_shared<nn::RMSNorm>(kv_lora_rank_, config_.norm_eps);
+        modules_[kKVBProjLayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
+            kv_lora_rank_, n_head_ * (qk_nope_head_dim_ + v_head_dim_), false, false, false, false,
+            nn::parallel::global::GetSequenceParallelEnabled());
+        modules_[kOProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(
+            n_head_ * v_head_dim_, n_embd_, false, true, true, false,
+            nn::parallel::global::GetSequenceParallelEnabled());
+        return;
+    }
 
     int64_t qkv_dim = (config.n_head + 2 * n_kv_head_) * head_dim_;
     // qkv: ColumnParallel (do not gather output)
@@ -63,6 +82,23 @@ void CausalSelfAttention::SetupAttention(const TransformerConfig &config) {
     head_dim_ = config.n_embd / config.n_head;
     local_n_head_ = n_head_ / tp_world_size;
 
+    if (config.attention_variant == AttentionVariant::kFM9G) {
+        q_lora_rank_ = config.q_lora_rank;
+        kv_lora_rank_ = config.kv_lora_rank;
+        qk_nope_head_dim_ = config.qk_nope_head_dim;
+        qk_rope_head_dim_ = config.qk_rope_head_dim;
+        v_head_dim_ = config.v_head_dim;
+        q_head_dim_ = qk_nope_head_dim_ + qk_rope_head_dim_;
+        CHECK_GT(q_lora_rank_, 0);
+        CHECK_GT(kv_lora_rank_, 0);
+        CHECK_GT(qk_nope_head_dim_, 0);
+        CHECK_GT(qk_rope_head_dim_, 0);
+        CHECK_GT(v_head_dim_, 0);
+        n_kv_head_ = n_head_;
+        n_rep_ = 1;
+        return;
+    }
+
     // For GQA, set n_kv_head and n_rep
     if (config.UseGQA()) {
         CHECK_EQ(config.n_head % config.n_kv_head, 0) << "n_head must be divisible by n_kv_head for GQA";
@@ -90,6 +126,7 @@ std::shared_ptr<infini_train::Tensor> CausalSelfAttention::RepeatKV(const std::s
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
 CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
+    if (config_.attention_variant == AttentionVariant::kFM9G) { return ForwardFM9G(x); }
     const auto B = x[0]->Dims()[0]; // bs
     const auto C = x[0]->Dims()[2]; // n_embd
 
@@ -170,6 +207,47 @@ CausalSelfAttention::Forward(const std::vector<std::shared_ptr<infini_train::Ten
     y = (*modules_[kCProjLayerName])({y})[0];
     // (B, H, C) == (bs, seq_len, n_embd)
     return {y};
+}
+
+std::vector<std::shared_ptr<infini_train::Tensor>>
+CausalSelfAttention::ForwardFM9G(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
+    const auto B = x[0]->Dims()[0];
+    const auto tp_size = nn::parallel::global::GetTensorParallelSize();
+    const auto H_local = n_head_ / tp_size;
+    const auto freqs_cis = x.size() > 1 ? x[1] : nullptr;
+    const auto mask = x.size() > 3 ? x[3] : nullptr;
+    CHECK(freqs_cis != nullptr) << "FM9G attention requires RoPE frequencies";
+
+    auto q_latent = (*modules_[kQAProjLayerName])({x[0]})[0];
+    q_latent = (*modules_[kQALayerNormLayerName])({q_latent})[0];
+    auto q = (*modules_[kQBProjLayerName])({q_latent})[0];
+    const auto T = q->Dims()[1];
+    q = q->View({B, T, H_local, q_head_dim_});
+    auto q_nope = q->Slice(-1, 0, qk_nope_head_dim_);
+    auto q_pe = q->Slice(-1, qk_nope_head_dim_, q_head_dim_);
+
+    auto kv_a = (*modules_[kKVAProjWithMQALayerName])({x[0]})[0];
+    auto compressed_kv = kv_a->Slice(-1, 0, kv_lora_rank_);
+    auto k_pe = kv_a->Slice(-1, kv_lora_rank_, kv_lora_rank_ + qk_rope_head_dim_)
+                    ->View({B, T, 1, qk_rope_head_dim_});
+    auto kv = (*modules_[kKVALayerNormLayerName])({compressed_kv})[0];
+    kv = (*modules_[kKVBProjLayerName])({kv})[0]->View({B, T, H_local, qk_nope_head_dim_ + v_head_dim_});
+    auto k_nope = kv->Slice(-1, 0, qk_nope_head_dim_);
+    auto v = kv->Slice(-1, qk_nope_head_dim_, qk_nope_head_dim_ + v_head_dim_);
+
+    std::tie(q_pe, k_pe) = ApplyFM9GRotaryEmbedding(q_pe, k_pe, freqs_cis);
+    k_pe = RepeatKV(k_pe, H_local);
+    q = nn::function::Concat(std::vector<std::shared_ptr<Tensor>>{q_nope, q_pe}, -1);
+    auto k = nn::function::Concat(std::vector<std::shared_ptr<Tensor>>{k_nope, k_pe}, -1);
+    q = q->Transpose(1, 2);
+    k = k->Transpose(1, 2);
+    v = v->Transpose(1, 2);
+
+    auto att = q->Matmul(k->Transpose(-2, -1)) * (1.0 / std::sqrt(static_cast<float>(q_head_dim_)));
+    if (mask) { att = att->MaskedFill(mask, std::numeric_limits<float>::lowest()); }
+    att = nn::function::Softmax(att, -1);
+    auto y = att->Matmul(v)->Transpose(1, 2)->Contiguous()->View({B, T, H_local * v_head_dim_});
+    return {(*modules_[kOProjLayerName])({y})[0]};
 }
 
 } // namespace infini_train::nn

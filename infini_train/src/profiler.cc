@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
+#include <sstream>
 
 #include "glog/logging.h"
 
@@ -235,7 +237,9 @@ void Profiler::Report(const std::string &file_prefix, SortBy sort_by) const {
     auto get_stream = [&](int64_t rank) -> std::ostream & {
         auto &file = file_map[rank];
         if (!file.is_open()) {
-            std::string filename = std::format("{}.rank{}", file_prefix, rank);
+            std::ostringstream filename_stream;
+            filename_stream << file_prefix << ".rank" << rank;
+            std::string filename = filename_stream.str();
             file.open(filename);
             if (!file) {
                 LOG(ERROR) << "Failed to open file: " << filename;
@@ -298,7 +302,9 @@ void Profiler::PrintRecords(const std::string &file_prefix) const {
     auto get_stream = [&](int64_t rank) -> std::ostream & {
         auto &file = file_map[rank];
         if (!file.is_open()) {
-            std::string filename = std::format("{}.rank{}", file_prefix, rank);
+            std::ostringstream filename_stream;
+            filename_stream << file_prefix << ".rank" << rank;
+            std::string filename = filename_stream.str();
             file.open(filename);
             if (!file) {
                 LOG(ERROR) << "Failed to open file: " << filename;

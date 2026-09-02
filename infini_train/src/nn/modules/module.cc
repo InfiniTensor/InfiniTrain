@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -20,6 +21,26 @@
 #endif
 
 namespace infini_train::nn {
+namespace {
+
+std::string LoadStateDictMissingKeyMessage(const std::string &name) { return "Missing key: " + name; }
+
+std::string LoadStateDictShapeMismatchMessage(const std::string &name, const std::vector<int64_t> &expected,
+                                              const std::vector<int64_t> &actual) {
+    std::ostringstream oss;
+    oss << "Shape mismatch for '" << name << "': expected=" << infini_train::utils::DimsToString(expected)
+        << ", got=" << infini_train::utils::DimsToString(actual);
+    return oss.str();
+}
+
+std::string LoadStateDictDtypeMismatchMessage(const std::string &name, DataType expected, DataType actual) {
+    std::ostringstream oss;
+    oss << "Dtype mismatch for '" << name << "': expected=" << kDataTypeToDesc.at(expected)
+        << ", got=" << kDataTypeToDesc.at(actual);
+    return oss.str();
+}
+
+} // namespace
 
 Module::Module() : Module(kUndefinedType) {}
 
@@ -187,24 +208,21 @@ void Module::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr
     for (const auto &[name, dst] : expected) {
         visited_keys.insert(name);
         if (!state_dict.contains(name)) {
-            error_msgs.push_back(std::format("Missing key: {}", name));
+            error_msgs.push_back(LoadStateDictMissingKeyMessage(name));
             continue;
         }
         const auto &src = state_dict.at(name);
         if (dst->Dims() != src->Dims()) {
-            error_msgs.push_back(std::format("Shape mismatch for '{}': expected={}, got={}", name,
-                                             infini_train::utils::DimsToString(dst->Dims()),
-                                             infini_train::utils::DimsToString(src->Dims())));
+            error_msgs.push_back(LoadStateDictShapeMismatchMessage(name, dst->Dims(), src->Dims()));
         }
         if (dst->Dtype() != src->Dtype()) {
-            error_msgs.push_back(std::format("Dtype mismatch for '{}': expected={}, got={}", name,
-                                             kDataTypeToDesc.at(dst->Dtype()), kDataTypeToDesc.at(src->Dtype())));
+            error_msgs.push_back(LoadStateDictDtypeMismatchMessage(name, dst->Dtype(), src->Dtype()));
         }
     }
 
     for (const auto &[name, src] : state_dict) {
         if (!visited_keys.contains(name)) {
-            LOG(WARNING) << std::format("Unexpected key in state_dict: {}", name);
+            LOG(WARNING) << "Unexpected key in state_dict: " << name;
         }
     }
 
