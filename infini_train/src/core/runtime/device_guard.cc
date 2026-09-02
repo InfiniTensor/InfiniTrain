@@ -140,7 +140,7 @@ void DeviceGuardImplRegistry::Register(Device::DeviceType type, std::unique_ptr<
     }
 
     if (impls_.contains(type)) {
-        LOG(FATAL) << std::format("DeviceGuardImpl for type {} already registrered", static_cast<int>(type));
+        LOG(FATAL) << std::format("DeviceGuardImpl for type {} already registered", static_cast<int>(type));
     }
 
     if (!impls_.empty()) {
