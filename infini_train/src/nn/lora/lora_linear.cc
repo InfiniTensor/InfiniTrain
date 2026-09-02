@@ -46,11 +46,11 @@ LoRALinear::LoRALinear(std::shared_ptr<nn::Module> base_linear,
   }
 
   // Transfer weight from base linear (overwrite base-created one)
-  parameters_[kParamWeightName] = base_linear->parameter(kParamWeightName);
+  RegisterParameter(kParamWeightName, base_linear->parameter(kParamWeightName));
 
   // Transfer bias if exists
   if (has_bias()) {
-    parameters_[kParamBiasName] = base_linear->parameter(kParamBiasName);
+    RegisterParameter(kParamBiasName, base_linear->parameter(kParamBiasName));
   }
 
   // Initialize LoRA weights
@@ -63,10 +63,11 @@ LoRALinear::LoRALinear(std::shared_ptr<nn::Module> base_linear,
 void LoRALinear::InitLoRAWeights() {
   // A matrix: [rank, in_features]
   // Initialize with Kaiming uniform (or normal based on config)
-  parameters_[kParamLoraAName] =
+  RegisterParameter(
+      kParamLoraAName,
       std::make_shared<Tensor>(std::vector<int64_t>{config_.rank, in_features_},
                                DataType::kFLOAT32, device_)
-          ->RequiresGrad();
+          ->RequiresGrad());
 
   if (config_.use_kaiming_a) {
     init::KaimingUniform(parameters_[kParamLoraAName], config_.kaiming_a_param);
@@ -76,11 +77,11 @@ void LoRALinear::InitLoRAWeights() {
 
   // B matrix: [out_features, rank]
   // Initialize with zeros (ensures LoRA starts as identity transformation)
-  parameters_[kParamLoraBName] =
-      std::make_shared<Tensor>(
-          std::vector<int64_t>{out_features_, config_.rank}, DataType::kFLOAT32,
-          device_)
-          ->RequiresGrad();
+  RegisterParameter(kParamLoraBName,
+                    std::make_shared<Tensor>(
+                        std::vector<int64_t>{out_features_, config_.rank},
+                        DataType::kFLOAT32, device_)
+                        ->RequiresGrad());
   init::Zeros(parameters_[kParamLoraBName]);
 }
 

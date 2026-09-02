@@ -117,7 +117,7 @@ DistributedDataParallel::DistributedDataParallel(
   for (auto &buffer : module->Buffers()) {
     validate_device(buffer->GetDevice(), "buffer");
   }
-  modules_[kModuleName] = std::move(module);
+  RegisterModule(kModuleName, std::move(module));
 
   if (ddp_config.zero_stage >= 1) {
     BuildParamAndGradBuffers(trainable_params);

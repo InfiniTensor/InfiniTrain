@@ -94,7 +94,7 @@ PipelineParallel::PipelineParallel(
     const std::vector<std::vector<int64_t>> &recv_shape, int pp_rank,
     Device device, int chunk_size)
     : num_stages_(num_stages), rank_(pp_rank) {
-  modules_[kModuleName] = std::move(module);
+  RegisterModule(kModuleName, std::move(module));
 
   int stage_id = pp_rank;
   int stage_size = num_stages;
