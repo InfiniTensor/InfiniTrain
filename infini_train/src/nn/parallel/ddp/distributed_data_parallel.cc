@@ -218,11 +218,15 @@ DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &inp
 std::shared_ptr<nn::Module> DistributedDataParallel::module() const { return modules_.at(kModuleName); }
 
 std::unique_ptr<nn::NoSyncGuard> DistributedDataParallel::no_sync() {
+    // FIXME(zbl): Support ZeRO-0 no_sync when gradient bucketing is disabled.
     SetIsLastMicrobatch(false);
     return std::make_unique<nn::NoSyncGuard>([this] { SetIsLastMicrobatch(true); });
 }
 
 void DistributedDataParallel::SetIsLastMicrobatch(bool is_last_microbatch) {
+    if (reducer_) {
+        reducer_->SetIsLastMicrobatch(is_last_microbatch);
+    }
     for (auto &group : bucket_groups_) { group->SetIsLastMicrobatch(is_last_microbatch); }
 }
 } // namespace infini_train::nn::parallel

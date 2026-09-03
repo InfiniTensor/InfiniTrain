@@ -269,14 +269,12 @@ void Train(const nn::parallel::Rank &rank) {
                 (*mutable_chunks)[chunk_id]
                     = std::make_shared<DistributedDataParallel>(mutable_chunks->at(chunk_id), rank, ddp_config);
             }
-            if (FLAGS_zero_stage >= 1) {
-                pipeline_model->SetNoSyncFunc([mutable_chunks] {
-                    std::vector<std::unique_ptr<nn::NoSyncGuard>> guards;
-                    guards.reserve(mutable_chunks->size());
-                    for (const auto &chunk : *mutable_chunks) { guards.push_back(chunk->no_sync()); }
-                    return guards;
-                });
-            }
+            pipeline_model->SetNoSyncFunc([mutable_chunks] {
+                std::vector<std::unique_ptr<nn::NoSyncGuard>> guards;
+                guards.reserve(mutable_chunks->size());
+                for (const auto &chunk : *mutable_chunks) { guards.push_back(chunk->no_sync()); }
+                return guards;
+            });
         }
     } else if (ddp_world_size > 1) {
         // NOTE(dcj): Complete all device (.to(device)) and dtype (.to(dtype)) conversions
@@ -475,7 +473,7 @@ void Train(const nn::parallel::Rank &rank) {
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
                 std::unique_ptr<nn::NoSyncGuard> no_sync_guard;
-                if (ddp_world_size > 1 && FLAGS_zero_stage >= 1 && micro_step != grad_accum_steps - 1) {
+                if (ddp_world_size > 1 && micro_step != grad_accum_steps - 1) {
                     no_sync_guard = model->no_sync();
                 }
                 loss->Backward();
