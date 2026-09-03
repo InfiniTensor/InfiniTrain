@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <numeric>
 #include <utility>
 
@@ -13,8 +14,14 @@
 
 namespace infini_train {
 namespace {
+size_t CheckedCeilDiv(size_t numerator, size_t denominator) {
+    CHECK_GT(denominator, 0);
+    return (numerator + denominator - 1) / denominator;
+}
+
 // TODO(dcj): Use official stack implementation later.
 std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &tensors) {
+    CHECK(!tensors.empty()) << "Cannot stack an empty batch. Check DataLoader iterator end handling.";
     const int batch_size = tensors.size();
     const auto &dims = tensors[0]->Dims();
     const int stacked_dim = std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>());
@@ -35,9 +42,9 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &tensor
 }
 } // namespace
 
-DataLoaderIterator::DataLoaderIterator(const Dataset &dataset, size_t batch_size, size_t batch_idx,
-                                       size_t max_batch_idx, size_t ddp_rank, size_t ddp_world_size)
-    : dataset_(&dataset), batch_size_(batch_size), batch_idx_(batch_idx), max_batch_idx_(max_batch_idx),
+DataLoaderIterator::DataLoaderIterator(const Dataset &dataset, size_t batch_size, size_t batch_idx, size_t num_batches,
+                                       size_t ddp_rank, size_t ddp_world_size)
+    : dataset_(&dataset), batch_size_(batch_size), batch_idx_(batch_idx), num_batches_(num_batches),
       ddp_rank_(ddp_rank), ddp_world_size_(ddp_world_size){};
 
 std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DataLoaderIterator::operator*() const {
@@ -49,7 +56,16 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DataLoaderIterator::
     */
     std::vector<std::shared_ptr<Tensor>> data_vec;
     std::vector<std::shared_ptr<Tensor>> label_vec;
-    for (int idx = batch_idx_ * batch_size_; idx < (batch_idx_ + 1) * batch_size_ && idx < dataset_->Size(); ++idx) {
+    CHECK_LT(batch_idx_, num_batches_) << "Cannot dereference DataLoader end iterator. batch_idx=" << batch_idx_
+                                       << ", num_batches=" << num_batches_ << ", ddp_rank=" << ddp_rank_
+                                       << ", ddp_world_size=" << ddp_world_size_;
+    const size_t start_idx = (batch_idx_ * ddp_world_size_ + ddp_rank_) * batch_size_;
+    CHECK_LT(start_idx, dataset_->Size())
+        << "DataLoader batch starts past dataset end. batch_idx=" << batch_idx_ << ", start_idx=" << start_idx
+        << ", dataset_size=" << dataset_->Size() << ", batch_size=" << batch_size_ << ", ddp_rank=" << ddp_rank_
+        << ", ddp_world_size=" << ddp_world_size_;
+    const size_t end_idx = std::min(start_idx + batch_size_, dataset_->Size());
+    for (size_t idx = start_idx; idx < end_idx; ++idx) {
         auto &&[data, label] = dataset_->operator[](idx);
         data_vec.push_back(std::move(data));
         label_vec.push_back(std::move(label));
@@ -58,7 +74,7 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DataLoaderIterator::
 }
 
 DataLoaderIterator &DataLoaderIterator::operator++() {
-    batch_idx_ = std::min(batch_idx_ + ddp_world_size_, max_batch_idx_);
+    batch_idx_ = std::min(batch_idx_ + 1, num_batches_);
     return *this;
 }
 
@@ -79,23 +95,38 @@ bool operator==(const DataLoaderIterator &lhs, const DataLoaderIterator &rhs) {
 }
 
 DataLoader::DataLoader(const std::shared_ptr<Dataset> &dataset, size_t batch_size)
-    : dataset_(dataset), batch_size_(batch_size), max_batch_idx_((dataset_->Size() + batch_size_ - 1) / batch_size_) {}
+    : dataset_(dataset), batch_size_(batch_size) {
+    CHECK(dataset_ != nullptr) << "DataLoader dataset must not be null";
+    CHECK_GT(batch_size_, 0) << "DataLoader batch_size must be greater than zero";
+    num_batches_ = CheckedCeilDiv(dataset_->Size(), batch_size_);
+}
 
-DataLoaderIterator DataLoader::begin() const { return DataLoaderIterator(*dataset_, batch_size_, 0, max_batch_idx_); }
+DataLoaderIterator DataLoader::begin() const {
+    return DataLoaderIterator(*dataset_, batch_size_, 0, num_batches_, 0, 1);
+}
 
 DataLoaderIterator DataLoader::end() const {
-    return DataLoaderIterator(*dataset_, batch_size_, max_batch_idx_, max_batch_idx_);
+    return DataLoaderIterator(*dataset_, batch_size_, num_batches_, num_batches_, 0, 1);
 }
 
 DistributedDataLoader::DistributedDataLoader(const std::shared_ptr<Dataset> &dataset, size_t batch_size,
                                              size_t ddp_rank, size_t ddp_world_size)
-    : DataLoader(dataset, batch_size), ddp_rank_(ddp_rank), ddp_world_size_(ddp_world_size) {}
+    : DataLoader(dataset, batch_size), ddp_rank_(ddp_rank), ddp_world_size_(ddp_world_size) {
+    CHECK_GT(ddp_world_size_, 0);
+    CHECK_LT(ddp_rank_, ddp_world_size_);
+    const size_t global_batch_size = ddp_world_size_ * batch_size_;
+    CHECK_GE(dataset_->Size(), global_batch_size)
+        << "DistributedDataLoader needs enough samples for one global batch. dataset_size=" << dataset_->Size()
+        << ", global_batch_size=" << global_batch_size << " (" << batch_size_ << " per rank * " << ddp_world_size_
+        << " ranks). Reduce batch size/world size or use a larger dataset.";
+    num_batches_ = dataset_->Size() / global_batch_size;
+}
 
 DataLoaderIterator DistributedDataLoader::begin() const {
-    return DataLoaderIterator(*dataset_, batch_size_, ddp_rank_, max_batch_idx_, ddp_rank_, ddp_world_size_);
+    return DataLoaderIterator(*dataset_, batch_size_, 0, num_batches_, ddp_rank_, ddp_world_size_);
 }
 
 DataLoaderIterator DistributedDataLoader::end() const {
-    return DataLoaderIterator(*dataset_, batch_size_, max_batch_idx_, max_batch_idx_, ddp_rank_, ddp_world_size_);
+    return DataLoaderIterator(*dataset_, batch_size_, num_batches_, num_batches_, ddp_rank_, ddp_world_size_);
 }
 } // namespace infini_train

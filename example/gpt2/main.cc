@@ -383,13 +383,28 @@ void Train(const nn::parallel::Rank &rank) {
     start_step = resume_result.global_step;
     size_t consumed_train_samples = resume_result.consumed_train_samples;
 
-    // TODO(jym): Replace with Sampler abstraction when available.
-    // Skip dataloader to resume from the correct batch position.
+    auto advance_train_iter = [&]() {
+        ++train_iter;
+        if (train_iter == train_loader.end()) {
+            train_iter = train_loader.begin();
+        }
+    };
+
+    // TODO(jym): Move resume position handling into a Sampler abstraction when available.
     if (consumed_train_samples > 0) {
         const size_t num_skips
             = DataLoaderBatchesToSkip(consumed_train_samples, train_loader_batch_size, ddp_world_size);
-        for (size_t i = 0; i < num_skips; ++i) { ++train_iter; }
+        for (size_t i = 0; i < num_skips; ++i) { advance_train_iter(); }
     }
+
+    auto next_train_batch = [&]() {
+        auto batch = *train_iter;
+        // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
+        // TODO(dcj): support dataloader.reset() later
+        advance_train_iter();
+        consumed_train_samples += train_loader_batch_size * ddp_world_size;
+        return batch;
+    };
 
     auto save_checkpoint = [&](const std::filesystem::path &save_dir, int64_t global_step) {
         SaveCheckpoint({
@@ -463,11 +478,7 @@ void Train(const nn::parallel::Rank &rank) {
                 infini_train::AutocastGuard autocast_guard(device.type(), dtype);
 
                 // (bs, seq_len), (bs, seq_len)
-                auto [x, y] = *train_iter;
-                // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
-                // TODO(dcj): support dataloader.reset() later
-                ++train_iter;
-                consumed_train_samples += static_cast<size_t>(FLAGS_batch_size) * ddp_world_size;
+                auto [x, y] = next_train_batch();
                 x = std::make_shared<Tensor>(x->To(device));
                 y = std::make_shared<Tensor>(y->To(device));
 
@@ -499,11 +510,7 @@ void Train(const nn::parallel::Rank &rank) {
                 scheduler->Step();
             }
         } else {
-            auto [x, y] = *train_iter;
-            // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
-            // TODO(dcj): support dataloader.reset() later
-            ++train_iter;
-            consumed_train_samples += train_loader_batch_size * ddp_world_size;
+            auto [x, y] = next_train_batch();
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
