@@ -22,12 +22,8 @@ class Module;
 
 class NoSyncGuard {
 public:
-    explicit NoSyncGuard(std::function<void()> exit_func) : exit_func_(std::move(exit_func)) {}
-    ~NoSyncGuard() {
-        if (exit_func_) {
-            exit_func_();
-        }
-    }
+    explicit NoSyncGuard(std::function<void()> exit_func);
+    ~NoSyncGuard();
 
     NoSyncGuard(const NoSyncGuard &) = delete;
     NoSyncGuard &operator=(const NoSyncGuard &) = delete;
@@ -98,9 +94,7 @@ public:
         return 0.0f;
     };
 
-    virtual std::unique_ptr<NoSyncGuard> no_sync() {
-        return std::make_unique<NoSyncGuard>([] {});
-    }
+    virtual std::unique_ptr<NoSyncGuard> no_sync();
 
     virtual void To(Device device);
 

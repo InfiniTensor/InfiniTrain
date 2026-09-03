@@ -20,6 +20,8 @@
 
 namespace infini_train::nn::parallel {
 
+void PipelineSchedule::SetNoSyncFunc(NoSyncFunc func) { no_sync_func_ = std::move(func); }
+
 void PrintScheduleTable(const std::vector<PipelineParallelScheduler::Task> &schedule, int n, int num_stages,
                         int vpp_size) {
     int total_global_chunks = num_stages * vpp_size;

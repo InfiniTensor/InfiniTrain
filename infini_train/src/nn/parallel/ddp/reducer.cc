@@ -304,6 +304,11 @@ void Reducer::PrepareForBackward() {
     }
 }
 
+void Reducer::SetIsLastMicrobatch(bool is_last_microbatch) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    is_last_microbatch_ = is_last_microbatch;
+}
+
 void Reducer::AttachHooksToParameters() {
     for (size_t param_idx = 0; param_idx < params_.size(); ++param_idx) {
         class BucketHook final : public autograd::PostAccumulateGradHook {
@@ -332,6 +337,10 @@ void Reducer::AttachHooksToParameters() {
 
 void Reducer::MarkVariableReadyDense(size_t variable_index) {
     std::unique_lock<std::mutex> lock(mutex_);
+    if (!is_last_microbatch_) {
+        return;
+    }
+
     const auto loc = locators_.at(variable_index);
     auto &bucket = buckets_.at(loc.bucket_index);
 
