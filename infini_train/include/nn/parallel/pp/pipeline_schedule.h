@@ -5,13 +5,13 @@
 #include <vector>
 
 #include "infini_train/include/datatype.h"
-#include "infini_train/include/nn/modules/module.h"
 
 namespace infini_train {
 class Tensor;
 class Optimizer;
 namespace nn {
 class Module;
+class NoSyncGuard;
 }
 } // namespace infini_train
 
@@ -35,7 +35,7 @@ public:
 
     using NoSyncFunc = std::function<std::vector<std::unique_ptr<nn::NoSyncGuard>>()>;
 
-    void SetNoSyncFunc(NoSyncFunc func) { no_sync_func_ = std::move(func); }
+    void SetNoSyncFunc(NoSyncFunc func);
 
     std::vector<std::shared_ptr<Tensor>> ReceiveFromPrev(int peer_rank);
     std::vector<std::shared_ptr<Tensor>> SendToNext(const std::vector<std::shared_ptr<Tensor>> &tensors, int peer_rank);
