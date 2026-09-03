@@ -383,17 +383,25 @@ void Train(const nn::parallel::Rank &rank) {
     start_step = resume_result.global_step;
     size_t consumed_train_samples = resume_result.consumed_train_samples;
 
-    const size_t consumed_dataloader_steps
-        = DataLoaderStepsToSkip(consumed_train_samples, train_loader_batch_size, ddp_world_size);
-    train_iter.SeekDataLoaderStep(consumed_dataloader_steps % train_loader.NumDataLoaderSteps());
-    auto next_train_batch = [&]() {
-        auto batch = *train_iter;
-        // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
-        // TODO(dcj): support dataloader.reset() later
+    auto advance_train_iter = [&]() {
         ++train_iter;
         if (train_iter == train_loader.end()) {
             train_iter = train_loader.begin();
         }
+    };
+
+    // TODO(jym): Move resume position handling into a Sampler abstraction when available.
+    if (consumed_train_samples > 0) {
+        const size_t num_skips
+            = DataLoaderBatchesToSkip(consumed_train_samples, train_loader_batch_size, ddp_world_size);
+        for (size_t i = 0; i < num_skips; ++i) { advance_train_iter(); }
+    }
+
+    auto next_train_batch = [&]() {
+        auto batch = *train_iter;
+        // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
+        // TODO(dcj): support dataloader.reset() later
+        advance_train_iter();
         consumed_train_samples += train_loader_batch_size * ddp_world_size;
         return batch;
     };
