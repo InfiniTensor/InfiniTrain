@@ -33,7 +33,9 @@ Module::Module() : Module(kUndefinedType) {}
 
 Module::Module(const std::string &type) : type_(type), device_(Device()) {}
 
-std::unique_ptr<NoSyncGuard> Module::no_sync() { return std::make_unique<NoSyncGuard>([] {}); }
+std::unique_ptr<NoSyncGuard> Module::no_sync() {
+    return std::make_unique<NoSyncGuard>([] {});
+}
 
 const std::string &Module::type() const { return type_; }
 

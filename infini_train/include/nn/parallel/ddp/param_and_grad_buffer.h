@@ -152,6 +152,7 @@ private:
     std::vector<std::vector<std::shared_ptr<Tensor>>> param_buffer_shard_list_;
     std::vector<std::vector<std::shared_ptr<Tensor>>> grad_buffer_shard_list_;
 
+    // Whether to enable grad sync on last microbatch (DDP + ZeRO path)
     bool is_last_microbatch_ = true;
 
     bool grad_reduce_dispatched_ = false;
