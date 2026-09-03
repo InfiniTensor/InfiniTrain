@@ -146,9 +146,7 @@ void ParamAndGradBucketGroup::Reset() {
     }
 }
 
-void ParamAndGradBucketGroup::SetIsLastMicrobatch(bool is_last_microbatch) {
-    is_last_microbatch_ = is_last_microbatch;
-}
+void ParamAndGradBucketGroup::SetIsLastMicrobatch(bool is_last_microbatch) { is_last_microbatch_ = is_last_microbatch; }
 
 void ParamAndGradBucketGroup::RegisterGradReady(const std::shared_ptr<Tensor> &parameter) {
     if (!ddp_config_.overlap_grad_reduce) {

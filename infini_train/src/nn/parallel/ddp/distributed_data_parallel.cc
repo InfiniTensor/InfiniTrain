@@ -47,7 +47,8 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
             const auto reduce_op
                 = ddp_config.average_in_collective ? function::ReduceOpType::kAvg : function::ReduceOpType::kSum;
-            auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(reduce_op, ddp_pg_);
+            auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(
+                reduce_op, ddp_pg_, is_last_microbatch_);
             param->RegisterPostAccumulateGradHook(std::move(hook));
         }
     }
@@ -225,12 +226,12 @@ DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &inp
 std::shared_ptr<nn::Module> DistributedDataParallel::module() const { return modules_.at(kModuleName); }
 
 std::unique_ptr<nn::NoSyncGuard> DistributedDataParallel::no_sync() {
-    // FIXME(zbl): Support ZeRO-0 no_sync when gradient bucketing is disabled.
     SetIsLastMicrobatch(false);
     return std::make_unique<nn::NoSyncGuard>([this] { SetIsLastMicrobatch(true); });
 }
 
 void DistributedDataParallel::SetIsLastMicrobatch(bool is_last_microbatch) {
+    is_last_microbatch_->store(is_last_microbatch, std::memory_order_relaxed);
     if (reducer_) {
         reducer_->SetIsLastMicrobatch(is_last_microbatch);
     }
