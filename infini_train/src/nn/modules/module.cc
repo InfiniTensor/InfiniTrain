@@ -21,9 +21,21 @@
 
 namespace infini_train::nn {
 
+NoSyncGuard::NoSyncGuard(std::function<void()> exit_func) : exit_func_(std::move(exit_func)) {}
+
+NoSyncGuard::~NoSyncGuard() {
+    if (exit_func_) {
+        exit_func_();
+    }
+}
+
 Module::Module() : Module(kUndefinedType) {}
 
 Module::Module(const std::string &type) : type_(type), device_(Device()) {}
+
+std::unique_ptr<NoSyncGuard> Module::no_sync() {
+    return std::make_unique<NoSyncGuard>([] {});
+}
 
 const std::string &Module::type() const { return type_; }
 

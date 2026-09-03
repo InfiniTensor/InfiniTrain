@@ -263,11 +263,18 @@ void Train(const nn::parallel::Rank &rank) {
                                                                  pp_rank, device, model_config.GetChunkSize());
         if (ddp_world_size > 1) {
             auto ddp_config = DistributedDataParallelConfig{.zero_stage = FLAGS_zero_stage};
-            auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
+            auto *pipeline_model = dynamic_cast<nn::parallel::PipelineParallel *>(model.get());
+            auto *mutable_chunks = pipeline_model->mutable_chunks();
             for (int chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
                 (*mutable_chunks)[chunk_id]
                     = std::make_shared<DistributedDataParallel>(mutable_chunks->at(chunk_id), rank, ddp_config);
             }
+            pipeline_model->SetNoSyncFunc([mutable_chunks] {
+                std::vector<std::unique_ptr<nn::NoSyncGuard>> guards;
+                guards.reserve(mutable_chunks->size());
+                for (const auto &chunk : *mutable_chunks) { guards.push_back(chunk->no_sync()); }
+                return guards;
+            });
         }
     } else if (ddp_world_size > 1) {
         // NOTE(dcj): Complete all device (.to(device)) and dtype (.to(dtype)) conversions
@@ -465,6 +472,10 @@ void Train(const nn::parallel::Rank &rank) {
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
+                std::unique_ptr<nn::NoSyncGuard> no_sync_guard;
+                if (ddp_world_size > 1 && micro_step != grad_accum_steps - 1) {
+                    no_sync_guard = model->no_sync();
+                }
                 loss->Backward();
                 // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
                 // between forward and backward.

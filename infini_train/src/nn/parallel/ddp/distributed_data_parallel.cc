@@ -37,7 +37,7 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
             << "All parameters must be on the same device as the module";
         if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
             auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(
-                function::ReduceOpType::kAvg, ddp_pg_);
+                function::ReduceOpType::kAvg, ddp_pg_, is_last_microbatch_);
             param->RegisterPostAccumulateGradHook(std::move(hook));
         }
     }
@@ -216,4 +216,17 @@ DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &inp
 }
 
 std::shared_ptr<nn::Module> DistributedDataParallel::module() const { return modules_.at(kModuleName); }
+
+std::unique_ptr<nn::NoSyncGuard> DistributedDataParallel::no_sync() {
+    SetIsLastMicrobatch(false);
+    return std::make_unique<nn::NoSyncGuard>([this] { SetIsLastMicrobatch(true); });
+}
+
+void DistributedDataParallel::SetIsLastMicrobatch(bool is_last_microbatch) {
+    is_last_microbatch_->store(is_last_microbatch, std::memory_order_relaxed);
+    if (reducer_) {
+        reducer_->SetIsLastMicrobatch(is_last_microbatch);
+    }
+    for (auto &group : bucket_groups_) { group->SetIsLastMicrobatch(is_last_microbatch); }
+}
 } // namespace infini_train::nn::parallel

@@ -20,6 +20,8 @@
 
 namespace infini_train::nn::parallel {
 
+void PipelineSchedule::SetNoSyncFunc(NoSyncFunc func) { no_sync_func_ = std::move(func); }
+
 void PrintScheduleTable(const std::vector<PipelineParallelScheduler::Task> &schedule, int n, int num_stages,
                         int vpp_size) {
     int total_global_chunks = num_stages * vpp_size;
@@ -212,6 +214,12 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
     std::vector<std::vector<std::vector<std::shared_ptr<Tensor>>>> activations(
         vpp_size, std::vector<std::vector<std::shared_ptr<Tensor>>>(n));
 
+    std::vector<std::unique_ptr<nn::NoSyncGuard>> no_sync_guards;
+    if (no_sync_func_) {
+        no_sync_guards = no_sync_func_();
+    }
+    std::vector<int> backward_counts(vpp_size, 0);
+
     for (size_t i = 0; i < schedule.size(); ++i) {
         const auto &task = schedule[i];
         if (task.stage_id != stage_idx) {
@@ -244,6 +252,10 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 }
             }
         } else {
+            const bool is_last_microbatch = ++backward_counts[task.local_chunk_idx] == n;
+            if (is_last_microbatch && no_sync_func_) {
+                no_sync_guards[task.local_chunk_idx].reset();
+            }
             if (task.is_last_chunk) {
                 auto target = microbatch_targets[mb];
                 std::shared_ptr<Tensor> loss;

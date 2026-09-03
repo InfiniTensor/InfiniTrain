@@ -146,6 +146,8 @@ void ParamAndGradBucketGroup::Reset() {
     }
 }
 
+void ParamAndGradBucketGroup::SetIsLastMicrobatch(bool is_last_microbatch) { is_last_microbatch_ = is_last_microbatch; }
+
 void ParamAndGradBucketGroup::RegisterGradReady(const std::shared_ptr<Tensor> &parameter) {
     if (!ddp_config_.overlap_grad_reduce) {
         LOG(WARNING)
@@ -154,19 +156,23 @@ void ParamAndGradBucketGroup::RegisterGradReady(const std::shared_ptr<Tensor> &p
         return;
     }
 
-    // TODO(zbl): Only register grads as ready and trigger grad sync when processing the last microbatch
-    //            For now, is_last_microbatch_ is always true
+    // Only the last microbatch registers ready grads so the reduce can overlap with its backward pass.
     if (is_last_microbatch_) {
         if (!parameter || params_.find(parameter.get()) == params_.end()) {
             return;
         }
 
-        params_with_grad_.insert(parameter.get());
-        // TODO(zbl): check this if sync is only done in last mircobatch
-        // if (!inserted) {
-        //     LOG(FATAL) << "ParamAndGradBucketGroup: RegisterGradReady() was called twice for the same parameter in a
-        //     bucket group."; return;
-        // }
+        if (grad_reduce_dispatched_) {
+            LOG(FATAL) << "ParamAndGradBucketGroup: RegisterGradReady() was called after grad sync was dispatched.";
+            return;
+        }
+
+        auto [_, inserted] = params_with_grad_.insert(parameter.get());
+        if (!inserted) {
+            LOG(FATAL) << "ParamAndGradBucketGroup: RegisterGradReady() was called twice for the same parameter in a "
+                          "bucket group.";
+            return;
+        }
 
         if (params_with_grad_.size() == params_.size()) {
             // All param grads are ready in this group, trigger grad sync
@@ -297,8 +303,6 @@ void ParamAndGradBucketGroup::StartGradSync() {
     }
 
     grad_reduce_dispatched_ = true;
-    // TODO(zbl): no need to clear params_with_grad_ here if grad sync is only done on last microbatch
-    params_with_grad_.clear();
 }
 
 void ParamAndGradBucketGroup::FinishGradSync() {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 
 #include "infini_train/include/nn/modules/module.h"
@@ -31,6 +32,8 @@ public:
 
     std::shared_ptr<nn::Module> module() const;
 
+    std::unique_ptr<nn::NoSyncGuard> no_sync() override;
+
     DistributedDataParallelConfig ddp_config() const { return ddp_config_; }
 
     const std::vector<std::shared_ptr<ParamAndGradBuffer>> &param_grad_buffers() const { return param_grad_buffers_; }
@@ -41,9 +44,12 @@ private:
     void BuildParamAndGradBuffers();
     void RegisterBackwardHooks();
     void OnGradReady(const std::shared_ptr<Tensor> &param);
+    void SetIsLastMicrobatch(bool is_last_microbatch);
 
 private:
     std::shared_ptr<Reducer> reducer_ = nullptr;
+    // Whether to enable grad sync on last microbatch (DDP naive path)
+    std::shared_ptr<std::atomic_bool> is_last_microbatch_ = std::make_shared<std::atomic_bool>(true);
 
     DistributedDataParallelConfig ddp_config_;
     const ProcessGroup *ddp_pg_ = nullptr;
