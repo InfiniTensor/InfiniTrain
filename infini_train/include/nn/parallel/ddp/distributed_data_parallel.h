@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 
 #include "infini_train/include/nn/modules/module.h"
@@ -47,6 +48,8 @@ private:
 
 private:
     std::shared_ptr<Reducer> reducer_ = nullptr;
+    // Whether to enable grad sync on last microbatch (DDP naive path)
+    std::shared_ptr<std::atomic_bool> is_last_microbatch_ = std::make_shared<std::atomic_bool>(true);
 
     DistributedDataParallelConfig ddp_config_;
     const ProcessGroup *ddp_pg_ = nullptr;
