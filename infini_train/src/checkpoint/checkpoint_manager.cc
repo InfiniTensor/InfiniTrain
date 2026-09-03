@@ -120,15 +120,15 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
     }
 }
 
-size_t DataLoaderStepsToSkip(size_t consumed_train_samples, size_t local_batch_size, size_t ddp_world_size) {
+size_t DataLoaderBatchesToSkip(size_t consumed_train_samples, size_t local_batch_size, size_t ddp_world_size) {
     CHECK_GT(local_batch_size, 0);
     CHECK_GT(ddp_world_size, 0);
     CHECK_LE(local_batch_size, std::numeric_limits<size_t>::max() / ddp_world_size)
         << "Data loader batch size overflows size_t";
-    const size_t samples_per_dataloader_step = local_batch_size * ddp_world_size;
-    CHECK_EQ(consumed_train_samples % samples_per_dataloader_step, 0)
+    const size_t global_loader_batch_size = local_batch_size * ddp_world_size;
+    CHECK_EQ(consumed_train_samples % global_loader_batch_size, 0)
         << "consumed_train_samples=" << consumed_train_samples
         << " does not align with current local_batch_size=" << local_batch_size
         << " and ddp_world_size=" << ddp_world_size;
-    return consumed_train_samples / samples_per_dataloader_step;
+    return consumed_train_samples / global_loader_batch_size;
 }
