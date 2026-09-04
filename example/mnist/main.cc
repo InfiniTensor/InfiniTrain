@@ -47,14 +47,14 @@ int main(int argc, char *argv[]) {
     auto test_dataset = std::make_shared<MNISTDataset>(FLAGS_dataset, false);
     DataLoader test_dataloader(test_dataset, FLAGS_bs);
 
-    auto network = MNIST();
+    auto network = std::make_shared<MNIST>();
     Device device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
     Device cpu_device = Device();
-    network.To(device);
+    network->To(device);
 
     auto loss_fn = nn::CrossEntropyLoss();
     loss_fn.To(device);
-    auto optimizer = optimizers::SGD(network.Parameters(), FLAGS_lr);
+    auto optimizer = optimizers::SGD(network->Parameters(), FLAGS_lr);
 
     for (int epoch = 0; epoch < FLAGS_num_epoch; ++epoch) {
         int train_idx = 0;
@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
             auto new_image = std::make_shared<Tensor>(image->To(device));
             auto new_label = std::make_shared<Tensor>(label->To(device));
 
-            auto outputs = network.Forward({new_image});
+            auto outputs = network->Forward({new_image});
             optimizer.ZeroGrad();
 
             auto loss = loss_fn.Forward({outputs[0], new_label});
@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
         auto new_label = std::make_shared<Tensor>(label->To(device));
 
         auto label_cpu = label->To(cpu_device);
-        auto outputs = network.Forward({new_image});
+        auto outputs = network->Forward({new_image});
         auto output_cpu = outputs[0]->To(cpu_device);
         auto loss = loss_fn.Forward({outputs[0], new_label});
         auto loss_cpu = loss[0]->To(cpu_device);
