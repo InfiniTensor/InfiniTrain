@@ -13,8 +13,7 @@ public:
     static constexpr char kGeluLayerName[] = "gelu";
     static constexpr char kCProjLayerName[] = "c_proj";
 
-    static constexpr char kCFc2LayerName[] = "c_fc2";
-    static constexpr char kSiluLayerName[] = "silu";
+    static constexpr char kSwiGLULayerName[] = "swiglu";
 
     explicit MLP(const TransformerConfig &config);
 
