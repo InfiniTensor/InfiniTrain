@@ -277,7 +277,8 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                                   nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
-            ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
+            float *dst = static_cast<float *>(tensor->DataPtr()) + fc_pp * n_embd;
+            ReadMatrixRowShardFloat(ifs, dst,
                                     /*rows=*/fc_out, /*cols=*/n_embd,
                                     /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
             ++local_layer_index;
@@ -293,7 +294,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         if (owned_layers[i]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFc2LayerName,
+                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                     /*rows=*/fc_out, /*cols=*/n_embd,
