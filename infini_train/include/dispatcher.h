@@ -1,11 +1,13 @@
 #pragma once
 
 #include <map>
+#include <string>
 #include <type_traits>
 #include <utility>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/common/common.h"
 #include "infini_train/include/device.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
@@ -55,6 +57,8 @@ public:
         return instance;
     }
 
+    bool HasKernel(const KeyT &key) const { return key_to_kernel_map_.contains(key); }
+
     const KernelFunction &GetKernel(KeyT key) const {
         CHECK(key_to_kernel_map_.contains(key))
             << "Kernel not found: " << key.second << " on device: " << static_cast<int>(key.first);
@@ -85,7 +89,8 @@ private:
 } // namespace infini_train
 
 #define REGISTER_KERNEL(device, kernel_name, kernel_func)                                                              \
-    static const bool _##kernel_name##_registered##__COUNTER__ = []() {                                                \
-        infini_train::Dispatcher::Instance().Register({device, #kernel_name}, kernel_func);                            \
-        return true;                                                                                                   \
-    }();
+    [[maybe_unused]] static const bool CAT(infini_train_kernel_, CAT(kernel_name, CAT(_registered_, __COUNTER__)))     \
+        = []() {                                                                                                       \
+              infini_train::Dispatcher::Instance().Register({device, #kernel_name}, kernel_func);                      \
+              return true;                                                                                             \
+          }();

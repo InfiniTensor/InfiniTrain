@@ -78,6 +78,7 @@ MIXTRAL_LLMC_FILEPATH="$(read_var MIXTRAL_LLMC_FILEPATH)"; : "${MIXTRAL_LLMC_FIL
 GPT2_TEST_GROUPS="$(read_var GPT2_TEST_GROUPS)";          : "${GPT2_TEST_GROUPS:=basic,zero,lora,checkpoint}"
 LLAMA3_TEST_GROUPS="$(read_var LLAMA3_TEST_GROUPS)";      : "${LLAMA3_TEST_GROUPS:=basic,zero,lora,checkpoint}"
 MIXTRAL_TEST_GROUPS="$(read_var MIXTRAL_TEST_GROUPS)";    : "${MIXTRAL_TEST_GROUPS:=moe}"
+DEVICE_BACKEND="$(read_var DEVICE_BACKEND)";             : "${DEVICE_BACKEND:=cuda}"
 
 # export custom variables from config first. LOG_DIR/PROFILE_LOG_DIR are normalized below.
 while IFS="=" read -r k v; do
@@ -446,9 +447,9 @@ infini_run_cmd_for_test() {
     local arg_str="$4"
     local nproc_per_node="$5"
 
-    printf './infini_run --nproc_per_node=%s %s --input_bin %q --llmc_filepath %q --device cuda %s' \
+    printf './infini_run --nproc_per_node=%s %s --input_bin %q --llmc_filepath %q --device %q %s' \
         "$nproc_per_node" "$model_bin" \
-        "$input_bin" "$llmc_filepath" "$arg_str"
+        "$input_bin" "$llmc_filepath" "$DEVICE_BACKEND" "$arg_str"
 }
 
 # Run tests
@@ -529,7 +530,7 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
                     if [[ -n "$nproc_per_node" ]]; then
                         gpt2_cmd="$(infini_run_cmd_for_test "./gpt2" "$GPT2_INPUT_BIN" "$GPT2_LLMC_FILEPATH" "$gpt2_arg_str" "$nproc_per_node")"
                     else
-                        gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device cuda ${gpt2_arg_str}"
+                        gpt2_cmd="${prefix}./gpt2 --input_bin ${GPT2_INPUT_BIN} --llmc_filepath ${GPT2_LLMC_FILEPATH} --device ${DEVICE_BACKEND} ${gpt2_arg_str}"
                     fi
                     run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
@@ -540,7 +541,7 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
                     if [[ -n "$nproc_per_node" ]]; then
                         llama3_cmd="$(infini_run_cmd_for_test "./llama3" "$LLAMA3_INPUT_BIN" "$LLAMA3_LLMC_FILEPATH" "$llama3_arg_str" "$nproc_per_node")"
                     else
-                        llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device cuda ${llama3_arg_str}"
+                        llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device ${DEVICE_BACKEND} ${llama3_arg_str}"
                     fi
                     run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
@@ -550,7 +551,7 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
                     if [[ -n "$nproc_per_node" ]]; then
                         mixtral_cmd="$(infini_run_cmd_for_test "./mixtral" "$MIXTRAL_INPUT_BIN" "$MIXTRAL_LLMC_FILEPATH" "$mixtral_arg_str" "$nproc_per_node")"
                     else
-                        mixtral_cmd="${prefix}./mixtral --input_bin ${MIXTRAL_INPUT_BIN} --llmc_filepath ${MIXTRAL_LLMC_FILEPATH} --device cuda ${mixtral_arg_str}"
+                        mixtral_cmd="${prefix}./mixtral --input_bin ${MIXTRAL_INPUT_BIN} --llmc_filepath ${MIXTRAL_LLMC_FILEPATH} --device ${DEVICE_BACKEND} ${mixtral_arg_str}"
                     fi
                     run_and_log "$mixtral_cmd" "mixtral_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi

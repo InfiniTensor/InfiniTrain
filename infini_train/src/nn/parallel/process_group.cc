@@ -94,7 +94,14 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
         core::ReadUniqueIdFile(unique_id.get(), name_);
     }
 
-    core::CclGroupGuard ccl_group_guard(backend_);
+    const auto local_rank_count = std::ranges::count_if(
+        ranks, [lower_rank, upper_rank](int rank) { return rank >= lower_rank && rank < upper_rank; });
+    std::unique_ptr<core::CclGroupGuard> ccl_group_guard;
+    // Grouped init is only required when this process initializes multiple communicators sequentially.
+    if (local_rank_count > 1) {
+        ccl_group_guard = std::make_unique<core::CclGroupGuard>(backend_);
+    }
+
     for (int i = 0; i < n_threads; ++i) {
         int global_thread_rank = lower_rank + i;
         auto it = std::ranges::find(ranks, global_thread_rank);

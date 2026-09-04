@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "infini_train/include/common/common.h"
 #include "infini_train/include/core/ccl/ccl_common.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
@@ -79,6 +80,8 @@ public:
 
     void Register(Device::DeviceType type, std::unique_ptr<CclImpl> impl);
 
+    bool Has(Device::DeviceType type) const;
+
     CclImpl *Get(Device::DeviceType type) const;
 
 private:
@@ -94,7 +97,7 @@ CclImpl *GetCclImpl(Device::DeviceType type);
 } // namespace infini_train::core
 
 #define INFINI_TRAIN_REGISTER_CCL_IMPL(device_type, class_impl)                                                        \
-    static const bool __infini_train_ccl_registered##__COUNTER__ = []() {                                              \
+    [[maybe_unused]] static const bool CAT(infini_train_ccl_registered_, __COUNTER__) = []() {                         \
         infini_train::core::CclImplRegistry::Instance().Register(device_type, std::make_unique<class_impl>());         \
         return true;                                                                                                   \
     }();

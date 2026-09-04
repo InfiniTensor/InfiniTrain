@@ -11,8 +11,15 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
+// Out-of-tree builds inject the selected provider's declaration without adding
+// a vendor dependency to the upstream example.
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_HEADER
+#include INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_HEADER
+#endif
+
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/checkpoint/checkpoint.h"
+#include "infini_train/include/core/privateuse1_backend.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
@@ -76,12 +83,11 @@ DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 // debugging
 DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 // memory management
-DEFINE_string(device, "cuda", "device type (cpu/cuda), useless if using parallel training mode");
+DEFINE_string(device, "cuda", "device type, useless if using parallel training mode");
 // parallel
-DEFINE_int32(
-    nthread_per_process, 1,
-    "Number of threads to use for each process. "
-    "When set > 1, enables data parallelism with device=cuda on the specified number of visible CUDA devices.");
+DEFINE_int32(nthread_per_process, 1,
+             "Number of threads to use for each process. "
+             "When set > 1, enables data parallelism on the specified accelerator devices.");
 DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
@@ -112,8 +118,6 @@ namespace {
 // validation
 const std::unordered_set<std::string> kSupportedModels
     = {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "d12", "d24", "d36", "d48"};
-constexpr char kDeviceCPU[] = "cpu";
-constexpr char kDeviceCUDA[] = "cuda";
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles
@@ -127,11 +131,15 @@ const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
     {"d48", {.block_size = 1024, .vocab_size = 50257, .n_layer = 48, .n_head = 25, .n_embd = 1600}},
 };
 
+bool IsMacaBackend(Device::DeviceType device_type) {
+    return device_type == Device::DeviceType::kPrivateUse1 && core::HasPrivateUse1Backend()
+        && core::GetPrivateUse1BackendName() == "maca";
+}
+
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
-DEFINE_validator(device,
-                 [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_validator(device, [](const char *, const std::string &value) { return Device::ParseType(value).has_value(); });
 DEFINE_validator(zero_stage, [](const char *, int32_t value) { return value >= 0 && value <= 3; });
 DEFINE_validator(lr_decay_style,
                  [](const char *, const std::string &value) { return kSupportedLRDecayStyles.contains(value); });
@@ -157,6 +165,7 @@ void Train(const nn::parallel::Rank &rank) {
 
     // select the device
     Device device;
+    const auto device_type = Device::ParseType(FLAGS_device).value();
 
     int ddp_world_size = global::GetDataParallelSize();
     int tp_world_size = global::GetTensorParallelSize();
@@ -181,7 +190,8 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *pp_pg = nullptr;
 
     if (rank.IsParallel()) {
-        device = Device(Device::DeviceType::kCUDA, global::GetDeviceIndex(rank.thread_rank()));
+        CHECK(device_type != Device::DeviceType::kCPU) << "Parallel training requires an accelerator backend";
+        device = Device(device_type, global::GetDeviceIndex(rank.thread_rank()));
         auto *pg_factory = ProcessGroupFactory::Instance(device.type());
 
         if (ddp_world_size > 1) {
@@ -206,7 +216,7 @@ void Train(const nn::parallel::Rank &rank) {
             nn::parallel::pp_rank = pp_rank;
         }
     } else {
-        device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
+        device = Device(device_type, 0);
     }
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
@@ -306,9 +316,9 @@ void Train(const nn::parallel::Rank &rank) {
         model = std::make_shared<DistributedDataParallel>(model, rank, ddp_config);
     }
 
-    const size_t train_loader_batch_size = pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size;
     DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
-                                       train_loader_batch_size, ddp_rank, ddp_world_size);
+                                       pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size,
+                                       ddp_rank, ddp_world_size);
 
     std::optional<DistributedDataLoader> val_loader = std::nullopt;
     if (!FLAGS_input_val_bin.empty()) {
@@ -382,13 +392,15 @@ void Train(const nn::parallel::Rank &rank) {
                                                      .state = state,
                                                      .lr_scheduler = scheduler});
     start_step = resume_result.global_step;
-    size_t consumed_train_samples = resume_result.consumed_train_samples;
+    size_t consumed_batches = resume_result.consumed_batches;
 
     // TODO(jym): Replace with Sampler abstraction when available.
     // Skip dataloader to resume from the correct batch position.
-    if (consumed_train_samples > 0) {
-        const size_t num_skips
-            = DataLoaderBatchesToSkip(consumed_train_samples, train_loader_batch_size, ddp_world_size);
+    if (consumed_batches > 0) {
+        size_t start = train_iter.BatchIndex();
+        // Each rank processes every ddp_world_size-th batch starting from its own rank.
+        // num_skips calculates how many ++ iterations to reach the saved batch position.
+        size_t num_skips = (consumed_batches - start) / ddp_world_size;
         for (size_t i = 0; i < num_skips; ++i) { ++train_iter; }
     }
 
@@ -396,7 +408,7 @@ void Train(const nn::parallel::Rank &rank) {
         SaveCheckpoint({
             .save_dir = save_dir,
             .global_step = global_step,
-            .consumed_train_samples = consumed_train_samples,
+            .consumed_batches = consumed_batches,
             .n_layer = model_config.n_layer,
             .n_head = model_config.n_head,
             .n_kv_head = model_config.n_kv_head,
@@ -468,7 +480,7 @@ void Train(const nn::parallel::Rank &rank) {
                 // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
                 // TODO(dcj): support dataloader.reset() later
                 ++train_iter;
-                consumed_train_samples += static_cast<size_t>(FLAGS_batch_size) * ddp_world_size;
+                consumed_batches = train_iter.BatchIndex();
                 x = std::make_shared<Tensor>(x->To(device));
                 y = std::make_shared<Tensor>(y->To(device));
 
@@ -504,7 +516,7 @@ void Train(const nn::parallel::Rank &rank) {
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
             // TODO(dcj): support dataloader.reset() later
             ++train_iter;
-            consumed_train_samples += train_loader_batch_size * ddp_world_size;
+            consumed_batches = train_iter.BatchIndex();
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
@@ -564,11 +576,27 @@ void Train(const nn::parallel::Rank &rank) {
     Profiler::Instance().Report("gpt2.report", Profiler::SortBy::DeviceTimePercentage);
     Profiler::Instance().PrintRecords("gpt2.records.log");
 #endif
+
+    // FIXME(cx): MACA requires a step-boundary synchronization to flush pending mcFreeAsync operations.
+    // Replace this backend-name check with a provider step-completion hook.
+    // Releasing the pending operations ensures that ATU entries for
+    // activation/gradient tensors from this step are released before the next
+    // forward pass begins.  Without this, the ATU (address-translation unit)
+    // accumulates deferred frees across steps and becomes full, causing
+    // xnack(0x8) ATU-fault crashes in CastKernel and other large-tensor kernels.
+    if (IsMacaBackend(device.type())) {
+        impl->SynchronizeDevice(device);
+    }
 }
 
 int main(int argc, char *argv[]) {
-    gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
+    // Register provider metadata and implementations before gflags validates
+    // --device. The device runtime initializes lazily on first DeviceGuard use.
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR
+    INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR();
+#endif
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
 
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
@@ -592,8 +620,17 @@ int main(int argc, char *argv[]) {
         Train(rank);
     }
 
+    const bool bypass_maca_static_teardown
+        = IsMacaBackend(Device::ParseType(FLAGS_device).value()) && nn::parallel::global::GetWorldSize() > 1;
+
     gflags::ShutDownCommandLineFlags();
     google::ShutdownGoogleLogging();
+
+    // FIXME(cx): MACA parallel execution bypasses static destruction to avoid teardown failures.
+    // Replace this backend-name check with a provider shutdown hook.
+    if (bypass_maca_static_teardown) {
+        std::_Exit(0);
+    }
 
     return 0;
 }
