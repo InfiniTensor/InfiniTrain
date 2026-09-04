@@ -297,9 +297,9 @@ void Train(const nn::parallel::Rank &rank) {
         model = std::make_shared<DistributedDataParallel>(model, rank, ddp_config);
     }
 
-    const size_t train_loader_batch_size = pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size;
     DistributedDataLoader train_loader(std::make_shared<TinyShakespeareDataset>(FLAGS_input_bin, FLAGS_sequence_length),
-                                       train_loader_batch_size, ddp_rank, ddp_world_size);
+                                       pp_world_size > 1 ? FLAGS_batch_size * num_micro_batches : FLAGS_batch_size,
+                                       ddp_rank, ddp_world_size);
 
     std::optional<DistributedDataLoader> val_loader = std::nullopt;
     if (!FLAGS_input_val_bin.empty()) {
@@ -381,13 +381,15 @@ void Train(const nn::parallel::Rank &rank) {
                                                      .lr_scheduler = scheduler});
 
     start_step = resume_result.global_step;
-    size_t consumed_train_samples = resume_result.consumed_train_samples;
+    size_t consumed_batches = resume_result.consumed_batches;
 
     // TODO(jym): Replace with Sampler abstraction when available.
     // Skip dataloader to resume from the correct batch position.
-    if (consumed_train_samples > 0) {
-        const size_t num_skips
-            = DataLoaderBatchesToSkip(consumed_train_samples, train_loader_batch_size, ddp_world_size);
+    if (consumed_batches > 0) {
+        size_t start = train_iter.BatchIndex();
+        // Each rank processes every ddp_world_size-th batch starting from its own rank.
+        // num_skips calculates how many ++ iterations to reach the saved batch position.
+        size_t num_skips = (consumed_batches - start) / ddp_world_size;
         for (size_t i = 0; i < num_skips; ++i) { ++train_iter; }
     }
 
@@ -395,7 +397,7 @@ void Train(const nn::parallel::Rank &rank) {
         SaveCheckpoint({
             .save_dir = save_dir,
             .global_step = global_step,
-            .consumed_train_samples = consumed_train_samples,
+            .consumed_batches = consumed_batches,
             .n_layer = model_config.n_layer,
             .n_head = model_config.n_head,
             .n_kv_head = model_config.n_kv_head,
@@ -465,7 +467,7 @@ void Train(const nn::parallel::Rank &rank) {
                 // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
                 // TODO(dcj): support dataloader.reset() later
                 ++train_iter;
-                consumed_train_samples += static_cast<size_t>(FLAGS_batch_size) * ddp_world_size;
+                consumed_batches = train_iter.BatchIndex();
                 x = std::make_shared<Tensor>(x->To(device));
                 y = std::make_shared<Tensor>(y->To(device));
 
@@ -500,7 +502,7 @@ void Train(const nn::parallel::Rank &rank) {
             // if we are trying to overfit a single batch, we reset the loader here by commenting out the line below
             // TODO(dcj): support dataloader.reset() later
             ++train_iter;
-            consumed_train_samples += train_loader_batch_size * ddp_world_size;
+            consumed_batches = train_iter.BatchIndex();
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
