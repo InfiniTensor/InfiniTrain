@@ -3,6 +3,7 @@
 
 #include "gtest/gtest.h"
 
+#include "infini_train/include/autograd/activations.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
@@ -12,6 +13,70 @@
 using namespace infini_train;
 
 class AutogradElementwiseBackwardTest : public infini_train::test::InfiniTrainTest {};
+
+TEST_P(AutogradElementwiseBackwardTest, SwiGLUForwardBackward) {
+    const std::vector<int64_t> input_dims{2, 6};
+    const std::vector<float> input_values{-1.0f, 0.5f, 2.0f, -2.0f, 0.0f, 1.5f, 0.25f, -3.0f, 1.0f, 0.5f, -1.0f, 2.0f};
+    const std::vector<float> grad_values{1.0f, -0.5f, 2.0f, -1.5f, 0.25f, 0.75f};
+    auto input = std::make_shared<Tensor>(input_values.data(), input_dims, DataType::kFLOAT32, GetDevice());
+    auto grad_output
+        = std::make_shared<Tensor>(grad_values.data(), std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
+
+    std::vector<float> expected_output(6);
+    std::vector<float> expected_grad(12);
+    for (int64_t row = 0; row < 2; ++row) {
+        for (int64_t col = 0; col < 3; ++col) {
+            const int64_t packed_base = row * 6;
+            const int64_t output_idx = row * 3 + col;
+            const float up = input_values[packed_base + col];
+            const float gate = input_values[packed_base + 3 + col];
+            const float grad = grad_values[output_idx];
+            const float sigmoid = 1.0f / (1.0f + std::exp(-gate));
+            expected_output[output_idx] = up * gate * sigmoid;
+            expected_grad[packed_base + col] = grad * gate * sigmoid;
+            expected_grad[packed_base + 3 + col] = grad * up * sigmoid * (1.0f + gate * (1.0f - sigmoid));
+        }
+    }
+
+    auto swiglu_fn = std::make_shared<autograd::SwiGLU>();
+    auto result = swiglu_fn->Apply({input});
+    ASSERT_EQ(result.size(), 1);
+    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 3}));
+    test::ExpectTensorNear(result[0], expected_output, 1e-5f);
+
+    auto grad_inputs = swiglu_fn->Backward({grad_output});
+    ASSERT_EQ(grad_inputs.size(), 1);
+    EXPECT_EQ(grad_inputs[0]->Dims(), input_dims);
+    test::ExpectTensorNear(grad_inputs[0], expected_grad, 1e-5f);
+}
+
+TEST_P(AutogradElementwiseBackwardTest, SwiGLUAutocastBackward) {
+    ONLY_CUDA();
+    const std::vector<int64_t> input_dims{1, 4};
+    const std::vector<float> input_values{0.5f, -1.0f, 1.0f, -0.5f};
+    const std::vector<float> grad_values{2.0f, -0.25f};
+    auto input_fp32 = std::make_shared<Tensor>(input_values.data(), input_dims, DataType::kFLOAT32, GetDevice());
+    auto input = std::make_shared<Tensor>(input_fp32->To(DataType::kBFLOAT16));
+    auto grad_output
+        = std::make_shared<Tensor>(grad_values.data(), std::vector<int64_t>{1, 2}, DataType::kFLOAT32, GetDevice());
+
+    auto swiglu_fn = std::make_shared<autograd::SwiGLU>();
+    swiglu_fn->Apply({input});
+    auto grad_inputs = swiglu_fn->Backward({grad_output});
+    ASSERT_EQ(grad_inputs.size(), 1);
+    EXPECT_EQ(grad_inputs[0]->Dtype(), DataType::kFLOAT32);
+
+    std::vector<float> expected_grad(4);
+    for (int64_t col = 0; col < 2; ++col) {
+        const float up = input_values[col];
+        const float gate = input_values[2 + col];
+        const float grad = grad_values[col];
+        const float sigmoid = 1.0f / (1.0f + std::exp(-gate));
+        expected_grad[col] = grad * gate * sigmoid;
+        expected_grad[2 + col] = grad * up * sigmoid * (1.0f + gate * (1.0f - sigmoid));
+    }
+    test::ExpectTensorNear(grad_inputs[0], expected_grad, 2e-3f);
+}
 
 TEST_P(AutogradElementwiseBackwardTest, AddBackward) {
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);

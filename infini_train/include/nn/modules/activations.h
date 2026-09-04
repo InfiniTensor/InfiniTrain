@@ -30,6 +30,7 @@ public:
     static constexpr char kType[] = "SwiGLU";
     SwiGLU() : CloneableModule(kType) {}
 
+    // The last input dimension is packed as [up, gate].
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &x) override;
 };
 } // namespace infini_train::nn
