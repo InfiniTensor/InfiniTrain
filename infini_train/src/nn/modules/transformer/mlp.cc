@@ -78,7 +78,7 @@ MLP::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     if (modules_.contains(kSwiGLULayerName)) {
         // (B, T, C) -> ColumnParallelLinear(C, 2*H) -> (B, T, 2*H_local)
         auto packed = (*modules_[kCFcLayerName])(x)[0];
-        // (B, T, 2*H_local) [up, gate] -> SwiGLU -> (B, T, H_local)
+        // (B, T, 2*H_local) [gate, up] -> SwiGLU -> (B, T, H_local)
         auto activated = (*modules_[kSwiGLULayerName])({packed});
         // (B, T, H_local) -> RowParallelLinear(H, C) -> (B, T, C)
         return (*modules_[kCProjLayerName])(activated);

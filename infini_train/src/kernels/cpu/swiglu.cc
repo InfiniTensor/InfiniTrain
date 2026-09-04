@@ -25,8 +25,8 @@ std::shared_ptr<Tensor> SwiGLUForward(const std::shared_ptr<Tensor> &input) {
         const int64_t input_base = row * 2 * hidden;
         const int64_t output_base = row * hidden;
         for (int64_t col = 0; col < hidden; ++col) {
-            const float up = input_ptr[input_base + col];
-            const float gate = input_ptr[input_base + hidden + col];
+            const float gate = input_ptr[input_base + col];
+            const float up = input_ptr[input_base + hidden + col];
             output_ptr[output_base + col] = up * gate / (1.0f + std::exp(-gate));
         }
     }
@@ -53,12 +53,12 @@ std::shared_ptr<Tensor> SwiGLUBackward(const std::shared_ptr<Tensor> &input,
         const int64_t input_base = row * 2 * hidden;
         const int64_t output_base = row * hidden;
         for (int64_t col = 0; col < hidden; ++col) {
-            const float up = input_ptr[input_base + col];
-            const float gate = input_ptr[input_base + hidden + col];
+            const float gate = input_ptr[input_base + col];
+            const float up = input_ptr[input_base + hidden + col];
             const float grad = grad_output_ptr[output_base + col];
             const float sigmoid = 1.0f / (1.0f + std::exp(-gate));
-            grad_input_ptr[input_base + col] = grad * gate * sigmoid;
-            grad_input_ptr[input_base + hidden + col] = grad * up * sigmoid * (1.0f + gate * (1.0f - sigmoid));
+            grad_input_ptr[input_base + col] = grad * up * sigmoid * (1.0f + gate * (1.0f - sigmoid));
+            grad_input_ptr[input_base + hidden + col] = grad * gate * sigmoid;
         }
     }
     return grad_input;
