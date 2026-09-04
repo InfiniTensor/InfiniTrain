@@ -284,6 +284,36 @@ bool ColumnParallelLinear::input_is_parallel() const { return input_is_parallel_
 bool ColumnParallelLinear::skip_bias_add() const { return skip_bias_add_; }
 bool ColumnParallelLinear::sequence_parallel() const { return sequence_parallel_; }
 
+checkpoint::ShardedStateDict ColumnParallelLinear::ShardedStateDict(const std::string &prefix) const {
+    checkpoint::ShardedStateDict sd;
+    int tp_size = global::GetTensorParallelSize();
+
+    auto &weight = parameter(kParamWeightName);
+    checkpoint::ShardedTensor w;
+    w.key = prefix.empty() ? kParamWeightName : prefix + "." + kParamWeightName;
+    w.dtype = weight->Dtype();
+    w.global_shape = {output_size_per_partition_ * tp_size, weight->Dims()[1]};
+    w.local_shape = weight->Dims();
+    w.global_offset = {output_size_per_partition_ * tp_rank, 0};
+    w.axis_fragmentations = {tp_size, 1};
+    sd.tensors[w.key] = std::move(w);
+
+    // Bias is also split along dim=0
+    if (bias_) {
+        auto &bias = parameter(kParamBiasName);
+        checkpoint::ShardedTensor b;
+        b.key = prefix.empty() ? kParamBiasName : prefix + "." + kParamBiasName;
+        b.dtype = bias->Dtype();
+        b.global_shape = {static_cast<int64_t>(output_size_per_partition_ * tp_size)};
+        b.local_shape = bias->Dims();
+        b.global_offset = {output_size_per_partition_ * tp_rank};
+        b.axis_fragmentations = {tp_size};
+        sd.tensors[b.key] = std::move(b);
+    }
+
+    return sd;
+}
+
 RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool reduce_output,
                                      bool input_is_parallel, bool skip_bias_add, bool sequence_parallel)
     : CloneableModule(kType), bias_(bias), reduce_output_(reduce_output), input_is_parallel_(input_is_parallel),
@@ -339,9 +369,40 @@ bool RowParallelLinear::input_is_parallel() const { return input_is_parallel_; }
 bool RowParallelLinear::skip_bias_add() const { return skip_bias_add_; }
 bool RowParallelLinear::sequence_parallel() const { return sequence_parallel_; }
 
+checkpoint::ShardedStateDict RowParallelLinear::ShardedStateDict(const std::string &prefix) const {
+    checkpoint::ShardedStateDict sd;
+    int tp_size = global::GetTensorParallelSize();
+
+    auto &weight = parameter(kParamWeightName);
+    checkpoint::ShardedTensor w;
+    w.key = prefix.empty() ? kParamWeightName : prefix + "." + kParamWeightName;
+    w.dtype = weight->Dtype();
+    w.global_shape = {weight->Dims()[0], input_size_per_partition_ * tp_size};
+    w.local_shape = weight->Dims();
+    w.global_offset = {0, input_size_per_partition_ * tp_rank};
+    w.axis_fragmentations = {1, tp_size};
+    sd.tensors[w.key] = std::move(w);
+
+    // Bias is NOT sharded in RowParallelLinear
+    if (bias_) {
+        auto &bias = parameter(kParamBiasName);
+        checkpoint::ShardedTensor b;
+        b.key = prefix.empty() ? kParamBiasName : prefix + "." + kParamBiasName;
+        b.dtype = bias->Dtype();
+        b.global_shape = bias->Dims();
+        b.local_shape = bias->Dims();
+        b.global_offset = {0};
+        b.axis_fragmentations = {1};
+        sd.tensors[b.key] = std::move(b);
+    }
+
+    return sd;
+}
+
 VocabParallelEmbedding::VocabParallelEmbedding(int64_t num_embeddings, int64_t embedding_dim,
                                                bool reduce_scatter_embeddings)
-    : CloneableModule(kType), embedding_dim_(embedding_dim), reduce_scatter_embeddings_(reduce_scatter_embeddings) {
+    : CloneableModule(kType), vocab_size_global_(num_embeddings), embedding_dim_(embedding_dim),
+      reduce_scatter_embeddings_(reduce_scatter_embeddings) {
     auto tp_size = global::GetTensorParallelSize();
     CHECK_GT(tp_size, 0) << "No available devices found for VocabParallelEmbedding";
     CHECK_GT(num_embeddings, 0);
@@ -393,6 +454,23 @@ VocabParallelEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>> &inpu
                                              : ReduceFromTPRegionFunc(local_output)[0];
 
     return {output};
+}
+
+checkpoint::ShardedStateDict VocabParallelEmbedding::ShardedStateDict(const std::string &prefix) const {
+    checkpoint::ShardedStateDict sd;
+    int tp_size = global::GetTensorParallelSize();
+
+    auto &weight = parameter(kParamWeightName);
+    checkpoint::ShardedTensor w;
+    w.key = prefix.empty() ? kParamWeightName : prefix + "." + kParamWeightName;
+    w.dtype = weight->Dtype();
+    w.global_shape = {vocab_size_global_, embedding_dim_};
+    w.local_shape = weight->Dims();
+    w.global_offset = {vocab_start_index_, 0};
+    w.axis_fragmentations = {tp_size, 1};
+    sd.tensors[w.key] = std::move(w);
+
+    return sd;
 }
 
 std::vector<std::shared_ptr<Tensor>>
@@ -465,7 +543,7 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     auto sum_exp_local = exp_local->Sum(-1);
     auto sum_exp = (tp_size > 1) ? ReduceFromTPRegionFunc(sum_exp_local)[0] : sum_exp_local;
 
-    // 4. Perform Softmax（local shards but normalize globally）
+    // 4. Perform Softmax (local shards but normalize globally).
     auto softmax_local = exp_local->Div(sum_exp->Unsqueeze(-1));
 
     // 5. Perform allreduce to get global predicted_logit
@@ -479,7 +557,7 @@ VocabParallelCrossEntropy::Forward(const std::vector<std::shared_ptr<Tensor>> &i
     auto log_sum_exp = sum_exp->Log();
     auto loss = log_sum_exp->Sub(predicted);
 
-    // 7. Label smoothing（According to Megatron-LM）
+    // 7. Apply label smoothing according to Megatron-LM.
     // TODO(zbl): adjust smoothing coef according to vocab_size_original
     if (label_smoothing_ > 0.0f) {
         // mean_logp over *valid tokens only*:

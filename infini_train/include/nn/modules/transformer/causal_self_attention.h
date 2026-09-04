@@ -21,6 +21,8 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
+    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+
 private:
     TransformerConfig config_;
     int64_t n_head_ = 0;

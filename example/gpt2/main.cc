@@ -405,6 +405,7 @@ void Train(const nn::parallel::Rank &rank) {
             .tp_size = tp_world_size,
             .sp_size = sp_world_size,
             .pp_size = pp_world_size,
+            .vpp_size = static_cast<int>(FLAGS_virtual_pipeline_parallel),
             .checkpoint_root_dir = FLAGS_save,
             .max_checkpoint_keep = FLAGS_max_checkpoint_keep,
             .rank = rank,
