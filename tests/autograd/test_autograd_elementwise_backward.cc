@@ -28,13 +28,13 @@ TEST_P(AutogradElementwiseBackwardTest, SwiGLUForwardBackward) {
         for (int64_t col = 0; col < 3; ++col) {
             const int64_t packed_base = row * 6;
             const int64_t output_idx = row * 3 + col;
-            const float up = input_values[packed_base + col];
-            const float gate = input_values[packed_base + 3 + col];
+            const float gate = input_values[packed_base + col];
+            const float up = input_values[packed_base + 3 + col];
             const float grad = grad_values[output_idx];
             const float sigmoid = 1.0f / (1.0f + std::exp(-gate));
             expected_output[output_idx] = up * gate * sigmoid;
-            expected_grad[packed_base + col] = grad * gate * sigmoid;
-            expected_grad[packed_base + 3 + col] = grad * up * sigmoid * (1.0f + gate * (1.0f - sigmoid));
+            expected_grad[packed_base + col] = grad * up * sigmoid * (1.0f + gate * (1.0f - sigmoid));
+            expected_grad[packed_base + 3 + col] = grad * gate * sigmoid;
         }
     }
 
@@ -68,12 +68,12 @@ TEST_P(AutogradElementwiseBackwardTest, SwiGLUAutocastBackward) {
 
     std::vector<float> expected_grad(4);
     for (int64_t col = 0; col < 2; ++col) {
-        const float up = input_values[col];
-        const float gate = input_values[2 + col];
+        const float gate = input_values[col];
+        const float up = input_values[2 + col];
         const float grad = grad_values[col];
         const float sigmoid = 1.0f / (1.0f + std::exp(-gate));
-        expected_grad[col] = grad * gate * sigmoid;
-        expected_grad[2 + col] = grad * up * sigmoid * (1.0f + gate * (1.0f - sigmoid));
+        expected_grad[col] = grad * up * sigmoid * (1.0f + gate * (1.0f - sigmoid));
+        expected_grad[2 + col] = grad * gate * sigmoid;
     }
     test::ExpectTensorNear(grad_inputs[0], expected_grad, 2e-3f);
 }

@@ -153,10 +153,10 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
         for (int64_t expert = 0; expert < moe_config.num_experts; ++expert) {
             const std::string expert_prefix = prefix + ".mlp.experts.expert_" + std::to_string(expert);
             const std::string packed_fc1_name = expert_prefix + ".c_fc.weight";
+            read_projection_into_packed_weight(packed_fc1_name, 0, moe_config.moe_ffn_hidden_size,
+                                               expert_prefix + ".c_fc2.weight"); // Mixtral w1/gate_proj
             read_projection_into_packed_weight(packed_fc1_name, moe_config.moe_ffn_hidden_size,
                                                moe_config.moe_ffn_hidden_size,
-                                               expert_prefix + ".c_fc2.weight"); // Mixtral w1/gate_proj
-            read_projection_into_packed_weight(packed_fc1_name, 0, moe_config.moe_ffn_hidden_size,
                                                expert_prefix + ".c_fc.weight"); // Mixtral w3/up_proj
             read_tensor_by_state_key(expert_prefix + ".c_proj.weight");         // Mixtral w2/down_proj
         }

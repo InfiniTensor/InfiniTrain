@@ -23,8 +23,8 @@ __global__ void SwiGLUForwardKernel(T *__restrict__ output, const T *__restrict_
         const size_t row = idx / hidden;
         const size_t col = idx % hidden;
         const size_t input_base = row * 2 * hidden;
-        const T up = input[input_base + col];
-        const T gate = input[input_base + hidden + col];
+        const T gate = input[input_base + col];
+        const T up = input[input_base + hidden + col];
         output[idx] = Mul(up, Mul(gate, Sigmoid(gate)));
     }
 }
@@ -38,13 +38,12 @@ __global__ void SwiGLUBackwardKernel(T *__restrict__ grad_input, const InputT *_
         const size_t row = idx / hidden;
         const size_t col = idx % hidden;
         const size_t input_base = row * 2 * hidden;
-        const T up = Cast<T>(input[input_base + col]);
-        const T gate = Cast<T>(input[input_base + hidden + col]);
+        const T gate = Cast<T>(input[input_base + col]);
+        const T up = Cast<T>(input[input_base + hidden + col]);
         const T grad = Cast<T>(grad_output[idx]);
         const T sigmoid = Sigmoid(gate);
-        grad_input[input_base + col] = Mul(grad, Mul(gate, sigmoid));
-        grad_input[input_base + hidden + col]
-            = Mul(grad, Mul(up, Mul(sigmoid, Add(T(1), Mul(gate, Sub(T(1), sigmoid))))));
+        grad_input[input_base + col] = Mul(grad, Mul(up, Mul(sigmoid, Add(T(1), Mul(gate, Sub(T(1), sigmoid))))));
+        grad_input[input_base + hidden + col] = Mul(grad, Mul(gate, sigmoid));
     }
 }
 
