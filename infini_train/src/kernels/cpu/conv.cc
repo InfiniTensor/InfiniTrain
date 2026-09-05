@@ -80,10 +80,13 @@ std::shared_ptr<Tensor> Conv2dForward(const std::shared_ptr<Tensor> &input, cons
     CHECK_EQ(weight_dims[1], channels);
     CHECK_GE(height, kernel_h);
     CHECK_GE(width, kernel_w);
+    CHECK(input->Dtype() == DataType::kFLOAT32) << "Conv2d requires FP32 tensors";
+    CHECK(weight->Dtype() == DataType::kFLOAT32) << "Conv2d requires FP32 tensors";
 
     if (bias) {
         CHECK_EQ(bias->Dims().size(), 1);
         CHECK_EQ(bias->Dims()[0], out_channels);
+        CHECK(bias->Dtype() == DataType::kFLOAT32) << "Conv2d requires FP32 tensors";
     }
 
     const int64_t out_height = height - kernel_h + 1;
@@ -143,6 +146,8 @@ std::shared_ptr<Tensor> Conv2dBackwardInput(const std::shared_ptr<Tensor> &weigh
     CHECK_EQ(weight_dims[1], channels);
     CHECK_GE(height, kernel_h);
     CHECK_GE(width, kernel_w);
+    CHECK(weight->Dtype() == DataType::kFLOAT32) << "Conv2d requires FP32 tensors";
+    CHECK(grad_output->Dtype() == DataType::kFLOAT32) << "Conv2d requires FP32 tensors";
 
     const int64_t out_height = height - kernel_h + 1;
     const int64_t out_width = width - kernel_w + 1;
@@ -195,6 +200,8 @@ std::shared_ptr<Tensor> Conv2dBackwardWeight(const std::shared_ptr<Tensor> &inpu
     const auto &grad_dims = grad_output->Dims();
     CHECK_EQ(grad_dims.size(), 4);
     CHECK_EQ(grad_dims[0], batch);
+    CHECK(input->Dtype() == DataType::kFLOAT32) << "Conv2d requires FP32 tensors";
+    CHECK(grad_output->Dtype() == DataType::kFLOAT32) << "Conv2d requires FP32 tensors";
 
     // The kernel extent is the difference between the input and output spatial extents.
     const int64_t kernel_h = height - grad_dims[2] + 1;
@@ -240,6 +247,7 @@ std::shared_ptr<Tensor> Conv2dBackwardBias(const std::shared_ptr<Tensor> &grad_o
     const auto &grad_dims = grad_output->Dims();
     CHECK_EQ(grad_dims.size(), 4);
     CHECK_EQ(grad_dims[1], out_channels);
+    CHECK(grad_output->Dtype() == DataType::kFLOAT32) << "Conv2d requires FP32 tensors";
 
     auto grad_bias
         = std::make_shared<Tensor>(std::vector<int64_t>{out_channels}, DataType::kFLOAT32, grad_output->GetDevice());
