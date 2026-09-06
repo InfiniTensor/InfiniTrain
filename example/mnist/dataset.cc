@@ -89,7 +89,12 @@ MNISTDataset::MNISTDataset(const std::string &dataset, bool train)
           std::format("{}/{}-labels-idx1-ubyte", dataset, train ? kTrainPrefix : kTestPrefix))),
       image_dims_(image_file_.dims.begin() + 1, image_file_.dims.end()),
       label_dims_(label_file_.dims.begin() + 1, label_file_.dims.end()),
-      image_size_in_bytes_(kSN3TypeToSize.at(image_file_.type)
+      // The image tensor is normalized to FLOAT32 in the constructor body, so the per-sample
+      // byte stride must use the float element size, not the on-disk UINT8 size. After the
+      // first sample, the UINT8 stride reads the wrong bytes: most views are a misaligned
+      // mix of real pixels, and some coincide with another sample's exact copy but are still
+      // paired with an unrelated label.
+      image_size_in_bytes_(infini_train::kDataTypeToSize.at(DataType::kFLOAT32)
                            * std::accumulate(image_dims_.begin(), image_dims_.end(), 1, std::multiplies<int>())),
       label_size_in_bytes_(kSN3TypeToSize.at(label_file_.type)
                            * std::accumulate(label_dims_.begin(), label_dims_.end(), 1, std::multiplies<int>())) {
