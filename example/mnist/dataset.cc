@@ -103,13 +103,16 @@ MNISTDataset::MNISTDataset(const std::string &dataset, bool train)
     const auto bs = image_dims[0];
     infini_train::Tensor transposed_tensor(image_dims, DataType::kFLOAT32);
     for (int idx = 0; idx < bs; ++idx) {
-        const auto *image_data = reinterpret_cast<uint8_t *>(image_file_.tensor.DataPtr()) + idx * 28 * 28;
+        const auto *image_data = reinterpret_cast<const uint8_t *>(image_file_.tensor.DataPtr()) + idx * 28 * 28;
         auto *transposed_data = static_cast<float *>(transposed_tensor.DataPtr()) + idx * 28 * 28;
         for (int i = 0; i < 28; ++i) {
             for (int j = 0; j < 28; ++j) { transposed_data[i * 28 + j] = image_data[i * 28 + j] / 255.0f; }
         }
     }
     image_file_.tensor = std::move(transposed_tensor);
+    // The images are now float32; recompute the per-sample stride, which was computed against the
+    // original uint8 file in the member initializer list.
+    image_size_in_bytes_ = image_file_.tensor.SizeInBytes() / bs;
 }
 
 std::pair<std::shared_ptr<infini_train::Tensor>, std::shared_ptr<infini_train::Tensor>>
