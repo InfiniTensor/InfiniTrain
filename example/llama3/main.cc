@@ -23,6 +23,7 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_layout.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
@@ -84,6 +85,8 @@ DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
+DEFINE_string(pipeline_layer_partition, "",
+              "comma-separated per-stage layer counts for a custom pipeline layout, e.g. 4,8,6,6");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 DEFINE_uint32(save_interval, 0, "save checkpoint every N steps; 0 disables saving");
@@ -221,6 +224,10 @@ void Train(const nn::parallel::Rank &rank) {
 
     utils::PrecisionChecker::BuildNameMap(model.get());
 
+    // Cache the transformer stage info before wrapping with LoRA / PipelineParallel.
+    auto llama_model = std::dynamic_pointer_cast<nn::TransformerModel>(model);
+    CHECK(llama_model) << "LLaMA3 example expects a TransformerModel.";
+
     // Apply LoRA using GetLoRAModel (in-place injection)
     bool lora_enabled = FLAGS_lora_rank > 0;
     if (lora_enabled) {
@@ -260,7 +267,7 @@ void Train(const nn::parallel::Rank &rank) {
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
         model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
-                                                                 pp_rank, device, model_config.GetChunkSize());
+                                                                 pp_rank, device, llama_model->stage_info());
         if (ddp_world_size > 1) {
             auto ddp_config = DistributedDataParallelConfig{.zero_stage = FLAGS_zero_stage};
             auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
@@ -549,8 +556,10 @@ int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
 
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
+    auto pipeline_layer_partition = nn::parallel::ParsePipelineLayerPartition(FLAGS_pipeline_layer_partition);
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
-                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
+                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel,
+                                     pipeline_layer_partition);
     utils::PrecisionCheckEnv::Instance().Init(precision_config);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();

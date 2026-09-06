@@ -7,6 +7,11 @@ infini_train_add_test(test_rank
   LABELS cpu
 )
 
+infini_train_add_test(test_pipeline_layout
+  SOURCES test_pipeline_layout.cc
+  LABELS cpu
+)
+
 add_test(
   NAME RankTest.MultiNodeSingleProcessIsParallel
   COMMAND ${CMAKE_COMMAND} -E env

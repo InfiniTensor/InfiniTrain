@@ -263,7 +263,14 @@ data_parallel_size = world_size / (tensor_parallel × pipeline_parallel)
 ```bash
 --pipeline_parallel 8     		# 8 pipeline stages
 --virtual_pipeline_parallel 4  	# Virtual pipeline for better load balancing
+--pipeline_layer_partition 4,8,6,6  # Optional custom per-stage layer counts
 ```
+
+`--pipeline_layer_partition` lets you assign a non-uniform but contiguous number
+of transformer layers to each stage (e.g. `4,8,6,6` for 4 stages / 24 layers).
+The sum of entries must equal the model layer count. When omitted, the default
+uniform partition (compatible with vPP) is used. See
+[`docs/pipeline_layout_guide.md`](docs/pipeline_layout_guide.md) for details.
 
 #### Combining Parallelism Strategies
 

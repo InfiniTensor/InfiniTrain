@@ -13,6 +13,7 @@
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_layout.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
 #include "infini_train/include/nn/parallel/pp/send_recv.h"
 #include "infini_train/include/optimizer.h"
@@ -32,8 +33,8 @@ void PrintScheduleTable(const std::vector<PipelineParallelScheduler::Task> &sche
     LOG(INFO) << "-----|-----------|------------|--------------|-------------|-------";
 
     for (const auto &task : schedule) {
-        int owning_stage = task.global_chunk_id % num_stages;
-        int local_chunk = task.global_chunk_id / num_stages;
+        int owning_stage = PipelineLayout::StageOfChunk(task.global_chunk_id, num_stages);
+        int local_chunk = PipelineLayout::LocalChunkIndexOfChunk(task.global_chunk_id, num_stages);
 
         std::string type_str = task.is_forward ? "Forward" : "Backward";
 
@@ -75,9 +76,9 @@ PipelineParallelScheduler::Task PipelineParallelScheduler::CreateTask(int step, 
     task.step = step;
     task.microbatch_id = mb;
     task.global_chunk_id = global_chunk;
-    task.local_chunk_idx = global_chunk / num_stages;
+    task.local_chunk_idx = PipelineLayout::LocalChunkIndexOfChunk(global_chunk, num_stages);
     task.is_forward = is_forward;
-    task.stage_id = global_chunk % num_stages;
+    task.stage_id = PipelineLayout::StageOfChunk(global_chunk, num_stages);
     task.is_last_chunk = (global_chunk == total_chunks - 1);
     task.is_first_chunk = (global_chunk == 0);
     return task;

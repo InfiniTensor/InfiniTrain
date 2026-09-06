@@ -93,6 +93,5 @@ struct TransformerConfig {
     int64_t max_gen_batch_size = 4; // max batch size during inference
 
     bool UseGQA() const;
-    int GetChunkSize() const;
 };
 } // namespace infini_train::nn

@@ -18,6 +18,7 @@
 #include "infini_train/include/nn/modules/transformer/mlp.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_layout.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
@@ -99,15 +100,16 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     CHECK_EQ(n_embd % n_head, 0) << "n_embd must be divisible by n_head.";
     CHECK_EQ(n_head % tp_size, 0) << "n_head must be divisible by TP world size.";
 
-    // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
+    // Unified pipeline layout: which layers / special modules this rank owns.
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
-    int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
-    auto pp_rank = nn::parallel::pp_rank;
-    auto [is_first_stage, is_last_stage, layer_ranges_per_chunk]
-        = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size, pp_rank, vpp_size);
-    // ========== layer to chunk ==========
+    auto layout = nn::parallel::PipelineLayout::Create(
+        static_cast<int>(n_layer), pp_size, nn::parallel::global::GetVirtualPipelineParallelSize(),
+        nn::parallel::global::GetPipelineLayerPartition());
+    const auto stage_info = layout.GetStageInfo(nn::parallel::pp_rank);
+    const bool is_first_stage = stage_info.is_first_stage;
+    const bool is_last_stage = stage_info.is_last_stage;
     std::vector<bool> owned_layers(n_layer, false);
-    for (const auto &[start, end] : layer_ranges_per_chunk) {
+    for (const auto &[start, end] : stage_info.layer_ranges_per_chunk) {
         for (int i = start; i < end; ++i) { owned_layers[i] = true; }
     }
 

@@ -18,6 +18,8 @@
 #include "infini_train/include/nn/modules/transformer/moe/moe_layer.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_layout.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
@@ -206,9 +208,15 @@ std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(const std::ve
 
 TransformerModel::TransformerModel(const TransformerConfig config)
     : CloneableModule(kType), config_(config),
-      stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
-          config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
-          nn::parallel::global::GetVirtualPipelineParallelSize())) {
+      layout_(nn::parallel::PipelineLayout::Create(
+          static_cast<int>(config_.n_layer), nn::parallel::global::GetPipelineParallelSize(),
+          nn::parallel::global::GetVirtualPipelineParallelSize(),
+          nn::parallel::global::GetPipelineLayerPartition())),
+      stage_info_(layout_.GetStageInfo(nn::parallel::pp_rank)) {
+    if (nn::parallel::global::GetPipelineParallelSize() > 1 && nn::parallel::pp_rank == 0) {
+        LOG(INFO) << layout_.Describe();
+    }
+
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
 
     // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
