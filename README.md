@@ -139,10 +139,34 @@ The generated files can be passed directly to the corresponding executables:
 
 ##### MNIST
 
+Train an MLP classifier (the original example) or a CNN classifier on MNIST.
+The CNN stacks `Conv2d(1, 16, 3) -> ReLU -> Conv2d(16, 32, 3) -> ReLU ->
+Flatten -> Linear(18432, 10)` and reports test loss and accuracy after every
+epoch.
+
 ```bash
+# MLP (default: --model mlp)
 ./build/mnist \
   --device cpu \
   --dataset data/mnist
+
+# CNN on CUDA
+./build/mnist \
+  --model cnn \
+  --device cuda \
+  --dataset data/mnist
+```
+
+Pass `--init_weights <checkpoint_dir>` to load initial weights from an
+InfiniTrain checkpoint (`model.ckpt` inside the directory), for example one
+exported by PyTorch for numerical-alignment runs.
+
+```bash
+./build/mnist \
+  --model cnn \
+  --device cuda \
+  --dataset data/mnist \
+  --init_weights data/cnn_align
 ```
 
 ##### GPT-2 124M
