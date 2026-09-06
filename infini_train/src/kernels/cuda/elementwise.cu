@@ -1213,6 +1213,20 @@ std::shared_ptr<Tensor> SigmoidBackward(const std::shared_ptr<Tensor> &output,
         return UnaryBackward(grad_output, output, [] __device__(auto x) { return Mul(x, Sub(decltype(x){1}, x)); });
         , INFINI_ALL_FLOATING_TYPES)
 }
+
+std::shared_ptr<Tensor> ReluForward(const std::shared_ptr<Tensor> &input) {
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return Max(x, decltype(x){0}); });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> ReluBackward(const std::shared_ptr<Tensor> &output,
+                                     const std::shared_ptr<Tensor> &grad_output) {
+    DISPATCH(grad_output->Dtype(), return UnaryBackward(grad_output, output,
+                                                        [] __device__(auto x) {
+                                                            return x > decltype(x){0} ? decltype(x){1} : decltype(x){0};
+                                                        });
+             , INFINI_ALL_FLOATING_TYPES)
+}
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_ELEMENTWISE_KERNEL(kernel_name)                                                                  \
@@ -1262,5 +1276,7 @@ REGISTER_CUDA_ELEMENTWISE_KERNEL(DivForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(DivBackward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(SigmoidForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(SigmoidBackward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(ReluForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(ReluBackward)
 
 #undef REGISTER_CUDA_ELEMENTWISE_KERNEL

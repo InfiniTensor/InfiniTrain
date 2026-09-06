@@ -137,6 +137,17 @@ std::shared_ptr<Tensor> Max(const std::shared_ptr<Tensor> &input, int64_t dim, b
 //   A tensor containing sigmoid applied element-wise to the input.
 std::shared_ptr<Tensor> Sigmoid(const std::shared_ptr<Tensor> &input);
 
+// Applies the rectified linear unit function element-wise.
+//
+// ReLU(x) = max(0, x).
+//
+// Args:
+//   input: The input tensor.
+//
+// Returns:
+//   A tensor containing relu applied element-wise to the input.
+std::shared_ptr<Tensor> Relu(const std::shared_ptr<Tensor> &input);
+
 // Applies the softmax function along the specified dimension.
 //
 // The softmax function maps input values to the range [0, 1] and ensures they sum to 1.
