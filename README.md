@@ -169,6 +169,16 @@ exported by PyTorch for numerical-alignment runs.
   --init_weights data/cnn_align
 ```
 
+Pass `--metrics_file <path>` to append per-step training losses and per-epoch
+test loss / accuracy as JSON lines, which can be uploaded to
+[SwanLab](https://swanlab.cn) for training visualization:
+
+```bash
+./build/mnist --model cnn --device cuda --dataset data/mnist --metrics_file metrics.jsonl
+SWANLAB_API_KEY=<key> python3 scripts/swanlab_upload.py \
+  --metrics metrics.jsonl --name cnn-cuda-3epoch-lr0.05 --model cnn --device cuda --lr 0.05
+```
+
 ##### GPT-2 124M
 
 ```bash
