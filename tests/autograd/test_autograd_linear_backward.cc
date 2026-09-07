@@ -25,6 +25,12 @@ TEST_P(AutogradLinearBackwardTest, LinearBackward) {
     grad->Fill(1.0f);
     auto grad_inputs = linear_fn->Backward({grad});
     EXPECT_EQ(grad_inputs.size(), 3);
+    // With an all-ones grad, the bias gradient is the per-column sum of the (2, 4) grad output.
+    test::ExpectTensorFloatEqual(grad_inputs[2], {2.0f, 2.0f, 2.0f, 2.0f});
+    // grad_input = grad * weight^T summed over output features; grad_weight = grad^T * input.
+    test::ExpectTensorFloatEqual(grad_inputs[0], {4.0f, 4.0f, 4.0f, 4.0f, 4.0f, 4.0f});
+    test::ExpectTensorFloatEqual(grad_inputs[1],
+                                 {2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f});
 }
 
 TEST_P(AutogradLinearBackwardTest, LinearBackwardNoBias) {
