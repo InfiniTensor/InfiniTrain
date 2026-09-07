@@ -1,9 +1,11 @@
 #include <chrono>
 #include <cstdlib>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <numeric>
+#include <string>
 #include <vector>
 
 #include "gflags/gflags.h"
@@ -26,6 +28,7 @@ DEFINE_int32(num_epoch, 1, "num epochs");
 DEFINE_double(lr, 0.01, "learning rate");
 DEFINE_string(device, "cpu", "device type (cpu/cuda)");
 DEFINE_string(init_weights, "", "checkpoint dir to load initial weights from (e.g. exported by PyTorch)");
+DEFINE_string(metrics_file, "", "append train/test metrics as JSON lines to this file for visualization");
 
 using namespace infini_train;
 
@@ -35,12 +38,59 @@ constexpr int kNumClasses = 10;
 
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
-}; // namespace
+constexpr char kModelMLP[] = "mlp";
+constexpr char kModelCNN[] = "cnn";
+
+// Appends one JSON line to the metrics file; a no-op when the flag is empty.
+void AppendMetrics(const std::string &metrics_file, const std::string &json_line) {
+    if (metrics_file.empty()) {
+        return;
+    }
+    std::ofstream ofs(metrics_file, std::ios::app);
+    ofs << json_line << "\n";
+}
+} // namespace
 
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
 
-DEFINE_validator(model, [](const char *, const std::string &value) { return value == "mlp" || value == "cnn"; });
+DEFINE_validator(model,
+                 [](const char *, const std::string &value) { return value == kModelMLP || value == kModelCNN; });
+
+// Runs the test set under no_grad; returns {average test loss, accuracy}.
+std::pair<float, float> Evaluate(nn::Module &network, nn::CrossEntropyLoss &loss_fn, DataLoader &test_dataloader,
+                                 const Device &device) {
+    Device cpu_device = Device();
+    std::vector<float> test_losses;
+    int correct = 0;
+    int total = 0;
+    autograd::NoGradGuard no_grad;
+    for (const auto &[image, label] : test_dataloader) {
+        auto new_image = std::make_shared<Tensor>(image->To(device));
+        auto new_label = std::make_shared<Tensor>(label->To(device));
+
+        auto label_cpu = label->To(cpu_device);
+        auto outputs = network.Forward({new_image});
+        auto output_cpu = outputs[0]->To(cpu_device);
+        auto loss = loss_fn.Forward({outputs[0], new_label});
+        auto loss_cpu = loss[0]->To(cpu_device);
+
+        const int batch_size = output_cpu.Dims()[0];
+        for (int batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
+            auto label_index = reinterpret_cast<const uint8_t *>(label_cpu.DataPtr())[batch_idx];
+            const auto *output_values = static_cast<const float *>(output_cpu.DataPtr()) + batch_idx * kNumClasses;
+            const int output_index = std::max_element(output_values, output_values + kNumClasses) - output_values;
+            if (output_index == label_index) {
+                ++correct;
+            }
+        }
+        total += batch_size;
+        test_losses.push_back(static_cast<const float *>(loss_cpu.DataPtr())[0]);
+    }
+    const auto avg_loss = static_cast<float>(std::accumulate(test_losses.begin(), test_losses.end(), 0.0)
+                                             / std::max<std::size_t>(test_losses.size(), 1));
+    return {avg_loss, static_cast<float>(correct) / total};
+}
 
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -67,6 +117,7 @@ int main(int argc, char *argv[]) {
     loss_fn.To(device);
     auto optimizer = optimizers::SGD(network->Parameters(), FLAGS_lr);
 
+    int64_t global_step = 0;
     for (int epoch = 0; epoch < FLAGS_num_epoch; ++epoch) {
         int train_idx = 0;
         float total_loss = 0.0;
@@ -92,50 +143,31 @@ int main(int argc, char *argv[]) {
                 LOG(ERROR) << "epoch: " << epoch << ", step: " << train_idx << ", [" << train_idx * FLAGS_bs << "/"
                            << train_dataset->Size() << "] "
                            << " loss: " << current_loss;
+                AppendMetrics(FLAGS_metrics_file,
+                              std::format("{{\"type\": \"train_step\", \"epoch\": {}, \"step\": {}, \"loss\": {:.6f}}}",
+                                          epoch, global_step, current_loss));
             }
 
             optimizer.Step();
             train_idx += 1;
+            global_step += 1;
         }
 
         const auto epoch_end = std::chrono::high_resolution_clock::now();
         const double duration_us = std::chrono::duration<double, std::micro>(epoch_end - epoch_start).count();
 
+        const float train_loss = total_loss / train_idx;
         LOG(ERROR) << std::format("epoch {:2d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} samples/s)",
-                                  epoch, FLAGS_num_epoch - 1, total_loss / train_idx, FLAGS_lr, duration_us / 1e3f,
+                                  epoch, FLAGS_num_epoch - 1, train_loss, FLAGS_lr, duration_us / 1e3f,
                                   train_dataset->Size() / (duration_us / 1e6));
-    }
 
-    {
-        autograd::NoGradGuard no_grad;
-        std::vector<float> test_losses;
-        int correct = 0;
-        int total = 0;
-        for (const auto &[image, label] : test_dataloader) {
-            auto new_image = std::make_shared<Tensor>(image->To(device));
-            auto new_label = std::make_shared<Tensor>(label->To(device));
-
-            auto label_cpu = label->To(cpu_device);
-            auto outputs = network->Forward({new_image});
-            auto output_cpu = outputs[0]->To(cpu_device);
-            auto loss = loss_fn.Forward({outputs[0], new_label});
-            auto loss_cpu = loss[0]->To(cpu_device);
-
-            const int batch_size = output_cpu.Dims()[0];
-            for (int batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
-                auto label_index = reinterpret_cast<const uint8_t *>(label_cpu.DataPtr())[batch_idx];
-                const auto *output_values = static_cast<const float *>(output_cpu.DataPtr()) + batch_idx * kNumClasses;
-                const int output_index = std::max_element(output_values, output_values + kNumClasses) - output_values;
-                if (output_index == label_index) {
-                    ++correct;
-                }
-            }
-            total += batch_size;
-            test_losses.push_back(static_cast<const float *>(loss_cpu.DataPtr())[0]);
-        }
-        const auto avg_loss = std::accumulate(test_losses.begin(), test_losses.end(), 0.0) / test_losses.size();
-        LOG(ERROR) << std::format("test | test loss {:.6f} | test accuracy {:.4f} ({}/{})", avg_loss,
-                                  static_cast<float>(correct) / total, correct, total);
+        const auto [test_loss, test_accuracy] = Evaluate(*network, loss_fn, test_dataloader, device);
+        LOG(ERROR) << std::format("epoch {:2d} | test loss {:.6f} | test accuracy {:.4f}", epoch, test_loss,
+                                  test_accuracy);
+        AppendMetrics(FLAGS_metrics_file,
+                      std::format("{{\"type\": \"epoch_end\", \"epoch\": {}, \"train_loss\": {:.6f}, "
+                                  "\"test_loss\": {:.6f}, \"test_accuracy\": {:.6f}}}",
+                                  epoch, train_loss, test_loss, test_accuracy));
     }
 
     gflags::ShutDownCommandLineFlags();
