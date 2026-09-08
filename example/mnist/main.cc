@@ -141,9 +141,9 @@ int main(int argc, char *argv[]) {
             // Zero grads before forward: DDP rebinds param.grad to its bucket view during forward.
             optimizer.ZeroGrad();
 
-            auto outputs = network->Forward({new_image});
+            auto outputs = (*network)({new_image});
 
-            auto loss = loss_fn->Forward({outputs[0], new_label});
+            auto loss = (*loss_fn)({outputs[0], new_label});
             loss[0]->Backward();
 
             // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
@@ -188,9 +188,9 @@ int main(int argc, char *argv[]) {
         auto new_label = std::make_shared<Tensor>(label->To(device));
 
         auto label_cpu = label->To(cpu_device);
-        auto outputs = network->Forward({new_image});
+        auto outputs = (*network)({new_image});
         auto output_cpu = outputs[0]->To(cpu_device);
-        auto loss = loss_fn->Forward({outputs[0], new_label});
+        auto loss = (*loss_fn)({outputs[0], new_label});
         auto loss_cpu = loss[0]->To(cpu_device);
 
         const int batch_size = output_cpu.Dims()[0];
