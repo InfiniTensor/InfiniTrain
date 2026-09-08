@@ -109,8 +109,10 @@ template <typename T> __device__ __forceinline__ T Cos(const T &x) {
 }
 
 template <typename T> __device__ __forceinline__ T Tanh(const T &x) {
-    if constexpr (std::is_same_v<T, nv_bfloat16> || std::is_same_v<T, half>) {
-        return htanh(x);
+    if constexpr (std::is_same_v<T, nv_bfloat16>) {
+        return __float2bfloat16(tanhf(__bfloat162float(x)));
+    } else if constexpr (std::is_same_v<T, half>) {
+        return __float2half(tanhf(__half2float(x)));
     } else if constexpr (std::is_same_v<T, float>) {
         return tanhf(x);
     } else {

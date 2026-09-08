@@ -2,10 +2,11 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
-#include <functional>
-#include <numeric>
+#include <memory>
 #include <utility>
+#include <vector>
 
 #include "glog/logging.h"
 
@@ -22,14 +23,16 @@ size_t CheckedCeilDiv(size_t numerator, size_t denominator) {
 // TODO(dcj): Use official stack implementation later.
 std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &tensors) {
     CHECK(!tensors.empty()) << "Cannot stack an empty batch. Check DataLoader iterator end handling.";
-    const int batch_size = tensors.size();
-    const auto &dims = tensors[0]->Dims();
-    const int stacked_dim = std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>());
-    auto stacked_tensor = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, stacked_dim}, tensors[0]->Dtype());
+    const int64_t batch_size = tensors.size();
+    const auto &sample_dims = tensors[0]->Dims();
+    std::vector<int64_t> stacked_dims;
+    stacked_dims.reserve(sample_dims.size() + 1);
+    stacked_dims.push_back(batch_size);
+    stacked_dims.insert(stacked_dims.end(), sample_dims.begin(), sample_dims.end());
+    auto stacked_tensor = std::make_shared<Tensor>(stacked_dims, tensors[0]->Dtype());
     for (const auto &tensor : tensors) {
-        CHECK_EQ(static_cast<int>(tensors[0]->Dtype()), static_cast<int>(tensor->Dtype()));
-        const auto &dims = tensor->Dims();
-        CHECK_EQ(stacked_dim, std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>()));
+        CHECK(tensors[0]->Dtype() == tensor->Dtype());
+        CHECK(tensor->Dims() == sample_dims) << "All samples in a batch must have the same shape.";
     }
 
     size_t offset = 0;

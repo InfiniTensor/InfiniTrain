@@ -20,6 +20,9 @@ add_subdirectory(dataloader)
 # Tensor tests
 add_subdirectory(tensor)
 
+# Example data pipeline tests
+add_subdirectory(example)
+
 # Optimizer tests
 add_subdirectory(optimizer)
 
