@@ -30,4 +30,22 @@ std::vector<std::shared_ptr<Tensor>> Sigmoid::Backward(const std::vector<std::sh
     auto device = output->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SigmoidBackward"}, output, grad_output)};
 }
+
+std::vector<std::shared_ptr<Tensor>> ReLU::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1);
+    const auto &input = input_tensors[0];
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({input->GetDevice().type(), "ReLUForward"}, input)};
+}
+
+void ReLU::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                        const std::vector<std::shared_ptr<Tensor>> &) {
+    ctx_.SaveForBackward({input_tensors[0]});
+}
+
+std::vector<std::shared_ptr<Tensor>> ReLU::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    CHECK_EQ(grad_outputs.size(), 1);
+    const auto input = ctx_.GetSavedTensors()[0];
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({input->GetDevice().type(), "ReLUBackward"}, input,
+                                                                 grad_outputs[0])};
+}
 } // namespace infini_train::autograd

@@ -12,6 +12,17 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Prefer the runtime library shipped with a Conda toolchain. Its newer ABI is
+# required by current NCCL packages, while the compiler's private GCC runtime
+# may be intentionally older than the environment runtime.
+get_filename_component(INFINITRAIN_COMPILER_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+get_filename_component(INFINITRAIN_TOOLCHAIN_PREFIX "${INFINITRAIN_COMPILER_BIN_DIR}" DIRECTORY)
+set(INFINITRAIN_TOOLCHAIN_LIB_DIR "${INFINITRAIN_TOOLCHAIN_PREFIX}/lib")
+if(EXISTS "${INFINITRAIN_TOOLCHAIN_LIB_DIR}/libstdc++.so")
+  link_directories(BEFORE "${INFINITRAIN_TOOLCHAIN_LIB_DIR}")
+  add_link_options("-L${INFINITRAIN_TOOLCHAIN_LIB_DIR}" "-Wl,-rpath,${INFINITRAIN_TOOLCHAIN_LIB_DIR}")
+endif()
+
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -62,7 +73,7 @@ endif()
 # ------------------------------------------------------------------------------
 
 # Framework core sources (*.cc), excluding cpu kernels (they are built separately)
-file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
+file(GLOB_RECURSE SRC CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
 list(FILTER SRC EXCLUDE REGEX ".*kernels/cpu/.*")
 if(NOT USE_CUDA)
   list(FILTER SRC EXCLUDE REGEX ".*runtime/cuda/.*")
@@ -73,7 +84,7 @@ if(NOT USE_NCCL)
 endif()
 
 # CPU kernels (*.cc)
-file(GLOB_RECURSE CPU_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/kernels/cpu/*.cc)
+file(GLOB_RECURSE CPU_KERNELS CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/infini_train/src/kernels/cpu/*.cc)
 
 # ------------------------------------------------------------------------------
 # CPU kernels library
@@ -96,12 +107,18 @@ if(USE_CUDA)
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
   include_directories(${CUDAToolkit_INCLUDE_DIRS})
+  # Conda's CUDA packages keep headers below targets/x86_64-linux/include,
+  # while FindCUDAToolkit may only report the prefix include directory.
+  set(CUDATOOLKIT_TARGET_INCLUDE_DIR "${CUDAToolkit_ROOT}/targets/x86_64-linux/include")
+  if(EXISTS "${CUDATOOLKIT_TARGET_INCLUDE_DIR}/cuda_runtime.h")
+    include_directories(${CUDATOOLKIT_TARGET_INCLUDE_DIR})
+  endif()
 
   # CUDA compilation options
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
   # Only compile CUDA kernels / cuda sources here (your original used src/*.cu)
-  file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
+  file(GLOB_RECURSE CUDA_KERNELS CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
 
   add_library(infini_train_cuda_kernels STATIC ${CUDA_KERNELS})
   set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "75;80;90")
