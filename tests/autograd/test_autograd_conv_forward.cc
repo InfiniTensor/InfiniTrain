@@ -5,7 +5,6 @@
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autograd/conv.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
@@ -23,7 +22,6 @@ class AutogradConvForwardTest : public infini_train::test::InfiniTrainTest {};
 // An asymmetric kernel pins the cross-correlation semantics: flipping the kernel would swap
 // the roles of the taps and change every output value.
 TEST_P(AutogradConvForwardTest, ConvForwardAsymmetricKernel) {
-    ONLY_CPU();
     std::vector<float> input_values;
     for (int idx = 0; idx < 16; ++idx) { input_values.push_back(static_cast<float>(idx)); }
     auto input = std::make_shared<Tensor>(input_values.data(), std::vector<int64_t>{1, 1, 4, 4}, DataType::kFLOAT32,
@@ -42,7 +40,6 @@ TEST_P(AutogradConvForwardTest, ConvForwardAsymmetricKernel) {
 }
 
 TEST_P(AutogradConvForwardTest, ConvForwardMultiChannelBatchBias) {
-    ONLY_CPU();
     // input(n, c, h, w) = 10*n + 5*c + 3*h + w with H = W = 3.
     std::vector<float> input_values;
     for (int n = 0; n < 2; ++n) {
@@ -73,7 +70,6 @@ TEST_P(AutogradConvForwardTest, ConvForwardMultiChannelBatchBias) {
 }
 
 TEST_P(AutogradConvForwardTest, ConvForwardKernelOne) {
-    ONLY_CPU();
     const std::vector<float> input_values{1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
                                           10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0f, 90.0f};
     auto input = std::make_shared<Tensor>(input_values.data(), std::vector<int64_t>{1, 2, 3, 3}, DataType::kFLOAT32,
@@ -94,7 +90,6 @@ TEST_P(AutogradConvForwardTest, ConvForwardKernelOne) {
 
 // H = W = kernel collapses the output to 1x1: the only patch covers the whole image.
 TEST_P(AutogradConvForwardTest, ConvForwardKernelEqualsSpatial) {
-    ONLY_CPU();
     std::vector<float> input_values;
     for (int idx = 0; idx < 9; ++idx) { input_values.push_back(static_cast<float>(idx)); }
     for (int idx = 0; idx < 9; ++idx) { input_values.push_back(2.0f * idx); }
@@ -116,7 +111,6 @@ TEST_P(AutogradConvForwardTest, ConvForwardKernelEqualsSpatial) {
 // Magnitudes near the fp32 integer-exact range: every product and partial sum stays exact, so
 // this guards against spurious overflow / precision loss on the accumulation path.
 TEST_P(AutogradConvForwardTest, ConvForwardExtremeValues) {
-    ONLY_CPU();
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{1, 1, 4, 4}, DataType::kFLOAT32, GetDevice(), true);
     input->Fill(static_cast<float>(1 << 30));
     auto weight = std::make_shared<Tensor>(std::vector<int64_t>{1, 1, 3, 3}, DataType::kFLOAT32, GetDevice(), true);
@@ -137,7 +131,6 @@ TEST_P(AutogradConvForwardTest, ConvForwardExtremeValues) {
 
 // Random 4D case checked against PyTorch conv2d (fixed seed, see file-level comment).
 TEST_P(AutogradConvForwardTest, ConvForwardTorchGolden) {
-    ONLY_CPU();
     const std::vector<float> input_values{
         2.014464855f,  -0.671311080f, -0.945236862f, -0.096128546f, 0.889558852f,  1.726294398f,  -0.078931913f,
         0.205890238f,  0.094608001f,  0.173616216f,  0.437049866f,  -0.557070732f, 0.455583423f,  -0.736482263f,
@@ -181,7 +174,6 @@ TEST_P(AutogradConvForwardTest, ConvForwardTorchGolden) {
 }
 
 TEST_P(AutogradConvForwardTest, ConvForwardRejectsInvalidShapes) {
-    ONLY_CPU();
     EXPECT_DEATH(
         {
             auto input = std::make_shared<Tensor>(std::vector<int64_t>{1, 2, 3, 3}, DataType::kFLOAT32, GetDevice());
@@ -201,6 +193,20 @@ TEST_P(AutogradConvForwardTest, ConvForwardRejectsInvalidShapes) {
             (void)result;
         },
         "");
+}
+
+// An empty batch is a degenerate but valid call: the kernel must not launch a zero-block
+// configuration; the output tensor keeps the (N=0, ...) shape and is returned untouched.
+TEST_P(AutogradConvForwardTest, ConvForwardEmptyBatch) {
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{0, 2, 4, 4}, DataType::kFLOAT32, GetDevice());
+    auto weight = std::make_shared<Tensor>(std::vector<int64_t>{3, 2, 3, 3}, DataType::kFLOAT32, GetDevice(), true);
+    weight->Fill(1.0f);
+
+    auto conv_fn = std::make_shared<autograd::Conv2d>();
+    auto result = conv_fn->Apply({input, weight});
+    ASSERT_EQ(result.size(), 1);
+    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{0, 3, 2, 2}));
+    EXPECT_EQ(result[0]->NumElements(), 0);
 }
 
 INFINI_TRAIN_REGISTER_TEST(AutogradConvForwardTest);
