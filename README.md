@@ -238,6 +238,22 @@ uses one execution thread by default:
     --num_iteration 10
 ```
 
+The MNIST example supports the same DDP launch (`--device cuda` is required;
+each rank trains on its own GPU and logs only on rank 0):
+
+```bash
+./build/infini_run \
+  --nnodes=1 \
+  --nproc_per_node=2 \
+  ./build/mnist \
+    --model cnn \
+    --device cuda \
+    --dataset data/mnist \
+    --num_epoch 3 \
+    --lr 0.1 \
+    --metrics_file metrics_ddp.jsonl
+```
+
 #### Multi-node Multi-process Launch
 
 Run the following command on every node with the same rendezvous settings and
