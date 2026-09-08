@@ -5,7 +5,6 @@
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autograd/conv.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
@@ -22,7 +21,6 @@ class AutogradConvBackwardTest : public infini_train::test::InfiniTrainTest {};
 // Hand-checkable case: x = arange(9) reshaped (1,1,3,3), w = [[1,2],[3,4]], bias = 0.5,
 // grad_output = ones(1,1,2,2). bias does not influence grad_input / grad_weight.
 TEST_P(AutogradConvBackwardTest, ConvBackwardGradients) {
-    ONLY_CPU();
     std::vector<float> input_values;
     for (int idx = 0; idx < 9; ++idx) { input_values.push_back(static_cast<float>(idx)); }
     auto input = std::make_shared<Tensor>(input_values.data(), std::vector<int64_t>{1, 1, 3, 3}, DataType::kFLOAT32,
@@ -60,7 +58,6 @@ TEST_P(AutogradConvBackwardTest, ConvBackwardGradients) {
 }
 
 TEST_P(AutogradConvBackwardTest, ConvBackwardNoBias) {
-    ONLY_CPU();
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2, 4, 4}, DataType::kFLOAT32, GetDevice(), true);
     input->Fill(1.0f);
     auto weight = std::make_shared<Tensor>(std::vector<int64_t>{3, 2, 3, 3}, DataType::kFLOAT32, GetDevice(), true);
@@ -83,7 +80,6 @@ TEST_P(AutogradConvBackwardTest, ConvBackwardNoBias) {
 
 // H = W = kernel: a single window, so grad_input mirrors the weight and grad_weight the input.
 TEST_P(AutogradConvBackwardTest, ConvBackwardKernelEqualsSpatial) {
-    ONLY_CPU();
     const std::vector<float> input_values{1.0f, 2.0f, 3.0f, 4.0f};
     auto input = std::make_shared<Tensor>(input_values.data(), std::vector<int64_t>{1, 1, 2, 2}, DataType::kFLOAT32,
                                           GetDevice())
@@ -113,7 +109,6 @@ TEST_P(AutogradConvBackwardTest, ConvBackwardKernelEqualsSpatial) {
 // Training-shaped call: the activation is a leaf without requires_grad, so only the parameter
 // gradients must be produced.
 TEST_P(AutogradConvBackwardTest, ConvBackwardInputNotRequired) {
-    ONLY_CPU();
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 2, 4, 4}, DataType::kFLOAT32, GetDevice());
     input->Fill(1.0f);
     auto weight = std::make_shared<Tensor>(std::vector<int64_t>{3, 2, 3, 3}, DataType::kFLOAT32, GetDevice(), true);
@@ -138,7 +133,6 @@ TEST_P(AutogradConvBackwardTest, ConvBackwardInputNotRequired) {
 
 // Random 4D case checked against PyTorch autograd (fixed seed, see file-level comment).
 TEST_P(AutogradConvBackwardTest, ConvBackwardTorchGolden) {
-    ONLY_CPU();
     const std::vector<float> input_values{
         2.014464855f,  -0.671311080f, -0.945236862f, -0.096128546f, 0.889558852f,  1.726294398f,  -0.078931913f,
         0.205890238f,  0.094608001f,  0.173616216f,  0.437049866f,  -0.557070732f, 0.455583423f,  -0.736482263f,
@@ -218,6 +212,34 @@ TEST_P(AutogradConvBackwardTest, ConvBackwardTorchGolden) {
     test::ExpectTensorNear(grad_inputs[1], expected_grad_weight, kGoldenAbsError);
     EXPECT_EQ(grad_inputs[2]->Dims(), (std::vector<int64_t>{3}));
     test::ExpectTensorNear(grad_inputs[2], expected_grad_bias, kGoldenAbsError);
+}
+
+// An empty batch is degenerate but must not crash nor return uninitialized gradients: the
+// parameter gradients (weight/bias) are sums over zero images, so they are exact zeros.
+TEST_P(AutogradConvBackwardTest, ConvBackwardEmptyBatch) {
+    auto input
+        = std::make_shared<Tensor>(std::vector<int64_t>{0, 2, 4, 4}, DataType::kFLOAT32, GetDevice())->RequiresGrad();
+    auto weight = std::make_shared<Tensor>(std::vector<int64_t>{3, 2, 3, 3}, DataType::kFLOAT32, GetDevice(), true)
+                      ->RequiresGrad();
+    auto bias
+        = std::make_shared<Tensor>(std::vector<int64_t>{3}, DataType::kFLOAT32, GetDevice(), true)->RequiresGrad();
+
+    auto conv_fn = std::make_shared<autograd::Conv2d>();
+    auto result = conv_fn->Apply({input, weight, bias});
+    auto grad_output = std::make_shared<Tensor>(std::vector<int64_t>{0, 3, 2, 2}, DataType::kFLOAT32, GetDevice());
+    auto grads = conv_fn->Backward({grad_output});
+    ASSERT_EQ(grads.size(), 3);
+    ASSERT_NE(grads[0], nullptr);
+    ASSERT_NE(grads[1], nullptr);
+    ASSERT_NE(grads[2], nullptr);
+
+    // grad_input has an empty batch, grad_weight and grad_bias are exact zeros over the empty batch.
+    EXPECT_EQ(grads[0]->Dims(), (std::vector<int64_t>{0, 2, 4, 4}));
+    EXPECT_EQ(grads[0]->NumElements(), 0);
+    EXPECT_EQ(grads[1]->Dims(), (std::vector<int64_t>{3, 2, 3, 3}));
+    test::ExpectTensorFloatEqual(grads[1], 0.0f);
+    EXPECT_EQ(grads[2]->Dims(), (std::vector<int64_t>{3}));
+    test::ExpectTensorFloatEqual(grads[2], 0.0f);
 }
 
 INFINI_TRAIN_REGISTER_TEST(AutogradConvBackwardTest);
