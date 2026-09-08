@@ -145,6 +145,10 @@ The generated files can be passed directly to the corresponding executables:
   --dataset data/mnist
 ```
 
+The MNIST example supports CPU, CUDA, and single-process DDP. Use
+`--device cuda` for GPU training and `--nthread_per_process 2` for two-GPU DDP.
+The `--bs` option specifies the batch size per rank.
+
 ##### GPT-2 124M
 
 ```bash

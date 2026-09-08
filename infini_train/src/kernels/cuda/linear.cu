@@ -155,6 +155,24 @@ __global__ void ReduceColumnsKernel(const TIn *__restrict__ input, TOut *__restr
     }
 }
 
+template <int BLOCK_SIZE, typename TIn, typename TOut>
+__global__ void ReduceRowsKernel(const TIn *__restrict__ input, TOut *__restrict__ output, int num_rows, int num_cols) {
+    using BlockReduce = cub::BlockReduce<float, BLOCK_SIZE>;
+    __shared__ typename BlockReduce::TempStorage temp_storage;
+
+    const int col = blockIdx.x;
+    float sum = 0.0f;
+
+    for (int row = threadIdx.x; row < num_rows; row += blockDim.x) {
+        sum += common::cuda::Cast<float>(input[row * num_cols + col]);
+    }
+
+    const float reduced = BlockReduce(temp_storage).Sum(sum);
+    if (threadIdx.x == 0) {
+        output[col] = reduced;
+    }
+}
+
 std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weight,
                                             const std::shared_ptr<Tensor> &grad_output, bool transpose,
                                             int64_t in_features, int64_t out_features,
@@ -302,23 +320,24 @@ std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_o
                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                  ->cuda_stream();
 
-    // d_bias = \sum_i(i=0, bs-1) d_output[i]
-    // TODO(dcj): use thrust::fill or reduce kernel do this
+    // d_bias[j] = sum_i d_output[i, j]. The gradient is row-major [bs, out_features],
+    // so each block reduces one feature across all batch rows.
     constexpr int BLOCK_SIZE = 256;
     switch (compute_dtype) {
         DISPATCH_CASE(WRAP({
-                          ReduceColumnsKernel<BLOCK_SIZE><<<out_features, BLOCK_SIZE, 0, cuda_stream>>>(
+                          ReduceRowsKernel<BLOCK_SIZE><<<out_features, BLOCK_SIZE, 0, cuda_stream>>>(
                               static_cast<const float *>(grad_output->DataPtr()),
-                              static_cast<float *>(grad_bias->DataPtr()), out_features, bs);
+                              static_cast<float *>(grad_bias->DataPtr()), bs, out_features);
                       }),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
-                          ReduceColumnsKernel<BLOCK_SIZE><<<out_features, BLOCK_SIZE, 0, cuda_stream>>>(
+                          ReduceRowsKernel<BLOCK_SIZE><<<out_features, BLOCK_SIZE, 0, cuda_stream>>>(
                               static_cast<const nv_bfloat16 *>(grad_output->DataPtr()),
-                              static_cast<float *>(grad_bias->DataPtr()), out_features, bs);
+                              static_cast<float *>(grad_bias->DataPtr()), bs, out_features);
                       }),
                       DataType::kBFLOAT16)
     }
+    CUDA_CHECK(cudaGetLastError());
 
     return grad_bias;
 }
