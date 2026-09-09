@@ -8,7 +8,6 @@
 #include "infini_train/include/nn/modules/conv.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/loss.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
@@ -17,12 +16,13 @@
 using namespace infini_train;
 
 // Minimal end-to-end training step: Conv2d -> Flatten -> Linear -> CrossEntropy, one
-// loss->Backward() through the autograd graph and one SGD step, on CPU.
+// loss->Backward() through the autograd graph and one SGD step. Loss, gradients and
+// parameters are inspected through host copies, so one body serves both devices.
 class AutogradConvTrainTest : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(AutogradConvTrainTest, ConvTrainStepUpdatesParams) {
-    ONLY_CPU();
     const Device device = GetDevice();
+    const Device host = Device();
     constexpr float kLearningRate = 0.1f;
 
     std::vector<float> input_values;
@@ -44,7 +44,8 @@ TEST_P(AutogradConvTrainTest, ConvTrainStepUpdatesParams) {
     ASSERT_EQ(logits->Dims(), (std::vector<int64_t>{2, 3}));
     auto loss = (*loss_fn)({logits, target})[0];
     ASSERT_TRUE(loss->Dims().empty());
-    EXPECT_TRUE(std::isfinite(*static_cast<const float *>(loss->DataPtr())));
+    const auto loss_cpu = loss->To(host);
+    EXPECT_TRUE(std::isfinite(*static_cast<const float *>(loss_cpu.DataPtr())));
 
     loss->Backward();
 
@@ -57,18 +58,21 @@ TEST_P(AutogradConvTrainTest, ConvTrainStepUpdatesParams) {
         const auto &grad = param->grad();
         ASSERT_NE(grad, nullptr);
         ASSERT_EQ(grad->Dims(), param->Dims());
-        const auto *grad_data = static_cast<const float *>(grad->DataPtr());
+        const auto grad_cpu = grad->To(host);
+        const auto *grad_data = static_cast<const float *>(grad_cpu.DataPtr());
         float max_abs = 0.0f;
-        for (size_t idx = 0; idx < grad->NumElements(); ++idx) {
+        for (size_t idx = 0; idx < grad_cpu.NumElements(); ++idx) {
             ASSERT_TRUE(std::isfinite(grad_data[idx]));
             max_abs = std::max(max_abs, std::fabs(grad_data[idx]));
         }
         EXPECT_GT(max_abs, 0.0f);
     }
 
+    // Snapshot into freshly allocated host buffers: a same-device To(host) view would alias
+    // the live storage and silently track the optimizer's in-place update.
     std::vector<std::shared_ptr<Tensor>> old_values;
     for (const auto &param : params) {
-        auto old_value = std::make_shared<Tensor>(param->Dims(), param->Dtype(), device);
+        auto old_value = std::make_shared<Tensor>(param->Dims(), param->Dtype(), host);
         old_value->CopyFrom(*param);
         old_values.push_back(old_value);
     }
@@ -77,9 +81,11 @@ TEST_P(AutogradConvTrainTest, ConvTrainStepUpdatesParams) {
     optimizer->Step();
 
     for (size_t p = 0; p < params.size(); ++p) {
+        const auto new_cpu = params[p]->To(host);
+        const auto grad_cpu = params[p]->grad()->To(host);
         const auto *old_data = static_cast<const float *>(old_values[p]->DataPtr());
-        const auto *grad_data = static_cast<const float *>(params[p]->grad()->DataPtr());
-        const auto *new_data = static_cast<const float *>(params[p]->DataPtr());
+        const auto *grad_data = static_cast<const float *>(grad_cpu.DataPtr());
+        const auto *new_data = static_cast<const float *>(new_cpu.DataPtr());
         for (size_t idx = 0; idx < params[p]->NumElements(); ++idx) {
             EXPECT_FLOAT_EQ(new_data[idx], old_data[idx] - kLearningRate * grad_data[idx]) << "param " << p;
         }
