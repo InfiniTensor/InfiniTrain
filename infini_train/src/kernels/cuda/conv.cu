@@ -13,7 +13,6 @@
 
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 #include "infini_train/src/kernels/common/gemm.h"
-#include "infini_train/src/kernels/cuda/common/gemm.cuh"
 
 namespace infini_train::kernels::cuda {
 namespace {

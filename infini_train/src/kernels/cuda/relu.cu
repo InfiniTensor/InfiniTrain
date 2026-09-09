@@ -30,9 +30,6 @@ __global__ void ReLUBackwardKernel(T *grad_input, const T *input, const T *grad_
     }
 }
 
-// Mirrors the unary launch pattern in kernels/cuda/elementwise.cu: same block-size
-// heuristic, stream lookup and offset-loop emission. That file's helpers live in an
-// anonymous namespace and cannot be shared from here; keep this in sync with it.
 inline size_t ChooseBlockSize(size_t num_elements) {
     if (num_elements < 1024) {
         return 64;
