@@ -45,7 +45,7 @@ __global__ void Im2colKernel(const float *__restrict__ input, float *__restrict_
 
 // col2im: inverse of Im2col for the input gradient. An input pixel is covered by
 // multiple output windows, so all patches that touch it are gathered. Each thread
-// owns one (c, x, y) output cell and writes it once, so no atomics are needed.
+// owns one (n, c, x, y) output cell and writes it once, so no atomics are needed.
 __global__ void Col2imKernel(const float *__restrict__ col, float *__restrict__ grad_input, int64_t total,
                              int64_t channels, int64_t height, int64_t width, int64_t kernel_h, int64_t kernel_w,
                              int64_t out_height, int64_t out_width, int64_t patches, int64_t flat_kernel) {
@@ -191,27 +191,31 @@ std::shared_ptr<Tensor> Conv2dForward(const std::shared_ptr<Tensor> &input, cons
     const float *weight_data = static_cast<const float *>(weight->DataPtr());
     float *output_data = static_cast<float *>(output->DataPtr());
     const float beta = bias ? 1.0f : 0.0f;
-    for (int64_t n = 0; n < batch; ++n) {
-        Dispatcher::Instance().Call<void>({device.type(), "Gemm"}, device,
-                                          GemmParams{
-                                              .trans_a = GemmTranspose::kNoTranspose,
-                                              .trans_b = GemmTranspose::kNoTranspose,
-                                              .m = static_cast<int>(patches),
-                                              .n = static_cast<int>(out_channels),
-                                              .k = static_cast<int>(flat_kernel),
-                                              .A = col_data + n * patches * flat_kernel,
-                                              .lda = static_cast<int>(patches),
-                                              .B = weight_data,
-                                              .ldb = static_cast<int>(flat_kernel),
-                                              .C = output_data + n * out_channels * patches,
-                                              .ldc = static_cast<int>(patches),
-                                              .alpha = 1.0f,
-                                              .beta = beta,
-                                              .batch_count = 1,
-                                              .input_dtype = DataType::kFLOAT32,
-                                              .output_dtype = DataType::kFLOAT32,
-                                          });
-    }
+    // One strided-batched GEMM over the batch: A steps through the per-image col blocks,
+    // B (the weight) is shared by every image via stride 0, C steps through the output.
+    // batch == 1 falls back to the non-batched Gemm path, which expects zero strides.
+    Dispatcher::Instance().Call<void>({device.type(), "Gemm"}, device,
+                                      GemmParams{
+                                          .trans_a = GemmTranspose::kNoTranspose,
+                                          .trans_b = GemmTranspose::kNoTranspose,
+                                          .m = static_cast<int>(patches),
+                                          .n = static_cast<int>(out_channels),
+                                          .k = static_cast<int>(flat_kernel),
+                                          .A = col_data,
+                                          .lda = static_cast<int>(patches),
+                                          .B = weight_data,
+                                          .ldb = static_cast<int>(flat_kernel),
+                                          .C = output_data,
+                                          .ldc = static_cast<int>(patches),
+                                          .alpha = 1.0f,
+                                          .beta = beta,
+                                          .batch_count = static_cast<int>(batch),
+                                          .stride_a = batch > 1 ? patches * flat_kernel : 0,
+                                          .stride_b = 0,
+                                          .stride_c = batch > 1 ? out_channels * patches : 0,
+                                          .input_dtype = DataType::kFLOAT32,
+                                          .output_dtype = DataType::kFLOAT32,
+                                      });
 
     return output;
 }
@@ -258,41 +262,45 @@ std::shared_ptr<Tensor> Conv2dBackwardInput(const std::shared_ptr<Tensor> &weigh
     auto device = grad_output->GetDevice();
     const cudaStream_t stream = CurrentCudaStream(device);
 
-    // Per-image scratch: grad_output(n)^T * weight, stored column-major (patches, flat_kernel).
-    auto col = std::make_shared<Tensor>(std::vector<int64_t>{flat_kernel, patches}, DataType::kFLOAT32, device);
+    // Whole-batch scratch: col(n) = grad_output(n)^T * weight per image, stored column-major
+    // (patches, flat_kernel), so the col2im below can gather every image in a single launch.
+    auto col = std::make_shared<Tensor>(std::vector<int64_t>{batch, flat_kernel, patches}, DataType::kFLOAT32, device);
 
     const float *weight_data = static_cast<const float *>(weight->DataPtr());
     const float *grad_output_data = static_cast<const float *>(grad_output->DataPtr());
     float *grad_input_data = static_cast<float *>(grad_input->DataPtr());
     float *col_data = static_cast<float *>(col->DataPtr());
 
-    for (int64_t n = 0; n < batch; ++n) {
-        // col = grad_output(n)^T * weight, the transpose of the forward GEMM.
-        Dispatcher::Instance().Call<void>({device.type(), "Gemm"}, device,
-                                          GemmParams{
-                                              .trans_a = GemmTranspose::kNoTranspose,
-                                              .trans_b = GemmTranspose::kTranspose,
-                                              .m = static_cast<int>(patches),
-                                              .n = static_cast<int>(flat_kernel),
-                                              .k = static_cast<int>(out_channels),
-                                              .A = grad_output_data + n * out_channels * patches,
-                                              .lda = static_cast<int>(patches),
-                                              .B = weight_data,
-                                              .ldb = static_cast<int>(flat_kernel),
-                                              .C = col_data,
-                                              .ldc = static_cast<int>(patches),
-                                              .alpha = 1.0f,
-                                              .beta = 0.0f,
-                                              .batch_count = 1,
-                                              .input_dtype = DataType::kFLOAT32,
-                                              .output_dtype = DataType::kFLOAT32,
-                                          });
+    // The transpose of the forward GEMM for every image at once: A steps through grad_output,
+    // B (the weight) is shared by every image via stride 0, C steps through the col buffer.
+    // batch == 1 falls back to the non-batched Gemm path, which expects zero strides.
+    Dispatcher::Instance().Call<void>({device.type(), "Gemm"}, device,
+                                      GemmParams{
+                                          .trans_a = GemmTranspose::kNoTranspose,
+                                          .trans_b = GemmTranspose::kTranspose,
+                                          .m = static_cast<int>(patches),
+                                          .n = static_cast<int>(flat_kernel),
+                                          .k = static_cast<int>(out_channels),
+                                          .A = grad_output_data,
+                                          .lda = static_cast<int>(patches),
+                                          .B = weight_data,
+                                          .ldb = static_cast<int>(flat_kernel),
+                                          .C = col_data,
+                                          .ldc = static_cast<int>(patches),
+                                          .alpha = 1.0f,
+                                          .beta = 0.0f,
+                                          .batch_count = static_cast<int>(batch),
+                                          .stride_a = batch > 1 ? out_channels * patches : 0,
+                                          .stride_b = 0,
+                                          .stride_c = batch > 1 ? flat_kernel * patches : 0,
+                                          .input_dtype = DataType::kFLOAT32,
+                                          .output_dtype = DataType::kFLOAT32,
+                                      });
 
-        Col2imKernel<<<NumBlocks(channels * height * width), kThreads, 0, stream>>>(
-            col_data, grad_input_data + n * channels * height * width, channels * height * width, channels, height,
-            width, kernel_h, kernel_w, out_height, out_width, patches, flat_kernel);
-        CUDA_CHECK(cudaGetLastError());
-    }
+    Col2imKernel<<<NumBlocks(batch * channels * height * width), kThreads, 0, stream>>>(
+        col_data, grad_input_data, batch * channels * height * width, channels, height, width, kernel_h, kernel_w,
+        out_height, out_width, patches, flat_kernel);
+    CUDA_CHECK(cudaGetLastError());
 
     return grad_input;
 }

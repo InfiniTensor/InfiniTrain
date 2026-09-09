@@ -102,16 +102,19 @@ std::shared_ptr<Tensor> Conv2dForward(const std::shared_ptr<Tensor> &input, cons
     float *output_data = static_cast<float *>(output->DataPtr());
 
     // (batch, patches, C*kH*kW) scratch: the im2col expansion of every image in the batch.
+    // Left uninitialized: im2col overwrites every element before the first read.
     const int64_t image_size = channels * height * width;
-    std::vector<float> col_buffer(batch * patches * flat_kernel);
+    auto col = std::make_shared<Tensor>(std::vector<int64_t>{batch, patches, flat_kernel}, DataType::kFLOAT32,
+                                        input->GetDevice());
+    float *col_buffer = static_cast<float *>(col->DataPtr());
     for (int64_t n = 0; n < batch; ++n) {
         Im2col(input_data + n * image_size, channels, height, width, kernel_h, kernel_w, out_height, out_width,
-               col_buffer.data() + n * patches * flat_kernel);
+               col_buffer + n * patches * flat_kernel);
     }
 
     Eigen::Map<const RowMatrix> weight_mat(weight_data, out_channels, flat_kernel);
     for (int64_t n = 0; n < batch; ++n) {
-        Eigen::Map<const RowMatrix> col_n(col_buffer.data() + n * patches * flat_kernel, patches, flat_kernel);
+        Eigen::Map<const RowMatrix> col_n(col_buffer + n * patches * flat_kernel, patches, flat_kernel);
         Eigen::Map<RowMatrix> out_n(output_data + n * out_channels * patches, out_channels, patches);
         out_n.noalias() = weight_mat * col_n.transpose();
         if (bias) {
@@ -170,12 +173,16 @@ std::shared_ptr<Tensor> Conv2dBackwardInput(const std::shared_ptr<Tensor> &weigh
 
     Eigen::Map<const RowMatrix> weight_mat(weight_data, out_channels, flat_kernel);
     const int64_t image_size = channels * height * width;
-    std::vector<float> col_buffer(patches * flat_kernel);
+    // (patches, C*kH*kW) scratch reused across images. Left uninitialized: the GEMM below
+    // assigns every element before Col2im reads it.
+    auto col = std::make_shared<Tensor>(std::vector<int64_t>{patches, flat_kernel}, DataType::kFLOAT32,
+                                        grad_output->GetDevice());
+    float *col_buffer = static_cast<float *>(col->DataPtr());
     for (int64_t n = 0; n < batch; ++n) {
         Eigen::Map<const RowMatrix> grad_output_n(grad_output_data + n * out_channels * patches, out_channels, patches);
-        Eigen::Map<RowMatrix> col_n(col_buffer.data(), patches, flat_kernel);
+        Eigen::Map<RowMatrix> col_n(col_buffer, patches, flat_kernel);
         col_n.noalias() = grad_output_n.transpose() * weight_mat;
-        Col2im(col_buffer.data(), channels, height, width, kernel_h, kernel_w, out_height, out_width,
+        Col2im(col_buffer, channels, height, width, kernel_h, kernel_w, out_height, out_width,
                grad_input_data + n * image_size);
     }
 
@@ -224,16 +231,20 @@ std::shared_ptr<Tensor> Conv2dBackwardWeight(const std::shared_ptr<Tensor> &inpu
     float *grad_weight_data = static_cast<float *>(grad_weight->DataPtr());
 
     const int64_t image_size = channels * height * width;
-    std::vector<float> col_buffer(batch * patches * flat_kernel);
+    // (batch, patches, C*kH*kW) scratch: the im2col expansion of every image in the batch.
+    // Left uninitialized: im2col overwrites every element before the first read.
+    auto col = std::make_shared<Tensor>(std::vector<int64_t>{batch, patches, flat_kernel}, DataType::kFLOAT32,
+                                        input->GetDevice());
+    float *col_buffer = static_cast<float *>(col->DataPtr());
     for (int64_t n = 0; n < batch; ++n) {
         Im2col(input_data + n * image_size, channels, height, width, kernel_h, kernel_w, out_height, out_width,
-               col_buffer.data() + n * patches * flat_kernel);
+               col_buffer + n * patches * flat_kernel);
     }
 
     Eigen::Map<RowMatrix> grad_weight_mat(grad_weight_data, out_channels, flat_kernel);
     for (int64_t n = 0; n < batch; ++n) {
         Eigen::Map<const RowMatrix> grad_output_n(grad_output_data + n * out_channels * patches, out_channels, patches);
-        Eigen::Map<const RowMatrix> col_n(col_buffer.data() + n * patches * flat_kernel, patches, flat_kernel);
+        Eigen::Map<const RowMatrix> col_n(col_buffer + n * patches * flat_kernel, patches, flat_kernel);
         grad_weight_mat.noalias() += grad_output_n * col_n;
     }
 
