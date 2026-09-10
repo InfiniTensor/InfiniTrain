@@ -61,25 +61,25 @@ int main(int argc, char *argv[]) {
     //auto optimizer = optimizers::SGD(network.Parameters(), FLAGS_lr);
     auto optimizer = optimizers::SGD(network->Parameters(), FLAGS_lr);
 
-    // ===== overfit single batch test =====
-    {
-        auto first = *train_dataloader.begin();
-        for (int step = 0; step < 300; ++step) {
-            auto new_image = std::make_shared<Tensor>(first.first->To(device));
-            auto new_label = std::make_shared<Tensor>(first.second->To(device));
-            auto outputs = network->Forward({new_image});
-            optimizer.ZeroGrad();
-            auto loss = loss_fn->Forward({outputs[0], new_label});
-            loss[0]->Backward();
-            auto loss_cpu = loss[0]->To(cpu_device);
-            if (step % 20 == 0) {
-                LOG(ERROR) << "[overfit] step " << step
-                           << " loss: " << static_cast<float *>(loss_cpu.DataPtr())[0];
-            }
-            optimizer.Step();
-        }
-    }
-    // =======================================
+    // // ===== overfit single batch test =====
+    // {
+    //     auto first = *train_dataloader.begin();
+    //     for (int step = 0; step < 300; ++step) {
+    //         auto new_image = std::make_shared<Tensor>(first.first->To(device));
+    //         auto new_label = std::make_shared<Tensor>(first.second->To(device));
+    //         auto outputs = network->Forward({new_image});
+    //         optimizer.ZeroGrad();
+    //         auto loss = loss_fn->Forward({outputs[0], new_label});
+    //         loss[0]->Backward();
+    //         auto loss_cpu = loss[0]->To(cpu_device);
+    //         if (step % 20 == 0) {
+    //             LOG(ERROR) << "[overfit] step " << step
+    //                        << " loss: " << static_cast<float *>(loss_cpu.DataPtr())[0];
+    //         }
+    //         optimizer.Step();
+    //     }
+    // }
+    // // =======================================
 
     for (int epoch = 0; epoch < FLAGS_num_epoch; ++epoch) {
         int train_idx = 0;
@@ -91,21 +91,21 @@ int main(int argc, char *argv[]) {
             auto new_image = std::make_shared<Tensor>(image->To(device));
             auto new_label = std::make_shared<Tensor>(label->To(device));
 
-            // ===== debug pairing =====
-            if (train_idx == 0 || train_idx == 1) {
-                auto lc = new_label->To(cpu_device);
-                auto ic = new_image->To(cpu_device);
-                const auto *lp = static_cast<const uint8_t *>(lc.DataPtr());
-                const float *ip = static_cast<const float *>(ic.DataPtr());
-                for (int i = 0; i < 16; ++i) {
-                    double s = 0.0;
-                    for (int j = 0; j < 784; ++j) { s += ip[i * 784 + j]; }
-                    LOG(ERROR) << "[debug] batch " << train_idx << " sample " << i
-                               << " | label = " << static_cast<int>(lp[i])
-                               << " | image sum = " << s;
-                }
-            }
-            // ===========================
+            // // ===== debug pairing =====
+            // if (train_idx == 0 || train_idx == 1) {
+            //     auto lc = new_label->To(cpu_device);
+            //     auto ic = new_image->To(cpu_device);
+            //     const auto *lp = static_cast<const uint8_t *>(lc.DataPtr());
+            //     const float *ip = static_cast<const float *>(ic.DataPtr());
+            //     for (int i = 0; i < 16; ++i) {
+            //         double s = 0.0;
+            //         for (int j = 0; j < 784; ++j) { s += ip[i * 784 + j]; }
+            //         LOG(ERROR) << "[debug] batch " << train_idx << " sample " << i
+            //                    << " | label = " << static_cast<int>(lp[i])
+            //                    << " | image sum = " << s;
+            //     }
+            // }
+            // // ===========================
 
             // auto outputs = network.Forward({new_image});
             auto outputs = network->Forward({new_image});
@@ -115,24 +115,24 @@ int main(int argc, char *argv[]) {
             auto loss = loss_fn->Forward({outputs[0], new_label});
             loss[0]->Backward();
 
-            // ===== debug start =====
-            const auto params = network->Parameters();   // 关键：先把临时 vector 接住
-            for (size_t pi = 0; pi < params.size(); ++pi) {
-                const auto &p = params[pi];              // 现在引用有效
-                const auto g = p->grad();
-                if (!g) {
-                    LOG(ERROR) << "[debug] param " << pi << " grad is NULL";
-                    continue;
-                }
-                auto gc = g->To(cpu_device);
-                const float *gd = static_cast<const float *>(gc.DataPtr());
-                double sum = 0.0;
-                for (size_t j = 0; j < g->NumElements(); ++j) { sum += gd[j] * gd[j]; }
-                LOG(ERROR) << "[debug] param " << pi << " grad norm = " << std::sqrt(sum);
-            }
-            auto pb = network->Parameters()[0]->To(cpu_device);
-            LOG(ERROR) << "[debug] w0[0] before step: " << static_cast<float *>(pb.DataPtr())[0];
-            // ===== debug end =====
+            // // ===== debug start =====
+            // const auto params = network->Parameters();   // 关键：先把临时 vector 接住
+            // for (size_t pi = 0; pi < params.size(); ++pi) {
+            //     const auto &p = params[pi];              // 现在引用有效
+            //     const auto g = p->grad();
+            //     if (!g) {
+            //         LOG(ERROR) << "[debug] param " << pi << " grad is NULL";
+            //         continue;
+            //     }
+            //     auto gc = g->To(cpu_device);
+            //     const float *gd = static_cast<const float *>(gc.DataPtr());
+            //     double sum = 0.0;
+            //     for (size_t j = 0; j < g->NumElements(); ++j) { sum += gd[j] * gd[j]; }
+            //     LOG(ERROR) << "[debug] param " << pi << " grad norm = " << std::sqrt(sum);
+            // }
+            // auto pb = network->Parameters()[0]->To(cpu_device);
+            // LOG(ERROR) << "[debug] w0[0] before step: " << static_cast<float *>(pb.DataPtr())[0];
+            // // ===== debug end =====
 
             // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
             // between forward and backward.
