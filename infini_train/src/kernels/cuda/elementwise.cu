@@ -522,14 +522,16 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
 
     const unsigned logical_active_mask = static_cast<unsigned>(static_cast<uint64_t>(active_mask) >> logical_base);
     const int leader = __ffs(logical_active_mask) - 1;
-    const int64_t common_offset = __shfl_sync(active_mask, b_offset, leader, kWarpSize);
+    // All lanes in a nonempty logical warp participate, including out-of-bounds lanes with zero gradients.
+    // Use the active mask only to select valid offsets so warp_uniform agrees across all lanes before Sum.
+    const int64_t common_offset = __shfl_sync(logical_lane_mask, b_offset, leader, kWarpSize);
 
     bool warp_uniform = true;
     for (int i = 0; i < kWarpSize; ++i) {
         if (!(logical_active_mask & (unsigned{1} << i))) {
             continue;
         }
-        const int64_t offset_i = __shfl_sync(active_mask, b_offset, i, kWarpSize);
+        const int64_t offset_i = __shfl_sync(logical_lane_mask, b_offset, i, kWarpSize);
         if (offset_i != common_offset) {
             warp_uniform = false;
             break;
