@@ -93,6 +93,42 @@ TEST_P(AutogradElementwiseBackwardTest, Float32MulBroadcastBackwardAcrossLogical
     test::ExpectTensorFloatEqual(grad_inputs[1], std::vector<float>{64.0f, 64.0f});
 }
 
+TEST_P(AutogradElementwiseBackwardTest, Float32MulBroadcastBackwardPartialLogicalWarps) {
+    // A single row covers 31/33-element tails; multiple rows also exercise nonzero B offsets
+    // and logical warps that straddle rows with different B offsets.
+    for (int64_t rows : {1, 3}) {
+        for (int64_t cols : {31, 33}) {
+            SCOPED_TRACE(::testing::Message() << "rows=" << rows << ", cols=" << cols);
+            const std::vector<int64_t> a_dims{rows, cols};
+            const std::vector<int64_t> b_dims{rows, 1};
+            std::vector<float> a_values(rows * cols), b_values(rows), grad_values(rows * cols);
+            std::vector<float> expected_grad_a(rows * cols), expected_grad_b(rows, 0.0f);
+            for (int64_t row = 0; row < rows; ++row) {
+                b_values[row] = static_cast<float>(row + 2);
+                for (int64_t col = 0; col < cols; ++col) {
+                    const int64_t idx = row * cols + col;
+                    a_values[idx] = static_cast<float>(idx + 1);
+                    grad_values[idx] = static_cast<float>(col % 3 + 1);
+                    expected_grad_a[idx] = grad_values[idx] * b_values[row];
+                    expected_grad_b[row] += grad_values[idx] * a_values[idx];
+                }
+            }
+
+            auto a = std::make_shared<Tensor>(a_values.data(), a_dims, DataType::kFLOAT32, GetDevice());
+            auto b = std::make_shared<Tensor>(b_values.data(), b_dims, DataType::kFLOAT32, GetDevice());
+            auto mul_fn = std::make_shared<autograd::Mul>();
+            auto result = mul_fn->Apply({a, b});
+            auto grad = std::make_shared<Tensor>(grad_values.data(), a_dims, DataType::kFLOAT32, GetDevice());
+            auto grad_inputs = mul_fn->Backward({grad});
+            ASSERT_EQ(grad_inputs.size(), 2);
+            EXPECT_EQ(grad_inputs[0]->Dims(), a_dims);
+            EXPECT_EQ(grad_inputs[1]->Dims(), b_dims);
+            test::ExpectTensorFloatEqual(grad_inputs[0], expected_grad_a);
+            test::ExpectTensorFloatEqual(grad_inputs[1], expected_grad_b);
+        }
+    }
+}
+
 TEST_P(AutogradElementwiseBackwardTest, BFloat16MulBroadcastBackwardLargeBlock) {
     ONLY_CUDA();
     auto a = std::make_shared<Tensor>(std::vector<int64_t>{512, 8192}, DataType::kBFLOAT16, GetDevice(), true);
