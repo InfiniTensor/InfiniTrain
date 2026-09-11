@@ -53,6 +53,9 @@ public:
                                nn::parallel::function::ReduceOpType reduce_op, const CclComm *comm,
                                Stream *stream) const;
 
+    virtual void AlltoAll(const void *sendbuff, void *recvbuff, size_t count, DataType dtype, const CclComm *comm,
+                          Stream *stream) const;
+
     virtual void Send(const void *buff, size_t count, DataType dtype, int peer, const CclComm *comm,
                       Stream *stream) const;
 
