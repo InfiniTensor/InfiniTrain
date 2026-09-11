@@ -32,6 +32,8 @@ std::unique_ptr<ProcessGroupFactory> g_process_group_factory_instance = nullptr;
 
 int ProcessGroup::GetGroupRank(int global_rank) const { return global_group_rank_map_.at(global_rank); }
 
+Device::DeviceType ProcessGroup::backend() const { return backend_; }
+
 ProcessGroup::ProcessGroup(int world_size, const std::string &name) : world_size_(world_size), name_(name) {}
 
 ProcessGroup::ProcessGroup(Device::DeviceType backend, const std::string &process_group_name,

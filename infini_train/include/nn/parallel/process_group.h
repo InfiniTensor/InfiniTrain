@@ -39,7 +39,7 @@ public:
 
     virtual int GetGroupRank(int global_rank) const;
 
-    Device::DeviceType backend() const { return backend_; }
+    Device::DeviceType backend() const;
 
     // Asynchronous communication APIs (Compute / Communication stream decoupled)
     virtual std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor,
