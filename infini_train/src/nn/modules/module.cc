@@ -27,9 +27,59 @@ Module::Module(const std::string &type) : type_(type), device_(Device()) {}
 
 const std::string &Module::type() const { return type_; }
 
-std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
-    const auto &named_parameters = NamedParameters();
+namespace {
+void CheckRegistrationName(const std::string &name) {
+    CHECK(!name.empty()) << "Module registration name cannot be empty.";
+    CHECK(name.find('.') == std::string::npos) << "Module registration name cannot contain '.', got: " << name;
+}
+} // namespace
 
+std::shared_ptr<Tensor> Module::RegisterParameter(const std::string &name, std::shared_ptr<Tensor> parameter) {
+    CheckRegistrationName(name);
+    CHECK(!modules_.contains(name) && !buffers_.contains(name))
+        << "Cannot register parameter '" << name << "': the name is already used by another registry.";
+    CHECK(!parameter || parameter->is_leaf())
+        << "Cannot register parameter '" << name << "': parameters must be leaf tensors.";
+
+    if (!parameters_.contains(name)) {
+        parameter_order_.push_back(name);
+    }
+    parameters_[name] = std::move(parameter);
+    return parameters_.at(name);
+}
+
+std::shared_ptr<Tensor> Module::RegisterBuffer(const std::string &name, std::shared_ptr<Tensor> buffer,
+                                               bool persistent) {
+    CheckRegistrationName(name);
+    CHECK(!modules_.contains(name) && !parameters_.contains(name))
+        << "Cannot register buffer '" << name << "': the name is already used by another registry.";
+
+    if (!buffers_.contains(name)) {
+        buffer_order_.push_back(name);
+    }
+    buffers_[name] = std::move(buffer);
+    if (persistent) {
+        non_persistent_buffers_.erase(name);
+    } else {
+        non_persistent_buffers_.insert(name);
+    }
+    return buffers_.at(name);
+}
+
+std::shared_ptr<Module> Module::RegisterModule(const std::string &name, std::shared_ptr<Module> module) {
+    CheckRegistrationName(name);
+    CHECK(!parameters_.contains(name) && !buffers_.contains(name))
+        << "Cannot register module '" << name << "': the name is already used by another registry.";
+
+    if (!modules_.contains(name)) {
+        module_order_.push_back(name);
+    }
+    modules_[name] = std::move(module);
+    return modules_.at(name);
+}
+
+std::vector<std::shared_ptr<Tensor>> Module::Parameters(bool recurse) const {
+    const auto &named_parameters = NamedParameters(/*prefix=*/"", recurse);
     std::vector<std::shared_ptr<Tensor>> params;
     params.reserve(named_parameters.size());
 
@@ -53,19 +103,11 @@ Module::NamedParameters(const std::string &prefix, bool recurse, bool remove_dup
     }
 
     for (const auto &[module_prefix, module] : named_modules) {
-        std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> local_parameters;
-        local_parameters.reserve(module->parameters_.size());
-
-        for (const auto &[name, parameter] : module->parameters_) {
-            if (parameter != nullptr) {
-                local_parameters.emplace_back(name, parameter);
+        for (const auto &name : module->parameter_order_) {
+            const auto &parameter = module->parameters_.at(name);
+            if (!parameter) {
+                continue;
             }
-        }
-
-        std::sort(local_parameters.begin(), local_parameters.end(),
-                  [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
-
-        for (const auto &[name, parameter] : local_parameters) {
             if (remove_duplicate && !visited_parameters.insert(parameter.get()).second) {
                 continue;
             }
@@ -93,8 +135,17 @@ const std::shared_ptr<Tensor> &Module::parameter(const std::string &name) const 
 
 std::vector<std::shared_ptr<Tensor>> Module::Buffers() const {
     std::vector<std::shared_ptr<Tensor>> buffers;
-    for (auto &[_, buffer] : buffers_) { buffers.push_back(buffer); }
-    for (auto &[_, module] : modules_) {
+    for (const auto &name : buffer_order_) {
+        const auto &buffer = buffers_.at(name);
+        if (buffer) {
+            buffers.push_back(buffer);
+        }
+    }
+    for (const auto &name : module_order_) {
+        const auto &module = modules_.at(name);
+        if (!module) {
+            continue;
+        }
         for (auto &buffer : module->Buffers()) { buffers.push_back(buffer); }
     }
     return buffers;
@@ -137,19 +188,12 @@ Module::NamedModules(std::unordered_set<Module *> *memory, const std::string &pr
     // Emit self first (pre-order)
     named_modules.emplace_back(prefix, shared_from_this());
 
-    // Collect children then sort by key for stable order
-    std::vector<std::pair<std::string, std::shared_ptr<Module>>> children;
-    children.reserve(modules_.size());
-    for (const auto &[name, module] : modules_) {
+    // Recurse in registration order, matching torch.nn.Module.named_modules().
+    for (const auto &name : module_order_) {
+        const auto &module = modules_.at(name);
         if (!module) {
             continue;
         }
-        children.emplace_back(name, module);
-    }
-    std::sort(children.begin(), children.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
-
-    // Recurse in sorted order
-    for (const auto &[name, module] : children) {
         const auto submodule_prefix = (prefix.empty() ? "" : prefix + ".") + name;
         auto sub = module->NamedModules(memory, submodule_prefix, remove_duplicate);
         named_modules.insert(named_modules.end(), sub.begin(), sub.end());
@@ -167,9 +211,23 @@ const Module &Module::module(const std::string &name) const {
 
 std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() const {
     std::unordered_map<std::string, std::shared_ptr<Tensor>> state;
-    for (auto &[name, param] : parameters_) { state.emplace(name, param); }
-    for (auto &[name, buffer] : buffers_) { state.emplace(name, buffer); }
-    for (auto &[name, module] : modules_) {
+    for (const auto &name : parameter_order_) {
+        const auto &param = parameters_.at(name);
+        if (param) {
+            state.emplace(name, param);
+        }
+    }
+    for (const auto &name : buffer_order_) {
+        const auto &buffer = buffers_.at(name);
+        if (buffer && !non_persistent_buffers_.contains(name)) {
+            state.emplace(name, buffer);
+        }
+    }
+    for (const auto &name : module_order_) {
+        const auto &module = modules_.at(name);
+        if (!module) {
+            continue;
+        }
         if (name.starts_with("__pp")) {
             continue;
         }
@@ -304,32 +362,52 @@ void Module::To(Device device) {
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> new_parameters;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> new_buffers;
-    for (auto &[name, param] : parameters_) {
-        new_parameters.emplace(name, std::make_shared<Tensor>(param->To(device)));
+    for (const auto &name : parameter_order_) {
+        const auto &param = parameters_.at(name);
+        new_parameters.emplace(name, param ? std::make_shared<Tensor>(param->To(device)) : nullptr);
     }
-    for (auto &[name, buffer] : buffers_) { new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(device))); }
+    for (const auto &name : buffer_order_) {
+        const auto &buffer = buffers_.at(name);
+        new_buffers.emplace(name, buffer ? std::make_shared<Tensor>(buffer->To(device)) : nullptr);
+    }
     parameters_ = std::move(new_parameters);
     buffers_ = std::move(new_buffers);
     device_ = device;
 
-    for (auto &[_, module] : modules_) { module->To(device); }
+    for (const auto &name : module_order_) {
+        if (const auto &module = modules_.at(name); module) {
+            module->To(device);
+        }
+    }
 }
 
 void Module::To(DataType dtype) {
     std::unordered_map<std::string, std::shared_ptr<Tensor>> new_parameters;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> new_buffers;
-    for (auto &[name, param] : parameters_) {
-        new_parameters.emplace(name, std::make_shared<Tensor>(param->To(dtype)));
+    for (const auto &name : parameter_order_) {
+        const auto &param = parameters_.at(name);
+        new_parameters.emplace(name, param ? std::make_shared<Tensor>(param->To(dtype)) : nullptr);
     }
-    for (auto &[name, buffer] : buffers_) { new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(dtype))); }
+    for (const auto &name : buffer_order_) {
+        const auto &buffer = buffers_.at(name);
+        new_buffers.emplace(name, buffer ? std::make_shared<Tensor>(buffer->To(dtype)) : nullptr);
+    }
     parameters_ = std::move(new_parameters);
     buffers_ = std::move(new_buffers);
 
-    for (auto &[_, layer] : modules_) { layer->To(dtype); }
+    for (const auto &name : module_order_) {
+        if (const auto &module = modules_.at(name); module) {
+            module->To(dtype);
+        }
+    }
 }
 
 void Module::Apply(std::function<void(Module *)> fn) {
-    for (auto &[_, module] : modules_) { module->Apply(fn); }
+    for (const auto &name : module_order_) {
+        if (const auto &module = modules_.at(name); module) {
+            module->Apply(fn);
+        }
+    }
     fn(this);
 }
 

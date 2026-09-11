@@ -61,6 +61,9 @@ void DistributedOptimizer::InitializeModelChunks(const std::vector<std::shared_p
                                    ddp_chunk->param_grad_buffers().end());
         bucket_groups_.insert(bucket_groups_.end(), ddp_chunk->bucket_groups().begin(),
                               ddp_chunk->bucket_groups().end());
+        if (!ddp_chunk->bucket_groups().empty()) {
+            first_param_sync_bucket_groups_.push_back(ddp_chunk->bucket_groups().back());
+        }
     }
 }
 
@@ -174,14 +177,21 @@ void DistributedOptimizer::Step() {
     // 1. Ensure grads are synced
     FinishGradSync();
 
+    // Parameter gathers from the previous update must finish before the optimizer writes into the same buffers.
+    for (auto &group : bucket_groups_) { group->PrepareParamSyncForNextStep(); }
+
     // 2. Base optimizer step on owned param pieces
     CHECK(base_optimizer_) << "DistributedOptimizer: base optimizer is null.";
     base_optimizer_->Step();
 
-    // 3. Gather updated param shards back to full params
-    StartParamSync(/*force_sync=*/false);
-    // TODO(zbl): Delay sync call until param is actually used in next step
-    FinishParamSync(/*skip_next_bucket_dispatch=*/true);
+    // 3. Publish updated parameter shards. With overlap enabled, only launch the first gather in each model
+    // chunk. Forward pre-hooks wait on it at first use and dispatch subsequent bucket gathers.
+    CHECK(!bucket_groups_.empty());
+    if (bucket_groups_.front()->config().overlap_param_gather) {
+        for (auto &group : first_param_sync_bucket_groups_) { group->StartParamSync(); }
+    } else {
+        StartParamSync(/*force_sync=*/false);
+    }
 }
 
 std::unordered_map<std::string, std::shared_ptr<Tensor>> DistributedOptimizer::StateDict() const {

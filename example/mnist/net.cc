@@ -18,8 +18,8 @@ MNIST::MNIST() {
     std::vector<std::shared_ptr<nn::Module>> layers;
     layers.push_back(std::make_shared<nn::Linear>(784, 30));
     layers.push_back(std::make_shared<nn::Sigmoid>());
-    modules_["sequential"] = std::make_shared<nn::Sequential>(std::move(layers));
-    modules_["linear2"] = std::make_shared<nn::Linear>(30, 10);
+    RegisterModule("sequential", std::make_shared<nn::Sequential>(std::move(layers)));
+    RegisterModule("linear2", std::make_shared<nn::Linear>(30, 10));
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>

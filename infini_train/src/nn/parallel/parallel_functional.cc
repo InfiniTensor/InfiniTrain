@@ -114,25 +114,29 @@ std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &ne
 
     for (int idx = 0; idx < modules.size(); ++idx) {
         auto &module = modules[idx];
-        for (auto &[name, child] : module->modules_) {
-            const auto module_idx = module_indices[child.get()];
+        for (const auto &name : module->module_order_) {
+            const auto &child = module->modules_.at(name);
             for (int replica_idx = 0; replica_idx < num_replicas; ++replica_idx) {
                 auto &replica = module_copies[replica_idx][idx];
-                replica->modules_[name] = module_copies[replica_idx][module_idx];
+                replica->RegisterModule(name,
+                                        child ? module_copies[replica_idx][module_indices.at(child.get())] : nullptr);
             }
         }
-        for (auto &[name, param] : module->parameters_) {
-            const auto param_idx = param_indices[param.get()];
+        for (const auto &name : module->parameter_order_) {
+            const auto &param = module->parameters_.at(name);
             for (int replica_idx = 0; replica_idx < num_replicas; ++replica_idx) {
                 auto &replica = module_copies[replica_idx][idx];
-                replica->parameters_[name] = param_copies[replica_idx][param_idx];
+                replica->RegisterParameter(name,
+                                           param ? param_copies[replica_idx][param_indices.at(param.get())] : nullptr);
             }
         }
-        for (auto &[name, buffer] : module->buffers_) {
-            const auto buffer_idx = buffer_indices[buffer.get()];
+        for (const auto &name : module->buffer_order_) {
+            const auto &buffer = module->buffers_.at(name);
+            const bool persistent = !module->non_persistent_buffers_.contains(name);
             for (int replica_idx = 0; replica_idx < num_replicas; ++replica_idx) {
                 auto &replica = module_copies[replica_idx][idx];
-                replica->buffers_[name] = buffer_copies[replica_idx][buffer_idx];
+                replica->RegisterBuffer(
+                    name, buffer ? buffer_copies[replica_idx][buffer_indices.at(buffer.get())] : nullptr, persistent);
             }
         }
     }

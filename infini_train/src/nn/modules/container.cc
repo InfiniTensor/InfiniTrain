@@ -10,7 +10,7 @@ namespace infini_train::nn {
 Sequential::Sequential(std::vector<std::shared_ptr<Module>> &&layers) : CloneableModule(kType) {
     int idx = 0;
     for (auto &layer : layers) {
-        modules_[std::to_string(idx)] = std::move(layer);
+        RegisterModule(std::to_string(idx), std::move(layer));
         ++idx;
     }
 }
@@ -21,8 +21,8 @@ std::vector<std::shared_ptr<Tensor>> Sequential::Forward(const std::vector<std::
     return x;
 }
 
-ModuleDict::ModuleDict(std::unordered_map<std::string, std::shared_ptr<Module>> modules) : CloneableModule(kType) {
-    for (auto &[name, layer] : modules) { modules_[name] = std::move(layer); }
+ModuleDict::ModuleDict(std::vector<Item> modules) : CloneableModule(kType) {
+    for (auto &[name, layer] : modules) { RegisterModule(name, std::move(layer)); }
 }
 
 std::vector<std::shared_ptr<Tensor>> ModuleDict::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -33,7 +33,7 @@ ModuleList::ModuleList(std::vector<std::shared_ptr<Module>> &&layers)
     : CloneableModule(kType), module_list_(std::move(layers)) {
     int idx = 0;
     for (auto &layer : module_list_) {
-        modules_[std::to_string(idx)] = layer;
+        RegisterModule(std::to_string(idx), layer);
         ++idx;
     }
 }

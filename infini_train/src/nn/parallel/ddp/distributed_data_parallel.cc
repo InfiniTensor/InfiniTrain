@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -45,11 +46,14 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         CHECK_EQ(buffer->GetDevice().index(), global::GetDeviceIndex(rank.thread_rank()))
             << "All buffers must be on the same device as the module";
     }
-    modules_[kModuleName] = std::move(module);
+    RegisterModule(kModuleName, std::move(module));
 
     if (ddp_config.zero_stage >= 1) {
         BuildParamAndGradBuffers();
         RegisterBackwardHooks();
+        if (ddp_config_.overlap_param_gather) {
+            RegisterForwardPreHooks();
+        }
     } else if (ddp_config.gradient_bucketing_enabled) {
         // Bucket Assignment
         auto params = modules_[kModuleName]->Parameters();
@@ -60,6 +64,38 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
 
         reducer_ = std::make_shared<Reducer>(params, bucket_indices, ddp_config);
         reducer_->AttachHooksToParameters();
+    }
+}
+
+void DistributedDataParallel::RegisterForwardPreHooks() {
+    auto &model = modules_.at(kModuleName);
+    for (auto &module : model->modules()) {
+        std::unordered_set<ParamAndGradBucketGroup *> required_groups;
+        for (const auto &param : module->Parameters(/*recurse=*/false)) {
+            auto it = param_to_bucket_group_.find(param.get());
+            if (it != param_to_bucket_group_.end()) {
+                required_groups.insert(it->second.get());
+            }
+        }
+        if (required_groups.empty()) {
+            continue;
+        }
+
+        std::vector<std::weak_ptr<ParamAndGradBucketGroup>> ordered_groups;
+        for (auto it = bucket_groups_.rbegin(); it != bucket_groups_.rend(); ++it) {
+            if (required_groups.contains(it->get())) {
+                ordered_groups.emplace_back(*it);
+            }
+        }
+
+        module->RegisterForwardPreHook(
+            [groups = std::move(ordered_groups)](nn::Module *, const std::vector<std::shared_ptr<Tensor>> &) {
+                for (const auto &weak_group : groups) {
+                    if (auto group = weak_group.lock()) {
+                        group->FinishParamSync();
+                    }
+                }
+            });
     }
 }
 

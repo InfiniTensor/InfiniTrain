@@ -47,40 +47,40 @@ MLP::MLP(const TransformerConfig &config) : CloneableModule(kType) {
     CHECK_GT(ffn_hidden, 0);
 
     // c_fc: ColumnParallel (input full, output parallel)
-    modules_[kCFcLayerName] = std::make_shared<parallel::ColumnParallelLinear>(
-        /*in_features=*/config.n_embd, /*out_features=*/ffn_hidden,
-        /*bias=*/config.add_bias_linear,
-        /*gather_output=*/false,
-        /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false,
-        /*sequence_parallel=*/parallel::global::GetSequenceParallelEnabled());
+    RegisterModule(kCFcLayerName, std::make_shared<parallel::ColumnParallelLinear>(
+                                      /*in_features=*/config.n_embd, /*out_features=*/ffn_hidden,
+                                      /*bias=*/config.add_bias_linear,
+                                      /*gather_output=*/false,
+                                      /*input_is_parallel=*/false,
+                                      /*skip_bias_add=*/false,
+                                      /*sequence_parallel=*/parallel::global::GetSequenceParallelEnabled()));
 
     // For SwiGLU, add second projection
     if (config.activation_type == MLPType::kSwiGLU) {
-        modules_[kCFc2LayerName] = std::make_shared<nn::parallel::ColumnParallelLinear>(
-            /*in_features=*/config.n_embd, /*out_features=*/ffn_hidden,
-            /*bias=*/config.add_bias_linear,
-            /*gather_output=*/false,
-            /*input_is_parallel=*/false,
-            /*skip_bias_add=*/false,
-            /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+        RegisterModule(kCFc2LayerName, std::make_shared<nn::parallel::ColumnParallelLinear>(
+                                           /*in_features=*/config.n_embd, /*out_features=*/ffn_hidden,
+                                           /*bias=*/config.add_bias_linear,
+                                           /*gather_output=*/false,
+                                           /*input_is_parallel=*/false,
+                                           /*skip_bias_add=*/false,
+                                           /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled()));
     }
 
     // Activation: check for GELU or SwiGLU
     if (config.activation_type == MLPType::kGELU) {
-        modules_[kGeluLayerName] = std::make_shared<NewGELU>();
+        RegisterModule(kGeluLayerName, std::make_shared<NewGELU>());
     } else if (config.activation_type == MLPType::kSwiGLU) {
-        modules_[kSiluLayerName] = std::make_shared<SwiGLU>();
+        RegisterModule(kSiluLayerName, std::make_shared<SwiGLU>());
     }
 
     // c_proj: RowParallel (input parallel, output full)
-    modules_[kCProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(
-        /*in_features=*/ffn_hidden, /*out_features=*/config.n_embd,
-        /*bias=*/config.add_bias_linear,
-        /*reduce_output=*/true,
-        /*input_is_parallel=*/true,
-        /*skip_bias_add=*/false,
-        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+    RegisterModule(kCProjLayerName, std::make_shared<nn::parallel::RowParallelLinear>(
+                                        /*in_features=*/ffn_hidden, /*out_features=*/config.n_embd,
+                                        /*bias=*/config.add_bias_linear,
+                                        /*reduce_output=*/true,
+                                        /*input_is_parallel=*/true,
+                                        /*skip_bias_add=*/false,
+                                        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled()));
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>

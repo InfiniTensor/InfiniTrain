@@ -113,6 +113,9 @@ public:
     // Wait for parameter all-gather to complete
     void FinishParamSync(bool skip_next_bucket_dispatch = false);
 
+    // Drain any previous parameter all-gather before the optimizer writes the next parameter version.
+    void PrepareParamSyncForNextStep();
+
     // TODO(zbl): For PP, set the next bucket group used for parameter all-gather.
     void SetNextParamGatherBucketGroup(std::shared_ptr<ParamAndGradBucketGroup> next_group);
 

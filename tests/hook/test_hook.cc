@@ -75,4 +75,84 @@ TEST_P(HookTest, HookRemove) {
     EXPECT_EQ(hook3_count, 3);
 }
 
+TEST_P(HookTest, ModuleRegistriesPreserveInsertionOrder) {
+    auto module = std::make_shared<TestModule>();
+    auto first = std::make_shared<Tensor>(std::vector<int64_t>{1}, DataType::kFLOAT32, GetDevice());
+    auto second = std::make_shared<Tensor>(std::vector<int64_t>{1}, DataType::kFLOAT32, GetDevice());
+    auto replacement = std::make_shared<Tensor>(std::vector<int64_t>{1}, DataType::kFLOAT32, GetDevice());
+
+    module->RegisterParameter("first", first);
+    module->RegisterParameter("second", second);
+    module->RegisterParameter("first", replacement);
+    module->RegisterParameter("deferred", nullptr);
+
+    auto direct_params = module->Parameters(/*recurse=*/false);
+    ASSERT_EQ(direct_params.size(), 2);
+    EXPECT_EQ(direct_params[0], replacement);
+    EXPECT_EQ(direct_params[1], second);
+
+    auto child_10 = std::make_shared<TestModule>();
+    auto child_2 = std::make_shared<TestModule>();
+    auto child_1 = std::make_shared<TestModule>();
+    auto child_10_param = std::make_shared<Tensor>(std::vector<int64_t>{1}, DataType::kFLOAT32, GetDevice());
+    auto child_2_param = std::make_shared<Tensor>(std::vector<int64_t>{1}, DataType::kFLOAT32, GetDevice());
+    auto child_1_param = std::make_shared<Tensor>(std::vector<int64_t>{1}, DataType::kFLOAT32, GetDevice());
+    child_10->RegisterParameter("weight", child_10_param);
+    child_2->RegisterParameter("weight", child_2_param);
+    child_1->RegisterParameter("weight", child_1_param);
+    module->RegisterModule("10", child_10);
+    module->RegisterModule("2", child_2);
+    module->RegisterModule("1", child_1);
+
+    auto modules = module->modules();
+    ASSERT_EQ(modules.size(), 4);
+    EXPECT_EQ(modules[0], module);
+    EXPECT_EQ(modules[1], child_10);
+    EXPECT_EQ(modules[2], child_2);
+    EXPECT_EQ(modules[3], child_1);
+
+    auto recursive_params = module->Parameters();
+    ASSERT_EQ(recursive_params.size(), 5);
+    EXPECT_EQ(recursive_params[0], replacement);
+    EXPECT_EQ(recursive_params[1], second);
+    EXPECT_EQ(recursive_params[2], child_10_param);
+    EXPECT_EQ(recursive_params[3], child_2_param);
+    EXPECT_EQ(recursive_params[4], child_1_param);
+}
+
+TEST_P(HookTest, ModuleBuffersMatchPersistentStateDictSemantics) {
+    auto module = std::make_shared<TestModule>();
+    auto persistent = std::make_shared<Tensor>(std::vector<int64_t>{1}, DataType::kFLOAT32, GetDevice());
+    auto transient = std::make_shared<Tensor>(std::vector<int64_t>{1}, DataType::kFLOAT32, GetDevice());
+
+    module->RegisterBuffer("persistent", persistent);
+    module->RegisterBuffer("transient", transient, false);
+    module->RegisterBuffer("deferred", nullptr);
+
+    auto buffers = module->Buffers();
+    ASSERT_EQ(buffers.size(), 2);
+    EXPECT_EQ(buffers[0], persistent);
+    EXPECT_EQ(buffers[1], transient);
+
+    auto state = module->StateDict();
+    EXPECT_TRUE(state.contains("persistent"));
+    EXPECT_FALSE(state.contains("transient"));
+    EXPECT_FALSE(state.contains("deferred"));
+
+    module->RegisterBuffer("transient", transient, true);
+    EXPECT_TRUE(module->StateDict().contains("transient"));
+}
+
+TEST_P(HookTest, ModuleRegistriesRejectInvalidAndConflictingNames) {
+    auto module = std::make_shared<TestModule>();
+    auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{1}, DataType::kFLOAT32, GetDevice());
+
+    EXPECT_DEATH(module->RegisterParameter("", tensor), "cannot be empty");
+    EXPECT_DEATH(module->RegisterParameter("nested.weight", tensor), "cannot contain");
+
+    module->RegisterParameter("weight", tensor);
+    EXPECT_DEATH(module->RegisterBuffer("weight", tensor), "already used");
+    EXPECT_DEATH(module->RegisterModule("weight", std::make_shared<TestModule>()), "already used");
+}
+
 INFINI_TRAIN_REGISTER_TEST(HookTest);

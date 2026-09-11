@@ -14,12 +14,13 @@ Linear::Linear(int64_t in_features, int64_t out_features, bool bias, Device devi
     : CloneableModule(kType), bias_(bias) {
     device_ = device;
 
-    parameters_[kParamWeightName]
-        = std::make_shared<Tensor>(std::vector<int64_t>{out_features, in_features}, DataType::kFLOAT32, device_)
-              ->RequiresGrad();
+    RegisterParameter(kParamWeightName, std::make_shared<Tensor>(std::vector<int64_t>{out_features, in_features},
+                                                                 DataType::kFLOAT32, device_)
+                                            ->RequiresGrad());
     if (bias) {
-        parameters_[kParamBiasName]
-            = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, DataType::kFLOAT32, device_)->RequiresGrad();
+        RegisterParameter(
+            kParamBiasName,
+            std::make_shared<Tensor>(std::vector<int64_t>{out_features}, DataType::kFLOAT32, device_)->RequiresGrad());
     }
     ResetParameters();
 }

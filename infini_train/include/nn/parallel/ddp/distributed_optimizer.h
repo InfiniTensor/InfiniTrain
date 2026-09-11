@@ -56,6 +56,7 @@ private:
     // Inherit from DDP model
     std::vector<std::shared_ptr<ParamAndGradBuffer>> param_grad_buffers_;
     std::vector<std::shared_ptr<ParamAndGradBucketGroup>> bucket_groups_;
+    std::vector<std::shared_ptr<ParamAndGradBucketGroup>> first_param_sync_bucket_groups_;
 
     // DP info
     size_t ddp_world_size_;

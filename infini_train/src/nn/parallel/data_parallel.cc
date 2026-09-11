@@ -71,7 +71,7 @@ DataParallel::DataParallel(const std::shared_ptr<Module> &module, int dim, Devic
 
     module->To(src_device_);
 
-    modules_[kModuleName] = std::move(module);
+    RegisterModule(kModuleName, std::move(module));
 
     // TODO(dcj): implement check_balance for cuda devices later.
 

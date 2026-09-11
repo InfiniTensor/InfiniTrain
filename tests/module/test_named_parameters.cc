@@ -33,8 +33,8 @@ TEST_P(ModuleNamedParametersTest, SupportsRecursionAndSharedParameterDeduplicati
 
     const auto deduplicated = root->NamedParameters("model");
     ASSERT_EQ(deduplicated.size(), 2);
-    EXPECT_EQ(deduplicated[0].first, "model.0.bias");
-    EXPECT_EQ(deduplicated[1].first, "model.0.weight");
+    EXPECT_EQ(deduplicated[0].first, "model.0.weight");
+    EXPECT_EQ(deduplicated[1].first, "model.0.bias");
     std::unordered_set<const Tensor *> tensors;
     for (const auto &[name, parameter] : deduplicated) { tensors.insert(parameter.get()); }
     EXPECT_TRUE(tensors.contains(shared->parameter(nn::Linear::kParamWeightName).get()));

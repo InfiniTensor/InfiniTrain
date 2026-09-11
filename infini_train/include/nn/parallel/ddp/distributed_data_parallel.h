@@ -40,6 +40,7 @@ public:
 private:
     void BuildParamAndGradBuffers();
     void RegisterBackwardHooks();
+    void RegisterForwardPreHooks();
     void OnGradReady(const std::shared_ptr<Tensor> &param);
 
 private:
