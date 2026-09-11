@@ -153,9 +153,13 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
         int64_t start_pos = 0;
         auto freqs_view = buffers_[kFreqsCisName]->Slice(0, start_pos, start_pos + t, 1);
 
-        // Create causal mask
-        std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(device));
-        std::shared_ptr<Tensor> mask = nn::function::Triu(ones, 1)->View({1, 1, t, t});
+        // FlashAttention applies causal masking in the kernel. The explicit mask is retained for the unfused path
+        // and for callers that need custom mask semantics.
+        std::shared_ptr<Tensor> mask = nullptr;
+        if (!config_.flash) {
+            auto ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(device));
+            mask = nn::function::Triu(ones, 1)->View({1, 1, t, t});
+        }
 
         std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 
