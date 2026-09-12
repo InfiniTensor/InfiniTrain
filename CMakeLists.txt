@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 
 option(USE_CUDA "Support NVIDIA CUDA" OFF)
 option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
+option(NVTX_MODE "Emit NVTX ranges for nsys timeline analysis (requires USE_CUDA; adds no CUDA synchronization)" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
 option(USE_NCCL "Build project for distributed running on CUDA using NCCL" ON)
 option(BUILD_TEST "Build InfiniTrain tests" OFF)
@@ -65,6 +66,15 @@ if(PROFILE_MODE)
   add_compile_definitions(PROFILE_MODE=1)
 endif()
 
+if(NVTX_MODE)
+  if(NOT USE_CUDA)
+    message(FATAL_ERROR "NVTX_MODE=ON requires USE_CUDA=ON: <nvtx3/nvToolsExt.h> ships with the CUDA toolkit.")
+  endif()
+  # Unlike PROFILE_MODE this does not serialize the pipeline, so the two can be
+  # enabled independently; NVTX_MODE alone is the one to use for timing work.
+  add_compile_definitions(NVTX_MODE=1)
+endif()
+
 # ------------------------------------------------------------------------------
 # Sources
 # ------------------------------------------------------------------------------
@@ -104,9 +114,26 @@ endif()
 
 if(USE_CUDA)
   add_compile_definitions(USE_CUDA=1)
+
+  # Must be set before enable_language(CUDA): CMake's built-in default (52) is
+  # rejected by nvcc 13.x, whose minimum supported architecture is compute_75.
+  # 75=Turing, 80=Ampere, 90=Hopper, 120=Blackwell GeForce (RTX 50 series).
+  # Pass -DCMAKE_CUDA_ARCHITECTURES=120 for a faster build targeting one GPU.
+  if(NOT CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES "75;80;90;120")
+  endif()
+
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
   include_directories(${CUDAToolkit_INCLUDE_DIRS})
+
+  if(NVTX_MODE)
+    # nvtx3 is header-only and needs no library (libnvToolsExt.so was dropped in
+    # CUDA 13); the injection library is resolved by dlopen at runtime. Fail at
+    # configure time rather than halfway through compiling 24 CUDA sources.
+    find_path(NVTX3_INCLUDE_DIR nvtx3/nvToolsExt.h HINTS ${CUDAToolkit_INCLUDE_DIRS} REQUIRED)
+    message(STATUS "NVTX_MODE enabled, nvtx3 headers found in: ${NVTX3_INCLUDE_DIR}")
+  endif()
 
   # CUDA compilation options
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
@@ -115,13 +142,14 @@ if(USE_CUDA)
   file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
 
   add_library(infini_train_cuda_kernels STATIC ${CUDA_KERNELS})
-  set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "75;80;90")
+  set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}")
 
   target_link_libraries(infini_train_cuda_kernels
     PUBLIC
       glog
       CUDA::cudart
       CUDA::cublas
+      CUDA::cublasLt
       CUDA::cuda_driver
   )
 
@@ -162,6 +190,7 @@ if(USE_CUDA)
     PUBLIC
       CUDA::cudart
       CUDA::cublas
+      CUDA::cublasLt
       CUDA::cuda_driver
   )
 

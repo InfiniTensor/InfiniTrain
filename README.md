@@ -116,13 +116,19 @@ written to `data/` by default.
 
 # LLaMA 3.2 1B weights and tokenized TinyShakespeare data
 HF_TOKEN=hf_xxx ./scripts/assets/prepare-infinitrain-assets.sh llama3
+
+# Same flow through ModelScope
+MODEL_SOURCE=modelscope MODEL_REPO_ID=LLM-Research/Meta-Llama-3.2-1B \
+  ./scripts/assets/prepare-infinitrain-assets.sh llama3
 ```
 
 Preparing LLaMA requires access to the gated
 `meta-llama/Llama-3.2-1B` repository. Accept its license on Hugging Face and
 provide `HF_TOKEN`, or authenticate with `hf auth login`, before running the
-command. The complete LLaMA preparation requires approximately 8.5 GB of free
-disk space, including the downloaded checkpoint and converted FP32 weights.
+command. If the Hugging Face download is blocked, set `MODEL_SOURCE=modelscope`
+and optionally override `MODEL_REPO_ID` to the mirror you have access to.
+The complete LLaMA preparation requires approximately 8.5 GB of free disk
+space, including the downloaded checkpoint and converted FP32 weights.
 
 Use `DATA_DIR` to write the assets elsewhere, or prepare all supported assets
 in one invocation:

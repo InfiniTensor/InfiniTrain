@@ -38,8 +38,23 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 DATA_DIR="${DATA_DIR:-${REPO_ROOT}/data}"
 CACHE_DIR="${DATA_DIR}/.cache"
 PYTHON="${PYTHON:-python3}"
+PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}"
+PIP_EXTRA_INDEX_URL="${PIP_EXTRA_INDEX_URL:-}"
 FORCE="${FORCE:-0}"
 SKIP_LLAMA3_WEIGHTS="${SKIP_LLAMA3_WEIGHTS:-0}"
+MODEL_SOURCE="${MODEL_SOURCE:-huggingface}"
+MODEL_REPO_ID="${MODEL_REPO_ID:-meta-llama/Llama-3.2-1B}"
+
+if [[ "${MODEL_SOURCE}" == "modelscope" && -z "${MODEL_REPO_ID:-}" ]]; then
+  echo "ERROR: MODEL_SOURCE=modelscope requires MODEL_REPO_ID to point to a valid ModelScope repo." >&2
+  echo "The official Meta-Llama-3.2-1B repository is not publicly available on ModelScope." >&2
+  echo "Use Hugging Face with HF_TOKEN=hf_xxx, or set MODEL_REPO_ID to your own mirror/private repo." >&2
+  exit 2
+fi
+
+if [[ "${MODEL_SOURCE}" == "modelscope" ]]; then
+  MODEL_REPO_ID="${MODEL_REPO_ID}"
+fi
 
 GPT2_DIR="${DATA_DIR}/gpt2"
 LLAMA3_DIR="${DATA_DIR}/llama3"
@@ -129,19 +144,34 @@ ensure_llama_python() {
   fi
 
   if ! "${py}" - <<'PY' >/dev/null 2>&1
+import os
 import numpy
 import huggingface_hub
 import socksio
 import transformers
+if os.environ.get("MODEL_SOURCE", "huggingface") == "modelscope":
+    import modelscope
 PY
   then
     log "Installing LLaMA3 preparation dependencies into ${venv}"
-    "${py}" -m pip install --upgrade pip
-    "${py}" -m pip install \
+    "${py}" -m pip install --upgrade pip setuptools wheel
+    local pip_args=(
+      --index-url "${PIP_INDEX_URL}"
+    )
+    if [[ -n "${PIP_EXTRA_INDEX_URL}" ]]; then
+      pip_args+=(--extra-index-url "${PIP_EXTRA_INDEX_URL}")
+    fi
+    pip_args+=(
+      --trusted-host pypi.org
+      --trusted-host files.pythonhosted.org
+      --trusted-host mirrors.aliyun.com
+    )
+    "${py}" -m pip install "${pip_args[@]}" \
       "numpy>=1.24" \
       "huggingface_hub>=0.24" \
       "socksio>=1.0" \
-      "transformers>=4.43"
+      "transformers>=4.43" \
+      "modelscope>=1.18"
   fi
 
 }
@@ -162,7 +192,10 @@ prepare_llama3() {
   # the token saved by `hf auth login`.
   TINY_SHAKESPEARE_TXT="${tiny_txt}" \
   LLAMA3_OUTPUT_DIR="${LLAMA3_DIR}" \
-  LLAMA3_CACHE_DIR="${CACHE_DIR}/llama3-hf" \
+  LLAMA3_CACHE_DIR="${CACHE_DIR}/llama3-${MODEL_SOURCE}" \
+  MODEL_SOURCE="${MODEL_SOURCE}" \
+  MODEL_REPO_ID="${MODEL_REPO_ID}" \
+  HF_TOKEN="${HF_TOKEN:-}" \
   SKIP_LLAMA3_WEIGHTS="${SKIP_LLAMA3_WEIGHTS}" \
   FORCE="${FORCE}" \
   "${py}" "${SCRIPT_DIR}/prepare_llama3_assets.py"
