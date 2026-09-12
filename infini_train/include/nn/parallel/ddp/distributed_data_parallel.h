@@ -43,6 +43,8 @@ private:
     void OnGradReady(const std::shared_ptr<Tensor> &param);
 
 private:
+    void SynchronizeModuleState();
+
     std::shared_ptr<Reducer> reducer_ = nullptr;
 
     DistributedDataParallelConfig ddp_config_;
