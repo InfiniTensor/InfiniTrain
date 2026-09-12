@@ -2,6 +2,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <vector>
 
 #include "glog/logging.h"

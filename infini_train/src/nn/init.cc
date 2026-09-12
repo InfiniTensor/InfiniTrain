@@ -1,8 +1,14 @@
 #include "infini_train/include/nn/init.h"
 
+#include <cmath>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <numeric>
+#include <ostream>
+#include <random>
+#include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 

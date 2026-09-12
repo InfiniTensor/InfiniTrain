@@ -4,8 +4,6 @@
 #include <iostream>
 #include <memory>
 #include <optional>
-#include <random>
-
 #include <vector>
 
 #include "Eigen/Dense"
@@ -13,6 +11,7 @@
 
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
+// TODO: Reduce the Tensor header dependency on Generator.
 #include "infini_train/include/generator.h"
 #include "infini_train/include/scalar.h"
 
