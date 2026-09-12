@@ -7,6 +7,9 @@
 #include <numeric>
 #include <optional>
 #include <ostream>
+#include <random>
+#include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 

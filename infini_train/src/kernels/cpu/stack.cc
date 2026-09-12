@@ -5,7 +5,6 @@
 #include <functional>
 #include <memory>
 #include <numeric>
-#include <ostream>
 #include <vector>
 
 #include "glog/logging.h"
@@ -29,8 +28,6 @@ std::shared_ptr<Tensor> StackForward(
 
   for (const auto &input : inputs) {
     CHECK(input->Dims() == base_dims);
-    CHECK(input->Dtype() == DataType::kFLOAT32)
-        << "CPU StackForward only supports float32 inputs";
   }
 
   std::vector<int64_t> output_dims = base_dims;

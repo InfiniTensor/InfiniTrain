@@ -34,6 +34,7 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/generator.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/parallel/comm.h"
@@ -41,7 +42,6 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/nn/parallel/model_parallel_config.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
@@ -394,16 +394,12 @@ int main(int argc, char *argv[]) {
   CHECK_GT(FLAGS_virtual_pipeline_parallel, 0);
   CHECK_GT(FLAGS_expert_parallel, 0);
 
-  nn::parallel::ModelParallelConfig model_parallel_config;
-  model_parallel_config.tensor_model_parallel_size = FLAGS_tensor_parallel;
-  model_parallel_config.pipeline_model_parallel_size = FLAGS_pipeline_parallel;
-  model_parallel_config.virtual_pipeline_model_parallel_size =
-      FLAGS_virtual_pipeline_parallel;
-  model_parallel_config.expert_model_parallel_size = FLAGS_expert_parallel;
-  model_parallel_config.expert_tensor_parallel_size =
-      FLAGS_expert_tensor_parallel;
-  nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process,
-                                   model_parallel_config);
+  nn::parallel::global::InitAllEnv(
+      FLAGS_nthread_per_process, FLAGS_tensor_parallel,
+      /*sequence_parallel_enabled=*/false, FLAGS_pipeline_parallel,
+      FLAGS_virtual_pipeline_parallel, FLAGS_expert_parallel,
+      FLAGS_expert_tensor_parallel);
+  infini_train::ManualSeed(42);
 
   LOG(INFO) << nn::parallel::global::ProcessGroupOverview(
       nn::parallel::global::GetDenseRankGenerator(),

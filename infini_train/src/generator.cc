@@ -1,22 +1,27 @@
 #include "infini_train/include/generator.h"
+#include "infini_train/include/generator_impl.h"
 
+#include <memory>
 #include <ostream>
+#include <utility>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/core/runtime/generator_backend.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/tensor.h"
-#include "infini_train/src/core/runtime/cpu/cpu_generator_impl.h"
-
-#ifdef USE_CUDA
-#include "infini_train/src/core/runtime/cuda/cuda_generator_impl.h"
-#endif
 
 namespace infini_train {
 
 Generator::Generator(std::shared_ptr<GeneratorImpl> impl) : impl_(std::move(impl)) {
     CHECK(impl_) << "GeneratorImpl with nullptr is not supported";
 }
+
+void Generator::set_current_seed(uint64_t seed) const { impl_->set_current_seed(seed); }
+
+uint64_t Generator::current_seed() const { return impl_->current_seed(); }
+
+uint64_t Generator::Seed() { return impl_->Seed(); }
 
 void Generator::set_state(const Tensor &state) {
     CHECK(state.defined()) << "Undefined tensor is not allowed";
@@ -25,9 +30,13 @@ void Generator::set_state(const Tensor &state) {
 
 std::shared_ptr<Tensor> Generator::get_state() const { return impl_->get_state(); }
 
+Device Generator::device() const { return impl_->device(); }
+
+Generator Generator::Clone() const { return Generator(impl_->Clone()); }
+
 namespace detail {
 
-void check_rng_state(const Tensor &state) {
+void CheckRngState(const Tensor &state) {
     CHECK(state.GetDevice().IsCPU()) << "RNG state must be a CPU tensor";
     CHECK_EQ(static_cast<int>(state.Dtype()), static_cast<int>(DataType::kUINT8)) << "RNG state must be a UINT8 tensor";
 }
@@ -35,47 +44,13 @@ void check_rng_state(const Tensor &state) {
 } // namespace detail
 
 Generator CreateGenerator(const Device &device, uint64_t seed) {
-    if (device.IsCPU()) {
-        return core::cpu::createCPUGenerator(seed);
-    }
-
-#ifdef USE_CUDA
-    if (device.IsCUDA()) {
-        return core::cuda::createCUDAGenerator(device.index(), seed);
-    }
-#else
-    if (device.IsCUDA()) {
-        throw std::invalid_argument("CUDA generator requested but CUDA support is not enabled");
-    }
-#endif
-
-    throw std::invalid_argument("Generator can only be created for CPU or CUDA devices");
+    return GeneratorBackendRegistry::Instance().Get(device.type()).Create(device, seed);
 }
 
 const Generator &GetDefaultGenerator(const Device &device) {
-    if (device.IsCPU()) {
-        return core::cpu::getDefaultCPUGenerator();
-    }
-
-#ifdef USE_CUDA
-    if (device.IsCUDA()) {
-        return core::cuda::getDefaultCUDAGenerator(device.index());
-    }
-#else
-    if (device.IsCUDA()) {
-        throw std::invalid_argument("CUDA default generator requested but CUDA support is not enabled");
-    }
-#endif
-
-    throw std::invalid_argument("Default generator can only be requested for CPU or CUDA devices");
+    return GeneratorBackendRegistry::Instance().Get(device.type()).GetDefault(device);
 }
 
-void manual_seed(uint64_t seed) {
-    core::cpu::manual_seed(seed);
-
-#ifdef USE_CUDA
-    core::cuda::manual_seed_all(seed);
-#endif
-}
+void ManualSeed(uint64_t seed) { GeneratorBackendRegistry::Instance().ManualSeedAll(seed); }
 
 } // namespace infini_train

@@ -39,12 +39,10 @@ DistributedDataParallel::DistributedDataParallel(
     LOG(FATAL) << "DistributedDataParallel: ZeRO-3 is not implemented yet.";
   }
   auto *process_group_factory = ProcessGroupFactory::Instance();
-  const auto dense_dp_ranks =
-      GetDataParallelWithContextGroupRanks(rank.GlobalRank());
+  const auto dense_dp_ranks = GetDataParallelGroupRanks(rank.GlobalRank());
   if (dense_dp_ranks.size() > 1) {
     dense_dp_pg_ = process_group_factory->GetOrCreate(
-        GetDataParallelWithContextProcessGroupName(rank.GlobalRank()),
-        dense_dp_ranks);
+        GetDataParallelProcessGroupName(rank.GlobalRank()), dense_dp_ranks);
   }
   const auto expert_dp_ranks =
       GetExpertDataParallelGroupRanks(rank.GlobalRank());
@@ -187,8 +185,7 @@ const ProcessGroup *DistributedDataParallel::ProcessGroupForParameter(
 
 float DistributedDataParallel::GradientScalingFactorForParameter(
     bool is_expert_parallel) const {
-  const float dense_dp_size = static_cast<float>(
-      global::GetDataParallelSize() * global::GetContextParallelSize());
+  const float dense_dp_size = static_cast<float>(global::GetDataParallelSize());
   CHECK_GT(dense_dp_size, 0.f);
   if (!ddp_config_.average_in_collective) {
     return 1.f / dense_dp_size;

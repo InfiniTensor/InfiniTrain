@@ -2,7 +2,11 @@
 
 #include <cstdint>
 #include <memory>
+#include <ostream>
+#include <utility>
 #include <vector>
+
+#include "glog/logging.h"
 
 #include "infini_train/include/autograd/activations.h"
 #include "infini_train/include/autograd/dropout.h"

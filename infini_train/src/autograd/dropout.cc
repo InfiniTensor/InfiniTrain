@@ -1,9 +1,12 @@
 #include "infini_train/include/autograd/dropout.h"
 
+#include <memory>
 #include <tuple>
+#include <vector>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 

@@ -147,7 +147,7 @@ void Tokenizer::GenerateText(infini_train::nn::Module &model,
   std::cout << "The meaning of life is";
 
   auto x = std::make_shared<infini_train::Tensor>(x_tensor.To(device));
-  uint64_t rng_state = kRngState;
+  uint64_t kRngState = kRngState;
   LOG(INFO) << "start generate text:";
 
   auto cpu_device = Device();
@@ -161,7 +161,7 @@ void Tokenizer::GenerateText(infini_train::nn::Module &model,
     auto data = logits_cpu.DataPtr();
     auto vocab_size = logits->Dims()[2];
     float *probs = static_cast<float *>(data) + (t - 1) * vocab_size;
-    float coin = RandomF32(rng_state);
+    float coin = RandomF32(kRngState);
     int next_token = SampleMult(probs, vocab_size, coin);
 
     x = std::make_shared<infini_train::Tensor>(
