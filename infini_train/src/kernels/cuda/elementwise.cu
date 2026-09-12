@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <numeric>
 
 #include <cub/warp/warp_reduce.cuh>
 

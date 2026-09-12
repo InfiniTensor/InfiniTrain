@@ -6,6 +6,8 @@
 #include <random>
 
 #include "infini_train/include/generator.h"
+#include "infini_train/include/generator_impl.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::core::cpu {
 
@@ -17,16 +19,14 @@ public:
 
     void set_current_seed(uint64_t seed) override;
     uint64_t current_seed() const override;
-    uint64_t seed() override;
+    uint64_t Seed() override;
     void set_state(const Tensor &state) override;
     std::shared_ptr<Tensor> get_state() const override;
 
-    std::shared_ptr<CPUGeneratorImpl> clone() const;
+    std::shared_ptr<CPUGeneratorImpl> Clone() const;
 
-    static Device::DeviceType device_type();
-
-    uint32_t random();
-    uint64_t random64();
+    uint32_t Random();
+    uint64_t Random64();
 
     std::optional<float> next_float_normal_sample() const;
     std::optional<double> next_double_normal_sample() const;
@@ -34,7 +34,7 @@ public:
     void set_next_double_normal_sample(std::optional<double> randn);
 
 private:
-    CPUGeneratorImpl *clone_impl() const override;
+    CPUGeneratorImpl *CloneImpl() const override;
 
     std::mt19937 engine() const { return engine_; }
     void set_engine(std::mt19937 engine);
@@ -45,8 +45,8 @@ private:
     std::optional<double> next_double_normal_sample_;
 };
 
-const Generator &getDefaultCPUGenerator();
-Generator createCPUGenerator(uint64_t seed);
-void manual_seed(uint64_t seed);
+const Generator &GetDefaultCpuGenerator();
+Generator CreateCpuGenerator(uint64_t seed);
+void ManualSeed(uint64_t seed);
 
 } // namespace infini_train::core::cpu

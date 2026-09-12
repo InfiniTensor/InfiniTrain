@@ -13,6 +13,7 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/generator.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/parallel/global.h"
@@ -69,6 +70,7 @@ int main(int argc, char *argv[]) {
         /*sequence_parallel_enabled=*/false,
         /*pipeline_parallel_size=*/1,
         /*virtual_pipeline_parallel_size=*/1);
+    infini_train::ManualSeed(42);
 
     infini_train::nn::TransformerConfig model_config = mixtral::TinyMixtralConfig();
     mixtral::SanitizeTinyMixtralConfig(model_config);

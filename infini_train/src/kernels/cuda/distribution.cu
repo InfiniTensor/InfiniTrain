@@ -13,6 +13,7 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/generator.h"
+#include "infini_train/include/generator_impl.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/src/core/runtime/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/runtime/cuda/cuda_generator_impl.h"
@@ -22,42 +23,59 @@ namespace infini_train::kernels::cuda {
 namespace {
 
 constexpr int kThreadsPerBlock = 256;
+constexpr int kMaxUniformAttempts = 3;
 
-template <typename random_t> __device__ random_t uniform_sample(curandStatePhilox4_32_10_t *state) {
-    if constexpr (std::is_same_v<random_t, double>) {
-        return 1.0 - curand_uniform_double(state);
+template <typename RandomT> __device__ RandomT UniformSample(curandStatePhilox4_32_10_t *state) {
+    if constexpr (std::is_same_v<RandomT, double>) {
+        double sample;
+        do {
+            const double2 values = curand_uniform2_double(state);
+            sample = 1.0 - values.x;
+            // Subtraction can round a tiny positive draw to 1.0.
+        } while (sample >= 1.0);
+        return sample;
     } else {
         return static_cast<float>(curand(state)) * 0x1p-32f;
     }
 }
 
-template <typename random_t> __device__ random_t normal_sample(curandStatePhilox4_32_10_t *state) {
-    if constexpr (std::is_same_v<random_t, double>) {
+template <typename RandomT> __device__ RandomT NormalSample(curandStatePhilox4_32_10_t *state) {
+    if constexpr (std::is_same_v<RandomT, double>) {
         return curand_normal_double(state);
     } else {
         return curand_normal(state);
     }
 }
 
-template <typename storage_t, typename random_t>
-__global__ void UniformKernel(storage_t *data, int64_t n, random_t from, random_t to, uint64_t seed,
-                              uint64_t subsequence) {
+template <typename StorageT, typename RandomT>
+__global__ void UniformKernel(StorageT *data, int64_t n, double from, double to, uint64_t seed, uint64_t subsequence) {
     const int64_t index = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
     if (index >= n) {
         return;
     }
 
+    const StorageT from_value = common::cuda::Cast<StorageT>(from);
+    if (from == to) {
+        data[index] = from_value;
+        return;
+    }
     curandStatePhilox4_32_10_t state;
     curand_init(seed, subsequence + static_cast<uint64_t>(index), 0, &state);
-    const storage_t from_value = common::cuda::Cast<storage_t>(from);
-    const storage_t to_value = common::cuda::Cast<storage_t>(to);
-    const storage_t value = common::cuda::Cast<storage_t>(from + uniform_sample<random_t>(&state) * (to - from));
-    // [from, to) is half-open: a sample landing exactly on `to` is mapped back to `from`.
-    data[index] = common::cuda::Cast<random_t>(value) == common::cuda::Cast<random_t>(to_value) ? from_value : value;
+    const RandomT sample_from = static_cast<RandomT>(from);
+    const RandomT sample_to = static_cast<RandomT>(to);
+    StorageT value;
+    int attempt = 0;
+    do {
+        value = common::cuda::Cast<StorageT>(sample_from + UniformSample<RandomT>(&state) * (sample_to - sample_from));
+        ++attempt;
+    } while (attempt < kMaxUniformAttempts
+             && (common::cuda::Cast<double>(value) < from || common::cuda::Cast<double>(value) >= to));
+    // Bounded retries may still leave out-of-range values in very narrow intervals.
+    data[index] = common::cuda::Cast<double>(value) == to ? from_value : value;
 }
 
-template <typename storage_t, typename random_t>
-__global__ void NormalKernel(storage_t *data, int64_t n, random_t mean, random_t std, uint64_t seed,
+template <typename StorageT, typename RandomT>
+__global__ void NormalKernel(StorageT *data, int64_t n, RandomT mean, RandomT std, uint64_t seed,
                              uint64_t subsequence) {
     const int64_t index = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
     if (index >= n) {
@@ -66,10 +84,10 @@ __global__ void NormalKernel(storage_t *data, int64_t n, random_t mean, random_t
 
     curandStatePhilox4_32_10_t state;
     curand_init(seed, subsequence + static_cast<uint64_t>(index), 0, &state);
-    data[index] = common::cuda::Cast<storage_t>(mean + normal_sample<random_t>(&state) * std);
+    data[index] = common::cuda::Cast<StorageT>(mean + NormalSample<RandomT>(&state) * std);
 }
 
-const core::cuda::CudaStream *get_cuda_stream(const Device &device) {
+const core::cuda::CudaStream *GetCudaStream(const Device &device) {
     return dynamic_cast<const core::cuda::CudaStream *>(core::GetDeviceGuardImpl(device.type())->GetStream(device));
 }
 
@@ -83,26 +101,25 @@ void Uniform(const std::shared_ptr<Tensor> tensor, double from, double to, const
         return;
     }
     core::DeviceGuard guard(device);
-    auto *cuda_generator = get_generator_or_default<core::cuda::CUDAGeneratorImpl>(
-        gen, core::cuda::getDefaultCUDAGenerator(device.index()));
+    auto &cuda_generator = GetGeneratorOrDefault<core::cuda::CUDAGeneratorImpl>(
+        gen, core::cuda::GetDefaultCudaGenerator(device.index()), device);
 
     uint64_t seed = 0;
     uint64_t subsequence = 0;
-    {
-        std::lock_guard<std::mutex> lock(cuda_generator->mutex_);
-        seed = cuda_generator->current_seed();
-        subsequence = cuda_generator->philox_subsequence(static_cast<uint64_t>(n));
+    if (from != to) {
+        std::lock_guard<std::mutex> lock(cuda_generator.mutex_);
+        seed = cuda_generator.current_seed();
+        subsequence = cuda_generator.ReservePhiloxSubsequence(static_cast<uint64_t>(n));
     }
 
     const int blocks = static_cast<int>((n + kThreadsPerBlock - 1) / kThreadsPerBlock);
-    const auto *stream = get_cuda_stream(device);
+    const auto *stream = GetCudaStream(device);
     core::cuda::DispatchCudaFunc<DataType::kFLOAT16, DataType::kBFLOAT16, DataType::kFLOAT32, DataType::kFLOAT64>(
         tensor->Dtype(),
-        [&]<typename storage_t>() {
-            using random_t = std::conditional_t<std::is_same_v<storage_t, double>, double, float>;
-            UniformKernel<storage_t, random_t><<<blocks, kThreadsPerBlock, 0, stream->cuda_stream()>>>(
-                static_cast<storage_t *>(tensor->DataPtr()), n, static_cast<random_t>(from), static_cast<random_t>(to),
-                seed, subsequence);
+        [&]<typename StorageT>() {
+            using RandomT = std::conditional_t<std::is_same_v<StorageT, double>, double, float>;
+            UniformKernel<StorageT, RandomT><<<blocks, kThreadsPerBlock, 0, stream->cuda_stream()>>>(
+                static_cast<StorageT *>(tensor->DataPtr()), n, from, to, seed, subsequence);
         },
         "CUDA uniform");
     CUDA_CHECK(cudaGetLastError());
@@ -116,25 +133,25 @@ void Normal(const std::shared_ptr<Tensor> tensor, double mean, double std, const
         return;
     }
     core::DeviceGuard guard(device);
-    auto *cuda_generator = get_generator_or_default<core::cuda::CUDAGeneratorImpl>(
-        gen, core::cuda::getDefaultCUDAGenerator(device.index()));
+    auto &cuda_generator = GetGeneratorOrDefault<core::cuda::CUDAGeneratorImpl>(
+        gen, core::cuda::GetDefaultCudaGenerator(device.index()), device);
 
     uint64_t seed = 0;
     uint64_t subsequence = 0;
     {
-        std::lock_guard<std::mutex> lock(cuda_generator->mutex_);
-        seed = cuda_generator->current_seed();
-        subsequence = cuda_generator->philox_subsequence(static_cast<uint64_t>(n));
+        std::lock_guard<std::mutex> lock(cuda_generator.mutex_);
+        seed = cuda_generator.current_seed();
+        subsequence = cuda_generator.ReservePhiloxSubsequence(static_cast<uint64_t>(n));
     }
 
     const int blocks = static_cast<int>((n + kThreadsPerBlock - 1) / kThreadsPerBlock);
-    const auto *stream = get_cuda_stream(device);
+    const auto *stream = GetCudaStream(device);
     core::cuda::DispatchCudaFunc<DataType::kFLOAT16, DataType::kBFLOAT16, DataType::kFLOAT32, DataType::kFLOAT64>(
         tensor->Dtype(),
-        [&]<typename storage_t>() {
-            using random_t = std::conditional_t<std::is_same_v<storage_t, double>, double, float>;
-            NormalKernel<storage_t, random_t><<<blocks, kThreadsPerBlock, 0, stream->cuda_stream()>>>(
-                static_cast<storage_t *>(tensor->DataPtr()), n, static_cast<random_t>(mean), static_cast<random_t>(std),
+        [&]<typename StorageT>() {
+            using RandomT = std::conditional_t<std::is_same_v<StorageT, double>, double, float>;
+            NormalKernel<StorageT, RandomT><<<blocks, kThreadsPerBlock, 0, stream->cuda_stream()>>>(
+                static_cast<StorageT *>(tensor->DataPtr()), n, static_cast<RandomT>(mean), static_cast<RandomT>(std),
                 seed, subsequence);
         },
         "CUDA normal");

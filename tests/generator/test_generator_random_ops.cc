@@ -1,5 +1,7 @@
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -14,26 +16,13 @@
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/tensor.h"
 
+#include "infini_train/include/device.h"
 #include "tests/common/test_utils.h"
 
 using namespace infini_train;
+using infini_train::test::TensorBytes;
 
 namespace {
-
-std::shared_ptr<Tensor> CopyToCPU(const std::shared_ptr<Tensor> &tensor) {
-    auto host = std::make_shared<Tensor>(tensor->Dims(), tensor->Dtype(), Device());
-    host->CopyFrom(tensor);
-    if (tensor->GetDevice().IsCUDA()) {
-        core::GetDeviceGuardImpl(tensor->GetDevice().type())->SynchronizeDevice(tensor->GetDevice());
-    }
-    return host;
-}
-
-std::vector<uint8_t> TensorBytes(const std::shared_ptr<Tensor> &tensor) {
-    const auto host = CopyToCPU(tensor);
-    const auto *data = static_cast<const uint8_t *>(host->DataPtr());
-    return {data, data + host->SizeInBytes()};
-}
 
 template <typename T> void ExpectUniformRangeAndFinite(const Tensor &tensor) {
     const auto *data = static_cast<const T *>(tensor.DataPtr());
@@ -53,19 +42,21 @@ template <typename T> void ExpectFinite(const Tensor &tensor) {
 }
 
 void CheckUniformRangeAndFinite(const std::shared_ptr<Tensor> &tensor) {
-    const auto host = CopyToCPU(tensor);
-    switch (host->Dtype()) {
+    const Tensor host = tensor->To(Device());
+    const Device source_device = tensor->GetDevice();
+    core::GetDeviceGuardImpl(source_device.type())->SynchronizeDevice(source_device);
+    switch (host.Dtype()) {
     case DataType::kFLOAT16:
-        ExpectUniformRangeAndFinite<FP16>(*host);
+        ExpectUniformRangeAndFinite<FP16>(host);
         break;
     case DataType::kBFLOAT16:
-        ExpectUniformRangeAndFinite<BF16>(*host);
+        ExpectUniformRangeAndFinite<BF16>(host);
         break;
     case DataType::kFLOAT32:
-        ExpectUniformRangeAndFinite<float>(*host);
+        ExpectUniformRangeAndFinite<float>(host);
         break;
     case DataType::kFLOAT64:
-        ExpectUniformRangeAndFinite<double>(*host);
+        ExpectUniformRangeAndFinite<double>(host);
         break;
     default:
         FAIL() << "Unexpected dtype";
@@ -73,19 +64,21 @@ void CheckUniformRangeAndFinite(const std::shared_ptr<Tensor> &tensor) {
 }
 
 void CheckFinite(const std::shared_ptr<Tensor> &tensor) {
-    const auto host = CopyToCPU(tensor);
-    switch (host->Dtype()) {
+    const Tensor host = tensor->To(Device());
+    const Device source_device = tensor->GetDevice();
+    core::GetDeviceGuardImpl(source_device.type())->SynchronizeDevice(source_device);
+    switch (host.Dtype()) {
     case DataType::kFLOAT16:
-        ExpectFinite<FP16>(*host);
+        ExpectFinite<FP16>(host);
         break;
     case DataType::kBFLOAT16:
-        ExpectFinite<BF16>(*host);
+        ExpectFinite<BF16>(host);
         break;
     case DataType::kFLOAT32:
-        ExpectFinite<float>(*host);
+        ExpectFinite<float>(host);
         break;
     case DataType::kFLOAT64:
-        ExpectFinite<double>(*host);
+        ExpectFinite<double>(host);
         break;
     default:
         FAIL() << "Unexpected dtype";
@@ -105,11 +98,13 @@ std::vector<std::vector<uint8_t>> RunRandomScript(const Device &device, std::opt
 
 void ExpectMaskValues(const std::shared_ptr<Tensor> &mask) {
     EXPECT_EQ(mask->Dtype(), DataType::kUINT8);
-    const auto host = CopyToCPU(mask);
-    const auto *data = static_cast<const uint8_t *>(host->DataPtr());
+    const Tensor host = mask->To(Device());
+    const Device source_device = mask->GetDevice();
+    core::GetDeviceGuardImpl(source_device.type())->SynchronizeDevice(source_device);
+    const auto *data = static_cast<const uint8_t *>(host.DataPtr());
     bool saw_zero = false;
     bool saw_one = false;
-    for (int64_t index = 0; index < host->NumElements(); ++index) {
+    for (int64_t index = 0; index < host.NumElements(); ++index) {
         EXPECT_TRUE(data[index] == 0 || data[index] == 1);
         saw_zero |= data[index] == 0;
         saw_one |= data[index] == 1;
@@ -130,20 +125,25 @@ template <typename T> void ExpectUnitInputDropoutValues(const Tensor &output, co
 
 void ExpectUnitInputDropoutValues(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &mask,
                                   double p) {
-    const auto host_output = CopyToCPU(output);
-    const auto host_mask = CopyToCPU(mask);
-    switch (host_output->Dtype()) {
+    const Tensor host_output = output->To(Device());
+    const Tensor host_mask = mask->To(Device());
+    // Each async D2H copy must complete before its host buffer is read.
+    const Device output_device = output->GetDevice();
+    core::GetDeviceGuardImpl(output_device.type())->SynchronizeDevice(output_device);
+    const Device mask_source_device = mask->GetDevice();
+    core::GetDeviceGuardImpl(mask_source_device.type())->SynchronizeDevice(mask_source_device);
+    switch (host_output.Dtype()) {
     case DataType::kFLOAT16:
-        ExpectUnitInputDropoutValues<FP16>(*host_output, *host_mask, p);
+        ExpectUnitInputDropoutValues<FP16>(host_output, host_mask, p);
         break;
     case DataType::kBFLOAT16:
-        ExpectUnitInputDropoutValues<BF16>(*host_output, *host_mask, p);
+        ExpectUnitInputDropoutValues<BF16>(host_output, host_mask, p);
         break;
     case DataType::kFLOAT32:
-        ExpectUnitInputDropoutValues<float>(*host_output, *host_mask, p);
+        ExpectUnitInputDropoutValues<float>(host_output, host_mask, p);
         break;
     case DataType::kFLOAT64:
-        ExpectUnitInputDropoutValues<double>(*host_output, *host_mask, p);
+        ExpectUnitInputDropoutValues<double>(host_output, host_mask, p);
         break;
     default:
         FAIL() << "Unexpected dtype";
@@ -174,6 +174,46 @@ TEST_P(GeneratorRandomOpsTest, RandAndRandnSupportAllFloatingDtypes) {
     }
 }
 
+TEST_P(GeneratorRandomOpsTest, UniformConstantDoesNotAdvanceGenerator) {
+    const Device device = GetDevice();
+    for (const auto dtype : {DataType::kFLOAT16, DataType::kBFLOAT16, DataType::kFLOAT32, DataType::kFLOAT64}) {
+        SCOPED_TRACE(static_cast<int>(dtype));
+        auto generator = CreateGenerator(device, 2101);
+        nn::function::Rand({11}, dtype, device, generator);
+        const auto state_before = TensorBytes(generator.get_state());
+        auto replay = generator.Clone();
+        auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{257}, dtype, device);
+        auto expected = std::make_shared<Tensor>(tensor->Dims(), dtype, Device());
+        expected->Fill(0.1f);
+
+        nn::init::Uniform(tensor, 0.1f, 0.1f, generator);
+
+        EXPECT_EQ(TensorBytes(tensor), TensorBytes(expected));
+        EXPECT_EQ(TensorBytes(generator.get_state()), state_before);
+        EXPECT_EQ(TensorBytes(nn::function::Rand({129}, dtype, device, generator)),
+                  TensorBytes(nn::function::Rand({129}, dtype, device, replay)));
+    }
+}
+
+TEST_P(GeneratorRandomOpsTest, UniformEmptyTensorDoesNotAdvanceGenerator) {
+    const Device device = GetDevice();
+    for (const auto dtype : {DataType::kFLOAT16, DataType::kBFLOAT16, DataType::kFLOAT32, DataType::kFLOAT64}) {
+        SCOPED_TRACE(static_cast<int>(dtype));
+        auto generator = CreateGenerator(device, 2102);
+        nn::function::Rand({11}, dtype, device, generator);
+        const auto state_before = TensorBytes(generator.get_state());
+        auto replay = generator.Clone();
+        auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 0, 3}, dtype, device);
+
+        nn::init::Uniform(tensor, -2.0f, 3.0f, generator);
+
+        EXPECT_EQ(tensor->NumElements(), 0);
+        EXPECT_EQ(TensorBytes(generator.get_state()), state_before);
+        EXPECT_EQ(TensorBytes(nn::function::Rand({129}, dtype, device, generator)),
+                  TensorBytes(nn::function::Rand({129}, dtype, device, replay)));
+    }
+}
+
 TEST_P(GeneratorRandomOpsTest, DropoutSupportsAllFloatingDtypesWithExplicitGenerator) {
     const std::vector<DataType> dtypes
         = {DataType::kFLOAT16, DataType::kBFLOAT16, DataType::kFLOAT32, DataType::kFLOAT64};
@@ -181,7 +221,7 @@ TEST_P(GeneratorRandomOpsTest, DropoutSupportsAllFloatingDtypesWithExplicitGener
 
     for (const auto dtype : dtypes) {
         auto input = nn::function::Rand({4097}, dtype, device, CreateGenerator(device, 3003));
-        manual_seed(4004);
+        ManualSeed(4004);
         const auto default_state_before = TensorBytes(GetDefaultGenerator(device).get_state());
 
         auto dropout_first = CreateGenerator(device, 5005);
@@ -209,19 +249,19 @@ TEST_P(GeneratorRandomOpsTest, SameSeedReplaysRandRandnAndDropoutScript) {
 TEST_P(GeneratorRandomOpsTest, DefaultGeneratorReplaysRandRandnAndDropoutScript) {
     const Device device = GetDevice();
 
-    manual_seed(7001);
+    ManualSeed(7001);
     const auto expected = RunRandomScript(device, std::nullopt);
-    manual_seed(7001);
+    ManualSeed(7001);
     EXPECT_EQ(expected, RunRandomScript(device, std::nullopt));
 
-    manual_seed(7001);
-    Generator undefined;
+    ManualSeed(7001);
+    std::optional<Generator> undefined = std::nullopt;
     EXPECT_EQ(expected, RunRandomScript(device, undefined));
 }
 
 TEST_P(GeneratorRandomOpsTest, ExplicitRandomGeneratorsDoNotAdvanceDefaultGenerator) {
     const Device device = GetDevice();
-    manual_seed(7101);
+    ManualSeed(7101);
     const auto default_state_before = TensorBytes(GetDefaultGenerator(device).get_state());
 
     RunRandomScript(device, CreateGenerator(device, 7102));
@@ -241,8 +281,10 @@ TEST_P(GeneratorRandomOpsTest, OffsetViewsUseTheirOwnDataPointers) {
     auto uniform_view = std::make_shared<Tensor>(*storage, kOffsetBytes, std::vector<int64_t>{kViewElements});
     nn::init::Uniform(uniform_view, 0.0f, 1.0f, CreateGenerator(device, 7201));
 
-    const auto uniform_storage = CopyToCPU(storage);
-    const auto *uniform_data = static_cast<const float *>(uniform_storage->DataPtr());
+    const Tensor uniform_storage = storage->To(Device());
+    const Device storage_device = storage->GetDevice();
+    core::GetDeviceGuardImpl(storage_device.type())->SynchronizeDevice(storage_device);
+    const auto *uniform_data = static_cast<const float *>(uniform_storage.DataPtr());
     for (int64_t index = 0; index < kOffsetElements; ++index) { EXPECT_FLOAT_EQ(uniform_data[index], -1.0f); }
     for (int64_t index = kOffsetElements; index < kOffsetElements + kViewElements; ++index) {
         EXPECT_GE(uniform_data[index], 0.0f);
@@ -257,14 +299,18 @@ TEST_P(GeneratorRandomOpsTest, OffsetViewsUseTheirOwnDataPointers) {
     auto input_view = std::make_shared<Tensor>(*input_storage, kOffsetBytes, std::vector<int64_t>{kViewElements});
     input_view->Fill(1.0f);
     const auto output = nn::function::Dropout(input_view, 0.5, true, CreateGenerator(device, 7202));
-    const auto host_output = CopyToCPU(output);
-    const auto *output_data = static_cast<const float *>(host_output->DataPtr());
+    const Tensor host_output = output->To(Device());
+    const Device output_device = output->GetDevice();
+    core::GetDeviceGuardImpl(output_device.type())->SynchronizeDevice(output_device);
+    const auto *output_data = static_cast<const float *>(host_output.DataPtr());
     for (int64_t index = 0; index < kViewElements; ++index) {
         EXPECT_TRUE(output_data[index] == 0.0f || std::abs(output_data[index] - 2.0f) < 1e-6f);
     }
 
-    const auto input_storage_host = CopyToCPU(input_storage);
-    const auto *input_storage_data = static_cast<const float *>(input_storage_host->DataPtr());
+    const Tensor input_storage_host = input_storage->To(Device());
+    const Device input_storage_device = input_storage->GetDevice();
+    core::GetDeviceGuardImpl(input_storage_device.type())->SynchronizeDevice(input_storage_device);
+    const auto *input_storage_data = static_cast<const float *>(input_storage_host.DataPtr());
     for (int64_t index = 0; index < kOffsetElements; ++index) { EXPECT_FLOAT_EQ(input_storage_data[index], -3.0f); }
     for (int64_t index = kOffsetElements + kViewElements; index < kStorageElements; ++index) {
         EXPECT_FLOAT_EQ(input_storage_data[index], -3.0f);

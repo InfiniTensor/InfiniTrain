@@ -6,65 +6,78 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/common/cpu/distributions_helper.h"
 #include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/generator.h"
+#include "infini_train/include/generator_impl.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/src/core/runtime/cpu/cpu_dispatch.h"
 #include "infini_train/src/core/runtime/cpu/cpu_generator_impl.h"
+#include "infini_train/src/kernels/cpu/distributions_helper.h"
 
 namespace infini_train::kernels::cpu {
 namespace {
 
-template <typename storage_t, typename random_t>
+constexpr int kMaxUniformAttempts = 3;
+
+template <typename StorageT, typename RandomT>
 void UniformImpl(Tensor &tensor, double from, double to, core::cpu::CPUGeneratorImpl *generator) {
-    auto *buf = static_cast<storage_t *>(tensor.DataPtr());
-    common::cpu::uniform_real_distribution<random_t> dist(static_cast<random_t>(from), static_cast<random_t>(to));
-    const storage_t from_value = static_cast<storage_t>(from);
-    const random_t to_value = static_cast<random_t>(static_cast<storage_t>(to));
+    auto *buf = static_cast<StorageT *>(tensor.DataPtr());
+    common::cpu::UniformRealDistribution<RandomT> dist(static_cast<RandomT>(from), static_cast<RandomT>(to));
+    const StorageT from_value = static_cast<StorageT>(from);
+    if (from == to) {
+        for (int64_t i = 0; i < tensor.NumElements(); ++i) { buf[i] = from_value; }
+        return;
+    }
     for (int64_t i = 0; i < tensor.NumElements(); ++i) {
-        const storage_t value = static_cast<storage_t>(dist(generator));
-        // [from, to) is half-open: a sample landing exactly on `to` is mapped back to `from`.
-        buf[i] = static_cast<random_t>(value) == to_value ? from_value : value;
+        StorageT value;
+        int attempt = 0;
+        do {
+            value = static_cast<StorageT>(dist(generator));
+            ++attempt;
+        } while (attempt < kMaxUniformAttempts
+                 && (static_cast<double>(value) < from || static_cast<double>(value) >= to));
+        // Bounded retries may still leave out-of-range values in very narrow intervals.
+        buf[i] = static_cast<double>(value) == to ? from_value : value;
     }
 }
 
-template <typename storage_t, typename random_t>
+template <typename StorageT, typename RandomT>
 void NormalImpl(Tensor &tensor, double mean, double std, core::cpu::CPUGeneratorImpl *generator) {
-    auto *buf = static_cast<storage_t *>(tensor.DataPtr());
-    common::cpu::normal_distribution<random_t> dist(static_cast<random_t>(mean), static_cast<random_t>(std));
-    for (int64_t i = 0; i < tensor.NumElements(); ++i) { buf[i] = static_cast<storage_t>(dist(generator)); }
+    auto *buf = static_cast<StorageT *>(tensor.DataPtr());
+    common::cpu::NormalDistribution<RandomT> dist(static_cast<RandomT>(mean), static_cast<RandomT>(std));
+    for (int64_t i = 0; i < tensor.NumElements(); ++i) { buf[i] = static_cast<StorageT>(dist(generator)); }
 }
 
 } // namespace
 
 void Uniform(const std::shared_ptr<Tensor> tensor, double from, double to, const std::optional<Generator> gen) {
     CHECK(tensor->GetDevice().IsCPU());
-    auto *cpu_generator
-        = get_generator_or_default<core::cpu::CPUGeneratorImpl>(gen, core::cpu::getDefaultCPUGenerator());
+    auto &cpu_generator = GetGeneratorOrDefault<core::cpu::CPUGeneratorImpl>(gen, core::cpu::GetDefaultCpuGenerator(),
+                                                                             tensor->GetDevice());
 
-    std::lock_guard<std::mutex> lock(cpu_generator->mutex_);
+    std::lock_guard<std::mutex> lock(cpu_generator.mutex_);
     core::cpu::DispatchCpuFunc<DataType::kFLOAT16, DataType::kBFLOAT16, DataType::kFLOAT32, DataType::kFLOAT64>(
         tensor->Dtype(),
-        [&]<typename storage_t>() {
-            using random_t = std::conditional_t<std::is_same_v<storage_t, double>, double, float>;
-            UniformImpl<storage_t, random_t>(*tensor, from, to, cpu_generator);
+        [&]<typename StorageT>() {
+            using RandomT = std::conditional_t<std::is_same_v<StorageT, double>, double, float>;
+            UniformImpl<StorageT, RandomT>(*tensor, from, to, &cpu_generator);
         },
         "CPU uniform");
 }
 
 void Normal(const std::shared_ptr<Tensor> tensor, double mean, double std, const std::optional<Generator> gen) {
     CHECK(tensor->GetDevice().IsCPU());
-    auto *cpu_generator
-        = get_generator_or_default<core::cpu::CPUGeneratorImpl>(gen, core::cpu::getDefaultCPUGenerator());
+    auto &cpu_generator = GetGeneratorOrDefault<core::cpu::CPUGeneratorImpl>(gen, core::cpu::GetDefaultCpuGenerator(),
+                                                                             tensor->GetDevice());
 
-    std::lock_guard<std::mutex> lock(cpu_generator->mutex_);
+    std::lock_guard<std::mutex> lock(cpu_generator.mutex_);
     core::cpu::DispatchCpuFunc<DataType::kFLOAT16, DataType::kBFLOAT16, DataType::kFLOAT32, DataType::kFLOAT64>(
         tensor->Dtype(),
-        [&]<typename storage_t>() {
-            using random_t = std::conditional_t<std::is_same_v<storage_t, double>, double, float>;
-            NormalImpl<storage_t, random_t>(*tensor, mean, std, cpu_generator);
+        [&]<typename StorageT>() {
+            using RandomT = std::conditional_t<std::is_same_v<StorageT, double>, double, float>;
+            NormalImpl<StorageT, RandomT>(*tensor, mean, std, &cpu_generator);
         },
         "CPU normal");
 }

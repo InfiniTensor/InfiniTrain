@@ -14,6 +14,7 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/generator.h"
 #include "infini_train/include/lr_scheduler.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/loss.h"
@@ -203,9 +204,6 @@ void Train(const nn::parallel::Rank &rank) {
         LOG(INFO) << "total desired batch size: " << FLAGS_total_batch_size
                   << " => calculated gradient accumulation steps: " << grad_accum_steps;
     }
-
-    // rng / reproducibility
-    // ManualSeed(42);
 
     nn::TransformerConfig model_config = llama3::LLaMA3Config();
     std::shared_ptr<nn::Module> model = nullptr;
@@ -542,6 +540,7 @@ int main(int argc, char *argv[]) {
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
                                      FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
     utils::PrecisionCheckEnv::Instance().Init(precision_config);
+    infini_train::ManualSeed(42);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 
