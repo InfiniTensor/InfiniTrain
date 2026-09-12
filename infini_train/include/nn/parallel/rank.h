@@ -3,7 +3,7 @@
 namespace infini_train::nn::parallel {
 class Rank {
 public:
-    Rank(int process_rank, int thread_rank, int process_size, int thread_size);
+    Rank(int global_process_rank, int thread_rank, int processes_per_node, int threads_per_process);
 
     int process_rank() const;
     int thread_rank() const;
@@ -19,9 +19,9 @@ public:
     bool IsLastRank() const;
 
 private:
-    const int process_rank_ = 0; // Rank of the current process within the node
-    const int thread_rank_ = 0;  // Rank of the current thread within the process
-    const int process_size_ = 1; // Total number of processes on this node
-    const int thread_size_ = 1;  // Total number of threads in the current process
+    const int global_process_rank_ = 0; // Global rank of the current process
+    const int thread_rank_ = 0;         // Rank of the current thread within the process
+    const int processes_per_node_ = 1;  // Number of processes on each node
+    const int threads_per_process_ = 1; // Number of threads in each process
 };
 } // namespace infini_train::nn::parallel

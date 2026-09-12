@@ -10,8 +10,47 @@ DistributedOptimizer::DistributedOptimizer(OptimizerCreator creator,
                                            const std::vector<std::shared_ptr<Tensor>> &full_params,
                                            const std::vector<std::shared_ptr<Module>> &model_chunks,
                                            size_t ddp_world_size, size_t ddp_rank)
-    : Optimizer(full_params), ddp_world_size_(ddp_world_size), ddp_rank_(ddp_rank) {
+    : Optimizer(full_params, /*learning_rate=*/0.0f), ddp_world_size_(ddp_world_size), ddp_rank_(ddp_rank) {
+    InitializeModelChunks(model_chunks);
 
+    std::vector<std::shared_ptr<Tensor>> shard_params;
+    BuildShardParamsAndBindGrads(
+        [&shard_params](const std::shared_ptr<Tensor> &, const std::shared_ptr<Tensor> &param_piece) {
+            shard_params.push_back(param_piece);
+        });
+
+    base_optimizer_ = creator(shard_params);
+    CHECK(base_optimizer_) << "DistributedOptimizer: failed to create base optimizer.";
+}
+
+DistributedOptimizer::DistributedOptimizer(OptimizerCreatorNamed creator, const NamedParameterList &named_parameters,
+                                           const std::vector<std::shared_ptr<Module>> &model_chunks,
+                                           size_t ddp_world_size, size_t ddp_rank)
+    : Optimizer(named_parameters, /*learning_rate=*/0.0f), ddp_world_size_(ddp_world_size), ddp_rank_(ddp_rank) {
+    InitializeModelChunks(model_chunks);
+
+    std::unordered_map<const Tensor *, std::string> parameter_name_by_tensor;
+    parameter_name_by_tensor.reserve(named_parameters.size());
+    for (const auto &[name, parameter] : named_parameters) {
+        CHECK(parameter);
+        parameter_name_by_tensor.emplace(parameter.get(), name);
+    }
+
+    NamedParameterList shard_named_parameters;
+    BuildShardParamsAndBindGrads(
+        [&parameter_name_by_tensor, &shard_named_parameters](const std::shared_ptr<Tensor> &parameter,
+                                                             const std::shared_ptr<Tensor> &param_piece) {
+            const auto name_it = parameter_name_by_tensor.find(parameter.get());
+            CHECK(name_it != parameter_name_by_tensor.end())
+                << "DistributedOptimizer parameter is not registered in the model";
+            shard_named_parameters.emplace_back(name_it->second, param_piece);
+        });
+
+    base_optimizer_ = creator(shard_named_parameters);
+    CHECK(base_optimizer_) << "DistributedOptimizer: failed to create base optimizer.";
+}
+
+void DistributedOptimizer::InitializeModelChunks(const std::vector<std::shared_ptr<Module>> &model_chunks) {
     CHECK(ddp_world_size_ > 1) << "DistributedOptimizer: ddp_world_size must be greater than 1.";
 
     for (size_t i = 0; i < model_chunks.size(); ++i) {
@@ -23,16 +62,10 @@ DistributedOptimizer::DistributedOptimizer(OptimizerCreator creator,
         bucket_groups_.insert(bucket_groups_.end(), ddp_chunk->bucket_groups().begin(),
                               ddp_chunk->bucket_groups().end());
     }
-
-    BuildShardParamsAndBindGrads();
-
-    // Build base optimizer
-    base_optimizer_ = creator(shard_params_);
-    CHECK(base_optimizer_) << "DistributedOptimizer: failed to create base optimizer.";
 }
 
-void DistributedOptimizer::BuildShardParamsAndBindGrads() {
-    shard_params_.clear();
+void DistributedOptimizer::BuildShardParamsAndBindGrads(const AddShardParam &add_shard_param) {
+    size_t num_shard_params = 0;
 
     for (const auto &group : bucket_groups_) {
         const bool use_grad_shard = group->config().zero_stage >= 2;
@@ -82,12 +115,13 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads() {
                 // NOTE(zbl): Do not call `param->set_grad(grad_piece);` under ZeRO-2.
                 //            The base optimizer updates param_piece views only; original param->grad()
                 //            would be a partial flattened shard and does not represent the full parameter grad.
-                shard_params_.push_back(param_piece);
+                add_shard_param(param, param_piece);
+                ++num_shard_params;
             }
         }
     }
 
-    CHECK(!shard_params_.empty()) << "DistributedOptimizer: this DP rank owns no param pieces. "
+    CHECK_GT(num_shard_params, 0) << "DistributedOptimizer: this DP rank owns no param pieces. "
                                   << "Check bucket padding/divisibility and param bucketing order.";
 }
 

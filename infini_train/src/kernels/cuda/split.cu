@@ -114,6 +114,7 @@ std::shared_ptr<Tensor> LaunchSplitBackward(const std::vector<int64_t> &input_di
     const auto &grad = grad_outputs[0];
     auto dtype = grad->Dtype();
     auto grad_input = std::make_shared<Tensor>(input_dims, dtype, grad->GetDevice());
+    // Keep initialization: defensive early returns in SplitBackwardKernel can leave elements unwritten.
     grad_input->Fill(0.0);
 
     int64_t N = std::accumulate(input_dims.begin(), input_dims.begin() + dim, 1, std::multiplies<int64_t>());

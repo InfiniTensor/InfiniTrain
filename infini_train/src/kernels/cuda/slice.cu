@@ -48,8 +48,7 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
 
     auto dtype = input->Dtype();
     auto new_tensor = std::make_shared<Tensor>(new_dims, dtype, input->GetDevice());
-    // NOTE(zbl): must initialize with 0
-    new_tensor->Fill(0.0);
+    // SliceForwardKernel writes every output index in [0, total_elements); no Fill is needed.
 
     std::vector<int64_t> src_strides(dims.size(), 0), dst_strides(new_dims.size(), 0);
     int64_t stride = 1;

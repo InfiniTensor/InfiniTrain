@@ -18,22 +18,24 @@ TEST_P(AutogradLinearForwardTest, LinearForward) {
     auto weight = std::make_shared<Tensor>(std::vector<int64_t>{4, 3}, DataType::kFLOAT32, GetDevice(), true);
     weight->Fill(1.0f);
     auto bias = std::make_shared<Tensor>(std::vector<int64_t>{4}, DataType::kFLOAT32, GetDevice(), true);
-    bias->Fill(0.0f);
+    bias->Fill(2.0f);
     auto linear_fn = std::make_shared<autograd::Linear>();
     auto result = linear_fn->Apply({input, weight, bias});
     EXPECT_EQ(result.size(), 1);
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
+    test::ExpectTensorFloatEqual(result[0], 5.0f);
 }
 
 TEST_P(AutogradLinearForwardTest, LinearNoBias) {
-    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{1, 3}, DataType::kFLOAT32, GetDevice(), true);
     input->Fill(1.0f);
     auto weight = std::make_shared<Tensor>(std::vector<int64_t>{4, 3}, DataType::kFLOAT32, GetDevice(), true);
     weight->Fill(1.0f);
     auto linear_fn = std::make_shared<autograd::Linear>();
     auto result = linear_fn->Apply({input, weight});
     EXPECT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
+    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{1, 4}));
+    test::ExpectTensorFloatEqual(result[0], 3.0f);
 }
 
 TEST_P(AutogradLinearForwardTest, LinearBatch) {
@@ -41,12 +43,11 @@ TEST_P(AutogradLinearForwardTest, LinearBatch) {
     input->Fill(1.0f);
     auto weight = std::make_shared<Tensor>(std::vector<int64_t>{64, 128}, DataType::kFLOAT32, GetDevice(), true);
     weight->Fill(1.0f);
-    auto bias = std::make_shared<Tensor>(std::vector<int64_t>{64}, DataType::kFLOAT32, GetDevice(), true);
-    bias->Fill(0.0f);
     auto linear_fn = std::make_shared<autograd::Linear>();
-    auto result = linear_fn->Apply({input, weight, bias});
+    auto result = linear_fn->Apply({input, weight});
     EXPECT_EQ(result.size(), 1);
     EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{32, 64}));
+    test::ExpectTensorFloatEqual(result[0], 128.0f);
 }
 
 INFINI_TRAIN_REGISTER_TEST(AutogradLinearForwardTest);

@@ -1,3 +1,4 @@
+#include <numeric>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -22,12 +23,14 @@ TEST_P(AutogradTransformForwardTest, TransposeForward) {
 }
 
 TEST_P(AutogradTransformForwardTest, SliceForward) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{4, 4}, DataType::kFLOAT32, GetDevice(), true);
-    a->Fill(1.0f);
+    std::vector<float> values(16);
+    std::iota(values.begin(), values.end(), 0.0f);
+    auto a = std::make_shared<Tensor>(values.data(), std::vector<int64_t>{4, 4}, DataType::kFLOAT32, GetDevice());
     auto slice_fn = std::make_shared<autograd::Slice>(std::vector<int64_t>{1, 1}, std::vector<int64_t>{3, 3},
                                                       std::vector<int64_t>{1, 1});
     auto result = slice_fn->Apply({a});
     EXPECT_EQ(result.size(), 1);
+    test::ExpectTensorFloatEqual(result[0], {5.0f, 6.0f, 9.0f, 10.0f});
 }
 
 TEST_P(AutogradTransformForwardTest, SplitForward) {

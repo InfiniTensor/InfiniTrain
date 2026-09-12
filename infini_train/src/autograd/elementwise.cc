@@ -182,12 +182,21 @@ std::vector<std::shared_ptr<Tensor>> Exp::Forward(const std::vector<std::shared_
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "ExpForward"}, input)};
 }
 
+void Exp::SetupContext(const std::vector<std::shared_ptr<Tensor>> &,
+                       const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+    const auto &output = output_tensors[0];
+    ctx_.SaveForBackward({output});
+}
+
 std::vector<std::shared_ptr<Tensor>> Exp::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 1);
+    const auto &output = saved_tensors[0];
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice().type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "ExpBackward"}, grad_output)};
+    auto device = output->GetDevice().type();
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "ExpBackward"}, grad_output, output)};
 }
 
 std::vector<std::shared_ptr<Tensor>> Log::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -396,11 +405,6 @@ void Add::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors
 std::vector<std::shared_ptr<Tensor>> Add::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
-
-    // Fast path: no broadcast — grad_a and grad_b are both just grad_output
-    if (a_dims_ == b_dims_) {
-        return {grad_output, grad_output};
-    }
 
     auto device = grad_output->GetDevice().type();
     auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(

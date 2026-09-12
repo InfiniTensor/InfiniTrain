@@ -29,19 +29,18 @@ struct ResumeFromCheckpointArgs {
     std::shared_ptr<Optimizer> optimizer;
     const nn::TransformerConfig &model_config;
     TrainerState &state;
-    bool load_optimizer_state;
     std::shared_ptr<LRScheduler> lr_scheduler = nullptr;
 };
 
 struct ResumeFromCheckpointResult {
     int global_step = 0;
-    size_t consumed_batches = 0;
+    size_t consumed_train_samples = 0;
 };
 
 struct SaveCheckpointArgs {
     std::filesystem::path save_dir;
     int64_t global_step = 0;
-    size_t consumed_batches = 0;
+    size_t consumed_train_samples = 0;
     int64_t n_layer = 0;
     int64_t n_head = 0;
     int64_t n_kv_head = 0;
@@ -51,15 +50,16 @@ struct SaveCheckpointArgs {
     int tp_size = 1;
     int sp_size = 1;
     int pp_size = 1;
-    bool save_optimizer_state = true;
     std::filesystem::path checkpoint_root_dir;
     size_t max_checkpoint_keep = 0;
     const nn::parallel::Rank &rank;
     const nn::Module &model;
-    const Optimizer &optimizer;
+    const Optimizer *optimizer = nullptr;
     const LRScheduler *lr_scheduler = nullptr;
 };
 
 ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &args);
 
 void SaveCheckpoint(const SaveCheckpointArgs &args);
+
+size_t DataLoaderBatchesToSkip(size_t consumed_train_samples, size_t local_batch_size, size_t ddp_world_size);

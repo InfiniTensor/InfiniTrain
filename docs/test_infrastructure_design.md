@@ -8,7 +8,7 @@
 tests/
 ├── CMakeLists.txt              # 顶层：include 宏 + add_subdirectory
 ├── common/
-│   ├── CMakeLists.txt          # header-only interface library
+│   ├── CMakeLists.txt          # 公共 test_main target
 │   └── test_utils.h            # C++ 基类、skip 宏、填充工具函数
 ├── tensor/                     # Tensor 创建 / 拷贝 / 销毁 / 算子
 ├── optimizer/                  # Optimizer 创建 / step
@@ -16,7 +16,8 @@ tests/
 ├── hook/                       # Module hook + precision check
 ├── lora/                       # LoRA 相关
 ├── dtype/                      # Scalar / dtype dispatch + 编译期负面测试
-└── transformer/                # Transformer 架构测试
+├── transformer/                # Transformer 架构测试
+└── checkpoint/                 # Checkpoint 序列化测试
 
 cmake/
 └── test_macros.cmake           # CMake 宏：infini_train_add_test / infini_train_add_test_suite
@@ -88,11 +89,11 @@ ctest -L cpu --output-on-failure
 ctest -L cuda --output-on-failure
 
 # 运行单个测试二进制（看完整 GTest 输出）
-./test_tensor_cpu
-./test_autograd_cuda
+./tests/tensor/test_tensor_cpu
+./tests/autograd/test_autograd_cuda
 
 # GTest filter 过滤特定用例
-./test_tensor_cpu --gtest_filter="CPU/TensorCreateTest.*"
+./tests/tensor/test_tensor_cpu --gtest_filter="CPU/TensorCreateTest.*"
 ```
 
 无 GPU 机器上 `cmake -DBUILD_TEST=ON -DUSE_CUDA=OFF ..` 即可，CUDA 测试实例不会注册。

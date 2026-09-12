@@ -25,17 +25,10 @@ TEST_P(TensorDeleteTest, MoveTransferKeepsData) {
     auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
     tensor->Fill(5.0f);
 
-    // Verify data via CPU copy for any device.
-    auto cpu_copy
-        = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, Device(Device::DeviceType::kCPU, 0));
-    cpu_copy->CopyFrom(tensor);
-
     auto moved = std::move(tensor);
     EXPECT_EQ(tensor, nullptr);
     ASSERT_NE(moved, nullptr);
-
-    auto *data = static_cast<float *>(cpu_copy->DataPtr());
-    for (int i = 0; i < 6; ++i) { EXPECT_FLOAT_EQ(data[i], 5.0f); }
+    test::ExpectTensorFloatEqual(moved, 5.0f);
 }
 
 TEST_P(TensorDeleteTest, NullifiesPointerOnMove) {

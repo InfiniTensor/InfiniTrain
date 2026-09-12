@@ -36,8 +36,8 @@ ctest -L cuda --output-on-failure
 ctest -R tensor --output-on-failure
 
 # 直接运行测试二进制，使用 GTest 过滤器
-./tests/tensor/test_tensor_create_cpu --gtest_filter="CPU/TensorCreateTest.*"
-./tests/tensor/test_tensor_create_cuda --gtest_filter="CUDA/TensorCreateTest.*"
+./tests/tensor/test_tensor_cpu --gtest_filter="CPU/TensorCreateTest.*"
+./tests/tensor/test_tensor_cuda --gtest_filter="CUDA/TensorCreateTest.*"
 ```
 
 ---
@@ -75,7 +75,9 @@ INFINI_TRAIN_REGISTER_TEST(TensorCopyTest);
 在子目录的 `CMakeLists.txt`（例如 `tests/tensor/CMakeLists.txt`）中添加：
 
 ```cmake
-infini_train_add_test_suite(test_tensor_copy test_tensor_copy.cc)
+infini_train_add_test_suite(test_tensor_copy
+  SOURCES test_tensor_copy.cc
+)
 ```
 
 这会生成两个 CTest 目标：`test_tensor_copy_cpu`（标签 `cpu`）和 `test_tensor_copy_cuda`（标签 `cuda`）。

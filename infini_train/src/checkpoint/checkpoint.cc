@@ -182,7 +182,7 @@ template <typename T> T ExtractNumberField(const std::string &content, const std
 } // namespace
 
 void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Module &model, const Optimizer *optimizer,
-                      const TrainerState &state, bool save_optimizer_state, const LRScheduler *lr_scheduler) {
+                      const TrainerState &state, const LRScheduler *lr_scheduler) {
     std::filesystem::create_directories(checkpoint_dir);
     LOG(INFO) << "[CKPT] Save begin: dir=" << checkpoint_dir << ", global_step=" << state.global_step;
 
@@ -190,8 +190,7 @@ void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Mod
 
     SaveStateDict(model_path, model.StateDict());
 
-    if (save_optimizer_state) {
-        CHECK(optimizer != nullptr) << "Optimizer pointer is null, cannot save optimizer state.";
+    if (optimizer != nullptr) {
         auto opt_state = optimizer->StateDict();
         if (!opt_state.empty()) {
             const auto opt_path = checkpoint_dir / "optimizer.ckpt";
@@ -208,14 +207,13 @@ void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Mod
 }
 
 void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &model, Optimizer *optimizer,
-                      TrainerState &state, bool load_optimizer_state, LRScheduler *lr_scheduler) {
+                      TrainerState &state, LRScheduler *lr_scheduler) {
     const auto model_path = checkpoint_dir / "model.ckpt";
     LOG(INFO) << "[CKPT] Loading model: " << model_path;
 
     model.LoadStateDict(LoadStateDict(model_path));
 
-    if (load_optimizer_state) {
-        CHECK(optimizer != nullptr) << "Optimizer pointer is null, cannot load optimizer state.";
+    if (optimizer != nullptr) {
         const auto opt_path = checkpoint_dir / "optimizer.ckpt";
         if (std::filesystem::exists(opt_path)) {
             LOG(INFO) << "[CKPT] Loading optimizer: " << opt_path;
@@ -239,8 +237,8 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &m
     }
 
     LOG(ERROR) << "[CKPT] Load done: global_step=" << state.global_step
-               << ", consumed_batches =" << state.consumed_batches << ", topology(ddp,tp,sp,pp)=(" << state.ddp_size
-               << "," << state.tp_size << "," << state.sp_size << "," << state.pp_size << ")";
+               << ", consumed_train_samples=" << state.consumed_train_samples << ", topology(ddp,tp,sp,pp)=("
+               << state.ddp_size << "," << state.tp_size << "," << state.sp_size << "," << state.pp_size << ")";
 }
 
 void Checkpoint::SaveStateDict(const std::filesystem::path &path,
@@ -322,7 +320,7 @@ void Checkpoint::SaveTrainerState(const std::filesystem::path &path, const Train
     ofs << "  \"n_embd\": " << state.n_embd << ",\n";
     ofs << "  \"vocab_size\": " << state.vocab_size << ",\n";
     ofs << "  \"global_step\": " << state.global_step << ",\n";
-    ofs << "  \"consumed_batches\": " << state.consumed_batches << ",\n";
+    ofs << "  \"consumed_train_samples\": " << state.consumed_train_samples << ",\n";
     ofs << "  \"ddp_size\": " << state.ddp_size << ",\n";
     ofs << "  \"tp_size\": " << state.tp_size << ",\n";
     ofs << "  \"sp_size\": " << state.sp_size << ",\n";
@@ -343,7 +341,7 @@ TrainerState Checkpoint::LoadTrainerState(const std::filesystem::path &path) {
     state.n_embd = ExtractNumberField<int64_t>(content, "n_embd", 0);
     state.vocab_size = ExtractNumberField<int64_t>(content, "vocab_size", 0);
     state.global_step = ExtractNumberField<int64_t>(content, "global_step", 0);
-    state.consumed_batches = ExtractNumberField<int64_t>(content, "consumed_batches", 0);
+    state.consumed_train_samples = ExtractNumberField<int64_t>(content, "consumed_train_samples", 0);
     state.ddp_size = ExtractNumberField<int>(content, "ddp_size", 1);
     state.tp_size = ExtractNumberField<int>(content, "tp_size", 1);
     state.sp_size = ExtractNumberField<int>(content, "sp_size", 1);

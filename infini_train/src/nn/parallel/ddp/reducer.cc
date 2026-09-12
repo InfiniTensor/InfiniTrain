@@ -401,7 +401,9 @@ void Reducer::FinalizeBucketDense(size_t bucket_index) {
         // FIXME(zbl): support custom hook later
         LOG(FATAL) << "Custom hook is not supported now";
     } else {
-        bucket.work = ddp_pg->AllReduce(bucket.contents, function::ReduceOpType::kAvg, true);
+        const auto reduce_op
+            = ddp_config_.average_in_collective ? function::ReduceOpType::kAvg : function::ReduceOpType::kSum;
+        bucket.work = ddp_pg->AllReduce(bucket.contents, reduce_op, true);
     }
 }
 

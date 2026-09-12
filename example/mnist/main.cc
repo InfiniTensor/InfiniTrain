@@ -72,6 +72,10 @@ int main(int argc, char *argv[]) {
             optimizer.ZeroGrad();
 
             auto loss = loss_fn.Forward({outputs[0], new_label});
+            loss[0]->Backward();
+
+            // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
+            // between forward and backward.
             auto loss_cpu = loss[0]->To(cpu_device);
             float current_loss = static_cast<float *>(loss_cpu.DataPtr())[0];
             total_loss += current_loss;
@@ -81,7 +85,6 @@ int main(int argc, char *argv[]) {
                            << " loss: " << current_loss;
             }
 
-            loss[0]->Backward();
             optimizer.Step();
             train_idx += 1;
         }
