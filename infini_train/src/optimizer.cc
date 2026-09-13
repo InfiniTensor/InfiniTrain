@@ -9,6 +9,15 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
+thread_local std::unordered_map<const Tensor*, std::shared_ptr<Tensor>> g_shadow_registry;
+
+// 自由函数：供 autocast.h 查询影子权重（与 Optimizer 具体类型解耦）。
+// 命中返回 shadow；未命中（激活或未启用影子）返回 nullptr，autocast 走 fallback Cast。
+std::shared_ptr<Tensor> GetShadow(const Tensor *param) {
+    auto it = g_shadow_registry.find(param);
+    return it != g_shadow_registry.end() ? it->second : nullptr;
+}
+
 Optimizer::Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate)
     : params_(params), learning_rate_(learning_rate) {}
 
@@ -99,6 +108,55 @@ Adam::Adam(const NamedParameterList &named_params, float learning_rate, float be
     }
 }
 
+void Adam::EnableShadowWeights(DataType shadow_dtype){
+    shadow_enable_ = true;
+    shadow_dtype_ = shadow_dtype;
+    shadow_weights_.clear();
+    shadow_weights_.reserve(params_.size());
+    // init shadow weights form param
+    for (auto &param : params_){
+        auto shadow_weight = std::make_shared<Tensor>(param->Dims(), shadow_dtype_, param->GetDevice());
+        auto casted = param->To(shadow_dtype);
+        shadow_weight->CopyFrom(casted);
+        shadow_weights_.push_back(shadow_weight);
+        g_shadow_registry[param.get()] = shadow_weight;
+    }
+    LOG(INFO) << "Enable shadow weights for Adam optimizer, shadow dtype: " << static_cast<int>(shadow_dtype_);
+}
+
+void Adam::DisableShadowWeights(){
+    if (shadow_enable_ == false) return;
+    shadow_enable_ = false;
+    for (auto &param : params_){
+        g_shadow_registry.erase(param.get());
+    }
+    shadow_weights_.clear();
+    LOG(INFO) << "Disable shadow weights for Adam optimizer";
+}
+
+void Adam::RefreshShadowWeights() {
+    if (!shadow_enable_) {
+        return;
+    }
+    // param 已被 checkpoint 原地更新（LoadStateDict 走 CopyFrom，指针不变），
+    // 重新从当前 FP32 主权重 cast 到 shadow；registry 映射无需改动。
+    for (size_t i = 0; i < params_.size(); ++i) {
+        auto casted = params_[i]->To(shadow_dtype_);
+        shadow_weights_[i]->CopyFrom(casted);
+    }
+    LOG(INFO) << "Refreshed " << shadow_weights_.size() << " shadow weights from current params";
+}
+
+std::shared_ptr<Tensor> Adam::GetShadow(const Tensor* param) const {
+    auto it = g_shadow_registry.find(param);
+    if (it != g_shadow_registry.end()) {
+        return it->second;
+    } else {
+        LOG(WARNING) << "Shadow weight not found for the given parameter.";
+        return nullptr;
+    }
+}
+
 void Adam::Step() {
     ++t_;
 
@@ -114,9 +172,16 @@ void Adam::Step() {
 
         auto device = param->GetDevice();
         core::DeviceGuard guard(device);
-        auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGrad"});
-        kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
-    }
+        if (shadow_enable_) {
+            auto shadow_weight = shadow_weights_[i];
+            auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGradShadow"});
+            kernel.Call<void>(grad, param, shadow_weight, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
+        } else {
+            auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGrad"});
+            kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
+        }
+    }   
+
 }
 
 OptimizerCreator Adam::Create(float learning_rate, float beta1, float beta2, float eps) {

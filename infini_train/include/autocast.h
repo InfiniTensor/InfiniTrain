@@ -11,6 +11,7 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
+    std::shared_ptr<Tensor> GetShadow(const Tensor* param);
 namespace {
 inline std::string_view GetBaseOpName(std::string_view op) {
     constexpr std::string_view function_suffix = "Function";
@@ -131,7 +132,12 @@ struct AutocastContext {
                     if (is_floating_point(current_dtype)) {
                         DataType target_dtype = get_target_dtype();
                         if (current_dtype != target_dtype) {
-                            arg = std::make_shared<Tensor>(arg->To(target_dtype));
+                            auto shadow = GetShadow(arg.get());
+                            if (shadow && shadow->Dtype() == target_dtype) {
+                                arg = shadow;
+                            } else {
+                                arg = std::make_shared<Tensor>(arg->To(target_dtype));
+                            }
                         }
                     }
                 }

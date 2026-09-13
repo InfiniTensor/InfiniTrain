@@ -381,6 +381,12 @@ void Train(const nn::parallel::Rank &rank) {
     start_step = resume_result.global_step;
     size_t consumed_train_samples = resume_result.consumed_train_samples;
 
+    // enable shadow weights (polymorphic; DistributedOptimizer degrades to a no-op with a warning).
+    // 注意：此处位于 ResumeFromCheckpoint 之后，shadow 直接从已恢复的 FP32 param 构建，无需额外 refresh。
+    if (FLAGS_dtype == kDtypeBF16) {
+        optimizer->EnableShadowWeights(DataType::kBFLOAT16);
+    }
+
     auto advance_train_iter = [&]() {
         ++train_iter;
         if (train_iter == train_loader.end()) {
