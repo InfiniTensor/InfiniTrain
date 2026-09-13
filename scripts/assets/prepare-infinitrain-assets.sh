@@ -109,7 +109,7 @@ prepare_gpt2() {
 
   # InfiniTrain's GPT-2 LLMC loader currently accepts the FP32 v3 file.
   # These artifacts are the same llm.c starter-pack files used by TinyInfiniTrain.
-  local base="https://huggingface.co/datasets/karpathy/llmc-starter-pack/resolve/main"
+  local base="https://hf-mirror.com/datasets/karpathy/llmc-starter-pack/resolve/main"
 
   local files=(
     "gpt2_124M.bin"
