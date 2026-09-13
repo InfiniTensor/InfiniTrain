@@ -87,6 +87,10 @@ DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 DEFINE_string(pipeline_layer_partition, "",
               "comma-separated per-stage layer counts for a custom pipeline layout, e.g. 4,8,6,6");
+DEFINE_string(pipeline_layer_costs, "",
+              "comma-separated per-layer compute costs used to auto-suggest a balanced layout, e.g. 1,2,1.5");
+DEFINE_bool(pipeline_auto_layout, false,
+            "auto-suggest a load-balanced pipeline layout using per-layer parameter counts");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 DEFINE_uint32(save_interval, 0, "save checkpoint every N steps; 0 disables saving");
@@ -118,6 +122,24 @@ constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles
     = {"none", "constant", "linear", "cosine", "inverse-square-root"};
+
+std::string PartitionToString(const std::vector<int> &partition) {
+    std::string s;
+    for (size_t i = 0; i < partition.size(); ++i) {
+        if (i > 0) {
+            s += ",";
+        }
+        s += std::to_string(partition[i]);
+    }
+    return s;
+}
+
+nn::TransformerConfig ResolveLLaMA3Config() {
+    nn::TransformerConfig config = llama3::LLaMA3Config();
+    llama3::SanitizeLLaMA3Config(config);
+    return config;
+}
+
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
@@ -539,6 +561,11 @@ void Train(const nn::parallel::Rank &rank) {
         }
     }
 
+    // Print per-stage execution time, load-imbalance bubble and pipeline efficiency.
+    if (pp_world_size > 1) {
+        dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->ReportPipelineStats();
+    }
+
     // Save LoRA weights if enabled and path specified
     if (lora_enabled && !FLAGS_lora_save_path.empty()) {
         LOG(INFO) << "Saving LoRA weights to: " << FLAGS_lora_save_path;
@@ -556,7 +583,32 @@ int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
 
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
-    auto pipeline_layer_partition = nn::parallel::ParsePipelineLayerPartition(FLAGS_pipeline_layer_partition);
+
+    const bool has_explicit_partition = !FLAGS_pipeline_layer_partition.empty();
+    const bool has_layer_costs = !FLAGS_pipeline_layer_costs.empty();
+    CHECK(!(has_explicit_partition && (has_layer_costs || FLAGS_pipeline_auto_layout)))
+        << "--pipeline_layer_partition cannot be combined with --pipeline_layer_costs or --pipeline_auto_layout";
+    CHECK(!(has_layer_costs && FLAGS_pipeline_auto_layout))
+        << "--pipeline_layer_costs and --pipeline_auto_layout are mutually exclusive";
+
+    std::vector<int> pipeline_layer_partition;
+    if (has_explicit_partition) {
+        pipeline_layer_partition = nn::parallel::ParsePipelineLayerPartition(FLAGS_pipeline_layer_partition);
+    } else if (has_layer_costs) {
+        const auto layer_costs = nn::parallel::ParsePipelineLayerCosts(FLAGS_pipeline_layer_costs);
+        pipeline_layer_partition = nn::parallel::SuggestBalancedPartition(
+            static_cast<int>(layer_costs.size()), FLAGS_pipeline_parallel, layer_costs);
+        LOG(INFO) << "Auto-suggested pipeline layout from --pipeline_layer_costs: "
+                  << PartitionToString(pipeline_layer_partition);
+    } else if (FLAGS_pipeline_auto_layout) {
+        const auto config = ResolveLLaMA3Config();
+        const auto layer_costs = nn::ComputePerLayerParamCounts(config);
+        pipeline_layer_partition = nn::parallel::SuggestBalancedPartition(
+            static_cast<int>(config.n_layer), FLAGS_pipeline_parallel, layer_costs);
+        LOG(INFO) << "Auto-suggested pipeline layout from per-layer parameter counts: "
+                  << PartitionToString(pipeline_layer_partition);
+    }
+
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
                                      FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel,
                                      pipeline_layer_partition);

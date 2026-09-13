@@ -85,4 +85,11 @@ private:
     const infini_train::nn::parallel::StageInfo stage_info_;
 };
 
+// Returns `n_layer` per-layer parameter counts (the number of trainable scalar
+// parameters in each Transformer block), computed analytically from `config` so a balanced
+// pipeline layout can be suggested before the model is built. For standard homogeneous
+// GPT-2 / LLaMA3 blocks every entry is equal; MoE blocks are not supported by this helper
+// (pass --pipeline_layer_costs for those).
+std::vector<double> ComputePerLayerParamCounts(const TransformerConfig &config);
+
 } // namespace infini_train::nn

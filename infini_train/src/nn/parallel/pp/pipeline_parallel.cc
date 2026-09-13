@@ -1,14 +1,23 @@
 // pipeline_parallel.cc
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <format>
 #include <memory>
+#include <numeric>
 #include <string>
+#include <vector>
+
+#include "glog/logging.h"
 
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_schedule.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
+#include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/nn/parallel/utils.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
 namespace {
@@ -66,4 +75,58 @@ PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num
 }
 
 std::vector<std::shared_ptr<Module>> *PipelineParallel::mutable_chunks() { return pipeline_stage_->mutable_chunks(); }
+
+void PipelineParallel::ReportPipelineStats() {
+    const int num_stages = num_stages_;
+    if (num_stages <= 1) {
+        return; // Nothing to compare with a single pipeline stage.
+    }
+
+    // Flush pending event timing and read this stage's accumulated compute time.
+    const double fwd = schedule_->ForwardSeconds();
+    const double bwd = schedule_->BackwardSeconds();
+    const int64_t fwd_count = schedule_->ForwardTaskCount();
+    const int64_t bwd_count = schedule_->BackwardTaskCount();
+
+    Device device = pipeline_stage_->device();
+    auto *pp_group = ProcessGroupFactory::Instance(device.type())
+                         ->Get(GetPipelineParallelProcessGroupName(device.Rank().GlobalRank()));
+
+    // Gather [fwd_seconds, bwd_seconds] from every pipeline rank along dim 0.
+    const float host[2] = {static_cast<float>(fwd), static_cast<float>(bwd)};
+    auto input = std::make_shared<Tensor>(host, std::vector<int64_t>{2}, DataType::kFLOAT32, device);
+    auto gathered = std::make_shared<Tensor>(std::vector<int64_t>{2 * num_stages}, DataType::kFLOAT32, device);
+    pp_group->AllGather(gathered, input, /*async_op=*/false);
+
+    const auto gathered_cpu = gathered->To(Device());
+    const float *data = static_cast<const float *>(gathered_cpu.DataPtr());
+
+    std::vector<double> stage_fwd(num_stages), stage_bwd(num_stages), stage_total(num_stages);
+    for (int s = 0; s < num_stages; ++s) {
+        stage_fwd[s] = data[2 * s];
+        stage_bwd[s] = data[2 * s + 1];
+        stage_total[s] = stage_fwd[s] + stage_bwd[s];
+    }
+
+    // The gather is collective; only the first pipeline rank prints the summary.
+    if (rank_ != 0) {
+        return;
+    }
+
+    const double bottleneck = *std::max_element(stage_total.begin(), stage_total.end());
+    const double average = std::accumulate(stage_total.begin(), stage_total.end(), 0.0) / num_stages;
+    const double efficiency = bottleneck > 0.0 ? average / bottleneck : 0.0;
+    const double imbalance_bubble = 1.0 - efficiency;
+
+    LOG(INFO) << std::format("=== Pipeline Timing Summary ({} stages) ===", num_stages);
+    LOG(INFO) << std::format("{:<6} {:>14} {:>14} {:>14}", "Stage", "Fwd(ms)", "Bwd(ms)", "Total(ms)");
+    for (int s = 0; s < num_stages; ++s) {
+        LOG(INFO) << std::format("{:<6} {:>14.3f} {:>14.3f} {:>14.3f}", s, stage_fwd[s] * 1e3, stage_bwd[s] * 1e3,
+                                 stage_total[s] * 1e3);
+    }
+    LOG(INFO) << std::format("Compute tasks per stage: {} forward + {} backward", fwd_count, bwd_count);
+    LOG(INFO) << std::format("Bottleneck stage: {:.3f} ms | average: {:.3f} ms", bottleneck * 1e3, average * 1e3);
+    LOG(INFO) << std::format("Load-imbalance bubble: {:.1f}% | pipeline efficiency: {:.1f}%", imbalance_bubble * 100.0,
+                             efficiency * 100.0);
+}
 } // namespace infini_train::nn::parallel

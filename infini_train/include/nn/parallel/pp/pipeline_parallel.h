@@ -31,6 +31,12 @@ public:
 
     std::vector<std::shared_ptr<Module>> *mutable_chunks();
 
+    // Gather per-stage forward/backward compute times across the pipeline process group and
+    // print a summary of per-stage execution time, measured load-imbalance bubble and pipeline
+    // efficiency. This is a collective over the pipeline group (all PP ranks must call it); only
+    // the first pipeline rank prints. No-op when num_stages <= 1.
+    void ReportPipelineStats();
+
 private:
     void BuildPipelineStage(const std::vector<std::vector<int64_t>> &recv_shape, Device device,
                             std::vector<std::shared_ptr<Module>> &&chunks);

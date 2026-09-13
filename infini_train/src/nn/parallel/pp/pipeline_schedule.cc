@@ -1,13 +1,16 @@
 // pipeline_schedule.cc
 #include "infini_train/include/nn/parallel/pp/pipeline_schedule.h"
 
+#include <chrono>
 #include <cstddef>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/init.h"
@@ -20,6 +23,148 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
+
+// Measures per-stage compute time (forward / backward) with CUDA events on GPU and
+// std::chrono::steady_clock on CPU. Events are recorded on the device stream without blocking;
+// Flush() synchronizes once and accumulates the elapsed device time of every pending interval.
+class StageTimer {
+public:
+    explicit StageTimer(Device device) : device_(device), is_cpu_(device.IsCPU()) {
+        if (!is_cpu_) {
+            impl_ = core::GetDeviceGuardImpl(device_.type());
+        }
+    }
+
+    ~StageTimer() { ClearPending(); }
+
+    void Begin() {
+        if (is_cpu_) {
+            CHECK(!cpu_active_) << "StageTimer::Begin called while already timing";
+            cpu_begin_ = std::chrono::steady_clock::now();
+            cpu_active_ = true;
+            return;
+        }
+        core::Event *start = nullptr;
+        impl_->EventCreate(&start);
+        impl_->EventRecord(start, CurrentStream());
+        pending_starts_.push_back(start);
+    }
+
+    void End(bool is_forward) {
+        if (is_cpu_) {
+            CHECK(cpu_active_) << "StageTimer::End called without a matching Begin";
+            const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - cpu_begin_).count();
+            if (is_forward) {
+                fwd_seconds_ += seconds;
+                ++fwd_count_;
+            } else {
+                bwd_seconds_ += seconds;
+                ++bwd_count_;
+            }
+            cpu_active_ = false;
+            return;
+        }
+        CHECK(!pending_starts_.empty()) << "StageTimer::End called without a matching Begin";
+        core::Event *start = pending_starts_.back();
+        pending_starts_.pop_back();
+        core::Event *stop = nullptr;
+        impl_->EventCreate(&stop);
+        impl_->EventRecord(stop, CurrentStream());
+        pending_intervals_.push_back({start, stop, is_forward});
+    }
+
+    // Synchronize the device once, then accumulate the elapsed time of every pending interval.
+    void Flush() {
+        if (is_cpu_ || pending_intervals_.empty()) {
+            return;
+        }
+        // The stream is ordered, so synchronizing the last stop event guarantees every earlier
+        // event in this timer has completed; EventElapsedTime then returns without blocking.
+        impl_->EventSynchronize(pending_intervals_.back().stop);
+        for (const auto &interval : pending_intervals_) {
+            const double seconds = impl_->EventElapsedTime(interval.start, interval.stop) * 1e-3;
+            if (interval.is_forward) {
+                fwd_seconds_ += seconds;
+                ++fwd_count_;
+            } else {
+                bwd_seconds_ += seconds;
+                ++bwd_count_;
+            }
+        }
+        ClearPending();
+    }
+
+    double forward_seconds() const { return fwd_seconds_; }
+    double backward_seconds() const { return bwd_seconds_; }
+    int64_t forward_count() const { return fwd_count_; }
+    int64_t backward_count() const { return bwd_count_; }
+
+private:
+    struct Interval {
+        core::Event *start;
+        core::Event *stop;
+        bool is_forward;
+    };
+
+    core::Stream *CurrentStream() { return impl_->GetStream(device_); }
+
+    void ClearPending() {
+        for (const auto &interval : pending_intervals_) {
+            impl_->EventDestroy(interval.start);
+            impl_->EventDestroy(interval.stop);
+        }
+        pending_intervals_.clear();
+        for (core::Event *start : pending_starts_) {
+            impl_->EventDestroy(start);
+        }
+        pending_starts_.clear();
+    }
+
+    Device device_;
+    core::DeviceGuardImpl *impl_ = nullptr;
+    bool is_cpu_ = false;
+
+    // CPU timing state.
+    std::chrono::steady_clock::time_point cpu_begin_;
+    bool cpu_active_ = false;
+
+    // CUDA timing state: unmatched start events and completed intervals awaiting flush.
+    std::vector<core::Event *> pending_starts_;
+    std::vector<Interval> pending_intervals_;
+
+    double fwd_seconds_ = 0.0;
+    double bwd_seconds_ = 0.0;
+    int64_t fwd_count_ = 0;
+    int64_t bwd_count_ = 0;
+};
+
+PipelineSchedule::PipelineSchedule(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches)
+    : stage_(std::move(stage)), num_micro_batches_(num_micro_batches),
+      timer_(std::make_unique<StageTimer>(stage_->device())) {
+    (void)num_stages;
+}
+
+PipelineSchedule::~PipelineSchedule() = default;
+
+double PipelineSchedule::ForwardSeconds() const {
+    timer_->Flush();
+    return timer_->forward_seconds();
+}
+
+double PipelineSchedule::BackwardSeconds() const {
+    timer_->Flush();
+    return timer_->backward_seconds();
+}
+
+int64_t PipelineSchedule::ForwardTaskCount() const {
+    timer_->Flush();
+    return timer_->forward_count();
+}
+
+int64_t PipelineSchedule::BackwardTaskCount() const {
+    timer_->Flush();
+    return timer_->backward_count();
+}
 
 void PrintScheduleTable(const std::vector<PipelineParallelScheduler::Task> &schedule, int n, int num_stages,
                         int vpp_size) {
@@ -235,7 +380,9 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 }
             }
 
+            timer_->Begin();
             activations[task.local_chunk_idx][mb] = stage_->ForwardOneChunk(inputs, task.local_chunk_idx);
+            timer_->End(/*is_forward=*/true);
 
             if (!task.is_last_chunk) {
                 if (stage_->IsLastStage()) {
@@ -256,7 +403,9 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                         {activations[task.local_chunk_idx][mb][0], std::make_shared<Tensor>(target_on_device)})[0];
                     loss = loss / n;
                 }
+                timer_->Begin();
                 loss->Backward();
+                timer_->End(/*is_forward=*/false);
                 // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
                 // between forward and backward.
                 total_loss += static_cast<const float *>(loss->To(Device()).DataPtr())[0];
@@ -266,7 +415,9 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 auto dummy_gradient
                     = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
 
+                timer_->Begin();
                 out_tensor->Backward(dummy_gradient);
+                timer_->End(/*is_forward=*/false);
             }
         }
     }

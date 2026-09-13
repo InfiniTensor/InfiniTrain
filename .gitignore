@@ -8,3 +8,9 @@ build/
 
 __pycache__/
 /data/
+.aider*
+
+# local junk
+.claude/
+*.msi
+cclUniqueId_*.bin
