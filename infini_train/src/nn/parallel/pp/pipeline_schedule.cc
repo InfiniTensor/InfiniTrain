@@ -73,13 +73,11 @@ std::vector<std::shared_ptr<Tensor>> PipelineSchedule::SendToNext(const std::vec
 }
 
 PipelineParallelScheduler::Task PipelineParallelScheduler::CreateTask(int step, int mb, int global_chunk,
-                                                                      int num_stages, int total_chunks,
-                                                                      bool is_forward,
+                                                                      int num_stages, int total_chunks, bool is_forward,
                                                                       const PipelineLayout &layout) {
     if (num_stages != layout.num_stages()) {
-        throw PipelineLayoutError(std::format(
-            "scheduler stage count mismatch: num_stages={}, layout.num_stages={}",
-            num_stages, layout.num_stages()));
+        throw PipelineLayoutError(std::format("scheduler stage count mismatch: num_stages={}, layout.num_stages={}",
+                                              num_stages, layout.num_stages()));
     }
     const auto &chunk = layout.chunk(global_chunk);
 
@@ -95,13 +93,12 @@ PipelineParallelScheduler::Task PipelineParallelScheduler::CreateTask(int step, 
     return task;
 }
 
-std::vector<PipelineParallelScheduler::Task> PipelineParallelScheduler::GenerateGPipeSchedule(int n, int num_stages,
-                                                                                              int vpp_size,
-                                                                                              const PipelineLayout &layout) {
+std::vector<PipelineParallelScheduler::Task>
+PipelineParallelScheduler::GenerateGPipeSchedule(int n, int num_stages, int vpp_size, const PipelineLayout &layout) {
     if (layout.num_stages() != num_stages || layout.vpp_size() != vpp_size) {
-        throw PipelineLayoutError(std::format(
-            "scheduler topology mismatch: requested stages={}, vpp={}, layout stages={}, vpp={}",
-            num_stages, vpp_size, layout.num_stages(), layout.vpp_size()));
+        throw PipelineLayoutError(
+            std::format("scheduler topology mismatch: requested stages={}, vpp={}, layout stages={}, vpp={}",
+                        num_stages, vpp_size, layout.num_stages(), layout.vpp_size()));
     }
     std::vector<Task> schedule;
     int total_global_chunks = num_stages * vpp_size;
@@ -125,9 +122,8 @@ std::vector<PipelineParallelScheduler::Task> PipelineParallelScheduler::Generate
             int global_chunk_id = (total_steps - 1 - step) - mb;
             if (global_chunk_id >= 0 && global_chunk_id < total_global_chunks) {
                 auto is_forward = false;
-                auto task
-                    = CreateTask(step + total_steps, mb, global_chunk_id, num_stages, total_global_chunks, is_forward,
-                                 layout);
+                auto task = CreateTask(step + total_steps, mb, global_chunk_id, num_stages, total_global_chunks,
+                                       is_forward, layout);
                 schedule.push_back(task);
             }
         }
@@ -154,9 +150,9 @@ PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(int n, int num_stages
         return schedule;
     }
     if (layout.num_stages() != num_stages || layout.vpp_size() != vpp_size) {
-        throw PipelineLayoutError(std::format(
-            "scheduler topology mismatch: requested stages={}, vpp={}, layout stages={}, vpp={}",
-            num_stages, vpp_size, layout.num_stages(), layout.vpp_size()));
+        throw PipelineLayoutError(
+            std::format("scheduler topology mismatch: requested stages={}, vpp={}, layout stages={}, vpp={}",
+                        num_stages, vpp_size, layout.num_stages(), layout.vpp_size()));
     }
 
     int total_global_chunks = num_stages * vpp_size;
@@ -170,8 +166,8 @@ PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(int n, int num_stages
             int forward_global_chunk = step - mb;
             if (forward_global_chunk >= 0 && forward_global_chunk < total_global_chunks) {
                 auto is_forward = true;
-                auto task = CreateTask(step, mb, forward_global_chunk, num_stages, total_global_chunks, is_forward,
-                                       layout);
+                auto task
+                    = CreateTask(step, mb, forward_global_chunk, num_stages, total_global_chunks, is_forward, layout);
                 schedule.push_back(task);
             }
         }
@@ -186,8 +182,8 @@ PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(int n, int num_stages
             int forward_global_chunk = step - mb;
             if (forward_global_chunk >= 0 && forward_global_chunk < total_global_chunks) {
                 auto is_forward = true;
-                auto task = CreateTask(step, mb, forward_global_chunk, num_stages, total_global_chunks, is_forward,
-                                       layout);
+                auto task
+                    = CreateTask(step, mb, forward_global_chunk, num_stages, total_global_chunks, is_forward, layout);
                 schedule.push_back(task);
             }
 
@@ -196,8 +192,8 @@ PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(int n, int num_stages
 
             if (backward_global_chunk >= 0 && backward_global_chunk < total_global_chunks) {
                 auto is_forward = false;
-                auto task = CreateTask(step, mb, backward_global_chunk, num_stages, total_global_chunks, is_forward,
-                                       layout);
+                auto task
+                    = CreateTask(step, mb, backward_global_chunk, num_stages, total_global_chunks, is_forward, layout);
                 schedule.push_back(task);
             }
         }
@@ -210,8 +206,8 @@ PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(int n, int num_stages
             int backward_global_chunk = (total_global_chunks - 1) - (backward_step - mb);
             if (backward_global_chunk >= 0 && backward_global_chunk < total_global_chunks) {
                 auto is_forward = false;
-                auto task = CreateTask(step, mb, backward_global_chunk, num_stages, total_global_chunks, is_forward,
-                                       layout);
+                auto task
+                    = CreateTask(step, mb, backward_global_chunk, num_stages, total_global_chunks, is_forward, layout);
                 schedule.push_back(task);
             }
         }

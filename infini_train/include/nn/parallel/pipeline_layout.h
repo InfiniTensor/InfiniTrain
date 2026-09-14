@@ -8,7 +8,7 @@ namespace infini_train::nn::parallel {
 
 class PipelineLayoutError : public std::runtime_error {
 public:
-    explicit PipelineLayoutError(const std::string& msg);
+    explicit PipelineLayoutError(const std::string &msg);
 };
 
 // Represent the three special modules explicitly.
@@ -52,7 +52,6 @@ struct LayerLocation {
     int flat_local_layer_index = -1;
 };
 
-
 // Optional validation policies for layout construction.
 struct PipelineLayoutPolicy {
     bool allow_empty_stages = false;
@@ -65,37 +64,29 @@ public:
     PipelineLayout();
 
     // Build the default layout with total_chunks = num_stages * vpp_size.
-    static PipelineLayout BuildDefault(
-        int num_layers,
-        int num_stages,
-        int vpp_size,
-        SpecialModulePlacement placement = {},
-        PipelineLayoutPolicy policy = {}
-    );
+    static PipelineLayout BuildDefault(int num_layers, int num_stages, int vpp_size,
+                                       SpecialModulePlacement placement = {}, PipelineLayoutPolicy policy = {});
 
     // Build a user-defined contiguous layout.
-    static PipelineLayout BuildContiguous(
-        const std::vector<int>& stage_layer_counts,
-        SpecialModulePlacement placement = {},
-        PipelineLayoutPolicy policy = {}
-    );
+    static PipelineLayout BuildContiguous(const std::vector<int> &stage_layer_counts,
+                                          SpecialModulePlacement placement = {}, PipelineLayoutPolicy policy = {});
 
     int num_layers() const;
     int num_stages() const;
     int vpp_size() const;
 
-    const StageLayout& stage(int stage_id) const;
-    const ChunkLayout& chunk(int global_chunk_id) const;
-    const std::vector<ChunkLayout>& chunks() const;
+    const StageLayout &stage(int stage_id) const;
+    const ChunkLayout &chunk(int global_chunk_id) const;
+    const std::vector<ChunkLayout> &chunks() const;
 
-    const LayerLocation& locate_layer(int layer_id) const;
+    const LayerLocation &locate_layer(int layer_id) const;
     int stage_of_layer(int layer_id) const;
     int local_layer_index(int stage_id, int layer_id) const;
-    const ChunkLayout& chunk_of_layer(int layer_id) const;
+    const ChunkLayout &chunk_of_layer(int layer_id) const;
 
     bool owns(SpecialModule module, int stage_id) const;
-    const SpecialModulePlacement& special_modules() const;
-    const PipelineLayoutPolicy& policy() const;
+    const SpecialModulePlacement &special_modules() const;
+    const PipelineLayoutPolicy &policy() const;
 
     std::string ToString() const;
     void Validate() const;
@@ -107,42 +98,25 @@ public:
     // chunks within a stage by ',', 't' denotes one transformer layer and E/F/H
     // denote embedding/final-norm/LM-head ownership respectively. Parenthesized
     // expressions may be repeated with '*N'.
-    static PipelineLayout ParseMegatronStyleLayout(
-        const std::string& value,
-        int num_layers,
-        int pp_size,
-        int vpp_size = 1,
-        SpecialModulePlacement placement = {},
-        PipelineLayoutPolicy policy = {});
+    static PipelineLayout ParseMegatronStyleLayout(const std::string &value, int num_layers, int pp_size,
+                                                   int vpp_size = 1, SpecialModulePlacement placement = {},
+                                                   PipelineLayoutPolicy policy = {});
 
     // Suggest a contiguous layer partition that approximately balances the
     // supplied per-layer costs.  The returned vector has pp_size entries and
     // sums to num_layers.
-    static std::vector<int> SuggestBalancedPartition(
-        int num_layers,
-        int pp_size,
-        const std::vector<double>& layer_costs = {});
+    static std::vector<int> SuggestBalancedPartition(int num_layers, int pp_size,
+                                                     const std::vector<double> &layer_costs = {});
 
-    static PipelineLayout BuildPipelineLayout(
-        int num_layers,
-        int pp_size,
-        int vpp_size,
-        const std::string &layer_partition,
-        SpecialModulePlacement placement = {},
-        PipelineLayoutPolicy policy = {});
+    static PipelineLayout BuildPipelineLayout(int num_layers, int pp_size, int vpp_size,
+                                              const std::string &layer_partition, SpecialModulePlacement placement = {},
+                                              PipelineLayoutPolicy policy = {});
 
 private:
-    PipelineLayout(
-        int num_layers,
-        int num_stages,
-        int vpp_size,
-        std::vector<ChunkLayout> chunks,
-        SpecialModulePlacement placement,
-        PipelineLayoutPolicy policy);
+    PipelineLayout(int num_layers, int num_stages, int vpp_size, std::vector<ChunkLayout> chunks,
+                   SpecialModulePlacement placement, PipelineLayoutPolicy policy);
 
-    static SpecialModulePlacement BuildPlacement(
-        SpecialModulePlacement placement,
-        int num_stages);
+    static SpecialModulePlacement BuildPlacement(SpecialModulePlacement placement, int num_stages);
 
     void BuildIndexes();
 

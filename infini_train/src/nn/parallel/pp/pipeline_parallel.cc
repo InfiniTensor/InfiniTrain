@@ -90,14 +90,14 @@ PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num
         throw std::invalid_argument("PipelineParallel requires a non-null model module");
     }
     if (num_stages != layout.num_stages()) {
-        throw PipelineLayoutError(std::format(
-            "PipelineParallel num_stages={} does not match installed PipelineLayout num_stages={}",
-            num_stages, layout.num_stages()));
+        throw PipelineLayoutError(
+            std::format("PipelineParallel num_stages={} does not match installed PipelineLayout num_stages={}",
+                        num_stages, layout.num_stages()));
     }
     if (pp_rank < 0 || pp_rank >= layout.num_stages()) {
-        throw PipelineLayoutError(std::format(
-            "PipelineParallel rank={} is outside installed PipelineLayout stage range [0, {})",
-            pp_rank, layout.num_stages()));
+        throw PipelineLayoutError(
+            std::format("PipelineParallel rank={} is outside installed PipelineLayout stage range [0, {})", pp_rank,
+                        layout.num_stages()));
     }
     layout.ValidateForCurrentPipelineTransport();
 
@@ -126,9 +126,9 @@ PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num
         const int global_chunk_id = stage.global_chunk_ids.at(local_chunk_idx);
         const auto &chunk_layout = layout.chunk(global_chunk_id);
         if (chunk_layout.stage_id != rank_) {
-            throw PipelineLayoutError(std::format(
-                "Global chunk {} belongs to stage {}, but PipelineParallel is building stage {}",
-                global_chunk_id, chunk_layout.stage_id, rank_));
+            throw PipelineLayoutError(
+                std::format("Global chunk {} belongs to stage {}, but PipelineParallel is building stage {}",
+                            global_chunk_id, chunk_layout.stage_id, rank_));
         }
 
         std::vector<std::shared_ptr<Module>> chunk_parts;
@@ -149,14 +149,13 @@ PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num
         if (local_chunk_idx == num_local_chunks - 1 && stages_last_module) {
             auto &last_stage = wrapped_module->mutable_module(kPPLastStageName);
             if (last_stage == nullptr) {
-                throw std::invalid_argument(
-                    "Pipeline model owns final norm or LM head but __pp_last_stage is null");
+                throw std::invalid_argument("Pipeline model owns final norm or LM head but __pp_last_stage is null");
             }
             chunk_parts.push_back(last_stage);
         }
         if (chunk_parts.empty()) {
-            throw std::invalid_argument(std::format(
-                "Pipeline stage {} local chunk {} has no executable modules", rank_, local_chunk_idx));
+            throw std::invalid_argument(
+                std::format("Pipeline stage {} local chunk {} has no executable modules", rank_, local_chunk_idx));
         }
         chunks.push_back(std::make_shared<Sequential>(std::move(chunk_parts)));
     }

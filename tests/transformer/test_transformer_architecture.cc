@@ -168,9 +168,8 @@ TEST(TransformerPipelineLayoutTest, BuildsOnlyTheCurrentStageModules) {
     config.add_bias_linear = true;
     config.tie_weights = false;
 
-    auto has_key = [](const auto &state_dict, const std::string &key) {
-        return state_dict.find(key) != state_dict.end();
-    };
+    auto has_key
+        = [](const auto &state_dict, const std::string &key) { return state_dict.find(key) != state_dict.end(); };
     auto has_named_parameter = [](const auto &named_parameters, const std::string &key) {
         return std::any_of(named_parameters.begin(), named_parameters.end(),
                            [&](const auto &entry) { return entry.first == key; });
@@ -236,9 +235,7 @@ TEST(TransformerPipelineLayoutTest, BuildsOnlyTheCurrentStageModules) {
     PipelineLayoutPolicy split_policy;
     split_policy.require_boundary_special_modules = false;
     auto split_layout = PipelineLayout::BuildContiguous(
-        {2, 4, 3, 3},
-        {.embedding_stage = 0, .final_norm_stage = 2, .lm_head_stage = 3},
-        split_policy);
+        {2, 4, 3, 3}, {.embedding_stage = 0, .final_norm_stage = 2, .lm_head_stage = 3}, split_policy);
     GlobalEnv::Instance().set_pipeline_layout(split_layout);
 
     nn::parallel::pp_rank = 2;

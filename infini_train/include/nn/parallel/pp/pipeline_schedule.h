@@ -56,8 +56,7 @@ public:
     static Task CreateTask(int step, int mb, int global_chunk, int num_stages, int total_chunks, bool is_forward,
                            const PipelineLayout &layout);
 
-    static std::vector<Task> GenerateGPipeSchedule(int n, int num_stages, int vpp_size,
-                                                   const PipelineLayout &layout);
+    static std::vector<Task> GenerateGPipeSchedule(int n, int num_stages, int vpp_size, const PipelineLayout &layout);
 
     static std::vector<Task> GenerateInterleaved1F1BSchedule(int n, int num_stages, int vpp_size,
                                                              const PipelineLayout &layout);

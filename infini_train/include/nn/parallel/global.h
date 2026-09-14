@@ -59,9 +59,9 @@ public:
 
     Layout layout() const;
 
-    const PipelineLayout& pipeline_layout() const;
+    const PipelineLayout &pipeline_layout() const;
 
-    void set_pipeline_layout(const PipelineLayout& layout);
+    void set_pipeline_layout(const PipelineLayout &layout);
 
     int pp_rank() const;
 
@@ -119,13 +119,13 @@ inline bool GetSequenceParallelEnabled() { return GlobalEnv::Instance().sequence
 inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
 inline int GetPipelineParallelSize() { return GlobalEnv::Instance().pipeline_parallel_size(); }
 inline int GetVirtualPipelineParallelSize() { return GlobalEnv::Instance().virtual_pipeline_parallel_size(); }
-inline const PipelineLayout& GetPipelineLayout() {return GlobalEnv::Instance().pipeline_layout();}
-inline void InstallPipelineLayout(const PipelineLayout& layout) {
+inline const PipelineLayout &GetPipelineLayout() { return GlobalEnv::Instance().pipeline_layout(); }
+inline void InstallPipelineLayout(const PipelineLayout &layout) {
     layout.Validate();
     layout.ValidateForCurrentPipelineTransport();
     GlobalEnv::Instance().set_pipeline_layout(layout);
 }
-inline int GetPPRank() {return GlobalEnv::Instance().pp_rank();}
+inline int GetPPRank() { return GlobalEnv::Instance().pp_rank(); }
 
 // =========================
 // Layout Helper Functions

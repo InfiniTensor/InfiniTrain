@@ -1,8 +1,8 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
 
+#include <format>
 #include <memory>
 #include <stdexcept>
-#include <format>
 
 #include "glog/logging.h"
 
@@ -22,16 +22,15 @@ PipelineStage::PipelineStage(int stage_index /* pp_rank */, int num_stages /* pp
         throw std::invalid_argument("PipelineStage num_stages must be positive");
     }
     if (stage_index_ < 0 || stage_index_ >= num_stages_) {
-        throw std::invalid_argument(std::format(
-            "PipelineStage stage_index={} is outside [0, {})", stage_index_, num_stages_));
+        throw std::invalid_argument(
+            std::format("PipelineStage stage_index={} is outside [0, {})", stage_index_, num_stages_));
     }
     if (chunks_.empty()) {
         throw std::invalid_argument("PipelineStage requires at least one local chunk");
     }
     for (size_t local_chunk_idx = 0; local_chunk_idx < chunks_.size(); ++local_chunk_idx) {
         if (chunks_[local_chunk_idx] == nullptr) {
-            throw std::invalid_argument(std::format(
-                "PipelineStage local chunk {} is null", local_chunk_idx));
+            throw std::invalid_argument(std::format("PipelineStage local chunk {} is null", local_chunk_idx));
         }
     }
 }

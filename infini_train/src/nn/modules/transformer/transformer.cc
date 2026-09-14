@@ -174,11 +174,10 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
     return {x1};
 }
 
-TransformerLastStage::TransformerLastStage(const TransformerConfig &config,
-    bool has_final_norm, bool has_lm_head) : CloneableModule(kType), config_(config),
-    has_final_norm_(has_final_norm), has_lm_head_(has_lm_head) {
+TransformerLastStage::TransformerLastStage(const TransformerConfig &config, bool has_final_norm, bool has_lm_head)
+    : CloneableModule(kType), config_(config), has_final_norm_(has_final_norm), has_lm_head_(has_lm_head) {
 
-    if(has_final_norm) {
+    if (has_final_norm) {
         switch (config.norm_type) {
         case NormType::kLayerNorm:
             modules_[kLnFLayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd});
@@ -192,7 +191,7 @@ TransformerLastStage::TransformerLastStage(const TransformerConfig &config,
     }
 
     // NOTE(zbl): weight-tying is possible but torch script did not do so
-    if(has_lm_head) {
+    if (has_lm_head) {
         modules_[kLMHeadLayerName] = std::make_shared<parallel::ColumnParallelLinear>(
             /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
             /*bias=*/config_.add_bias_lm_head,
@@ -207,18 +206,17 @@ TransformerLastStage::TransformerLastStage(const TransformerConfig &config,
 std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     // (B, T, C) -> Layernorm -> (B, T, C)
     auto x1 = x[0];
-    if(has_final_norm_) {
+    if (has_final_norm_) {
         x1 = (*modules_[kLnFLayerName])({x1})[0];
     }
-    if(has_lm_head_) {
+    if (has_lm_head_) {
         return (*modules_[kLMHeadLayerName])({x1});
     }
     return {x1};
 }
 
 TransformerModel::TransformerModel(const TransformerConfig config)
-    : CloneableModule(kType), config_(config), 
-    num_local_chunks_(0) {
+    : CloneableModule(kType), config_(config), num_local_chunks_(0) {
     const auto &layout = nn::parallel::global::GetPipelineLayout();
     const int stage_id = nn::parallel::pp_rank;
     const auto &stage = layout.stage(stage_id);
@@ -243,11 +241,11 @@ TransformerModel::TransformerModel(const TransformerConfig config)
     {
         std::vector<std::shared_ptr<nn::Module>> h;
         int local_chunk_idx = 0;
-        for(int gid: stage.global_chunk_ids) {
+        for (int gid : stage.global_chunk_ids) {
             const auto &c = layout.chunk(gid);
             auto chunk = std::make_shared<TransformerChunk>(config_, c.layers.start, c.layers.end);
             const int layer_count = c.layers.size();
-            for(int i=0; i<layer_count; ++i) {
+            for (int i = 0; i < layer_count; ++i) {
                 h.push_back(chunk->mutable_module(TransformerChunk::kHLayerName)->mutable_module(std::to_string(i)));
             }
             modules_[kPPChunkNamePrefix + std::to_string(local_chunk_idx)] = std::move(chunk);
@@ -259,13 +257,13 @@ TransformerModel::TransformerModel(const TransformerConfig config)
 
     const bool has_final_norm = layout.owns(nn::parallel::SpecialModule::kFinalNorm, stage_id);
     const bool has_lm_head = layout.owns(nn::parallel::SpecialModule::kLMHead, stage_id);
-    if(has_final_norm || has_lm_head) {
+    if (has_final_norm || has_lm_head) {
         modules_[kPPLastStageName] = std::make_shared<TransformerLastStage>(config_, has_final_norm, has_lm_head);
-        if(has_final_norm) {
+        if (has_final_norm) {
             transformer[TransformerLastStage::kLnFLayerName]
                 = modules_[kPPLastStageName]->mutable_module(TransformerLastStage::kLnFLayerName);
         }
-        if(has_lm_head) {
+        if (has_lm_head) {
             // Keep the canonical checkpoint path under `transformer`, while the
             // pipeline wrapper owns the same module for execution.  Registering
             // a second top-level alias would make StateDict emit `lm_head.*`

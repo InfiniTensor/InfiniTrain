@@ -188,11 +188,9 @@ Layout GlobalEnv::layout() const {
     return layout_;
 }
 
-const PipelineLayout& GlobalEnv::pipeline_layout() const {
-    return pipeline_layout_;
-}
+const PipelineLayout &GlobalEnv::pipeline_layout() const { return pipeline_layout_; }
 
-void GlobalEnv::set_pipeline_layout(const PipelineLayout& layout) {
+void GlobalEnv::set_pipeline_layout(const PipelineLayout &layout) {
     std::lock_guard<std::mutex> lock(mutex_);
     pipeline_layout_ = layout;
 }

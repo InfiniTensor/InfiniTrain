@@ -7,11 +7,9 @@
 namespace infini_train::nn::parallel {
 namespace {
 
-PipelineLayout BuildExampleLayout() {
-    return PipelineLayout::BuildDefault(24, 4, 1);
-}
+PipelineLayout BuildExampleLayout() { return PipelineLayout::BuildDefault(24, 4, 1); }
 
-}  // namespace
+} // namespace
 
 TEST(PipelineLayoutTest, BuildDefaultBasicProperties) {
     auto layout = BuildExampleLayout();
@@ -187,4 +185,4 @@ TEST(PipelineLayoutTest, BuildPipelineLayoutRejectsInvalidConfigurations) {
     EXPECT_THROW(PipelineLayout::BuildPipelineLayout(24, 4, 2, "4,8,6,6"), PipelineLayoutError);
 }
 
-}  // namespace infini_train::nn::parallel
+} // namespace infini_train::nn::parallel

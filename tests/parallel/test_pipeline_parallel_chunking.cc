@@ -31,8 +31,8 @@ nn::TransformerConfig MakeConfig() {
     return config;
 }
 
-std::shared_ptr<nn::parallel::PipelineParallel> BuildPipeline(
-    const nn::parallel::PipelineLayout &layout, int stage_id) {
+std::shared_ptr<nn::parallel::PipelineParallel> BuildPipeline(const nn::parallel::PipelineLayout &layout,
+                                                              int stage_id) {
     nn::parallel::global::GlobalEnv::Instance().set_pipeline_layout(layout);
     nn::parallel::pp_rank = stage_id;
 
@@ -40,13 +40,13 @@ std::shared_ptr<nn::parallel::PipelineParallel> BuildPipeline(
     const std::vector<std::vector<int64_t>> recv_shape = {{2, 4, 32}};
     const int local_chunk_count = static_cast<int>(layout.stage(stage_id).global_chunk_ids.size());
 
-    return std::make_shared<nn::parallel::PipelineParallel>(
-        model, layout.num_stages(), /*num_micro_batches=*/1, recv_shape, stage_id,
-        Device(Device::DeviceType::kCPU, 0), local_chunk_count);
+    return std::make_shared<nn::parallel::PipelineParallel>(model, layout.num_stages(), /*num_micro_batches=*/1,
+                                                            recv_shape, stage_id, Device(Device::DeviceType::kCPU, 0),
+                                                            local_chunk_count);
 }
 
-std::shared_ptr<nn::Sequential> AsSequential(
-    const std::shared_ptr<nn::parallel::PipelineParallel> &pipeline, size_t index) {
+std::shared_ptr<nn::Sequential> AsSequential(const std::shared_ptr<nn::parallel::PipelineParallel> &pipeline,
+                                             size_t index) {
     auto *chunks = pipeline->mutable_chunks();
     if (chunks == nullptr || index >= chunks->size()) {
         return nullptr;
@@ -54,7 +54,7 @@ std::shared_ptr<nn::Sequential> AsSequential(
     return std::dynamic_pointer_cast<nn::Sequential>(chunks->at(index));
 }
 
-}  // namespace
+} // namespace
 
 TEST(PipelineParallelChunkingTest, Stage0IncludesEmbeddingOnly) {
     const auto layout = nn::parallel::PipelineLayout::BuildContiguous({2, 4, 3, 3});
@@ -108,12 +108,10 @@ TEST(PipelineParallelChunkingTest, RejectsStageCountMismatchWithCatchableError) 
     nn::parallel::pp_rank = 0;
     auto model = std::make_shared<nn::TransformerModel>(MakeConfig());
 
-    EXPECT_THROW(
-        std::make_shared<nn::parallel::PipelineParallel>(
-            model, /*num_stages=*/2, /*num_micro_batches=*/1,
-            std::vector<std::vector<int64_t>>{{2, 4, 32}}, /*rank=*/0,
-            Device(Device::DeviceType::kCPU, 0), /*vpp=*/1),
-        nn::parallel::PipelineLayoutError);
+    EXPECT_THROW(std::make_shared<nn::parallel::PipelineParallel>(
+                     model, /*num_stages=*/2, /*num_micro_batches=*/1, std::vector<std::vector<int64_t>>{{2, 4, 32}},
+                     /*rank=*/0, Device(Device::DeviceType::kCPU, 0), /*vpp=*/1),
+                 nn::parallel::PipelineLayoutError);
 }
 
 class PipelineParallelChunkingEnvironment : public ::testing::Environment {
@@ -125,5 +123,5 @@ public:
     }
 };
 
-::testing::Environment *const pipeline_parallel_chunking_environment =
-    ::testing::AddGlobalTestEnvironment(new PipelineParallelChunkingEnvironment());
+::testing::Environment *const pipeline_parallel_chunking_environment
+    = ::testing::AddGlobalTestEnvironment(new PipelineParallelChunkingEnvironment());

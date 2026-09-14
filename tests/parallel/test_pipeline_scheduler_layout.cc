@@ -51,9 +51,8 @@ TEST(PipelineSchedulerLayoutTest, CreateTaskSupportsContiguousCustomLayout) {
 TEST(PipelineSchedulerLayoutTest, RejectsTopologyMismatch) {
     const auto layout = PipelineLayout::BuildDefault(/*num_layers=*/12, /*num_stages=*/3, /*vpp_size=*/2);
 
-    EXPECT_THROW(
-        PipelineParallelScheduler::GenerateGPipeSchedule(/*n=*/2, /*num_stages=*/2, /*vpp_size=*/2, layout),
-        PipelineLayoutError);
+    EXPECT_THROW(PipelineParallelScheduler::GenerateGPipeSchedule(/*n=*/2, /*num_stages=*/2, /*vpp_size=*/2, layout),
+                 PipelineLayoutError);
 }
 
-}  // namespace infini_train::nn::parallel
+} // namespace infini_train::nn::parallel
