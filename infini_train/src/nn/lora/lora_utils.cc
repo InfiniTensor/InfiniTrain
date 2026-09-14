@@ -15,9 +15,11 @@
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/lora/lora_linear.h"
 #include "infini_train/include/nn/lora/lora_parallel_linear.h"
+#include "infini_train/include/nn/modules/activations.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
+#include "infini_train/include/nn/modules/transformer/mlp.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
@@ -36,6 +38,9 @@ enum class LoRATensorSharding {
     // Attention QKV LoRA-B: dim0-sharded like ColumnParallel, but each local
     // shard is packed as [Qi | Ki | Vi] instead of a simple contiguous slice.
     kPackedQKVColumnParallelDim0,
+    // SwiGLU FC1 LoRA-B: dim0-sharded like ColumnParallel, but each local
+    // shard is packed as [gate_i | up_i] instead of a simple contiguous slice.
+    kPackedSwiGLUColumnParallelDim0,
     // LoRA-A for a RowParallelLinear: local shape is [rank, in/tp].
     kRowParallelDim1,
 };
@@ -131,6 +136,33 @@ std::unordered_map<std::string, LoRATensorSharding> BuildLoRATensorShardings(con
             = LoRATensorSharding::kPackedQKVColumnParallelDim0;
     }
 
+    // For packed SwiGLU: FC1 projection is stored locally as [gate_i | up_i] on each TP rank.
+    for (const auto &[module_name, module] : named_modules) {
+        if (!dynamic_cast<MLP *>(module.get())) {
+            continue;
+        }
+
+        bool is_swiglu = false;
+        for (const auto &child : module->modules()) {
+            if (dynamic_cast<SwiGLU *>(child.get())) {
+                is_swiglu = true;
+                break;
+            }
+        }
+        if (!is_swiglu) {
+            continue;
+        }
+
+        auto fc_projection = module->mutable_module(MLP::kCFcLayerName);
+        if (!dynamic_cast<LoRAColumnParallelLinear *>(fc_projection.get())) {
+            continue;
+        }
+
+        const auto fc_module_name = QualifiedParamName(module_name, MLP::kCFcLayerName);
+        shardings[QualifiedParamName(fc_module_name, LoRAColumnParallelLinear::kParamLoraBName)]
+            = LoRATensorSharding::kPackedSwiGLUColumnParallelDim0;
+    }
+
     return shardings;
 }
 
@@ -165,12 +197,20 @@ ExportLoRATensorForSave(const std::string &name, const std::shared_ptr<Tensor> &
     case LoRATensorSharding::kReplicated:
         return tensor;
     case LoRATensorSharding::kPackedQKVColumnParallelDim0:
-        // Packed QKV is still dim0-sharded like ColumnParallel; it only needs
-        // an extra Q/K/V reorder after the common gather below.
+    case LoRATensorSharding::kPackedSwiGLUColumnParallelDim0:
+        // Packed projections are still dim0-sharded like ColumnParallel; they
+        // only need an extra component reorder after the common gather below.
     case LoRATensorSharding::kColumnParallelDim0: {
         auto gathered = parallel::GatherTensorParallelShard(tensor, 0);
-        if (sharding != LoRATensorSharding::kPackedQKVColumnParallelDim0) {
+        if (sharding == LoRATensorSharding::kColumnParallelDim0) {
             return gathered;
+        }
+
+        if (sharding == LoRATensorSharding::kPackedSwiGLUColumnParallelDim0) {
+            // Local shards are gathered as [gate_0 | up_0 | gate_1 | up_1 | ...].
+            // Adapter files use the full packed order [all_gate | all_up].
+            return detail::RestorePackedSwiGLURowsFromTensorParallel(gathered,
+                                                                     parallel::global::GetTensorParallelSize());
         }
 
         const auto lora_a_name = LoraANameForLoraB(name);
@@ -223,6 +263,14 @@ void LoadLoRATensorIntoModel(const std::string &name, const std::shared_ptr<Tens
         auto sliced
             = detail::SlicePackedQKVRowsForTensorParallel(src, /*q_rows=*/lora_a_dims[1], parallel::tp_rank, tp_size);
         CHECK(sliced->Dims() == dst_dims) << "LoadLoRATensorIntoModel: packed QKV shard shape mismatch for " << name;
+        dst->CopyFrom(sliced);
+        return;
+    }
+    if (sharding == LoRATensorSharding::kPackedSwiGLUColumnParallelDim0) {
+        // Full adapter files store [all_gate | all_up]. Each TP rank needs its
+        // matching local packed layout [gate_i | up_i].
+        auto sliced = detail::SlicePackedSwiGLURowsForTensorParallel(src, parallel::tp_rank, tp_size);
+        CHECK(sliced->Dims() == dst_dims) << "LoadLoRATensorIntoModel: packed SwiGLU shard shape mismatch for " << name;
         dst->CopyFrom(sliced);
         return;
     }
@@ -321,6 +369,56 @@ std::shared_ptr<Tensor> RestorePackedQKVRowsFromTensorParallel(const std::shared
             gathered_tensor->Slice(0, base + q_local_rows + kv_local_rows, base + q_local_rows + 2 * kv_local_rows));
     }
 
+    return nn::function::Concat(reordered_shards, 0);
+}
+
+std::shared_ptr<Tensor> SlicePackedSwiGLURowsForTensorParallel(const std::shared_ptr<Tensor> &full_tensor, int tp_rank,
+                                                               int tp_size) {
+    CHECK(full_tensor != nullptr);
+
+    const auto &dims = full_tensor->Dims();
+    CHECK_GE(dims.size(), 1);
+    CHECK_GT(tp_size, 0);
+    CHECK_GE(tp_rank, 0);
+    CHECK_LT(tp_rank, tp_size);
+    CHECK_EQ(dims[0] % 2, 0) << "Packed SwiGLU tensor must contain balanced gate and up rows";
+
+    const int64_t rows_per_projection = dims[0] / 2;
+    CHECK_GT(rows_per_projection, 0);
+    CHECK_EQ(rows_per_projection % tp_size, 0) << "SwiGLU projection rows must be divisible by TP size";
+    const int64_t local_rows = rows_per_projection / tp_size;
+
+    auto gate_shard = full_tensor->Slice(0, static_cast<int64_t>(tp_rank) * local_rows,
+                                         static_cast<int64_t>(tp_rank + 1) * local_rows);
+    auto up_shard = full_tensor->Slice(0, rows_per_projection + static_cast<int64_t>(tp_rank) * local_rows,
+                                       rows_per_projection + static_cast<int64_t>(tp_rank + 1) * local_rows);
+    return nn::function::Concat({gate_shard, up_shard}, 0);
+}
+
+std::shared_ptr<Tensor> RestorePackedSwiGLURowsFromTensorParallel(const std::shared_ptr<Tensor> &gathered_tensor,
+                                                                  int tp_size) {
+    CHECK(gathered_tensor != nullptr);
+
+    const auto &dims = gathered_tensor->Dims();
+    CHECK_GE(dims.size(), 1);
+    CHECK_GT(tp_size, 0);
+    CHECK_EQ(dims[0] % tp_size, 0) << "Gathered packed SwiGLU rows must be divisible by TP size";
+
+    const int64_t rows_per_rank = dims[0] / tp_size;
+    CHECK_EQ(rows_per_rank % 2, 0) << "Local packed SwiGLU tensor must contain balanced gate and up rows";
+    const int64_t local_rows = rows_per_rank / 2;
+    CHECK_GT(local_rows, 0);
+
+    std::vector<std::shared_ptr<Tensor>> reordered_shards;
+    reordered_shards.reserve(static_cast<size_t>(tp_size) * 2);
+    for (int rank = 0; rank < tp_size; ++rank) {
+        const int64_t base = static_cast<int64_t>(rank) * rows_per_rank;
+        reordered_shards.push_back(gathered_tensor->Slice(0, base, base + local_rows));
+    }
+    for (int rank = 0; rank < tp_size; ++rank) {
+        const int64_t base = static_cast<int64_t>(rank) * rows_per_rank;
+        reordered_shards.push_back(gathered_tensor->Slice(0, base + local_rows, base + 2 * local_rows));
+    }
     return nn::function::Concat(reordered_shards, 0);
 }
 
