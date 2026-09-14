@@ -104,8 +104,4 @@ PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num
 }
 
 std::vector<std::shared_ptr<Module>> *PipelineParallel::mutable_chunks() { return pipeline_stage_->mutable_chunks(); }
-
-void PipelineParallel::SetNoSyncFunc(std::function<std::vector<std::unique_ptr<nn::NoSyncGuard>>()> func) {
-    schedule_->SetNoSyncFunc(std::move(func));
-}
 } // namespace infini_train::nn::parallel
