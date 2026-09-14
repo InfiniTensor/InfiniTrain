@@ -320,9 +320,6 @@ float PipelineSchedule::Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tens
 
     float lossf = StepMicroBatches(micro_batches, target_mbs, loss_fn, dtype);
 
-    // Clip only after all micro-batches have accumulated and all overlap work
-    // has been completed by the optimizer's distributed implementation.
-    optimizer->ClipGradNormConfigured();
     optimizer->Step();
 
     return lossf;
