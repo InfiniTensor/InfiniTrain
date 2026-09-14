@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <memory>
 #include <vector>
 
@@ -11,7 +10,6 @@ class Tensor;
 class Optimizer;
 namespace nn {
 class Module;
-class NoSyncGuard;
 } // namespace nn
 } // namespace infini_train
 
@@ -33,17 +31,12 @@ public:
                                    const std::vector<std::shared_ptr<Tensor>> &target_mbs,
                                    const std::shared_ptr<nn::Module> &loss_fn, DataType dtype);
 
-    using NoSyncFunc = std::function<std::vector<std::unique_ptr<nn::NoSyncGuard>>()>;
-
-    void SetNoSyncFunc(NoSyncFunc func);
-
     std::vector<std::shared_ptr<Tensor>> ReceiveFromPrev(int peer_rank);
     std::vector<std::shared_ptr<Tensor>> SendToNext(const std::vector<std::shared_ptr<Tensor>> &tensors, int peer_rank);
 
 protected:
     int num_micro_batches_ = -1;
     std::shared_ptr<PipelineStage> stage_ = nullptr;
-    NoSyncFunc no_sync_func_;
 };
 
 class PipelineParallelScheduler {
