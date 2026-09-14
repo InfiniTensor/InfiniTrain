@@ -340,12 +340,16 @@ void Train(const nn::parallel::Rank &rank) {
 
     if (FLAGS_clip_grad_norm >= 0.0) {
         std::optional<bool> foreach = std::nullopt;
-        if (FLAGS_clip_grad_foreach == "true") foreach = true;
-        else if (FLAGS_clip_grad_foreach == "false") foreach = false;
-        else CHECK_EQ(FLAGS_clip_grad_foreach, "auto");
+        if (FLAGS_clip_grad_foreach == "true") {
+            foreach { = true; }
+        } else if (FLAGS_clip_grad_foreach == "false") {
+            foreach { = false; }
+        } else {
+            CHECK_EQ(FLAGS_clip_grad_foreach, "auto");
+        }
         optimizer->SetClipGradNormConfig(static_cast<float>(FLAGS_clip_grad_norm),
-                                         static_cast<float>(FLAGS_grad_norm_type),
-                                         FLAGS_clip_grad_error_if_nonfinite, foreach);
+                                         static_cast<float>(FLAGS_grad_norm_type), FLAGS_clip_grad_error_if_nonfinite,
+                                         foreach);
     }
 
     const int64_t lr_decay_iters = FLAGS_lr_decay_iters > 0 ? FLAGS_lr_decay_iters : FLAGS_num_iteration;

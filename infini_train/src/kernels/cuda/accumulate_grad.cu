@@ -11,8 +11,7 @@
 
 namespace infini_train::kernels::cuda {
 
-template <typename T>
-__global__ void ScaleInplaceKernel(T *data, float scale, size_t num_elements) {
+template <typename T> __global__ void ScaleInplaceKernel(T *data, float scale, size_t num_elements) {
     const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < num_elements) {
         data[idx] = common::cuda::Mul(data[idx], common::cuda::Cast<T>(scale));
@@ -30,8 +29,8 @@ void ScaleInplace(const std::shared_ptr<Tensor> &tensor, float scale) {
     core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         tensor->Dtype(),
         [=]<typename T>() {
-            ScaleInplaceKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
-                static_cast<T *>(tensor->DataPtr()), scale, num_elements);
+            ScaleInplaceKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(static_cast<T *>(tensor->DataPtr()),
+                                                                                  scale, num_elements);
         },
         "CUDA ScaleInplace");
 }

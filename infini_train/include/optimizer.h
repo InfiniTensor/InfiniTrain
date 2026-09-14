@@ -29,9 +29,10 @@ public:
     virtual void ZeroGrad(bool set_to_none = true);
 
     // Return the pre-clipping norm and scale selected gradients in place.
-    virtual std::shared_ptr<Tensor> ClipGradNorm_(
-        const std::vector<std::shared_ptr<Tensor>> &parameters, float max_norm, float norm_type = 2.0f,
-        bool error_if_nonfinite = false, std::optional<bool> foreach = std::nullopt);
+    virtual std::shared_ptr<Tensor> ClipGradNorm_(const std::vector<std::shared_ptr<Tensor>> &parameters,
+                                                  float max_norm, float norm_type = 2.0f,
+                                                  bool error_if_nonfinite = false,
+                                                  std::optional<bool> foreach = std::nullopt);
 
     std::shared_ptr<Tensor> ClipGradNorm(const std::vector<std::shared_ptr<Tensor>> &parameters, float max_norm,
                                          float norm_type = 2.0f, bool error_if_nonfinite = false,

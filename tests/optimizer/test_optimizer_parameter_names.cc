@@ -65,9 +65,8 @@ TEST_P(OptimizerParameterNamesTest, DistributedOptimizerPropagatesNamesToShardOp
     pg_factory->GetOrCreate(nn::parallel::GetDataParallelProcessGroupName(rank.GlobalRank()),
                             nn::parallel::GetDataParallelGroupRanks(rank.GlobalRank()));
 
-    auto model = std::make_shared<nn::Linear>(64, 4, /*bias=*/false,
-                                               Device(Device::DeviceType::kCUDA,
-                                                      nn::parallel::global::GetLocalProcRank()));
+    auto model = std::make_shared<nn::Linear>(
+        64, 4, /*bias=*/false, Device(Device::DeviceType::kCUDA, nn::parallel::global::GetLocalProcRank()));
     const auto named_parameters = model->NamedParameters();
 
     nn::parallel::DistributedDataParallelConfig ddp_config;
@@ -97,7 +96,6 @@ TEST_P(OptimizerParameterNamesTest, PreservesNumericKeysWhenNamesAreNotSet) {
     EXPECT_TRUE(state.contains("adam.v.0"));
 }
 
-
 TEST_P(OptimizerParameterNamesTest, DistributedOptimizerClipGradNormUsesZero2LocalShard) {
     ONLY_CUDA();
     REQUIRE_MIN_DEVICES(2);
@@ -109,9 +107,8 @@ TEST_P(OptimizerParameterNamesTest, DistributedOptimizerClipGradNormUsesZero2Loc
     auto *pg_factory = nn::parallel::ProcessGroupFactory::Instance(Device::DeviceType::kCUDA);
     pg_factory->GetOrCreate(nn::parallel::GetDataParallelProcessGroupName(rank.GlobalRank()),
                             nn::parallel::GetDataParallelGroupRanks(rank.GlobalRank()));
-    auto model = std::make_shared<nn::Linear>(64, 4, /*bias=*/false,
-                                               Device(Device::DeviceType::kCUDA,
-                                                      nn::parallel::global::GetLocalProcRank()));
+    auto model = std::make_shared<nn::Linear>(
+        64, 4, /*bias=*/false, Device(Device::DeviceType::kCUDA, nn::parallel::global::GetLocalProcRank()));
     nn::parallel::DistributedDataParallelConfig ddp_config;
     ddp_config.zero_stage = 2;
     ddp_config.overlap_grad_reduce = false;
@@ -133,7 +130,6 @@ TEST_P(OptimizerParameterNamesTest, DistributedOptimizerClipGradNormUsesZero2Loc
     EXPECT_NEAR(static_cast<const float *>(local_shard.DataPtr())[0], 0.5f, 1e-4f);
 }
 
-
 TEST_P(OptimizerParameterNamesTest, DistributedOptimizerClipGradNormHandlesEmptyLocalShard) {
     ONLY_CUDA();
     REQUIRE_MIN_DEVICES(2);
@@ -145,9 +141,8 @@ TEST_P(OptimizerParameterNamesTest, DistributedOptimizerClipGradNormHandlesEmpty
     auto *pg_factory = nn::parallel::ProcessGroupFactory::Instance(Device::DeviceType::kCUDA);
     pg_factory->GetOrCreate(nn::parallel::GetDataParallelProcessGroupName(rank.GlobalRank()),
                             nn::parallel::GetDataParallelGroupRanks(rank.GlobalRank()));
-    auto model = std::make_shared<nn::Linear>(4, 4, /*bias=*/false,
-                                               Device(Device::DeviceType::kCUDA,
-                                                      nn::parallel::global::GetLocalProcRank()));
+    auto model = std::make_shared<nn::Linear>(
+        4, 4, /*bias=*/false, Device(Device::DeviceType::kCUDA, nn::parallel::global::GetLocalProcRank()));
     nn::parallel::DistributedDataParallelConfig ddp_config;
     ddp_config.zero_stage = 1;
     ddp_config.overlap_grad_reduce = false;
@@ -179,9 +174,8 @@ TEST_P(OptimizerParameterNamesTest, DistributedOptimizerClipGradNormUsesGlobalSh
     pg_factory->GetOrCreate(nn::parallel::GetDataParallelProcessGroupName(rank.GlobalRank()),
                             nn::parallel::GetDataParallelGroupRanks(rank.GlobalRank()));
 
-    auto model = std::make_shared<nn::Linear>(64, 4, /*bias=*/false,
-                                               Device(Device::DeviceType::kCUDA,
-                                                      nn::parallel::global::GetLocalProcRank()));
+    auto model = std::make_shared<nn::Linear>(
+        64, 4, /*bias=*/false, Device(Device::DeviceType::kCUDA, nn::parallel::global::GetLocalProcRank()));
     nn::parallel::DistributedDataParallelConfig ddp_config;
     ddp_config.zero_stage = 1;
     ddp_config.overlap_grad_reduce = false;

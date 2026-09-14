@@ -46,7 +46,7 @@ DistributedOptimizer::DistributedOptimizer(OptimizerCreatorNamed creator, const 
     NamedParameterList shard_named_parameters;
     BuildShardParamsAndBindGrads(
         [this, &parameter_name_by_tensor, &shard_named_parameters](const std::shared_ptr<Tensor> &parameter,
-                                                             const std::shared_ptr<Tensor> &param_piece) {
+                                                                   const std::shared_ptr<Tensor> &param_piece) {
             const auto name_it = parameter_name_by_tensor.find(parameter.get());
             CHECK(name_it != parameter_name_by_tensor.end())
                 << "DistributedOptimizer parameter is not registered in the model";
@@ -161,9 +161,9 @@ void DistributedOptimizer::FinishParamSync(bool skip_next_bucket_dispatch) {
     for (auto &group : bucket_groups_) { group->FinishParamSync(skip_next_bucket_dispatch); }
 }
 
-std::shared_ptr<Tensor> DistributedOptimizer::ClipGradNorm_(
-    const std::vector<std::shared_ptr<Tensor>> &parameters, float max_norm, float norm_type,
-    bool error_if_nonfinite, std::optional<bool> foreach) {
+std::shared_ptr<Tensor> DistributedOptimizer::ClipGradNorm_(const std::vector<std::shared_ptr<Tensor>> &parameters,
+                                                            float max_norm, float norm_type, bool error_if_nonfinite,
+                                                            std::optional<bool> foreach) {
     CHECK_GE(max_norm, 0.0f) << "max_norm must be non-negative.";
     CHECK((norm_type > 0.0f && std::isfinite(norm_type)) || norm_type == std::numeric_limits<float>::infinity())
         << "norm_type must be positive finite or +inf.";
@@ -185,11 +185,11 @@ std::shared_ptr<Tensor> DistributedOptimizer::ClipGradNorm_(
         if (requested.empty() || requested.contains(shard_param_owners_[i].get())) {
             selected_shards.push_back(shard_params_[i]);
             bool include_in_norm = true;
-            if (global::GetTensorParallelSize() > 1 &&
-                tp_replicated_param_owners_.contains(shard_param_owners_[i].get())) {
-                const auto *tp_group = ProcessGroupFactory::Instance(shard_params_[i]->GetDevice().type())
-                                            ->Get(GetTensorParallelProcessGroupName(
-                                                shard_params_[i]->GetDevice().Rank().GlobalRank()));
+            if (global::GetTensorParallelSize() > 1
+                && tp_replicated_param_owners_.contains(shard_param_owners_[i].get())) {
+                const auto *tp_group
+                    = ProcessGroupFactory::Instance(shard_params_[i]->GetDevice().type())
+                          ->Get(GetTensorParallelProcessGroupName(shard_params_[i]->GetDevice().Rank().GlobalRank()));
                 CHECK(tp_group) << "Tensor-parallel process group is not initialized.";
                 include_in_norm = tp_group->GetGroupRank(shard_params_[i]->GetDevice().Rank().GlobalRank()) == 0;
             }
@@ -201,8 +201,8 @@ std::shared_ptr<Tensor> DistributedOptimizer::ClipGradNorm_(
 
     // Ask the base optimizer for the local norm without scaling.  Infinite
     // max_norm makes its coefficient exactly one for finite gradients.
-    auto local_norm_tensor = base_optimizer_->ClipGradNorm_(
-        norm_shards, std::numeric_limits<float>::infinity(), norm_type, false, std::nullopt);
+    auto local_norm_tensor = base_optimizer_->ClipGradNorm_(norm_shards, std::numeric_limits<float>::infinity(),
+                                                            norm_type, false, std::nullopt);
     const float local_norm = *static_cast<const float *>(local_norm_tensor->DataPtr());
     const bool is_inf_norm = std::isinf(norm_type);
     double local_stat = is_inf_norm ? static_cast<double>(local_norm)
@@ -230,14 +230,14 @@ std::shared_ptr<Tensor> DistributedOptimizer::ClipGradNorm_(
         group->AllReduce(reduced, is_inf_norm ? function::ReduceOpType::kMax : function::ReduceOpType::kSum, false);
     }
     if (global::GetTensorParallelSize() > 1) {
-        const auto *tp_group = ProcessGroupFactory::Instance(total_norm_device.type())->Get(
-            GetTensorParallelProcessGroupName(total_norm_device.Rank().GlobalRank()));
+        const auto *tp_group = ProcessGroupFactory::Instance(total_norm_device.type())
+                                   ->Get(GetTensorParallelProcessGroupName(total_norm_device.Rank().GlobalRank()));
         CHECK(tp_group) << "Tensor-parallel process group is not initialized.";
         tp_group->AllReduce(reduced, is_inf_norm ? function::ReduceOpType::kMax : function::ReduceOpType::kSum, false);
     }
     if (nn::parallel::global::GetPipelineParallelSize() > 1) {
-        const auto *pp_group = ProcessGroupFactory::Instance(total_norm_device.type())->Get(
-            GetPipelineParallelProcessGroupName(total_norm_device.Rank().GlobalRank()));
+        const auto *pp_group = ProcessGroupFactory::Instance(total_norm_device.type())
+                                   ->Get(GetPipelineParallelProcessGroupName(total_norm_device.Rank().GlobalRank()));
         CHECK(pp_group) << "Pipeline process group is not initialized.";
         pp_group->AllReduce(reduced, is_inf_norm ? function::ReduceOpType::kMax : function::ReduceOpType::kSum, false);
     }

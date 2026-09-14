@@ -6,13 +6,10 @@
 
 namespace infini_train::kernels::cpu {
 
-template <typename T>
-void ScaleInplaceTyped(const std::shared_ptr<Tensor> &tensor, float scale) {
+template <typename T> void ScaleInplaceTyped(const std::shared_ptr<Tensor> &tensor, float scale) {
     auto *data = static_cast<T *>(tensor->DataPtr());
 #pragma omp parallel for
-    for (size_t i = 0; i < tensor->NumElements(); ++i) {
-        data[i] = T(static_cast<float>(data[i]) * scale);
-    }
+    for (size_t i = 0; i < tensor->NumElements(); ++i) { data[i] = T(static_cast<float>(data[i]) * scale); }
 }
 
 void ScaleInplace(const std::shared_ptr<Tensor> &tensor, float scale) {
