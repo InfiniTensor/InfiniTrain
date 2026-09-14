@@ -339,17 +339,17 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     if (FLAGS_clip_grad_norm >= 0.0) {
-        std::optional<bool> foreach = std::nullopt;
+        std::optional<bool> foreach_option = std::nullopt;
         if (FLAGS_clip_grad_foreach == "true") {
-            foreach { = true; }
+            foreach_option = true;
         } else if (FLAGS_clip_grad_foreach == "false") {
-            foreach { = false; }
+            foreach_option = false;
         } else {
             CHECK_EQ(FLAGS_clip_grad_foreach, "auto");
         }
         optimizer->SetClipGradNormConfig(static_cast<float>(FLAGS_clip_grad_norm),
                                          static_cast<float>(FLAGS_grad_norm_type), FLAGS_clip_grad_error_if_nonfinite,
-                                         foreach);
+                                         foreach_option);
     }
 
     const int64_t lr_decay_iters = FLAGS_lr_decay_iters > 0 ? FLAGS_lr_decay_iters : FLAGS_num_iteration;
