@@ -1,0 +1,1015 @@
+{
+  "nodes": [
+    {
+      "id": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "type": "file",
+      "name": "gradient_clip.cc",
+      "filePath": "gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "fileCategory": "code",
+      "summary": "梯度裁剪实现，提供范数计算、非有限值检查以及按设备执行的梯度缩放。",
+      "tags": [
+        "梯度裁剪",
+        "gradient-clipping",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:ValidateArguments",
+      "type": "function",
+      "name": "ValidateArguments",
+      "filePath": "gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "lineRange": [
+        20,
+        30
+      ],
+      "summary": "执行梯度裁剪中的ValidateArguments操作，完成核心数据处理或状态变换。",
+      "tags": [
+        "梯度裁剪",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:MakeScalar",
+      "type": "function",
+      "name": "MakeScalar",
+      "filePath": "gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "lineRange": [
+        32,
+        36
+      ],
+      "summary": "实现梯度裁剪子系统中的 MakeScalar 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "梯度裁剪",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:ClipGradNorm",
+      "type": "function",
+      "name": "ClipGradNorm",
+      "filePath": "gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "lineRange": [
+        40,
+        127
+      ],
+      "summary": "计算参数梯度范数并按阈值缩放梯度，支持分布式统计与非有限值检查。",
+      "tags": [
+        "梯度裁剪",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/include/autograd/comm.h",
+      "type": "file",
+      "name": "comm.h",
+      "filePath": "infini_train/include/autograd/comm.h",
+      "fileCategory": "code",
+      "summary": "comm，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:infini_train/include/autograd/comm.h:Scatter",
+      "type": "class",
+      "name": "Scatter",
+      "filePath": "infini_train/include/autograd/comm.h",
+      "lineRange": [
+        19,
+        38
+      ],
+      "summary": "自动微分中的 Scatter 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/comm.h:Gather",
+      "type": "class",
+      "name": "Gather",
+      "filePath": "infini_train/include/autograd/comm.h",
+      "lineRange": [
+        40,
+        59
+      ],
+      "summary": "自动微分中的 Gather 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/comm.h:Broadcast",
+      "type": "class",
+      "name": "Broadcast",
+      "filePath": "infini_train/include/autograd/comm.h",
+      "lineRange": [
+        61,
+        80
+      ],
+      "summary": "自动微分中的 Broadcast 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/comm.h:ReduceAddCoalesced",
+      "type": "class",
+      "name": "ReduceAddCoalesced",
+      "filePath": "infini_train/include/autograd/comm.h",
+      "lineRange": [
+        82,
+        101
+      ],
+      "summary": "自动微分中的 ReduceAddCoalesced 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/gradient_clip.h",
+      "type": "file",
+      "name": "gradient_clip.h",
+      "filePath": "infini_train/include/gradient_clip.h",
+      "fileCategory": "code",
+      "summary": "梯度裁剪公共接口，提供范数计算、非有限值检查以及按设备执行的梯度缩放。",
+      "tags": [
+        "梯度裁剪",
+        "gradient-clipping",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/gradient_clip.h:GradientClipRecord",
+      "type": "class",
+      "name": "GradientClipRecord",
+      "filePath": "infini_train/include/gradient_clip.h",
+      "lineRange": [
+        20,
+        24
+      ],
+      "summary": "梯度裁剪中的 GradientClipRecord 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "梯度裁剪",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "type": "file",
+      "name": "distributed_data_parallel.h",
+      "filePath": "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "fileCategory": "code",
+      "summary": "distributed data parallel，实现数据并行训练中的参数分片、梯度归约、通信钩子和同步优化步骤。",
+      "tags": [
+        "数据并行",
+        "distributed-data-parallel",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h:ddp_config",
+      "type": "function",
+      "name": "ddp_config",
+      "filePath": "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "lineRange": [
+        34,
+        34
+      ],
+      "summary": "实现数据并行子系统中的 ddp_config 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h:DistributedDataParallel",
+      "type": "class",
+      "name": "DistributedDataParallel",
+      "filePath": "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "lineRange": [
+        25,
+        54
+      ],
+      "summary": "数据并行中的 DistributedDataParallel 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "数据并行",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h",
+      "type": "file",
+      "name": "distributed_data_parallel_config.h",
+      "filePath": "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h",
+      "fileCategory": "code",
+      "summary": "distributed data parallel config，实现数据并行训练中的参数分片、梯度归约、通信钩子和同步优化步骤。",
+      "tags": [
+        "数据并行",
+        "distributed-data-parallel",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h:DistributedDataParallelConfig",
+      "type": "class",
+      "name": "DistributedDataParallelConfig",
+      "filePath": "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h",
+      "lineRange": [
+        12,
+        66
+      ],
+      "summary": "保存数据并行组件的结构化配置，并提供默认值与校验。",
+      "tags": [
+        "数据并行",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "type": "file",
+      "name": "param_and_grad_buffer.h",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "fileCategory": "code",
+      "summary": "param and grad buffer，实现数据并行训练中的参数分片、梯度归约、通信钩子和同步优化步骤。",
+      "tags": [
+        "数据并行",
+        "distributed-data-parallel",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:bucket_id",
+      "type": "function",
+      "name": "bucket_id",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        41,
+        41
+      ],
+      "summary": "实现数据并行子系统中的 bucket_id 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:param_dtype",
+      "type": "function",
+      "name": "param_dtype",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        49,
+        49
+      ],
+      "summary": "实现数据并行子系统中的 param_dtype 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:grad_dtype",
+      "type": "function",
+      "name": "grad_dtype",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        51,
+        51
+      ],
+      "summary": "实现数据并行子系统中的 grad_dtype 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:offset",
+      "type": "function",
+      "name": "offset",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        53,
+        53
+      ],
+      "summary": "实现数据并行子系统中的 offset 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:num_elements_unpadded",
+      "type": "function",
+      "name": "num_elements_unpadded",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        55,
+        55
+      ],
+      "summary": "读取或更新数据并行组件的配置、状态和运行时元数据。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:gradient_scaling_factor",
+      "type": "function",
+      "name": "gradient_scaling_factor",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        57,
+        57
+      ],
+      "summary": "实现数据并行子系统中的 gradient_scaling_factor 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ddp_config",
+      "type": "function",
+      "name": "ddp_config",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        173,
+        173
+      ],
+      "summary": "实现数据并行子系统中的 ddp_config 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:param_buffer",
+      "type": "function",
+      "name": "param_buffer",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        175,
+        175
+      ],
+      "summary": "实现数据并行子系统中的 param_buffer 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:grad_buffer",
+      "type": "function",
+      "name": "grad_buffer",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        177,
+        177
+      ],
+      "summary": "实现数据并行子系统中的 grad_buffer 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ddp_world_size",
+      "type": "function",
+      "name": "ddp_world_size",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        181,
+        181
+      ],
+      "summary": "实现数据并行子系统中的 ddp_world_size 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:buckets",
+      "type": "function",
+      "name": "buckets",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        183,
+        183
+      ],
+      "summary": "实现数据并行子系统中的 buckets 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ParamAndGradBucket",
+      "type": "class",
+      "name": "ParamAndGradBucket",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        22,
+        77
+      ],
+      "summary": "数据并行中的 ParamAndGradBucket 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "数据并行",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ParamAndGradBucketGroup",
+      "type": "class",
+      "name": "ParamAndGradBucketGroup",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        79,
+        157
+      ],
+      "summary": "数据并行中的 ParamAndGradBucketGroup 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "数据并行",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ParamAndGradBuffer",
+      "type": "class",
+      "name": "ParamAndGradBuffer",
+      "filePath": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "lineRange": [
+        159,
+        215
+      ],
+      "summary": "数据并行中的 ParamAndGradBuffer 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "数据并行",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:ValidateArguments",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:ValidateArguments",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:MakeScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:MakeScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:ClipGradNorm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:ClipGradNorm",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/comm.h",
+      "target": "class:infini_train/include/autograd/comm.h:Scatter",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/comm.h",
+      "target": "class:infini_train/include/autograd/comm.h:Scatter",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/comm.h",
+      "target": "class:infini_train/include/autograd/comm.h:Gather",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/comm.h",
+      "target": "class:infini_train/include/autograd/comm.h:Gather",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/comm.h",
+      "target": "class:infini_train/include/autograd/comm.h:Broadcast",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/comm.h",
+      "target": "class:infini_train/include/autograd/comm.h:Broadcast",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/comm.h",
+      "target": "class:infini_train/include/autograd/comm.h:ReduceAddCoalesced",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/comm.h",
+      "target": "class:infini_train/include/autograd/comm.h:ReduceAddCoalesced",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/gradient_clip.h",
+      "target": "class:infini_train/include/gradient_clip.h:GradientClipRecord",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/gradient_clip.h",
+      "target": "class:infini_train/include/gradient_clip.h:GradientClipRecord",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h:ddp_config",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h:ddp_config",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h:DistributedDataParallel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h:DistributedDataParallel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h:DistributedDataParallelConfig",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h:DistributedDataParallelConfig",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:bucket_id",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:bucket_id",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:param_dtype",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:param_dtype",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:grad_dtype",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:grad_dtype",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:offset",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:offset",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:num_elements_unpadded",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:num_elements_unpadded",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:gradient_scaling_factor",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:gradient_scaling_factor",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ddp_config",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ddp_config",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:param_buffer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:param_buffer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:grad_buffer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:grad_buffer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ddp_world_size",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ddp_world_size",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:buckets",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:buckets",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ParamAndGradBucket",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ParamAndGradBucket",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ParamAndGradBucketGroup",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ParamAndGradBucketGroup",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ParamAndGradBuffer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h:ParamAndGradBuffer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "file:infini_train/include/core/runtime/device_guard.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "file:infini_train/include/dispatcher.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "file:infini_train/include/gradient_clip.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "file:infini_train/include/nn/parallel/parallel_functional.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "file:infini_train/include/nn/parallel/process_group.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "file:infini_train/include/nn/parallel/reduce_op_type.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/autograd/comm.h",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/autograd/comm.h",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/gradient_clip.h",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "target": "file:infini_train/include/nn/modules/module.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "target": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "target": "file:infini_train/include/nn/parallel/ddp/reducer.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "file:infini_train/include/datatype.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "target": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:ClipGradNorm",
+      "target": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:ValidateArguments",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:ClipGradNorm",
+      "target": "function:gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc:MakeScalar",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

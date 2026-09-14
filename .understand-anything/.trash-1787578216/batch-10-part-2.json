@@ -1,0 +1,942 @@
+{
+  "nodes": [
+    {
+      "id": "file:infini_train/include/nn/modules/transformer/utils.h",
+      "type": "file",
+      "name": "utils.h",
+      "filePath": "infini_train/include/nn/modules/transformer/utils.h",
+      "summary": "实现 Transformer 模型的 utils 组件，封装前向计算与并行训练所需的张量操作。",
+      "tags": [
+        "transformer",
+        "模型架构",
+        "header",
+        "接口定义",
+        "transformer-与-moe-模型模块"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "type": "file",
+      "name": "tensor_parallel.h",
+      "filePath": "infini_train/include/nn/parallel/tensor_parallel.h",
+      "summary": "定义并实现张量并行通信原语及 Column/Row Parallel 层，支持数据切分、聚合和序列并行。",
+      "tags": [
+        "并行训练",
+        "distributed",
+        "header",
+        "接口定义",
+        "分布式并行训练"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/src/nn/modules/normalization.cc",
+      "type": "file",
+      "name": "normalization.cc",
+      "filePath": "infini_train/src/nn/modules/normalization.cc",
+      "summary": "声明 LayerNorm 与 RMSNorm 模块接口，统一归一化层的参数和前向行为。",
+      "tags": [
+        "implementation",
+        "c++",
+        "infinitrain-运行时"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/src/nn/modules/sparse.cc",
+      "type": "file",
+      "name": "sparse.cc",
+      "filePath": "infini_train/src/nn/modules/sparse.cc",
+      "summary": "声明 Embedding 等稀疏模块接口，管理词嵌入参数与设备放置。",
+      "tags": [
+        "implementation",
+        "c++",
+        "infinitrain-运行时"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "type": "file",
+      "name": "causal_self_attention.cc",
+      "filePath": "infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "summary": "实现 Transformer 模型的 causal_self_attention 组件，封装前向计算与并行训练所需的张量操作。",
+      "tags": [
+        "transformer",
+        "模型架构",
+        "implementation",
+        "c++",
+        "transformer-与-moe-模型模块"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/tensor_parallel.h:Tensor",
+      "type": "class",
+      "name": "Tensor",
+      "filePath": "infini_train/include/nn/parallel/tensor_parallel.h",
+      "lineRange": [
+        11,
+        11
+      ],
+      "summary": "定义 Tensor 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/tensor_parallel.h:Device",
+      "type": "class",
+      "name": "Device",
+      "filePath": "infini_train/include/nn/parallel/tensor_parallel.h",
+      "lineRange": [
+        12,
+        12
+      ],
+      "summary": "定义 Device 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/tensor_parallel.h:ColumnParallelLinear",
+      "type": "class",
+      "name": "ColumnParallelLinear",
+      "filePath": "infini_train/include/nn/parallel/tensor_parallel.h",
+      "lineRange": [
+        21,
+        48
+      ],
+      "summary": "定义 ColumnParallelLinear 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/tensor_parallel.h:RowParallelLinear",
+      "type": "class",
+      "name": "RowParallelLinear",
+      "filePath": "infini_train/include/nn/parallel/tensor_parallel.h",
+      "lineRange": [
+        50,
+        77
+      ],
+      "summary": "定义 RowParallelLinear 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelEmbedding",
+      "type": "class",
+      "name": "VocabParallelEmbedding",
+      "filePath": "infini_train/include/nn/parallel/tensor_parallel.h",
+      "lineRange": [
+        79,
+        97
+      ],
+      "summary": "定义 VocabParallelEmbedding 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelCrossEntropy",
+      "type": "class",
+      "name": "VocabParallelCrossEntropy",
+      "filePath": "infini_train/include/nn/parallel/tensor_parallel.h",
+      "lineRange": [
+        99,
+        116
+      ],
+      "summary": "定义 VocabParallelCrossEntropy 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelCrossEntropyLoss",
+      "type": "class",
+      "name": "VocabParallelCrossEntropyLoss",
+      "filePath": "infini_train/include/nn/parallel/tensor_parallel.h",
+      "lineRange": [
+        118,
+        129
+      ],
+      "summary": "定义 VocabParallelCrossEntropyLoss 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelCrossEntropy@103",
+      "type": "function",
+      "name": "VocabParallelCrossEntropy@103",
+      "filePath": "infini_train/include/nn/parallel/tensor_parallel.h",
+      "lineRange": [
+        103,
+        104
+      ],
+      "summary": "实现 分布式并行训练 中的 VocabParallelCrossEntropy，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelCrossEntropyLoss@121",
+      "type": "function",
+      "name": "VocabParallelCrossEntropyLoss@121",
+      "filePath": "infini_train/include/nn/parallel/tensor_parallel.h",
+      "lineRange": [
+        121,
+        122
+      ],
+      "summary": "实现 分布式并行训练 中的 VocabParallelCrossEntropyLoss，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/normalization.cc:LayerNorm",
+      "type": "function",
+      "name": "LayerNorm",
+      "filePath": "infini_train/src/nn/modules/normalization.cc",
+      "lineRange": [
+        13,
+        22
+      ],
+      "summary": "实现 InfiniTrain 运行时 中的 LayerNorm，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/normalization.cc:Forward",
+      "type": "function",
+      "name": "Forward",
+      "filePath": "infini_train/src/nn/modules/normalization.cc",
+      "lineRange": [
+        24,
+        28
+      ],
+      "summary": "执行 InfiniTrain 运行时 的前向计算并生成输出张量。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/normalization.cc:ResetParameters",
+      "type": "function",
+      "name": "ResetParameters",
+      "filePath": "infini_train/src/nn/modules/normalization.cc",
+      "lineRange": [
+        30,
+        33
+      ],
+      "summary": "实现 InfiniTrain 运行时 中的 ResetParameters，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/normalization.cc:RMSNorm",
+      "type": "function",
+      "name": "RMSNorm",
+      "filePath": "infini_train/src/nn/modules/normalization.cc",
+      "lineRange": [
+        35,
+        39
+      ],
+      "summary": "实现 InfiniTrain 运行时 中的 RMSNorm，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/normalization.cc:Forward@41",
+      "type": "function",
+      "name": "Forward@41",
+      "filePath": "infini_train/src/nn/modules/normalization.cc",
+      "lineRange": [
+        41,
+        45
+      ],
+      "summary": "执行 InfiniTrain 运行时 的前向计算并生成输出张量。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/sparse.cc:Embedding",
+      "type": "function",
+      "name": "Embedding",
+      "filePath": "infini_train/src/nn/modules/sparse.cc",
+      "lineRange": [
+        13,
+        19
+      ],
+      "summary": "实现 InfiniTrain 运行时 中的 Embedding，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/sparse.cc:Forward",
+      "type": "function",
+      "name": "Forward",
+      "filePath": "infini_train/src/nn/modules/sparse.cc",
+      "lineRange": [
+        21,
+        23
+      ],
+      "summary": "执行 InfiniTrain 运行时 的前向计算并生成输出张量。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/sparse.cc:ResetParameters",
+      "type": "function",
+      "name": "ResetParameters",
+      "filePath": "infini_train/src/nn/modules/sparse.cc",
+      "lineRange": [
+        25,
+        25
+      ],
+      "summary": "实现 InfiniTrain 运行时 中的 ResetParameters，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:CausalSelfAttention",
+      "type": "function",
+      "name": "CausalSelfAttention",
+      "filePath": "infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "lineRange": [
+        23,
+        53
+      ],
+      "summary": "实现 Transformer 与 MoE 模型模块 中的 CausalSelfAttention，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:SetupAttention",
+      "type": "function",
+      "name": "SetupAttention",
+      "filePath": "infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "lineRange": [
+        55,
+        77
+      ],
+      "summary": "实现 Transformer 与 MoE 模型模块 中的 SetupAttention，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:RepeatKV",
+      "type": "function",
+      "name": "RepeatKV",
+      "filePath": "infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "lineRange": [
+        79,
+        89
+      ],
+      "summary": "实现 Transformer 与 MoE 模型模块 中的 RepeatKV，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:Forward",
+      "type": "function",
+      "name": "Forward",
+      "filePath": "infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "lineRange": [
+        91,
+        173
+      ],
+      "summary": "执行 Transformer 与 MoE 模型模块 的前向计算并生成输出张量。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:infini_train/include/nn/modules/transformer/utils.h",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:Tensor",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:Tensor",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:Device",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:Device",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:ColumnParallelLinear",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:ColumnParallelLinear",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:RowParallelLinear",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:RowParallelLinear",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelEmbedding",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelEmbedding",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelCrossEntropy",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelCrossEntropy",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelCrossEntropyLoss",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "class:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelCrossEntropyLoss",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "function:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelCrossEntropy@103",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "function:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelCrossEntropy@103",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "function:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelCrossEntropyLoss@121",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "function:infini_train/include/nn/parallel/tensor_parallel.h:VocabParallelCrossEntropyLoss@121",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "file:infini_train/include/nn/modules/module.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "target": "file:infini_train/include/nn/parallel/process_group.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "function:infini_train/src/nn/modules/normalization.cc:LayerNorm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "function:infini_train/src/nn/modules/normalization.cc:LayerNorm",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "function:infini_train/src/nn/modules/normalization.cc:Forward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "function:infini_train/src/nn/modules/normalization.cc:Forward",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "function:infini_train/src/nn/modules/normalization.cc:ResetParameters",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "function:infini_train/src/nn/modules/normalization.cc:ResetParameters",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "function:infini_train/src/nn/modules/normalization.cc:RMSNorm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "function:infini_train/src/nn/modules/normalization.cc:RMSNorm",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "function:infini_train/src/nn/modules/normalization.cc:Forward@41",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "function:infini_train/src/nn/modules/normalization.cc:Forward@41",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "file:infini_train/include/autograd/normalization.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "file:infini_train/include/nn/functional.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "file:infini_train/include/nn/init.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "file:infini_train/include/nn/modules/normalization.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/normalization.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:infini_train/src/nn/modules/normalization.cc:LayerNorm",
+      "target": "function:infini_train/src/nn/modules/normalization.cc:ResetParameters",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/sparse.cc",
+      "target": "function:infini_train/src/nn/modules/sparse.cc:Embedding",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/sparse.cc",
+      "target": "function:infini_train/src/nn/modules/sparse.cc:Embedding",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/sparse.cc",
+      "target": "function:infini_train/src/nn/modules/sparse.cc:Forward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/sparse.cc",
+      "target": "function:infini_train/src/nn/modules/sparse.cc:Forward",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/sparse.cc",
+      "target": "function:infini_train/src/nn/modules/sparse.cc:ResetParameters",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/sparse.cc",
+      "target": "function:infini_train/src/nn/modules/sparse.cc:ResetParameters",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/sparse.cc",
+      "target": "file:infini_train/include/autograd/sparse.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/sparse.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/sparse.cc",
+      "target": "file:infini_train/include/nn/init.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/sparse.cc",
+      "target": "file:infini_train/include/nn/modules/sparse.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/sparse.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:infini_train/src/nn/modules/sparse.cc:Embedding",
+      "target": "function:infini_train/src/nn/modules/sparse.cc:ResetParameters",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:CausalSelfAttention",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:CausalSelfAttention",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:SetupAttention",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:SetupAttention",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:RepeatKV",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:RepeatKV",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:Forward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:Forward",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "file:infini_train/include/nn/functional.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "file:infini_train/include/nn/init.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "file:infini_train/include/nn/modules/normalization.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "file:infini_train/include/nn/modules/sparse.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/causal_self_attention.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/transformer_config.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:CausalSelfAttention",
+      "target": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:SetupAttention",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:Forward",
+      "target": "function:infini_train/src/nn/modules/transformer/causal_self_attention.cc:RepeatKV",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/modules/transformer/utils.h",
+      "target": "file:tests/transformer/test_transformer_architecture.cc",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

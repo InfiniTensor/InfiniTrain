@@ -1,0 +1,2706 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 16,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 90,
+      "nonEmptyLines": 74,
+      "functions": [
+        {
+          "name": "GradientNormStats",
+          "startLine": 64,
+          "endLine": 72,
+          "params": [
+            "gradient",
+            "norm_type",
+            "stats",
+            "accumulate"
+          ]
+        },
+        {
+          "name": "ScaleGradientInplace",
+          "startLine": 74,
+          "endLine": 80,
+          "params": [
+            "gradient",
+            "coefficient"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "GradientNormStats",
+          "line": 64,
+          "isDefault": false
+        },
+        {
+          "name": "ScaleGradientInplace",
+          "line": 74,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "ToDouble",
+          "callee": "static_cast<double>",
+          "lineNumber": 17
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "CHECK_EQ",
+          "lineNumber": 22
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "Dtype",
+          "lineNumber": 22
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "CHECK_EQ",
+          "lineNumber": 23
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "NumElements",
+          "lineNumber": 23
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "static_cast<double *>",
+          "lineNumber": 25
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "DataPtr",
+          "lineNumber": 25
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "static_cast<const T *>",
+          "lineNumber": 29
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "DataPtr",
+          "lineNumber": 29
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "NumElements",
+          "lineNumber": 31
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "ToDouble",
+          "lineNumber": 32
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "std::isnan",
+          "lineNumber": 33
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "std::isinf",
+          "lineNumber": 37
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "std::abs",
+          "lineNumber": 41
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "std::isinf",
+          "lineNumber": 42
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "std::max",
+          "lineNumber": 43
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "std::pow",
+          "lineNumber": 45
+        },
+        {
+          "caller": "ScaleGradientImpl",
+          "callee": "static_cast<T *>",
+          "lineNumber": 56
+        },
+        {
+          "caller": "ScaleGradientImpl",
+          "callee": "DataPtr",
+          "lineNumber": 56
+        },
+        {
+          "caller": "ScaleGradientImpl",
+          "callee": "NumElements",
+          "lineNumber": 57
+        },
+        {
+          "caller": "ScaleGradientImpl",
+          "callee": "static_cast<T>",
+          "lineNumber": 58
+        },
+        {
+          "caller": "ScaleGradientImpl",
+          "callee": "ToDouble",
+          "lineNumber": 58
+        },
+        {
+          "caller": "ScaleGradientImpl",
+          "callee": "static_cast<double>",
+          "lineNumber": 58
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "CHECK",
+          "lineNumber": 66
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "CHECK",
+          "lineNumber": 67
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "IsFloatingPointDType",
+          "lineNumber": 67
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "Dtype",
+          "lineNumber": 67
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "core::cpu::DispatchCpuFunc<INFINI_ALL_FLOATING_TYPES>",
+          "lineNumber": 68
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "Dtype",
+          "lineNumber": 69
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "GradientNormStatsImpl<T>",
+          "lineNumber": 70
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "CHECK",
+          "lineNumber": 75
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "CHECK",
+          "lineNumber": 76
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "IsFloatingPointDType",
+          "lineNumber": 76
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "Dtype",
+          "lineNumber": 76
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "core::cpu::DispatchCpuFunc<INFINI_ALL_FLOATING_TYPES>",
+          "lineNumber": 77
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "Dtype",
+          "lineNumber": 78
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "ScaleGradientImpl<T>",
+          "lineNumber": 78
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/include/common/common.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 30,
+      "nonEmptyLines": 24,
+      "functions": [
+        {
+          "name": "ComputeStrides",
+          "startLine": 26,
+          "endLine": 30,
+          "params": [
+            "dims"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "ComputeStrides",
+          "line": 26,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "ComputeStrides",
+          "callee": "size",
+          "lineNumber": 27
+        },
+        {
+          "caller": "ComputeStrides",
+          "callee": "size",
+          "lineNumber": 28
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/include/common/cpu/common_cpu.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 43,
+      "nonEmptyLines": 35,
+      "callGraph": [
+        {
+          "caller": "CastImpl",
+          "callee": "DST",
+          "lineNumber": 19
+        },
+        {
+          "caller": "CastImpl",
+          "callee": "static_cast<float>",
+          "lineNumber": 19
+        },
+        {
+          "caller": "CastImpl",
+          "callee": "std::forward<SRC>",
+          "lineNumber": 19
+        },
+        {
+          "caller": "CastImpl",
+          "callee": "static_cast<DST>",
+          "lineNumber": 22
+        },
+        {
+          "caller": "CastImpl",
+          "callee": "static_cast<float>",
+          "lineNumber": 22
+        },
+        {
+          "caller": "CastImpl",
+          "callee": "static_cast<DST>",
+          "lineNumber": 24
+        },
+        {
+          "caller": "CastImpl",
+          "callee": "std::forward<SRC>",
+          "lineNumber": 24
+        },
+        {
+          "caller": "Cast",
+          "callee": "detail::CastImpl<DST>",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Cast",
+          "callee": "std::forward<SRC>",
+          "lineNumber": 40
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/include/core/backend_type_map.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 84,
+      "nonEmptyLines": 78,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/include/datatype.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 134,
+      "nonEmptyLines": 108,
+      "functions": [
+        {
+          "name": "from_bits",
+          "startLine": 47,
+          "endLine": 47,
+          "params": []
+        },
+        {
+          "name": "FP16",
+          "startLine": 49,
+          "endLine": 49,
+          "params": []
+        },
+        {
+          "name": "FP16",
+          "startLine": 50,
+          "endLine": 50,
+          "params": [
+            "bits"
+          ]
+        },
+        {
+          "name": "from_bits",
+          "startLine": 67,
+          "endLine": 67,
+          "params": []
+        },
+        {
+          "name": "BF16",
+          "startLine": 69,
+          "endLine": 69,
+          "params": []
+        },
+        {
+          "name": "BF16",
+          "startLine": 70,
+          "endLine": 70,
+          "params": [
+            "bits"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "FP16",
+          "startLine": 43,
+          "endLine": 61,
+          "methods": [
+            "from_bits",
+            "FP16",
+            "FP16"
+          ],
+          "properties": [
+            "x"
+          ]
+        },
+        {
+          "name": "BF16",
+          "startLine": 63,
+          "endLine": 81,
+          "methods": [
+            "from_bits",
+            "BF16",
+            "BF16"
+          ],
+          "properties": [
+            "x"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "from_bits",
+          "line": 47,
+          "isDefault": false
+        },
+        {
+          "name": "FP16",
+          "line": 49,
+          "isDefault": false
+        },
+        {
+          "name": "FP16",
+          "line": 50,
+          "isDefault": false
+        },
+        {
+          "name": "FP16",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "from_bits",
+          "line": 67,
+          "isDefault": false
+        },
+        {
+          "name": "BF16",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "BF16",
+          "line": 70,
+          "isDefault": false
+        },
+        {
+          "name": "BF16",
+          "line": 63,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 8,
+        "functionCount": 6,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "infini_train/include/dtype_dispatch.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 338,
+      "nonEmptyLines": 292,
+      "callGraph": [
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 246
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 247
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 248
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 249
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 250
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 251
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 252
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 253
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 254
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 255
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 256
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 257
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 258
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "LOG_UNSUPPORTED_DTYPE",
+          "lineNumber": 262
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "std::abort",
+          "lineNumber": 263
+        },
+        {
+          "caller": "call",
+          "callee": "template operator()<ResolvedTypes...>",
+          "lineNumber": 276
+        },
+        {
+          "caller": "call",
+          "callee": "std::forward<Functor>",
+          "lineNumber": 276
+        },
+        {
+          "caller": "call",
+          "callee": "std::forward<Args>",
+          "lineNumber": 276
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 295
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 296
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 297
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 298
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 299
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 300
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 301
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 302
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 303
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 304
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 305
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 306
+        },
+        {
+          "caller": "call",
+          "callee": "CASE_FOR_TYPE",
+          "lineNumber": 307
+        },
+        {
+          "caller": "call",
+          "callee": "LOG_UNSUPPORTED_DTYPE",
+          "lineNumber": 311
+        },
+        {
+          "caller": "call",
+          "callee": "std::abort",
+          "lineNumber": 312
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "size",
+          "lineNumber": 327
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "LOG",
+          "lineNumber": 328
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "std::format",
+          "lineNumber": 328
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "size",
+          "lineNumber": 329
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "std::abort",
+          "lineNumber": 330
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "detail::TypeMapDispatcher<TypeMap, 0, AllowedListTuple>::call",
+          "lineNumber": 334
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "std::forward<Functor>",
+          "lineNumber": 335
+        },
+        {
+          "caller": "DispatchByTypeMap",
+          "callee": "std::forward<Args>",
+          "lineNumber": 335
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/include/scalar.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 84,
+      "nonEmptyLines": 70,
+      "functions": [
+        {
+          "name": "Scalar",
+          "startLine": 15,
+          "endLine": 15,
+          "params": []
+        },
+        {
+          "name": "Scalar",
+          "startLine": 16,
+          "endLine": 16,
+          "params": [
+            "v"
+          ]
+        },
+        {
+          "name": "Scalar",
+          "startLine": 31,
+          "endLine": 31,
+          "params": [
+            "v"
+          ]
+        },
+        {
+          "name": "Scalar",
+          "startLine": 32,
+          "endLine": 32,
+          "params": [
+            "v"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Scalar",
+          "startLine": 12,
+          "endLine": 82,
+          "methods": [
+            "Scalar",
+            "Scalar",
+            "Scalar",
+            "Scalar"
+          ],
+          "properties": [
+            "kind"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Scalar",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "Scalar",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "Scalar",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "Scalar",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "Scalar",
+          "line": 12,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Scalar",
+          "callee": "static_cast<double>",
+          "lineNumber": 19
+        },
+        {
+          "caller": "Scalar",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 24
+        },
+        {
+          "caller": "Scalar",
+          "callee": "static_cast<uint64_t>",
+          "lineNumber": 29
+        },
+        {
+          "caller": "Scalar",
+          "callee": "static_cast<float>",
+          "lineNumber": 31
+        },
+        {
+          "caller": "Scalar",
+          "callee": "static_cast<float>",
+          "lineNumber": 32
+        },
+        {
+          "caller": "to",
+          "callee": "common::cpu::Cast<T>",
+          "lineNumber": 62
+        },
+        {
+          "caller": "to",
+          "callee": "common::cpu::Cast<T>",
+          "lineNumber": 64
+        },
+        {
+          "caller": "to",
+          "callee": "common::cpu::Cast<T>",
+          "lineNumber": 66
+        },
+        {
+          "caller": "to",
+          "callee": "common::cpu::Cast<T>",
+          "lineNumber": 68
+        },
+        {
+          "caller": "to",
+          "callee": "LOG",
+          "lineNumber": 70
+        },
+        {
+          "caller": "to",
+          "callee": "std::abort",
+          "lineNumber": 73
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 5,
+        "functionCount": 4,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "infini_train/src/core/runtime/cpu/cpu_dispatch.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 49,
+      "nonEmptyLines": 38,
+      "callGraph": [
+        {
+          "caller": "DispatchCpuFunc",
+          "callee": "infini_train::DispatchByTypeMap<CpuTypeMap, AllowedDTypes...>",
+          "lineNumber": 38
+        },
+        {
+          "caller": "DispatchCpuFunc",
+          "callee": "std::forward<Functor>",
+          "lineNumber": 39
+        },
+        {
+          "caller": "DispatchCpuFunc",
+          "callee": "std::forward<Args>",
+          "lineNumber": 39
+        },
+        {
+          "caller": "DispatchCpuFunc",
+          "callee": "infini_train::DispatchByTypeMap<CpuTypeMap, AllowedTypeLists...>",
+          "lineNumber": 45
+        },
+        {
+          "caller": "DispatchCpuFunc",
+          "callee": "std::forward<Functor>",
+          "lineNumber": 46
+        },
+        {
+          "caller": "DispatchCpuFunc",
+          "callee": "std::forward<Args>",
+          "lineNumber": 46
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/core/runtime/cuda/cuda_dispatch.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 51,
+      "nonEmptyLines": 39,
+      "callGraph": [
+        {
+          "caller": "DispatchCudaFunc",
+          "callee": "infini_train::DispatchByTypeMap<CudaTypeMap, AllowedDTypes...>",
+          "lineNumber": 40
+        },
+        {
+          "caller": "DispatchCudaFunc",
+          "callee": "std::forward<Functor>",
+          "lineNumber": 41
+        },
+        {
+          "caller": "DispatchCudaFunc",
+          "callee": "std::forward<Args>",
+          "lineNumber": 41
+        },
+        {
+          "caller": "DispatchCudaFunc",
+          "callee": "infini_train::DispatchByTypeMap<CudaTypeMap, AllowedTypeLists...>",
+          "lineNumber": 47
+        },
+        {
+          "caller": "DispatchCudaFunc",
+          "callee": "std::forward<Functor>",
+          "lineNumber": 48
+        },
+        {
+          "caller": "DispatchCudaFunc",
+          "callee": "std::forward<Args>",
+          "lineNumber": 48
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/datatype.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 200,
+      "nonEmptyLines": 163,
+      "functions": [
+        {
+          "name": "FloatToBf16Bits",
+          "startLine": 16,
+          "endLine": 21,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "Bf16BitsToFloat",
+          "startLine": 23,
+          "endLine": 26,
+          "params": [
+            "bits"
+          ]
+        },
+        {
+          "name": "FloatToFp16Bits",
+          "startLine": 32,
+          "endLine": 97,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "Fp16BitsToFloat",
+          "startLine": 99,
+          "endLine": 130,
+          "params": [
+            "bits"
+          ]
+        },
+        {
+          "name": "FP16",
+          "startLine": 137,
+          "endLine": 137,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "FP16",
+          "startLine": 138,
+          "endLine": 138,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "FP16",
+          "startLine": 139,
+          "endLine": 139,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "FP16",
+          "startLine": 140,
+          "endLine": 140,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "BF16",
+          "startLine": 153,
+          "endLine": 153,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "BF16",
+          "startLine": 154,
+          "endLine": 154,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "BF16",
+          "startLine": 155,
+          "endLine": 155,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "BF16",
+          "startLine": 156,
+          "endLine": 156,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "IsFloatingPointDType",
+          "startLine": 169,
+          "endLine": 172,
+          "params": [
+            "dt"
+          ]
+        },
+        {
+          "name": "PromoteDataTypes",
+          "startLine": 174,
+          "endLine": 198,
+          "params": [
+            "a",
+            "b"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "FloatToBf16Bits",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "Bf16BitsToFloat",
+          "line": 23,
+          "isDefault": false
+        },
+        {
+          "name": "FloatToFp16Bits",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "Fp16BitsToFloat",
+          "line": 99,
+          "isDefault": false
+        },
+        {
+          "name": "FP16",
+          "line": 137,
+          "isDefault": false
+        },
+        {
+          "name": "FP16",
+          "line": 138,
+          "isDefault": false
+        },
+        {
+          "name": "FP16",
+          "line": 139,
+          "isDefault": false
+        },
+        {
+          "name": "FP16",
+          "line": 140,
+          "isDefault": false
+        },
+        {
+          "name": "BF16",
+          "line": 153,
+          "isDefault": false
+        },
+        {
+          "name": "BF16",
+          "line": 154,
+          "isDefault": false
+        },
+        {
+          "name": "BF16",
+          "line": 155,
+          "isDefault": false
+        },
+        {
+          "name": "BF16",
+          "line": 156,
+          "isDefault": false
+        },
+        {
+          "name": "IsFloatingPointDType",
+          "line": 169,
+          "isDefault": false
+        },
+        {
+          "name": "PromoteDataTypes",
+          "line": 174,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "FloatToBf16Bits",
+          "callee": "std::bit_cast<uint32_t>",
+          "lineNumber": 17
+        },
+        {
+          "caller": "FloatToBf16Bits",
+          "callee": "static_cast<uint16_t>",
+          "lineNumber": 20
+        },
+        {
+          "caller": "Bf16BitsToFloat",
+          "callee": "static_cast<uint32_t>",
+          "lineNumber": 24
+        },
+        {
+          "caller": "Bf16BitsToFloat",
+          "callee": "std::bit_cast<float>",
+          "lineNumber": 25
+        },
+        {
+          "caller": "FloatToFp16Bits",
+          "callee": "std::bit_cast<uint32_t>",
+          "lineNumber": 33
+        },
+        {
+          "caller": "FloatToFp16Bits",
+          "callee": "static_cast<int32_t>",
+          "lineNumber": 37
+        },
+        {
+          "caller": "FloatToFp16Bits",
+          "callee": "static_cast<uint16_t>",
+          "lineNumber": 42
+        },
+        {
+          "caller": "FloatToFp16Bits",
+          "callee": "static_cast<uint16_t>",
+          "lineNumber": 44
+        },
+        {
+          "caller": "FloatToFp16Bits",
+          "callee": "static_cast<uint16_t>",
+          "lineNumber": 49
+        },
+        {
+          "caller": "FloatToFp16Bits",
+          "callee": "static_cast<uint16_t>",
+          "lineNumber": 57
+        },
+        {
+          "caller": "FloatToFp16Bits",
+          "callee": "static_cast<uint16_t>",
+          "lineNumber": 63
+        },
+        {
+          "caller": "FloatToFp16Bits",
+          "callee": "static_cast<uint16_t>",
+          "lineNumber": 77
+        },
+        {
+          "caller": "FloatToFp16Bits",
+          "callee": "static_cast<uint32_t>",
+          "lineNumber": 81
+        },
+        {
+          "caller": "FloatToFp16Bits",
+          "callee": "static_cast<uint16_t>",
+          "lineNumber": 91
+        },
+        {
+          "caller": "FloatToFp16Bits",
+          "callee": "static_cast<uint16_t>",
+          "lineNumber": 96
+        },
+        {
+          "caller": "Fp16BitsToFloat",
+          "callee": "static_cast<uint32_t>",
+          "lineNumber": 100
+        },
+        {
+          "caller": "Fp16BitsToFloat",
+          "callee": "static_cast<uint32_t>",
+          "lineNumber": 117
+        },
+        {
+          "caller": "Fp16BitsToFloat",
+          "callee": "static_cast<uint32_t>",
+          "lineNumber": 124
+        },
+        {
+          "caller": "Fp16BitsToFloat",
+          "callee": "static_cast<int32_t>",
+          "lineNumber": 124
+        },
+        {
+          "caller": "Fp16BitsToFloat",
+          "callee": "std::bit_cast<float>",
+          "lineNumber": 129
+        },
+        {
+          "caller": "FP16",
+          "callee": "detail::FloatToFp16Bits",
+          "lineNumber": 137
+        },
+        {
+          "caller": "FP16",
+          "callee": "static_cast<float>",
+          "lineNumber": 138
+        },
+        {
+          "caller": "FP16",
+          "callee": "static_cast<float>",
+          "lineNumber": 139
+        },
+        {
+          "caller": "FP16",
+          "callee": "static_cast<float>",
+          "lineNumber": 140
+        },
+        {
+          "caller": "BF16",
+          "callee": "detail::FloatToBf16Bits",
+          "lineNumber": 153
+        },
+        {
+          "caller": "BF16",
+          "callee": "static_cast<float>",
+          "lineNumber": 154
+        },
+        {
+          "caller": "BF16",
+          "callee": "static_cast<float>",
+          "lineNumber": 155
+        },
+        {
+          "caller": "BF16",
+          "callee": "static_cast<float>",
+          "lineNumber": 156
+        },
+        {
+          "caller": "PromoteDataTypes",
+          "callee": "IsFloatingPointDType",
+          "lineNumber": 185
+        },
+        {
+          "caller": "PromoteDataTypes",
+          "callee": "IsFloatingPointDType",
+          "lineNumber": 186
+        },
+        {
+          "caller": "PromoteDataTypes",
+          "callee": "at",
+          "lineNumber": 197
+        },
+        {
+          "caller": "PromoteDataTypes",
+          "callee": "at",
+          "lineNumber": 197
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 14,
+        "functionCount": 14,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/kernels/cpu/cast.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 36,
+      "nonEmptyLines": 27,
+      "functions": [
+        {
+          "name": "Cast",
+          "startLine": 12,
+          "endLine": 28,
+          "params": [
+            "input",
+            "dtype"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Cast",
+          "line": 12,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Cast",
+          "callee": "GetDevice",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Cast",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Cast",
+          "callee": "Dims",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Cast",
+          "callee": "core::cpu::DispatchCpuFunc<DataTypeList<INFINI_ALL_NUMERIC_TYPES, INFINI_LOGICAL_TYPES>,\n                               DataTypeList<INFINI_ALL_NUMERIC_TYPES, INFINI_LOGICAL_TYPES>>",
+          "lineNumber": 16
+        },
+        {
+          "caller": "Cast",
+          "callee": "Dtype",
+          "lineNumber": 18
+        },
+        {
+          "caller": "Cast",
+          "callee": "static_cast<Tdst *>",
+          "lineNumber": 20
+        },
+        {
+          "caller": "Cast",
+          "callee": "DataPtr",
+          "lineNumber": 20
+        },
+        {
+          "caller": "Cast",
+          "callee": "static_cast<const Tsrc *>",
+          "lineNumber": 21
+        },
+        {
+          "caller": "Cast",
+          "callee": "DataPtr",
+          "lineNumber": 21
+        },
+        {
+          "caller": "Cast",
+          "callee": "NumElements",
+          "lineNumber": 23
+        },
+        {
+          "caller": "Cast",
+          "callee": "common::cpu::Cast<Tdst>",
+          "lineNumber": 23
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/kernels/cpu/fill.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 27,
+      "nonEmptyLines": 21,
+      "functions": [
+        {
+          "name": "Fill",
+          "startLine": 10,
+          "endLine": 19,
+          "params": [
+            "tensor",
+            "scalar"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Fill",
+          "line": 10,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Fill",
+          "callee": "core::cpu::DispatchCpuFunc<INFINI_ALL_NUMERIC_TYPES>",
+          "lineNumber": 11
+        },
+        {
+          "caller": "Fill",
+          "callee": "Dtype",
+          "lineNumber": 12
+        },
+        {
+          "caller": "Fill",
+          "callee": "reinterpret_cast<T *>",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Fill",
+          "callee": "DataPtr",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Fill",
+          "callee": "to<T>",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Fill",
+          "callee": "std::fill",
+          "lineNumber": 16
+        },
+        {
+          "caller": "Fill",
+          "callee": "NumElements",
+          "lineNumber": 16
+        }
+      ],
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/kernels/cpu/gradient_clip.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 90,
+      "nonEmptyLines": 74,
+      "functions": [
+        {
+          "name": "GradientNormStats",
+          "startLine": 64,
+          "endLine": 72,
+          "params": [
+            "gradient",
+            "norm_type",
+            "stats",
+            "accumulate"
+          ]
+        },
+        {
+          "name": "ScaleGradientInplace",
+          "startLine": 74,
+          "endLine": 80,
+          "params": [
+            "gradient",
+            "coefficient"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "GradientNormStats",
+          "line": 64,
+          "isDefault": false
+        },
+        {
+          "name": "ScaleGradientInplace",
+          "line": 74,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "ToDouble",
+          "callee": "static_cast<double>",
+          "lineNumber": 17
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "CHECK_EQ",
+          "lineNumber": 22
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "Dtype",
+          "lineNumber": 22
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "CHECK_EQ",
+          "lineNumber": 23
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "NumElements",
+          "lineNumber": 23
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "static_cast<double *>",
+          "lineNumber": 25
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "DataPtr",
+          "lineNumber": 25
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "static_cast<const T *>",
+          "lineNumber": 29
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "DataPtr",
+          "lineNumber": 29
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "NumElements",
+          "lineNumber": 31
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "ToDouble",
+          "lineNumber": 32
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "std::isnan",
+          "lineNumber": 33
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "std::isinf",
+          "lineNumber": 37
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "std::abs",
+          "lineNumber": 41
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "std::isinf",
+          "lineNumber": 42
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "std::max",
+          "lineNumber": 43
+        },
+        {
+          "caller": "GradientNormStatsImpl",
+          "callee": "std::pow",
+          "lineNumber": 45
+        },
+        {
+          "caller": "ScaleGradientImpl",
+          "callee": "static_cast<T *>",
+          "lineNumber": 56
+        },
+        {
+          "caller": "ScaleGradientImpl",
+          "callee": "DataPtr",
+          "lineNumber": 56
+        },
+        {
+          "caller": "ScaleGradientImpl",
+          "callee": "NumElements",
+          "lineNumber": 57
+        },
+        {
+          "caller": "ScaleGradientImpl",
+          "callee": "static_cast<T>",
+          "lineNumber": 58
+        },
+        {
+          "caller": "ScaleGradientImpl",
+          "callee": "ToDouble",
+          "lineNumber": 58
+        },
+        {
+          "caller": "ScaleGradientImpl",
+          "callee": "static_cast<double>",
+          "lineNumber": 58
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "CHECK",
+          "lineNumber": 66
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "CHECK",
+          "lineNumber": 67
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "IsFloatingPointDType",
+          "lineNumber": 67
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "Dtype",
+          "lineNumber": 67
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "core::cpu::DispatchCpuFunc<INFINI_ALL_FLOATING_TYPES>",
+          "lineNumber": 68
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "Dtype",
+          "lineNumber": 69
+        },
+        {
+          "caller": "GradientNormStats",
+          "callee": "GradientNormStatsImpl<T>",
+          "lineNumber": 70
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "CHECK",
+          "lineNumber": 75
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "CHECK",
+          "lineNumber": 76
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "IsFloatingPointDType",
+          "lineNumber": 76
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "Dtype",
+          "lineNumber": 76
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "core::cpu::DispatchCpuFunc<INFINI_ALL_FLOATING_TYPES>",
+          "lineNumber": 77
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "Dtype",
+          "lineNumber": 78
+        },
+        {
+          "caller": "ScaleGradientInplace",
+          "callee": "ScaleGradientImpl<T>",
+          "lineNumber": 78
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "tests/dtype/test_dtype_dispatch.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 73,
+      "nonEmptyLines": 59,
+      "functions": [
+        {
+          "name": "TEST_P",
+          "startLine": 40,
+          "endLine": 51,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 53,
+          "endLine": 64,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 66,
+          "endLine": 71,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "DtypeDispatchTest",
+          "startLine": 38,
+          "endLine": 38,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "DtypeDispatchTest",
+          "line": 38,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 40,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 66,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "TEST_P",
+          "callee": "core::cpu::DispatchCpuFunc<DataType::kFLOAT16, DataType::kBFLOAT16>",
+          "lineNumber": 42
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 50
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "core::cpu::DispatchCpuFunc<DataType::kFLOAT16, DataType::kBFLOAT16>",
+          "lineNumber": 55
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 63
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_DEATH",
+          "lineNumber": 67
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "core::cpu::DispatchCpuFunc<DataType::kFLOAT32>",
+          "lineNumber": 67
+        }
+      ],
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 4,
+        "functionCount": 3,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "tests/dtype/test_dtype_dispatch_compile_fail.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 26,
+      "nonEmptyLines": 21,
+      "functions": [
+        {
+          "name": "main",
+          "startLine": 19,
+          "endLine": 26,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "main",
+          "line": 19,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "main",
+          "callee": "DispatchByTypeMap<LowPrecisionMissingTypeMap, DataType::kFLOAT16>",
+          "lineNumber": 23
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "tests/dtype/test_scalar.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 147,
+      "nonEmptyLines": 116,
+      "functions": [
+        {
+          "name": "TEST_P",
+          "startLine": 15,
+          "endLine": 19,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 21,
+          "endLine": 29,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 31,
+          "endLine": 43,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 45,
+          "endLine": 54,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 56,
+          "endLine": 60,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 62,
+          "endLine": 66,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 68,
+          "endLine": 78,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 80,
+          "endLine": 88,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 90,
+          "endLine": 97,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 99,
+          "endLine": 103,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 105,
+          "endLine": 117,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 119,
+          "endLine": 128,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 130,
+          "endLine": 135,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 137,
+          "endLine": 145,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "ScalarTest",
+          "startLine": 13,
+          "endLine": 13,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "ScalarTest",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 45,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 56,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 68,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 80,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 90,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 99,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 105,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 119,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 130,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 137,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 17
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 17
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 17
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 18
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 23
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 23
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 23
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 24
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<uint64_t>",
+          "lineNumber": 24
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 27
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 27
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 27
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 28
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<uint64_t>",
+          "lineNumber": 28
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 33
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 33
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 33
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 34
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 37
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 41
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 41
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 41
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 42
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 48
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 48
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 48
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 49
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<uint64_t>",
+          "lineNumber": 49
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::numeric_limits<uint64_t>::max",
+          "lineNumber": 51
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 53
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 58
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 58
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 58
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 59
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 64
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 64
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 64
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 65
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 71
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 71
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 71
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 72
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 76
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 76
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<int>",
+          "lineNumber": 76
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 77
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 81
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<int64_t>",
+          "lineNumber": 81
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 81
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 82
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<double>",
+          "lineNumber": 82
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 82
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 83
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<float>",
+          "lineNumber": 83
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 83
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 84
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<double>",
+          "lineNumber": 84
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 84
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 85
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<int64_t>",
+          "lineNumber": 85
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 85
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 86
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<int32_t>",
+          "lineNumber": 86
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 86
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 87
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<float>",
+          "lineNumber": 87
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 87
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 91
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<int64_t>",
+          "lineNumber": 91
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 91
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 92
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<int64_t>",
+          "lineNumber": 92
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 92
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 93
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<double>",
+          "lineNumber": 93
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 93
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 94
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<double>",
+          "lineNumber": 94
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 94
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 95
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<bool>",
+          "lineNumber": 95
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 95
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 96
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<bool>",
+          "lineNumber": 96
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 96
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 101
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<double>",
+          "lineNumber": 101
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 101
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 102
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<uint64_t>",
+          "lineNumber": 102
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 102
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<uint64_t>",
+          "lineNumber": 102
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<FP16>",
+          "lineNumber": 106
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 106
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 107
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<float>",
+          "lineNumber": 107
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<FP16>",
+          "lineNumber": 109
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 109
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 110
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<float>",
+          "lineNumber": 110
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<BF16>",
+          "lineNumber": 112
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 112
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 113
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<float>",
+          "lineNumber": 113
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<BF16>",
+          "lineNumber": 115
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 115
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 116
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<float>",
+          "lineNumber": 116
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::numeric_limits<int64_t>::max",
+          "lineNumber": 120
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 121
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<int64_t>",
+          "lineNumber": 121
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 121
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::numeric_limits<int64_t>::min",
+          "lineNumber": 123
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 124
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<int64_t>",
+          "lineNumber": 124
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 124
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::numeric_limits<uint64_t>::max",
+          "lineNumber": 126
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 127
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<uint64_t>",
+          "lineNumber": 127
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 127
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 131
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<int64_t>",
+          "lineNumber": 131
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 131
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 132
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<double>",
+          "lineNumber": 132
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 132
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 133
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<double>",
+          "lineNumber": 133
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 133
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 134
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<int64_t>",
+          "lineNumber": 134
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 134
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<FP16>",
+          "lineNumber": 139
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 139
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 140
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<float>",
+          "lineNumber": 140
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "to<BF16>",
+          "lineNumber": 143
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Scalar",
+          "lineNumber": 143
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 144
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<float>",
+          "lineNumber": 144
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 15,
+        "functionCount": 14,
+        "classCount": 1
+      }
+    }
+  ]
+}

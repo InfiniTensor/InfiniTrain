@@ -1,0 +1,5 @@
+if(EXISTS "/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/parallel/test_pipeline_layout_balance_cpu[1]_tests.cmake")
+  include("/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/parallel/test_pipeline_layout_balance_cpu[1]_tests.cmake")
+else()
+  add_test(test_pipeline_layout_balance_cpu_NOT_BUILT test_pipeline_layout_balance_cpu_NOT_BUILT)
+endif()

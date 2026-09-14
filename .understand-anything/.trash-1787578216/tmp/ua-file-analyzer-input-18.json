@@ -1,0 +1,36 @@
+{
+  "projectRoot": "/home/fabu/桌面/InfiniTrain",
+  "batchFiles": [
+    {
+      "path": "pipeline_layout_implementation/chapters/14_deliverables/report_template.md",
+      "language": "markdown",
+      "sizeLines": 32,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/14_deliverables/standalone_test_log.md",
+      "language": "markdown",
+      "sizeLines": 59,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/14_deliverables/test_log_template.md",
+      "language": "markdown",
+      "sizeLines": 41,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/14_deliverables/user_guide.md",
+      "language": "markdown",
+      "sizeLines": 53,
+      "fileCategory": "docs"
+    }
+  ],
+  "batchImportData": {
+    "pipeline_layout_implementation/chapters/14_deliverables/report_template.md": [],
+    "pipeline_layout_implementation/chapters/14_deliverables/standalone_test_log.md": [],
+    "pipeline_layout_implementation/chapters/14_deliverables/test_log_template.md": [],
+    "pipeline_layout_implementation/chapters/14_deliverables/user_guide.md": []
+  },
+  "neighborMap": {}
+}

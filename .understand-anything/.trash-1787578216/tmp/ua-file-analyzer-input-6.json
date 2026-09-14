@@ -1,0 +1,267 @@
+{
+  "projectRoot": "/home/fabu/桌面/InfiniTrain",
+  "batchFiles": [
+    {
+      "path": "infini_train/include/nn/parallel/pp/pipeline_parallel.h",
+      "language": "c",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/include/nn/parallel/pp/pipeline_schedule.h",
+      "language": "c",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/include/nn/parallel/pp/pipeline_stage.h",
+      "language": "c",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/include/optimizer.h",
+      "language": "c",
+      "sizeLines": 97,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/include/utils/precision_check_config.h",
+      "language": "c",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/include/utils/precision_check_context.h",
+      "language": "c",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/include/utils/precision_checker.h",
+      "language": "c",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/checkpoint/checkpoint.cc",
+      "language": "cpp",
+      "sizeLines": 351,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/dataloader.cc",
+      "language": "cpp",
+      "sizeLines": 103,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/lr_scheduler.cc",
+      "language": "cpp",
+      "sizeLines": 388,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/nn/modules/container.cc",
+      "language": "cpp",
+      "sizeLines": 52,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/nn/parallel/pp/pipeline_parallel.cc",
+      "language": "cpp",
+      "sizeLines": 107,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/nn/parallel/pp/pipeline_schedule.cc",
+      "language": "cpp",
+      "sizeLines": 298,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/nn/parallel/pp/pipeline_stage.cc",
+      "language": "cpp",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/utils/precision_check_config.cc",
+      "language": "cpp",
+      "sizeLines": 88,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/utils/precision_check_context.cc",
+      "language": "cpp",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/utils/precision_checker.cc",
+      "language": "cpp",
+      "sizeLines": 473,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/checkpoint/test_checkpoint_serialization.cc",
+      "language": "cpp",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/checkpoint/test_lr_scheduler_state.cc",
+      "language": "cpp",
+      "sizeLines": 100,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/checkpoint/test_trainer_state.cc",
+      "language": "cpp",
+      "sizeLines": 107,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/hook/test_precision_check.cc",
+      "language": "cpp",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/module/test_named_parameters.cc",
+      "language": "cpp",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/optimizer/test_lr_scheduler.cc",
+      "language": "cpp",
+      "sizeLines": 336,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "infini_train/include/nn/parallel/pp/pipeline_parallel.h": [
+      "infini_train/include/nn/modules/module.h"
+    ],
+    "infini_train/include/nn/parallel/pp/pipeline_schedule.h": [
+      "infini_train/include/datatype.h"
+    ],
+    "infini_train/include/nn/parallel/pp/pipeline_stage.h": [
+      "infini_train/include/device.h"
+    ],
+    "infini_train/include/optimizer.h": [],
+    "infini_train/include/utils/precision_check_config.h": [],
+    "infini_train/include/utils/precision_check_context.h": [],
+    "infini_train/include/utils/precision_checker.h": [
+      "infini_train/include/utils/precision_check_config.h"
+    ],
+    "infini_train/src/checkpoint/checkpoint.cc": [
+      "infini_train/include/checkpoint/checkpoint.h",
+      "infini_train/include/lr_scheduler.h",
+      "infini_train/include/nn/modules/module.h",
+      "infini_train/include/optimizer.h",
+      "infini_train/include/tensor.h"
+    ],
+    "infini_train/src/dataloader.cc": [
+      "infini_train/include/dataloader.h",
+      "infini_train/include/dataset.h",
+      "infini_train/include/tensor.h"
+    ],
+    "infini_train/src/lr_scheduler.cc": [
+      "infini_train/include/lr_scheduler.h",
+      "infini_train/include/optimizer.h"
+    ],
+    "infini_train/src/nn/modules/container.cc": [
+      "infini_train/include/nn/modules/container.h",
+      "infini_train/include/tensor.h"
+    ],
+    "infini_train/src/nn/parallel/pp/pipeline_parallel.cc": [
+      "infini_train/include/nn/modules/container.h",
+      "infini_train/include/nn/modules/module.h",
+      "infini_train/include/nn/parallel/pp/pipeline_parallel.h",
+      "infini_train/include/nn/parallel/pp/pipeline_schedule.h",
+      "infini_train/include/nn/parallel/pp/pipeline_stage.h"
+    ],
+    "infini_train/src/nn/parallel/pp/pipeline_schedule.cc": [
+      "infini_train/include/autocast.h",
+      "infini_train/include/datatype.h",
+      "infini_train/include/device.h",
+      "infini_train/include/nn/init.h",
+      "infini_train/include/nn/modules/module.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/nn/parallel/pp/pipeline_schedule.h",
+      "infini_train/include/nn/parallel/pp/pipeline_stage.h",
+      "infini_train/include/nn/parallel/pp/send_recv.h",
+      "infini_train/include/optimizer.h",
+      "infini_train/include/tensor.h"
+    ],
+    "infini_train/src/nn/parallel/pp/pipeline_stage.cc": [
+      "infini_train/include/device.h",
+      "infini_train/include/nn/modules/module.h",
+      "infini_train/include/nn/parallel/pp/pipeline_stage.h",
+      "infini_train/include/nn/parallel/process_group.h"
+    ],
+    "infini_train/src/utils/precision_check_config.cc": [
+      "infini_train/include/utils/precision_check_config.h",
+      "infini_train/include/utils/precision_checker.h"
+    ],
+    "infini_train/src/utils/precision_check_context.cc": [
+      "infini_train/include/utils/precision_check_context.h"
+    ],
+    "infini_train/src/utils/precision_checker.cc": [
+      "infini_train/include/autograd/function.h",
+      "infini_train/include/nn/modules/module.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/nn/parallel/tensor_parallel.h",
+      "infini_train/include/tensor.h",
+      "infini_train/include/utils/global_module_hook_registry.h",
+      "infini_train/include/utils/precision_check_config.h",
+      "infini_train/include/utils/precision_check_context.h",
+      "infini_train/include/utils/precision_checker.h"
+    ],
+    "tests/checkpoint/test_checkpoint_serialization.cc": [
+      "infini_train/include/checkpoint/checkpoint.h",
+      "infini_train/include/nn/modules/linear.h",
+      "infini_train/include/nn/modules/module.h",
+      "infini_train/include/optimizer.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/checkpoint/test_lr_scheduler_state.cc": [
+      "infini_train/include/checkpoint/checkpoint.h",
+      "infini_train/include/lr_scheduler.h",
+      "infini_train/include/nn/modules/linear.h",
+      "infini_train/include/optimizer.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/checkpoint/test_trainer_state.cc": [
+      "infini_train/include/checkpoint/checkpoint.h",
+      "infini_train/include/nn/modules/linear.h",
+      "infini_train/include/nn/modules/module.h",
+      "infini_train/include/optimizer.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/hook/test_precision_check.cc": [
+      "infini_train/include/nn/modules/module.h",
+      "infini_train/include/tensor.h",
+      "infini_train/include/utils/precision_check_config.h",
+      "infini_train/include/utils/precision_checker.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/module/test_named_parameters.cc": [
+      "infini_train/include/nn/modules/container.h",
+      "infini_train/include/nn/modules/linear.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/optimizer/test_lr_scheduler.cc": [
+      "infini_train/include/lr_scheduler.h",
+      "infini_train/include/optimizer.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ]
+  }
+}

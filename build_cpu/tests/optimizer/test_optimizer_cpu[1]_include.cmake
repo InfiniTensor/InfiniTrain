@@ -1,0 +1,5 @@
+if(EXISTS "/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/optimizer/test_optimizer_cpu[1]_tests.cmake")
+  include("/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/optimizer/test_optimizer_cpu[1]_tests.cmake")
+else()
+  add_test(test_optimizer_cpu_NOT_BUILT test_optimizer_cpu_NOT_BUILT)
+endif()

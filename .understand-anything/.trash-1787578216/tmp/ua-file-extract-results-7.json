@@ -1,0 +1,7384 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 22,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "example/common/tiny_shakespeare_dataset.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 120,
+      "nonEmptyLines": 102,
+      "functions": [
+        {
+          "name": "ReadSeveralBytesFromIfstream",
+          "startLine": 42,
+          "endLine": 46,
+          "params": [
+            "num_bytes",
+            "ifs"
+          ]
+        },
+        {
+          "name": "ReadTinyShakespeareFile",
+          "startLine": 55,
+          "endLine": 100,
+          "params": [
+            "path",
+            "sequence_length"
+          ]
+        },
+        {
+          "name": "TinyShakespeareDataset",
+          "startLine": 103,
+          "endLine": 108,
+          "params": [
+            "filepath",
+            "sequence_length"
+          ]
+        },
+        {
+          "name": "operator[]",
+          "startLine": 110,
+          "endLine": 118,
+          "params": [
+            "idx"
+          ]
+        },
+        {
+          "name": "Size",
+          "startLine": 120,
+          "endLine": 120,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "ReadSeveralBytesFromIfstream",
+          "line": 42,
+          "isDefault": false
+        },
+        {
+          "name": "ReadTinyShakespeareFile",
+          "line": 55,
+          "isDefault": false
+        },
+        {
+          "name": "TinyShakespeareDataset",
+          "line": 103,
+          "isDefault": false
+        },
+        {
+          "name": "operator[]",
+          "line": 110,
+          "isDefault": false
+        },
+        {
+          "name": "Size",
+          "line": 120,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "ReadSeveralBytesFromIfstream",
+          "callee": "read",
+          "lineNumber": 44
+        },
+        {
+          "caller": "ReadSeveralBytesFromIfstream",
+          "callee": "reinterpret_cast<char *>",
+          "lineNumber": 44
+        },
+        {
+          "caller": "ReadSeveralBytesFromIfstream",
+          "callee": "data",
+          "lineNumber": 44
+        },
+        {
+          "caller": "BytesToType",
+          "callee": "std::memcpy",
+          "lineNumber": 51
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "std::filesystem::exists",
+          "lineNumber": 62
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "LOG",
+          "lineNumber": 63
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "ReadSeveralBytesFromIfstream",
+          "lineNumber": 68
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "BytesToType<int32_t>",
+          "lineNumber": 69
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "BytesToType<int32_t>",
+          "lineNumber": 70
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "BytesToType<int32_t>",
+          "lineNumber": 72
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "at",
+          "lineNumber": 73
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "assign",
+          "lineNumber": 76
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 76
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "at",
+          "lineNumber": 79
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "std::accumulate",
+          "lineNumber": 80
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "begin",
+          "lineNumber": 80
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "end",
+          "lineNumber": 80
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "std::multiplies<int>",
+          "lineNumber": 80
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "infini_train::Tensor",
+          "lineNumber": 82
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "static_cast<int64_t *>",
+          "lineNumber": 83
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "DataPtr",
+          "lineNumber": 83
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "CHECK_LE",
+          "lineNumber": 87
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "std::vector<uint16_t>",
+          "lineNumber": 88
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "CHECK_LE",
+          "lineNumber": 90
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "std::vector<int32_t>",
+          "lineNumber": 91
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "std::visit",
+          "lineNumber": 93
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "read",
+          "lineNumber": 95
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "reinterpret_cast<char *>",
+          "lineNumber": 95
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "data",
+          "lineNumber": 95
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "size",
+          "lineNumber": 96
+        },
+        {
+          "caller": "ReadTinyShakespeareFile",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 96
+        },
+        {
+          "caller": "TinyShakespeareDataset",
+          "callee": "ReadTinyShakespeareFile",
+          "lineNumber": 104
+        },
+        {
+          "caller": "TinyShakespeareDataset",
+          "callee": "CHECK_EQ",
+          "lineNumber": 106
+        },
+        {
+          "caller": "TinyShakespeareDataset",
+          "callee": "CHECK_EQ",
+          "lineNumber": 107
+        },
+        {
+          "caller": "TinyShakespeareDataset",
+          "callee": "static_cast<int>",
+          "lineNumber": 107
+        },
+        {
+          "caller": "TinyShakespeareDataset",
+          "callee": "Dtype",
+          "lineNumber": 107
+        },
+        {
+          "caller": "TinyShakespeareDataset",
+          "callee": "static_cast<int>",
+          "lineNumber": 107
+        },
+        {
+          "caller": "operator[]",
+          "callee": "CHECK_LT",
+          "lineNumber": 112
+        },
+        {
+          "caller": "operator[]",
+          "callee": "std::vector<int64_t>",
+          "lineNumber": 113
+        },
+        {
+          "caller": "operator[]",
+          "callee": "begin",
+          "lineNumber": 113
+        },
+        {
+          "caller": "operator[]",
+          "callee": "end",
+          "lineNumber": 113
+        },
+        {
+          "caller": "operator[]",
+          "callee": "std::make_shared<infini_train::Tensor>",
+          "lineNumber": 115
+        },
+        {
+          "caller": "operator[]",
+          "callee": "std::make_shared<infini_train::Tensor>",
+          "lineNumber": 116
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 5,
+        "functionCount": 5,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "example/mnist/dataset.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 122,
+      "nonEmptyLines": 105,
+      "functions": [
+        {
+          "name": "ReadSeveralBytesFromIfstream",
+          "startLine": 45,
+          "endLine": 49,
+          "params": [
+            "num_bytes",
+            "ifs"
+          ]
+        },
+        {
+          "name": "ReadSN3PascalVincentFile",
+          "startLine": 51,
+          "endLine": 82,
+          "params": [
+            "path"
+          ]
+        },
+        {
+          "name": "MNISTDataset",
+          "startLine": 85,
+          "endLine": 113,
+          "params": [
+            "dataset",
+            "train"
+          ]
+        },
+        {
+          "name": "operator[]",
+          "startLine": 115,
+          "endLine": 120,
+          "params": [
+            "idx"
+          ]
+        },
+        {
+          "name": "Size",
+          "startLine": 122,
+          "endLine": 122,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "ReadSeveralBytesFromIfstream",
+          "line": 45,
+          "isDefault": false
+        },
+        {
+          "name": "ReadSN3PascalVincentFile",
+          "line": 51,
+          "isDefault": false
+        },
+        {
+          "name": "MNISTDataset",
+          "line": 85,
+          "isDefault": false
+        },
+        {
+          "name": "operator[]",
+          "line": 115,
+          "isDefault": false
+        },
+        {
+          "name": "Size",
+          "line": 122,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "ReadSeveralBytesFromIfstream",
+          "callee": "read",
+          "lineNumber": 47
+        },
+        {
+          "caller": "ReadSeveralBytesFromIfstream",
+          "callee": "reinterpret_cast<char *>",
+          "lineNumber": 47
+        },
+        {
+          "caller": "ReadSeveralBytesFromIfstream",
+          "callee": "data",
+          "lineNumber": 47
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "std::filesystem::exists",
+          "lineNumber": 58
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "LOG",
+          "lineNumber": 59
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "ReadSeveralBytesFromIfstream",
+          "lineNumber": 64
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "at",
+          "lineNumber": 67
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "resize",
+          "lineNumber": 70
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "ReadSeveralBytesFromIfstream",
+          "lineNumber": 72
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "at",
+          "lineNumber": 78
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "std::accumulate",
+          "lineNumber": 78
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "begin",
+          "lineNumber": 78
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "end",
+          "lineNumber": 78
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "std::multiplies<int>",
+          "lineNumber": 78
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "infini_train::Tensor",
+          "lineNumber": 79
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "at",
+          "lineNumber": 79
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "read",
+          "lineNumber": 80
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "reinterpret_cast<char *>",
+          "lineNumber": 80
+        },
+        {
+          "caller": "ReadSN3PascalVincentFile",
+          "callee": "DataPtr",
+          "lineNumber": 80
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "ReadSN3PascalVincentFile",
+          "lineNumber": 87
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "std::format",
+          "lineNumber": 87
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "ReadSN3PascalVincentFile",
+          "lineNumber": 88
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "std::format",
+          "lineNumber": 89
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "begin",
+          "lineNumber": 90
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "end",
+          "lineNumber": 90
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "begin",
+          "lineNumber": 91
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "end",
+          "lineNumber": 91
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "at",
+          "lineNumber": 92
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "std::accumulate",
+          "lineNumber": 93
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "begin",
+          "lineNumber": 93
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "end",
+          "lineNumber": 93
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "std::multiplies<int>",
+          "lineNumber": 93
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "at",
+          "lineNumber": 94
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "std::accumulate",
+          "lineNumber": 95
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "begin",
+          "lineNumber": 95
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "end",
+          "lineNumber": 95
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "std::multiplies<int>",
+          "lineNumber": 95
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "CHECK_EQ",
+          "lineNumber": 96
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "CHECK_EQ",
+          "lineNumber": 97
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "static_cast<int>",
+          "lineNumber": 97
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "Dtype",
+          "lineNumber": 97
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "static_cast<int>",
+          "lineNumber": 97
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "Dims",
+          "lineNumber": 98
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "CHECK_EQ",
+          "lineNumber": 99
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "size",
+          "lineNumber": 99
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "CHECK_EQ",
+          "lineNumber": 100
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "CHECK_EQ",
+          "lineNumber": 101
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "reinterpret_cast<uint8_t *>",
+          "lineNumber": 106
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "DataPtr",
+          "lineNumber": 106
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "static_cast<float *>",
+          "lineNumber": 107
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "DataPtr",
+          "lineNumber": 107
+        },
+        {
+          "caller": "MNISTDataset",
+          "callee": "std::move",
+          "lineNumber": 112
+        },
+        {
+          "caller": "operator[]",
+          "callee": "CHECK_LT",
+          "lineNumber": 117
+        },
+        {
+          "caller": "operator[]",
+          "callee": "std::make_shared<infini_train::Tensor>",
+          "lineNumber": 118
+        },
+        {
+          "caller": "operator[]",
+          "callee": "std::make_shared<infini_train::Tensor>",
+          "lineNumber": 119
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 5,
+        "functionCount": 5,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "example/mnist/dataset.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 45,
+      "nonEmptyLines": 37,
+      "classes": [
+        {
+          "name": "MNISTDataset",
+          "startLine": 13,
+          "endLine": 45,
+          "methods": [
+            "operator[]",
+            "Size"
+          ],
+          "properties": [
+            "image_file_",
+            "label_file_",
+            "image_dims_",
+            "label_dims_",
+            "image_size_in_bytes_",
+            "label_size_in_bytes_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "operator[]",
+          "line": 33,
+          "isDefault": false
+        },
+        {
+          "name": "Size",
+          "line": 36,
+          "isDefault": false
+        },
+        {
+          "name": "MNISTDataset",
+          "line": 13,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "infini_train/include/autograd/loss.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 24,
+      "nonEmptyLines": 18,
+      "functions": [
+        {
+          "name": "CrossEntropy",
+          "startLine": 17,
+          "endLine": 17,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 9,
+          "endLine": 9,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "CrossEntropy",
+          "startLine": 13,
+          "endLine": 23,
+          "methods": [
+            "CrossEntropy",
+            "Forward",
+            "SetupContext",
+            "Backward"
+          ],
+          "properties": [
+            "kType"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "CrossEntropy",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "CrossEntropy",
+          "line": 13,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 6,
+        "functionCount": 1,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "infini_train/include/dispatcher.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 91,
+      "nonEmptyLines": 74,
+      "classes": [
+        {
+          "name": "KernelFunction",
+          "startLine": 16,
+          "endLine": 47,
+          "methods": [],
+          "properties": [
+            "func_ptr_"
+          ]
+        },
+        {
+          "name": "Dispatcher",
+          "startLine": 49,
+          "endLine": 83,
+          "methods": [],
+          "properties": [
+            "key_to_kernel_map_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "KernelFunction",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "Dispatcher",
+          "line": 49,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "KernelFunction",
+          "callee": "reinterpret_cast<void *>",
+          "lineNumber": 18
+        },
+        {
+          "caller": "Call",
+          "callee": "GetProfileContext",
+          "lineNumber": 23
+        },
+        {
+          "caller": "Call",
+          "callee": "StartRecord",
+          "lineNumber": 24
+        },
+        {
+          "caller": "Call",
+          "callee": "Profiler::Instance",
+          "lineNumber": 24
+        },
+        {
+          "caller": "Call",
+          "callee": "reinterpret_cast<FuncT>",
+          "lineNumber": 28
+        },
+        {
+          "caller": "Call",
+          "callee": "fn",
+          "lineNumber": 31
+        },
+        {
+          "caller": "Call",
+          "callee": "std::forward<ArgsT>",
+          "lineNumber": 31
+        },
+        {
+          "caller": "Call",
+          "callee": "EndRecord",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Call",
+          "callee": "Profiler::Instance",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Call",
+          "callee": "fn",
+          "lineNumber": 37
+        },
+        {
+          "caller": "Call",
+          "callee": "std::forward<ArgsT>",
+          "lineNumber": 37
+        },
+        {
+          "caller": "Call",
+          "callee": "EndRecord",
+          "lineNumber": 39
+        },
+        {
+          "caller": "Call",
+          "callee": "Profiler::Instance",
+          "lineNumber": 39
+        },
+        {
+          "caller": "Register",
+          "callee": "CHECK",
+          "lineNumber": 68
+        },
+        {
+          "caller": "Register",
+          "callee": "contains",
+          "lineNumber": 68
+        },
+        {
+          "caller": "Register",
+          "callee": "static_cast<int>",
+          "lineNumber": 69
+        },
+        {
+          "caller": "Register",
+          "callee": "emplace",
+          "lineNumber": 70
+        },
+        {
+          "caller": "Call",
+          "callee": "GetKernel",
+          "lineNumber": 74
+        },
+        {
+          "caller": "Call",
+          "callee": "SetProfileContext",
+          "lineNumber": 76
+        },
+        {
+          "caller": "Call",
+          "callee": "Call<RetT>",
+          "lineNumber": 78
+        },
+        {
+          "caller": "Call",
+          "callee": "std::forward<ArgsT>",
+          "lineNumber": 78
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "infini_train/include/tensor.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 278,
+      "nonEmptyLines": 223,
+      "functions": [
+        {
+          "name": "Tensor",
+          "startLine": 65,
+          "endLine": 65,
+          "params": []
+        },
+        {
+          "name": "Tensor",
+          "startLine": 68,
+          "endLine": 68,
+          "params": [
+            "dims",
+            "dtype"
+          ]
+        },
+        {
+          "name": "Tensor",
+          "startLine": 75,
+          "endLine": 75,
+          "params": [
+            "data",
+            "dims",
+            "dtype"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Function",
+          "startLine": 19,
+          "endLine": 19,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "AccumulateGrad",
+          "startLine": 20,
+          "endLine": 20,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "PreAccumulateGradHook",
+          "startLine": 21,
+          "endLine": 21,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "PostAccumulateGradHook",
+          "startLine": 22,
+          "endLine": 22,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "PrintOptions",
+          "startLine": 26,
+          "endLine": 38,
+          "methods": [],
+          "properties": [
+            "precision",
+            "threshold",
+            "edge_items",
+            "linewidth",
+            "sci_mode"
+          ]
+        },
+        {
+          "name": "TensorBuffer",
+          "startLine": 41,
+          "endLine": 56,
+          "methods": [
+            "GetDevice",
+            "Size"
+          ],
+          "properties": [
+            "DataPtr",
+            "DataPtr",
+            "device_",
+            "size_",
+            "data_"
+          ]
+        },
+        {
+          "name": "Tensor",
+          "startLine": 58,
+          "endLine": 270,
+          "methods": [
+            "Tensor",
+            "Tensor",
+            "SetData",
+            "Tensor",
+            "GetDevice",
+            "SizeInBytes",
+            "NumElements",
+            "Dtype",
+            "SetGradientClipRole",
+            "gradient_clip_role",
+            "gradient_clip_replicated",
+            "gradient_clip_owner_tp_rank",
+            "gradient_clip_logical_id",
+            "Detach",
+            "Fill",
+            "EigenMatrix",
+            "EigenVector",
+            "To",
+            "To",
+            "CopyFrom",
+            "CopyFrom",
+            "Equals",
+            "Equals",
+            "Lt",
+            "Lt",
+            "Le",
+            "Le",
+            "Gt",
+            "Gt",
+            "Ge",
+            "Ge",
+            "And",
+            "Or",
+            "Add",
+            "Add",
+            "Sub",
+            "Mul",
+            "Mul",
+            "Div",
+            "Neg",
+            "Reciprocal",
+            "Sin",
+            "Cos",
+            "Tanh",
+            "Pow",
+            "Rsqrt",
+            "Exp",
+            "Log",
+            "Mean",
+            "Sum",
+            "Min",
+            "Max",
+            "Split",
+            "Gather",
+            "Transpose",
+            "Slice",
+            "Slice",
+            "RepeatInterleave",
+            "View",
+            "Contiguous",
+            "IsContiguous",
+            "Flatten",
+            "Squeeze",
+            "Unsqueeze",
+            "Uniform",
+            "Matmul",
+            "Outer",
+            "MaskedFill",
+            "SaveAsNpy",
+            "Print",
+            "SetPrintOptions",
+            "RequiresGrad",
+            "grad",
+            "set_grad",
+            "requires_grad",
+            "set_requires_grad",
+            "is_leaf",
+            "set_is_leaf",
+            "grad_fn",
+            "set_grad_fn",
+            "output_idx",
+            "set_output_idx",
+            "ZeroGrad",
+            "MarkGradOverwriteOnNextAccum",
+            "ConsumeGradOverwriteFlag",
+            "Backward",
+            "grad_accumulator",
+            "ResetAccumulator",
+            "RegisterPreAccumulateGradHook",
+            "RegisterPostAccumulateGradHook"
+          ],
+          "properties": [
+            "DataPtr",
+            "DataPtr",
+            "buffer_",
+            "offset_",
+            "dims_",
+            "num_elements_",
+            "dtype_",
+            "gradient_clip_role_",
+            "gradient_clip_owner_tp_rank_",
+            "gradient_clip_logical_id_",
+            "pre_accumulate_grad_hook",
+            "post_accumulate_grad_hook",
+            "grad_",
+            "requires_grad_",
+            "is_leaf_",
+            "grad_fn_",
+            "output_idx_",
+            "grad_accumulator_",
+            "pre_accumulate_grad_hook_",
+            "post_accumulate_grad_hook_",
+            "grad_overwrite_once_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Function",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "AccumulateGrad",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "PreAccumulateGradHook",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "PostAccumulateGradHook",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "PrintOptions",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "GetDevice",
+          "line": 49,
+          "isDefault": false
+        },
+        {
+          "name": "Size",
+          "line": 50,
+          "isDefault": false
+        },
+        {
+          "name": "TensorBuffer",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "Tensor",
+          "line": 65,
+          "isDefault": false
+        },
+        {
+          "name": "Tensor",
+          "line": 68,
+          "isDefault": false
+        },
+        {
+          "name": "SetData",
+          "line": 72,
+          "isDefault": false
+        },
+        {
+          "name": "Tensor",
+          "line": 75,
+          "isDefault": false
+        },
+        {
+          "name": "GetDevice",
+          "line": 77,
+          "isDefault": false
+        },
+        {
+          "name": "SizeInBytes",
+          "line": 82,
+          "isDefault": false
+        },
+        {
+          "name": "NumElements",
+          "line": 85,
+          "isDefault": false
+        },
+        {
+          "name": "Dtype",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "SetGradientClipRole",
+          "line": 88,
+          "isDefault": false
+        },
+        {
+          "name": "gradient_clip_role",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "gradient_clip_replicated",
+          "line": 90,
+          "isDefault": false
+        },
+        {
+          "name": "gradient_clip_owner_tp_rank",
+          "line": 91,
+          "isDefault": false
+        },
+        {
+          "name": "gradient_clip_logical_id",
+          "line": 92,
+          "isDefault": false
+        },
+        {
+          "name": "Detach",
+          "line": 94,
+          "isDefault": false
+        },
+        {
+          "name": "Fill",
+          "line": 96,
+          "isDefault": false
+        },
+        {
+          "name": "EigenMatrix",
+          "line": 98,
+          "isDefault": false
+        },
+        {
+          "name": "EigenVector",
+          "line": 99,
+          "isDefault": false
+        },
+        {
+          "name": "To",
+          "line": 102,
+          "isDefault": false
+        },
+        {
+          "name": "To",
+          "line": 103,
+          "isDefault": false
+        },
+        {
+          "name": "CopyFrom",
+          "line": 105,
+          "isDefault": false
+        },
+        {
+          "name": "CopyFrom",
+          "line": 106,
+          "isDefault": false
+        },
+        {
+          "name": "Equals",
+          "line": 109,
+          "isDefault": false
+        },
+        {
+          "name": "Equals",
+          "line": 110,
+          "isDefault": false
+        },
+        {
+          "name": "Lt",
+          "line": 111,
+          "isDefault": false
+        },
+        {
+          "name": "Lt",
+          "line": 112,
+          "isDefault": false
+        },
+        {
+          "name": "Le",
+          "line": 113,
+          "isDefault": false
+        },
+        {
+          "name": "Le",
+          "line": 114,
+          "isDefault": false
+        },
+        {
+          "name": "Gt",
+          "line": 115,
+          "isDefault": false
+        },
+        {
+          "name": "Gt",
+          "line": 116,
+          "isDefault": false
+        },
+        {
+          "name": "Ge",
+          "line": 117,
+          "isDefault": false
+        },
+        {
+          "name": "Ge",
+          "line": 118,
+          "isDefault": false
+        },
+        {
+          "name": "And",
+          "line": 119,
+          "isDefault": false
+        },
+        {
+          "name": "Or",
+          "line": 120,
+          "isDefault": false
+        },
+        {
+          "name": "Add",
+          "line": 122,
+          "isDefault": false
+        },
+        {
+          "name": "Add",
+          "line": 123,
+          "isDefault": false
+        },
+        {
+          "name": "Sub",
+          "line": 124,
+          "isDefault": false
+        },
+        {
+          "name": "Mul",
+          "line": 125,
+          "isDefault": false
+        },
+        {
+          "name": "Mul",
+          "line": 126,
+          "isDefault": false
+        },
+        {
+          "name": "Div",
+          "line": 127,
+          "isDefault": false
+        },
+        {
+          "name": "Neg",
+          "line": 128,
+          "isDefault": false
+        },
+        {
+          "name": "Reciprocal",
+          "line": 129,
+          "isDefault": false
+        },
+        {
+          "name": "Sin",
+          "line": 130,
+          "isDefault": false
+        },
+        {
+          "name": "Cos",
+          "line": 131,
+          "isDefault": false
+        },
+        {
+          "name": "Tanh",
+          "line": 132,
+          "isDefault": false
+        },
+        {
+          "name": "Pow",
+          "line": 133,
+          "isDefault": false
+        },
+        {
+          "name": "Rsqrt",
+          "line": 134,
+          "isDefault": false
+        },
+        {
+          "name": "Exp",
+          "line": 135,
+          "isDefault": false
+        },
+        {
+          "name": "Log",
+          "line": 136,
+          "isDefault": false
+        },
+        {
+          "name": "Mean",
+          "line": 138,
+          "isDefault": false
+        },
+        {
+          "name": "Sum",
+          "line": 139,
+          "isDefault": false
+        },
+        {
+          "name": "Min",
+          "line": 140,
+          "isDefault": false
+        },
+        {
+          "name": "Max",
+          "line": 141,
+          "isDefault": false
+        },
+        {
+          "name": "Split",
+          "line": 143,
+          "isDefault": false
+        },
+        {
+          "name": "Gather",
+          "line": 144,
+          "isDefault": false
+        },
+        {
+          "name": "Transpose",
+          "line": 146,
+          "isDefault": false
+        },
+        {
+          "name": "Slice",
+          "line": 147,
+          "isDefault": false
+        },
+        {
+          "name": "Slice",
+          "line": 149,
+          "isDefault": false
+        },
+        {
+          "name": "RepeatInterleave",
+          "line": 151,
+          "isDefault": false
+        },
+        {
+          "name": "View",
+          "line": 153,
+          "isDefault": false
+        },
+        {
+          "name": "Contiguous",
+          "line": 154,
+          "isDefault": false
+        },
+        {
+          "name": "IsContiguous",
+          "line": 158,
+          "isDefault": false
+        },
+        {
+          "name": "Flatten",
+          "line": 159,
+          "isDefault": false
+        },
+        {
+          "name": "Squeeze",
+          "line": 160,
+          "isDefault": false
+        },
+        {
+          "name": "Unsqueeze",
+          "line": 161,
+          "isDefault": false
+        },
+        {
+          "name": "Uniform",
+          "line": 164,
+          "isDefault": false
+        },
+        {
+          "name": "Matmul",
+          "line": 167,
+          "isDefault": false
+        },
+        {
+          "name": "Outer",
+          "line": 168,
+          "isDefault": false
+        },
+        {
+          "name": "MaskedFill",
+          "line": 169,
+          "isDefault": false
+        },
+        {
+          "name": "SaveAsNpy",
+          "line": 204,
+          "isDefault": false
+        },
+        {
+          "name": "Print",
+          "line": 205,
+          "isDefault": false
+        },
+        {
+          "name": "SetPrintOptions",
+          "line": 206,
+          "isDefault": false
+        },
+        {
+          "name": "RequiresGrad",
+          "line": 224,
+          "isDefault": false
+        },
+        {
+          "name": "grad",
+          "line": 226,
+          "isDefault": false
+        },
+        {
+          "name": "set_grad",
+          "line": 227,
+          "isDefault": false
+        },
+        {
+          "name": "requires_grad",
+          "line": 229,
+          "isDefault": false
+        },
+        {
+          "name": "set_requires_grad",
+          "line": 230,
+          "isDefault": false
+        },
+        {
+          "name": "is_leaf",
+          "line": 232,
+          "isDefault": false
+        },
+        {
+          "name": "set_is_leaf",
+          "line": 233,
+          "isDefault": false
+        },
+        {
+          "name": "grad_fn",
+          "line": 235,
+          "isDefault": false
+        },
+        {
+          "name": "set_grad_fn",
+          "line": 236,
+          "isDefault": false
+        },
+        {
+          "name": "output_idx",
+          "line": 238,
+          "isDefault": false
+        },
+        {
+          "name": "set_output_idx",
+          "line": 239,
+          "isDefault": false
+        },
+        {
+          "name": "ZeroGrad",
+          "line": 241,
+          "isDefault": false
+        },
+        {
+          "name": "MarkGradOverwriteOnNextAccum",
+          "line": 242,
+          "isDefault": false
+        },
+        {
+          "name": "ConsumeGradOverwriteFlag",
+          "line": 243,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 245,
+          "isDefault": false
+        },
+        {
+          "name": "grad_accumulator",
+          "line": 248,
+          "isDefault": false
+        },
+        {
+          "name": "ResetAccumulator",
+          "line": 249,
+          "isDefault": false
+        },
+        {
+          "name": "RegisterPreAccumulateGradHook",
+          "line": 251,
+          "isDefault": false
+        },
+        {
+          "name": "RegisterPostAccumulateGradHook",
+          "line": 254,
+          "isDefault": false
+        },
+        {
+          "name": "Tensor",
+          "line": 58,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Tensor",
+          "callee": "Device",
+          "lineNumber": 68
+        },
+        {
+          "caller": "Tensor",
+          "callee": "Device",
+          "lineNumber": 75
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 99,
+        "functionCount": 3,
+        "classCount": 7
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/activations.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 33,
+      "nonEmptyLines": 26,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 9,
+          "endLine": 15,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 17,
+          "endLine": 21,
+          "params": [
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 23,
+          "endLine": 32,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 23,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 14
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 20
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 24
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 25
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 25
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 31
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 31
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/elementwise.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 527,
+      "nonEmptyLines": 417,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 9,
+          "endLine": 15,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 17,
+          "endLine": 23,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 25,
+          "endLine": 31,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 33,
+          "endLine": 37,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 39,
+          "endLine": 48,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 50,
+          "endLine": 56,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 58,
+          "endLine": 62,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 64,
+          "endLine": 73,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 75,
+          "endLine": 81,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 83,
+          "endLine": 87,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 89,
+          "endLine": 98,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 100,
+          "endLine": 106,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 108,
+          "endLine": 112,
+          "params": [
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 114,
+          "endLine": 123,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 125,
+          "endLine": 132,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 134,
+          "endLine": 138,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 140,
+          "endLine": 150,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 152,
+          "endLine": 158,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 160,
+          "endLine": 164,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 166,
+          "endLine": 175,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 177,
+          "endLine": 183,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 185,
+          "endLine": 191,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 193,
+          "endLine": 199,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 201,
+          "endLine": 205,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 207,
+          "endLine": 216,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 218,
+          "endLine": 225,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 227,
+          "endLine": 230,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 232,
+          "endLine": 238,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 240,
+          "endLine": 243,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 245,
+          "endLine": 252,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 254,
+          "endLine": 257,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 259,
+          "endLine": 265,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 267,
+          "endLine": 270,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 272,
+          "endLine": 279,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 281,
+          "endLine": 284,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 286,
+          "endLine": 292,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 294,
+          "endLine": 297,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 299,
+          "endLine": 306,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 308,
+          "endLine": 311,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 313,
+          "endLine": 319,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 321,
+          "endLine": 324,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 326,
+          "endLine": 333,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 335,
+          "endLine": 338,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 340,
+          "endLine": 346,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 348,
+          "endLine": 351,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 353,
+          "endLine": 360,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 362,
+          "endLine": 365,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 367,
+          "endLine": 374,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 376,
+          "endLine": 379,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 381,
+          "endLine": 388,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 390,
+          "endLine": 394,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 396,
+          "endLine": 409,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 411,
+          "endLine": 417,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 419,
+          "endLine": 425,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 427,
+          "endLine": 434,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 436,
+          "endLine": 440,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 442,
+          "endLine": 450,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 452,
+          "endLine": 459,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 461,
+          "endLine": 466,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 468,
+          "endLine": 480,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 482,
+          "endLine": 488,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 490,
+          "endLine": 496,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 498,
+          "endLine": 505,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 507,
+          "endLine": 512,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 514,
+          "endLine": 526,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 25,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 33,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 39,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 50,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 64,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 75,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 83,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 100,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 108,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 114,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 125,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 134,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 140,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 152,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 160,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 166,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 177,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 185,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 193,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 201,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 207,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 218,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 227,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 232,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 240,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 245,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 254,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 259,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 267,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 272,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 281,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 286,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 294,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 299,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 308,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 313,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 321,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 326,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 335,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 340,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 348,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 353,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 362,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 367,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 376,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 381,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 390,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 396,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 411,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 419,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 427,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 436,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 442,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 452,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 461,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 468,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 482,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 490,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 498,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 507,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 514,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 18
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 18
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 21
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 21
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 22
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 22
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 29
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 29
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 30
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 36
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 41
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 41
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 43
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 43
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 46
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 46
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 51
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 51
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 54
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 54
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 55
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 55
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 61
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 65
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 66
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 66
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 68
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 68
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 71
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 71
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 72
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 72
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 76
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 76
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 79
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 79
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 80
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 80
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 86
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 90
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 91
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 91
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 93
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 93
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 96
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 96
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 97
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 97
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 101
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 101
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 104
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 104
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 105
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 105
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 111
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 115
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 116
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 116
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 118
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 118
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 121
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 121
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 122
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 122
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 126
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 126
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 129
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 129
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 130
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 130
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 137
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 141
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 142
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 142
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 144
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 144
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 147
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 147
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 148
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 148
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 153
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 153
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 156
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 156
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 157
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 157
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 163
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 167
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 168
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 168
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 170
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 170
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 173
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 173
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 174
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 174
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 178
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 178
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 181
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 181
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 182
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 182
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 186
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 186
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 189
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 189
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 190
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 190
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 194
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 194
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 197
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 197
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 198
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 198
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 204
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 208
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 209
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 209
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 211
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 211
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 214
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 214
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 215
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 215
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 219
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 219
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 223
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 223
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 224
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 224
+        },
+        {
+          "caller": "Backward",
+          "callee": "LOG",
+          "lineNumber": 228
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 233
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 233
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 236
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 236
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 237
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 237
+        },
+        {
+          "caller": "Backward",
+          "callee": "LOG",
+          "lineNumber": 241
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 246
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 246
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 250
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 250
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 251
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 251
+        },
+        {
+          "caller": "Backward",
+          "callee": "LOG",
+          "lineNumber": 255
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 260
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 260
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 263
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 263
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 264
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 264
+        },
+        {
+          "caller": "Backward",
+          "callee": "LOG",
+          "lineNumber": 268
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 273
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 273
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 277
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 277
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 278
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 278
+        },
+        {
+          "caller": "Backward",
+          "callee": "LOG",
+          "lineNumber": 282
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 287
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 287
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 290
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 290
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 291
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 291
+        },
+        {
+          "caller": "Backward",
+          "callee": "LOG",
+          "lineNumber": 295
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 300
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 300
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 304
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 304
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 305
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 305
+        },
+        {
+          "caller": "Backward",
+          "callee": "LOG",
+          "lineNumber": 309
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 314
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 314
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 317
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 317
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 318
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 318
+        },
+        {
+          "caller": "Backward",
+          "callee": "LOG",
+          "lineNumber": 322
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 327
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 327
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 331
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 331
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 332
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 332
+        },
+        {
+          "caller": "Backward",
+          "callee": "LOG",
+          "lineNumber": 336
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 341
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 341
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 344
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 344
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 345
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 345
+        },
+        {
+          "caller": "Backward",
+          "callee": "LOG",
+          "lineNumber": 349
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 354
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 354
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 358
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 358
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 359
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 359
+        },
+        {
+          "caller": "Backward",
+          "callee": "LOG",
+          "lineNumber": 363
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 368
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 368
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 372
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 372
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 373
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 373
+        },
+        {
+          "caller": "Backward",
+          "callee": "LOG",
+          "lineNumber": 377
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 382
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 382
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 386
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 386
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 387
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 387
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 392
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 393
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 397
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 397
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 405
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 405
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>",
+          "lineNumber": 406
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 406
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 412
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 412
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 415
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 415
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 416
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 416
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 420
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 420
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 423
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 423
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 424
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 424
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 428
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 428
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 432
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 432
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 433
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 433
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 438
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 439
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 443
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 443
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 446
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 446
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>",
+          "lineNumber": 447
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 447
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 453
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 453
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 457
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 457
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 458
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 458
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 465
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 469
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 470
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 470
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 473
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 473
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 476
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 476
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>",
+          "lineNumber": 477
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 477
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 483
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 483
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 486
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 486
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 487
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 487
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 491
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 491
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 494
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 494
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 495
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 495
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 499
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 499
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 503
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 503
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 504
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 504
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 511
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 515
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 516
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 516
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 519
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 519
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 522
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 522
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>",
+          "lineNumber": 523
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 523
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 65,
+        "functionCount": 65,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/gather.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 38,
+      "nonEmptyLines": 30,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 9,
+          "endLine": 17,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 19,
+          "endLine": 25,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 27,
+          "endLine": 36,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 27,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetKernel",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 16
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 23
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 24
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 28
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 28
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetKernel",
+          "lineNumber": 34
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 34
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 34
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 35
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/linear.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 74,
+      "nonEmptyLines": 61,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 9,
+          "endLine": 17,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 19,
+          "endLine": 34,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 36,
+          "endLine": 73,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 36,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_GE",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 16
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 16
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "size",
+          "lineNumber": 23
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "needs_input_grad",
+          "lineNumber": 23
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "needs_input_grad",
+          "lineNumber": 23
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "size",
+          "lineNumber": 24
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "needs_input_grad",
+          "lineNumber": 24
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "needs_input_grad",
+          "lineNumber": 24
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 27
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "size",
+          "lineNumber": 30
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 31
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 32
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 37
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 38
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 38
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 41
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 41
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK",
+          "lineNumber": 44
+        },
+        {
+          "caller": "Backward",
+          "callee": "empty",
+          "lineNumber": 44
+        },
+        {
+          "caller": "Backward",
+          "callee": "needs_input_grad",
+          "lineNumber": 44
+        },
+        {
+          "caller": "Backward",
+          "callee": "needs_input_grad",
+          "lineNumber": 45
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 46
+        },
+        {
+          "caller": "Backward",
+          "callee": "needs_input_grad",
+          "lineNumber": 46
+        },
+        {
+          "caller": "Backward",
+          "callee": "needs_input_grad",
+          "lineNumber": 46
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Backward",
+          "callee": "needs_input_grad",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Backward",
+          "callee": "needs_input_grad",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 49
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 49
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 56
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 56
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 60
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 60
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 64
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 64
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/loss.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 38,
+      "nonEmptyLines": 31,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 9,
+          "endLine": 16,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 18,
+          "endLine": 23,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 25,
+          "endLine": 37,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 25,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 15
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 22
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 34
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 34
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/matmul.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 65,
+      "nonEmptyLines": 52,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 9,
+          "endLine": 16,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 18,
+          "endLine": 33,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 35,
+          "endLine": 64,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 35,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 15
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "size",
+          "lineNumber": 26
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "needs_input_grad",
+          "lineNumber": 26
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "needs_input_grad",
+          "lineNumber": 26
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "size",
+          "lineNumber": 27
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "needs_input_grad",
+          "lineNumber": 27
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "needs_input_grad",
+          "lineNumber": 27
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 29
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 30
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 31
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 32
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 36
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 37
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 37
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK",
+          "lineNumber": 43
+        },
+        {
+          "caller": "Backward",
+          "callee": "empty",
+          "lineNumber": 43
+        },
+        {
+          "caller": "Backward",
+          "callee": "needs_input_grad",
+          "lineNumber": 43
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 44
+        },
+        {
+          "caller": "Backward",
+          "callee": "needs_input_grad",
+          "lineNumber": 44
+        },
+        {
+          "caller": "Backward",
+          "callee": "needs_input_grad",
+          "lineNumber": 44
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 45
+        },
+        {
+          "caller": "Backward",
+          "callee": "needs_input_grad",
+          "lineNumber": 45
+        },
+        {
+          "caller": "Backward",
+          "callee": "needs_input_grad",
+          "lineNumber": 45
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK",
+          "lineNumber": 53
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 54
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 54
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK",
+          "lineNumber": 58
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 59
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 59
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/no_op.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 31,
+      "nonEmptyLines": 23,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 9,
+          "endLine": 15,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 17,
+          "endLine": 21,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 23,
+          "endLine": 29,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 23,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 14
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 20
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 24
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 24
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 28
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 28
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/normalization.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 54,
+      "nonEmptyLines": 46,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 10,
+          "endLine": 22,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 24,
+          "endLine": 34,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 36,
+          "endLine": 53,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 36,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 11
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 11
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 16
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 16
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>",
+          "lineNumber": 18
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 18
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "CHECK_EQ",
+          "lineNumber": 26
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "size",
+          "lineNumber": 26
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "MarkNonDifferentiable",
+          "lineNumber": 32
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 37
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 38
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 38
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_GE",
+          "lineNumber": 44
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 44
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>",
+          "lineNumber": 49
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 49
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/outer.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 42,
+      "nonEmptyLines": 34,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 12,
+          "endLine": 19,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 21,
+          "endLine": 26,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 28,
+          "endLine": 41,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 12,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 28,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 17
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 17
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 18
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 18
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 25
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 29
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 36
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 36
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>",
+          "lineNumber": 38
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 38
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/reduction.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 113,
+      "nonEmptyLines": 90,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 12,
+          "endLine": 18,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 20,
+          "endLine": 24,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 26,
+          "endLine": 33,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 35,
+          "endLine": 41,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 43,
+          "endLine": 47,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 49,
+          "endLine": 56,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 58,
+          "endLine": 64,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 66,
+          "endLine": 71,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 73,
+          "endLine": 84,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 86,
+          "endLine": 92,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 94,
+          "endLine": 99,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 101,
+          "endLine": 112,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 12,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 35,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 49,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 66,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 73,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 94,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 101,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 16
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 16
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 17
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 17
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 23
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 31
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 31
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 36
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 36
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 39
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 39
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 40
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 46
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 50
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 50
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 53
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 53
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 54
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 54
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 59
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 59
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 62
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 62
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 63
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 63
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 70
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 74
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 74
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 75
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 76
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 76
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 81
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 81
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 82
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 82
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 87
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 87
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 90
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 90
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 91
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 91
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 98
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 102
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 102
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 103
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 104
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 104
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 109
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 109
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 110
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 110
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 12,
+        "functionCount": 12,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/scatter.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 35,
+      "nonEmptyLines": 28,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 10,
+          "endLine": 17,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 19,
+          "endLine": 22,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 24,
+          "endLine": 33,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 24,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 11
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 11
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 15
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 21
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 25
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 25
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 29
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 29
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 31
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 31
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/scatter_add.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 36,
+      "nonEmptyLines": 29,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 10,
+          "endLine": 18,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 20,
+          "endLine": 23,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 25,
+          "endLine": 34,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 25,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 11
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 11
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 15
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 22
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 28
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 32
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 32
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/softmax.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 34,
+      "nonEmptyLines": 27,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 9,
+          "endLine": 15,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 17,
+          "endLine": 21,
+          "params": [
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 23,
+          "endLine": 33,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 23,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 14
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 20
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 24
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 25
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 25
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 32
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 32
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/sparse.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 37,
+      "nonEmptyLines": 30,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 9,
+          "endLine": 16,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 18,
+          "endLine": 24,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 26,
+          "endLine": 36,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 26,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 10
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 15
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 22
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 23
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 28
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 32
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 32
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 33
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/topk.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 39,
+      "nonEmptyLines": 32,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 10,
+          "endLine": 19,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 21,
+          "endLine": 27,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 29,
+          "endLine": 37,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 29,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 11
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 11
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_GT",
+          "lineNumber": 12
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::vector<std::shared_ptr<Tensor>>>",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 17
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 17
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "CHECK_EQ",
+          "lineNumber": 23
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "size",
+          "lineNumber": 23
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 24
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 25
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "MarkNonDifferentiable",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 32
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 34
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 34
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 35
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 35
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/transform.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 183,
+      "nonEmptyLines": 141,
+      "functions": [
+        {
+          "name": "Forward",
+          "startLine": 7,
+          "endLine": 13,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 15,
+          "endLine": 20,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 22,
+          "endLine": 28,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 30,
+          "endLine": 35,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 37,
+          "endLine": 43,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 45,
+          "endLine": 51,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 53,
+          "endLine": 59,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 61,
+          "endLine": 66,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 68,
+          "endLine": 76,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 78,
+          "endLine": 82,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 84,
+          "endLine": 91,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 93,
+          "endLine": 100,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 102,
+          "endLine": 106,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 108,
+          "endLine": 112,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 114,
+          "endLine": 119,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 121,
+          "endLine": 125,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 127,
+          "endLine": 133,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 135,
+          "endLine": 141,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 143,
+          "endLine": 146,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 148,
+          "endLine": 154,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 156,
+          "endLine": 163,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 165,
+          "endLine": 170,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 172,
+          "endLine": 181,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 7,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 30,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 37,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 45,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 61,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 68,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 78,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 84,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 93,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 102,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 108,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 114,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 121,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 127,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 135,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 143,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 148,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 156,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 165,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 172,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 8
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 8
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 11
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 11
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 12
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 12
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 18
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 18
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 19
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 19
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 23
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 23
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 34
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 34
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 38
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 38
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 41
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 41
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 42
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 42
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 48
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 48
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 50
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 50
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 54
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 54
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 57
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 57
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 58
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 58
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 64
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 64
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 65
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 65
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 70
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 70
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 73
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 73
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 74
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 74
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 81
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 88
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 88
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 89
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 89
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 94
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 94
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 97
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 97
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::vector<std::shared_ptr<Tensor>>>",
+          "lineNumber": 98
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 98
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 105
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 109
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 110
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 110
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 110
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_GE",
+          "lineNumber": 115
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 115
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 116
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 116
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 118
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 118
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 124
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 130
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 130
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::vector<std::shared_ptr<Tensor>>>",
+          "lineNumber": 131
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 131
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_GE",
+          "lineNumber": 136
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 136
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 137
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 137
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetKernel",
+          "lineNumber": 139
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 139
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 140
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "push_back",
+          "lineNumber": 145
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "Dims",
+          "lineNumber": 145
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 151
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 151
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetKernel",
+          "lineNumber": 152
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 152
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 157
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 157
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 160
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 160
+        },
+        {
+          "caller": "Forward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 162
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 162
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "SaveForBackward",
+          "lineNumber": 169
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 173
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 174
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 174
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 178
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 178
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 179
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 179
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 23,
+        "functionCount": 23,
+        "classCount": 0
+      }
+    }
+  ]
+}

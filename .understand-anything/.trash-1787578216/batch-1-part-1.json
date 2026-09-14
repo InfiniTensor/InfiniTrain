@@ -1,0 +1,569 @@
+{
+  "nodes": [
+    {
+      "id": "file:gradient_clipping_implementation/source/infini_train/include/gradient_clip.h",
+      "type": "file",
+      "name": "gradient_clip.h",
+      "filePath": "gradient_clipping_implementation/source/infini_train/include/gradient_clip.h",
+      "fileCategory": "code",
+      "summary": "梯度裁剪公共接口，提供范数计算、非有限值检查以及按设备执行的梯度缩放。",
+      "tags": [
+        "梯度裁剪",
+        "gradient-clipping",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:gradient_clipping_implementation/source/infini_train/include/gradient_clip.h:GradientClipRecord",
+      "type": "class",
+      "name": "GradientClipRecord",
+      "filePath": "gradient_clipping_implementation/source/infini_train/include/gradient_clip.h",
+      "lineRange": [
+        20,
+        24
+      ],
+      "summary": "梯度裁剪中的 GradientClipRecord 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "梯度裁剪",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/common/cuda/common_cuda.h",
+      "type": "file",
+      "name": "common_cuda.h",
+      "filePath": "infini_train/include/common/cuda/common_cuda.h",
+      "fileCategory": "code",
+      "summary": "common cuda，属于训练基础设施子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "训练基础设施",
+        "training-infrastructure",
+        "公共接口"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/core/ccl/ccl.h",
+      "type": "file",
+      "name": "ccl.h",
+      "filePath": "infini_train/include/core/ccl/ccl.h",
+      "fileCategory": "code",
+      "summary": "集合通信接口，抽象集合通信操作并提供 CPU/CUDA 后端适配，供进程组和并行训练组件调用。",
+      "tags": [
+        "集合通信",
+        "collective-communication",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/include/core/ccl/ccl.h:CclImpl",
+      "type": "function",
+      "name": "CclImpl",
+      "filePath": "infini_train/include/core/ccl/ccl.h",
+      "lineRange": [
+        20,
+        20
+      ],
+      "summary": "实现集合通信子系统中的 CclImpl 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "集合通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/core/ccl/ccl.h:~CclImpl",
+      "type": "function",
+      "name": "~CclImpl",
+      "filePath": "infini_train/include/core/ccl/ccl.h",
+      "lineRange": [
+        21,
+        21
+      ],
+      "summary": "实现集合通信子系统中的 ~CclImpl 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "集合通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/core/ccl/ccl.h:CclGroupGuard",
+      "type": "function",
+      "name": "CclGroupGuard",
+      "filePath": "infini_train/include/core/ccl/ccl.h",
+      "lineRange": [
+        67,
+        67
+      ],
+      "summary": "实现集合通信子系统中的 CclGroupGuard 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "集合通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/core/ccl/ccl.h:CclImplRegistry",
+      "type": "function",
+      "name": "CclImplRegistry",
+      "filePath": "infini_train/include/core/ccl/ccl.h",
+      "lineRange": [
+        85,
+        85
+      ],
+      "summary": "实现集合通信子系统中的 CclImplRegistry 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "集合通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/core/ccl/ccl.h:CclImpl",
+      "type": "class",
+      "name": "CclImpl",
+      "filePath": "infini_train/include/core/ccl/ccl.h",
+      "lineRange": [
+        18,
+        60
+      ],
+      "summary": "集合通信中的 CclImpl 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "集合通信",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:infini_train/include/core/ccl/ccl.h:CclGroupGuard",
+      "type": "class",
+      "name": "CclGroupGuard",
+      "filePath": "infini_train/include/core/ccl/ccl.h",
+      "lineRange": [
+        62,
+        74
+      ],
+      "summary": "集合通信中的 CclGroupGuard 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "集合通信",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/core/ccl/ccl.h:CclImplRegistry",
+      "type": "class",
+      "name": "CclImplRegistry",
+      "filePath": "infini_train/include/core/ccl/ccl.h",
+      "lineRange": [
+        76,
+        90
+      ],
+      "summary": "集合通信中的 CclImplRegistry 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "集合通信",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/core/ccl/ccl_common.h",
+      "type": "file",
+      "name": "ccl_common.h",
+      "filePath": "infini_train/include/core/ccl/ccl_common.h",
+      "fileCategory": "code",
+      "summary": "ccl common，抽象集合通信操作并提供 CPU/CUDA 后端适配，供进程组和并行训练组件调用。",
+      "tags": [
+        "集合通信",
+        "collective-communication",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/include/core/ccl/ccl_common.h:CclComm",
+      "type": "function",
+      "name": "CclComm",
+      "filePath": "infini_train/include/core/ccl/ccl_common.h",
+      "lineRange": [
+        44,
+        44
+      ],
+      "summary": "实现集合通信子系统中的 CclComm 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "集合通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/core/ccl/ccl_common.h:~CclComm",
+      "type": "function",
+      "name": "~CclComm",
+      "filePath": "infini_train/include/core/ccl/ccl_common.h",
+      "lineRange": [
+        45,
+        45
+      ],
+      "summary": "实现集合通信子系统中的 ~CclComm 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "集合通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/core/ccl/ccl_common.h:CclUniqueId",
+      "type": "function",
+      "name": "CclUniqueId",
+      "filePath": "infini_train/include/core/ccl/ccl_common.h",
+      "lineRange": [
+        50,
+        50
+      ],
+      "summary": "实现集合通信子系统中的 CclUniqueId 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "集合通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/core/ccl/ccl_common.h:~CclUniqueId",
+      "type": "function",
+      "name": "~CclUniqueId",
+      "filePath": "infini_train/include/core/ccl/ccl_common.h",
+      "lineRange": [
+        51,
+        51
+      ],
+      "summary": "实现集合通信子系统中的 ~CclUniqueId 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "集合通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/core/ccl/ccl_common.h:CclComm",
+      "type": "class",
+      "name": "CclComm",
+      "filePath": "infini_train/include/core/ccl/ccl_common.h",
+      "lineRange": [
+        42,
+        46
+      ],
+      "summary": "集合通信中的 CclComm 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "集合通信",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/core/ccl/ccl_common.h:CclUniqueId",
+      "type": "class",
+      "name": "CclUniqueId",
+      "filePath": "infini_train/include/core/ccl/ccl_common.h",
+      "lineRange": [
+        48,
+        56
+      ],
+      "summary": "集合通信中的 CclUniqueId 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "集合通信",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/core/ccl/ccl_utils.h",
+      "type": "file",
+      "name": "ccl_utils.h",
+      "filePath": "infini_train/include/core/ccl/ccl_utils.h",
+      "fileCategory": "code",
+      "summary": "ccl utils，抽象集合通信操作并提供 CPU/CUDA 后端适配，供进程组和并行训练组件调用。",
+      "tags": [
+        "集合通信",
+        "collective-communication",
+        "公共接口"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/include/gradient_clip.h",
+      "target": "class:gradient_clipping_implementation/source/infini_train/include/gradient_clip.h:GradientClipRecord",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/include/gradient_clip.h",
+      "target": "class:gradient_clipping_implementation/source/infini_train/include/gradient_clip.h:GradientClipRecord",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "function:infini_train/include/core/ccl/ccl.h:CclImpl",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "function:infini_train/include/core/ccl/ccl.h:CclImpl",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "function:infini_train/include/core/ccl/ccl.h:~CclImpl",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "function:infini_train/include/core/ccl/ccl.h:~CclImpl",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "function:infini_train/include/core/ccl/ccl.h:CclGroupGuard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "function:infini_train/include/core/ccl/ccl.h:CclGroupGuard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "function:infini_train/include/core/ccl/ccl.h:CclImplRegistry",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "function:infini_train/include/core/ccl/ccl.h:CclImplRegistry",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "class:infini_train/include/core/ccl/ccl.h:CclImpl",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "class:infini_train/include/core/ccl/ccl.h:CclImpl",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "class:infini_train/include/core/ccl/ccl.h:CclGroupGuard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "class:infini_train/include/core/ccl/ccl.h:CclGroupGuard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "class:infini_train/include/core/ccl/ccl.h:CclImplRegistry",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "class:infini_train/include/core/ccl/ccl.h:CclImplRegistry",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_common.h",
+      "target": "function:infini_train/include/core/ccl/ccl_common.h:CclComm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_common.h",
+      "target": "function:infini_train/include/core/ccl/ccl_common.h:CclComm",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_common.h",
+      "target": "function:infini_train/include/core/ccl/ccl_common.h:~CclComm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_common.h",
+      "target": "function:infini_train/include/core/ccl/ccl_common.h:~CclComm",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_common.h",
+      "target": "function:infini_train/include/core/ccl/ccl_common.h:CclUniqueId",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_common.h",
+      "target": "function:infini_train/include/core/ccl/ccl_common.h:CclUniqueId",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_common.h",
+      "target": "function:infini_train/include/core/ccl/ccl_common.h:~CclUniqueId",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_common.h",
+      "target": "function:infini_train/include/core/ccl/ccl_common.h:~CclUniqueId",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_common.h",
+      "target": "class:infini_train/include/core/ccl/ccl_common.h:CclComm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_common.h",
+      "target": "class:infini_train/include/core/ccl/ccl_common.h:CclComm",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_common.h",
+      "target": "class:infini_train/include/core/ccl/ccl_common.h:CclUniqueId",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_common.h",
+      "target": "class:infini_train/include/core/ccl/ccl_common.h:CclUniqueId",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/include/gradient_clip.h",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "file:infini_train/include/core/ccl/ccl_common.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "file:infini_train/include/datatype.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl.h",
+      "target": "file:infini_train/include/nn/parallel/reduce_op_type.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/core/ccl/ccl_utils.h",
+      "target": "file:infini_train/include/core/ccl/ccl_common.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

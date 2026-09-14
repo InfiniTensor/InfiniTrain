@@ -1,0 +1,330 @@
+{
+  "nodes": [
+    {
+      "id": "file:.clang-format",
+      "type": "file",
+      "name": ".clang-format",
+      "filePath": ".clang-format",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:.gitmodules",
+      "type": "file",
+      "name": ".gitmodules",
+      "filePath": ".gitmodules",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:.understand-anything/.understandignore",
+      "type": "file",
+      "name": ".understandignore",
+      "filePath": ".understand-anything/.understandignore",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:.understand-anything/config.json",
+      "type": "config",
+      "name": "config.json",
+      "filePath": ".understand-anything/config.json",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:cmake/FindNCCL.cmake",
+      "type": "file",
+      "name": "FindNCCL.cmake",
+      "filePath": "cmake/FindNCCL.cmake",
+      "summary": "CMake 构建配置，定义 InfiniTrain 库、CPU/CUDA kernel、示例程序和测试目标。",
+      "tags": [
+        "configuration",
+        "build-system",
+        "cmake"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:cmake/test_macros.cmake",
+      "type": "file",
+      "name": "test_macros.cmake",
+      "filePath": "cmake/test_macros.cmake",
+      "summary": "CMake 构建配置，定义 InfiniTrain 库、CPU/CUDA kernel、示例程序和测试目标。",
+      "tags": [
+        "configuration",
+        "build-system",
+        "cmake"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "CMakeLists.txt",
+      "summary": "CMake 构建配置，定义 InfiniTrain 库、CPU/CUDA kernel、示例程序和测试目标。",
+      "tags": [
+        "configuration",
+        "build-system",
+        "cmake"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/design/00_background_and_source_guide.md",
+      "type": "document",
+      "name": "00_background_and_source_guide.md",
+      "filePath": "gradient_clipping_implementation/design/00_background_and_source_guide.md",
+      "summary": "梯度裁剪功能的设计、迁移步骤、kernel 实现和测试材料。",
+      "tags": [
+        "documentation",
+        "design",
+        "reference"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/design/01_implementation_plan.md",
+      "type": "document",
+      "name": "01_implementation_plan.md",
+      "filePath": "gradient_clipping_implementation/design/01_implementation_plan.md",
+      "summary": "梯度裁剪功能的设计、迁移步骤、kernel 实现和测试材料。",
+      "tags": [
+        "documentation",
+        "design",
+        "reference"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/examples/integration_steps.md",
+      "type": "document",
+      "name": "integration_steps.md",
+      "filePath": "gradient_clipping_implementation/examples/integration_steps.md",
+      "summary": "梯度裁剪功能的设计、迁移步骤、kernel 实现和测试材料。",
+      "tags": [
+        "documentation",
+        "design",
+        "reference"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/MIGRATION_CHECKLIST.md",
+      "type": "document",
+      "name": "MIGRATION_CHECKLIST.md",
+      "filePath": "gradient_clipping_implementation/MIGRATION_CHECKLIST.md",
+      "summary": "梯度裁剪功能的设计、迁移步骤、kernel 实现和测试材料。",
+      "tags": [
+        "documentation",
+        "design",
+        "reference"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:gradient_clipping_implementation/patches/01_optimizer_and_parallel_api.patch",
+      "type": "file",
+      "name": "01_optimizer_and_parallel_api.patch",
+      "filePath": "gradient_clipping_implementation/patches/01_optimizer_and_parallel_api.patch",
+      "summary": "梯度裁剪功能的设计、迁移步骤、kernel 实现和测试材料。",
+      "tags": [
+        "gradient-clipping",
+        "implementation",
+        "testing"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:gradient_clipping_implementation/patches/02_tensor_metadata_and_tp.patch",
+      "type": "file",
+      "name": "02_tensor_metadata_and_tp.patch",
+      "filePath": "gradient_clipping_implementation/patches/02_tensor_metadata_and_tp.patch",
+      "summary": "梯度裁剪功能的设计、迁移步骤、kernel 实现和测试材料。",
+      "tags": [
+        "gradient-clipping",
+        "implementation",
+        "testing"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:gradient_clipping_implementation/patches/03_distributed_optimizer_and_buffer.patch",
+      "type": "file",
+      "name": "03_distributed_optimizer_and_buffer.patch",
+      "filePath": "gradient_clipping_implementation/patches/03_distributed_optimizer_and_buffer.patch",
+      "summary": "梯度裁剪功能的设计、迁移步骤、kernel 实现和测试材料。",
+      "tags": [
+        "gradient-clipping",
+        "implementation",
+        "testing"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:gradient_clipping_implementation/patches/04_owner_filtering_and_zero_subset.patch",
+      "type": "file",
+      "name": "04_owner_filtering_and_zero_subset.patch",
+      "filePath": "gradient_clipping_implementation/patches/04_owner_filtering_and_zero_subset.patch",
+      "summary": "梯度裁剪功能的设计、迁移步骤、kernel 实现和测试材料。",
+      "tags": [
+        "gradient-clipping",
+        "implementation",
+        "testing"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "gradient_clipping_implementation/README.md",
+      "summary": "梯度裁剪功能的设计、迁移步骤、kernel 实现和测试材料。",
+      "tags": [
+        "documentation",
+        "design",
+        "reference"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:gradient_clipping_implementation/source/infini_train/src/kernels/cuda/gradient_clip.cu",
+      "type": "file",
+      "name": "gradient_clip.cu",
+      "filePath": "gradient_clipping_implementation/source/infini_train/src/kernels/cuda/gradient_clip.cu",
+      "summary": "梯度裁剪功能的设计、迁移步骤、kernel 实现和测试材料。",
+      "tags": [
+        "gradient-clipping",
+        "implementation",
+        "testing"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/tests/clip_grad_norm_test_plan.md",
+      "type": "document",
+      "name": "clip_grad_norm_test_plan.md",
+      "filePath": "gradient_clipping_implementation/tests/clip_grad_norm_test_plan.md",
+      "summary": "梯度裁剪功能的设计、迁移步骤、kernel 实现和测试材料。",
+      "tags": [
+        "documentation",
+        "design",
+        "reference"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:gradient_clipping_implementation/tests/CMake_integration_snippet.cmake",
+      "type": "file",
+      "name": "CMake_integration_snippet.cmake",
+      "filePath": "gradient_clipping_implementation/tests/CMake_integration_snippet.cmake",
+      "summary": "梯度裁剪功能的设计、迁移步骤、kernel 实现和测试材料。",
+      "tags": [
+        "gradient-clipping",
+        "implementation",
+        "testing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/common/cuda/cub_compat.cuh",
+      "type": "file",
+      "name": "cub_compat.cuh",
+      "filePath": "infini_train/include/common/cuda/cub_compat.cuh",
+      "summary": "CUDA 后端 kernel 或辅助头文件，为张量算子提供 GPU 执行实现。",
+      "tags": [
+        "cuda",
+        "kernel",
+        "gpu-compute"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/common/cuda/kernel_helper.cuh",
+      "type": "file",
+      "name": "kernel_helper.cuh",
+      "filePath": "infini_train/include/common/cuda/kernel_helper.cuh",
+      "summary": "CUDA 后端 kernel 或辅助头文件，为张量算子提供 GPU 执行实现。",
+      "tags": [
+        "cuda",
+        "kernel",
+        "gpu-compute"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:infini_train/src/kernels/cuda/accumulate_grad.cu",
+      "type": "file",
+      "name": "accumulate_grad.cu",
+      "filePath": "infini_train/src/kernels/cuda/accumulate_grad.cu",
+      "summary": "CUDA 后端 kernel 或辅助头文件，为张量算子提供 GPU 执行实现。",
+      "tags": [
+        "cuda",
+        "kernel",
+        "gpu-compute"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/src/kernels/cuda/cast.cu",
+      "type": "file",
+      "name": "cast.cu",
+      "filePath": "infini_train/src/kernels/cuda/cast.cu",
+      "summary": "CUDA 后端 kernel 或辅助头文件，为张量算子提供 GPU 执行实现。",
+      "tags": [
+        "cuda",
+        "kernel",
+        "gpu-compute"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/src/kernels/cuda/comm.cu",
+      "type": "file",
+      "name": "comm.cu",
+      "filePath": "infini_train/src/kernels/cuda/comm.cu",
+      "summary": "CUDA 后端 kernel 或辅助头文件，为张量算子提供 GPU 执行实现。",
+      "tags": [
+        "cuda",
+        "kernel",
+        "gpu-compute"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/src/kernels/cuda/common/gemm.cu",
+      "type": "file",
+      "name": "gemm.cu",
+      "filePath": "infini_train/src/kernels/cuda/common/gemm.cu",
+      "summary": "CUDA 后端 kernel 或辅助头文件，为张量算子提供 GPU 执行实现。",
+      "tags": [
+        "cuda",
+        "kernel",
+        "gpu-compute"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": []
+}

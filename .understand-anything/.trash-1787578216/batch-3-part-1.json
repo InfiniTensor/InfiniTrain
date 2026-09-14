@@ -1,0 +1,2110 @@
+{
+  "nodes": [
+    {
+      "id": "file:infini_train/include/autograd/accumulate.h",
+      "type": "file",
+      "name": "accumulate.h",
+      "filePath": "infini_train/include/autograd/accumulate.h",
+      "fileCategory": "code",
+      "summary": "accumulate，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/accumulate.h:AccumulateGrad",
+      "type": "class",
+      "name": "AccumulateGrad",
+      "filePath": "infini_train/include/autograd/accumulate.h",
+      "lineRange": [
+        13,
+        24
+      ],
+      "summary": "自动微分中的 AccumulateGrad 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/autograd/activations.h",
+      "type": "file",
+      "name": "activations.h",
+      "filePath": "infini_train/include/autograd/activations.h",
+      "fileCategory": "code",
+      "summary": "激活函数自动微分，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/activations.h:Sigmoid",
+      "type": "function",
+      "name": "Sigmoid",
+      "filePath": "infini_train/include/autograd/activations.h",
+      "lineRange": [
+        17,
+        17
+      ],
+      "summary": "实现自动微分子系统中的 Sigmoid 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/activations.h:Sigmoid",
+      "type": "class",
+      "name": "Sigmoid",
+      "filePath": "infini_train/include/autograd/activations.h",
+      "lineRange": [
+        13,
+        23
+      ],
+      "summary": "自动微分中的 Sigmoid 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/autograd/elementwise.h",
+      "type": "file",
+      "name": "elementwise.h",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "fileCategory": "code",
+      "summary": "逐元素自动微分，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Neg",
+      "type": "function",
+      "name": "Neg",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        17,
+        17
+      ],
+      "summary": "实现自动微分子系统中的 Neg 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Reciprocal",
+      "type": "function",
+      "name": "Reciprocal",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        27,
+        27
+      ],
+      "summary": "实现自动微分子系统中的 Reciprocal 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Sin",
+      "type": "function",
+      "name": "Sin",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        39,
+        39
+      ],
+      "summary": "实现自动微分子系统中的 Sin 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Cos",
+      "type": "function",
+      "name": "Cos",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        51,
+        51
+      ],
+      "summary": "实现自动微分子系统中的 Cos 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Tanh",
+      "type": "function",
+      "name": "Tanh",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        63,
+        63
+      ],
+      "summary": "实现自动微分子系统中的 Tanh 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Pow",
+      "type": "function",
+      "name": "Pow",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        75,
+        76
+      ],
+      "summary": "实现自动微分子系统中的 Pow 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Rsqrt",
+      "type": "function",
+      "name": "Rsqrt",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        92,
+        92
+      ],
+      "summary": "实现自动微分子系统中的 Rsqrt 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Exp",
+      "type": "function",
+      "name": "Exp",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        104,
+        104
+      ],
+      "summary": "实现自动微分子系统中的 Exp 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Log",
+      "type": "function",
+      "name": "Log",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        114,
+        114
+      ],
+      "summary": "实现自动微分子系统中的 Log 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Equals",
+      "type": "function",
+      "name": "Equals",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        126,
+        126
+      ],
+      "summary": "实现自动微分子系统中的 Equals 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:EqualsScalar",
+      "type": "function",
+      "name": "EqualsScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        136,
+        136
+      ],
+      "summary": "实现自动微分子系统中的 EqualsScalar 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Lt",
+      "type": "function",
+      "name": "Lt",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        149,
+        149
+      ],
+      "summary": "实现自动微分子系统中的 Lt 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:LtScalar",
+      "type": "function",
+      "name": "LtScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        159,
+        159
+      ],
+      "summary": "实现自动微分子系统中的 LtScalar 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Le",
+      "type": "function",
+      "name": "Le",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        172,
+        172
+      ],
+      "summary": "实现自动微分子系统中的 Le 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:LeScalar",
+      "type": "function",
+      "name": "LeScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        182,
+        182
+      ],
+      "summary": "实现自动微分子系统中的 LeScalar 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Gt",
+      "type": "function",
+      "name": "Gt",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        195,
+        195
+      ],
+      "summary": "实现自动微分子系统中的 Gt 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:GtScalar",
+      "type": "function",
+      "name": "GtScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        205,
+        205
+      ],
+      "summary": "实现自动微分子系统中的 GtScalar 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Ge",
+      "type": "function",
+      "name": "Ge",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        218,
+        218
+      ],
+      "summary": "实现自动微分子系统中的 Ge 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:GeScalar",
+      "type": "function",
+      "name": "GeScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        228,
+        228
+      ],
+      "summary": "实现自动微分子系统中的 GeScalar 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:And",
+      "type": "function",
+      "name": "And",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        241,
+        241
+      ],
+      "summary": "实现自动微分子系统中的 And 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Or",
+      "type": "function",
+      "name": "Or",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        251,
+        251
+      ],
+      "summary": "实现自动微分子系统中的 Or 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Add",
+      "type": "function",
+      "name": "Add",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        261,
+        261
+      ],
+      "summary": "实现自动微分子系统中的 Add 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:AddScalar",
+      "type": "function",
+      "name": "AddScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        277,
+        277
+      ],
+      "summary": "实现自动微分子系统中的 AddScalar 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Sub",
+      "type": "function",
+      "name": "Sub",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        290,
+        290
+      ],
+      "summary": "实现自动微分子系统中的 Sub 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Mul",
+      "type": "function",
+      "name": "Mul",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        306,
+        306
+      ],
+      "summary": "实现自动微分子系统中的 Mul 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:MulScalar",
+      "type": "function",
+      "name": "MulScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        318,
+        318
+      ],
+      "summary": "实现自动微分子系统中的 MulScalar 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/elementwise.h:Div",
+      "type": "function",
+      "name": "Div",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        331,
+        331
+      ],
+      "summary": "实现自动微分子系统中的 Div 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Neg",
+      "type": "class",
+      "name": "Neg",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        13,
+        21
+      ],
+      "summary": "自动微分中的 Neg 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Reciprocal",
+      "type": "class",
+      "name": "Reciprocal",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        23,
+        33
+      ],
+      "summary": "自动微分中的 Reciprocal 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Sin",
+      "type": "class",
+      "name": "Sin",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        35,
+        45
+      ],
+      "summary": "自动微分中的 Sin 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Cos",
+      "type": "class",
+      "name": "Cos",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        47,
+        57
+      ],
+      "summary": "自动微分中的 Cos 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Tanh",
+      "type": "class",
+      "name": "Tanh",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        59,
+        69
+      ],
+      "summary": "自动微分中的 Tanh 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Pow",
+      "type": "class",
+      "name": "Pow",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        71,
+        86
+      ],
+      "summary": "自动微分中的 Pow 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Rsqrt",
+      "type": "class",
+      "name": "Rsqrt",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        88,
+        98
+      ],
+      "summary": "自动微分中的 Rsqrt 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Exp",
+      "type": "class",
+      "name": "Exp",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        100,
+        108
+      ],
+      "summary": "自动微分中的 Exp 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Log",
+      "type": "class",
+      "name": "Log",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        110,
+        120
+      ],
+      "summary": "自动微分中的 Log 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Equals",
+      "type": "class",
+      "name": "Equals",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        122,
+        130
+      ],
+      "summary": "自动微分中的 Equals 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:EqualsScalar",
+      "type": "class",
+      "name": "EqualsScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        132,
+        143
+      ],
+      "summary": "自动微分中的 EqualsScalar 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Lt",
+      "type": "class",
+      "name": "Lt",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        145,
+        153
+      ],
+      "summary": "自动微分中的 Lt 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:LtScalar",
+      "type": "class",
+      "name": "LtScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        155,
+        166
+      ],
+      "summary": "自动微分中的 LtScalar 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Le",
+      "type": "class",
+      "name": "Le",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        168,
+        176
+      ],
+      "summary": "自动微分中的 Le 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:LeScalar",
+      "type": "class",
+      "name": "LeScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        178,
+        189
+      ],
+      "summary": "自动微分中的 LeScalar 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Gt",
+      "type": "class",
+      "name": "Gt",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        191,
+        199
+      ],
+      "summary": "自动微分中的 Gt 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:GtScalar",
+      "type": "class",
+      "name": "GtScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        201,
+        212
+      ],
+      "summary": "自动微分中的 GtScalar 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Ge",
+      "type": "class",
+      "name": "Ge",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        214,
+        222
+      ],
+      "summary": "自动微分中的 Ge 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:GeScalar",
+      "type": "class",
+      "name": "GeScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        224,
+        235
+      ],
+      "summary": "自动微分中的 GeScalar 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:And",
+      "type": "class",
+      "name": "And",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        237,
+        245
+      ],
+      "summary": "自动微分中的 And 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Or",
+      "type": "class",
+      "name": "Or",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        247,
+        255
+      ],
+      "summary": "自动微分中的 Or 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Add",
+      "type": "class",
+      "name": "Add",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        257,
+        271
+      ],
+      "summary": "自动微分中的 Add 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:AddScalar",
+      "type": "class",
+      "name": "AddScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        273,
+        284
+      ],
+      "summary": "自动微分中的 AddScalar 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Sub",
+      "type": "class",
+      "name": "Sub",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        286,
+        300
+      ],
+      "summary": "自动微分中的 Sub 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Mul",
+      "type": "class",
+      "name": "Mul",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        302,
+        312
+      ],
+      "summary": "自动微分中的 Mul 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:MulScalar",
+      "type": "class",
+      "name": "MulScalar",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        314,
+        325
+      ],
+      "summary": "自动微分中的 MulScalar 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/elementwise.h:Div",
+      "type": "class",
+      "name": "Div",
+      "filePath": "infini_train/include/autograd/elementwise.h",
+      "lineRange": [
+        327,
+        337
+      ],
+      "summary": "自动微分中的 Div 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/autograd/function_hook.h",
+      "type": "file",
+      "name": "function_hook.h",
+      "filePath": "infini_train/include/autograd/function_hook.h",
+      "fileCategory": "code",
+      "summary": "function hook，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/include/autograd/function_hook.h:TryBypassAccumulate",
+      "type": "function",
+      "name": "TryBypassAccumulate",
+      "filePath": "infini_train/include/autograd/function_hook.h",
+      "lineRange": [
+        22,
+        24
+      ],
+      "summary": "实现自动微分子系统中的 TryBypassAccumulate 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/function_hook.h:~PreAccumulateGradHook",
+      "type": "function",
+      "name": "~PreAccumulateGradHook",
+      "filePath": "infini_train/include/autograd/function_hook.h",
+      "lineRange": [
+        26,
+        26
+      ],
+      "summary": "实现自动微分子系统中的 ~PreAccumulateGradHook 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/function_hook.h:~PostAccumulateGradHook",
+      "type": "function",
+      "name": "~PostAccumulateGradHook",
+      "filePath": "infini_train/include/autograd/function_hook.h",
+      "lineRange": [
+        33,
+        33
+      ],
+      "summary": "实现自动微分子系统中的 ~PostAccumulateGradHook 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/function_hook.h:PreAccumulateGradHook",
+      "type": "class",
+      "name": "PreAccumulateGradHook",
+      "filePath": "infini_train/include/autograd/function_hook.h",
+      "lineRange": [
+        17,
+        27
+      ],
+      "summary": "自动微分中的 PreAccumulateGradHook 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/function_hook.h:PostAccumulateGradHook",
+      "type": "class",
+      "name": "PostAccumulateGradHook",
+      "filePath": "infini_train/include/autograd/function_hook.h",
+      "lineRange": [
+        29,
+        34
+      ],
+      "summary": "自动微分中的 PostAccumulateGradHook 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/function_hook.h:AllReducePostAccumulateHook",
+      "type": "class",
+      "name": "AllReducePostAccumulateHook",
+      "filePath": "infini_train/include/autograd/function_hook.h",
+      "lineRange": [
+        36,
+        46
+      ],
+      "summary": "自动微分中的 AllReducePostAccumulateHook 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:infini_train/include/autograd/accumulate.h",
+      "target": "class:infini_train/include/autograd/accumulate.h:AccumulateGrad",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/accumulate.h",
+      "target": "class:infini_train/include/autograd/accumulate.h:AccumulateGrad",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/activations.h",
+      "target": "function:infini_train/include/autograd/activations.h:Sigmoid",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/activations.h",
+      "target": "function:infini_train/include/autograd/activations.h:Sigmoid",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/activations.h",
+      "target": "class:infini_train/include/autograd/activations.h:Sigmoid",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/activations.h",
+      "target": "class:infini_train/include/autograd/activations.h:Sigmoid",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Neg",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Neg",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Reciprocal",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Reciprocal",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Sin",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Sin",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Cos",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Cos",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Tanh",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Tanh",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Pow",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Pow",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Rsqrt",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Rsqrt",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Exp",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Exp",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Log",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Log",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Equals",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Equals",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:EqualsScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:EqualsScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Lt",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Lt",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:LtScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:LtScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Le",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Le",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:LeScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:LeScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Gt",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Gt",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:GtScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:GtScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Ge",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Ge",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:GeScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:GeScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:And",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:And",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Or",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Or",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Add",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Add",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:AddScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:AddScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Sub",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Sub",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Mul",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Mul",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:MulScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:MulScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Div",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "function:infini_train/include/autograd/elementwise.h:Div",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Neg",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Neg",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Reciprocal",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Reciprocal",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Sin",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Sin",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Cos",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Cos",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Tanh",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Tanh",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Pow",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Pow",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Rsqrt",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Rsqrt",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Exp",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Exp",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Log",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Log",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Equals",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Equals",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:EqualsScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:EqualsScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Lt",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Lt",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:LtScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:LtScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Le",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Le",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:LeScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:LeScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Gt",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Gt",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:GtScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:GtScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Ge",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Ge",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:GeScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:GeScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:And",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:And",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Or",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Or",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Add",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Add",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:AddScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:AddScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Sub",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Sub",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Mul",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Mul",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:MulScalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:MulScalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Div",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "class:infini_train/include/autograd/elementwise.h:Div",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "function:infini_train/include/autograd/function_hook.h:TryBypassAccumulate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "function:infini_train/include/autograd/function_hook.h:TryBypassAccumulate",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "function:infini_train/include/autograd/function_hook.h:~PreAccumulateGradHook",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "function:infini_train/include/autograd/function_hook.h:~PreAccumulateGradHook",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "function:infini_train/include/autograd/function_hook.h:~PostAccumulateGradHook",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "function:infini_train/include/autograd/function_hook.h:~PostAccumulateGradHook",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "class:infini_train/include/autograd/function_hook.h:PreAccumulateGradHook",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "class:infini_train/include/autograd/function_hook.h:PreAccumulateGradHook",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "class:infini_train/include/autograd/function_hook.h:PostAccumulateGradHook",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "class:infini_train/include/autograd/function_hook.h:PostAccumulateGradHook",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "class:infini_train/include/autograd/function_hook.h:AllReducePostAccumulateHook",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "class:infini_train/include/autograd/function_hook.h:AllReducePostAccumulateHook",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/accumulate.h",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/autograd/activations.h",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/autograd/elementwise.h",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/autograd/function_hook.h",
+      "target": "file:infini_train/include/nn/parallel/reduce_op_type.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

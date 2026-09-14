@@ -1,0 +1,135 @@
+{
+  "nodes": [
+    {
+      "id": "document:gradient_clipping_implementation/steps/00_migration_corrections.md",
+      "type": "document",
+      "name": "00_migration_corrections.md",
+      "filePath": "gradient_clipping_implementation/steps/00_migration_corrections.md",
+      "summary": "列出迁移前需要修正的 device hint、统计/缩放分离、ZeRO、collective 和 PP/vPP 语义。",
+      "tags": [
+        "gradient-clipping",
+        "documentation",
+        "guide"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/steps/01_parameter_collection_code.md",
+      "type": "document",
+      "name": "01_parameter_collection_code.md",
+      "filePath": "gradient_clipping_implementation/steps/01_parameter_collection_code.md",
+      "summary": "说明步骤一的逻辑参数集合代码及参数所有权入口。",
+      "tags": [
+        "gradient-clipping",
+        "documentation",
+        "guide"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/steps/02_core_api_code.md",
+      "type": "document",
+      "name": "02_core_api_code.md",
+      "filePath": "gradient_clipping_implementation/steps/02_core_api_code.md",
+      "summary": "说明步骤二的梯度裁剪核心 API、参数校验和标量语义。",
+      "tags": [
+        "gradient-clipping",
+        "documentation",
+        "guide"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/steps/03_dispatcher_kernel_code.md",
+      "type": "document",
+      "name": "03_dispatcher_kernel_code.md",
+      "filePath": "gradient_clipping_implementation/steps/03_dispatcher_kernel_code.md",
+      "summary": "说明步骤三的 dispatcher 与 CPU/CUDA kernel 接入方式。",
+      "tags": [
+        "gradient-clipping",
+        "documentation",
+        "guide"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/steps/04_metadata_code.md",
+      "type": "document",
+      "name": "04_metadata_code.md",
+      "filePath": "gradient_clipping_implementation/steps/04_metadata_code.md",
+      "summary": "说明步骤四如何为 TP/共享参数增加副本角色和统计元数据。",
+      "tags": [
+        "gradient-clipping",
+        "documentation",
+        "guide"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/steps/05_zero_and_parallel_code.md",
+      "type": "document",
+      "name": "05_zero_and_parallel_code.md",
+      "filePath": "gradient_clipping_implementation/steps/05_zero_and_parallel_code.md",
+      "summary": "说明步骤五的 DistributedOptimizer、ZeRO 子集和并行归约接入。",
+      "tags": [
+        "gradient-clipping",
+        "documentation",
+        "guide"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/steps/06_known_risks.md",
+      "type": "document",
+      "name": "06_known_risks.md",
+      "filePath": "gradient_clipping_implementation/steps/06_known_risks.md",
+      "summary": "汇总 host scalar 读取、CUDA reduction、TP metadata 和 DistributedOptimizer 去重风险。",
+      "tags": [
+        "gradient-clipping",
+        "documentation",
+        "guide"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/steps/07_example_and_schedule_code.md",
+      "type": "document",
+      "name": "07_example_and_schedule_code.md",
+      "filePath": "gradient_clipping_implementation/steps/07_example_and_schedule_code.md",
+      "summary": "说明步骤七如何更新 example 与 PP 训练调度代码。",
+      "tags": [
+        "gradient-clipping",
+        "documentation",
+        "guide"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/steps/08_verification_code.md",
+      "type": "document",
+      "name": "08_verification_code.md",
+      "filePath": "gradient_clipping_implementation/steps/08_verification_code.md",
+      "summary": "说明步骤八的验证代码、oracle 和结果记录。",
+      "tags": [
+        "gradient-clipping",
+        "documentation",
+        "guide"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:gradient_clipping_implementation/steps/implementation_sequence.md",
+      "type": "document",
+      "name": "implementation_sequence.md",
+      "filePath": "gradient_clipping_implementation/steps/implementation_sequence.md",
+      "summary": "按逻辑梯度、数学核心、dispatcher、参数副本和 optimizer 接入排列实现序列。",
+      "tags": [
+        "gradient-clipping",
+        "documentation",
+        "guide"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": []
+}

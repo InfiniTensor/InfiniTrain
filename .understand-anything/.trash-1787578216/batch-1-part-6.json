@@ -1,0 +1,2881 @@
+{
+  "nodes": [
+    {
+      "id": "file:infini_train/src/nn/init.cc",
+      "type": "file",
+      "name": "init.cc",
+      "filePath": "infini_train/src/nn/init.cc",
+      "fileCategory": "code",
+      "summary": "参数初始化，属于训练基础设施子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "训练基础设施",
+        "training-infrastructure",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/init.cc:Normal",
+      "type": "function",
+      "name": "Normal",
+      "filePath": "infini_train/src/nn/init.cc",
+      "lineRange": [
+        38,
+        66
+      ],
+      "summary": "实现训练基础设施子系统中的 Normal 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/init.cc:CalculateFanInAndFanOut",
+      "type": "function",
+      "name": "CalculateFanInAndFanOut",
+      "filePath": "infini_train/src/nn/init.cc",
+      "lineRange": [
+        68,
+        82
+      ],
+      "summary": "实现训练基础设施子系统中的 CalculateFanInAndFanOut 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/init.cc:CalculateCorrectFan",
+      "type": "function",
+      "name": "CalculateCorrectFan",
+      "filePath": "infini_train/src/nn/init.cc",
+      "lineRange": [
+        85,
+        88
+      ],
+      "summary": "实现训练基础设施子系统中的 CalculateCorrectFan 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/init.cc:CalculateGain",
+      "type": "function",
+      "name": "CalculateGain",
+      "filePath": "infini_train/src/nn/init.cc",
+      "lineRange": [
+        91,
+        112
+      ],
+      "summary": "实现训练基础设施子系统中的 CalculateGain 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/init.cc:KaimingUniform",
+      "type": "function",
+      "name": "KaimingUniform",
+      "filePath": "infini_train/src/nn/init.cc",
+      "lineRange": [
+        115,
+        128
+      ],
+      "summary": "实现训练基础设施子系统中的 KaimingUniform 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/init.cc:Uniform",
+      "type": "function",
+      "name": "Uniform",
+      "filePath": "infini_train/src/nn/init.cc",
+      "lineRange": [
+        130,
+        160
+      ],
+      "summary": "实现训练基础设施子系统中的 Uniform 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/init.cc:Ones",
+      "type": "function",
+      "name": "Ones",
+      "filePath": "infini_train/src/nn/init.cc",
+      "lineRange": [
+        162,
+        178
+      ],
+      "summary": "实现训练基础设施子系统中的 Ones 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/init.cc:Zeros",
+      "type": "function",
+      "name": "Zeros",
+      "filePath": "infini_train/src/nn/init.cc",
+      "lineRange": [
+        180,
+        196
+      ],
+      "summary": "执行训练基础设施中的Zeros操作，完成核心数据处理或状态变换。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/init.cc:Arange",
+      "type": "function",
+      "name": "Arange",
+      "filePath": "infini_train/src/nn/init.cc",
+      "lineRange": [
+        206,
+        236
+      ],
+      "summary": "实现训练基础设施子系统中的 Arange 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "type": "file",
+      "name": "data_parallel.cc",
+      "filePath": "infini_train/src/nn/parallel/data_parallel.cc",
+      "fileCategory": "code",
+      "summary": "data parallel，属于分布式通信子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "分布式通信",
+        "distributed-communication",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/data_parallel.cc:ParallelApply",
+      "type": "function",
+      "name": "ParallelApply",
+      "filePath": "infini_train/src/nn/parallel/data_parallel.cc",
+      "lineRange": [
+        22,
+        58
+      ],
+      "summary": "实现分布式通信子系统中的 ParallelApply 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/data_parallel.cc:DataParallel",
+      "type": "function",
+      "name": "DataParallel",
+      "filePath": "infini_train/src/nn/parallel/data_parallel.cc",
+      "lineRange": [
+        61,
+        79
+      ],
+      "summary": "实现分布式通信子系统中的 DataParallel 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/data_parallel.cc:Forward",
+      "type": "function",
+      "name": "Forward",
+      "filePath": "infini_train/src/nn/parallel/data_parallel.cc",
+      "lineRange": [
+        81,
+        103
+      ],
+      "summary": "执行分布式通信组件的前向计算，并返回后续训练阶段所需的张量结果。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "type": "file",
+      "name": "reducer.cc",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "fileCategory": "code",
+      "summary": "梯度归约器，实现数据并行训练中的参数分片、梯度归约、通信钩子和同步优化步骤。",
+      "tags": [
+        "数据并行",
+        "distributed-data-parallel",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:CopyGradToBucket",
+      "type": "function",
+      "name": "CopyGradToBucket",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        18,
+        31
+      ],
+      "summary": "执行数据并行中的CopyGradToBucket操作，完成核心数据处理或状态变换。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:CopyBucketToGrad",
+      "type": "function",
+      "name": "CopyBucketToGrad",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        33,
+        46
+      ],
+      "summary": "执行数据并行中的CopyBucketToGrad操作，完成核心数据处理或状态变换。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MakeGradView",
+      "type": "function",
+      "name": "MakeGradView",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        48,
+        53
+      ],
+      "summary": "实现数据并行子系统中的 MakeGradView 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:ComputeBucketAssignmentBySize",
+      "type": "function",
+      "name": "ComputeBucketAssignmentBySize",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        56,
+        139
+      ],
+      "summary": "执行数据并行中的ComputeBucketAssignmentBySize操作，完成核心数据处理或状态变换。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:Reducer",
+      "type": "function",
+      "name": "Reducer",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        141,
+        146
+      ],
+      "summary": "实现数据并行子系统中的 Reducer 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:InitializeBuckets",
+      "type": "function",
+      "name": "InitializeBuckets",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        148,
+        153
+      ],
+      "summary": "初始化数据并行组件并建立依赖对象、缓冲区或通信资源。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:InitializeBucketViews",
+      "type": "function",
+      "name": "InitializeBucketViews",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        155,
+        169
+      ],
+      "summary": "初始化数据并行组件并建立依赖对象、缓冲区或通信资源。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:BuildBuckets",
+      "type": "function",
+      "name": "BuildBuckets",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        171,
+        210
+      ],
+      "summary": "初始化数据并行组件并建立依赖对象、缓冲区或通信资源。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:RebuildBuckets",
+      "type": "function",
+      "name": "RebuildBuckets",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        212,
+        247
+      ],
+      "summary": "实现数据并行子系统中的 RebuildBuckets 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:GetBucketTensors",
+      "type": "function",
+      "name": "GetBucketTensors",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        249,
+        255
+      ],
+      "summary": "读取或更新数据并行组件的配置、状态和运行时元数据。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:RegisterCommHook",
+      "type": "function",
+      "name": "RegisterCommHook",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        257,
+        260
+      ],
+      "summary": "初始化数据并行组件并建立依赖对象、缓冲区或通信资源。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:PrepareForBackward",
+      "type": "function",
+      "name": "PrepareForBackward",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        262,
+        305
+      ],
+      "summary": "实现数据并行子系统中的 PrepareForBackward 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:AttachHooksToParameters",
+      "type": "function",
+      "name": "AttachHooksToParameters",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        307,
+        331
+      ],
+      "summary": "实现数据并行子系统中的 AttachHooksToParameters 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MarkVariableReadyDense",
+      "type": "function",
+      "name": "MarkVariableReadyDense",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        333,
+        365
+      ],
+      "summary": "实现数据并行子系统中的 MarkVariableReadyDense 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MarkBucketReady",
+      "type": "function",
+      "name": "MarkBucketReady",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        367,
+        390
+      ],
+      "summary": "实现数据并行子系统中的 MarkBucketReady 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:FinalizeBucketDense",
+      "type": "function",
+      "name": "FinalizeBucketDense",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        392,
+        406
+      ],
+      "summary": "实现数据并行子系统中的 FinalizeBucketDense 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/ddp/reducer.cc:FinalizeBackward",
+      "type": "function",
+      "name": "FinalizeBackward",
+      "filePath": "infini_train/src/nn/parallel/ddp/reducer.cc",
+      "lineRange": [
+        408,
+        443
+      ],
+      "summary": "实现数据并行子系统中的 FinalizeBackward 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/nn/parallel/process_group.cc",
+      "type": "file",
+      "name": "process_group.cc",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "fileCategory": "code",
+      "summary": "process group，属于分布式通信子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "分布式通信",
+        "distributed-communication",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:GetGroupRank",
+      "type": "function",
+      "name": "GetGroupRank",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        33,
+        33
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:ProcessGroup",
+      "type": "function",
+      "name": "ProcessGroup",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        37,
+        48
+      ],
+      "summary": "实现分布式通信子系统中的 ProcessGroup 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:~ProcessGroup",
+      "type": "function",
+      "name": "~ProcessGroup",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        50,
+        57
+      ],
+      "summary": "实现分布式通信子系统中的 ~ProcessGroup 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:InitSingleProcess",
+      "type": "function",
+      "name": "InitSingleProcess",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        59,
+        77
+      ],
+      "summary": "初始化分布式通信组件并建立依赖对象、缓冲区或通信资源。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:InitMultiProcess",
+      "type": "function",
+      "name": "InitMultiProcess",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        79,
+        116
+      ],
+      "summary": "初始化分布式通信组件并建立依赖对象、缓冲区或通信资源。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:InitStreams",
+      "type": "function",
+      "name": "InitStreams",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        118,
+        126
+      ],
+      "summary": "初始化分布式通信组件并建立依赖对象、缓冲区或通信资源。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:AllReduce",
+      "type": "function",
+      "name": "AllReduce",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        128,
+        149
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:AllGather",
+      "type": "function",
+      "name": "AllGather",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        151,
+        171
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:ReduceScatter",
+      "type": "function",
+      "name": "ReduceScatter",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        173,
+        195
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:Broadcast",
+      "type": "function",
+      "name": "Broadcast",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        197,
+        229
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:Scatter",
+      "type": "function",
+      "name": "Scatter",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        231,
+        305
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:Send",
+      "type": "function",
+      "name": "Send",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        307,
+        332
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:Recv",
+      "type": "function",
+      "name": "Recv",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        334,
+        359
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:BroadCast_",
+      "type": "function",
+      "name": "BroadCast_",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        361,
+        400
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:ReduceAddCoalesced",
+      "type": "function",
+      "name": "ReduceAddCoalesced",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        402,
+        440
+      ],
+      "summary": "实现分布式通信子系统中的 ReduceAddCoalesced 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:Scatter_",
+      "type": "function",
+      "name": "Scatter_",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        442,
+        469
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:Gather",
+      "type": "function",
+      "name": "Gather",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        471,
+        511
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/process_group.cc:ProcessGroupFactory",
+      "type": "function",
+      "name": "ProcessGroupFactory",
+      "filePath": "infini_train/src/nn/parallel/process_group.cc",
+      "lineRange": [
+        562,
+        564
+      ],
+      "summary": "实现分布式通信子系统中的 ProcessGroupFactory 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/nn/parallel/work.cc",
+      "type": "file",
+      "name": "work.cc",
+      "filePath": "infini_train/src/nn/parallel/work.cc",
+      "fileCategory": "code",
+      "summary": "work，属于分布式通信子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "分布式通信",
+        "distributed-communication",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/work.cc:makeRuntimeError",
+      "type": "function",
+      "name": "makeRuntimeError",
+      "filePath": "infini_train/src/nn/parallel/work.cc",
+      "lineRange": [
+        15,
+        18
+      ],
+      "summary": "实现分布式通信子系统中的 makeRuntimeError 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/work.cc:Work",
+      "type": "function",
+      "name": "Work",
+      "filePath": "infini_train/src/nn/parallel/work.cc",
+      "lineRange": [
+        21,
+        25
+      ],
+      "summary": "实现分布式通信子系统中的 Work 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/work.cc:~Work",
+      "type": "function",
+      "name": "~Work",
+      "filePath": "infini_train/src/nn/parallel/work.cc",
+      "lineRange": [
+        27,
+        35
+      ],
+      "summary": "实现分布式通信子系统中的 ~Work 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/work.cc:WaitBlocking",
+      "type": "function",
+      "name": "WaitBlocking",
+      "filePath": "infini_train/src/nn/parallel/work.cc",
+      "lineRange": [
+        37,
+        73
+      ],
+      "summary": "实现分布式通信子系统中的 WaitBlocking 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/work.cc:WaitNonBlocking",
+      "type": "function",
+      "name": "WaitNonBlocking",
+      "filePath": "infini_train/src/nn/parallel/work.cc",
+      "lineRange": [
+        75,
+        82
+      ],
+      "summary": "实现分布式通信子系统中的 WaitNonBlocking 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/work.cc:Synchronize",
+      "type": "function",
+      "name": "Synchronize",
+      "filePath": "infini_train/src/nn/parallel/work.cc",
+      "lineRange": [
+        84,
+        90
+      ],
+      "summary": "实现分布式通信子系统中的 Synchronize 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/work.cc:IsCompleted",
+      "type": "function",
+      "name": "IsCompleted",
+      "filePath": "infini_train/src/nn/parallel/work.cc",
+      "lineRange": [
+        92,
+        109
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/work.cc:IsSuccess",
+      "type": "function",
+      "name": "IsSuccess",
+      "filePath": "infini_train/src/nn/parallel/work.cc",
+      "lineRange": [
+        111,
+        116
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/work.cc:CheckCclStatus",
+      "type": "function",
+      "name": "CheckCclStatus",
+      "filePath": "infini_train/src/nn/parallel/work.cc",
+      "lineRange": [
+        118,
+        132
+      ],
+      "summary": "执行分布式通信中的CheckCclStatus操作，完成核心数据处理或状态变换。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/work.cc:SetException",
+      "type": "function",
+      "name": "SetException",
+      "filePath": "infini_train/src/nn/parallel/work.cc",
+      "lineRange": [
+        134,
+        141
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/profiler.cc",
+      "type": "file",
+      "name": "profiler.cc",
+      "filePath": "infini_train/src/profiler.cc",
+      "fileCategory": "code",
+      "summary": "性能分析器，记录训练过程中的设备事件、时间区间和统计信息，为性能诊断提供结构化数据。",
+      "tags": [
+        "性能分析",
+        "profiling",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:infini_train/src/profiler.cc:GetCurrentTimestamp",
+      "type": "function",
+      "name": "GetCurrentTimestamp",
+      "filePath": "infini_train/src/profiler.cc",
+      "lineRange": [
+        15,
+        27
+      ],
+      "summary": "读取或更新性能分析组件的配置、状态和运行时元数据。",
+      "tags": [
+        "性能分析",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/profiler.cc:GetRank",
+      "type": "function",
+      "name": "GetRank",
+      "filePath": "infini_train/src/profiler.cc",
+      "lineRange": [
+        35,
+        38
+      ],
+      "summary": "读取或更新性能分析组件的配置、状态和运行时元数据。",
+      "tags": [
+        "性能分析",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/profiler.cc:StartRecord",
+      "type": "function",
+      "name": "StartRecord",
+      "filePath": "infini_train/src/profiler.cc",
+      "lineRange": [
+        40,
+        73
+      ],
+      "summary": "实现性能分析子系统中的 StartRecord 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "性能分析",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/profiler.cc:EndRecord",
+      "type": "function",
+      "name": "EndRecord",
+      "filePath": "infini_train/src/profiler.cc",
+      "lineRange": [
+        75,
+        114
+      ],
+      "summary": "实现性能分析子系统中的 EndRecord 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "性能分析",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/profiler.cc:RecordKernel",
+      "type": "function",
+      "name": "RecordKernel",
+      "filePath": "infini_train/src/profiler.cc",
+      "lineRange": [
+        116,
+        123
+      ],
+      "summary": "实现性能分析子系统中的 RecordKernel 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "性能分析",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/profiler.cc:Reset",
+      "type": "function",
+      "name": "Reset",
+      "filePath": "infini_train/src/profiler.cc",
+      "lineRange": [
+        125,
+        129
+      ],
+      "summary": "执行性能分析中的Reset操作，完成核心数据处理或状态变换。",
+      "tags": [
+        "性能分析",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/profiler.cc:SetTag",
+      "type": "function",
+      "name": "SetTag",
+      "filePath": "infini_train/src/profiler.cc",
+      "lineRange": [
+        131,
+        131
+      ],
+      "summary": "读取或更新性能分析组件的配置、状态和运行时元数据。",
+      "tags": [
+        "性能分析",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/profiler.cc:ReportGroupedByRank",
+      "type": "function",
+      "name": "ReportGroupedByRank",
+      "filePath": "infini_train/src/profiler.cc",
+      "lineRange": [
+        133,
+        225
+      ],
+      "summary": "实现性能分析子系统中的 ReportGroupedByRank 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "性能分析",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/profiler.cc:Report",
+      "type": "function",
+      "name": "Report",
+      "filePath": "infini_train/src/profiler.cc",
+      "lineRange": [
+        232,
+        250
+      ],
+      "summary": "实现性能分析子系统中的 Report 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "性能分析",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/profiler.cc:PrintRecordsGroupedByRank",
+      "type": "function",
+      "name": "PrintRecordsGroupedByRank",
+      "filePath": "infini_train/src/profiler.cc",
+      "lineRange": [
+        252,
+        288
+      ],
+      "summary": "实现性能分析子系统中的 PrintRecordsGroupedByRank 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "性能分析",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/profiler.cc:PrintRecords",
+      "type": "function",
+      "name": "PrintRecords",
+      "filePath": "infini_train/src/profiler.cc",
+      "lineRange": [
+        295,
+        313
+      ],
+      "summary": "实现性能分析子系统中的 PrintRecords 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "性能分析",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:Normal",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:Normal",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:CalculateFanInAndFanOut",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:CalculateFanInAndFanOut",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:CalculateCorrectFan",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:CalculateCorrectFan",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:CalculateGain",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:CalculateGain",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:KaimingUniform",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:KaimingUniform",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:Uniform",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:Uniform",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:Ones",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:Ones",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:Zeros",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:Zeros",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:Arange",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "function:infini_train/src/nn/init.cc:Arange",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/data_parallel.cc:ParallelApply",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/data_parallel.cc:ParallelApply",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/data_parallel.cc:DataParallel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/data_parallel.cc:DataParallel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/data_parallel.cc:Forward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/data_parallel.cc:Forward",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:CopyGradToBucket",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:CopyGradToBucket",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:CopyBucketToGrad",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:CopyBucketToGrad",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MakeGradView",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MakeGradView",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:ComputeBucketAssignmentBySize",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:ComputeBucketAssignmentBySize",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:Reducer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:Reducer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:InitializeBuckets",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:InitializeBuckets",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:InitializeBucketViews",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:InitializeBucketViews",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:BuildBuckets",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:BuildBuckets",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:RebuildBuckets",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:RebuildBuckets",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:GetBucketTensors",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:GetBucketTensors",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:RegisterCommHook",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:RegisterCommHook",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:PrepareForBackward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:PrepareForBackward",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:AttachHooksToParameters",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:AttachHooksToParameters",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MarkVariableReadyDense",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MarkVariableReadyDense",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MarkBucketReady",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MarkBucketReady",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:FinalizeBucketDense",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:FinalizeBucketDense",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:FinalizeBackward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:FinalizeBackward",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:GetGroupRank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:GetGroupRank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:ProcessGroup",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:ProcessGroup",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:~ProcessGroup",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:~ProcessGroup",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:InitSingleProcess",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:InitSingleProcess",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:InitMultiProcess",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:InitMultiProcess",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:InitStreams",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:InitStreams",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:AllReduce",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:AllReduce",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:AllGather",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:AllGather",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:ReduceScatter",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:ReduceScatter",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Broadcast",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Broadcast",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Scatter",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Scatter",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Send",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Send",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Recv",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Recv",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:BroadCast_",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:BroadCast_",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:ReduceAddCoalesced",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:ReduceAddCoalesced",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Scatter_",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Scatter_",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Gather",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Gather",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:ProcessGroupFactory",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:ProcessGroupFactory",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:makeRuntimeError",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:makeRuntimeError",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:Work",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:Work",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:~Work",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:~Work",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:WaitBlocking",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:WaitBlocking",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:WaitNonBlocking",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:WaitNonBlocking",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:Synchronize",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:Synchronize",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:IsCompleted",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:IsCompleted",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:IsSuccess",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:IsSuccess",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:CheckCclStatus",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:CheckCclStatus",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:SetException",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "function:infini_train/src/nn/parallel/work.cc:SetException",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:GetCurrentTimestamp",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:GetCurrentTimestamp",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:GetRank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:GetRank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:StartRecord",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:StartRecord",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:EndRecord",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:EndRecord",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:RecordKernel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:RecordKernel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:Reset",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:Reset",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:SetTag",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:SetTag",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:ReportGroupedByRank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:ReportGroupedByRank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:Report",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:Report",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:PrintRecordsGroupedByRank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:PrintRecordsGroupedByRank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:PrintRecords",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "function:infini_train/src/profiler.cc:PrintRecords",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "file:infini_train/include/core/runtime/device_guard.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "file:infini_train/include/nn/init.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/init.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "file:infini_train/include/core/runtime/device_guard.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "file:infini_train/include/nn/modules/module.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "file:infini_train/include/nn/parallel/data_parallel.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "file:infini_train/include/nn/parallel/parallel_functional.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/data_parallel.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "file:infini_train/include/autograd/function_hook.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "file:infini_train/include/core/runtime/device_guard.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "file:infini_train/include/nn/parallel/ddp/reducer.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "file:infini_train/include/nn/parallel/utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "file:infini_train/include/nn/parallel/work.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/ddp/reducer.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "file:infini_train/include/core/ccl/ccl_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "file:infini_train/include/core/ccl/ccl.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "file:infini_train/include/core/runtime/device_guard.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "file:infini_train/include/core/runtime/runtime_common.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "file:infini_train/include/nn/parallel/process_group.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "file:infini_train/include/nn/parallel/work.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/process_group.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "file:infini_train/include/core/ccl/ccl.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "file:infini_train/include/core/runtime/device_guard.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/work.cc",
+      "target": "file:infini_train/include/nn/parallel/work.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "file:infini_train/include/core/runtime/device_guard.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/profiler.cc",
+      "target": "file:infini_train/include/profiler.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:infini_train/src/nn/init.cc:CalculateCorrectFan",
+      "target": "function:infini_train/src/nn/init.cc:CalculateFanInAndFanOut",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/init.cc:KaimingUniform",
+      "target": "function:infini_train/src/nn/init.cc:CalculateCorrectFan",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/init.cc:KaimingUniform",
+      "target": "function:infini_train/src/nn/init.cc:CalculateGain",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/init.cc:KaimingUniform",
+      "target": "function:infini_train/src/nn/init.cc:Uniform",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/data_parallel.cc:DataParallel",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetNthreadPerProc",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/data_parallel.cc:DataParallel",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetDeviceIndex",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/data_parallel.cc:Forward",
+      "target": "function:infini_train/src/nn/parallel/data_parallel.cc:ParallelApply",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/ddp/reducer.cc:Reducer",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:BuildBuckets",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/ddp/reducer.cc:InitializeBuckets",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:BuildBuckets",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/ddp/reducer.cc:InitializeBucketViews",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MakeGradView",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/ddp/reducer.cc:BuildBuckets",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:InitializeBucketViews",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/ddp/reducer.cc:RebuildBuckets",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:ComputeBucketAssignmentBySize",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/ddp/reducer.cc:RebuildBuckets",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:InitializeBuckets",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/ddp/reducer.cc:PrepareForBackward",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:RebuildBuckets",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MarkVariableReadyDense",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:CopyGradToBucket",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MarkVariableReadyDense",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MarkBucketReady",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MarkVariableReadyDense",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:FinalizeBackward",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/ddp/reducer.cc:MarkBucketReady",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:FinalizeBucketDense",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/ddp/reducer.cc:FinalizeBackward",
+      "target": "function:infini_train/src/nn/parallel/ddp/reducer.cc:CopyBucketToGrad",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:ProcessGroup",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetNnodes",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:ProcessGroup",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetNprocPerNode",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:ProcessGroup",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:InitSingleProcess",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:ProcessGroup",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:InitMultiProcess",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:ProcessGroup",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:InitStreams",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:InitSingleProcess",
+      "target": "class:infini_train/include/device.h:Device",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:InitMultiProcess",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetNthreadPerProc",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:InitMultiProcess",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetGlobalProcRank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:InitMultiProcess",
+      "target": "class:infini_train/include/device.h:Device",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:InitMultiProcess",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetDeviceIndex",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:Broadcast",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:GetGroupRank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:Scatter",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:GetGroupRank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:Scatter",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Send",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:Scatter",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Recv",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:BroadCast_",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Broadcast",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:Scatter_",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Send",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:Scatter_",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Recv",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:Gather",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Send",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:Gather",
+      "target": "function:infini_train/src/nn/parallel/process_group.cc:Recv",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/process_group.cc:ProcessGroupFactory",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetWorldSize",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/work.cc:WaitBlocking",
+      "target": "function:infini_train/src/nn/parallel/work.cc:SetException",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/work.cc:WaitBlocking",
+      "target": "function:infini_train/src/nn/parallel/work.cc:makeRuntimeError",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/work.cc:WaitBlocking",
+      "target": "function:infini_train/src/nn/parallel/work.cc:CheckCclStatus",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/work.cc:IsCompleted",
+      "target": "function:infini_train/src/nn/parallel/work.cc:CheckCclStatus",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/work.cc:IsCompleted",
+      "target": "function:infini_train/src/nn/parallel/work.cc:SetException",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/work.cc:IsCompleted",
+      "target": "function:infini_train/src/nn/parallel/work.cc:makeRuntimeError",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/work.cc:IsSuccess",
+      "target": "function:infini_train/src/nn/parallel/work.cc:IsCompleted",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/work.cc:CheckCclStatus",
+      "target": "function:infini_train/src/nn/parallel/work.cc:SetException",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/profiler.cc:StartRecord",
+      "target": "class:infini_train/include/device.h:Device",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/profiler.cc:EndRecord",
+      "target": "function:infini_train/src/profiler.cc:GetRank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/profiler.cc:EndRecord",
+      "target": "class:infini_train/include/device.h:Device",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/profiler.cc:EndRecord",
+      "target": "function:infini_train/src/profiler.cc:RecordKernel",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/profiler.cc:RecordKernel",
+      "target": "function:infini_train/src/profiler.cc:GetCurrentTimestamp",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/profiler.cc:Report",
+      "target": "function:infini_train/src/profiler.cc:ReportGroupedByRank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/profiler.cc:PrintRecords",
+      "target": "function:infini_train/src/profiler.cc:PrintRecordsGroupedByRank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

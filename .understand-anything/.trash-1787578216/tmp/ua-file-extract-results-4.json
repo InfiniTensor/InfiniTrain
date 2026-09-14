@@ -1,0 +1,8173 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 26,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "gradient_clipping_implementation/source/infini_train/src/gradient_clip.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 129,
+      "nonEmptyLines": 112,
+      "functions": [
+        {
+          "name": "ValidateArguments",
+          "startLine": 20,
+          "endLine": 30,
+          "params": [
+            "max_norm",
+            "norm_type",
+            "foreach"
+          ]
+        },
+        {
+          "name": "MakeScalar",
+          "startLine": 32,
+          "endLine": 36,
+          "params": [
+            "device",
+            "value"
+          ]
+        },
+        {
+          "name": "ClipGradNorm",
+          "startLine": 40,
+          "endLine": 127,
+          "params": [
+            "records",
+            "max_norm",
+            "norm_type",
+            "error_if_nonfinite",
+            "foreach",
+            "stats_pg",
+            "device_hint"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "ValidateArguments",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "MakeScalar",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "ClipGradNorm",
+          "line": 40,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "ValidateArguments",
+          "callee": "std::isfinite",
+          "lineNumber": 21
+        },
+        {
+          "caller": "ValidateArguments",
+          "callee": "std::invalid_argument",
+          "lineNumber": 22
+        },
+        {
+          "caller": "ValidateArguments",
+          "callee": "std::isnan",
+          "lineNumber": 24
+        },
+        {
+          "caller": "ValidateArguments",
+          "callee": "std::isinf",
+          "lineNumber": 24
+        },
+        {
+          "caller": "ValidateArguments",
+          "callee": "std::invalid_argument",
+          "lineNumber": 25
+        },
+        {
+          "caller": "ValidateArguments",
+          "callee": "has_value",
+          "lineNumber": 27
+        },
+        {
+          "caller": "ValidateArguments",
+          "callee": "std::invalid_argument",
+          "lineNumber": 28
+        },
+        {
+          "caller": "MakeScalar",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 33
+        },
+        {
+          "caller": "MakeScalar",
+          "callee": "Fill",
+          "lineNumber": 34
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "ValidateArguments",
+          "lineNumber": 43
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "GetDevice",
+          "lineNumber": 57
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "MakeScalar",
+          "lineNumber": 59
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "CHECK",
+          "lineNumber": 62
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Device",
+          "lineNumber": 62
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 64
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Fill",
+          "lineNumber": 65
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "GetKernel",
+          "lineNumber": 74
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 74
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "type",
+          "lineNumber": 74
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Call<void>",
+          "lineNumber": 75
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "MakeScalar",
+          "lineNumber": 79
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 82
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 83
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 84
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::isinf",
+          "lineNumber": 86
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "nn::parallel::function::AllReduce",
+          "lineNumber": 88
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "nn::parallel::function::AllReduce",
+          "lineNumber": 89
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "nn::parallel::function::AllReduce",
+          "lineNumber": 90
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "To",
+          "lineNumber": 96
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Device",
+          "lineNumber": 96
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "static_cast<const double *>",
+          "lineNumber": 97
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "DataPtr",
+          "lineNumber": 97
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::numeric_limits<double>::quiet_NaN",
+          "lineNumber": 102
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::numeric_limits<double>::infinity",
+          "lineNumber": 104
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::isinf",
+          "lineNumber": 105
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::pow",
+          "lineNumber": 106
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::isfinite",
+          "lineNumber": 109
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::runtime_error",
+          "lineNumber": 110
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::min",
+          "lineNumber": 113
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "GetKernel",
+          "lineNumber": 120
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 120
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "type",
+          "lineNumber": 120
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "GetDevice",
+          "lineNumber": 120
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Call<void>",
+          "lineNumber": 121
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "static_cast<float>",
+          "lineNumber": 121
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "MakeScalar",
+          "lineNumber": 126
+        }
+      ],
+      "metrics": {
+        "importCount": 7,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/include/autograd/comm.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 102,
+      "nonEmptyLines": 74,
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 10,
+          "endLine": 10,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Device",
+          "startLine": 11,
+          "endLine": 11,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "ProcessGroup",
+          "startLine": 14,
+          "endLine": 14,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Scatter",
+          "startLine": 19,
+          "endLine": 38,
+          "methods": [
+            "Forward",
+            "SetupContext",
+            "Backward"
+          ],
+          "properties": [
+            "kType",
+            "pg_",
+            "target_gpus_",
+            "input_device_",
+            "dim_"
+          ]
+        },
+        {
+          "name": "Gather",
+          "startLine": 40,
+          "endLine": 59,
+          "methods": [
+            "Forward",
+            "SetupContext",
+            "Backward"
+          ],
+          "properties": [
+            "kType",
+            "pg_",
+            "target_device_",
+            "input_gpus_",
+            "dim_",
+            "unsqueezed_scalar_"
+          ]
+        },
+        {
+          "name": "Broadcast",
+          "startLine": 61,
+          "endLine": 80,
+          "methods": [
+            "Forward",
+            "SetupContext",
+            "Backward"
+          ],
+          "properties": [
+            "kType",
+            "pg_",
+            "target_gpus_",
+            "num_inputs_",
+            "input_device_"
+          ]
+        },
+        {
+          "name": "ReduceAddCoalesced",
+          "startLine": 82,
+          "endLine": 101,
+          "methods": [
+            "Forward",
+            "SetupContext",
+            "Backward"
+          ],
+          "properties": [
+            "kType",
+            "pg_",
+            "destination_",
+            "target_gpus_",
+            "num_inputs_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "Device",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "ProcessGroup",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "Scatter",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 48,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 51,
+          "isDefault": false
+        },
+        {
+          "name": "Gather",
+          "line": 40,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 68,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 70,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 73,
+          "isDefault": false
+        },
+        {
+          "name": "Broadcast",
+          "line": 61,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 91,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 94,
+          "isDefault": false
+        },
+        {
+          "name": "ReduceAddCoalesced",
+          "line": 82,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 19,
+        "functionCount": 0,
+        "classCount": 7
+      }
+    },
+    {
+      "path": "infini_train/include/gradient_clip.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 49,
+      "nonEmptyLines": 39,
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 10,
+          "endLine": 10,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "ProcessGroup",
+          "startLine": 12,
+          "endLine": 12,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "GradientClipRecord",
+          "startLine": 20,
+          "endLine": 24,
+          "methods": [],
+          "properties": [
+            "logical_parameter",
+            "stats_grad_views",
+            "scale_grad_views"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "ProcessGroup",
+          "line": 12,
+          "isDefault": false
+        },
+        {
+          "name": "GradientClipRecord",
+          "line": 20,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 56,
+      "nonEmptyLines": 39,
+      "functions": [
+        {
+          "name": "ddp_config",
+          "startLine": 34,
+          "endLine": 34,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 10,
+          "endLine": 10,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Device",
+          "startLine": 11,
+          "endLine": 11,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "DistributedDataParallelConfig",
+          "startLine": 13,
+          "endLine": 13,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Rank",
+          "startLine": 14,
+          "endLine": 14,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "DistributedDataParallel",
+          "startLine": 25,
+          "endLine": 54,
+          "methods": [
+            "Forward",
+            "module",
+            "ddp_config",
+            "BuildParamAndGradBuffers",
+            "RegisterBackwardHooks",
+            "OnGradReady"
+          ],
+          "properties": [
+            "reducer_",
+            "ddp_config_",
+            "ddp_pg_",
+            "param_grad_buffers_",
+            "bucket_groups_",
+            "param_to_bucket_group_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "Device",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "DistributedDataParallelConfig",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "Rank",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 30,
+          "isDefault": false
+        },
+        {
+          "name": "module",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "ddp_config",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "DistributedDataParallel",
+          "line": 25,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 8,
+        "functionCount": 1,
+        "classCount": 5
+      }
+    },
+    {
+      "path": "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 67,
+      "nonEmptyLines": 54,
+      "classes": [
+        {
+          "name": "DistributedDataParallelConfig",
+          "startLine": 12,
+          "endLine": 66,
+          "methods": [],
+          "properties": [
+            "first_bucket_cap_mb",
+            "normal_bucket_cap_mb",
+            "gradient_as_bucket_view",
+            "gradient_bucketing_enabled",
+            "overlap_grad_reduce",
+            "zero_stage",
+            "overlap_param_gather",
+            "average_in_collective",
+            "check_for_nan_in_grad",
+            "check_for_large_grads",
+            "num_distributed_optimizer_instances",
+            "bucket_size_in_elements",
+            "pad_buckets_for_high_nccl_busbw"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "DistributedDataParallelConfig",
+          "line": 12,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 220,
+      "nonEmptyLines": 164,
+      "functions": [
+        {
+          "name": "bucket_id",
+          "startLine": 41,
+          "endLine": 41,
+          "params": []
+        },
+        {
+          "name": "param_dtype",
+          "startLine": 49,
+          "endLine": 49,
+          "params": []
+        },
+        {
+          "name": "grad_dtype",
+          "startLine": 51,
+          "endLine": 51,
+          "params": []
+        },
+        {
+          "name": "offset",
+          "startLine": 53,
+          "endLine": 53,
+          "params": []
+        },
+        {
+          "name": "num_elements_unpadded",
+          "startLine": 55,
+          "endLine": 55,
+          "params": []
+        },
+        {
+          "name": "gradient_scaling_factor",
+          "startLine": 57,
+          "endLine": 57,
+          "params": []
+        },
+        {
+          "name": "ddp_config",
+          "startLine": 173,
+          "endLine": 173,
+          "params": []
+        },
+        {
+          "name": "param_buffer",
+          "startLine": 175,
+          "endLine": 175,
+          "params": []
+        },
+        {
+          "name": "grad_buffer",
+          "startLine": 177,
+          "endLine": 177,
+          "params": []
+        },
+        {
+          "name": "ddp_world_size",
+          "startLine": 181,
+          "endLine": 181,
+          "params": []
+        },
+        {
+          "name": "buckets",
+          "startLine": 183,
+          "endLine": 183,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 14,
+          "endLine": 14,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "ProcessGroup",
+          "startLine": 16,
+          "endLine": 16,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Work",
+          "startLine": 17,
+          "endLine": 17,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "ParamAndGradBucket",
+          "startLine": 22,
+          "endLine": 77,
+          "methods": [
+            "bucket_id",
+            "param_dtype",
+            "grad_dtype",
+            "offset",
+            "num_elements_unpadded",
+            "gradient_scaling_factor",
+            "GetTensorLocInBucket",
+            "ScaleGradients"
+          ],
+          "properties": [
+            "bucket_id_",
+            "params_",
+            "param_data_",
+            "grad_data_",
+            "param_dtype_",
+            "grad_dtype_",
+            "offset_",
+            "num_elements_unpadded_",
+            "gradient_scaling_factor_",
+            "param_to_range_"
+          ]
+        },
+        {
+          "name": "ParamAndGradBucketGroup",
+          "startLine": 79,
+          "endLine": 157,
+          "methods": [
+            "Reset",
+            "RegisterGradReady",
+            "StartGradSync",
+            "AccumulateParamGrad",
+            "FinishGradSync",
+            "StartParamSync",
+            "FinishParamSync",
+            "SetNextParamGatherBucketGroup",
+            "GetLocalGradShardBuffer"
+          ],
+          "properties": [
+            "buckets_",
+            "collective_pg_",
+            "collective_pg_size_",
+            "rank_in_collective_pg_",
+            "ddp_config_",
+            "params_",
+            "params_with_grad_",
+            "param_to_bucket_",
+            "grad_reduce_work_list_",
+            "grad_reduce_bucket_indices_",
+            "param_gather_work_list_",
+            "grad_shard_buffer_list_",
+            "temp_full_grad_buffer_list_",
+            "next_param_gather_bucket_group_",
+            "param_buffer_shard_list_",
+            "grad_buffer_shard_list_",
+            "is_last_microbatch_",
+            "grad_reduce_dispatched_",
+            "param_gather_dispatched_"
+          ]
+        },
+        {
+          "name": "ParamAndGradBuffer",
+          "startLine": 159,
+          "endLine": 215,
+          "methods": [
+            "ddp_config",
+            "param_buffer",
+            "grad_buffer",
+            "ddp_world_size",
+            "buckets",
+            "ScaleGradients",
+            "Reset",
+            "RebindGradViews",
+            "BuildBuckets"
+          ],
+          "properties": [
+            "ddp_config_",
+            "params_",
+            "grads_",
+            "param_buffer_",
+            "grad_buffer_",
+            "numel_",
+            "numel_unpadded_",
+            "ddp_pg_",
+            "ddp_world_size_",
+            "buckets_",
+            "need_rebind_grad_views_",
+            "bucket_indices_",
+            "param_index_map_",
+            "param_bucket_map_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "ProcessGroup",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "Work",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "bucket_id",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "param_dtype",
+          "line": 49,
+          "isDefault": false
+        },
+        {
+          "name": "grad_dtype",
+          "line": 51,
+          "isDefault": false
+        },
+        {
+          "name": "offset",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "num_elements_unpadded",
+          "line": 55,
+          "isDefault": false
+        },
+        {
+          "name": "gradient_scaling_factor",
+          "line": 57,
+          "isDefault": false
+        },
+        {
+          "name": "GetTensorLocInBucket",
+          "line": 59,
+          "isDefault": false
+        },
+        {
+          "name": "ScaleGradients",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "ParamAndGradBucket",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "Reset",
+          "line": 94,
+          "isDefault": false
+        },
+        {
+          "name": "RegisterGradReady",
+          "line": 98,
+          "isDefault": false
+        },
+        {
+          "name": "StartGradSync",
+          "line": 101,
+          "isDefault": false
+        },
+        {
+          "name": "AccumulateParamGrad",
+          "line": 104,
+          "isDefault": false
+        },
+        {
+          "name": "FinishGradSync",
+          "line": 108,
+          "isDefault": false
+        },
+        {
+          "name": "StartParamSync",
+          "line": 111,
+          "isDefault": false
+        },
+        {
+          "name": "FinishParamSync",
+          "line": 114,
+          "isDefault": false
+        },
+        {
+          "name": "SetNextParamGatherBucketGroup",
+          "line": 117,
+          "isDefault": false
+        },
+        {
+          "name": "GetLocalGradShardBuffer",
+          "line": 122,
+          "isDefault": false
+        },
+        {
+          "name": "ParamAndGradBucketGroup",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "ddp_config",
+          "line": 173,
+          "isDefault": false
+        },
+        {
+          "name": "param_buffer",
+          "line": 175,
+          "isDefault": false
+        },
+        {
+          "name": "grad_buffer",
+          "line": 177,
+          "isDefault": false
+        },
+        {
+          "name": "ddp_world_size",
+          "line": 181,
+          "isDefault": false
+        },
+        {
+          "name": "buckets",
+          "line": 183,
+          "isDefault": false
+        },
+        {
+          "name": "ScaleGradients",
+          "line": 185,
+          "isDefault": false
+        },
+        {
+          "name": "Reset",
+          "line": 187,
+          "isDefault": false
+        },
+        {
+          "name": "RebindGradViews",
+          "line": 189,
+          "isDefault": false
+        },
+        {
+          "name": "ParamAndGradBuffer",
+          "line": 159,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 31,
+        "functionCount": 11,
+        "classCount": 6
+      }
+    },
+    {
+      "path": "infini_train/include/nn/parallel/ddp/reducer.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 158,
+      "nonEmptyLines": 130,
+      "functions": [
+        {
+          "name": "GradBucket",
+          "startLine": 32,
+          "endLine": 32,
+          "params": [
+            "tensors"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 13,
+          "endLine": 13,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Device",
+          "startLine": 14,
+          "endLine": 14,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "PostAccumulateGradHook",
+          "startLine": 16,
+          "endLine": 16,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Work",
+          "startLine": 19,
+          "endLine": 19,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "GradBucket",
+          "startLine": 30,
+          "endLine": 37,
+          "methods": [
+            "GradBucket"
+          ],
+          "properties": [
+            "tensors_"
+          ]
+        },
+        {
+          "name": "Reducer",
+          "startLine": 49,
+          "endLine": 156,
+          "methods": [
+            "AttachHooksToParameters",
+            "PrepareForBackward",
+            "RegisterCommHook",
+            "GetBucketTensors",
+            "InitializeBuckets",
+            "MarkVariableReadyDense",
+            "MarkBucketReady",
+            "FinalizeBucketDense",
+            "FinalizeBackward",
+            "BuildBuckets",
+            "InitializeBucketViews",
+            "RebuildBuckets"
+          ],
+          "properties": [
+            "mutex_",
+            "params_",
+            "buckets_",
+            "locators_",
+            "buckets_finished_",
+            "comm_hook_",
+            "ddp_config_",
+            "next_bucket_",
+            "grad_ready_order_indices_",
+            "ready_seen_this_iter_",
+            "need_rebuild_",
+            "has_rebuilt_bucket_",
+            "all_buckets_ready_this_iter_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "Device",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "PostAccumulateGradHook",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "Work",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "GradBucket",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "GradBucket",
+          "line": 30,
+          "isDefault": false
+        },
+        {
+          "name": "AttachHooksToParameters",
+          "line": 61,
+          "isDefault": false
+        },
+        {
+          "name": "PrepareForBackward",
+          "line": 64,
+          "isDefault": false
+        },
+        {
+          "name": "RegisterCommHook",
+          "line": 70,
+          "isDefault": false
+        },
+        {
+          "name": "GetBucketTensors",
+          "line": 73,
+          "isDefault": false
+        },
+        {
+          "name": "Reducer",
+          "line": 49,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 11,
+        "functionCount": 1,
+        "classCount": 6
+      }
+    },
+    {
+      "path": "infini_train/include/nn/parallel/parallel_functional.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 40,
+      "nonEmptyLines": 28,
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 11,
+          "endLine": 11,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Module",
+          "startLine": 13,
+          "endLine": 13,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "Module",
+          "line": 13,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "infini_train/include/nn/parallel/pp/send_recv.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 20,
+      "nonEmptyLines": 14,
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 9,
+          "endLine": 9,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 9,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "infini_train/include/nn/parallel/process_group.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 159,
+      "nonEmptyLines": 117,
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 15,
+          "endLine": 15,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "CclComm",
+          "startLine": 17,
+          "endLine": 17,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "CclImpl",
+          "startLine": 18,
+          "endLine": 18,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "DeviceGuardImpl",
+          "startLine": 19,
+          "endLine": 19,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Stream",
+          "startLine": 20,
+          "endLine": 20,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Module",
+          "startLine": 23,
+          "endLine": 23,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Work",
+          "startLine": 25,
+          "endLine": 25,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "ProcessGroup",
+          "startLine": 33,
+          "endLine": 113,
+          "methods": [
+            "GetGroupRank",
+            "AllReduce",
+            "AllGather",
+            "ReduceScatter",
+            "Broadcast",
+            "Scatter",
+            "Send",
+            "Recv",
+            "BroadCast_",
+            "ReduceAddCoalesced",
+            "Scatter_",
+            "Gather",
+            "InitSingleProcess",
+            "InitMultiProcess",
+            "InitStreams"
+          ],
+          "properties": [
+            "devices_",
+            "global_group_rank_map_",
+            "world_size_",
+            "name_",
+            "is_main_process_",
+            "backend_",
+            "runtime_impl_",
+            "ccl_impl_",
+            "comms_",
+            "comm_streams_",
+            "device_comm_map_",
+            "device_stream_map_"
+          ]
+        },
+        {
+          "name": "ProcessGroupFactory",
+          "startLine": 115,
+          "endLine": 158,
+          "methods": [],
+          "properties": [
+            "kDefaltProcessGroupName",
+            "Instance",
+            "Instance",
+            "GetOrCreate",
+            "GetOrCreate",
+            "Get",
+            "GetDefaultProcessGroup",
+            "mutex_",
+            "cond_",
+            "name_to_group_",
+            "backend_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "CclComm",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "CclImpl",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "DeviceGuardImpl",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "Stream",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "Module",
+          "line": 23,
+          "isDefault": false
+        },
+        {
+          "name": "Work",
+          "line": 25,
+          "isDefault": false
+        },
+        {
+          "name": "GetGroupRank",
+          "line": 40,
+          "isDefault": false
+        },
+        {
+          "name": "AllReduce",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "AllGather",
+          "line": 47,
+          "isDefault": false
+        },
+        {
+          "name": "ReduceScatter",
+          "line": 50,
+          "isDefault": false
+        },
+        {
+          "name": "Broadcast",
+          "line": 56,
+          "isDefault": false
+        },
+        {
+          "name": "Scatter",
+          "line": 60,
+          "isDefault": false
+        },
+        {
+          "name": "Send",
+          "line": 64,
+          "isDefault": false
+        },
+        {
+          "name": "Recv",
+          "line": 67,
+          "isDefault": false
+        },
+        {
+          "name": "BroadCast_",
+          "line": 73,
+          "isDefault": false
+        },
+        {
+          "name": "ReduceAddCoalesced",
+          "line": 76,
+          "isDefault": false
+        },
+        {
+          "name": "Scatter_",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "Gather",
+          "line": 82,
+          "isDefault": false
+        },
+        {
+          "name": "ProcessGroup",
+          "line": 33,
+          "isDefault": false
+        },
+        {
+          "name": "ProcessGroupFactory",
+          "line": 115,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 21,
+        "functionCount": 0,
+        "classCount": 9
+      }
+    },
+    {
+      "path": "infini_train/include/nn/parallel/rank.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 27,
+      "nonEmptyLines": 20,
+      "classes": [
+        {
+          "name": "Rank",
+          "startLine": 4,
+          "endLine": 26,
+          "methods": [
+            "process_rank",
+            "thread_rank",
+            "process_size",
+            "thread_size",
+            "GlobalRank",
+            "IsParallel",
+            "IsMainRank",
+            "IsLastRank"
+          ],
+          "properties": [
+            "global_process_rank_",
+            "thread_rank_",
+            "processes_per_node_",
+            "threads_per_process_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "process_rank",
+          "line": 8,
+          "isDefault": false
+        },
+        {
+          "name": "thread_rank",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "process_size",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "thread_size",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "GlobalRank",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "IsParallel",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "IsMainRank",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "IsLastRank",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "Rank",
+          "line": 4,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 9,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "infini_train/include/nn/parallel/reduce_op_type.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 14,
+      "nonEmptyLines": 11,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/include/nn/parallel/utils.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 37,
+      "nonEmptyLines": 26,
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 9,
+          "endLine": 9,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 9,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/comm.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 124,
+      "nonEmptyLines": 99,
+      "functions": [
+        {
+          "name": "Scatter",
+          "startLine": 13,
+          "endLine": 16,
+          "params": [
+            "target_gpus",
+            "dim",
+            "pg"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 18,
+          "endLine": 23,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 25,
+          "endLine": 28,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 30,
+          "endLine": 32,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Gather",
+          "startLine": 34,
+          "endLine": 36,
+          "params": [
+            "target_device",
+            "dim",
+            "pg"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 38,
+          "endLine": 55,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 57,
+          "endLine": 60,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 62,
+          "endLine": 65,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Broadcast",
+          "startLine": 67,
+          "endLine": 69,
+          "params": [
+            "target_gpus",
+            "pg"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 71,
+          "endLine": 86,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 88,
+          "endLine": 91,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 93,
+          "endLine": 95,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "ReduceAddCoalesced",
+          "startLine": 97,
+          "endLine": 100,
+          "params": [
+            "destination",
+            "num_inputs",
+            "pg"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 102,
+          "endLine": 113,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 115,
+          "endLine": 118,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 120,
+          "endLine": 123,
+          "params": [
+            "grad_outputs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Scatter",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 25,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 30,
+          "isDefault": false
+        },
+        {
+          "name": "Gather",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 38,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 57,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "Broadcast",
+          "line": 67,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 71,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 88,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 93,
+          "isDefault": false
+        },
+        {
+          "name": "ReduceAddCoalesced",
+          "line": 97,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 102,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 115,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 120,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Scatter",
+          "callee": "GetDefaultProcessGroup",
+          "lineNumber": 16
+        },
+        {
+          "caller": "Scatter",
+          "callee": "infini_train::nn::parallel::ProcessGroupFactory::Instance",
+          "lineNumber": 16
+        },
+        {
+          "caller": "Forward",
+          "callee": "Scatter_",
+          "lineNumber": 21
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "GetDevice",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Backward",
+          "callee": "Apply",
+          "lineNumber": 31
+        },
+        {
+          "caller": "Backward",
+          "callee": "std::make_shared<Gather>",
+          "lineNumber": 31
+        },
+        {
+          "caller": "Gather",
+          "callee": "GetDefaultProcessGroup",
+          "lineNumber": 36
+        },
+        {
+          "caller": "Gather",
+          "callee": "infini_train::nn::parallel::ProcessGroupFactory::Instance",
+          "lineNumber": 36
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_NE",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<int>",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<int>",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 43
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dims",
+          "lineNumber": 43
+        },
+        {
+          "caller": "Forward",
+          "callee": "LOG",
+          "lineNumber": 46
+        },
+        {
+          "caller": "Forward",
+          "callee": "Gather",
+          "lineNumber": 54
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "push_back",
+          "lineNumber": 59
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "GetDevice",
+          "lineNumber": 59
+        },
+        {
+          "caller": "Backward",
+          "callee": "Apply",
+          "lineNumber": 64
+        },
+        {
+          "caller": "Backward",
+          "callee": "std::make_shared<Scatter>",
+          "lineNumber": 64
+        },
+        {
+          "caller": "Broadcast",
+          "callee": "GetDefaultProcessGroup",
+          "lineNumber": 69
+        },
+        {
+          "caller": "Broadcast",
+          "callee": "infini_train::nn::parallel::ProcessGroupFactory::Instance",
+          "lineNumber": 69
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 72
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 76
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK",
+          "lineNumber": 79
+        },
+        {
+          "caller": "Forward",
+          "callee": "IsCPU",
+          "lineNumber": 79
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 79
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK",
+          "lineNumber": 80
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 80
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 80
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 80
+        },
+        {
+          "caller": "Forward",
+          "callee": "BroadCast_",
+          "lineNumber": 85
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "size",
+          "lineNumber": 90
+        },
+        {
+          "caller": "Backward",
+          "callee": "Apply",
+          "lineNumber": 94
+        },
+        {
+          "caller": "Backward",
+          "callee": "std::make_shared<ReduceAddCoalesced>",
+          "lineNumber": 94
+        },
+        {
+          "caller": "ReduceAddCoalesced",
+          "callee": "GetDefaultProcessGroup",
+          "lineNumber": 100
+        },
+        {
+          "caller": "ReduceAddCoalesced",
+          "callee": "infini_train::nn::parallel::ProcessGroupFactory::Instance",
+          "lineNumber": 100
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 104
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 105
+        },
+        {
+          "caller": "Forward",
+          "callee": "resize",
+          "lineNumber": 106
+        },
+        {
+          "caller": "Forward",
+          "callee": "ReduceAddCoalesced",
+          "lineNumber": 112
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "push_back",
+          "lineNumber": 117
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "GetDevice",
+          "lineNumber": 117
+        },
+        {
+          "caller": "Backward",
+          "callee": "Apply",
+          "lineNumber": 122
+        },
+        {
+          "caller": "Backward",
+          "callee": "std::make_shared<Broadcast>",
+          "lineNumber": 122
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 16,
+        "functionCount": 16,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/autograd/function_hook.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 16,
+      "nonEmptyLines": 13,
+      "functions": [
+        {
+          "name": "AllReducePostAccumulateHook",
+          "startLine": 8,
+          "endLine": 11,
+          "params": [
+            "reduce_op",
+            "pg"
+          ]
+        },
+        {
+          "name": "operator()",
+          "startLine": 13,
+          "endLine": 15,
+          "params": [
+            "tensor"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "AllReducePostAccumulateHook",
+          "line": 8,
+          "isDefault": false
+        },
+        {
+          "name": "operator()",
+          "line": 13,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "AllReducePostAccumulateHook",
+          "callee": "GetDefaultProcessGroup",
+          "lineNumber": 11
+        },
+        {
+          "caller": "AllReducePostAccumulateHook",
+          "callee": "infini_train::nn::parallel::ProcessGroupFactory::Instance",
+          "lineNumber": 11
+        },
+        {
+          "caller": "operator()",
+          "callee": "infini_train::nn::parallel::function::AllReduce",
+          "lineNumber": 14
+        }
+      ],
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/gradient_clip.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 129,
+      "nonEmptyLines": 112,
+      "functions": [
+        {
+          "name": "ValidateArguments",
+          "startLine": 20,
+          "endLine": 30,
+          "params": [
+            "max_norm",
+            "norm_type",
+            "foreach"
+          ]
+        },
+        {
+          "name": "MakeScalar",
+          "startLine": 32,
+          "endLine": 36,
+          "params": [
+            "device",
+            "value"
+          ]
+        },
+        {
+          "name": "ClipGradNorm",
+          "startLine": 40,
+          "endLine": 127,
+          "params": [
+            "records",
+            "max_norm",
+            "norm_type",
+            "error_if_nonfinite",
+            "foreach",
+            "stats_pg",
+            "device_hint"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "ValidateArguments",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "MakeScalar",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "ClipGradNorm",
+          "line": 40,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "ValidateArguments",
+          "callee": "std::isfinite",
+          "lineNumber": 21
+        },
+        {
+          "caller": "ValidateArguments",
+          "callee": "std::invalid_argument",
+          "lineNumber": 22
+        },
+        {
+          "caller": "ValidateArguments",
+          "callee": "std::isnan",
+          "lineNumber": 24
+        },
+        {
+          "caller": "ValidateArguments",
+          "callee": "std::isinf",
+          "lineNumber": 24
+        },
+        {
+          "caller": "ValidateArguments",
+          "callee": "std::invalid_argument",
+          "lineNumber": 25
+        },
+        {
+          "caller": "ValidateArguments",
+          "callee": "has_value",
+          "lineNumber": 27
+        },
+        {
+          "caller": "ValidateArguments",
+          "callee": "std::invalid_argument",
+          "lineNumber": 28
+        },
+        {
+          "caller": "MakeScalar",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 33
+        },
+        {
+          "caller": "MakeScalar",
+          "callee": "Fill",
+          "lineNumber": 34
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "ValidateArguments",
+          "lineNumber": 43
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "GetDevice",
+          "lineNumber": 57
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "MakeScalar",
+          "lineNumber": 59
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "CHECK",
+          "lineNumber": 62
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Device",
+          "lineNumber": 62
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 64
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Fill",
+          "lineNumber": 65
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "GetKernel",
+          "lineNumber": 74
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 74
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "type",
+          "lineNumber": 74
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Call<void>",
+          "lineNumber": 75
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "MakeScalar",
+          "lineNumber": 79
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 82
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 83
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 84
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::isinf",
+          "lineNumber": 86
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "nn::parallel::function::AllReduce",
+          "lineNumber": 88
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "nn::parallel::function::AllReduce",
+          "lineNumber": 89
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "nn::parallel::function::AllReduce",
+          "lineNumber": 90
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "To",
+          "lineNumber": 96
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Device",
+          "lineNumber": 96
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "static_cast<const double *>",
+          "lineNumber": 97
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "DataPtr",
+          "lineNumber": 97
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::numeric_limits<double>::quiet_NaN",
+          "lineNumber": 102
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::numeric_limits<double>::infinity",
+          "lineNumber": 104
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::isinf",
+          "lineNumber": 105
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::pow",
+          "lineNumber": 106
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::isfinite",
+          "lineNumber": 109
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::runtime_error",
+          "lineNumber": 110
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "std::min",
+          "lineNumber": 113
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "GetKernel",
+          "lineNumber": 120
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 120
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "type",
+          "lineNumber": 120
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "GetDevice",
+          "lineNumber": 120
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "Call<void>",
+          "lineNumber": 121
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "static_cast<float>",
+          "lineNumber": 121
+        },
+        {
+          "caller": "ClipGradNorm",
+          "callee": "MakeScalar",
+          "lineNumber": 126
+        }
+      ],
+      "metrics": {
+        "importCount": 7,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/parallel/ddp/distributed_data_parallel.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 219,
+      "nonEmptyLines": 186,
+      "functions": [
+        {
+          "name": "DistributedDataParallel",
+          "startLine": 22,
+          "endLine": 64,
+          "params": [
+            "module",
+            "rank",
+            "ddp_config"
+          ]
+        },
+        {
+          "name": "BuildParamAndGradBuffers",
+          "startLine": 66,
+          "endLine": 121,
+          "params": []
+        },
+        {
+          "name": "RegisterBackwardHooks",
+          "startLine": 123,
+          "endLine": 190,
+          "params": []
+        },
+        {
+          "name": "OnGradReady",
+          "startLine": 192,
+          "endLine": 204,
+          "params": [
+            "param"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 206,
+          "endLine": 216,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "module",
+          "startLine": 218,
+          "endLine": 218,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "DistributedDataParallel",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "BuildParamAndGradBuffers",
+          "line": 66,
+          "isDefault": false
+        },
+        {
+          "name": "RegisterBackwardHooks",
+          "line": 123,
+          "isDefault": false
+        },
+        {
+          "name": "OnGradReady",
+          "line": 192,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 206,
+          "isDefault": false
+        },
+        {
+          "name": "module",
+          "line": 218,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "Get",
+          "lineNumber": 25
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 25
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "GetDataParallelProcessGroupName",
+          "lineNumber": 25
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "GlobalRank",
+          "lineNumber": 25
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "CHECK",
+          "lineNumber": 26
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "LOG",
+          "lineNumber": 29
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "Parameters",
+          "lineNumber": 31
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "requires_grad",
+          "lineNumber": 32
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "GetDevice",
+          "lineNumber": 35
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "CHECK_EQ",
+          "lineNumber": 36
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "index",
+          "lineNumber": 36
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "global::GetDeviceIndex",
+          "lineNumber": 36
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "thread_rank",
+          "lineNumber": 36
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>",
+          "lineNumber": 39
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "RegisterPostAccumulateGradHook",
+          "lineNumber": 41
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "std::move",
+          "lineNumber": 41
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "Buffers",
+          "lineNumber": 44
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "CHECK_EQ",
+          "lineNumber": 45
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "index",
+          "lineNumber": 45
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "GetDevice",
+          "lineNumber": 45
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "global::GetDeviceIndex",
+          "lineNumber": 45
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "thread_rank",
+          "lineNumber": 45
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "std::move",
+          "lineNumber": 48
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "BuildParamAndGradBuffers",
+          "lineNumber": 51
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "RegisterBackwardHooks",
+          "lineNumber": 52
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "Parameters",
+          "lineNumber": 55
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "ComputeBucketAssignmentBySize",
+          "lineNumber": 59
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "std::make_shared<Reducer>",
+          "lineNumber": 61
+        },
+        {
+          "caller": "DistributedDataParallel",
+          "callee": "AttachHooksToParameters",
+          "lineNumber": 62
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "Parameters",
+          "lineNumber": 71
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "requires_grad",
+          "lineNumber": 72
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "Dtype",
+          "lineNumber": 75
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "grad",
+          "lineNumber": 76
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "Dtype",
+          "lineNumber": 76
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "grad",
+          "lineNumber": 76
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "push_back",
+          "lineNumber": 77
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "clear",
+          "lineNumber": 80
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "reserve",
+          "lineNumber": 81
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "size",
+          "lineNumber": 81
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "empty",
+          "lineNumber": 87
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "std::make_shared<ParamAndGradBuffer>",
+          "lineNumber": 91
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "push_back",
+          "lineNumber": 93
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "PartitionBuckets",
+          "lineNumber": 97
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "size",
+          "lineNumber": 100
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "SetNextParamGatherBucketGroup",
+          "lineNumber": 102
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "clear",
+          "lineNumber": 106
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "buckets",
+          "lineNumber": 108
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "params",
+          "lineNumber": 109
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "emplace",
+          "lineNumber": 110
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "get",
+          "lineNumber": 110
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "LOG",
+          "lineNumber": 112
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "LOG",
+          "lineNumber": 118
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "size",
+          "lineNumber": 119
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "size",
+          "lineNumber": 119
+        },
+        {
+          "caller": "BuildParamAndGradBuffers",
+          "callee": "size",
+          "lineNumber": 120
+        },
+        {
+          "caller": "Zero2PreAccumulateGradHook",
+          "callee": "std::move",
+          "lineNumber": 130
+        },
+        {
+          "caller": "TryBypassAccumulate",
+          "callee": "lock",
+          "lineNumber": 134
+        },
+        {
+          "caller": "TryBypassAccumulate",
+          "callee": "AccumulateParamGrad",
+          "lineNumber": 135
+        },
+        {
+          "caller": "TryBypassAccumulate",
+          "callee": "config",
+          "lineNumber": 136
+        },
+        {
+          "caller": "TryBypassAccumulate",
+          "callee": "RegisterGradReady",
+          "lineNumber": 137
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "at",
+          "lineNumber": 150
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "Parameters",
+          "lineNumber": 151
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "requires_grad",
+          "lineNumber": 152
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "find",
+          "lineNumber": 155
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "get",
+          "lineNumber": 155
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "CHECK",
+          "lineNumber": 156
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "end",
+          "lineNumber": 156
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "std::make_unique<Zero2PreAccumulateGradHook>",
+          "lineNumber": 159
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "RegisterPreAccumulateGradHook",
+          "lineNumber": 160
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "std::move",
+          "lineNumber": 160
+        },
+        {
+          "caller": "operator()",
+          "callee": "lock",
+          "lineNumber": 171
+        },
+        {
+          "caller": "operator()",
+          "callee": "OnGradReady",
+          "lineNumber": 172
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "at",
+          "lineNumber": 181
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "Parameters",
+          "lineNumber": 182
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "requires_grad",
+          "lineNumber": 183
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "std::make_unique<DDPPostAccumulateHook>",
+          "lineNumber": 187
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "RegisterPostAccumulateGradHook",
+          "lineNumber": 188
+        },
+        {
+          "caller": "RegisterBackwardHooks",
+          "callee": "std::move",
+          "lineNumber": 188
+        },
+        {
+          "caller": "OnGradReady",
+          "callee": "find",
+          "lineNumber": 193
+        },
+        {
+          "caller": "OnGradReady",
+          "callee": "get",
+          "lineNumber": 193
+        },
+        {
+          "caller": "OnGradReady",
+          "callee": "end",
+          "lineNumber": 194
+        },
+        {
+          "caller": "OnGradReady",
+          "callee": "CHECK",
+          "lineNumber": 195
+        },
+        {
+          "caller": "OnGradReady",
+          "callee": "requires_grad",
+          "lineNumber": 195
+        },
+        {
+          "caller": "OnGradReady",
+          "callee": "CHECK",
+          "lineNumber": 197
+        },
+        {
+          "caller": "OnGradReady",
+          "callee": "grad",
+          "lineNumber": 197
+        },
+        {
+          "caller": "OnGradReady",
+          "callee": "RegisterGradReady",
+          "lineNumber": 201
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kModuleName])",
+          "lineNumber": 208
+        },
+        {
+          "caller": "Forward",
+          "callee": "PrepareForBackward",
+          "lineNumber": 210
+        },
+        {
+          "caller": "Forward",
+          "callee": "RebindGradViews",
+          "lineNumber": 213
+        },
+        {
+          "caller": "module",
+          "callee": "at",
+          "lineNumber": 218
+        }
+      ],
+      "metrics": {
+        "importCount": 9,
+        "exportCount": 6,
+        "functionCount": 6,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/parallel/ddp/distributed_optimizer.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 252,
+      "nonEmptyLines": 209,
+      "functions": [
+        {
+          "name": "DistributedOptimizer",
+          "startLine": 14,
+          "endLine": 29,
+          "params": [
+            "creator",
+            "full_params",
+            "model_chunks",
+            "ddp_world_size",
+            "ddp_rank"
+          ]
+        },
+        {
+          "name": "DistributedOptimizer",
+          "startLine": 31,
+          "endLine": 56,
+          "params": [
+            "creator",
+            "named_parameters",
+            "model_chunks",
+            "ddp_world_size",
+            "ddp_rank"
+          ]
+        },
+        {
+          "name": "InitializeModelChunks",
+          "startLine": 58,
+          "endLine": 70,
+          "params": [
+            "model_chunks"
+          ]
+        },
+        {
+          "name": "BuildShardParamsAndBindGrads",
+          "startLine": 72,
+          "endLine": 132,
+          "params": [
+            "add_shard_param"
+          ]
+        },
+        {
+          "name": "StartGradSync",
+          "startLine": 134,
+          "endLine": 139,
+          "params": []
+        },
+        {
+          "name": "FinishGradSync",
+          "startLine": 141,
+          "endLine": 147,
+          "params": []
+        },
+        {
+          "name": "StartParamSync",
+          "startLine": 149,
+          "endLine": 151,
+          "params": [
+            "force_sync"
+          ]
+        },
+        {
+          "name": "ClipGradNorm_",
+          "startLine": 152,
+          "endLine": 192,
+          "params": [
+            "parameters",
+            "max_norm",
+            "norm_type",
+            "error_if_nonfinite",
+            "foreach"
+          ]
+        },
+        {
+          "name": "FinishParamSync",
+          "startLine": 195,
+          "endLine": 197,
+          "params": [
+            "skip_next_bucket_dispatch"
+          ]
+        },
+        {
+          "name": "ZeroGrad",
+          "startLine": 199,
+          "endLine": 213,
+          "params": [
+            "set_to_none"
+          ]
+        },
+        {
+          "name": "set_learning_rate",
+          "startLine": 215,
+          "endLine": 220,
+          "params": [
+            "lr"
+          ]
+        },
+        {
+          "name": "learning_rate",
+          "startLine": 222,
+          "endLine": 227,
+          "params": []
+        },
+        {
+          "name": "Step",
+          "startLine": 229,
+          "endLine": 241,
+          "params": []
+        },
+        {
+          "name": "StateDict",
+          "startLine": 243,
+          "endLine": 246,
+          "params": []
+        },
+        {
+          "name": "LoadStateDict",
+          "startLine": 248,
+          "endLine": 251,
+          "params": [
+            "state_dict"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "DistributedOptimizer",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "DistributedOptimizer",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "InitializeModelChunks",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "BuildShardParamsAndBindGrads",
+          "line": 72,
+          "isDefault": false
+        },
+        {
+          "name": "StartGradSync",
+          "line": 134,
+          "isDefault": false
+        },
+        {
+          "name": "FinishGradSync",
+          "line": 141,
+          "isDefault": false
+        },
+        {
+          "name": "StartParamSync",
+          "line": 149,
+          "isDefault": false
+        },
+        {
+          "name": "ClipGradNorm_",
+          "line": 152,
+          "isDefault": false
+        },
+        {
+          "name": "FinishParamSync",
+          "line": 195,
+          "isDefault": false
+        },
+        {
+          "name": "ZeroGrad",
+          "line": 199,
+          "isDefault": false
+        },
+        {
+          "name": "set_learning_rate",
+          "line": 215,
+          "isDefault": false
+        },
+        {
+          "name": "learning_rate",
+          "line": 222,
+          "isDefault": false
+        },
+        {
+          "name": "Step",
+          "line": 229,
+          "isDefault": false
+        },
+        {
+          "name": "StateDict",
+          "line": 243,
+          "isDefault": false
+        },
+        {
+          "name": "LoadStateDict",
+          "line": 248,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "InitializeModelChunks",
+          "lineNumber": 19
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "BuildShardParamsAndBindGrads",
+          "lineNumber": 22
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "push_back",
+          "lineNumber": 24
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "creator",
+          "lineNumber": 27
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "CHECK",
+          "lineNumber": 28
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "InitializeModelChunks",
+          "lineNumber": 35
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "reserve",
+          "lineNumber": 38
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "size",
+          "lineNumber": 38
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "CHECK",
+          "lineNumber": 40
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "emplace",
+          "lineNumber": 41
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "get",
+          "lineNumber": 41
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "BuildShardParamsAndBindGrads",
+          "lineNumber": 45
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "find",
+          "lineNumber": 48
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "get",
+          "lineNumber": 48
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "CHECK",
+          "lineNumber": 49
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "end",
+          "lineNumber": 49
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "emplace_back",
+          "lineNumber": 51
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "creator",
+          "lineNumber": 54
+        },
+        {
+          "caller": "DistributedOptimizer",
+          "callee": "CHECK",
+          "lineNumber": 55
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "CHECK",
+          "lineNumber": 59
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "size",
+          "lineNumber": 61
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "std::dynamic_pointer_cast<DistributedDataParallel>",
+          "lineNumber": 62
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "CHECK",
+          "lineNumber": 63
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "insert",
+          "lineNumber": 65
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "end",
+          "lineNumber": 65
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "begin",
+          "lineNumber": 65
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "param_grad_buffers",
+          "lineNumber": 65
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "end",
+          "lineNumber": 66
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "param_grad_buffers",
+          "lineNumber": 66
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "insert",
+          "lineNumber": 67
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "end",
+          "lineNumber": 67
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "begin",
+          "lineNumber": 67
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "bucket_groups",
+          "lineNumber": 67
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "end",
+          "lineNumber": 68
+        },
+        {
+          "caller": "InitializeModelChunks",
+          "callee": "bucket_groups",
+          "lineNumber": 68
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "config",
+          "lineNumber": 76
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "buckets",
+          "lineNumber": 77
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "size",
+          "lineNumber": 78
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "param_data",
+          "lineNumber": 81
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "GetLocalGradShardBuffer",
+          "lineNumber": 82
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "grad_data",
+          "lineNumber": 82
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "CHECK",
+          "lineNumber": 84
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "CHECK",
+          "lineNumber": 85
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "CHECK_EQ",
+          "lineNumber": 87
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "NumElements",
+          "lineNumber": 87
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "NumElements",
+          "lineNumber": 88
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "params",
+          "lineNumber": 93
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "GetTensorLocInBucket",
+          "lineNumber": 95
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "CHECK",
+          "lineNumber": 96
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "std::max",
+          "lineNumber": 98
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "std::min",
+          "lineNumber": 99
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "CHECK_GT",
+          "lineNumber": 106
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "at",
+          "lineNumber": 108
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "Dtype",
+          "lineNumber": 108
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "at",
+          "lineNumber": 111
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "Dtype",
+          "lineNumber": 111
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 113
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 114
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 116
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 117
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "set_grad",
+          "lineNumber": 119
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "add_shard_param",
+          "lineNumber": 123
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "push_back",
+          "lineNumber": 124
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "get",
+          "lineNumber": 124
+        },
+        {
+          "caller": "BuildShardParamsAndBindGrads",
+          "callee": "CHECK_GT",
+          "lineNumber": 130
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "StartGradSync",
+          "lineNumber": 138
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "FinishGradSync",
+          "lineNumber": 145
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "StartParamSync",
+          "lineNumber": 150
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "FinishGradSync",
+          "lineNumber": 158
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "reserve",
+          "lineNumber": 161
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "size",
+          "lineNumber": 161
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "CHECK",
+          "lineNumber": 166
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "GetDevice",
+          "lineNumber": 168
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "insert",
+          "lineNumber": 170
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "get",
+          "lineNumber": 170
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "find",
+          "lineNumber": 176
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "get",
+          "lineNumber": 176
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "end",
+          "lineNumber": 177
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "push_back",
+          "lineNumber": 181
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "std::move",
+          "lineNumber": 181
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "type",
+          "lineNumber": 185
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "global::IsInitialized",
+          "lineNumber": 185
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "global::GetWorldSize",
+          "lineNumber": 186
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "GetDefaultProcessGroup",
+          "lineNumber": 187
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 187
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "type",
+          "lineNumber": 187
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "gradient_clip::ClipGradNorm",
+          "lineNumber": 190
+        },
+        {
+          "caller": "FinishParamSync",
+          "callee": "FinishParamSync",
+          "lineNumber": 196
+        },
+        {
+          "caller": "ZeroGrad",
+          "callee": "Reset",
+          "lineNumber": 208
+        },
+        {
+          "caller": "ZeroGrad",
+          "callee": "Reset",
+          "lineNumber": 209
+        },
+        {
+          "caller": "ZeroGrad",
+          "callee": "ZeroGrad",
+          "lineNumber": 211
+        },
+        {
+          "caller": "set_learning_rate",
+          "callee": "Optimizer::set_learning_rate",
+          "lineNumber": 216
+        },
+        {
+          "caller": "set_learning_rate",
+          "callee": "set_learning_rate",
+          "lineNumber": 218
+        },
+        {
+          "caller": "learning_rate",
+          "callee": "learning_rate",
+          "lineNumber": 224
+        },
+        {
+          "caller": "learning_rate",
+          "callee": "Optimizer::learning_rate",
+          "lineNumber": 226
+        },
+        {
+          "caller": "Step",
+          "callee": "FinishGradSync",
+          "lineNumber": 231
+        },
+        {
+          "caller": "Step",
+          "callee": "CHECK",
+          "lineNumber": 234
+        },
+        {
+          "caller": "Step",
+          "callee": "Step",
+          "lineNumber": 235
+        },
+        {
+          "caller": "Step",
+          "callee": "StartParamSync",
+          "lineNumber": 238
+        },
+        {
+          "caller": "Step",
+          "callee": "FinishParamSync",
+          "lineNumber": 240
+        },
+        {
+          "caller": "StateDict",
+          "callee": "CHECK",
+          "lineNumber": 244
+        },
+        {
+          "caller": "StateDict",
+          "callee": "StateDict",
+          "lineNumber": 245
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "CHECK",
+          "lineNumber": 249
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "LoadStateDict",
+          "lineNumber": 250
+        }
+      ],
+      "metrics": {
+        "importCount": 6,
+        "exportCount": 15,
+        "functionCount": 15,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/parallel/ddp/param_and_grad_buffer.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 716,
+      "nonEmptyLines": 607,
+      "functions": [
+        {
+          "name": "PadTo",
+          "startLine": 25,
+          "endLine": 31,
+          "params": [
+            "value",
+            "alignment"
+          ]
+        },
+        {
+          "name": "AllocateFlatBuffer",
+          "startLine": 33,
+          "endLine": 37,
+          "params": [
+            "num_elements",
+            "data_type",
+            "device"
+          ]
+        },
+        {
+          "name": "GetBufferView",
+          "startLine": 39,
+          "endLine": 42,
+          "params": [
+            "buffer",
+            "start_in_elements",
+            "dims"
+          ]
+        },
+        {
+          "name": "ShardBuffer",
+          "startLine": 44,
+          "endLine": 53,
+          "params": [
+            "buffer",
+            "ddp_world_size"
+          ]
+        },
+        {
+          "name": "ParamAndGradBucket",
+          "startLine": 57,
+          "endLine": 70,
+          "params": [
+            "params",
+            "param_data",
+            "param_dtype",
+            "grad_data",
+            "grad_dtype",
+            "offset",
+            "num_elements_unpadded",
+            "gradient_scaling_factor",
+            "bucket_id"
+          ]
+        },
+        {
+          "name": "GetTensorLocInBucket",
+          "startLine": 72,
+          "endLine": 81,
+          "params": [
+            "parameter",
+            "start_in_bucket",
+            "end_in_bucket"
+          ]
+        },
+        {
+          "name": "ScaleGradients",
+          "startLine": 83,
+          "endLine": 90,
+          "params": [
+            "scaling_factor"
+          ]
+        },
+        {
+          "name": "ParamAndGradBucketGroup",
+          "startLine": 92,
+          "endLine": 133,
+          "params": [
+            "buckets",
+            "collective_pg",
+            "process_group_size",
+            "ddp_config"
+          ]
+        },
+        {
+          "name": "Reset",
+          "startLine": 135,
+          "endLine": 147,
+          "params": []
+        },
+        {
+          "name": "RegisterGradReady",
+          "startLine": 149,
+          "endLine": 176,
+          "params": [
+            "parameter"
+          ]
+        },
+        {
+          "name": "AccumulateParamGrad",
+          "startLine": 178,
+          "endLine": 224,
+          "params": [
+            "parameter",
+            "grad",
+            "overwrite",
+            "learning_rate"
+          ]
+        },
+        {
+          "name": "GetLocalGradShardBuffer",
+          "startLine": 226,
+          "endLine": 235,
+          "params": [
+            "bucket_idx"
+          ]
+        },
+        {
+          "name": "StartGradSync",
+          "startLine": 237,
+          "endLine": 301,
+          "params": []
+        },
+        {
+          "name": "FinishGradSync",
+          "startLine": 303,
+          "endLine": 341,
+          "params": []
+        },
+        {
+          "name": "StartParamSync",
+          "startLine": 343,
+          "endLine": 377,
+          "params": [
+            "force_sync"
+          ]
+        },
+        {
+          "name": "FinishParamSync",
+          "startLine": 379,
+          "endLine": 404,
+          "params": [
+            "skip_next_bucket_dispatch"
+          ]
+        },
+        {
+          "name": "SetNextParamGatherBucketGroup",
+          "startLine": 406,
+          "endLine": 408,
+          "params": [
+            "next_group"
+          ]
+        },
+        {
+          "name": "ParamAndGradBuffer",
+          "startLine": 410,
+          "endLine": 422,
+          "params": [
+            "params",
+            "param_dtype",
+            "grad_dtype",
+            "ddp_pg",
+            "ddp_config"
+          ]
+        },
+        {
+          "name": "BuildBuckets",
+          "startLine": 424,
+          "endLine": 624,
+          "params": [
+            "param_dtype",
+            "grad_dtype"
+          ]
+        },
+        {
+          "name": "ScaleGradients",
+          "startLine": 626,
+          "endLine": 633,
+          "params": [
+            "scaling_factor"
+          ]
+        },
+        {
+          "name": "Reset",
+          "startLine": 635,
+          "endLine": 645,
+          "params": [
+            "need_rebind"
+          ]
+        },
+        {
+          "name": "RebindGradViews",
+          "startLine": 647,
+          "endLine": 665,
+          "params": []
+        },
+        {
+          "name": "PartitionBuckets",
+          "startLine": 672,
+          "endLine": 714,
+          "params": [
+            "buffers",
+            "force_single_bucket_group"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "PadTo",
+          "line": 25,
+          "isDefault": false
+        },
+        {
+          "name": "AllocateFlatBuffer",
+          "line": 33,
+          "isDefault": false
+        },
+        {
+          "name": "GetBufferView",
+          "line": 39,
+          "isDefault": false
+        },
+        {
+          "name": "ShardBuffer",
+          "line": 44,
+          "isDefault": false
+        },
+        {
+          "name": "ParamAndGradBucket",
+          "line": 57,
+          "isDefault": false
+        },
+        {
+          "name": "GetTensorLocInBucket",
+          "line": 72,
+          "isDefault": false
+        },
+        {
+          "name": "ScaleGradients",
+          "line": 83,
+          "isDefault": false
+        },
+        {
+          "name": "ParamAndGradBucketGroup",
+          "line": 92,
+          "isDefault": false
+        },
+        {
+          "name": "Reset",
+          "line": 135,
+          "isDefault": false
+        },
+        {
+          "name": "RegisterGradReady",
+          "line": 149,
+          "isDefault": false
+        },
+        {
+          "name": "AccumulateParamGrad",
+          "line": 178,
+          "isDefault": false
+        },
+        {
+          "name": "GetLocalGradShardBuffer",
+          "line": 226,
+          "isDefault": false
+        },
+        {
+          "name": "StartGradSync",
+          "line": 237,
+          "isDefault": false
+        },
+        {
+          "name": "FinishGradSync",
+          "line": 303,
+          "isDefault": false
+        },
+        {
+          "name": "StartParamSync",
+          "line": 343,
+          "isDefault": false
+        },
+        {
+          "name": "FinishParamSync",
+          "line": 379,
+          "isDefault": false
+        },
+        {
+          "name": "SetNextParamGatherBucketGroup",
+          "line": 406,
+          "isDefault": false
+        },
+        {
+          "name": "ParamAndGradBuffer",
+          "line": 410,
+          "isDefault": false
+        },
+        {
+          "name": "BuildBuckets",
+          "line": 424,
+          "isDefault": false
+        },
+        {
+          "name": "ScaleGradients",
+          "line": 626,
+          "isDefault": false
+        },
+        {
+          "name": "Reset",
+          "line": 635,
+          "isDefault": false
+        },
+        {
+          "name": "RebindGradViews",
+          "line": 647,
+          "isDefault": false
+        },
+        {
+          "name": "PartitionBuckets",
+          "line": 672,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "AllocateFlatBuffer",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 34
+        },
+        {
+          "caller": "AllocateFlatBuffer",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 36
+        },
+        {
+          "caller": "GetBufferView",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 41
+        },
+        {
+          "caller": "GetBufferView",
+          "callee": "at",
+          "lineNumber": 41
+        },
+        {
+          "caller": "GetBufferView",
+          "callee": "Dtype",
+          "lineNumber": 41
+        },
+        {
+          "caller": "ShardBuffer",
+          "callee": "CHECK_EQ",
+          "lineNumber": 45
+        },
+        {
+          "caller": "ShardBuffer",
+          "callee": "NumElements",
+          "lineNumber": 45
+        },
+        {
+          "caller": "ShardBuffer",
+          "callee": "NumElements",
+          "lineNumber": 46
+        },
+        {
+          "caller": "ShardBuffer",
+          "callee": "push_back",
+          "lineNumber": 49
+        },
+        {
+          "caller": "ShardBuffer",
+          "callee": "GetBufferView",
+          "lineNumber": 50
+        },
+        {
+          "caller": "ShardBuffer",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 50
+        },
+        {
+          "caller": "ParamAndGradBucket",
+          "callee": "std::move",
+          "lineNumber": 61
+        },
+        {
+          "caller": "ParamAndGradBucket",
+          "callee": "std::move",
+          "lineNumber": 61
+        },
+        {
+          "caller": "ParamAndGradBucket",
+          "callee": "std::move",
+          "lineNumber": 62
+        },
+        {
+          "caller": "ParamAndGradBucket",
+          "callee": "NumElements",
+          "lineNumber": 66
+        },
+        {
+          "caller": "ParamAndGradBucket",
+          "callee": "emplace",
+          "lineNumber": 67
+        },
+        {
+          "caller": "ParamAndGradBucket",
+          "callee": "get",
+          "lineNumber": 67
+        },
+        {
+          "caller": "ParamAndGradBucket",
+          "callee": "std::make_pair",
+          "lineNumber": 67
+        },
+        {
+          "caller": "GetTensorLocInBucket",
+          "callee": "find",
+          "lineNumber": 74
+        },
+        {
+          "caller": "GetTensorLocInBucket",
+          "callee": "get",
+          "lineNumber": 74
+        },
+        {
+          "caller": "GetTensorLocInBucket",
+          "callee": "end",
+          "lineNumber": 75
+        },
+        {
+          "caller": "ScaleGradients",
+          "callee": "GetKernel",
+          "lineNumber": 88
+        },
+        {
+          "caller": "ScaleGradients",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 88
+        },
+        {
+          "caller": "ScaleGradients",
+          "callee": "type",
+          "lineNumber": 88
+        },
+        {
+          "caller": "ScaleGradients",
+          "callee": "GetDevice",
+          "lineNumber": 88
+        },
+        {
+          "caller": "ScaleGradients",
+          "callee": "Call<void>",
+          "lineNumber": 89
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "std::move",
+          "lineNumber": 95
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "CHECK",
+          "lineNumber": 98
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "size",
+          "lineNumber": 101
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "params",
+          "lineNumber": 103
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "insert",
+          "lineNumber": 104
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "get",
+          "lineNumber": 104
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "get",
+          "lineNumber": 105
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "begin",
+          "lineNumber": 109
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "GetGroupRank",
+          "lineNumber": 110
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "GlobalRank",
+          "lineNumber": 110
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "Rank",
+          "lineNumber": 110
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "GetDevice",
+          "lineNumber": 110
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "resize",
+          "lineNumber": 113
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "size",
+          "lineNumber": 113
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "resize",
+          "lineNumber": 114
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "size",
+          "lineNumber": 114
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "resize",
+          "lineNumber": 116
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "size",
+          "lineNumber": 116
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "resize",
+          "lineNumber": 117
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "size",
+          "lineNumber": 117
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "size",
+          "lineNumber": 120
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "CHECK",
+          "lineNumber": 122
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "param_data",
+          "lineNumber": 122
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "NumElements",
+          "lineNumber": 123
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "param_data",
+          "lineNumber": 123
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "CHECK_EQ",
+          "lineNumber": 127
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "front",
+          "lineNumber": 129
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "params",
+          "lineNumber": 129
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "AllocateFlatBuffer",
+          "lineNumber": 130
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "grad_dtype",
+          "lineNumber": 130
+        },
+        {
+          "caller": "ParamAndGradBucketGroup",
+          "callee": "GetDevice",
+          "lineNumber": 130
+        },
+        {
+          "caller": "Reset",
+          "callee": "clear",
+          "lineNumber": 136
+        },
+        {
+          "caller": "Reset",
+          "callee": "clear",
+          "lineNumber": 137
+        },
+        {
+          "caller": "Reset",
+          "callee": "clear",
+          "lineNumber": 138
+        },
+        {
+          "caller": "Reset",
+          "callee": "clear",
+          "lineNumber": 139
+        },
+        {
+          "caller": "Reset",
+          "callee": "std::fill",
+          "lineNumber": 145
+        },
+        {
+          "caller": "Reset",
+          "callee": "begin",
+          "lineNumber": 145
+        },
+        {
+          "caller": "Reset",
+          "callee": "end",
+          "lineNumber": 145
+        },
+        {
+          "caller": "RegisterGradReady",
+          "callee": "LOG",
+          "lineNumber": 151
+        },
+        {
+          "caller": "RegisterGradReady",
+          "callee": "find",
+          "lineNumber": 160
+        },
+        {
+          "caller": "RegisterGradReady",
+          "callee": "get",
+          "lineNumber": 160
+        },
+        {
+          "caller": "RegisterGradReady",
+          "callee": "end",
+          "lineNumber": 160
+        },
+        {
+          "caller": "RegisterGradReady",
+          "callee": "insert",
+          "lineNumber": 164
+        },
+        {
+          "caller": "RegisterGradReady",
+          "callee": "get",
+          "lineNumber": 164
+        },
+        {
+          "caller": "RegisterGradReady",
+          "callee": "size",
+          "lineNumber": 171
+        },
+        {
+          "caller": "RegisterGradReady",
+          "callee": "size",
+          "lineNumber": 171
+        },
+        {
+          "caller": "RegisterGradReady",
+          "callee": "StartGradSync",
+          "lineNumber": 173
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "LOG",
+          "lineNumber": 182
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "find",
+          "lineNumber": 189
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "get",
+          "lineNumber": 189
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "end",
+          "lineNumber": 190
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "GetTensorLocInBucket",
+          "lineNumber": 197
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "CHECK",
+          "lineNumber": 203
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "param_data",
+          "lineNumber": 203
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "NumElements",
+          "lineNumber": 204
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "param_data",
+          "lineNumber": 204
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "AllocateFlatBuffer",
+          "lineNumber": 209
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "grad_dtype",
+          "lineNumber": 209
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "GetDevice",
+          "lineNumber": 209
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "Fill",
+          "lineNumber": 210
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "at",
+          "lineNumber": 213
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "grad_dtype",
+          "lineNumber": 213
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 215
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "Dims",
+          "lineNumber": 215
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "CopyFrom",
+          "lineNumber": 218
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "GetDevice",
+          "lineNumber": 220
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "GetKernel",
+          "lineNumber": 221
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 221
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "type",
+          "lineNumber": 221
+        },
+        {
+          "caller": "AccumulateParamGrad",
+          "callee": "Call<void>",
+          "lineNumber": 222
+        },
+        {
+          "caller": "GetLocalGradShardBuffer",
+          "callee": "LOG",
+          "lineNumber": 228
+        },
+        {
+          "caller": "GetLocalGradShardBuffer",
+          "callee": "size",
+          "lineNumber": 231
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "LOG",
+          "lineNumber": 239
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "empty",
+          "lineNumber": 246
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "size",
+          "lineNumber": 256
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "gradient_scaling_factor",
+          "lineNumber": 264
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "GetKernel",
+          "lineNumber": 265
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 265
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "type",
+          "lineNumber": 265
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "GetDevice",
+          "lineNumber": 265
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "Call<void>",
+          "lineNumber": 266
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "gradient_scaling_factor",
+          "lineNumber": 266
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "CHECK",
+          "lineNumber": 268
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "push_back",
+          "lineNumber": 270
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "ReduceScatter",
+          "lineNumber": 271
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "push_back",
+          "lineNumber": 272
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "gradient_scaling_factor",
+          "lineNumber": 276
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "ScaleGradients",
+          "lineNumber": 277
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "gradient_scaling_factor",
+          "lineNumber": 277
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "grad_data",
+          "lineNumber": 280
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "empty",
+          "lineNumber": 286
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "ShardBuffer",
+          "lineNumber": 287
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "push_back",
+          "lineNumber": 290
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "ReduceScatter",
+          "lineNumber": 291
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "push_back",
+          "lineNumber": 294
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "AllReduce",
+          "lineNumber": 294
+        },
+        {
+          "caller": "StartGradSync",
+          "callee": "clear",
+          "lineNumber": 300
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "StartGradSync",
+          "lineNumber": 305
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "clear",
+          "lineNumber": 310
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "clear",
+          "lineNumber": 311
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "empty",
+          "lineNumber": 316
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "clear",
+          "lineNumber": 317
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "CHECK_EQ",
+          "lineNumber": 323
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "size",
+          "lineNumber": 323
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "size",
+          "lineNumber": 323
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "size",
+          "lineNumber": 325
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "WaitNonBlocking",
+          "lineNumber": 327
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "reset",
+          "lineNumber": 329
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "clear",
+          "lineNumber": 331
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "clear",
+          "lineNumber": 332
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "WaitNonBlocking",
+          "lineNumber": 337
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "clear",
+          "lineNumber": 338
+        },
+        {
+          "caller": "FinishGradSync",
+          "callee": "clear",
+          "lineNumber": 339
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "CHECK",
+          "lineNumber": 344
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "LOG",
+          "lineNumber": 347
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "WaitNonBlocking",
+          "lineNumber": 353
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "clear",
+          "lineNumber": 354
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "CHECK",
+          "lineNumber": 357
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "empty",
+          "lineNumber": 357
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "size",
+          "lineNumber": 362
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "param_data",
+          "lineNumber": 364
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "empty",
+          "lineNumber": 369
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "ShardBuffer",
+          "lineNumber": 370
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "push_back",
+          "lineNumber": 373
+        },
+        {
+          "caller": "StartParamSync",
+          "callee": "AllGather",
+          "lineNumber": 373
+        },
+        {
+          "caller": "FinishParamSync",
+          "callee": "StartParamSync",
+          "lineNumber": 385
+        },
+        {
+          "caller": "FinishParamSync",
+          "callee": "empty",
+          "lineNumber": 388
+        },
+        {
+          "caller": "FinishParamSync",
+          "callee": "WaitNonBlocking",
+          "lineNumber": 389
+        },
+        {
+          "caller": "FinishParamSync",
+          "callee": "clear",
+          "lineNumber": 390
+        },
+        {
+          "caller": "FinishParamSync",
+          "callee": "LOG",
+          "lineNumber": 395
+        },
+        {
+          "caller": "FinishParamSync",
+          "callee": "StartParamSync",
+          "lineNumber": 400
+        },
+        {
+          "caller": "ParamAndGradBuffer",
+          "callee": "std::move",
+          "lineNumber": 413
+        },
+        {
+          "caller": "ParamAndGradBuffer",
+          "callee": "std::move",
+          "lineNumber": 413
+        },
+        {
+          "caller": "ParamAndGradBuffer",
+          "callee": "global::GetDataParallelSize",
+          "lineNumber": 415
+        },
+        {
+          "caller": "ParamAndGradBuffer",
+          "callee": "clear",
+          "lineNumber": 418
+        },
+        {
+          "caller": "ParamAndGradBuffer",
+          "callee": "resize",
+          "lineNumber": 419
+        },
+        {
+          "caller": "ParamAndGradBuffer",
+          "callee": "size",
+          "lineNumber": 419
+        },
+        {
+          "caller": "ParamAndGradBuffer",
+          "callee": "BuildBuckets",
+          "lineNumber": 421
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "PadTo",
+          "lineNumber": 432
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "std::lcm",
+          "lineNumber": 442
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "std::lcm",
+          "lineNumber": 446
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 446
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "PadTo",
+          "lineNumber": 448
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "push_back",
+          "lineNumber": 464
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "PadBucketEndIfNeeded",
+          "lineNumber": 467
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "push_back",
+          "lineNumber": 468
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "clear",
+          "lineNumber": 472
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "rbegin",
+          "lineNumber": 478
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "rend",
+          "lineNumber": 478
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "PadParamStartIfNeeded",
+          "lineNumber": 480
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "NumElements",
+          "lineNumber": 485
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "get",
+          "lineNumber": 486
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "push_back",
+          "lineNumber": 487
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "UpdateBucketMetadata",
+          "lineNumber": 492
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "empty",
+          "lineNumber": 500
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "UpdateBucketMetadata",
+          "lineNumber": 501
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "std::accumulate",
+          "lineNumber": 507
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "begin",
+          "lineNumber": 507
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "end",
+          "lineNumber": 507
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 508
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "std::plus<size_t>",
+          "lineNumber": 508
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "CHECK",
+          "lineNumber": 510
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "CHECK_EQ",
+          "lineNumber": 513
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "CHECK_EQ",
+          "lineNumber": 515
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "GetDevice",
+          "lineNumber": 519
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "front",
+          "lineNumber": 519
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "AllocateFlatBuffer",
+          "lineNumber": 521
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "reset",
+          "lineNumber": 524
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "reset",
+          "lineNumber": 527
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "AllocateFlatBuffer",
+          "lineNumber": 529
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "LOG",
+          "lineNumber": 532
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "clear",
+          "lineNumber": 535
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "CHECK_EQ",
+          "lineNumber": 544
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "CHECK_EQ",
+          "lineNumber": 545
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "CHECK_EQ",
+          "lineNumber": 546
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "at",
+          "lineNumber": 546
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "CHECK_EQ",
+          "lineNumber": 547
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "at",
+          "lineNumber": 547
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "GetBufferView",
+          "lineNumber": 552
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 553
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "GetBufferView",
+          "lineNumber": 557
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 558
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "std::make_shared<ParamAndGradBucket>",
+          "lineNumber": 563
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "CHECK",
+          "lineNumber": 568
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "find",
+          "lineNumber": 568
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "get",
+          "lineNumber": 568
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "end",
+          "lineNumber": 568
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "get",
+          "lineNumber": 570
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "std::move",
+          "lineNumber": 573
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "size",
+          "lineNumber": 576
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "rbegin",
+          "lineNumber": 578
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "rend",
+          "lineNumber": 578
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "std::tie",
+          "lineNumber": 580
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "at",
+          "lineNumber": 580
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "get",
+          "lineNumber": 580
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "SetData",
+          "lineNumber": 585
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "at",
+          "lineNumber": 585
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "Dtype",
+          "lineNumber": 585
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "GetBufferView",
+          "lineNumber": 590
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "Dims",
+          "lineNumber": 590
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "set_grad",
+          "lineNumber": 591
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "at",
+          "lineNumber": 598
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "CHECK_EQ",
+          "lineNumber": 599
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "push_back",
+          "lineNumber": 602
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "NewBucket",
+          "lineNumber": 602
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "clear",
+          "lineNumber": 606
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "CHECK_EQ",
+          "lineNumber": 608
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "size",
+          "lineNumber": 608
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "CHECK_EQ",
+          "lineNumber": 609
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "push_back",
+          "lineNumber": 612
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "empty",
+          "lineNumber": 616
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "at",
+          "lineNumber": 617
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "CHECK_EQ",
+          "lineNumber": 618
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "push_back",
+          "lineNumber": 621
+        },
+        {
+          "caller": "BuildBuckets",
+          "callee": "NewBucket",
+          "lineNumber": 621
+        },
+        {
+          "caller": "ScaleGradients",
+          "callee": "GetKernel",
+          "lineNumber": 631
+        },
+        {
+          "caller": "ScaleGradients",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 631
+        },
+        {
+          "caller": "ScaleGradients",
+          "callee": "type",
+          "lineNumber": 631
+        },
+        {
+          "caller": "ScaleGradients",
+          "callee": "GetDevice",
+          "lineNumber": 631
+        },
+        {
+          "caller": "ScaleGradients",
+          "callee": "Call<void>",
+          "lineNumber": 632
+        },
+        {
+          "caller": "Reset",
+          "callee": "Fill",
+          "lineNumber": 640
+        },
+        {
+          "caller": "RebindGradViews",
+          "callee": "CHECK_EQ",
+          "lineNumber": 656
+        },
+        {
+          "caller": "RebindGradViews",
+          "callee": "size",
+          "lineNumber": 656
+        },
+        {
+          "caller": "RebindGradViews",
+          "callee": "size",
+          "lineNumber": 656
+        },
+        {
+          "caller": "RebindGradViews",
+          "callee": "size",
+          "lineNumber": 657
+        },
+        {
+          "caller": "RebindGradViews",
+          "callee": "set_grad",
+          "lineNumber": 659
+        },
+        {
+          "caller": "RebindGradViews",
+          "callee": "MarkGradOverwriteOnNextAccum",
+          "lineNumber": 660
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "empty",
+          "lineNumber": 676
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "ddp_config",
+          "lineNumber": 683
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "front",
+          "lineNumber": 683
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "ddp_pg",
+          "lineNumber": 684
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "front",
+          "lineNumber": 684
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "ddp_world_size",
+          "lineNumber": 685
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "front",
+          "lineNumber": 685
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "CHECK",
+          "lineNumber": 688
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "ddp_pg",
+          "lineNumber": 688
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "CHECK",
+          "lineNumber": 689
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "ddp_world_size",
+          "lineNumber": 689
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "insert",
+          "lineNumber": 692
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "end",
+          "lineNumber": 692
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "begin",
+          "lineNumber": 692
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "buckets",
+          "lineNumber": 692
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "end",
+          "lineNumber": 692
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "buckets",
+          "lineNumber": 692
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "push_back",
+          "lineNumber": 695
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "std::make_shared<ParamAndGradBucketGroup>",
+          "lineNumber": 696
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "buckets",
+          "lineNumber": 702
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "push_back",
+          "lineNumber": 705
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "push_back",
+          "lineNumber": 706
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "std::make_shared<ParamAndGradBucketGroup>",
+          "lineNumber": 706
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "ddp_pg",
+          "lineNumber": 707
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "ddp_world_size",
+          "lineNumber": 707
+        },
+        {
+          "caller": "PartitionBuckets",
+          "callee": "ddp_config",
+          "lineNumber": 707
+        }
+      ],
+      "metrics": {
+        "importCount": 10,
+        "exportCount": 23,
+        "functionCount": 23,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/parallel/parallel_functional.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 144,
+      "nonEmptyLines": 128,
+      "functions": [
+        {
+          "name": "AllReduce",
+          "startLine": 16,
+          "endLine": 23,
+          "params": [
+            "tensor",
+            "reduce_op",
+            "pg",
+            "async_op"
+          ]
+        },
+        {
+          "name": "AllGather",
+          "startLine": 25,
+          "endLine": 32,
+          "params": [
+            "output",
+            "input",
+            "pg",
+            "async_op"
+          ]
+        },
+        {
+          "name": "ReduceScatter",
+          "startLine": 34,
+          "endLine": 41,
+          "params": [
+            "output",
+            "input",
+            "reduce_op",
+            "pg",
+            "async_op"
+          ]
+        },
+        {
+          "name": "Scatter",
+          "startLine": 43,
+          "endLine": 56,
+          "params": [
+            "input_tensors",
+            "devices",
+            "dim"
+          ]
+        },
+        {
+          "name": "Gather",
+          "startLine": 58,
+          "endLine": 63,
+          "params": [
+            "tensors",
+            "target_device",
+            "dim"
+          ]
+        },
+        {
+          "name": "BroadcastCoalescedReshape",
+          "startLine": 65,
+          "endLine": 79,
+          "params": [
+            "tensors",
+            "devices"
+          ]
+        },
+        {
+          "name": "Replicate",
+          "startLine": 81,
+          "endLine": 143,
+          "params": [
+            "network",
+            "devices"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "AllReduce",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "AllGather",
+          "line": 25,
+          "isDefault": false
+        },
+        {
+          "name": "ReduceScatter",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "Scatter",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "Gather",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "BroadcastCoalescedReshape",
+          "line": 65,
+          "isDefault": false
+        },
+        {
+          "name": "Replicate",
+          "line": 81,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "AllReduce",
+          "callee": "type",
+          "lineNumber": 18
+        },
+        {
+          "caller": "AllReduce",
+          "callee": "GetDevice",
+          "lineNumber": 18
+        },
+        {
+          "caller": "AllReduce",
+          "callee": "GetDefaultProcessGroup",
+          "lineNumber": 20
+        },
+        {
+          "caller": "AllReduce",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 20
+        },
+        {
+          "caller": "AllReduce",
+          "callee": "AllReduce",
+          "lineNumber": 22
+        },
+        {
+          "caller": "AllGather",
+          "callee": "type",
+          "lineNumber": 27
+        },
+        {
+          "caller": "AllGather",
+          "callee": "GetDevice",
+          "lineNumber": 27
+        },
+        {
+          "caller": "AllGather",
+          "callee": "GetDefaultProcessGroup",
+          "lineNumber": 29
+        },
+        {
+          "caller": "AllGather",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 29
+        },
+        {
+          "caller": "AllGather",
+          "callee": "AllGather",
+          "lineNumber": 31
+        },
+        {
+          "caller": "ReduceScatter",
+          "callee": "type",
+          "lineNumber": 36
+        },
+        {
+          "caller": "ReduceScatter",
+          "callee": "GetDevice",
+          "lineNumber": 36
+        },
+        {
+          "caller": "ReduceScatter",
+          "callee": "GetDefaultProcessGroup",
+          "lineNumber": 38
+        },
+        {
+          "caller": "ReduceScatter",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 38
+        },
+        {
+          "caller": "ReduceScatter",
+          "callee": "ReduceScatter",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Scatter",
+          "callee": "emplace_back",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Scatter",
+          "callee": "Apply",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Scatter",
+          "callee": "std::make_shared<autograd::comm::Scatter>",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Scatter",
+          "callee": "resize",
+          "lineNumber": 50
+        },
+        {
+          "caller": "Scatter",
+          "callee": "size",
+          "lineNumber": 50
+        },
+        {
+          "caller": "Scatter",
+          "callee": "size",
+          "lineNumber": 51
+        },
+        {
+          "caller": "Scatter",
+          "callee": "resize",
+          "lineNumber": 52
+        },
+        {
+          "caller": "Scatter",
+          "callee": "size",
+          "lineNumber": 52
+        },
+        {
+          "caller": "Scatter",
+          "callee": "size",
+          "lineNumber": 53
+        },
+        {
+          "caller": "Gather",
+          "callee": "push_back",
+          "lineNumber": 61
+        },
+        {
+          "caller": "Gather",
+          "callee": "Apply",
+          "lineNumber": 62
+        },
+        {
+          "caller": "Gather",
+          "callee": "std::make_shared<autograd::comm::Gather>",
+          "lineNumber": 62
+        },
+        {
+          "caller": "BroadcastCoalescedReshape",
+          "callee": "empty",
+          "lineNumber": 67
+        },
+        {
+          "caller": "BroadcastCoalescedReshape",
+          "callee": "Apply",
+          "lineNumber": 70
+        },
+        {
+          "caller": "BroadcastCoalescedReshape",
+          "callee": "std::make_shared<autograd::comm::Broadcast>",
+          "lineNumber": 70
+        },
+        {
+          "caller": "BroadcastCoalescedReshape",
+          "callee": "size",
+          "lineNumber": 71
+        },
+        {
+          "caller": "BroadcastCoalescedReshape",
+          "callee": "size",
+          "lineNumber": 72
+        },
+        {
+          "caller": "BroadcastCoalescedReshape",
+          "callee": "resize",
+          "lineNumber": 73
+        },
+        {
+          "caller": "BroadcastCoalescedReshape",
+          "callee": "size",
+          "lineNumber": 73
+        },
+        {
+          "caller": "BroadcastCoalescedReshape",
+          "callee": "size",
+          "lineNumber": 74
+        },
+        {
+          "caller": "BroadcastCoalescedReshape",
+          "callee": "size",
+          "lineNumber": 75
+        },
+        {
+          "caller": "Replicate",
+          "callee": "size",
+          "lineNumber": 83
+        },
+        {
+          "caller": "Replicate",
+          "callee": "Parameters",
+          "lineNumber": 86
+        },
+        {
+          "caller": "Replicate",
+          "callee": "size",
+          "lineNumber": 88
+        },
+        {
+          "caller": "Replicate",
+          "callee": "get",
+          "lineNumber": 88
+        },
+        {
+          "caller": "Replicate",
+          "callee": "BroadcastCoalescedReshape",
+          "lineNumber": 89
+        },
+        {
+          "caller": "Replicate",
+          "callee": "RequiresGrad",
+          "lineNumber": 92
+        },
+        {
+          "caller": "Replicate",
+          "callee": "set_is_leaf",
+          "lineNumber": 94
+        },
+        {
+          "caller": "Replicate",
+          "callee": "Buffers",
+          "lineNumber": 98
+        },
+        {
+          "caller": "Replicate",
+          "callee": "size",
+          "lineNumber": 100
+        },
+        {
+          "caller": "Replicate",
+          "callee": "get",
+          "lineNumber": 100
+        },
+        {
+          "caller": "Replicate",
+          "callee": "BroadcastCoalescedReshape",
+          "lineNumber": 101
+        },
+        {
+          "caller": "Replicate",
+          "callee": "modules",
+          "lineNumber": 103
+        },
+        {
+          "caller": "Replicate",
+          "callee": "size",
+          "lineNumber": 107
+        },
+        {
+          "caller": "Replicate",
+          "callee": "get",
+          "lineNumber": 109
+        },
+        {
+          "caller": "Replicate",
+          "callee": "push_back",
+          "lineNumber": 111
+        },
+        {
+          "caller": "Replicate",
+          "callee": "ReplicateForDataParallel",
+          "lineNumber": 111
+        },
+        {
+          "caller": "Replicate",
+          "callee": "size",
+          "lineNumber": 115
+        },
+        {
+          "caller": "Replicate",
+          "callee": "get",
+          "lineNumber": 118
+        },
+        {
+          "caller": "Replicate",
+          "callee": "get",
+          "lineNumber": 125
+        },
+        {
+          "caller": "Replicate",
+          "callee": "get",
+          "lineNumber": 132
+        },
+        {
+          "caller": "Replicate",
+          "callee": "push_back",
+          "lineNumber": 141
+        },
+        {
+          "caller": "Replicate",
+          "callee": "std::move",
+          "lineNumber": 141
+        }
+      ],
+      "metrics": {
+        "importCount": 7,
+        "exportCount": 7,
+        "functionCount": 7,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/parallel/pp/send_recv.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 124,
+      "nonEmptyLines": 93,
+      "functions": [
+        {
+          "name": "ISend",
+          "startLine": 21,
+          "endLine": 23,
+          "params": [
+            "target_device",
+            "cur_rank",
+            "peer_rank",
+            "shape"
+          ]
+        },
+        {
+          "name": "IRecv",
+          "startLine": 41,
+          "endLine": 42,
+          "params": [
+            "src_device",
+            "cur_rank",
+            "peer_rank"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 58,
+          "endLine": 68,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 70,
+          "endLine": 84,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 86,
+          "endLine": 92,
+          "params": [
+            "recv_tensors"
+          ]
+        },
+        {
+          "name": "SetupContext",
+          "startLine": 94,
+          "endLine": 100,
+          "params": [
+            "input_tensors",
+            "output_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 102,
+          "endLine": 109,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "ISend",
+          "startLine": 112,
+          "endLine": 117,
+          "params": [
+            "input_tensors",
+            "target_device",
+            "cur_rank",
+            "peer_rank",
+            "shape"
+          ]
+        },
+        {
+          "name": "IRecv",
+          "startLine": 119,
+          "endLine": 123,
+          "params": [
+            "outputs",
+            "src_device",
+            "cur_rank",
+            "peer_rank"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "ISend",
+          "startLine": 17,
+          "endLine": 35,
+          "methods": [
+            "ISend",
+            "Forward",
+            "Backward"
+          ],
+          "properties": [
+            "kType",
+            "target_device_",
+            "input_device_",
+            "cur_rank_",
+            "peer_rank_",
+            "shapes_"
+          ]
+        },
+        {
+          "name": "IRecv",
+          "startLine": 37,
+          "endLine": 56,
+          "methods": [
+            "IRecv",
+            "Forward",
+            "SetupContext",
+            "Backward"
+          ],
+          "properties": [
+            "kType",
+            "src_device_",
+            "cur_device_",
+            "cur_rank_",
+            "peer_rank_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "ISend",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 25,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 27,
+          "isDefault": false
+        },
+        {
+          "name": "ISend",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "IRecv",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 44,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 49,
+          "isDefault": false
+        },
+        {
+          "name": "IRecv",
+          "line": 37,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 70,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 94,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 102,
+          "isDefault": false
+        },
+        {
+          "name": "ISend",
+          "line": 112,
+          "isDefault": false
+        },
+        {
+          "name": "IRecv",
+          "line": 119,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 60
+        },
+        {
+          "caller": "Forward",
+          "callee": "Get",
+          "lineNumber": 62
+        },
+        {
+          "caller": "Forward",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 62
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 62
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetPipelineParallelProcessGroupName",
+          "lineNumber": 63
+        },
+        {
+          "caller": "Forward",
+          "callee": "GlobalRank",
+          "lineNumber": 63
+        },
+        {
+          "caller": "Forward",
+          "callee": "Rank",
+          "lineNumber": 63
+        },
+        {
+          "caller": "Forward",
+          "callee": "Send",
+          "lineNumber": 65
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 72
+        },
+        {
+          "caller": "Backward",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 74
+        },
+        {
+          "caller": "Backward",
+          "callee": "push_back",
+          "lineNumber": 75
+        },
+        {
+          "caller": "Backward",
+          "callee": "Get",
+          "lineNumber": 78
+        },
+        {
+          "caller": "Backward",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 78
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 78
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetPipelineParallelProcessGroupName",
+          "lineNumber": 79
+        },
+        {
+          "caller": "Backward",
+          "callee": "GlobalRank",
+          "lineNumber": 79
+        },
+        {
+          "caller": "Backward",
+          "callee": "Rank",
+          "lineNumber": 79
+        },
+        {
+          "caller": "Backward",
+          "callee": "Recv",
+          "lineNumber": 81
+        },
+        {
+          "caller": "Forward",
+          "callee": "Get",
+          "lineNumber": 87
+        },
+        {
+          "caller": "Forward",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 87
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 87
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetPipelineParallelProcessGroupName",
+          "lineNumber": 88
+        },
+        {
+          "caller": "Forward",
+          "callee": "GlobalRank",
+          "lineNumber": 88
+        },
+        {
+          "caller": "Forward",
+          "callee": "Rank",
+          "lineNumber": 88
+        },
+        {
+          "caller": "Forward",
+          "callee": "Recv",
+          "lineNumber": 89
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "empty",
+          "lineNumber": 96
+        },
+        {
+          "caller": "SetupContext",
+          "callee": "GetDevice",
+          "lineNumber": 99
+        },
+        {
+          "caller": "Backward",
+          "callee": "Get",
+          "lineNumber": 103
+        },
+        {
+          "caller": "Backward",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 103
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 103
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetPipelineParallelProcessGroupName",
+          "lineNumber": 104
+        },
+        {
+          "caller": "Backward",
+          "callee": "GlobalRank",
+          "lineNumber": 104
+        },
+        {
+          "caller": "Backward",
+          "callee": "Rank",
+          "lineNumber": 104
+        },
+        {
+          "caller": "Backward",
+          "callee": "Send",
+          "lineNumber": 106
+        },
+        {
+          "caller": "ISend",
+          "callee": "std::make_shared<functions::ISend>",
+          "lineNumber": 115
+        },
+        {
+          "caller": "ISend",
+          "callee": "Apply",
+          "lineNumber": 116
+        },
+        {
+          "caller": "IRecv",
+          "callee": "std::make_shared<functions::IRecv>",
+          "lineNumber": 121
+        },
+        {
+          "caller": "IRecv",
+          "callee": "Apply",
+          "lineNumber": 122
+        }
+      ],
+      "metrics": {
+        "importCount": 6,
+        "exportCount": 16,
+        "functionCount": 9,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "infini_train/src/nn/parallel/rank.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 22,
+      "nonEmptyLines": 15,
+      "functions": [
+        {
+          "name": "Rank",
+          "startLine": 5,
+          "endLine": 7,
+          "params": [
+            "global_process_rank",
+            "thread_rank",
+            "processes_per_node",
+            "threads_per_process"
+          ]
+        },
+        {
+          "name": "process_rank",
+          "startLine": 9,
+          "endLine": 9,
+          "params": []
+        },
+        {
+          "name": "thread_rank",
+          "startLine": 10,
+          "endLine": 10,
+          "params": []
+        },
+        {
+          "name": "process_size",
+          "startLine": 12,
+          "endLine": 12,
+          "params": []
+        },
+        {
+          "name": "thread_size",
+          "startLine": 13,
+          "endLine": 13,
+          "params": []
+        },
+        {
+          "name": "GlobalRank",
+          "startLine": 15,
+          "endLine": 15,
+          "params": []
+        },
+        {
+          "name": "IsParallel",
+          "startLine": 17,
+          "endLine": 17,
+          "params": []
+        },
+        {
+          "name": "IsMainRank",
+          "startLine": 19,
+          "endLine": 19,
+          "params": []
+        },
+        {
+          "name": "IsLastRank",
+          "startLine": 21,
+          "endLine": 21,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Rank",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "process_rank",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "thread_rank",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "process_size",
+          "line": 12,
+          "isDefault": false
+        },
+        {
+          "name": "thread_size",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "GlobalRank",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "IsParallel",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "IsMainRank",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "IsLastRank",
+          "line": 21,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "IsParallel",
+          "callee": "global::GetWorldSize",
+          "lineNumber": 17
+        },
+        {
+          "caller": "IsMainRank",
+          "callee": "GlobalRank",
+          "lineNumber": 19
+        },
+        {
+          "caller": "IsLastRank",
+          "callee": "GlobalRank",
+          "lineNumber": 21
+        },
+        {
+          "caller": "IsLastRank",
+          "callee": "global::GetWorldSize",
+          "lineNumber": 21
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 9,
+        "functionCount": 9,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/parallel/utils.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 82,
+      "nonEmptyLines": 64,
+      "functions": [
+        {
+          "name": "GetDataParallelProcessGroupName",
+          "startLine": 12,
+          "endLine": 14,
+          "params": [
+            "global_rank"
+          ]
+        },
+        {
+          "name": "GetTensorParallelProcessGroupName",
+          "startLine": 16,
+          "endLine": 18,
+          "params": [
+            "global_rank"
+          ]
+        },
+        {
+          "name": "GetPipelineParallelProcessGroupName",
+          "startLine": 20,
+          "endLine": 22,
+          "params": [
+            "global_rank"
+          ]
+        },
+        {
+          "name": "GetDataParallelGroupRanks",
+          "startLine": 24,
+          "endLine": 24,
+          "params": [
+            "global_rank"
+          ]
+        },
+        {
+          "name": "GetTensorParallelGroupRanks",
+          "startLine": 26,
+          "endLine": 26,
+          "params": [
+            "global_rank"
+          ]
+        },
+        {
+          "name": "GetPipelineParallelGroupRanks",
+          "startLine": 28,
+          "endLine": 30,
+          "params": [
+            "global_rank"
+          ]
+        },
+        {
+          "name": "GetModelParallelStatsProcessGroupName",
+          "startLine": 31,
+          "endLine": 35,
+          "params": [
+            "global_rank"
+          ]
+        },
+        {
+          "name": "GetModelParallelStatsGroupRanks",
+          "startLine": 37,
+          "endLine": 48,
+          "params": [
+            "global_rank"
+          ]
+        },
+        {
+          "name": "GatherTensorParallelShard",
+          "startLine": 51,
+          "endLine": 80,
+          "params": [
+            "tensor",
+            "dim"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "GetDataParallelProcessGroupName",
+          "line": 12,
+          "isDefault": false
+        },
+        {
+          "name": "GetTensorParallelProcessGroupName",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "GetPipelineParallelProcessGroupName",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "GetDataParallelGroupRanks",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "GetTensorParallelGroupRanks",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "GetPipelineParallelGroupRanks",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "GetModelParallelStatsProcessGroupName",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "GetModelParallelStatsGroupRanks",
+          "line": 37,
+          "isDefault": false
+        },
+        {
+          "name": "GatherTensorParallelShard",
+          "line": 51,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "GetDataParallelProcessGroupName",
+          "callee": "std::to_string",
+          "lineNumber": 13
+        },
+        {
+          "caller": "GetDataParallelProcessGroupName",
+          "callee": "global::GetGroupId",
+          "lineNumber": 13
+        },
+        {
+          "caller": "GetTensorParallelProcessGroupName",
+          "callee": "std::to_string",
+          "lineNumber": 17
+        },
+        {
+          "caller": "GetTensorParallelProcessGroupName",
+          "callee": "global::GetGroupId",
+          "lineNumber": 17
+        },
+        {
+          "caller": "GetPipelineParallelProcessGroupName",
+          "callee": "std::to_string",
+          "lineNumber": 21
+        },
+        {
+          "caller": "GetPipelineParallelProcessGroupName",
+          "callee": "global::GetGroupId",
+          "lineNumber": 21
+        },
+        {
+          "caller": "GetDataParallelGroupRanks",
+          "callee": "global::GetGroupRanks",
+          "lineNumber": 24
+        },
+        {
+          "caller": "GetTensorParallelGroupRanks",
+          "callee": "global::GetGroupRanks",
+          "lineNumber": 26
+        },
+        {
+          "caller": "GetPipelineParallelGroupRanks",
+          "callee": "global::GetGroupRanks",
+          "lineNumber": 29
+        },
+        {
+          "caller": "GetModelParallelStatsProcessGroupName",
+          "callee": "global::GetCoordOf",
+          "lineNumber": 33
+        },
+        {
+          "caller": "GetModelParallelStatsProcessGroupName",
+          "callee": "std::to_string",
+          "lineNumber": 34
+        },
+        {
+          "caller": "GetModelParallelStatsGroupRanks",
+          "callee": "global::GetCoordOf",
+          "lineNumber": 39
+        },
+        {
+          "caller": "GetModelParallelStatsGroupRanks",
+          "callee": "reserve",
+          "lineNumber": 41
+        },
+        {
+          "caller": "GetModelParallelStatsGroupRanks",
+          "callee": "global::GetTensorParallelSize",
+          "lineNumber": 41
+        },
+        {
+          "caller": "GetModelParallelStatsGroupRanks",
+          "callee": "global::GetPipelineParallelSize",
+          "lineNumber": 41
+        },
+        {
+          "caller": "GetModelParallelStatsGroupRanks",
+          "callee": "global::GetPipelineParallelSize",
+          "lineNumber": 42
+        },
+        {
+          "caller": "GetModelParallelStatsGroupRanks",
+          "callee": "global::GetTensorParallelSize",
+          "lineNumber": 43
+        },
+        {
+          "caller": "GetModelParallelStatsGroupRanks",
+          "callee": "push_back",
+          "lineNumber": 44
+        },
+        {
+          "caller": "GetModelParallelStatsGroupRanks",
+          "callee": "global::GetRankOf",
+          "lineNumber": 44
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "global::GetTensorParallelSize",
+          "lineNumber": 52
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "CHECK_GT",
+          "lineNumber": 53
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 59
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "size",
+          "lineNumber": 59
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "Dims",
+          "lineNumber": 59
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "CHECK_GE",
+          "lineNumber": 61
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "CHECK_LT",
+          "lineNumber": 62
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 62
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "size",
+          "lineNumber": 62
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "Dims",
+          "lineNumber": 62
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "GetDevice",
+          "lineNumber": 64
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "Get",
+          "lineNumber": 65
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 65
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "type",
+          "lineNumber": 65
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "GetTensorParallelProcessGroupName",
+          "lineNumber": 66
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "GlobalRank",
+          "lineNumber": 66
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "Rank",
+          "lineNumber": 66
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "Dims",
+          "lineNumber": 68
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 70
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "Dtype",
+          "lineNumber": 70
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "AllGather",
+          "lineNumber": 71
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "Split",
+          "lineNumber": 78
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "Dims",
+          "lineNumber": 78
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "Contiguous",
+          "lineNumber": 79
+        },
+        {
+          "caller": "GatherTensorParallelShard",
+          "callee": "nn::function::Concat",
+          "lineNumber": 79
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 9,
+        "functionCount": 9,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/optimizer.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 216,
+      "nonEmptyLines": 182,
+      "functions": [
+        {
+          "name": "Optimizer",
+          "startLine": 17,
+          "endLine": 18,
+          "params": [
+            "params",
+            "learning_rate"
+          ]
+        },
+        {
+          "name": "Optimizer",
+          "startLine": 20,
+          "endLine": 31,
+          "params": [
+            "named_params",
+            "learning_rate"
+          ]
+        },
+        {
+          "name": "ClipGradNorm_",
+          "startLine": 33,
+          "endLine": 78,
+          "params": [
+            "parameters",
+            "max_norm",
+            "norm_type",
+            "error_if_nonfinite",
+            "foreach"
+          ]
+        },
+        {
+          "name": "ZeroGrad",
+          "startLine": 80,
+          "endLine": 82,
+          "params": [
+            "set_to_none"
+          ]
+        },
+        {
+          "name": "set_learning_rate",
+          "startLine": 84,
+          "endLine": 84,
+          "params": [
+            "lr"
+          ]
+        },
+        {
+          "name": "learning_rate",
+          "startLine": 86,
+          "endLine": 86,
+          "params": []
+        },
+        {
+          "name": "initial_learning_rate",
+          "startLine": 88,
+          "endLine": 92,
+          "params": []
+        },
+        {
+          "name": "initial_lr_set",
+          "startLine": 94,
+          "endLine": 94,
+          "params": []
+        },
+        {
+          "name": "set_initial_learning_rate",
+          "startLine": 96,
+          "endLine": 100,
+          "params": [
+            "lr"
+          ]
+        },
+        {
+          "name": "SGD",
+          "startLine": 104,
+          "endLine": 104,
+          "params": [
+            "params",
+            "learning_rate"
+          ]
+        },
+        {
+          "name": "SGD",
+          "startLine": 106,
+          "endLine": 106,
+          "params": [
+            "named_params",
+            "learning_rate"
+          ]
+        },
+        {
+          "name": "Step",
+          "startLine": 108,
+          "endLine": 119,
+          "params": []
+        },
+        {
+          "name": "Create",
+          "startLine": 121,
+          "endLine": 125,
+          "params": [
+            "learning_rate"
+          ]
+        },
+        {
+          "name": "CreateNamed",
+          "startLine": 127,
+          "endLine": 131,
+          "params": [
+            "learning_rate"
+          ]
+        },
+        {
+          "name": "Adam",
+          "startLine": 133,
+          "endLine": 142,
+          "params": [
+            "params",
+            "learning_rate",
+            "beta1",
+            "beta2",
+            "eps"
+          ]
+        },
+        {
+          "name": "Adam",
+          "startLine": 144,
+          "endLine": 152,
+          "params": [
+            "named_params",
+            "learning_rate",
+            "beta1",
+            "beta2",
+            "eps"
+          ]
+        },
+        {
+          "name": "Step",
+          "startLine": 154,
+          "endLine": 172,
+          "params": []
+        },
+        {
+          "name": "Create",
+          "startLine": 174,
+          "endLine": 178,
+          "params": [
+            "learning_rate",
+            "beta1",
+            "beta2",
+            "eps"
+          ]
+        },
+        {
+          "name": "CreateNamed",
+          "startLine": 180,
+          "endLine": 184,
+          "params": [
+            "learning_rate",
+            "beta1",
+            "beta2",
+            "eps"
+          ]
+        },
+        {
+          "name": "StateDict",
+          "startLine": 186,
+          "endLine": 198,
+          "params": []
+        },
+        {
+          "name": "LoadStateDict",
+          "startLine": 200,
+          "endLine": 214,
+          "params": [
+            "state_dict"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Optimizer",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "Optimizer",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "ClipGradNorm_",
+          "line": 33,
+          "isDefault": false
+        },
+        {
+          "name": "ZeroGrad",
+          "line": 80,
+          "isDefault": false
+        },
+        {
+          "name": "set_learning_rate",
+          "line": 84,
+          "isDefault": false
+        },
+        {
+          "name": "learning_rate",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "initial_learning_rate",
+          "line": 88,
+          "isDefault": false
+        },
+        {
+          "name": "initial_lr_set",
+          "line": 94,
+          "isDefault": false
+        },
+        {
+          "name": "set_initial_learning_rate",
+          "line": 96,
+          "isDefault": false
+        },
+        {
+          "name": "SGD",
+          "line": 104,
+          "isDefault": false
+        },
+        {
+          "name": "SGD",
+          "line": 106,
+          "isDefault": false
+        },
+        {
+          "name": "Step",
+          "line": 108,
+          "isDefault": false
+        },
+        {
+          "name": "Create",
+          "line": 121,
+          "isDefault": false
+        },
+        {
+          "name": "CreateNamed",
+          "line": 127,
+          "isDefault": false
+        },
+        {
+          "name": "Adam",
+          "line": 133,
+          "isDefault": false
+        },
+        {
+          "name": "Adam",
+          "line": 144,
+          "isDefault": false
+        },
+        {
+          "name": "Step",
+          "line": 154,
+          "isDefault": false
+        },
+        {
+          "name": "Create",
+          "line": 174,
+          "isDefault": false
+        },
+        {
+          "name": "CreateNamed",
+          "line": 180,
+          "isDefault": false
+        },
+        {
+          "name": "StateDict",
+          "line": 186,
+          "isDefault": false
+        },
+        {
+          "name": "LoadStateDict",
+          "line": 200,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Optimizer",
+          "callee": "empty",
+          "lineNumber": 21
+        },
+        {
+          "caller": "Optimizer",
+          "callee": "reserve",
+          "lineNumber": 25
+        },
+        {
+          "caller": "Optimizer",
+          "callee": "size",
+          "lineNumber": 25
+        },
+        {
+          "caller": "Optimizer",
+          "callee": "reserve",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Optimizer",
+          "callee": "size",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Optimizer",
+          "callee": "push_back",
+          "lineNumber": 28
+        },
+        {
+          "caller": "Optimizer",
+          "callee": "push_back",
+          "lineNumber": 29
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "reserve",
+          "lineNumber": 37
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "size",
+          "lineNumber": 37
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "reserve",
+          "lineNumber": 40
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "size",
+          "lineNumber": 40
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "CHECK",
+          "lineNumber": 45
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "GetDevice",
+          "lineNumber": 47
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "insert",
+          "lineNumber": 50
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "get",
+          "lineNumber": 50
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "grad",
+          "lineNumber": 54
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "push_back",
+          "lineNumber": 58
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "push_back",
+          "lineNumber": 59
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "push_back",
+          "lineNumber": 61
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "std::move",
+          "lineNumber": 61
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "type",
+          "lineNumber": 65
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "nn::parallel::global::IsInitialized",
+          "lineNumber": 65
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "nn::parallel::global::GetWorldSize",
+          "lineNumber": 66
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "nn::parallel::global::GetDataParallelSize",
+          "lineNumber": 66
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "GlobalRank",
+          "lineNumber": 67
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "Rank",
+          "lineNumber": 67
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "nn::parallel::GetModelParallelStatsGroupRanks",
+          "lineNumber": 68
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "size",
+          "lineNumber": 69
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "nn::parallel::ProcessGroupFactory::Instance",
+          "lineNumber": 70
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "type",
+          "lineNumber": 70
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "GetOrCreate",
+          "lineNumber": 71
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "nn::parallel::GetModelParallelStatsProcessGroupName",
+          "lineNumber": 71
+        },
+        {
+          "caller": "ClipGradNorm_",
+          "callee": "gradient_clip::ClipGradNorm",
+          "lineNumber": 76
+        },
+        {
+          "caller": "ZeroGrad",
+          "callee": "ZeroGrad",
+          "lineNumber": 81
+        },
+        {
+          "caller": "initial_learning_rate",
+          "callee": "CHECK",
+          "lineNumber": 89
+        },
+        {
+          "caller": "set_initial_learning_rate",
+          "callee": "CHECK",
+          "lineNumber": 97
+        },
+        {
+          "caller": "Step",
+          "callee": "grad",
+          "lineNumber": 110
+        },
+        {
+          "caller": "Step",
+          "callee": "LOG",
+          "lineNumber": 111
+        },
+        {
+          "caller": "Step",
+          "callee": "GetDevice",
+          "lineNumber": 114
+        },
+        {
+          "caller": "Step",
+          "callee": "GetKernel",
+          "lineNumber": 116
+        },
+        {
+          "caller": "Step",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 116
+        },
+        {
+          "caller": "Step",
+          "callee": "type",
+          "lineNumber": 116
+        },
+        {
+          "caller": "Step",
+          "callee": "Call<void>",
+          "lineNumber": 117
+        },
+        {
+          "caller": "Step",
+          "callee": "grad",
+          "lineNumber": 117
+        },
+        {
+          "caller": "Create",
+          "callee": "std::make_shared<SGD>",
+          "lineNumber": 123
+        },
+        {
+          "caller": "CreateNamed",
+          "callee": "std::make_shared<SGD>",
+          "lineNumber": 129
+        },
+        {
+          "caller": "Adam",
+          "callee": "emplace_back",
+          "lineNumber": 137
+        },
+        {
+          "caller": "Adam",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 137
+        },
+        {
+          "caller": "Adam",
+          "callee": "Dims",
+          "lineNumber": 137
+        },
+        {
+          "caller": "Adam",
+          "callee": "Dtype",
+          "lineNumber": 137
+        },
+        {
+          "caller": "Adam",
+          "callee": "GetDevice",
+          "lineNumber": 137
+        },
+        {
+          "caller": "Adam",
+          "callee": "emplace_back",
+          "lineNumber": 138
+        },
+        {
+          "caller": "Adam",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 138
+        },
+        {
+          "caller": "Adam",
+          "callee": "Dims",
+          "lineNumber": 138
+        },
+        {
+          "caller": "Adam",
+          "callee": "Dtype",
+          "lineNumber": 138
+        },
+        {
+          "caller": "Adam",
+          "callee": "GetDevice",
+          "lineNumber": 138
+        },
+        {
+          "caller": "Adam",
+          "callee": "Fill",
+          "lineNumber": 139
+        },
+        {
+          "caller": "Adam",
+          "callee": "back",
+          "lineNumber": 139
+        },
+        {
+          "caller": "Adam",
+          "callee": "Fill",
+          "lineNumber": 140
+        },
+        {
+          "caller": "Adam",
+          "callee": "back",
+          "lineNumber": 140
+        },
+        {
+          "caller": "Adam",
+          "callee": "emplace_back",
+          "lineNumber": 147
+        },
+        {
+          "caller": "Adam",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 147
+        },
+        {
+          "caller": "Adam",
+          "callee": "Dims",
+          "lineNumber": 147
+        },
+        {
+          "caller": "Adam",
+          "callee": "Dtype",
+          "lineNumber": 147
+        },
+        {
+          "caller": "Adam",
+          "callee": "GetDevice",
+          "lineNumber": 147
+        },
+        {
+          "caller": "Adam",
+          "callee": "emplace_back",
+          "lineNumber": 148
+        },
+        {
+          "caller": "Adam",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 148
+        },
+        {
+          "caller": "Adam",
+          "callee": "Dims",
+          "lineNumber": 148
+        },
+        {
+          "caller": "Adam",
+          "callee": "Dtype",
+          "lineNumber": 148
+        },
+        {
+          "caller": "Adam",
+          "callee": "GetDevice",
+          "lineNumber": 148
+        },
+        {
+          "caller": "Adam",
+          "callee": "Fill",
+          "lineNumber": 149
+        },
+        {
+          "caller": "Adam",
+          "callee": "back",
+          "lineNumber": 149
+        },
+        {
+          "caller": "Adam",
+          "callee": "Fill",
+          "lineNumber": 150
+        },
+        {
+          "caller": "Adam",
+          "callee": "back",
+          "lineNumber": 150
+        },
+        {
+          "caller": "Step",
+          "callee": "size",
+          "lineNumber": 157
+        },
+        {
+          "caller": "Step",
+          "callee": "grad",
+          "lineNumber": 159
+        },
+        {
+          "caller": "Step",
+          "callee": "LOG",
+          "lineNumber": 161
+        },
+        {
+          "caller": "Step",
+          "callee": "GetDevice",
+          "lineNumber": 167
+        },
+        {
+          "caller": "Step",
+          "callee": "GetKernel",
+          "lineNumber": 169
+        },
+        {
+          "caller": "Step",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 169
+        },
+        {
+          "caller": "Step",
+          "callee": "type",
+          "lineNumber": 169
+        },
+        {
+          "caller": "Step",
+          "callee": "Call<void>",
+          "lineNumber": 170
+        },
+        {
+          "caller": "Create",
+          "callee": "std::make_shared<Adam>",
+          "lineNumber": 176
+        },
+        {
+          "caller": "CreateNamed",
+          "callee": "std::make_shared<Adam>",
+          "lineNumber": 182
+        },
+        {
+          "caller": "StateDict",
+          "callee": "size",
+          "lineNumber": 188
+        },
+        {
+          "caller": "StateDict",
+          "callee": "empty",
+          "lineNumber": 189
+        },
+        {
+          "caller": "StateDict",
+          "callee": "std::to_string",
+          "lineNumber": 189
+        },
+        {
+          "caller": "StateDict",
+          "callee": "emplace",
+          "lineNumber": 190
+        },
+        {
+          "caller": "StateDict",
+          "callee": "emplace",
+          "lineNumber": 191
+        },
+        {
+          "caller": "StateDict",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 194
+        },
+        {
+          "caller": "StateDict",
+          "callee": "Device",
+          "lineNumber": 194
+        },
+        {
+          "caller": "StateDict",
+          "callee": "static_cast<int64_t *>",
+          "lineNumber": 195
+        },
+        {
+          "caller": "StateDict",
+          "callee": "DataPtr",
+          "lineNumber": 195
+        },
+        {
+          "caller": "StateDict",
+          "callee": "emplace",
+          "lineNumber": 196
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "size",
+          "lineNumber": 201
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "empty",
+          "lineNumber": 202
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "std::to_string",
+          "lineNumber": 202
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "CHECK",
+          "lineNumber": 205
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "contains",
+          "lineNumber": 205
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "CHECK",
+          "lineNumber": 206
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "contains",
+          "lineNumber": 206
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "CopyFrom",
+          "lineNumber": 207
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "at",
+          "lineNumber": 207
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "CopyFrom",
+          "lineNumber": 208
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "at",
+          "lineNumber": 208
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "CHECK",
+          "lineNumber": 211
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "contains",
+          "lineNumber": 211
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "To",
+          "lineNumber": 212
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "at",
+          "lineNumber": 212
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "Device",
+          "lineNumber": 212
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "static_cast<const int64_t *>",
+          "lineNumber": 213
+        },
+        {
+          "caller": "LoadStateDict",
+          "callee": "DataPtr",
+          "lineNumber": 213
+        }
+      ],
+      "metrics": {
+        "importCount": 9,
+        "exportCount": 21,
+        "functionCount": 21,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "tests/distributed/test_rank.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 16,
+      "nonEmptyLines": 11,
+      "functions": [
+        {
+          "name": "TEST",
+          "startLine": 9,
+          "endLine": 13,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "TEST",
+          "line": 9,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "TEST",
+          "callee": "global::GetGlobalProcRank",
+          "lineNumber": 10
+        },
+        {
+          "caller": "TEST",
+          "callee": "global::GetNprocPerNode",
+          "lineNumber": 10
+        },
+        {
+          "caller": "TEST",
+          "callee": "global::GetNthreadPerProc",
+          "lineNumber": 10
+        },
+        {
+          "caller": "TEST",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 12
+        },
+        {
+          "caller": "TEST",
+          "callee": "IsParallel",
+          "lineNumber": 12
+        },
+        {
+          "caller": "TEST",
+          "callee": "global::GetWorldSize",
+          "lineNumber": 12
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "tests/optimizer/test_optimizer_parameter_names.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 96,
+      "nonEmptyLines": 76,
+      "functions": [
+        {
+          "name": "TEST_P",
+          "startLine": 23,
+          "endLine": 39,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 41,
+          "endLine": 53,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 55,
+          "endLine": 85,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 87,
+          "endLine": 94,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "OptimizerParameterNamesTest",
+          "startLine": 21,
+          "endLine": 21,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "OptimizerParameterNamesTest",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 23,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 55,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 87,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 24
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 24
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 25
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 25
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "optimizers::Adam::CreateNamed(0.001)",
+          "lineNumber": 27
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "optimizers::Adam::CreateNamed",
+          "lineNumber": 27
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "StateDict",
+          "lineNumber": 29
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 30
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 30
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 31
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 31
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 32
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 32
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 33
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 33
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 34
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 34
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "optimizers::Adam::CreateNamed(0.001)",
+          "lineNumber": 36
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "optimizers::Adam::CreateNamed",
+          "lineNumber": 36
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "LoadStateDict",
+          "lineNumber": 37
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 38
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 38
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "StateDict",
+          "lineNumber": 38
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 38
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 42
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 42
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 43
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 43
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "optimizers::Adam::CreateNamed(0.001)",
+          "lineNumber": 46
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "optimizers::Adam::CreateNamed",
+          "lineNumber": 46
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "StateDict",
+          "lineNumber": 47
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 49
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 49
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 50
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 50
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 51
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 51
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 52
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 52
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ONLY_CUDA",
+          "lineNumber": 56
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "REQUIRE_MIN_DEVICES",
+          "lineNumber": 57
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "nn::parallel::global::GetDataParallelSize",
+          "lineNumber": 58
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GTEST_SKIP",
+          "lineNumber": 59
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "nn::parallel::ProcessGroupFactory::Instance",
+          "lineNumber": 63
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetOrCreate",
+          "lineNumber": 64
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "nn::parallel::GetDataParallelProcessGroupName",
+          "lineNumber": 64
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GlobalRank",
+          "lineNumber": 64
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "nn::parallel::GetDataParallelGroupRanks",
+          "lineNumber": 65
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GlobalRank",
+          "lineNumber": 65
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::Linear>",
+          "lineNumber": 67
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 67
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "NamedParameters",
+          "lineNumber": 68
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::parallel::DistributedDataParallel>",
+          "lineNumber": 74
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "optimizers::Adam::CreateNamed",
+          "lineNumber": 76
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "StateDict",
+          "lineNumber": 79
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 81
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 81
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 82
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 82
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FALSE",
+          "lineNumber": 83
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 83
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FALSE",
+          "lineNumber": 84
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 84
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 88
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 88
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<optimizers::Adam>",
+          "lineNumber": 89
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "StateDict",
+          "lineNumber": 91
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 92
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 92
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_TRUE",
+          "lineNumber": 93
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 93
+        }
+      ],
+      "metrics": {
+        "importCount": 11,
+        "exportCount": 5,
+        "functionCount": 4,
+        "classCount": 1
+      }
+    }
+  ]
+}

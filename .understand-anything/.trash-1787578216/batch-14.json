@@ -1,0 +1,26 @@
+{
+  "nodes": [
+    {
+      "id": "pipeline:.github/workflows/format-check.yaml",
+      "type": "pipeline",
+      "name": "format-check.yaml",
+      "filePath": ".github/workflows/format-check.yaml",
+      "summary": "GitHub Actions 格式检查流水线，在推送或 Pull Request 时安装 Black 并校验项目 Python 脚本格式。",
+      "tags": [
+        "ci-cd",
+        "自动化检查",
+        "infinitrain-运行时"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "pipeline:.github/workflows/format-check.yaml",
+      "target": "file:scripts/format.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ]
+}

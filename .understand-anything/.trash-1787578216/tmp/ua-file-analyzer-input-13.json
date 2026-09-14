@@ -1,0 +1,32 @@
+{
+  "projectRoot": "/home/fabu/桌面/InfiniTrain",
+  "batchFiles": [
+    {
+      "path": "scripts/compare_loss.py",
+      "language": "python",
+      "sizeLines": 131,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/compare_tps.py",
+      "language": "python",
+      "sizeLines": 148,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/compare_utils.py",
+      "language": "python",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "scripts/compare_loss.py": [
+      "scripts/compare_utils.py"
+    ],
+    "scripts/compare_tps.py": [
+      "scripts/compare_utils.py"
+    ],
+    "scripts/compare_utils.py": []
+  }
+}

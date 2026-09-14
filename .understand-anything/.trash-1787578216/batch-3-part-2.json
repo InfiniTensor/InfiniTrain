@@ -1,0 +1,609 @@
+{
+  "nodes": [
+    {
+      "id": "file:infini_train/include/autograd/function.h",
+      "type": "file",
+      "name": "function.h",
+      "filePath": "infini_train/include/autograd/function.h",
+      "fileCategory": "code",
+      "summary": "自动微分函数基类，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:infini_train/include/autograd/function.h:FunctionCtx",
+      "type": "class",
+      "name": "FunctionCtx",
+      "filePath": "infini_train/include/autograd/function.h",
+      "lineRange": [
+        20,
+        76
+      ],
+      "summary": "自动微分中的 FunctionCtx 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:infini_train/include/autograd/function.h:Function",
+      "type": "class",
+      "name": "Function",
+      "filePath": "infini_train/include/autograd/function.h",
+      "lineRange": [
+        78,
+        125
+      ],
+      "summary": "自动微分中的 Function 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/include/autograd/gather.h",
+      "type": "file",
+      "name": "gather.h",
+      "filePath": "infini_train/include/autograd/gather.h",
+      "fileCategory": "code",
+      "summary": "Gather 自动微分，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/gather.h:Gather",
+      "type": "function",
+      "name": "Gather",
+      "filePath": "infini_train/include/autograd/gather.h",
+      "lineRange": [
+        18,
+        18
+      ],
+      "summary": "封装自动微分中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/gather.h:Gather",
+      "type": "class",
+      "name": "Gather",
+      "filePath": "infini_train/include/autograd/gather.h",
+      "lineRange": [
+        14,
+        28
+      ],
+      "summary": "自动微分中的 Gather 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/autograd/grad_mode.h",
+      "type": "file",
+      "name": "grad_mode.h",
+      "filePath": "infini_train/include/autograd/grad_mode.h",
+      "fileCategory": "code",
+      "summary": "grad mode，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/include/autograd/grad_mode.h:IsEnabled",
+      "type": "function",
+      "name": "IsEnabled",
+      "filePath": "infini_train/include/autograd/grad_mode.h",
+      "lineRange": [
+        9,
+        9
+      ],
+      "summary": "读取或更新自动微分组件的配置、状态和运行时元数据。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/grad_mode.h:SetEnabled",
+      "type": "function",
+      "name": "SetEnabled",
+      "filePath": "infini_train/include/autograd/grad_mode.h",
+      "lineRange": [
+        10,
+        10
+      ],
+      "summary": "读取或更新自动微分组件的配置、状态和运行时元数据。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/grad_mode.h:NoGradGuard",
+      "type": "function",
+      "name": "NoGradGuard",
+      "filePath": "infini_train/include/autograd/grad_mode.h",
+      "lineRange": [
+        20,
+        20
+      ],
+      "summary": "实现自动微分子系统中的 NoGradGuard 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/grad_mode.h:~NoGradGuard",
+      "type": "function",
+      "name": "~NoGradGuard",
+      "filePath": "infini_train/include/autograd/grad_mode.h",
+      "lineRange": [
+        21,
+        21
+      ],
+      "summary": "实现自动微分子系统中的 ~NoGradGuard 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/grad_mode.h:EnableGradGuard",
+      "type": "function",
+      "name": "EnableGradGuard",
+      "filePath": "infini_train/include/autograd/grad_mode.h",
+      "lineRange": [
+        30,
+        30
+      ],
+      "summary": "实现自动微分子系统中的 EnableGradGuard 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/grad_mode.h:~EnableGradGuard",
+      "type": "function",
+      "name": "~EnableGradGuard",
+      "filePath": "infini_train/include/autograd/grad_mode.h",
+      "lineRange": [
+        31,
+        31
+      ],
+      "summary": "实现自动微分子系统中的 ~EnableGradGuard 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/grad_mode.h:GradMode",
+      "type": "class",
+      "name": "GradMode",
+      "filePath": "infini_train/include/autograd/grad_mode.h",
+      "lineRange": [
+        6,
+        15
+      ],
+      "summary": "自动微分中的 GradMode 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/grad_mode.h:NoGradGuard",
+      "type": "class",
+      "name": "NoGradGuard",
+      "filePath": "infini_train/include/autograd/grad_mode.h",
+      "lineRange": [
+        18,
+        25
+      ],
+      "summary": "自动微分中的 NoGradGuard 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/grad_mode.h:EnableGradGuard",
+      "type": "class",
+      "name": "EnableGradGuard",
+      "filePath": "infini_train/include/autograd/grad_mode.h",
+      "lineRange": [
+        28,
+        35
+      ],
+      "summary": "自动微分中的 EnableGradGuard 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/autograd/matmul.h",
+      "type": "file",
+      "name": "matmul.h",
+      "filePath": "infini_train/include/autograd/matmul.h",
+      "fileCategory": "code",
+      "summary": "矩阵乘法自动微分，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/matmul.h:Matmul",
+      "type": "function",
+      "name": "Matmul",
+      "filePath": "infini_train/include/autograd/matmul.h",
+      "lineRange": [
+        17,
+        17
+      ],
+      "summary": "实现自动微分子系统中的 Matmul 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/matmul.h:Matmul",
+      "type": "class",
+      "name": "Matmul",
+      "filePath": "infini_train/include/autograd/matmul.h",
+      "lineRange": [
+        13,
+        28
+      ],
+      "summary": "自动微分中的 Matmul 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:infini_train/include/autograd/function.h",
+      "target": "class:infini_train/include/autograd/function.h:FunctionCtx",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/function.h",
+      "target": "class:infini_train/include/autograd/function.h:FunctionCtx",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/function.h",
+      "target": "class:infini_train/include/autograd/function.h:Function",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/function.h",
+      "target": "class:infini_train/include/autograd/function.h:Function",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/gather.h",
+      "target": "function:infini_train/include/autograd/gather.h:Gather",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/gather.h",
+      "target": "function:infini_train/include/autograd/gather.h:Gather",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/gather.h",
+      "target": "class:infini_train/include/autograd/gather.h:Gather",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/gather.h",
+      "target": "class:infini_train/include/autograd/gather.h:Gather",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "function:infini_train/include/autograd/grad_mode.h:IsEnabled",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "function:infini_train/include/autograd/grad_mode.h:IsEnabled",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "function:infini_train/include/autograd/grad_mode.h:SetEnabled",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "function:infini_train/include/autograd/grad_mode.h:SetEnabled",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "function:infini_train/include/autograd/grad_mode.h:NoGradGuard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "function:infini_train/include/autograd/grad_mode.h:NoGradGuard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "function:infini_train/include/autograd/grad_mode.h:~NoGradGuard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "function:infini_train/include/autograd/grad_mode.h:~NoGradGuard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "function:infini_train/include/autograd/grad_mode.h:EnableGradGuard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "function:infini_train/include/autograd/grad_mode.h:EnableGradGuard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "function:infini_train/include/autograd/grad_mode.h:~EnableGradGuard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "function:infini_train/include/autograd/grad_mode.h:~EnableGradGuard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "class:infini_train/include/autograd/grad_mode.h:GradMode",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "class:infini_train/include/autograd/grad_mode.h:GradMode",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "class:infini_train/include/autograd/grad_mode.h:NoGradGuard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "class:infini_train/include/autograd/grad_mode.h:NoGradGuard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "class:infini_train/include/autograd/grad_mode.h:EnableGradGuard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/grad_mode.h",
+      "target": "class:infini_train/include/autograd/grad_mode.h:EnableGradGuard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/matmul.h",
+      "target": "function:infini_train/include/autograd/matmul.h:Matmul",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/matmul.h",
+      "target": "function:infini_train/include/autograd/matmul.h:Matmul",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/matmul.h",
+      "target": "class:infini_train/include/autograd/matmul.h:Matmul",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/matmul.h",
+      "target": "class:infini_train/include/autograd/matmul.h:Matmul",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/function.h",
+      "target": "file:infini_train/include/autocast.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/autograd/gather.h",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/autograd/matmul.h",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:infini_train/include/autograd/grad_mode.h:NoGradGuard",
+      "target": "function:infini_train/include/autograd/grad_mode.h:IsEnabled",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/include/autograd/grad_mode.h:NoGradGuard",
+      "target": "function:infini_train/include/autograd/grad_mode.h:SetEnabled",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/include/autograd/grad_mode.h:~NoGradGuard",
+      "target": "function:infini_train/include/autograd/grad_mode.h:SetEnabled",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/include/autograd/grad_mode.h:EnableGradGuard",
+      "target": "function:infini_train/include/autograd/grad_mode.h:IsEnabled",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/include/autograd/grad_mode.h:EnableGradGuard",
+      "target": "function:infini_train/include/autograd/grad_mode.h:SetEnabled",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/include/autograd/grad_mode.h:~EnableGradGuard",
+      "target": "function:infini_train/include/autograd/grad_mode.h:SetEnabled",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

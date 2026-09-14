@@ -1,0 +1,460 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 25,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "infini_train/src/kernels/cuda/common/gemm.cuh",
+      "language": "cuh",
+      "fileCategory": "code",
+      "totalLines": 37,
+      "nonEmptyLines": 31,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/concat.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 247,
+      "nonEmptyLines": 200,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/cross_entropy.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 229,
+      "nonEmptyLines": 190,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/elementwise.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 1266,
+      "nonEmptyLines": 1085,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/embedding.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 125,
+      "nonEmptyLines": 102,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/fill.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 47,
+      "nonEmptyLines": 38,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/gather.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 227,
+      "nonEmptyLines": 190,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/gradient_clip.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 115,
+      "nonEmptyLines": 101,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/layernorm.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 207,
+      "nonEmptyLines": 169,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/linear.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 335,
+      "nonEmptyLines": 293,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/matmul.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 227,
+      "nonEmptyLines": 190,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/no_op.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 30,
+      "nonEmptyLines": 22,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/outer.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 188,
+      "nonEmptyLines": 161,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/reduction.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 244,
+      "nonEmptyLines": 200,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/scatter.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 123,
+      "nonEmptyLines": 103,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/slice.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 208,
+      "nonEmptyLines": 169,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/softmax.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 222,
+      "nonEmptyLines": 183,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/split.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 183,
+      "nonEmptyLines": 144,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/stack.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 160,
+      "nonEmptyLines": 124,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/topk.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 155,
+      "nonEmptyLines": 133,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/transform.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 593,
+      "nonEmptyLines": 487,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/vocab_parallel_cross_entropy.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 127,
+      "nonEmptyLines": 101,
+      "metrics": {}
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/01_task_scope/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 13,
+      "nonEmptyLines": 10,
+      "sections": [
+        {
+          "heading": "Chapter 01: Task Scope",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/02_current_architecture/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 31,
+      "nonEmptyLines": 23,
+      "sections": [
+        {
+          "heading": "Chapter 02: Current Architecture Map",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/04_pipeline_layout_core/include/pipeline_layout.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 132,
+      "nonEmptyLines": 105,
+      "classes": [
+        {
+          "name": "PipelineLayoutError",
+          "startLine": 9,
+          "endLine": 12,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "LayerRange",
+          "startLine": 14,
+          "endLine": 20,
+          "methods": [
+            "size",
+            "contains"
+          ],
+          "properties": [
+            "start",
+            "end"
+          ]
+        },
+        {
+          "name": "SpecialModulePlacement",
+          "startLine": 28,
+          "endLine": 32,
+          "methods": [],
+          "properties": [
+            "embedding_stage",
+            "final_norm_stage",
+            "lm_head_stage"
+          ]
+        },
+        {
+          "name": "ChunkLayout",
+          "startLine": 34,
+          "endLine": 39,
+          "methods": [],
+          "properties": [
+            "global_chunk_id",
+            "stage_id",
+            "local_chunk_id",
+            "layers"
+          ]
+        },
+        {
+          "name": "StageLayout",
+          "startLine": 41,
+          "endLine": 44,
+          "methods": [],
+          "properties": [
+            "stage_id",
+            "global_chunk_ids"
+          ]
+        },
+        {
+          "name": "LayerLocation",
+          "startLine": 46,
+          "endLine": 52,
+          "methods": [],
+          "properties": [
+            "stage_id",
+            "global_chunk_id",
+            "local_chunk_id",
+            "index_in_chunk",
+            "flat_local_layer_index"
+          ]
+        },
+        {
+          "name": "PipelineLayoutPolicy",
+          "startLine": 54,
+          "endLine": 58,
+          "methods": [],
+          "properties": [
+            "allow_empty_stages",
+            "require_contiguous_execution",
+            "require_boundary_special_modules"
+          ]
+        },
+        {
+          "name": "PipelineLayout",
+          "startLine": 60,
+          "endLine": 127,
+          "methods": [
+            "BuildDefault",
+            "BuildContiguous",
+            "BuildExplicit",
+            "num_layers",
+            "num_stages",
+            "vpp_size",
+            "stage_of_layer",
+            "local_layer_index",
+            "owns",
+            "ToString",
+            "Validate",
+            "ValidateForCurrentPipelineTransport",
+            "NormalizePlacement",
+            "BuildIndexes"
+          ],
+          "properties": [
+            "num_layers_",
+            "num_stages_",
+            "vpp_size_",
+            "chunks_",
+            "stages_",
+            "placement_",
+            "policy_",
+            "layer_locations_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "PipelineLayoutError",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "size",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "contains",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "LayerRange",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "SpecialModulePlacement",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "ChunkLayout",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "StageLayout",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "LayerLocation",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "PipelineLayoutPolicy",
+          "line": 54,
+          "isDefault": false
+        },
+        {
+          "name": "BuildDefault",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "BuildContiguous",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "BuildExplicit",
+          "line": 74,
+          "isDefault": false
+        },
+        {
+          "name": "num_layers",
+          "line": 82,
+          "isDefault": false
+        },
+        {
+          "name": "num_stages",
+          "line": 83,
+          "isDefault": false
+        },
+        {
+          "name": "vpp_size",
+          "line": 84,
+          "isDefault": false
+        },
+        {
+          "name": "stage_of_layer",
+          "line": 91,
+          "isDefault": false
+        },
+        {
+          "name": "local_layer_index",
+          "line": 92,
+          "isDefault": false
+        },
+        {
+          "name": "owns",
+          "line": 95,
+          "isDefault": false
+        },
+        {
+          "name": "ToString",
+          "line": 99,
+          "isDefault": false
+        },
+        {
+          "name": "Validate",
+          "line": 100,
+          "isDefault": false
+        },
+        {
+          "name": "ValidateForCurrentPipelineTransport",
+          "line": 102,
+          "isDefault": false
+        },
+        {
+          "name": "PipelineLayout",
+          "line": 60,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 22,
+        "functionCount": 0,
+        "classCount": 8
+      }
+    }
+  ]
+}

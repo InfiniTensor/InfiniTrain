@@ -1,0 +1,1704 @@
+{
+  "nodes": [
+    {
+      "id": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "type": "file",
+      "name": "cuda_runtime_common.cc",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "fileCategory": "code",
+      "summary": "cuda runtime common，统一管理设备、流和运行时状态，屏蔽 CPU 与 CUDA 后端差异并维护当前设备上下文。",
+      "tags": [
+        "设备运行时",
+        "device-runtime",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:ToCudaEventFlags",
+      "type": "function",
+      "name": "ToCudaEventFlags",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "lineRange": [
+        7,
+        22
+      ],
+      "summary": "实现设备运行时子系统中的 ToCudaEventFlags 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:CudaEvent",
+      "type": "function",
+      "name": "CudaEvent",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "lineRange": [
+        25,
+        25
+      ],
+      "summary": "实现设备运行时子系统中的 CudaEvent 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:~CudaEvent",
+      "type": "function",
+      "name": "~CudaEvent",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "lineRange": [
+        27,
+        31
+      ],
+      "summary": "实现设备运行时子系统中的 ~CudaEvent 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:cuda_event",
+      "type": "function",
+      "name": "cuda_event",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "lineRange": [
+        33,
+        33
+      ],
+      "summary": "实现设备运行时子系统中的 cuda_event 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:CudaStream",
+      "type": "function",
+      "name": "CudaStream",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "lineRange": [
+        37,
+        39
+      ],
+      "summary": "实现设备运行时子系统中的 CudaStream 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:~CudaStream",
+      "type": "function",
+      "name": "~CudaStream",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "lineRange": [
+        41,
+        43
+      ],
+      "summary": "实现设备运行时子系统中的 ~CudaStream 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:cuda_stream",
+      "type": "function",
+      "name": "cuda_stream",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "lineRange": [
+        45,
+        45
+      ],
+      "summary": "实现设备运行时子系统中的 cuda_stream 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:CudaBlasHandle",
+      "type": "function",
+      "name": "CudaBlasHandle",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "lineRange": [
+        47,
+        50
+      ],
+      "summary": "实现设备运行时子系统中的 CudaBlasHandle 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:~CudaBlasHandle",
+      "type": "function",
+      "name": "~CudaBlasHandle",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "lineRange": [
+        52,
+        54
+      ],
+      "summary": "实现设备运行时子系统中的 ~CudaBlasHandle 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:cublas_handle",
+      "type": "function",
+      "name": "cublas_handle",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "lineRange": [
+        56,
+        56
+      ],
+      "summary": "实现设备运行时子系统中的 cublas_handle 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "type": "file",
+      "name": "cuda_runtime_common.h",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "fileCategory": "code",
+      "summary": "cuda runtime common，统一管理设备、流和运行时状态，屏蔽 CPU 与 CUDA 后端差异并维护当前设备上下文。",
+      "tags": [
+        "设备运行时",
+        "device-runtime",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/src/core/runtime/cuda/cuda_runtime_common.h:CudaEvent",
+      "type": "class",
+      "name": "CudaEvent",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "lineRange": [
+        16,
+        25
+      ],
+      "summary": "设备运行时中的 CudaEvent 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "设备运行时",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/src/core/runtime/cuda/cuda_runtime_common.h:CudaStream",
+      "type": "class",
+      "name": "CudaStream",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "lineRange": [
+        27,
+        44
+      ],
+      "summary": "设备运行时中的 CudaStream 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "设备运行时",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/src/core/runtime/cuda/cuda_runtime_common.h:CudaBlasHandle",
+      "type": "class",
+      "name": "CudaBlasHandle",
+      "filePath": "infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "lineRange": [
+        46,
+        62
+      ],
+      "summary": "设备运行时中的 CudaBlasHandle 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "设备运行时",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/core/runtime/device_guard.cc",
+      "type": "file",
+      "name": "device_guard.cc",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "fileCategory": "code",
+      "summary": "device guard，统一管理设备、流和运行时状态，屏蔽 CPU 与 CUDA 后端差异并维护当前设备上下文。",
+      "tags": [
+        "设备运行时",
+        "device-runtime",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:SetDevice",
+      "type": "function",
+      "name": "SetDevice",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        116,
+        122
+      ],
+      "summary": "读取或更新设备运行时组件的配置、状态和运行时元数据。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:DeviceCount",
+      "type": "function",
+      "name": "DeviceCount",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        16,
+        19
+      ],
+      "summary": "读取或更新设备运行时组件的配置、状态和运行时元数据。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:DestroyStream",
+      "type": "function",
+      "name": "DestroyStream",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        36,
+        38
+      ],
+      "summary": "实现设备运行时子系统中的 DestroyStream 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:GetStreamPriorityRange",
+      "type": "function",
+      "name": "GetStreamPriorityRange",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        40,
+        42
+      ],
+      "summary": "读取或更新设备运行时组件的配置、状态和运行时元数据。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:EventCreate",
+      "type": "function",
+      "name": "EventCreate",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        44,
+        44
+      ],
+      "summary": "实现设备运行时子系统中的 EventCreate 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:EventCreateWithFlags",
+      "type": "function",
+      "name": "EventCreateWithFlags",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        46,
+        48
+      ],
+      "summary": "实现设备运行时子系统中的 EventCreateWithFlags 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:EventDestroy",
+      "type": "function",
+      "name": "EventDestroy",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        50,
+        50
+      ],
+      "summary": "实现设备运行时子系统中的 EventDestroy 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:EventRecord",
+      "type": "function",
+      "name": "EventRecord",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        52,
+        54
+      ],
+      "summary": "实现设备运行时子系统中的 EventRecord 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:StreamWaitEvent",
+      "type": "function",
+      "name": "StreamWaitEvent",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        56,
+        58
+      ],
+      "summary": "实现设备运行时子系统中的 StreamWaitEvent 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:EventSynchronize",
+      "type": "function",
+      "name": "EventSynchronize",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        60,
+        63
+      ],
+      "summary": "实现设备运行时子系统中的 EventSynchronize 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:EventQuery",
+      "type": "function",
+      "name": "EventQuery",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        65,
+        68
+      ],
+      "summary": "实现设备运行时子系统中的 EventQuery 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:EventElapsedTime",
+      "type": "function",
+      "name": "EventElapsedTime",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        70,
+        73
+      ],
+      "summary": "实现设备运行时子系统中的 EventElapsedTime 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:SynchronizeDevice",
+      "type": "function",
+      "name": "SynchronizeDevice",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        75,
+        77
+      ],
+      "summary": "实现设备运行时子系统中的 SynchronizeDevice 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:SynchronizeStream",
+      "type": "function",
+      "name": "SynchronizeStream",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        79,
+        81
+      ],
+      "summary": "实现设备运行时子系统中的 SynchronizeStream 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:MallocAsync",
+      "type": "function",
+      "name": "MallocAsync",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        88,
+        90
+      ],
+      "summary": "实现设备运行时子系统中的 MallocAsync 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:FreeAsync",
+      "type": "function",
+      "name": "FreeAsync",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        92,
+        94
+      ],
+      "summary": "实现设备运行时子系统中的 FreeAsync 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:MemcpyAsync",
+      "type": "function",
+      "name": "MemcpyAsync",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        96,
+        98
+      ],
+      "summary": "实现设备运行时子系统中的 MemcpyAsync 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:ResetMemPoolHighWatermarks",
+      "type": "function",
+      "name": "ResetMemPoolHighWatermarks",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        100,
+        102
+      ],
+      "summary": "执行设备运行时中的ResetMemPoolHighWatermarks操作，完成核心数据处理或状态变换。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:GetMemPoolPeakMB",
+      "type": "function",
+      "name": "GetMemPoolPeakMB",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        104,
+        107
+      ],
+      "summary": "读取或更新设备运行时组件的配置、状态和运行时元数据。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:DeviceGuard",
+      "type": "function",
+      "name": "DeviceGuard",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        110,
+        114
+      ],
+      "summary": "读取或更新设备运行时组件的配置、状态和运行时元数据。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:current_device",
+      "type": "function",
+      "name": "current_device",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        124,
+        124
+      ],
+      "summary": "实现设备运行时子系统中的 current_device 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:original_device",
+      "type": "function",
+      "name": "original_device",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        126,
+        126
+      ],
+      "summary": "实现设备运行时子系统中的 original_device 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:~DeviceGuard",
+      "type": "function",
+      "name": "~DeviceGuard",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        128,
+        128
+      ],
+      "summary": "实现设备运行时子系统中的 ~DeviceGuard 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/core/runtime/device_guard.cc:Register",
+      "type": "function",
+      "name": "Register",
+      "filePath": "infini_train/src/core/runtime/device_guard.cc",
+      "lineRange": [
+        136,
+        156
+      ],
+      "summary": "初始化设备运行时组件并建立依赖对象、缓冲区或通信资源。",
+      "tags": [
+        "设备运行时",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/device.cc",
+      "type": "file",
+      "name": "device.cc",
+      "filePath": "infini_train/src/device.cc",
+      "fileCategory": "code",
+      "summary": "device，属于训练基础设施子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "训练基础设施",
+        "training-infrastructure",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/device.cc:Device",
+      "type": "function",
+      "name": "Device",
+      "filePath": "infini_train/src/device.cc",
+      "lineRange": [
+        15,
+        19
+      ],
+      "summary": "读取或更新训练基础设施组件的配置、状态和运行时元数据。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/device.cc:type",
+      "type": "function",
+      "name": "type",
+      "filePath": "infini_train/src/device.cc",
+      "lineRange": [
+        21,
+        21
+      ],
+      "summary": "实现训练基础设施子系统中的 type 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/device.cc:index",
+      "type": "function",
+      "name": "index",
+      "filePath": "infini_train/src/device.cc",
+      "lineRange": [
+        23,
+        23
+      ],
+      "summary": "实现训练基础设施子系统中的 index 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/device.cc:IsCPU",
+      "type": "function",
+      "name": "IsCPU",
+      "filePath": "infini_train/src/device.cc",
+      "lineRange": [
+        25,
+        25
+      ],
+      "summary": "读取或更新训练基础设施组件的配置、状态和运行时元数据。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/device.cc:IsCUDA",
+      "type": "function",
+      "name": "IsCUDA",
+      "filePath": "infini_train/src/device.cc",
+      "lineRange": [
+        27,
+        27
+      ],
+      "summary": "读取或更新训练基础设施组件的配置、状态和运行时元数据。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/device.cc:ToString",
+      "type": "function",
+      "name": "ToString",
+      "filePath": "infini_train/src/device.cc",
+      "lineRange": [
+        29,
+        33
+      ],
+      "summary": "实现训练基础设施子系统中的 ToString 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/device.cc:Rank",
+      "type": "function",
+      "name": "Rank",
+      "filePath": "infini_train/src/device.cc",
+      "lineRange": [
+        35,
+        42
+      ],
+      "summary": "读取或更新训练基础设施组件的配置、状态和运行时元数据。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/device.cc:operator==",
+      "type": "function",
+      "name": "operator==",
+      "filePath": "infini_train/src/device.cc",
+      "lineRange": [
+        49,
+        49
+      ],
+      "summary": "实现训练基础设施子系统中的 operator== 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/device.cc:operator!=",
+      "type": "function",
+      "name": "operator!=",
+      "filePath": "infini_train/src/device.cc",
+      "lineRange": [
+        51,
+        51
+      ],
+      "summary": "实现训练基础设施子系统中的 operator!= 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "训练基础设施",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/kernels/common/gemm.h",
+      "type": "file",
+      "name": "gemm.h",
+      "filePath": "infini_train/src/kernels/common/gemm.h",
+      "fileCategory": "code",
+      "summary": "矩阵乘法内核接口，属于训练基础设施子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "训练基础设施",
+        "training-infrastructure",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/src/kernels/common/gemm.h:GemmParams",
+      "type": "class",
+      "name": "GemmParams",
+      "filePath": "infini_train/src/kernels/common/gemm.h",
+      "lineRange": [
+        21,
+        46
+      ],
+      "summary": "训练基础设施中的 GemmParams 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "训练基础设施",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:ToCudaEventFlags",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:ToCudaEventFlags",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:CudaEvent",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:CudaEvent",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:~CudaEvent",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:~CudaEvent",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:cuda_event",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:cuda_event",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:CudaStream",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:CudaStream",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:~CudaStream",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:~CudaStream",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:cuda_stream",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:cuda_stream",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:CudaBlasHandle",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:CudaBlasHandle",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:~CudaBlasHandle",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:~CudaBlasHandle",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:cublas_handle",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:cublas_handle",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "target": "class:infini_train/src/core/runtime/cuda/cuda_runtime_common.h:CudaEvent",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "target": "class:infini_train/src/core/runtime/cuda/cuda_runtime_common.h:CudaEvent",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "target": "class:infini_train/src/core/runtime/cuda/cuda_runtime_common.h:CudaStream",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "target": "class:infini_train/src/core/runtime/cuda/cuda_runtime_common.h:CudaStream",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "target": "class:infini_train/src/core/runtime/cuda/cuda_runtime_common.h:CudaBlasHandle",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "target": "class:infini_train/src/core/runtime/cuda/cuda_runtime_common.h:CudaBlasHandle",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:SetDevice",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:SetDevice",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:DeviceCount",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:DeviceCount",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:DestroyStream",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:DestroyStream",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:GetStreamPriorityRange",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:GetStreamPriorityRange",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventCreate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventCreate",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventCreateWithFlags",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventCreateWithFlags",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventDestroy",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventDestroy",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventRecord",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventRecord",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:StreamWaitEvent",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:StreamWaitEvent",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventSynchronize",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventSynchronize",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventQuery",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventQuery",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventElapsedTime",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:EventElapsedTime",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:SynchronizeDevice",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:SynchronizeDevice",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:SynchronizeStream",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:SynchronizeStream",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:MallocAsync",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:MallocAsync",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:FreeAsync",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:FreeAsync",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:MemcpyAsync",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:MemcpyAsync",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:ResetMemPoolHighWatermarks",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:ResetMemPoolHighWatermarks",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:GetMemPoolPeakMB",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:GetMemPoolPeakMB",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:DeviceGuard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:DeviceGuard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:current_device",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:current_device",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:original_device",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:original_device",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:~DeviceGuard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:~DeviceGuard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:Register",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:Register",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:Device",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:Device",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:type",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:type",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:index",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:index",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:IsCPU",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:IsCPU",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:IsCUDA",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:IsCUDA",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:ToString",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:ToString",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:Rank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:Rank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:operator==",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:operator==",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:operator!=",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "function:infini_train/src/device.cc:operator!=",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/kernels/common/gemm.h",
+      "target": "class:infini_train/src/kernels/common/gemm.h:GemmParams",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/kernels/common/gemm.h",
+      "target": "class:infini_train/src/kernels/common/gemm.h:GemmParams",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "file:infini_train/include/common/cuda/common_cuda.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc",
+      "target": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cuda/cuda_runtime_common.h",
+      "target": "file:infini_train/include/core/runtime/runtime_common.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "file:infini_train/include/core/runtime/device_guard.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/device_guard.cc",
+      "target": "file:infini_train/include/core/runtime/runtime_common.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/device.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/kernels/common/gemm.h",
+      "target": "file:infini_train/include/datatype.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/kernels/common/gemm.h",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:CudaEvent",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:ToCudaEventFlags",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:CudaBlasHandle",
+      "target": "function:infini_train/src/core/runtime/cuda/cuda_runtime_common.cc:cuda_stream",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/core/runtime/device_guard.cc:DeviceGuard",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:SetDevice",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/core/runtime/device_guard.cc:~DeviceGuard",
+      "target": "function:infini_train/src/core/runtime/device_guard.cc:SetDevice",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/device.cc:Rank",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetDeviceIndex",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/device.cc:Rank",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetNthreadPerProc",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/device.cc:Rank",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetGlobalProcRank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/device.cc:Rank",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetNprocPerNode",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

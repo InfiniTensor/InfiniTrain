@@ -1,0 +1,755 @@
+{
+  "nodes": [
+    {
+      "id": "file:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "type": "file",
+      "name": "gradient_clip.cc",
+      "filePath": "gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "summary": "实现 CPU 后端的 gradient_clip 张量算子前向与反向内核，并通过 Dispatcher 注册供自动求导调用。",
+      "tags": [
+        "kernel",
+        "算子实现",
+        "gradient-clipping",
+        "训练稳定性",
+        "implementation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/include/common/common.h",
+      "type": "file",
+      "name": "common.h",
+      "filePath": "infini_train/include/common/common.h",
+      "summary": "提供公共的 stride 计算、CPU 辅助宏和基础运行时工具。",
+      "tags": [
+        "header",
+        "接口定义",
+        "infinitrain-运行时"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/common/cpu/common_cpu.h",
+      "type": "file",
+      "name": "common_cpu.h",
+      "filePath": "infini_train/include/common/cpu/common_cpu.h",
+      "summary": "提供公共的 stride 计算、CPU 辅助宏和基础运行时工具。",
+      "tags": [
+        "header",
+        "接口定义",
+        "infinitrain-运行时"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/core/backend_type_map.h",
+      "type": "file",
+      "name": "backend_type_map.h",
+      "filePath": "infini_train/include/core/backend_type_map.h",
+      "summary": "维护后端类型与 C++ 类型之间的映射，支撑多设备 kernel 的统一编译接口。",
+      "tags": [
+        "header",
+        "接口定义",
+        "数据类型与标量运行时"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/include/datatype.h",
+      "type": "file",
+      "name": "datatype.h",
+      "filePath": "infini_train/include/datatype.h",
+      "summary": "定义 FP16/BF16 等低精度类型及转换、提升规则，为 CPU/CUDA 后端提供统一数值表示。",
+      "tags": [
+        "dtype",
+        "数值类型",
+        "header",
+        "接口定义",
+        "数据类型与标量运行时"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/include/dtype_dispatch.h",
+      "type": "file",
+      "name": "dtype_dispatch.h",
+      "filePath": "infini_train/include/dtype_dispatch.h",
+      "summary": "定义按数据类型分派 kernel 的模板接口，覆盖编译期类型选择与运行时 dtype 路由。",
+      "tags": [
+        "dtype",
+        "数值类型",
+        "header",
+        "接口定义",
+        "数据类型与标量运行时"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:infini_train/include/scalar.h",
+      "type": "file",
+      "name": "scalar.h",
+      "filePath": "infini_train/include/scalar.h",
+      "summary": "封装标量值的类型擦除与安全转换，支持 InfiniTrain 张量算子的数值参数传递。",
+      "tags": [
+        "dtype",
+        "数值类型",
+        "header",
+        "接口定义",
+        "数据类型与标量运行时"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/src/core/runtime/cpu/cpu_dispatch.h",
+      "type": "file",
+      "name": "cpu_dispatch.h",
+      "filePath": "infini_train/src/core/runtime/cpu/cpu_dispatch.h",
+      "summary": "声明设备运行时的 kernel dispatch 接口，将高层算子调用转发到具体后端实现。",
+      "tags": [
+        "header",
+        "接口定义",
+        "infinitrain-运行时"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc:GradientNormStats",
+      "type": "function",
+      "name": "GradientNormStats",
+      "filePath": "gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "lineRange": [
+        64,
+        72
+      ],
+      "summary": "实现 梯度裁剪 中的 GradientNormStats，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "梯度裁剪",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc:ScaleGradientInplace",
+      "type": "function",
+      "name": "ScaleGradientInplace",
+      "filePath": "gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "lineRange": [
+        74,
+        80
+      ],
+      "summary": "实现 梯度裁剪 中的 ScaleGradientInplace，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "梯度裁剪",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/common/common.h:ComputeStrides",
+      "type": "function",
+      "name": "ComputeStrides",
+      "filePath": "infini_train/include/common/common.h",
+      "lineRange": [
+        26,
+        30
+      ],
+      "summary": "实现 InfiniTrain 运行时 中的 ComputeStrides，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/datatype.h:FP16",
+      "type": "class",
+      "name": "FP16",
+      "filePath": "infini_train/include/datatype.h",
+      "lineRange": [
+        43,
+        61
+      ],
+      "summary": "定义 FP16 类，封装 数据类型与标量运行时 的状态、参数与核心操作。",
+      "tags": [
+        "数据类型与标量运行时",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/datatype.h:BF16",
+      "type": "class",
+      "name": "BF16",
+      "filePath": "infini_train/include/datatype.h",
+      "lineRange": [
+        63,
+        81
+      ],
+      "summary": "定义 BF16 类，封装 数据类型与标量运行时 的状态、参数与核心操作。",
+      "tags": [
+        "数据类型与标量运行时",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/datatype.h:from_bits",
+      "type": "function",
+      "name": "from_bits",
+      "filePath": "infini_train/include/datatype.h",
+      "lineRange": [
+        47,
+        47
+      ],
+      "summary": "实现 数据类型与标量运行时 中的 from_bits，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "数据类型与标量运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/datatype.h:FP16@49",
+      "type": "function",
+      "name": "FP16@49",
+      "filePath": "infini_train/include/datatype.h",
+      "lineRange": [
+        49,
+        49
+      ],
+      "summary": "实现 数据类型与标量运行时 中的 FP16，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "数据类型与标量运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/datatype.h:FP16@50",
+      "type": "function",
+      "name": "FP16@50",
+      "filePath": "infini_train/include/datatype.h",
+      "lineRange": [
+        50,
+        50
+      ],
+      "summary": "实现 数据类型与标量运行时 中的 FP16，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "数据类型与标量运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/datatype.h:from_bits@67",
+      "type": "function",
+      "name": "from_bits@67",
+      "filePath": "infini_train/include/datatype.h",
+      "lineRange": [
+        67,
+        67
+      ],
+      "summary": "实现 数据类型与标量运行时 中的 from_bits，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "数据类型与标量运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/datatype.h:BF16@69",
+      "type": "function",
+      "name": "BF16@69",
+      "filePath": "infini_train/include/datatype.h",
+      "lineRange": [
+        69,
+        69
+      ],
+      "summary": "实现 数据类型与标量运行时 中的 BF16，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "数据类型与标量运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/datatype.h:BF16@70",
+      "type": "function",
+      "name": "BF16@70",
+      "filePath": "infini_train/include/datatype.h",
+      "lineRange": [
+        70,
+        70
+      ],
+      "summary": "实现 数据类型与标量运行时 中的 BF16，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "数据类型与标量运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/scalar.h:Scalar",
+      "type": "class",
+      "name": "Scalar",
+      "filePath": "infini_train/include/scalar.h",
+      "lineRange": [
+        12,
+        82
+      ],
+      "summary": "定义 Scalar 类，封装 数据类型与标量运行时 的状态、参数与核心操作。",
+      "tags": [
+        "数据类型与标量运行时",
+        "class",
+        "组件"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/include/scalar.h:Scalar@15",
+      "type": "function",
+      "name": "Scalar@15",
+      "filePath": "infini_train/include/scalar.h",
+      "lineRange": [
+        15,
+        15
+      ],
+      "summary": "实现 数据类型与标量运行时 中的 Scalar，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "数据类型与标量运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/scalar.h:Scalar@16",
+      "type": "function",
+      "name": "Scalar@16",
+      "filePath": "infini_train/include/scalar.h",
+      "lineRange": [
+        16,
+        16
+      ],
+      "summary": "实现 数据类型与标量运行时 中的 Scalar，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "数据类型与标量运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/scalar.h:Scalar@31",
+      "type": "function",
+      "name": "Scalar@31",
+      "filePath": "infini_train/include/scalar.h",
+      "lineRange": [
+        31,
+        31
+      ],
+      "summary": "实现 数据类型与标量运行时 中的 Scalar，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "数据类型与标量运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/scalar.h:Scalar@32",
+      "type": "function",
+      "name": "Scalar@32",
+      "filePath": "infini_train/include/scalar.h",
+      "lineRange": [
+        32,
+        32
+      ],
+      "summary": "实现 数据类型与标量运行时 中的 Scalar，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "数据类型与标量运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "target": "function:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc:GradientNormStats",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "target": "function:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc:GradientNormStats",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "target": "function:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc:ScaleGradientInplace",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "target": "function:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc:ScaleGradientInplace",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "target": "file:infini_train/include/datatype.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "target": "file:infini_train/include/dispatcher.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "target": "file:infini_train/include/dtype_dispatch.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:gradient_clipping_implementation/source/infini_train/src/kernels/cpu/gradient_clip.cc",
+      "target": "file:infini_train/src/core/runtime/cpu/cpu_dispatch.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/common/common.h",
+      "target": "function:infini_train/include/common/common.h:ComputeStrides",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/common/common.h",
+      "target": "function:infini_train/include/common/common.h:ComputeStrides",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/common/common.h",
+      "target": "file:infini_train/include/datatype.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/common/cpu/common_cpu.h",
+      "target": "file:infini_train/include/datatype.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/core/backend_type_map.h",
+      "target": "file:infini_train/include/datatype.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/core/backend_type_map.h",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "class:infini_train/include/datatype.h:FP16",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "class:infini_train/include/datatype.h:FP16",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "class:infini_train/include/datatype.h:BF16",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "class:infini_train/include/datatype.h:BF16",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "function:infini_train/include/datatype.h:from_bits",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "function:infini_train/include/datatype.h:from_bits",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "function:infini_train/include/datatype.h:FP16@49",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "function:infini_train/include/datatype.h:FP16@49",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "function:infini_train/include/datatype.h:FP16@50",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "function:infini_train/include/datatype.h:FP16@50",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "function:infini_train/include/datatype.h:from_bits@67",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "function:infini_train/include/datatype.h:from_bits@67",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "function:infini_train/include/datatype.h:BF16@69",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "function:infini_train/include/datatype.h:BF16@69",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "function:infini_train/include/datatype.h:BF16@70",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "function:infini_train/include/datatype.h:BF16@70",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/dtype_dispatch.h",
+      "target": "file:infini_train/include/common/common.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/dtype_dispatch.h",
+      "target": "file:infini_train/include/datatype.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/scalar.h",
+      "target": "class:infini_train/include/scalar.h:Scalar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/scalar.h",
+      "target": "class:infini_train/include/scalar.h:Scalar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/scalar.h",
+      "target": "function:infini_train/include/scalar.h:Scalar@15",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/scalar.h",
+      "target": "function:infini_train/include/scalar.h:Scalar@15",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/scalar.h",
+      "target": "function:infini_train/include/scalar.h:Scalar@16",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/scalar.h",
+      "target": "function:infini_train/include/scalar.h:Scalar@16",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/scalar.h",
+      "target": "function:infini_train/include/scalar.h:Scalar@31",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/scalar.h",
+      "target": "function:infini_train/include/scalar.h:Scalar@31",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/scalar.h",
+      "target": "function:infini_train/include/scalar.h:Scalar@32",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/scalar.h",
+      "target": "function:infini_train/include/scalar.h:Scalar@32",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/scalar.h",
+      "target": "file:infini_train/include/common/cpu/common_cpu.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cpu/cpu_dispatch.h",
+      "target": "file:infini_train/include/core/backend_type_map.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cpu/cpu_dispatch.h",
+      "target": "file:infini_train/include/dtype_dispatch.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "file:tests/dtype/test_dtype_dispatch.cc",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:infini_train/include/dtype_dispatch.h",
+      "target": "file:tests/dtype/test_dtype_dispatch.cc",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:infini_train/src/core/runtime/cpu/cpu_dispatch.h",
+      "target": "file:tests/dtype/test_dtype_dispatch.cc",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:infini_train/include/datatype.h",
+      "target": "file:tests/dtype/test_dtype_dispatch_compile_fail.cc",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:infini_train/include/dtype_dispatch.h",
+      "target": "file:tests/dtype/test_dtype_dispatch_compile_fail.cc",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:infini_train/include/scalar.h",
+      "target": "file:tests/dtype/test_scalar.cc",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

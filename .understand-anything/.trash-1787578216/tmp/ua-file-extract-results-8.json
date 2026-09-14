@@ -1,0 +1,3507 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 21,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "example/common/utils.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 64,
+      "nonEmptyLines": 55,
+      "functions": [
+        {
+          "name": "ConvertBF16ToFloat",
+          "startLine": 5,
+          "endLine": 11,
+          "params": [
+            "ptr"
+          ]
+        },
+        {
+          "name": "ReadSeveralBytesFromIfstream",
+          "startLine": 14,
+          "endLine": 18,
+          "params": [
+            "num_bytes",
+            "ifs"
+          ]
+        },
+        {
+          "name": "ReadMatrixAllFloat",
+          "startLine": 20,
+          "endLine": 23,
+          "params": [
+            "ifs",
+            "dst",
+            "rows",
+            "cols"
+          ]
+        },
+        {
+          "name": "ReadMatrixRowShardFloat",
+          "startLine": 27,
+          "endLine": 35,
+          "params": [
+            "ifs",
+            "dst",
+            "rows",
+            "cols",
+            "row_start",
+            "row_cnt"
+          ]
+        },
+        {
+          "name": "ReadMatrixColShardFloat",
+          "startLine": 38,
+          "endLine": 49,
+          "params": [
+            "ifs",
+            "dst",
+            "rows",
+            "cols",
+            "col_start",
+            "col_cnt"
+          ]
+        },
+        {
+          "name": "ReadVectorAllFloat",
+          "startLine": 52,
+          "endLine": 54,
+          "params": [
+            "ifs",
+            "dst",
+            "len"
+          ]
+        },
+        {
+          "name": "ReadVectorShardFloat",
+          "startLine": 57,
+          "endLine": 62,
+          "params": [
+            "ifs",
+            "dst",
+            "len",
+            "start",
+            "cnt"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "ConvertBF16ToFloat",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "ReadSeveralBytesFromIfstream",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "ReadMatrixAllFloat",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "ReadMatrixRowShardFloat",
+          "line": 27,
+          "isDefault": false
+        },
+        {
+          "name": "ReadMatrixColShardFloat",
+          "line": 38,
+          "isDefault": false
+        },
+        {
+          "name": "ReadVectorAllFloat",
+          "line": 52,
+          "isDefault": false
+        },
+        {
+          "name": "ReadVectorShardFloat",
+          "line": 57,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "ConvertBF16ToFloat",
+          "callee": "reinterpret_cast<uint16_t *>",
+          "lineNumber": 6
+        },
+        {
+          "caller": "ConvertBF16ToFloat",
+          "callee": "static_cast<uint32_t>",
+          "lineNumber": 7
+        },
+        {
+          "caller": "ConvertBF16ToFloat",
+          "callee": "std::memcpy",
+          "lineNumber": 9
+        },
+        {
+          "caller": "ReadSeveralBytesFromIfstream",
+          "callee": "read",
+          "lineNumber": 16
+        },
+        {
+          "caller": "ReadSeveralBytesFromIfstream",
+          "callee": "reinterpret_cast<char *>",
+          "lineNumber": 16
+        },
+        {
+          "caller": "ReadSeveralBytesFromIfstream",
+          "callee": "data",
+          "lineNumber": 16
+        },
+        {
+          "caller": "ReadMatrixAllFloat",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 21
+        },
+        {
+          "caller": "ReadMatrixAllFloat",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 21
+        },
+        {
+          "caller": "ReadMatrixAllFloat",
+          "callee": "read",
+          "lineNumber": 22
+        },
+        {
+          "caller": "ReadMatrixAllFloat",
+          "callee": "reinterpret_cast<char *>",
+          "lineNumber": 22
+        },
+        {
+          "caller": "ReadMatrixRowShardFloat",
+          "callee": "tellg",
+          "lineNumber": 29
+        },
+        {
+          "caller": "ReadMatrixRowShardFloat",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 30
+        },
+        {
+          "caller": "ReadMatrixRowShardFloat",
+          "callee": "seekg",
+          "lineNumber": 31
+        },
+        {
+          "caller": "ReadMatrixRowShardFloat",
+          "callee": "std::streamoff",
+          "lineNumber": 31
+        },
+        {
+          "caller": "ReadMatrixRowShardFloat",
+          "callee": "read",
+          "lineNumber": 33
+        },
+        {
+          "caller": "ReadMatrixRowShardFloat",
+          "callee": "reinterpret_cast<char *>",
+          "lineNumber": 33
+        },
+        {
+          "caller": "ReadMatrixRowShardFloat",
+          "callee": "static_cast<std::streamsize>",
+          "lineNumber": 33
+        },
+        {
+          "caller": "ReadMatrixRowShardFloat",
+          "callee": "seekg",
+          "lineNumber": 34
+        },
+        {
+          "caller": "ReadMatrixRowShardFloat",
+          "callee": "std::streamoff",
+          "lineNumber": 34
+        },
+        {
+          "caller": "ReadMatrixColShardFloat",
+          "callee": "tellg",
+          "lineNumber": 40
+        },
+        {
+          "caller": "ReadMatrixColShardFloat",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 41
+        },
+        {
+          "caller": "ReadMatrixColShardFloat",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 42
+        },
+        {
+          "caller": "ReadMatrixColShardFloat",
+          "callee": "seekg",
+          "lineNumber": 45
+        },
+        {
+          "caller": "ReadMatrixColShardFloat",
+          "callee": "std::streamoff",
+          "lineNumber": 45
+        },
+        {
+          "caller": "ReadMatrixColShardFloat",
+          "callee": "read",
+          "lineNumber": 46
+        },
+        {
+          "caller": "ReadMatrixColShardFloat",
+          "callee": "reinterpret_cast<char *>",
+          "lineNumber": 46
+        },
+        {
+          "caller": "ReadMatrixColShardFloat",
+          "callee": "static_cast<std::streamsize>",
+          "lineNumber": 46
+        },
+        {
+          "caller": "ReadMatrixColShardFloat",
+          "callee": "seekg",
+          "lineNumber": 48
+        },
+        {
+          "caller": "ReadMatrixColShardFloat",
+          "callee": "std::streamoff",
+          "lineNumber": 48
+        },
+        {
+          "caller": "ReadVectorAllFloat",
+          "callee": "read",
+          "lineNumber": 53
+        },
+        {
+          "caller": "ReadVectorAllFloat",
+          "callee": "reinterpret_cast<char *>",
+          "lineNumber": 53
+        },
+        {
+          "caller": "ReadVectorAllFloat",
+          "callee": "static_cast<std::streamsize>",
+          "lineNumber": 53
+        },
+        {
+          "caller": "ReadVectorShardFloat",
+          "callee": "tellg",
+          "lineNumber": 58
+        },
+        {
+          "caller": "ReadVectorShardFloat",
+          "callee": "seekg",
+          "lineNumber": 59
+        },
+        {
+          "caller": "ReadVectorShardFloat",
+          "callee": "std::streamoff",
+          "lineNumber": 59
+        },
+        {
+          "caller": "ReadVectorShardFloat",
+          "callee": "read",
+          "lineNumber": 60
+        },
+        {
+          "caller": "ReadVectorShardFloat",
+          "callee": "reinterpret_cast<char *>",
+          "lineNumber": 60
+        },
+        {
+          "caller": "ReadVectorShardFloat",
+          "callee": "static_cast<std::streamsize>",
+          "lineNumber": 60
+        },
+        {
+          "caller": "ReadVectorShardFloat",
+          "callee": "seekg",
+          "lineNumber": 61
+        },
+        {
+          "caller": "ReadVectorShardFloat",
+          "callee": "std::streamoff",
+          "lineNumber": 61
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 7,
+        "functionCount": 7,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "example/common/utils.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 33,
+      "nonEmptyLines": 22,
+      "callGraph": [
+        {
+          "caller": "BytesToType",
+          "callee": "std::memcpy",
+          "lineNumber": 15
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "example/gpt2/checkpoint_loader.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 429,
+      "nonEmptyLines": 386,
+      "functions": [
+        {
+          "name": "DetermineAndCheckVersion",
+          "startLine": 43,
+          "endLine": 55,
+          "params": [
+            "header",
+            "offset"
+          ]
+        },
+        {
+          "name": "LoadFromLLMC",
+          "startLine": 60,
+          "endLine": 428,
+          "params": [
+            "filepath"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "DetermineAndCheckVersion",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "LoadFromLLMC",
+          "line": 60,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "DetermineAndCheckVersion",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 45
+        },
+        {
+          "caller": "DetermineAndCheckVersion",
+          "callee": "LOG",
+          "lineNumber": 52
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::filesystem::exists",
+          "lineNumber": 61
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 62
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadSeveralBytesFromIfstream",
+          "lineNumber": 66
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 68
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 69
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DetermineAndCheckVersion",
+          "lineNumber": 70
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 71
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "nn::parallel::global::GetTensorParallelSize",
+          "lineNumber": 73
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 75
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 76
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 77
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 78
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 79
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 80
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "gpt2::GPT2Config",
+          "lineNumber": 84
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "gpt2::SanitizeGPT2Config",
+          "lineNumber": 91
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::make_shared<nn::TransformerModel>",
+          "lineNumber": 92
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 94
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 98
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 99
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 100
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "nn::parallel::global::GetPipelineParallelSize",
+          "lineNumber": 103
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "nn::parallel::global::GetVirtualPipelineParallelSize",
+          "lineNumber": 104
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "nn::parallel::PipelineParallel::GetStageInfo",
+          "lineNumber": 107
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 117
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 123
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "StateDict",
+          "lineNumber": 128
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 134
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 137
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 137
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 137
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 140
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 142
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 142
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 142
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 146
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ignore",
+          "lineNumber": 151
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 157
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixAllFloat",
+          "lineNumber": 159
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 159
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 159
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 162
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 170
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 171
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorAllFloat",
+          "lineNumber": 173
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 173
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 173
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 177
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 185
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 186
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorAllFloat",
+          "lineNumber": 188
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 188
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 188
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 192
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 200
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 202
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 208
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 208
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "tellg",
+          "lineNumber": 212
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 214
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 215
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 220
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 221
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 226
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 227
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 235
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 243
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 245
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 251
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 251
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "tellg",
+          "lineNumber": 254
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 256
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorShardFloat",
+          "lineNumber": 257
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 262
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorShardFloat",
+          "lineNumber": 263
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 268
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorShardFloat",
+          "lineNumber": 269
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 277
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 285
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 287
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixColShardFloat",
+          "lineNumber": 289
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 289
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 289
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 294
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 302
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 304
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorAllFloat",
+          "lineNumber": 306
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 306
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 306
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 310
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 319
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 320
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorAllFloat",
+          "lineNumber": 322
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 322
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 322
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 326
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 334
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 335
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorAllFloat",
+          "lineNumber": 337
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 337
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 337
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 341
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 349
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 350
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 353
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 353
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 353
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 357
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 365
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 366
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorShardFloat",
+          "lineNumber": 369
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 369
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 369
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 373
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 381
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 382
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixColShardFloat",
+          "lineNumber": 385
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 385
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 385
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 390
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 398
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 399
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorAllFloat",
+          "lineNumber": 402
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 402
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 402
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 406
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 413
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorAllFloat",
+          "lineNumber": 415
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 415
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 415
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 418
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorAllFloat",
+          "lineNumber": 420
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 420
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 420
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 424
+        }
+      ],
+      "metrics": {
+        "importCount": 12,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "example/gpt2/config.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 43,
+      "nonEmptyLines": 38,
+      "functions": [
+        {
+          "name": "GPT2Config",
+          "startLine": 9,
+          "endLine": 26,
+          "params": []
+        },
+        {
+          "name": "SanitizeGPT2Config",
+          "startLine": 28,
+          "endLine": 41,
+          "params": [
+            "c"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "GPT2Config",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "SanitizeGPT2Config",
+          "line": 28,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "SanitizeGPT2Config",
+          "callee": "CHECK_GT",
+          "lineNumber": 29
+        },
+        {
+          "caller": "SanitizeGPT2Config",
+          "callee": "CHECK_GT",
+          "lineNumber": 30
+        },
+        {
+          "caller": "SanitizeGPT2Config",
+          "callee": "CHECK_GE",
+          "lineNumber": 31
+        },
+        {
+          "caller": "SanitizeGPT2Config",
+          "callee": "CHECK_GT",
+          "lineNumber": 32
+        },
+        {
+          "caller": "SanitizeGPT2Config",
+          "callee": "CHECK_GT",
+          "lineNumber": 33
+        },
+        {
+          "caller": "SanitizeGPT2Config",
+          "callee": "CHECK_GT",
+          "lineNumber": 34
+        },
+        {
+          "caller": "SanitizeGPT2Config",
+          "callee": "CHECK_EQ",
+          "lineNumber": 35
+        },
+        {
+          "caller": "SanitizeGPT2Config",
+          "callee": "CHECK_EQ",
+          "lineNumber": 36
+        },
+        {
+          "caller": "SanitizeGPT2Config",
+          "callee": "CHECK",
+          "lineNumber": 37
+        },
+        {
+          "caller": "SanitizeGPT2Config",
+          "callee": "CHECK",
+          "lineNumber": 39
+        },
+        {
+          "caller": "SanitizeGPT2Config",
+          "callee": "CHECK",
+          "lineNumber": 40
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "example/llama3/checkpoint_loader.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 348,
+      "nonEmptyLines": 307,
+      "functions": [
+        {
+          "name": "LoadFromLLMC",
+          "startLine": 43,
+          "endLine": 347,
+          "params": [
+            "filepath"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "LoadFromLLMC",
+          "line": 43,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::filesystem::exists",
+          "lineNumber": 44
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 45
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadSeveralBytesFromIfstream",
+          "lineNumber": 49
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 51
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 52
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 53
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 54
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 56
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 57
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 58
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 59
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 60
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 61
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<float>",
+          "lineNumber": 62
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<uint32_t>",
+          "lineNumber": 63
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<float>",
+          "lineNumber": 64
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<float>",
+          "lineNumber": 65
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<int32_t>",
+          "lineNumber": 66
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<int32_t>",
+          "lineNumber": 67
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<int32_t>",
+          "lineNumber": 68
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "BytesToType<int32_t>",
+          "lineNumber": 69
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "llama3::LLaMA3Config",
+          "lineNumber": 71
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<bool>",
+          "lineNumber": 81
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "llama3::SanitizeLLaMA3Config",
+          "lineNumber": 84
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::make_shared<nn::TransformerModel>",
+          "lineNumber": 85
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "nn::parallel::global::GetPipelineParallelSize",
+          "lineNumber": 88
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "nn::parallel::global::GetVirtualPipelineParallelSize",
+          "lineNumber": 89
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "nn::parallel::PipelineParallel::GetStageInfo",
+          "lineNumber": 92
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "nn::parallel::global::GetTensorParallelSize",
+          "lineNumber": 99
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 102
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 103
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 104
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 105
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 108
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 109
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 110
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 111
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 112
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 113
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 114
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 115
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 116
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 117
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 118
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 119
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 120
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 121
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 122
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 124
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "size",
+          "lineNumber": 125
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "LOG",
+          "lineNumber": 126
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 131
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 131
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 135
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 138
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::llround",
+          "lineNumber": 139
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<double>",
+          "lineNumber": 139
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<double>",
+          "lineNumber": 139
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "round_up_to",
+          "lineNumber": 142
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 142
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 146
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 147
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 150
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 151
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 153
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 156
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 157
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 161
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "StateDict",
+          "lineNumber": 167
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 172
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 175
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 175
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 175
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 179
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 180
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int>",
+          "lineNumber": 185
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 187
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 188
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorAllFloat",
+          "lineNumber": 190
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 190
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 190
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 194
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int>",
+          "lineNumber": 201
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 203
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 205
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 208
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 208
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "tellg",
+          "lineNumber": 209
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 212
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 213
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 219
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 220
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 226
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 227
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 234
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 235
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int>",
+          "lineNumber": 241
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 243
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 245
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixColShardFloat",
+          "lineNumber": 247
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 247
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 247
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 252
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 253
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int>",
+          "lineNumber": 259
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 261
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 262
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorAllFloat",
+          "lineNumber": 264
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 264
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 264
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 267
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 268
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int>",
+          "lineNumber": 274
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 276
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 277
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 280
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 280
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 280
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 285
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 286
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int>",
+          "lineNumber": 292
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 294
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 295
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 298
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 298
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 298
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 303
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 304
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<int>",
+          "lineNumber": 310
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 312
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 313
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixColShardFloat",
+          "lineNumber": 316
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 316
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 316
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 321
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 322
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 331
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::format",
+          "lineNumber": 333
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadVectorAllFloat",
+          "lineNumber": 335
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 335
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 335
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "ReadMatrixRowShardFloat",
+          "lineNumber": 336
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 336
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 336
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 340
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 341
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "seekg",
+          "lineNumber": 342
+        }
+      ],
+      "metrics": {
+        "importCount": 10,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "example/llama3/checkpoint_loader.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 12,
+      "nonEmptyLines": 9,
+      "classes": [
+        {
+          "name": "TransformerModel",
+          "startLine": 7,
+          "endLine": 7,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "TransformerModel",
+          "line": 7,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "example/llama3/config.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 47,
+      "nonEmptyLines": 43,
+      "functions": [
+        {
+          "name": "LLaMA3Config",
+          "startLine": 9,
+          "endLine": 26,
+          "params": []
+        },
+        {
+          "name": "SanitizeLLaMA3Config",
+          "startLine": 28,
+          "endLine": 46,
+          "params": [
+            "c"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "LLaMA3Config",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "SanitizeLLaMA3Config",
+          "line": 28,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK_GT",
+          "lineNumber": 29
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK_GT",
+          "lineNumber": 30
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK_GE",
+          "lineNumber": 31
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK_GT",
+          "lineNumber": 32
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK_GT",
+          "lineNumber": 33
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK_GT",
+          "lineNumber": 34
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK_LE",
+          "lineNumber": 35
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK_EQ",
+          "lineNumber": 36
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK_GT",
+          "lineNumber": 37
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK_EQ",
+          "lineNumber": 38
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK",
+          "lineNumber": 39
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK",
+          "lineNumber": 40
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK",
+          "lineNumber": 41
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK",
+          "lineNumber": 42
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK",
+          "lineNumber": 43
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK",
+          "lineNumber": 44
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "has_value",
+          "lineNumber": 44
+        },
+        {
+          "caller": "SanitizeLLaMA3Config",
+          "callee": "CHECK_GT",
+          "lineNumber": 45
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "example/mixtral/checkpoint_loader.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 167,
+      "nonEmptyLines": 143,
+      "functions": [
+        {
+          "name": "ConfigFromLLMC",
+          "startLine": 40,
+          "endLine": 72,
+          "params": [
+            "filepath"
+          ]
+        },
+        {
+          "name": "CheckLLMCConfig",
+          "startLine": 74,
+          "endLine": 97,
+          "params": [
+            "filepath",
+            "expected_config"
+          ]
+        },
+        {
+          "name": "LoadFromLLMC",
+          "startLine": 99,
+          "endLine": 165,
+          "params": [
+            "filepath",
+            "expected_config"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "ConfigFromLLMC",
+          "line": 40,
+          "isDefault": false
+        },
+        {
+          "name": "CheckLLMCConfig",
+          "line": 74,
+          "isDefault": false
+        },
+        {
+          "name": "LoadFromLLMC",
+          "line": 99,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "CompareCheckpointValue",
+          "callee": "CHECK_EQ",
+          "lineNumber": 34
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "CHECK",
+          "lineNumber": 42
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::ReadSeveralBytesFromIfstream",
+          "lineNumber": 43
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "CHECK",
+          "lineNumber": 44
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 45
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 45
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 46
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 46
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "TinyMixtralConfig",
+          "lineNumber": 48
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 49
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 50
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 52
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 53
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 54
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 55
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<float>",
+          "lineNumber": 56
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<float>",
+          "lineNumber": 58
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<float>",
+          "lineNumber": 59
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 60
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 63
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 65
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 66
+        },
+        {
+          "caller": "ConfigFromLLMC",
+          "callee": "SanitizeTinyMixtralConfig",
+          "lineNumber": 70
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "SanitizeTinyMixtralConfig",
+          "lineNumber": 75
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "ConfigFromLLMC",
+          "lineNumber": 76
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 77
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 78
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 79
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 81
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 82
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 83
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 84
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 85
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 87
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 88
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 89
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CHECK",
+          "lineNumber": 91
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "has_value",
+          "lineNumber": 91
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "value",
+          "lineNumber": 92
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "value",
+          "lineNumber": 93
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 94
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 95
+        },
+        {
+          "caller": "CheckLLMCConfig",
+          "callee": "CompareCheckpointValue",
+          "lineNumber": 96
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CheckLLMCConfig",
+          "lineNumber": 101
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::make_shared<nn::TransformerModel>",
+          "lineNumber": 102
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK",
+          "lineNumber": 105
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "infini_train::ReadSeveralBytesFromIfstream",
+          "lineNumber": 106
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK",
+          "lineNumber": 107
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 108
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 108
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 109
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "infini_train::BytesToType<int32_t>",
+          "lineNumber": 109
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "StateDict",
+          "lineNumber": 112
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK",
+          "lineNumber": 114
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "contains",
+          "lineNumber": 114
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "at",
+          "lineNumber": 115
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK",
+          "lineNumber": 116
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "Dtype",
+          "lineNumber": 116
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "infini_train::ReadMatrixAllFloat",
+          "lineNumber": 118
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 118
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 118
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "NumElements",
+          "lineNumber": 118
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK",
+          "lineNumber": 119
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK",
+          "lineNumber": 124
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "contains",
+          "lineNumber": 124
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "at",
+          "lineNumber": 125
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK",
+          "lineNumber": 126
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "Dtype",
+          "lineNumber": 126
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 128
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "size",
+          "lineNumber": 128
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "Dims",
+          "lineNumber": 128
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_GE",
+          "lineNumber": 129
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_GT",
+          "lineNumber": 130
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_LE",
+          "lineNumber": 131
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "Dims",
+          "lineNumber": 131
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "Dims",
+          "lineNumber": 132
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "static_cast<float *>",
+          "lineNumber": 133
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "DataPtr",
+          "lineNumber": 133
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "infini_train::ReadMatrixAllFloat",
+          "lineNumber": 134
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK",
+          "lineNumber": 135
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "value",
+          "lineNumber": 138
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_tensor_by_state_key",
+          "lineNumber": 139
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 141
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_tensor_by_state_key",
+          "lineNumber": 142
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_projection_into_packed_qkv",
+          "lineNumber": 147
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_projection_into_packed_qkv",
+          "lineNumber": 148
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_projection_into_packed_qkv",
+          "lineNumber": 149
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_tensor_by_state_key",
+          "lineNumber": 150
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_tensor_by_state_key",
+          "lineNumber": 151
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_tensor_by_state_key",
+          "lineNumber": 152
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::to_string",
+          "lineNumber": 154
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_tensor_by_state_key",
+          "lineNumber": 155
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_tensor_by_state_key",
+          "lineNumber": 156
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_tensor_by_state_key",
+          "lineNumber": 157
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_tensor_by_state_key",
+          "lineNumber": 160
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "read_tensor_by_state_key",
+          "lineNumber": 161
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "CHECK_EQ",
+          "lineNumber": 163
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "peek",
+          "lineNumber": 163
+        },
+        {
+          "caller": "LoadFromLLMC",
+          "callee": "std::ifstream::traits_type::eof",
+          "lineNumber": 163
+        }
+      ],
+      "metrics": {
+        "importCount": 6,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "example/mixtral/checkpoint_loader.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 21,
+      "nonEmptyLines": 13,
+      "classes": [
+        {
+          "name": "TransformerModel",
+          "startLine": 9,
+          "endLine": 9,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "TransformerModel",
+          "line": 9,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "example/mixtral/config.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 77,
+      "nonEmptyLines": 68,
+      "functions": [
+        {
+          "name": "TinyMixtralConfig",
+          "startLine": 11,
+          "endLine": 41,
+          "params": []
+        },
+        {
+          "name": "SanitizeTinyMixtralConfig",
+          "startLine": 43,
+          "endLine": 75,
+          "params": [
+            "c"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "TinyMixtralConfig",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "SanitizeTinyMixtralConfig",
+          "line": 43,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_GT",
+          "lineNumber": 44
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_GT",
+          "lineNumber": 45
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_GE",
+          "lineNumber": 46
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_GT",
+          "lineNumber": 47
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_GT",
+          "lineNumber": 48
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_GT",
+          "lineNumber": 49
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_LE",
+          "lineNumber": 50
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_EQ",
+          "lineNumber": 51
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_GT",
+          "lineNumber": 52
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_EQ",
+          "lineNumber": 53
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK",
+          "lineNumber": 54
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK",
+          "lineNumber": 56
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK",
+          "lineNumber": 57
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK",
+          "lineNumber": 58
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK",
+          "lineNumber": 59
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK",
+          "lineNumber": 60
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK",
+          "lineNumber": 61
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK",
+          "lineNumber": 62
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK",
+          "lineNumber": 63
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "has_value",
+          "lineNumber": 63
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "value",
+          "lineNumber": 65
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_GT",
+          "lineNumber": 66
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_EQ",
+          "lineNumber": 67
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_GT",
+          "lineNumber": 68
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_LE",
+          "lineNumber": 69
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK_GT",
+          "lineNumber": 70
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK",
+          "lineNumber": 71
+        },
+        {
+          "caller": "SanitizeTinyMixtralConfig",
+          "callee": "CHECK",
+          "lineNumber": 73
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/include/autograd/scatter.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 29,
+      "nonEmptyLines": 20,
+      "functions": [
+        {
+          "name": "Scatter",
+          "startLine": 18,
+          "endLine": 18,
+          "params": [
+            "output_dims"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 9,
+          "endLine": 9,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Scatter",
+          "startLine": 14,
+          "endLine": 27,
+          "methods": [
+            "Scatter",
+            "Forward",
+            "SetupContext",
+            "Backward"
+          ],
+          "properties": [
+            "kType",
+            "output_dims_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "Scatter",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 23,
+          "isDefault": false
+        },
+        {
+          "name": "Scatter",
+          "line": 14,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 6,
+        "functionCount": 1,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "infini_train/include/autograd/sparse.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 27,
+      "nonEmptyLines": 20,
+      "functions": [
+        {
+          "name": "Embedding",
+          "startLine": 17,
+          "endLine": 17,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 9,
+          "endLine": 9,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Embedding",
+          "startLine": 13,
+          "endLine": 26,
+          "methods": [
+            "Embedding",
+            "Forward",
+            "SetupContext",
+            "Backward"
+          ],
+          "properties": [
+            "kType",
+            "weight_dims_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "Embedding",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "Embedding",
+          "line": 13,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 6,
+        "functionCount": 1,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "infini_train/include/autograd/topk.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 34,
+      "nonEmptyLines": 25,
+      "functions": [
+        {
+          "name": "TopK",
+          "startLine": 18,
+          "endLine": 19,
+          "params": [
+            "topk"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 9,
+          "endLine": 9,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "TopK",
+          "startLine": 14,
+          "endLine": 32,
+          "methods": [
+            "TopK",
+            "Forward",
+            "SetupContext",
+            "Backward"
+          ],
+          "properties": [
+            "kType",
+            "topk_",
+            "dim_",
+            "largest_",
+            "sorted_",
+            "input_dims_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "TopK",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "SetupContext",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "TopK",
+          "line": 14,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 6,
+        "functionCount": 1,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "infini_train/include/nn/functional.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 186,
+      "nonEmptyLines": 166,
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 8,
+          "endLine": 8,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 8,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "infini_train/include/nn/init.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 55,
+      "nonEmptyLines": 43,
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 12,
+          "endLine": 12,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Device",
+          "startLine": 13,
+          "endLine": 13,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 12,
+          "isDefault": false
+        },
+        {
+          "name": "Device",
+          "line": 13,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "infini_train/include/nn/modules/normalization.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 41,
+      "nonEmptyLines": 30,
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 10,
+          "endLine": 10,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "LayerNorm",
+          "startLine": 14,
+          "endLine": 27,
+          "methods": [
+            "Forward",
+            "ResetParameters"
+          ],
+          "properties": [
+            "kType",
+            "kParamWeightName",
+            "kParamBiasName",
+            "eps_"
+          ]
+        },
+        {
+          "name": "RMSNorm",
+          "startLine": 29,
+          "endLine": 40,
+          "methods": [
+            "Forward"
+          ],
+          "properties": [
+            "kType",
+            "kParamWeightName",
+            "eps_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "LayerNorm",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 36,
+          "isDefault": false
+        },
+        {
+          "name": "RMSNorm",
+          "line": 29,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 5,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "infini_train/include/nn/modules/sparse.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 27,
+      "nonEmptyLines": 20,
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 10,
+          "endLine": 10,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Device",
+          "startLine": 11,
+          "endLine": 11,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Embedding",
+          "startLine": 15,
+          "endLine": 26,
+          "methods": [
+            "Forward",
+            "ResetParameters"
+          ],
+          "properties": [
+            "kType",
+            "kParamWeightName"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "Device",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "Embedding",
+          "line": 15,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 4,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "infini_train/include/nn/modules/transformer/causal_self_attention.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 40,
+      "nonEmptyLines": 29,
+      "classes": [
+        {
+          "name": "CausalSelfAttention",
+          "startLine": 11,
+          "endLine": 39,
+          "methods": [
+            "Forward",
+            "SetupAttention",
+            "RepeatKV"
+          ],
+          "properties": [
+            "kType",
+            "kCAttnLayerName",
+            "kCProjLayerName",
+            "kParamBiasName",
+            "config_",
+            "n_head_",
+            "n_embd_",
+            "local_n_head_",
+            "n_kv_head_",
+            "n_rep_",
+            "head_dim_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "CausalSelfAttention",
+          "line": 11,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "infini_train/include/nn/modules/transformer/mlp.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 24,
+      "nonEmptyLines": 18,
+      "classes": [
+        {
+          "name": "MLP",
+          "startLine": 9,
+          "endLine": 23,
+          "methods": [
+            "Forward"
+          ],
+          "properties": [
+            "kType",
+            "kCFcLayerName",
+            "kGeluLayerName",
+            "kCProjLayerName",
+            "kCFc2LayerName",
+            "kSiluLayerName"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "MLP",
+          "line": 9,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "infini_train/include/nn/modules/transformer/moe/experts.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 25,
+      "nonEmptyLines": 17,
+      "classes": [
+        {
+          "name": "SequentialMLP",
+          "startLine": 11,
+          "endLine": 23,
+          "methods": [
+            "Forward"
+          ],
+          "properties": [
+            "kType",
+            "kExpertNamePrefix",
+            "config_",
+            "num_local_experts_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "SequentialMLP",
+          "line": 11,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "infini_train/include/nn/modules/transformer/moe/moe_layer.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 25,
+      "nonEmptyLines": 17,
+      "classes": [
+        {
+          "name": "MoELayer",
+          "startLine": 11,
+          "endLine": 23,
+          "methods": [
+            "Forward"
+          ],
+          "properties": [
+            "kType",
+            "kRouterLayerName",
+            "kExpertsLayerName",
+            "config_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "MoELayer",
+          "line": 11,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    }
+  ]
+}

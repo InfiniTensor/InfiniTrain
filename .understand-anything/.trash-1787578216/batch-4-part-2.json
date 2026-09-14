@@ -1,0 +1,365 @@
+{
+  "nodes": [
+    {
+      "id": "file:infini_train/include/nn/parallel/ddp/reducer.h",
+      "type": "file",
+      "name": "reducer.h",
+      "filePath": "infini_train/include/nn/parallel/ddp/reducer.h",
+      "fileCategory": "code",
+      "summary": "梯度归约器，实现数据并行训练中的参数分片、梯度归约、通信钩子和同步优化步骤。",
+      "tags": [
+        "数据并行",
+        "distributed-data-parallel",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/include/nn/parallel/ddp/reducer.h:GradBucket",
+      "type": "function",
+      "name": "GradBucket",
+      "filePath": "infini_train/include/nn/parallel/ddp/reducer.h",
+      "lineRange": [
+        32,
+        32
+      ],
+      "summary": "实现数据并行子系统中的 GradBucket 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "数据并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/ddp/reducer.h:GradBucket",
+      "type": "class",
+      "name": "GradBucket",
+      "filePath": "infini_train/include/nn/parallel/ddp/reducer.h",
+      "lineRange": [
+        30,
+        37
+      ],
+      "summary": "数据并行中的 GradBucket 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "数据并行",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/ddp/reducer.h:Reducer",
+      "type": "class",
+      "name": "Reducer",
+      "filePath": "infini_train/include/nn/parallel/ddp/reducer.h",
+      "lineRange": [
+        49,
+        156
+      ],
+      "summary": "管理梯度桶、反向钩子和异步梯度归约。",
+      "tags": [
+        "数据并行",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/include/nn/parallel/parallel_functional.h",
+      "type": "file",
+      "name": "parallel_functional.h",
+      "filePath": "infini_train/include/nn/parallel/parallel_functional.h",
+      "fileCategory": "code",
+      "summary": "parallel functional，属于分布式通信子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "分布式通信",
+        "distributed-communication",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/nn/parallel/pp/send_recv.h",
+      "type": "file",
+      "name": "send_recv.h",
+      "filePath": "infini_train/include/nn/parallel/pp/send_recv.h",
+      "fileCategory": "code",
+      "summary": "send recv，编排流水线并行的阶段划分、微批调度以及阶段间张量收发。",
+      "tags": [
+        "流水线并行",
+        "pipeline-parallel",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/nn/parallel/process_group.h",
+      "type": "file",
+      "name": "process_group.h",
+      "filePath": "infini_train/include/nn/parallel/process_group.h",
+      "fileCategory": "code",
+      "summary": "process group，属于分布式通信子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "分布式通信",
+        "distributed-communication",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/process_group.h:ProcessGroup",
+      "type": "class",
+      "name": "ProcessGroup",
+      "filePath": "infini_train/include/nn/parallel/process_group.h",
+      "lineRange": [
+        33,
+        113
+      ],
+      "summary": "表示分布式进程组，并提供集合通信和点对点通信入口。",
+      "tags": [
+        "分布式通信",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/process_group.h:ProcessGroupFactory",
+      "type": "class",
+      "name": "ProcessGroupFactory",
+      "filePath": "infini_train/include/nn/parallel/process_group.h",
+      "lineRange": [
+        115,
+        158
+      ],
+      "summary": "表示分布式进程组，并提供集合通信和点对点通信入口。",
+      "tags": [
+        "分布式通信",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/nn/parallel/rank.h",
+      "type": "file",
+      "name": "rank.h",
+      "filePath": "infini_train/include/nn/parallel/rank.h",
+      "fileCategory": "code",
+      "summary": "rank，属于分布式通信子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "分布式通信",
+        "distributed-communication",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/parallel/rank.h:Rank",
+      "type": "class",
+      "name": "Rank",
+      "filePath": "infini_train/include/nn/parallel/rank.h",
+      "lineRange": [
+        4,
+        26
+      ],
+      "summary": "分布式通信中的 Rank 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "分布式通信",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/include/nn/parallel/reduce_op_type.h",
+      "type": "file",
+      "name": "reduce_op_type.h",
+      "filePath": "infini_train/include/nn/parallel/reduce_op_type.h",
+      "fileCategory": "code",
+      "summary": "reduce op type，属于分布式通信子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "分布式通信",
+        "distributed-communication",
+        "公共接口"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/nn/parallel/utils.h",
+      "type": "file",
+      "name": "utils.h",
+      "filePath": "infini_train/include/nn/parallel/utils.h",
+      "fileCategory": "code",
+      "summary": "utils，属于分布式通信子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "分布式通信",
+        "distributed-communication",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/reducer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/reducer.h:GradBucket",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/reducer.h",
+      "target": "function:infini_train/include/nn/parallel/ddp/reducer.h:GradBucket",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/reducer.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/reducer.h:GradBucket",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/reducer.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/reducer.h:GradBucket",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/reducer.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/reducer.h:Reducer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/reducer.h",
+      "target": "class:infini_train/include/nn/parallel/ddp/reducer.h:Reducer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/process_group.h",
+      "target": "class:infini_train/include/nn/parallel/process_group.h:ProcessGroup",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/process_group.h",
+      "target": "class:infini_train/include/nn/parallel/process_group.h:ProcessGroup",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/process_group.h",
+      "target": "class:infini_train/include/nn/parallel/process_group.h:ProcessGroupFactory",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/process_group.h",
+      "target": "class:infini_train/include/nn/parallel/process_group.h:ProcessGroupFactory",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/rank.h",
+      "target": "class:infini_train/include/nn/parallel/rank.h:Rank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/rank.h",
+      "target": "class:infini_train/include/nn/parallel/rank.h:Rank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/reducer.h",
+      "target": "file:infini_train/include/datatype.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/reducer.h",
+      "target": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/ddp/reducer.h",
+      "target": "file:infini_train/include/nn/parallel/parallel_functional.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/parallel_functional.h",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/parallel_functional.h",
+      "target": "file:infini_train/include/nn/parallel/process_group.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/parallel_functional.h",
+      "target": "file:infini_train/include/nn/parallel/reduce_op_type.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/pp/send_recv.h",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/process_group.h",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/parallel/process_group.h",
+      "target": "file:infini_train/include/nn/parallel/reduce_op_type.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

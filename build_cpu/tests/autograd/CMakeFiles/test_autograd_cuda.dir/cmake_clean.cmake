@@ -1,0 +1,41 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_elementwise_backward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_elementwise_backward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_elementwise_forward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_elementwise_forward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_linear_backward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_linear_backward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_linear_forward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_linear_forward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_loss.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_loss.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_matmul_backward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_matmul_backward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_matmul_forward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_matmul_forward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_normalization_backward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_normalization_backward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_normalization_forward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_normalization_forward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_reduction_backward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_reduction_backward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_reduction_forward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_reduction_forward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_softmax_backward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_softmax_backward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_softmax_forward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_softmax_forward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_transform_backward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_transform_backward.cc.o.d"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_transform_forward.cc.o"
+  "CMakeFiles/test_autograd_cuda.dir/test_autograd_transform_forward.cc.o.d"
+  "test_autograd_cuda"
+  "test_autograd_cuda.pdb"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/test_autograd_cuda.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

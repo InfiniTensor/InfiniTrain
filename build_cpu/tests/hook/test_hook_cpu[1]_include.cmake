@@ -1,0 +1,5 @@
+if(EXISTS "/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/hook/test_hook_cpu[1]_tests.cmake")
+  include("/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/hook/test_hook_cpu[1]_tests.cmake")
+else()
+  add_test(test_hook_cpu_NOT_BUILT test_hook_cpu_NOT_BUILT)
+endif()

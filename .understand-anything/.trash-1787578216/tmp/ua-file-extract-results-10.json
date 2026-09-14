@@ -1,0 +1,7061 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 20,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "infini_train/include/nn/modules/transformer/moe/moe_utils.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 94,
+      "nonEmptyLines": 77,
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 10,
+          "endLine": 10,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "PermutationMetadata",
+          "startLine": 17,
+          "endLine": 36,
+          "methods": [],
+          "properties": [
+            "sorted_indices",
+            "expanded_sorted_indices",
+            "selected_probs_indices",
+            "tokens_per_expert"
+          ]
+        },
+        {
+          "name": "PermutationResult",
+          "startLine": 38,
+          "endLine": 48,
+          "methods": [],
+          "properties": [
+            "permuted_input",
+            "permuted_probs",
+            "metadata"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "PermutationMetadata",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "PermutationResult",
+          "line": 38,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "infini_train/include/nn/modules/transformer/moe/router.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 25,
+      "nonEmptyLines": 17,
+      "classes": [
+        {
+          "name": "TopKRouter",
+          "startLine": 11,
+          "endLine": 23,
+          "methods": [
+            "Forward"
+          ],
+          "properties": [
+            "kType",
+            "kParamWeightName",
+            "kParamBiasName",
+            "config_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "TopKRouter",
+          "line": 11,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "infini_train/include/nn/modules/transformer/moe/token_dispatcher.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 70,
+      "nonEmptyLines": 57,
+      "functions": [
+        {
+          "name": "~MoETokenDispatcher",
+          "startLine": 18,
+          "endLine": 18,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 11,
+          "endLine": 11,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "MoETokenDispatcher",
+          "startLine": 16,
+          "endLine": 49,
+          "methods": [
+            "~MoETokenDispatcher",
+            "Combine",
+            "DispatchPreprocess",
+            "TokenDispatch",
+            "CombinePreprocess",
+            "TokenCombine",
+            "CombinePostprocess"
+          ],
+          "properties": [
+            "config_",
+            "dispatch_",
+            "hidden_dims_",
+            "routing_map_",
+            "local_map_",
+            "local_probs_",
+            "num_tokens_",
+            "hidden_size_"
+          ]
+        },
+        {
+          "name": "MoEAllGatherTokenDispatcher",
+          "startLine": 51,
+          "endLine": 68,
+          "methods": [
+            "DispatchPreprocess",
+            "TokenDispatch",
+            "CombinePreprocess",
+            "TokenCombine",
+            "CombinePostprocess"
+          ],
+          "properties": [
+            "num_local_experts_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "~MoETokenDispatcher",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "Combine",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "MoETokenDispatcher",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "MoEAllGatherTokenDispatcher",
+          "line": 51,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 5,
+        "functionCount": 1,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "infini_train/include/nn/modules/transformer/transformer.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 86,
+      "nonEmptyLines": 63,
+      "classes": [
+        {
+          "name": "TransformerLayer",
+          "startLine": 10,
+          "endLine": 22,
+          "methods": [
+            "Forward"
+          ],
+          "properties": [
+            "kType",
+            "kLn1LayerName",
+            "kAttnLayerName",
+            "kLn2LayerName",
+            "kMlpLayerName"
+          ]
+        },
+        {
+          "name": "TransformerFirstStage",
+          "startLine": 24,
+          "endLine": 37,
+          "methods": [
+            "Forward"
+          ],
+          "properties": [
+            "kType",
+            "kWTELayerName",
+            "kWPELayerName",
+            "config_"
+          ]
+        },
+        {
+          "name": "TransformerChunk",
+          "startLine": 39,
+          "endLine": 52,
+          "methods": [
+            "Forward"
+          ],
+          "properties": [
+            "kType",
+            "kHLayerName",
+            "kFreqsCisName",
+            "config_"
+          ]
+        },
+        {
+          "name": "TransformerLastStage",
+          "startLine": 54,
+          "endLine": 67,
+          "methods": [
+            "Forward"
+          ],
+          "properties": [
+            "kType",
+            "kLnFLayerName",
+            "kLMHeadLayerName",
+            "config_"
+          ]
+        },
+        {
+          "name": "TransformerModel",
+          "startLine": 69,
+          "endLine": 84,
+          "methods": [
+            "Forward"
+          ],
+          "properties": [
+            "kType",
+            "kTransformerModelName",
+            "config_",
+            "stage_info_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Forward",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "TransformerLayer",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "TransformerFirstStage",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 47,
+          "isDefault": false
+        },
+        {
+          "name": "TransformerChunk",
+          "line": 39,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "TransformerLastStage",
+          "line": 54,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 76,
+          "isDefault": false
+        },
+        {
+          "name": "TransformerModel",
+          "line": 69,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 10,
+        "functionCount": 0,
+        "classCount": 5
+      }
+    },
+    {
+      "path": "infini_train/include/nn/modules/transformer/transformer_config.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 98,
+      "nonEmptyLines": 80,
+      "classes": [
+        {
+          "name": "MoEConfig",
+          "startLine": 32,
+          "endLine": 55,
+          "methods": [],
+          "properties": [
+            "num_experts",
+            "expert_parallel_size",
+            "router_topk",
+            "router_pre_softmax",
+            "router_topk_scaling_factor",
+            "router_score_function",
+            "moe_ffn_hidden_size",
+            "token_dispatcher_type",
+            "expert_impl"
+          ]
+        },
+        {
+          "name": "TransformerConfig",
+          "startLine": 57,
+          "endLine": 97,
+          "methods": [
+            "UseGQA",
+            "GetChunkSize"
+          ],
+          "properties": [
+            "block_size",
+            "vocab_size",
+            "original_vocab_size",
+            "n_layer",
+            "n_head",
+            "n_kv_head",
+            "n_embd",
+            "position_embedding_type",
+            "activation_type",
+            "ffn_type",
+            "norm_type",
+            "add_bias_linear",
+            "add_bias_lm_head",
+            "tie_weights",
+            "ffn_expansion_ratio",
+            "ffn_dim_multiplier",
+            "multiple_of",
+            "moe_config",
+            "rope_theta",
+            "use_scaled_rope",
+            "norm_eps",
+            "use_kv",
+            "flash",
+            "max_gen_batch_size"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "MoEConfig",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "UseGQA",
+          "line": 95,
+          "isDefault": false
+        },
+        {
+          "name": "GetChunkSize",
+          "line": 96,
+          "isDefault": false
+        },
+        {
+          "name": "TransformerConfig",
+          "line": 57,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 0,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "infini_train/include/nn/modules/transformer/utils.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 17,
+      "nonEmptyLines": 13,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/include/nn/parallel/tensor_parallel.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 131,
+      "nonEmptyLines": 97,
+      "functions": [
+        {
+          "name": "VocabParallelCrossEntropy",
+          "startLine": 103,
+          "endLine": 104,
+          "params": []
+        },
+        {
+          "name": "VocabParallelCrossEntropyLoss",
+          "startLine": 121,
+          "endLine": 122,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "Tensor",
+          "startLine": 11,
+          "endLine": 11,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "Device",
+          "startLine": 12,
+          "endLine": 12,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "ColumnParallelLinear",
+          "startLine": 21,
+          "endLine": 48,
+          "methods": [
+            "Forward",
+            "bias",
+            "gather_output",
+            "input_is_parallel",
+            "skip_bias_add",
+            "sequence_parallel"
+          ],
+          "properties": [
+            "kType",
+            "kParamWeightName",
+            "kParamBiasName",
+            "bias_",
+            "gather_output_",
+            "input_is_parallel_",
+            "skip_bias_add_",
+            "sequence_parallel_",
+            "output_size_per_partition_"
+          ]
+        },
+        {
+          "name": "RowParallelLinear",
+          "startLine": 50,
+          "endLine": 77,
+          "methods": [
+            "Forward",
+            "bias",
+            "reduce_output",
+            "input_is_parallel",
+            "skip_bias_add",
+            "sequence_parallel"
+          ],
+          "properties": [
+            "kType",
+            "kParamWeightName",
+            "kParamBiasName",
+            "bias_",
+            "reduce_output_",
+            "input_is_parallel_",
+            "skip_bias_add_",
+            "sequence_parallel_",
+            "input_size_per_partition_"
+          ]
+        },
+        {
+          "name": "VocabParallelEmbedding",
+          "startLine": 79,
+          "endLine": 97,
+          "methods": [
+            "Forward"
+          ],
+          "properties": [
+            "kType",
+            "kParamWeightName",
+            "reduce_scatter_embeddings_",
+            "vocab_size_global_",
+            "embedding_dim_",
+            "vocab_size_per_partition_",
+            "vocab_start_index_",
+            "vocab_end_index_"
+          ]
+        },
+        {
+          "name": "VocabParallelCrossEntropy",
+          "startLine": 99,
+          "endLine": 116,
+          "methods": [
+            "VocabParallelCrossEntropy",
+            "Forward",
+            "Backward"
+          ],
+          "properties": [
+            "kType",
+            "label_smoothing_",
+            "rows_",
+            "vocab_size_local_",
+            "vocab_size_global_",
+            "vocab_size_original_"
+          ]
+        },
+        {
+          "name": "VocabParallelCrossEntropyLoss",
+          "startLine": 118,
+          "endLine": 129,
+          "methods": [
+            "VocabParallelCrossEntropyLoss",
+            "Forward"
+          ],
+          "properties": [
+            "kType",
+            "label_smoothing_",
+            "vocab_size_original_"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tensor",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "Device",
+          "line": 12,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "bias",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "gather_output",
+          "line": 35,
+          "isDefault": false
+        },
+        {
+          "name": "input_is_parallel",
+          "line": 36,
+          "isDefault": false
+        },
+        {
+          "name": "skip_bias_add",
+          "line": 37,
+          "isDefault": false
+        },
+        {
+          "name": "sequence_parallel",
+          "line": 38,
+          "isDefault": false
+        },
+        {
+          "name": "ColumnParallelLinear",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 60,
+          "isDefault": false
+        },
+        {
+          "name": "bias",
+          "line": 63,
+          "isDefault": false
+        },
+        {
+          "name": "reduce_output",
+          "line": 64,
+          "isDefault": false
+        },
+        {
+          "name": "input_is_parallel",
+          "line": 65,
+          "isDefault": false
+        },
+        {
+          "name": "skip_bias_add",
+          "line": 66,
+          "isDefault": false
+        },
+        {
+          "name": "sequence_parallel",
+          "line": 67,
+          "isDefault": false
+        },
+        {
+          "name": "RowParallelLinear",
+          "line": 50,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "VocabParallelEmbedding",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "VocabParallelCrossEntropy",
+          "line": 103,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 106,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 107,
+          "isDefault": false
+        },
+        {
+          "name": "VocabParallelCrossEntropy",
+          "line": 99,
+          "isDefault": false
+        },
+        {
+          "name": "VocabParallelCrossEntropyLoss",
+          "line": 121,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 124,
+          "isDefault": false
+        },
+        {
+          "name": "VocabParallelCrossEntropyLoss",
+          "line": 118,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 25,
+        "functionCount": 2,
+        "classCount": 7
+      }
+    },
+    {
+      "path": "infini_train/src/nn/modules/normalization.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 46,
+      "nonEmptyLines": 38,
+      "functions": [
+        {
+          "name": "LayerNorm",
+          "startLine": 13,
+          "endLine": 22,
+          "params": [
+            "normalized_shape",
+            "eps",
+            "device"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 24,
+          "endLine": 28,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "ResetParameters",
+          "startLine": 30,
+          "endLine": 33,
+          "params": []
+        },
+        {
+          "name": "RMSNorm",
+          "startLine": 35,
+          "endLine": 39,
+          "params": [
+            "dim",
+            "eps",
+            "device"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 41,
+          "endLine": 45,
+          "params": [
+            "x"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "LayerNorm",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "ResetParameters",
+          "line": 30,
+          "isDefault": false
+        },
+        {
+          "name": "RMSNorm",
+          "line": 35,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 41,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "LayerNorm",
+          "callee": "RequiresGrad",
+          "lineNumber": 18
+        },
+        {
+          "caller": "LayerNorm",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 18
+        },
+        {
+          "caller": "LayerNorm",
+          "callee": "RequiresGrad",
+          "lineNumber": 20
+        },
+        {
+          "caller": "LayerNorm",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 20
+        },
+        {
+          "caller": "LayerNorm",
+          "callee": "ResetParameters",
+          "lineNumber": 21
+        },
+        {
+          "caller": "Forward",
+          "callee": "Apply",
+          "lineNumber": 25
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<autograd::LayerNorm>",
+          "lineNumber": 25
+        },
+        {
+          "caller": "ResetParameters",
+          "callee": "init::Ones",
+          "lineNumber": 31
+        },
+        {
+          "caller": "ResetParameters",
+          "callee": "init::Zeros",
+          "lineNumber": 32
+        },
+        {
+          "caller": "RMSNorm",
+          "callee": "RequiresGrad",
+          "lineNumber": 37
+        },
+        {
+          "caller": "RMSNorm",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 37
+        },
+        {
+          "caller": "RMSNorm",
+          "callee": "nn::init::Ones",
+          "lineNumber": 38
+        },
+        {
+          "caller": "Forward",
+          "callee": "function::Rsqrt",
+          "lineNumber": 43
+        },
+        {
+          "caller": "Forward",
+          "callee": "function::Mean",
+          "lineNumber": 43
+        },
+        {
+          "caller": "Forward",
+          "callee": "function::Pow",
+          "lineNumber": 43
+        }
+      ],
+      "metrics": {
+        "importCount": 6,
+        "exportCount": 5,
+        "functionCount": 5,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/modules/sparse.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 26,
+      "nonEmptyLines": 20,
+      "functions": [
+        {
+          "name": "Embedding",
+          "startLine": 13,
+          "endLine": 19,
+          "params": [
+            "num_embeddings",
+            "embedding_dim",
+            "device"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 21,
+          "endLine": 23,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "ResetParameters",
+          "startLine": 25,
+          "endLine": 25,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Embedding",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "ResetParameters",
+          "line": 25,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Embedding",
+          "callee": "RequiresGrad",
+          "lineNumber": 16
+        },
+        {
+          "caller": "Embedding",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 16
+        },
+        {
+          "caller": "Embedding",
+          "callee": "ResetParameters",
+          "lineNumber": 18
+        },
+        {
+          "caller": "Forward",
+          "callee": "Apply",
+          "lineNumber": 22
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<autograd::Embedding>",
+          "lineNumber": 22
+        },
+        {
+          "caller": "ResetParameters",
+          "callee": "init::Normal",
+          "lineNumber": 25
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/modules/transformer/causal_self_attention.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 175,
+      "nonEmptyLines": 146,
+      "functions": [
+        {
+          "name": "CausalSelfAttention",
+          "startLine": 23,
+          "endLine": 53,
+          "params": [
+            "config"
+          ]
+        },
+        {
+          "name": "SetupAttention",
+          "startLine": 55,
+          "endLine": 77,
+          "params": [
+            "config"
+          ]
+        },
+        {
+          "name": "RepeatKV",
+          "startLine": 79,
+          "endLine": 89,
+          "params": [
+            "x",
+            "n_rep"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 91,
+          "endLine": 173,
+          "params": [
+            "x"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "CausalSelfAttention",
+          "line": 23,
+          "isDefault": false
+        },
+        {
+          "name": "SetupAttention",
+          "line": 55,
+          "isDefault": false
+        },
+        {
+          "name": "RepeatKV",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 91,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "CausalSelfAttention",
+          "callee": "SetupAttention",
+          "lineNumber": 24
+        },
+        {
+          "caller": "CausalSelfAttention",
+          "callee": "std::make_shared<nn::parallel::ColumnParallelLinear>",
+          "lineNumber": 28
+        },
+        {
+          "caller": "CausalSelfAttention",
+          "callee": "nn::parallel::global::GetSequenceParallelEnabled",
+          "lineNumber": 35
+        },
+        {
+          "caller": "CausalSelfAttention",
+          "callee": "std::make_shared<nn::parallel::RowParallelLinear>",
+          "lineNumber": 38
+        },
+        {
+          "caller": "CausalSelfAttention",
+          "callee": "nn::parallel::global::GetSequenceParallelEnabled",
+          "lineNumber": 45
+        },
+        {
+          "caller": "CausalSelfAttention",
+          "callee": "View",
+          "lineNumber": 50
+        },
+        {
+          "caller": "CausalSelfAttention",
+          "callee": "function::Tril",
+          "lineNumber": 50
+        },
+        {
+          "caller": "CausalSelfAttention",
+          "callee": "nn::function::Ones",
+          "lineNumber": 50
+        },
+        {
+          "caller": "SetupAttention",
+          "callee": "nn::parallel::global::GetTensorParallelSize",
+          "lineNumber": 56
+        },
+        {
+          "caller": "SetupAttention",
+          "callee": "CHECK_EQ",
+          "lineNumber": 58
+        },
+        {
+          "caller": "SetupAttention",
+          "callee": "CHECK_EQ",
+          "lineNumber": 59
+        },
+        {
+          "caller": "SetupAttention",
+          "callee": "UseGQA",
+          "lineNumber": 67
+        },
+        {
+          "caller": "SetupAttention",
+          "callee": "CHECK_EQ",
+          "lineNumber": 68
+        },
+        {
+          "caller": "SetupAttention",
+          "callee": "CHECK_EQ",
+          "lineNumber": 69
+        },
+        {
+          "caller": "RepeatKV",
+          "callee": "Dims",
+          "lineNumber": 81
+        },
+        {
+          "caller": "RepeatKV",
+          "callee": "View",
+          "lineNumber": 88
+        },
+        {
+          "caller": "RepeatKV",
+          "callee": "Contiguous",
+          "lineNumber": 88
+        },
+        {
+          "caller": "RepeatKV",
+          "callee": "RepeatInterleave",
+          "lineNumber": 88
+        },
+        {
+          "caller": "RepeatKV",
+          "callee": "View",
+          "lineNumber": 88
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dims",
+          "lineNumber": 93
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dims",
+          "lineNumber": 94
+        },
+        {
+          "caller": "Forward",
+          "callee": "nn::parallel::global::GetTensorParallelSize",
+          "lineNumber": 96
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 103
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 104
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 105
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK",
+          "lineNumber": 107
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kCAttnLayerName])",
+          "lineNumber": 111
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dims",
+          "lineNumber": 113
+        },
+        {
+          "caller": "Forward",
+          "callee": "View",
+          "lineNumber": 120
+        },
+        {
+          "caller": "Forward",
+          "callee": "Slice",
+          "lineNumber": 120
+        },
+        {
+          "caller": "Forward",
+          "callee": "View",
+          "lineNumber": 122
+        },
+        {
+          "caller": "Forward",
+          "callee": "Slice",
+          "lineNumber": 122
+        },
+        {
+          "caller": "Forward",
+          "callee": "View",
+          "lineNumber": 124
+        },
+        {
+          "caller": "Forward",
+          "callee": "Slice",
+          "lineNumber": 124
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::tie",
+          "lineNumber": 128
+        },
+        {
+          "caller": "Forward",
+          "callee": "ApplyRotaryEmbedding",
+          "lineNumber": 128
+        },
+        {
+          "caller": "Forward",
+          "callee": "RepeatKV",
+          "lineNumber": 136
+        },
+        {
+          "caller": "Forward",
+          "callee": "RepeatKV",
+          "lineNumber": 137
+        },
+        {
+          "caller": "Forward",
+          "callee": "Transpose",
+          "lineNumber": 140
+        },
+        {
+          "caller": "Forward",
+          "callee": "Transpose",
+          "lineNumber": 141
+        },
+        {
+          "caller": "Forward",
+          "callee": "Transpose",
+          "lineNumber": 142
+        },
+        {
+          "caller": "Forward",
+          "callee": "Matmul",
+          "lineNumber": 153
+        },
+        {
+          "caller": "Forward",
+          "callee": "Transpose",
+          "lineNumber": 153
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::sqrt",
+          "lineNumber": 153
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<float>",
+          "lineNumber": 153
+        },
+        {
+          "caller": "Forward",
+          "callee": "MaskedFill",
+          "lineNumber": 156
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::numeric_limits<float>::lowest",
+          "lineNumber": 156
+        },
+        {
+          "caller": "Forward",
+          "callee": "Slice",
+          "lineNumber": 159
+        },
+        {
+          "caller": "Forward",
+          "callee": "MaskedFill",
+          "lineNumber": 160
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::numeric_limits<float>::infinity",
+          "lineNumber": 160
+        },
+        {
+          "caller": "Forward",
+          "callee": "nn::function::Softmax",
+          "lineNumber": 163
+        },
+        {
+          "caller": "Forward",
+          "callee": "Matmul",
+          "lineNumber": 165
+        },
+        {
+          "caller": "Forward",
+          "callee": "View",
+          "lineNumber": 167
+        },
+        {
+          "caller": "Forward",
+          "callee": "Contiguous",
+          "lineNumber": 167
+        },
+        {
+          "caller": "Forward",
+          "callee": "Transpose",
+          "lineNumber": 167
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kCProjLayerName])",
+          "lineNumber": 170
+        }
+      ],
+      "metrics": {
+        "importCount": 10,
+        "exportCount": 4,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/modules/transformer/mlp.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 115,
+      "nonEmptyLines": 98,
+      "functions": [
+        {
+          "name": "MLP",
+          "startLine": 22,
+          "endLine": 84,
+          "params": [
+            "config"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 86,
+          "endLine": 113,
+          "params": [
+            "x"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "MLP",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 86,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "MLP",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 25
+        },
+        {
+          "caller": "MLP",
+          "callee": "int",
+          "lineNumber": 29
+        },
+        {
+          "caller": "MLP",
+          "callee": "has_value",
+          "lineNumber": 33
+        },
+        {
+          "caller": "MLP",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 35
+        },
+        {
+          "caller": "MLP",
+          "callee": "std::llround",
+          "lineNumber": 35
+        },
+        {
+          "caller": "MLP",
+          "callee": "static_cast<double>",
+          "lineNumber": 35
+        },
+        {
+          "caller": "MLP",
+          "callee": "value",
+          "lineNumber": 35
+        },
+        {
+          "caller": "MLP",
+          "callee": "moe::RequireMoEConfig",
+          "lineNumber": 42
+        },
+        {
+          "caller": "MLP",
+          "callee": "CHECK_GT",
+          "lineNumber": 43
+        },
+        {
+          "caller": "MLP",
+          "callee": "CHECK_GT",
+          "lineNumber": 47
+        },
+        {
+          "caller": "MLP",
+          "callee": "std::make_shared<parallel::ColumnParallelLinear>",
+          "lineNumber": 50
+        },
+        {
+          "caller": "MLP",
+          "callee": "parallel::global::GetSequenceParallelEnabled",
+          "lineNumber": 56
+        },
+        {
+          "caller": "MLP",
+          "callee": "std::make_shared<nn::parallel::ColumnParallelLinear>",
+          "lineNumber": 60
+        },
+        {
+          "caller": "MLP",
+          "callee": "nn::parallel::global::GetSequenceParallelEnabled",
+          "lineNumber": 66
+        },
+        {
+          "caller": "MLP",
+          "callee": "std::make_shared<NewGELU>",
+          "lineNumber": 71
+        },
+        {
+          "caller": "MLP",
+          "callee": "std::make_shared<SwiGLU>",
+          "lineNumber": 73
+        },
+        {
+          "caller": "MLP",
+          "callee": "std::make_shared<nn::parallel::RowParallelLinear>",
+          "lineNumber": 77
+        },
+        {
+          "caller": "MLP",
+          "callee": "nn::parallel::global::GetSequenceParallelEnabled",
+          "lineNumber": 83
+        },
+        {
+          "caller": "Forward",
+          "callee": "contains",
+          "lineNumber": 88
+        },
+        {
+          "caller": "Forward",
+          "callee": "contains",
+          "lineNumber": 88
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kCFcLayerName])",
+          "lineNumber": 93
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kCFc2LayerName])",
+          "lineNumber": 95
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kSiluLayerName])",
+          "lineNumber": 97
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kCProjLayerName])",
+          "lineNumber": 101
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kCFcLayerName])",
+          "lineNumber": 106
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kGeluLayerName])",
+          "lineNumber": 108
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kCProjLayerName])",
+          "lineNumber": 110
+        }
+      ],
+      "metrics": {
+        "importCount": 11,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/modules/transformer/moe/experts.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 65,
+      "nonEmptyLines": 53,
+      "functions": [
+        {
+          "name": "SequentialMLP",
+          "startLine": 17,
+          "endLine": 31,
+          "params": [
+            "config"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 33,
+          "endLine": 63,
+          "params": [
+            "input_tensors"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "SequentialMLP",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 33,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "SequentialMLP",
+          "callee": "RequireMoEConfig",
+          "lineNumber": 18
+        },
+        {
+          "caller": "SequentialMLP",
+          "callee": "CHECK",
+          "lineNumber": 19
+        },
+        {
+          "caller": "SequentialMLP",
+          "callee": "CHECK_EQ",
+          "lineNumber": 20
+        },
+        {
+          "caller": "SequentialMLP",
+          "callee": "CHECK",
+          "lineNumber": 22
+        },
+        {
+          "caller": "SequentialMLP",
+          "callee": "CHECK_GT",
+          "lineNumber": 26
+        },
+        {
+          "caller": "SequentialMLP",
+          "callee": "std::string",
+          "lineNumber": 29
+        },
+        {
+          "caller": "SequentialMLP",
+          "callee": "std::to_string",
+          "lineNumber": 29
+        },
+        {
+          "caller": "SequentialMLP",
+          "callee": "std::make_shared<MLP>",
+          "lineNumber": 29
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 34
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 34
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_unique<MoEAllGatherTokenDispatcher>",
+          "lineNumber": 39
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dispatch",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Forward",
+          "callee": "Slice",
+          "lineNumber": 52
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::string",
+          "lineNumber": 53
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::to_string",
+          "lineNumber": 53
+        },
+        {
+          "caller": "Forward",
+          "callee": "push_back",
+          "lineNumber": 54
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_.at(expert_name))",
+          "lineNumber": 54
+        },
+        {
+          "caller": "Forward",
+          "callee": "at",
+          "lineNumber": 54
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 57
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dims",
+          "lineNumber": 57
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK",
+          "lineNumber": 58
+        },
+        {
+          "caller": "Forward",
+          "callee": "empty",
+          "lineNumber": 58
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 61
+        },
+        {
+          "caller": "Forward",
+          "callee": "nn::function::Concat",
+          "lineNumber": 61
+        },
+        {
+          "caller": "Forward",
+          "callee": "Combine",
+          "lineNumber": 62
+        }
+      ],
+      "metrics": {
+        "importCount": 6,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/modules/transformer/moe/moe_layer.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 33,
+      "nonEmptyLines": 25,
+      "functions": [
+        {
+          "name": "MoELayer",
+          "startLine": 15,
+          "endLine": 23,
+          "params": [
+            "config"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 25,
+          "endLine": 31,
+          "params": [
+            "input_tensors"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "MoELayer",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 25,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "MoELayer",
+          "callee": "RequireMoEConfig",
+          "lineNumber": 16
+        },
+        {
+          "caller": "MoELayer",
+          "callee": "CHECK",
+          "lineNumber": 17
+        },
+        {
+          "caller": "MoELayer",
+          "callee": "CHECK",
+          "lineNumber": 18
+        },
+        {
+          "caller": "MoELayer",
+          "callee": "std::make_shared<TopKRouter>",
+          "lineNumber": 21
+        },
+        {
+          "caller": "MoELayer",
+          "callee": "std::make_shared<SequentialMLP>",
+          "lineNumber": 22
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_.at(kRouterLayerName))",
+          "lineNumber": 28
+        },
+        {
+          "caller": "Forward",
+          "callee": "at",
+          "lineNumber": 28
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 29
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 29
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_.at(kExpertsLayerName))",
+          "lineNumber": 30
+        },
+        {
+          "caller": "Forward",
+          "callee": "at",
+          "lineNumber": 30
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/modules/transformer/moe/moe_utils.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 172,
+      "nonEmptyLines": 149,
+      "functions": [
+        {
+          "name": "TopkRoutingWithScoreFunction",
+          "startLine": 14,
+          "endLine": 61,
+          "params": [
+            "logits",
+            "topk",
+            "use_pre_softmax",
+            "scaling_factor",
+            "score_function"
+          ]
+        },
+        {
+          "name": "BuildPermutationMetadata",
+          "startLine": 68,
+          "endLine": 124,
+          "params": [
+            "routing_map"
+          ]
+        },
+        {
+          "name": "Permute",
+          "startLine": 126,
+          "endLine": 153,
+          "params": [
+            "tokens",
+            "probs",
+            "routing_map"
+          ]
+        },
+        {
+          "name": "Unpermute",
+          "startLine": 155,
+          "endLine": 170,
+          "params": [
+            "permuted_tokens",
+            "permuted_probs",
+            "metadata",
+            "restore_shape"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "TopkRoutingWithScoreFunction",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "BuildPermutationMetadata",
+          "line": 68,
+          "isDefault": false
+        },
+        {
+          "name": "Permute",
+          "line": 126,
+          "isDefault": false
+        },
+        {
+          "name": "Unpermute",
+          "line": 155,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "function::Softmax",
+          "lineNumber": 27
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "std::make_shared<autograd::TopK>",
+          "lineNumber": 28
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "Apply",
+          "lineNumber": 29
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "std::make_shared<autograd::TopK>",
+          "lineNumber": 33
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "Apply",
+          "lineNumber": 34
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "function::Softmax",
+          "lineNumber": 37
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "function::Sigmoid",
+          "lineNumber": 40
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "std::make_shared<autograd::TopK>",
+          "lineNumber": 41
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "Apply",
+          "lineNumber": 42
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "Sum",
+          "lineNumber": 46
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "LOG",
+          "lineNumber": 49
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "has_value",
+          "lineNumber": 52
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "value",
+          "lineNumber": 53
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "Apply",
+          "lineNumber": 56
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "std::make_shared<autograd::Scatter>",
+          "lineNumber": 56
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "Dims",
+          "lineNumber": 56
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 57
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "To",
+          "lineNumber": 57
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "Equals",
+          "lineNumber": 57
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 58
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 58
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "type",
+          "lineNumber": 59
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "GetDevice",
+          "lineNumber": 59
+        },
+        {
+          "caller": "TopkRoutingWithScoreFunction",
+          "callee": "Dims",
+          "lineNumber": 59
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "CHECK",
+          "lineNumber": 69
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "Dtype",
+          "lineNumber": 69
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "CHECK_EQ",
+          "lineNumber": 70
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "size",
+          "lineNumber": 70
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "Dims",
+          "lineNumber": 70
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "Dims",
+          "lineNumber": 72
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "Dims",
+          "lineNumber": 73
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "CHECK_GT",
+          "lineNumber": 74
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "CHECK_GT",
+          "lineNumber": 75
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "To",
+          "lineNumber": 77
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "Device",
+          "lineNumber": 77
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 78
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "static_cast<const bool *>",
+          "lineNumber": 79
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "DataPtr",
+          "lineNumber": 79
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "reserve",
+          "lineNumber": 84
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "NumElements",
+          "lineNumber": 84
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "reserve",
+          "lineNumber": 85
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "NumElements",
+          "lineNumber": 85
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "reserve",
+          "lineNumber": 86
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "push_back",
+          "lineNumber": 92
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "push_back",
+          "lineNumber": 93
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "push_back",
+          "lineNumber": 97
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 100
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "size",
+          "lineNumber": 100
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 102
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "Device",
+          "lineNumber": 102
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 104
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "Device",
+          "lineNumber": 104
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 106
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "Device",
+          "lineNumber": 106
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "static_cast<int64_t *>",
+          "lineNumber": 107
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "DataPtr",
+          "lineNumber": 107
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "static_cast<int64_t *>",
+          "lineNumber": 108
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "DataPtr",
+          "lineNumber": 108
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "static_cast<int64_t *>",
+          "lineNumber": 109
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "DataPtr",
+          "lineNumber": 109
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "type",
+          "lineNumber": 116
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "GetDevice",
+          "lineNumber": 116
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 119
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "To",
+          "lineNumber": 119
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "GetDevice",
+          "lineNumber": 119
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "to_device",
+          "lineNumber": 122
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "to_device",
+          "lineNumber": 122
+        },
+        {
+          "caller": "BuildPermutationMetadata",
+          "callee": "to_device",
+          "lineNumber": 123
+        },
+        {
+          "caller": "Permute",
+          "callee": "CHECK_EQ",
+          "lineNumber": 128
+        },
+        {
+          "caller": "Permute",
+          "callee": "size",
+          "lineNumber": 128
+        },
+        {
+          "caller": "Permute",
+          "callee": "Dims",
+          "lineNumber": 128
+        },
+        {
+          "caller": "Permute",
+          "callee": "CHECK",
+          "lineNumber": 129
+        },
+        {
+          "caller": "Permute",
+          "callee": "Dims",
+          "lineNumber": 129
+        },
+        {
+          "caller": "Permute",
+          "callee": "Dims",
+          "lineNumber": 129
+        },
+        {
+          "caller": "Permute",
+          "callee": "CHECK",
+          "lineNumber": 130
+        },
+        {
+          "caller": "Permute",
+          "callee": "Dtype",
+          "lineNumber": 130
+        },
+        {
+          "caller": "Permute",
+          "callee": "Dims",
+          "lineNumber": 132
+        },
+        {
+          "caller": "Permute",
+          "callee": "BuildPermutationMetadata",
+          "lineNumber": 133
+        },
+        {
+          "caller": "Permute",
+          "callee": "Dims",
+          "lineNumber": 134
+        },
+        {
+          "caller": "Permute",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 140
+        },
+        {
+          "caller": "Permute",
+          "callee": "Dtype",
+          "lineNumber": 140
+        },
+        {
+          "caller": "Permute",
+          "callee": "GetDevice",
+          "lineNumber": 140
+        },
+        {
+          "caller": "Permute",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 141
+        },
+        {
+          "caller": "Permute",
+          "callee": "Dtype",
+          "lineNumber": 141
+        },
+        {
+          "caller": "Permute",
+          "callee": "GetDevice",
+          "lineNumber": 141
+        },
+        {
+          "caller": "Permute",
+          "callee": "RepeatInterleave",
+          "lineNumber": 145
+        },
+        {
+          "caller": "Permute",
+          "callee": "Gather",
+          "lineNumber": 147
+        },
+        {
+          "caller": "Permute",
+          "callee": "Gather",
+          "lineNumber": 149
+        },
+        {
+          "caller": "Permute",
+          "callee": "View",
+          "lineNumber": 149
+        },
+        {
+          "caller": "Permute",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 149
+        },
+        {
+          "caller": "Permute",
+          "callee": "NumElements",
+          "lineNumber": 149
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "CHECK_EQ",
+          "lineNumber": 158
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "size",
+          "lineNumber": 158
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "Dims",
+          "lineNumber": 158
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "CHECK_EQ",
+          "lineNumber": 159
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "size",
+          "lineNumber": 159
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "Dims",
+          "lineNumber": 159
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "CHECK_EQ",
+          "lineNumber": 160
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "Dims",
+          "lineNumber": 160
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "Dims",
+          "lineNumber": 160
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "CHECK_EQ",
+          "lineNumber": 161
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "size",
+          "lineNumber": 161
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "View",
+          "lineNumber": 163
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "Dims",
+          "lineNumber": 163
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "RepeatInterleave",
+          "lineNumber": 167
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "Apply",
+          "lineNumber": 169
+        },
+        {
+          "caller": "Unpermute",
+          "callee": "std::make_shared<autograd::ScatterAdd>",
+          "lineNumber": 169
+        }
+      ],
+      "metrics": {
+        "importCount": 7,
+        "exportCount": 4,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/modules/transformer/moe/router.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 57,
+      "nonEmptyLines": 45,
+      "functions": [
+        {
+          "name": "TopKRouter",
+          "startLine": 18,
+          "endLine": 35,
+          "params": [
+            "config"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 37,
+          "endLine": 55,
+          "params": [
+            "input_tensors"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "TopKRouter",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 37,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "TopKRouter",
+          "callee": "RequireMoEConfig",
+          "lineNumber": 19
+        },
+        {
+          "caller": "TopKRouter",
+          "callee": "CHECK_GT",
+          "lineNumber": 20
+        },
+        {
+          "caller": "TopKRouter",
+          "callee": "CHECK_GT",
+          "lineNumber": 21
+        },
+        {
+          "caller": "TopKRouter",
+          "callee": "CHECK_LE",
+          "lineNumber": 22
+        },
+        {
+          "caller": "TopKRouter",
+          "callee": "RequiresGrad",
+          "lineNumber": 24
+        },
+        {
+          "caller": "TopKRouter",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 24
+        },
+        {
+          "caller": "TopKRouter",
+          "callee": "init::KaimingUniform",
+          "lineNumber": 27
+        },
+        {
+          "caller": "TopKRouter",
+          "callee": "RequiresGrad",
+          "lineNumber": 31
+        },
+        {
+          "caller": "TopKRouter",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 31
+        },
+        {
+          "caller": "TopKRouter",
+          "callee": "Fill",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 38
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 38
+        },
+        {
+          "caller": "Forward",
+          "callee": "at",
+          "lineNumber": 39
+        },
+        {
+          "caller": "Forward",
+          "callee": "contains",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Forward",
+          "callee": "push_back",
+          "lineNumber": 41
+        },
+        {
+          "caller": "Forward",
+          "callee": "at",
+          "lineNumber": 41
+        },
+        {
+          "caller": "Forward",
+          "callee": "Apply",
+          "lineNumber": 44
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<autograd::Linear>",
+          "lineNumber": 44
+        },
+        {
+          "caller": "Forward",
+          "callee": "RequireMoEConfig",
+          "lineNumber": 46
+        },
+        {
+          "caller": "Forward",
+          "callee": "TopkRoutingWithScoreFunction",
+          "lineNumber": 49
+        }
+      ],
+      "metrics": {
+        "importCount": 8,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 97,
+      "nonEmptyLines": 79,
+      "functions": [
+        {
+          "name": "MoETokenDispatcher",
+          "startLine": 12,
+          "endLine": 12,
+          "params": [
+            "config"
+          ]
+        },
+        {
+          "name": "Combine",
+          "startLine": 22,
+          "endLine": 26,
+          "params": [
+            "hidden_states"
+          ]
+        },
+        {
+          "name": "MoEAllGatherTokenDispatcher",
+          "startLine": 28,
+          "endLine": 31,
+          "params": [
+            "num_local_experts",
+            "config"
+          ]
+        },
+        {
+          "name": "DispatchPreprocess",
+          "startLine": 33,
+          "endLine": 52,
+          "params": [
+            "tokens",
+            "routing_map",
+            "probs"
+          ]
+        },
+        {
+          "name": "TokenDispatch",
+          "startLine": 54,
+          "endLine": 60,
+          "params": [
+            "hidden_states",
+            "probs"
+          ]
+        },
+        {
+          "name": "CombinePreprocess",
+          "startLine": 79,
+          "endLine": 85,
+          "params": [
+            "hidden_states"
+          ]
+        },
+        {
+          "name": "TokenCombine",
+          "startLine": 87,
+          "endLine": 90,
+          "params": [
+            "hidden_states"
+          ]
+        },
+        {
+          "name": "CombinePostprocess",
+          "startLine": 92,
+          "endLine": 95,
+          "params": [
+            "hidden_states"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "MoETokenDispatcher",
+          "line": 12,
+          "isDefault": false
+        },
+        {
+          "name": "Combine",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "MoEAllGatherTokenDispatcher",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "DispatchPreprocess",
+          "line": 33,
+          "isDefault": false
+        },
+        {
+          "name": "TokenDispatch",
+          "line": 54,
+          "isDefault": false
+        },
+        {
+          "name": "CombinePreprocess",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "TokenCombine",
+          "line": 87,
+          "isDefault": false
+        },
+        {
+          "name": "CombinePostprocess",
+          "line": 92,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Combine",
+          "callee": "CombinePreprocess",
+          "lineNumber": 23
+        },
+        {
+          "caller": "Combine",
+          "callee": "TokenCombine",
+          "lineNumber": 24
+        },
+        {
+          "caller": "Combine",
+          "callee": "CombinePostprocess",
+          "lineNumber": 25
+        },
+        {
+          "caller": "MoEAllGatherTokenDispatcher",
+          "callee": "CHECK_GT",
+          "lineNumber": 30
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "CHECK",
+          "lineNumber": 37
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "Dims",
+          "lineNumber": 37
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "Dims",
+          "lineNumber": 37
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "CHECK",
+          "lineNumber": 38
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "Dtype",
+          "lineNumber": 38
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "CHECK_GE",
+          "lineNumber": 39
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "size",
+          "lineNumber": 39
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "Dims",
+          "lineNumber": 39
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "Dims",
+          "lineNumber": 41
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "back",
+          "lineNumber": 42
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "CHECK_GT",
+          "lineNumber": 43
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "NumElements",
+          "lineNumber": 44
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "CHECK_EQ",
+          "lineNumber": 45
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "back",
+          "lineNumber": 45
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "Dims",
+          "lineNumber": 45
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "CHECK_EQ",
+          "lineNumber": 46
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "NumElements",
+          "lineNumber": 46
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "static_cast<size_t>",
+          "lineNumber": 46
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "View",
+          "lineNumber": 48
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "View",
+          "lineNumber": 49
+        },
+        {
+          "caller": "DispatchPreprocess",
+          "callee": "View",
+          "lineNumber": 50
+        },
+        {
+          "caller": "CombinePreprocess",
+          "callee": "CHECK",
+          "lineNumber": 81
+        },
+        {
+          "caller": "CombinePreprocess",
+          "callee": "CHECK",
+          "lineNumber": 82
+        },
+        {
+          "caller": "CombinePreprocess",
+          "callee": "Unpermute",
+          "lineNumber": 83
+        },
+        {
+          "caller": "CombinePostprocess",
+          "callee": "View",
+          "lineNumber": 94
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 8,
+        "functionCount": 8,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/modules/transformer/transformer.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 285,
+      "nonEmptyLines": 246,
+      "functions": [
+        {
+          "name": "TransformerFirstStage",
+          "startLine": 27,
+          "endLine": 38,
+          "params": [
+            "config"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 40,
+          "endLine": 75,
+          "params": [
+            "input"
+          ]
+        },
+        {
+          "name": "TransformerLayer",
+          "startLine": 77,
+          "endLine": 97,
+          "params": [
+            "config"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 99,
+          "endLine": 123,
+          "params": [
+            "x"
+          ]
+        },
+        {
+          "name": "TransformerChunk",
+          "startLine": 125,
+          "endLine": 133,
+          "params": [
+            "config",
+            "start_layer",
+            "end_layer"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 135,
+          "endLine": 174,
+          "params": [
+            "x"
+          ]
+        },
+        {
+          "name": "TransformerLastStage",
+          "startLine": 176,
+          "endLine": 196,
+          "params": [
+            "config"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 198,
+          "endLine": 205,
+          "params": [
+            "x"
+          ]
+        },
+        {
+          "name": "TransformerModel",
+          "startLine": 207,
+          "endLine": 273,
+          "params": [
+            "config"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 275,
+          "endLine": 283,
+          "params": [
+            "x"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "TransformerFirstStage",
+          "line": 27,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 40,
+          "isDefault": false
+        },
+        {
+          "name": "TransformerLayer",
+          "line": 77,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 99,
+          "isDefault": false
+        },
+        {
+          "name": "TransformerChunk",
+          "line": 125,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 135,
+          "isDefault": false
+        },
+        {
+          "name": "TransformerLastStage",
+          "line": 176,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 198,
+          "isDefault": false
+        },
+        {
+          "name": "TransformerModel",
+          "line": 207,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 275,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "TransformerFirstStage",
+          "callee": "std::make_shared<parallel::VocabParallelEmbedding>",
+          "lineNumber": 29
+        },
+        {
+          "caller": "TransformerFirstStage",
+          "callee": "parallel::global::GetSequenceParallelEnabled",
+          "lineNumber": 30
+        },
+        {
+          "caller": "TransformerFirstStage",
+          "callee": "std::make_shared<Embedding>",
+          "lineNumber": 34
+        },
+        {
+          "caller": "TransformerFirstStage",
+          "callee": "LOG",
+          "lineNumber": 36
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_LE",
+          "lineNumber": 43
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dims",
+          "lineNumber": 43
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dims",
+          "lineNumber": 44
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 45
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kWTELayerName])",
+          "lineNumber": 48
+        },
+        {
+          "caller": "Forward",
+          "callee": "contains",
+          "lineNumber": 51
+        },
+        {
+          "caller": "Forward",
+          "callee": "nn::parallel::global::GetTensorParallelSize",
+          "lineNumber": 54
+        },
+        {
+          "caller": "Forward",
+          "callee": "nn::parallel::global::GetSequenceParallelEnabled",
+          "lineNumber": 55
+        },
+        {
+          "caller": "Forward",
+          "callee": "Get",
+          "lineNumber": 58
+        },
+        {
+          "caller": "Forward",
+          "callee": "nn::parallel::ProcessGroupFactory::Instance",
+          "lineNumber": 58
+        },
+        {
+          "caller": "Forward",
+          "callee": "nn::parallel::GetTensorParallelProcessGroupName",
+          "lineNumber": 59
+        },
+        {
+          "caller": "Forward",
+          "callee": "GlobalRank",
+          "lineNumber": 59
+        },
+        {
+          "caller": "Forward",
+          "callee": "Rank",
+          "lineNumber": 59
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetGroupRank",
+          "lineNumber": 60
+        },
+        {
+          "caller": "Forward",
+          "callee": "GlobalRank",
+          "lineNumber": 60
+        },
+        {
+          "caller": "Forward",
+          "callee": "Rank",
+          "lineNumber": 60
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dims",
+          "lineNumber": 62
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dims",
+          "lineNumber": 62
+        },
+        {
+          "caller": "Forward",
+          "callee": "nn::init::Arange",
+          "lineNumber": 64
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kWPELayerName])",
+          "lineNumber": 67
+        },
+        {
+          "caller": "TransformerLayer",
+          "callee": "std::make_shared<nn::LayerNorm>",
+          "lineNumber": 80
+        },
+        {
+          "caller": "TransformerLayer",
+          "callee": "std::make_shared<nn::LayerNorm>",
+          "lineNumber": 81
+        },
+        {
+          "caller": "TransformerLayer",
+          "callee": "std::make_shared<RMSNorm>",
+          "lineNumber": 84
+        },
+        {
+          "caller": "TransformerLayer",
+          "callee": "std::make_shared<RMSNorm>",
+          "lineNumber": 85
+        },
+        {
+          "caller": "TransformerLayer",
+          "callee": "LOG",
+          "lineNumber": 88
+        },
+        {
+          "caller": "TransformerLayer",
+          "callee": "std::make_shared<CausalSelfAttention>",
+          "lineNumber": 91
+        },
+        {
+          "caller": "TransformerLayer",
+          "callee": "std::make_shared<moe::MoELayer>",
+          "lineNumber": 93
+        },
+        {
+          "caller": "TransformerLayer",
+          "callee": "std::make_shared<MLP>",
+          "lineNumber": 95
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kLn1LayerName])",
+          "lineNumber": 101
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 104
+        },
+        {
+          "caller": "Forward",
+          "callee": "push_back",
+          "lineNumber": 105
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 107
+        },
+        {
+          "caller": "Forward",
+          "callee": "push_back",
+          "lineNumber": 108
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 110
+        },
+        {
+          "caller": "Forward",
+          "callee": "push_back",
+          "lineNumber": 111
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kAttnLayerName])",
+          "lineNumber": 114
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kMlpLayerName])",
+          "lineNumber": 119
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kLn2LayerName])",
+          "lineNumber": 119
+        },
+        {
+          "caller": "TransformerChunk",
+          "callee": "std::make_shared<TransformerLayer>",
+          "lineNumber": 129
+        },
+        {
+          "caller": "TransformerChunk",
+          "callee": "push_back",
+          "lineNumber": 130
+        },
+        {
+          "caller": "TransformerChunk",
+          "callee": "std::make_shared<nn::ModuleList>",
+          "lineNumber": 132
+        },
+        {
+          "caller": "TransformerChunk",
+          "callee": "std::move",
+          "lineNumber": 132
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 141
+        },
+        {
+          "caller": "Forward",
+          "callee": "PrecomputeFreqsCis",
+          "lineNumber": 146
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dims",
+          "lineNumber": 150
+        },
+        {
+          "caller": "Forward",
+          "callee": "nn::parallel::global::GetSequenceParallelSize",
+          "lineNumber": 150
+        },
+        {
+          "caller": "Forward",
+          "callee": "Slice",
+          "lineNumber": 154
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 157
+        },
+        {
+          "caller": "Forward",
+          "callee": "To",
+          "lineNumber": 157
+        },
+        {
+          "caller": "Forward",
+          "callee": "nn::function::Ones",
+          "lineNumber": 157
+        },
+        {
+          "caller": "Forward",
+          "callee": "View",
+          "lineNumber": 158
+        },
+        {
+          "caller": "Forward",
+          "callee": "nn::function::Triu",
+          "lineNumber": 158
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::dynamic_pointer_cast<nn::ModuleList>",
+          "lineNumber": 163
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*h)",
+          "lineNumber": 164
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::dynamic_pointer_cast<nn::ModuleList>",
+          "lineNumber": 168
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*h)",
+          "lineNumber": 168
+        },
+        {
+          "caller": "Forward",
+          "callee": "LOG",
+          "lineNumber": 170
+        },
+        {
+          "caller": "TransformerLastStage",
+          "callee": "std::make_shared<nn::LayerNorm>",
+          "lineNumber": 179
+        },
+        {
+          "caller": "TransformerLastStage",
+          "callee": "std::make_shared<RMSNorm>",
+          "lineNumber": 182
+        },
+        {
+          "caller": "TransformerLastStage",
+          "callee": "LOG",
+          "lineNumber": 185
+        },
+        {
+          "caller": "TransformerLastStage",
+          "callee": "std::make_shared<parallel::ColumnParallelLinear>",
+          "lineNumber": 188
+        },
+        {
+          "caller": "TransformerLastStage",
+          "callee": "nn::parallel::global::GetSequenceParallelEnabled",
+          "lineNumber": 195
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kLnFLayerName])",
+          "lineNumber": 200
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kLMHeadLayerName])",
+          "lineNumber": 204
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "nn::parallel::PipelineParallel::GetStageInfo",
+          "lineNumber": 209
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "nn::parallel::global::GetPipelineParallelSize",
+          "lineNumber": 210
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "nn::parallel::global::GetVirtualPipelineParallelSize",
+          "lineNumber": 211
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "nn::parallel::global::GetTensorParallelSize",
+          "lineNumber": 212
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "CHECK_EQ",
+          "lineNumber": 217
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "std::make_shared<TransformerFirstStage>",
+          "lineNumber": 221
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "mutable_module",
+          "lineNumber": 223
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "mutable_module",
+          "lineNumber": 226
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "size",
+          "lineNumber": 232
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "std::make_shared<TransformerChunk>",
+          "lineNumber": 234
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "std::make_pair",
+          "lineNumber": 235
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "push_back",
+          "lineNumber": 242
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "mutable_module",
+          "lineNumber": 242
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "mutable_module",
+          "lineNumber": 242
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "std::to_string",
+          "lineNumber": 242
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "std::to_string",
+          "lineNumber": 244
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "std::move",
+          "lineNumber": 244
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "std::make_shared<nn::ModuleList>",
+          "lineNumber": 247
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "std::move",
+          "lineNumber": 247
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "std::make_shared<TransformerLastStage>",
+          "lineNumber": 251
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "mutable_module",
+          "lineNumber": 253
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "mutable_module",
+          "lineNumber": 255
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "std::make_shared<nn::ModuleDict>",
+          "lineNumber": 257
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "std::move",
+          "lineNumber": 257
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "nn::parallel::global::GetPipelineParallelSize",
+          "lineNumber": 265
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "mutable_parameter",
+          "lineNumber": 267
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "mutable_module",
+          "lineNumber": 267
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "mutable_module",
+          "lineNumber": 267
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "parameter",
+          "lineNumber": 270
+        },
+        {
+          "caller": "TransformerModel",
+          "callee": "module",
+          "lineNumber": 270
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kPPFirstStageName])",
+          "lineNumber": 276
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 277
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)])",
+          "lineNumber": 278
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::to_string",
+          "lineNumber": 278
+        },
+        {
+          "caller": "Forward",
+          "callee": "(*modules_[kPPLastStageName])",
+          "lineNumber": 281
+        }
+      ],
+      "metrics": {
+        "importCount": 15,
+        "exportCount": 10,
+        "functionCount": 10,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/modules/transformer/utils.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 68,
+      "nonEmptyLines": 55,
+      "functions": [
+        {
+          "name": "PrecomputeFreqsCis",
+          "startLine": 13,
+          "endLine": 33,
+          "params": [
+            "dim",
+            "end",
+            "theta",
+            "use_scaled",
+            "device"
+          ]
+        },
+        {
+          "name": "ApplyRotaryEmbedding",
+          "startLine": 35,
+          "endLine": 67,
+          "params": [
+            "xq",
+            "xk",
+            "freqs_cis"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "PrecomputeFreqsCis",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "ApplyRotaryEmbedding",
+          "line": 35,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "PrecomputeFreqsCis",
+          "callee": "CHECK_GE",
+          "lineNumber": 15
+        },
+        {
+          "caller": "PrecomputeFreqsCis",
+          "callee": "Slice",
+          "lineNumber": 17
+        },
+        {
+          "caller": "PrecomputeFreqsCis",
+          "callee": "nn::init::Arange",
+          "lineNumber": 17
+        },
+        {
+          "caller": "PrecomputeFreqsCis",
+          "callee": "nn::function::Pow",
+          "lineNumber": 18
+        },
+        {
+          "caller": "PrecomputeFreqsCis",
+          "callee": "float",
+          "lineNumber": 18
+        },
+        {
+          "caller": "PrecomputeFreqsCis",
+          "callee": "nn::init::Arange",
+          "lineNumber": 23
+        },
+        {
+          "caller": "PrecomputeFreqsCis",
+          "callee": "Outer",
+          "lineNumber": 25
+        },
+        {
+          "caller": "PrecomputeFreqsCis",
+          "callee": "nn::function::Cos",
+          "lineNumber": 26
+        },
+        {
+          "caller": "PrecomputeFreqsCis",
+          "callee": "nn::function::Sin",
+          "lineNumber": 27
+        },
+        {
+          "caller": "PrecomputeFreqsCis",
+          "callee": "Contiguous",
+          "lineNumber": 30
+        },
+        {
+          "caller": "PrecomputeFreqsCis",
+          "callee": "nn::function::Stack",
+          "lineNumber": 30
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "Dims",
+          "lineNumber": 38
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "View",
+          "lineNumber": 43
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "Squeeze",
+          "lineNumber": 45
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "Slice",
+          "lineNumber": 45
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "Squeeze",
+          "lineNumber": 46
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "Slice",
+          "lineNumber": 46
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "Slice",
+          "lineNumber": 49
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "back",
+          "lineNumber": 49
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "Dims",
+          "lineNumber": 49
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "Slice",
+          "lineNumber": 50
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "back",
+          "lineNumber": 50
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "Dims",
+          "lineNumber": 50
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "std::make_pair",
+          "lineNumber": 51
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "slice_pair",
+          "lineNumber": 54
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "Flatten",
+          "lineNumber": 58
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "nn::function::Stack",
+          "lineNumber": 58
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "slice_pair",
+          "lineNumber": 60
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "Flatten",
+          "lineNumber": 64
+        },
+        {
+          "caller": "ApplyRotaryEmbedding",
+          "callee": "nn::function::Stack",
+          "lineNumber": 64
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 540,
+      "nonEmptyLines": 430,
+      "functions": [
+        {
+          "name": "GatherAlongFirstDim",
+          "startLine": 28,
+          "endLine": 30,
+          "params": [
+            "tensor"
+          ]
+        },
+        {
+          "name": "GatherAlongLastDim",
+          "startLine": 32,
+          "endLine": 34,
+          "params": [
+            "tensor"
+          ]
+        },
+        {
+          "name": "SplitAlongLastDim",
+          "startLine": 36,
+          "endLine": 52,
+          "params": [
+            "tensor"
+          ]
+        },
+        {
+          "name": "Reduce",
+          "startLine": 54,
+          "endLine": 70,
+          "params": [
+            "tensor"
+          ]
+        },
+        {
+          "name": "ReduceScatterAlongFirstDim",
+          "startLine": 72,
+          "endLine": 93,
+          "params": [
+            "tensor"
+          ]
+        },
+        {
+          "name": "CopyToTPRegion",
+          "startLine": 100,
+          "endLine": 100,
+          "params": []
+        },
+        {
+          "name": "Forward",
+          "startLine": 102,
+          "endLine": 106,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 108,
+          "endLine": 110,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "GatherFromTPRegion",
+          "startLine": 117,
+          "endLine": 117,
+          "params": []
+        },
+        {
+          "name": "Forward",
+          "startLine": 119,
+          "endLine": 121,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 123,
+          "endLine": 127,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "ScatterToTPRegion",
+          "startLine": 134,
+          "endLine": 134,
+          "params": []
+        },
+        {
+          "name": "Forward",
+          "startLine": 136,
+          "endLine": 140,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 142,
+          "endLine": 144,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "ReduceFromTPRegion",
+          "startLine": 151,
+          "endLine": 151,
+          "params": []
+        },
+        {
+          "name": "Forward",
+          "startLine": 153,
+          "endLine": 156,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 158,
+          "endLine": 160,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "ReduceScatterToSPRegion",
+          "startLine": 167,
+          "endLine": 167,
+          "params": []
+        },
+        {
+          "name": "Forward",
+          "startLine": 169,
+          "endLine": 172,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 174,
+          "endLine": 177,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "GatherFromSPRegion",
+          "startLine": 184,
+          "endLine": 184,
+          "params": []
+        },
+        {
+          "name": "Forward",
+          "startLine": 186,
+          "endLine": 189,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 191,
+          "endLine": 194,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "LinearResetParameters",
+          "startLine": 197,
+          "endLine": 204,
+          "params": [
+            "weight"
+          ]
+        },
+        {
+          "name": "CopyToTPRegionFunc",
+          "startLine": 209,
+          "endLine": 211,
+          "params": [
+            "input"
+          ]
+        },
+        {
+          "name": "ScatterToTPRegionFunc",
+          "startLine": 213,
+          "endLine": 215,
+          "params": [
+            "input"
+          ]
+        },
+        {
+          "name": "ReduceFromTPRegionFunc",
+          "startLine": 217,
+          "endLine": 219,
+          "params": [
+            "input"
+          ]
+        },
+        {
+          "name": "GatherFromTPRegionFunc",
+          "startLine": 221,
+          "endLine": 223,
+          "params": [
+            "input"
+          ]
+        },
+        {
+          "name": "ReduceScatterToSPRegionFunc",
+          "startLine": 225,
+          "endLine": 227,
+          "params": [
+            "input"
+          ]
+        },
+        {
+          "name": "GatherFromSPRegionFunc",
+          "startLine": 229,
+          "endLine": 231,
+          "params": [
+            "input"
+          ]
+        },
+        {
+          "name": "ColumnParallelLinear",
+          "startLine": 233,
+          "endLine": 257,
+          "params": [
+            "in_features",
+            "out_features",
+            "bias",
+            "gather_output",
+            "input_is_parallel",
+            "skip_bias_add",
+            "sequence_parallel"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 259,
+          "endLine": 280,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "bias",
+          "startLine": 283,
+          "endLine": 283,
+          "params": []
+        },
+        {
+          "name": "gather_output",
+          "startLine": 284,
+          "endLine": 284,
+          "params": []
+        },
+        {
+          "name": "input_is_parallel",
+          "startLine": 285,
+          "endLine": 285,
+          "params": []
+        },
+        {
+          "name": "skip_bias_add",
+          "startLine": 286,
+          "endLine": 286,
+          "params": []
+        },
+        {
+          "name": "sequence_parallel",
+          "startLine": 287,
+          "endLine": 287,
+          "params": []
+        },
+        {
+          "name": "RowParallelLinear",
+          "startLine": 289,
+          "endLine": 314,
+          "params": [
+            "in_features",
+            "out_features",
+            "bias",
+            "reduce_output",
+            "input_is_parallel",
+            "skip_bias_add",
+            "sequence_parallel"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 316,
+          "endLine": 336,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "bias",
+          "startLine": 339,
+          "endLine": 339,
+          "params": []
+        },
+        {
+          "name": "reduce_output",
+          "startLine": 340,
+          "endLine": 340,
+          "params": []
+        },
+        {
+          "name": "input_is_parallel",
+          "startLine": 341,
+          "endLine": 341,
+          "params": []
+        },
+        {
+          "name": "skip_bias_add",
+          "startLine": 342,
+          "endLine": 342,
+          "params": []
+        },
+        {
+          "name": "sequence_parallel",
+          "startLine": 343,
+          "endLine": 343,
+          "params": []
+        },
+        {
+          "name": "VocabParallelEmbedding",
+          "startLine": 345,
+          "endLine": 366,
+          "params": [
+            "num_embeddings",
+            "embedding_dim",
+            "reduce_scatter_embeddings"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 368,
+          "endLine": 401,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 403,
+          "endLine": 508,
+          "params": [
+            "input_tensors"
+          ]
+        },
+        {
+          "name": "Backward",
+          "startLine": 510,
+          "endLine": 526,
+          "params": [
+            "grad_outputs"
+          ]
+        },
+        {
+          "name": "Forward",
+          "startLine": 528,
+          "endLine": 539,
+          "params": [
+            "input_tensors"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "CopyToTPRegion",
+          "startLine": 96,
+          "endLine": 111,
+          "methods": [
+            "CopyToTPRegion",
+            "Forward",
+            "Backward"
+          ],
+          "properties": [
+            "kType"
+          ]
+        },
+        {
+          "name": "GatherFromTPRegion",
+          "startLine": 113,
+          "endLine": 128,
+          "methods": [
+            "GatherFromTPRegion",
+            "Forward",
+            "Backward"
+          ],
+          "properties": [
+            "kType"
+          ]
+        },
+        {
+          "name": "ScatterToTPRegion",
+          "startLine": 130,
+          "endLine": 145,
+          "methods": [
+            "ScatterToTPRegion",
+            "Forward",
+            "Backward"
+          ],
+          "properties": [
+            "kType"
+          ]
+        },
+        {
+          "name": "ReduceFromTPRegion",
+          "startLine": 147,
+          "endLine": 161,
+          "methods": [
+            "ReduceFromTPRegion",
+            "Forward",
+            "Backward"
+          ],
+          "properties": [
+            "kType"
+          ]
+        },
+        {
+          "name": "ReduceScatterToSPRegion",
+          "startLine": 163,
+          "endLine": 178,
+          "methods": [
+            "ReduceScatterToSPRegion",
+            "Forward",
+            "Backward"
+          ],
+          "properties": [
+            "kType"
+          ]
+        },
+        {
+          "name": "GatherFromSPRegion",
+          "startLine": 180,
+          "endLine": 195,
+          "methods": [
+            "GatherFromSPRegion",
+            "Forward",
+            "Backward"
+          ],
+          "properties": [
+            "kType"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "GatherAlongFirstDim",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "GatherAlongLastDim",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "SplitAlongLastDim",
+          "line": 36,
+          "isDefault": false
+        },
+        {
+          "name": "Reduce",
+          "line": 54,
+          "isDefault": false
+        },
+        {
+          "name": "ReduceScatterAlongFirstDim",
+          "line": 72,
+          "isDefault": false
+        },
+        {
+          "name": "CopyToTPRegion",
+          "line": 100,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 102,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 108,
+          "isDefault": false
+        },
+        {
+          "name": "CopyToTPRegion",
+          "line": 96,
+          "isDefault": false
+        },
+        {
+          "name": "GatherFromTPRegion",
+          "line": 117,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 119,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 123,
+          "isDefault": false
+        },
+        {
+          "name": "GatherFromTPRegion",
+          "line": 113,
+          "isDefault": false
+        },
+        {
+          "name": "ScatterToTPRegion",
+          "line": 134,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 136,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 142,
+          "isDefault": false
+        },
+        {
+          "name": "ScatterToTPRegion",
+          "line": 130,
+          "isDefault": false
+        },
+        {
+          "name": "ReduceFromTPRegion",
+          "line": 151,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 153,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 158,
+          "isDefault": false
+        },
+        {
+          "name": "ReduceFromTPRegion",
+          "line": 147,
+          "isDefault": false
+        },
+        {
+          "name": "ReduceScatterToSPRegion",
+          "line": 167,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 169,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 174,
+          "isDefault": false
+        },
+        {
+          "name": "ReduceScatterToSPRegion",
+          "line": 163,
+          "isDefault": false
+        },
+        {
+          "name": "GatherFromSPRegion",
+          "line": 184,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 186,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 191,
+          "isDefault": false
+        },
+        {
+          "name": "GatherFromSPRegion",
+          "line": 180,
+          "isDefault": false
+        },
+        {
+          "name": "LinearResetParameters",
+          "line": 197,
+          "isDefault": false
+        },
+        {
+          "name": "CopyToTPRegionFunc",
+          "line": 209,
+          "isDefault": false
+        },
+        {
+          "name": "ScatterToTPRegionFunc",
+          "line": 213,
+          "isDefault": false
+        },
+        {
+          "name": "ReduceFromTPRegionFunc",
+          "line": 217,
+          "isDefault": false
+        },
+        {
+          "name": "GatherFromTPRegionFunc",
+          "line": 221,
+          "isDefault": false
+        },
+        {
+          "name": "ReduceScatterToSPRegionFunc",
+          "line": 225,
+          "isDefault": false
+        },
+        {
+          "name": "GatherFromSPRegionFunc",
+          "line": 229,
+          "isDefault": false
+        },
+        {
+          "name": "ColumnParallelLinear",
+          "line": 233,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 259,
+          "isDefault": false
+        },
+        {
+          "name": "bias",
+          "line": 283,
+          "isDefault": false
+        },
+        {
+          "name": "gather_output",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "input_is_parallel",
+          "line": 285,
+          "isDefault": false
+        },
+        {
+          "name": "skip_bias_add",
+          "line": 286,
+          "isDefault": false
+        },
+        {
+          "name": "sequence_parallel",
+          "line": 287,
+          "isDefault": false
+        },
+        {
+          "name": "RowParallelLinear",
+          "line": 289,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 316,
+          "isDefault": false
+        },
+        {
+          "name": "bias",
+          "line": 339,
+          "isDefault": false
+        },
+        {
+          "name": "reduce_output",
+          "line": 340,
+          "isDefault": false
+        },
+        {
+          "name": "input_is_parallel",
+          "line": 341,
+          "isDefault": false
+        },
+        {
+          "name": "skip_bias_add",
+          "line": 342,
+          "isDefault": false
+        },
+        {
+          "name": "sequence_parallel",
+          "line": 343,
+          "isDefault": false
+        },
+        {
+          "name": "VocabParallelEmbedding",
+          "line": 345,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 368,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 403,
+          "isDefault": false
+        },
+        {
+          "name": "Backward",
+          "line": 510,
+          "isDefault": false
+        },
+        {
+          "name": "Forward",
+          "line": 528,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "GatherAlongFirstDim",
+          "callee": "GatherTensorParallelShard",
+          "lineNumber": 29
+        },
+        {
+          "caller": "GatherAlongLastDim",
+          "callee": "GatherTensorParallelShard",
+          "lineNumber": 33
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "global::GetTensorParallelSize",
+          "lineNumber": 37
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "CHECK_GT",
+          "lineNumber": 38
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "GetDevice",
+          "lineNumber": 44
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "Get",
+          "lineNumber": 45
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 45
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "type",
+          "lineNumber": 45
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "GetTensorParallelProcessGroupName",
+          "lineNumber": 46
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "GlobalRank",
+          "lineNumber": 46
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "Rank",
+          "lineNumber": 46
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "GetGroupRank",
+          "lineNumber": 47
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "GlobalRank",
+          "lineNumber": 47
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "Rank",
+          "lineNumber": 47
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "back",
+          "lineNumber": 49
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "Dims",
+          "lineNumber": 49
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "Split",
+          "lineNumber": 50
+        },
+        {
+          "caller": "SplitAlongLastDim",
+          "callee": "Contiguous",
+          "lineNumber": 51
+        },
+        {
+          "caller": "Reduce",
+          "callee": "global::GetTensorParallelSize",
+          "lineNumber": 55
+        },
+        {
+          "caller": "Reduce",
+          "callee": "CHECK_GT",
+          "lineNumber": 56
+        },
+        {
+          "caller": "Reduce",
+          "callee": "GetDevice",
+          "lineNumber": 62
+        },
+        {
+          "caller": "Reduce",
+          "callee": "Get",
+          "lineNumber": 63
+        },
+        {
+          "caller": "Reduce",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 63
+        },
+        {
+          "caller": "Reduce",
+          "callee": "type",
+          "lineNumber": 63
+        },
+        {
+          "caller": "Reduce",
+          "callee": "GetTensorParallelProcessGroupName",
+          "lineNumber": 64
+        },
+        {
+          "caller": "Reduce",
+          "callee": "GlobalRank",
+          "lineNumber": 64
+        },
+        {
+          "caller": "Reduce",
+          "callee": "Rank",
+          "lineNumber": 64
+        },
+        {
+          "caller": "Reduce",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 66
+        },
+        {
+          "caller": "Reduce",
+          "callee": "AllReduce",
+          "lineNumber": 68
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "global::GetTensorParallelSize",
+          "lineNumber": 73
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "CHECK_GT",
+          "lineNumber": 74
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "GetDevice",
+          "lineNumber": 80
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "Get",
+          "lineNumber": 81
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 81
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "type",
+          "lineNumber": 81
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "GetTensorParallelProcessGroupName",
+          "lineNumber": 82
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "GlobalRank",
+          "lineNumber": 82
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "Rank",
+          "lineNumber": 82
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "Dims",
+          "lineNumber": 84
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "CHECK_EQ",
+          "lineNumber": 85
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 88
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "Dtype",
+          "lineNumber": 88
+        },
+        {
+          "caller": "ReduceScatterAlongFirstDim",
+          "callee": "ReduceScatter",
+          "lineNumber": 90
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 105
+        },
+        {
+          "caller": "Backward",
+          "callee": "Reduce",
+          "lineNumber": 109
+        },
+        {
+          "caller": "Forward",
+          "callee": "GatherAlongLastDim",
+          "lineNumber": 120
+        },
+        {
+          "caller": "Backward",
+          "callee": "SplitAlongLastDim",
+          "lineNumber": 126
+        },
+        {
+          "caller": "Forward",
+          "callee": "SplitAlongLastDim",
+          "lineNumber": 139
+        },
+        {
+          "caller": "Backward",
+          "callee": "GatherAlongLastDim",
+          "lineNumber": 143
+        },
+        {
+          "caller": "Forward",
+          "callee": "Reduce",
+          "lineNumber": 155
+        },
+        {
+          "caller": "Backward",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 159
+        },
+        {
+          "caller": "Forward",
+          "callee": "Transpose",
+          "lineNumber": 171
+        },
+        {
+          "caller": "Forward",
+          "callee": "ReduceScatterAlongFirstDim",
+          "lineNumber": 171
+        },
+        {
+          "caller": "Forward",
+          "callee": "Transpose",
+          "lineNumber": 171
+        },
+        {
+          "caller": "Backward",
+          "callee": "Transpose",
+          "lineNumber": 176
+        },
+        {
+          "caller": "Backward",
+          "callee": "GatherAlongFirstDim",
+          "lineNumber": 176
+        },
+        {
+          "caller": "Backward",
+          "callee": "Transpose",
+          "lineNumber": 176
+        },
+        {
+          "caller": "Forward",
+          "callee": "Transpose",
+          "lineNumber": 188
+        },
+        {
+          "caller": "Forward",
+          "callee": "GatherAlongFirstDim",
+          "lineNumber": 188
+        },
+        {
+          "caller": "Forward",
+          "callee": "Transpose",
+          "lineNumber": 188
+        },
+        {
+          "caller": "Backward",
+          "callee": "Transpose",
+          "lineNumber": 193
+        },
+        {
+          "caller": "Backward",
+          "callee": "ReduceScatterAlongFirstDim",
+          "lineNumber": 193
+        },
+        {
+          "caller": "Backward",
+          "callee": "Transpose",
+          "lineNumber": 193
+        },
+        {
+          "caller": "LinearResetParameters",
+          "callee": "init::KaimingUniform",
+          "lineNumber": 198
+        },
+        {
+          "caller": "LinearResetParameters",
+          "callee": "sqrt",
+          "lineNumber": 198
+        },
+        {
+          "caller": "LinearResetParameters",
+          "callee": "init::CalculateFanInAndFanOut",
+          "lineNumber": 200
+        },
+        {
+          "caller": "LinearResetParameters",
+          "callee": "sqrt",
+          "lineNumber": 201
+        },
+        {
+          "caller": "LinearResetParameters",
+          "callee": "init::Uniform",
+          "lineNumber": 202
+        },
+        {
+          "caller": "CopyToTPRegionFunc",
+          "callee": "Apply",
+          "lineNumber": 210
+        },
+        {
+          "caller": "CopyToTPRegionFunc",
+          "callee": "std::make_shared<CopyToTPRegion>",
+          "lineNumber": 210
+        },
+        {
+          "caller": "ScatterToTPRegionFunc",
+          "callee": "Apply",
+          "lineNumber": 214
+        },
+        {
+          "caller": "ScatterToTPRegionFunc",
+          "callee": "std::make_shared<ScatterToTPRegion>",
+          "lineNumber": 214
+        },
+        {
+          "caller": "ReduceFromTPRegionFunc",
+          "callee": "Apply",
+          "lineNumber": 218
+        },
+        {
+          "caller": "ReduceFromTPRegionFunc",
+          "callee": "std::make_shared<ReduceFromTPRegion>",
+          "lineNumber": 218
+        },
+        {
+          "caller": "GatherFromTPRegionFunc",
+          "callee": "Apply",
+          "lineNumber": 222
+        },
+        {
+          "caller": "GatherFromTPRegionFunc",
+          "callee": "std::make_shared<GatherFromTPRegion>",
+          "lineNumber": 222
+        },
+        {
+          "caller": "ReduceScatterToSPRegionFunc",
+          "callee": "Apply",
+          "lineNumber": 226
+        },
+        {
+          "caller": "ReduceScatterToSPRegionFunc",
+          "callee": "std::make_shared<ReduceScatterToSPRegion>",
+          "lineNumber": 226
+        },
+        {
+          "caller": "GatherFromSPRegionFunc",
+          "callee": "Apply",
+          "lineNumber": 230
+        },
+        {
+          "caller": "GatherFromSPRegionFunc",
+          "callee": "std::make_shared<GatherFromSPRegion>",
+          "lineNumber": 230
+        },
+        {
+          "caller": "ColumnParallelLinear",
+          "callee": "global::GetTensorParallelSize",
+          "lineNumber": 237
+        },
+        {
+          "caller": "ColumnParallelLinear",
+          "callee": "CHECK_GT",
+          "lineNumber": 238
+        },
+        {
+          "caller": "ColumnParallelLinear",
+          "callee": "CHECK_EQ",
+          "lineNumber": 239
+        },
+        {
+          "caller": "ColumnParallelLinear",
+          "callee": "RequiresGrad",
+          "lineNumber": 245
+        },
+        {
+          "caller": "ColumnParallelLinear",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 245
+        },
+        {
+          "caller": "ColumnParallelLinear",
+          "callee": "SetGradientClipRole",
+          "lineNumber": 248
+        },
+        {
+          "caller": "ColumnParallelLinear",
+          "callee": "RequiresGrad",
+          "lineNumber": 251
+        },
+        {
+          "caller": "ColumnParallelLinear",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 251
+        },
+        {
+          "caller": "ColumnParallelLinear",
+          "callee": "SetGradientClipRole",
+          "lineNumber": 253
+        },
+        {
+          "caller": "ColumnParallelLinear",
+          "callee": "LinearResetParameters",
+          "lineNumber": 256
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 261
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 261
+        },
+        {
+          "caller": "Forward",
+          "callee": "CopyToTPRegionFunc",
+          "lineNumber": 264
+        },
+        {
+          "caller": "Forward",
+          "callee": "GatherFromSPRegionFunc",
+          "lineNumber": 267
+        },
+        {
+          "caller": "Forward",
+          "callee": "Apply",
+          "lineNumber": 270
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<autograd::Linear>",
+          "lineNumber": 270
+        },
+        {
+          "caller": "Forward",
+          "callee": "at",
+          "lineNumber": 272
+        },
+        {
+          "caller": "Forward",
+          "callee": "at",
+          "lineNumber": 273
+        },
+        {
+          "caller": "Forward",
+          "callee": "GatherFromTPRegionFunc",
+          "lineNumber": 275
+        },
+        {
+          "caller": "Forward",
+          "callee": "at",
+          "lineNumber": 278
+        },
+        {
+          "caller": "RowParallelLinear",
+          "callee": "global::GetTensorParallelSize",
+          "lineNumber": 293
+        },
+        {
+          "caller": "RowParallelLinear",
+          "callee": "CHECK_GT",
+          "lineNumber": 294
+        },
+        {
+          "caller": "RowParallelLinear",
+          "callee": "CHECK_EQ",
+          "lineNumber": 295
+        },
+        {
+          "caller": "RowParallelLinear",
+          "callee": "LOG",
+          "lineNumber": 299
+        },
+        {
+          "caller": "RowParallelLinear",
+          "callee": "RequiresGrad",
+          "lineNumber": 304
+        },
+        {
+          "caller": "RowParallelLinear",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 304
+        },
+        {
+          "caller": "RowParallelLinear",
+          "callee": "SetGradientClipRole",
+          "lineNumber": 307
+        },
+        {
+          "caller": "RowParallelLinear",
+          "callee": "RequiresGrad",
+          "lineNumber": 310
+        },
+        {
+          "caller": "RowParallelLinear",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 310
+        },
+        {
+          "caller": "RowParallelLinear",
+          "callee": "LinearResetParameters",
+          "lineNumber": 313
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 318
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 318
+        },
+        {
+          "caller": "Forward",
+          "callee": "ScatterToTPRegionFunc",
+          "lineNumber": 320
+        },
+        {
+          "caller": "Forward",
+          "callee": "Apply",
+          "lineNumber": 322
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<autograd::Linear>",
+          "lineNumber": 322
+        },
+        {
+          "caller": "Forward",
+          "callee": "at",
+          "lineNumber": 323
+        },
+        {
+          "caller": "Forward",
+          "callee": "ReduceScatterToSPRegionFunc",
+          "lineNumber": 325
+        },
+        {
+          "caller": "Forward",
+          "callee": "ReduceFromTPRegionFunc",
+          "lineNumber": 326
+        },
+        {
+          "caller": "Forward",
+          "callee": "Add",
+          "lineNumber": 330
+        },
+        {
+          "caller": "Forward",
+          "callee": "at",
+          "lineNumber": 334
+        },
+        {
+          "caller": "VocabParallelEmbedding",
+          "callee": "global::GetTensorParallelSize",
+          "lineNumber": 349
+        },
+        {
+          "caller": "VocabParallelEmbedding",
+          "callee": "CHECK_GT",
+          "lineNumber": 350
+        },
+        {
+          "caller": "VocabParallelEmbedding",
+          "callee": "CHECK_GT",
+          "lineNumber": 351
+        },
+        {
+          "caller": "VocabParallelEmbedding",
+          "callee": "CHECK_GT",
+          "lineNumber": 352
+        },
+        {
+          "caller": "VocabParallelEmbedding",
+          "callee": "CHECK_EQ",
+          "lineNumber": 354
+        },
+        {
+          "caller": "VocabParallelEmbedding",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 358
+        },
+        {
+          "caller": "VocabParallelEmbedding",
+          "callee": "RequiresGrad",
+          "lineNumber": 362
+        },
+        {
+          "caller": "VocabParallelEmbedding",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 362
+        },
+        {
+          "caller": "VocabParallelEmbedding",
+          "callee": "SetGradientClipRole",
+          "lineNumber": 365
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 370
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 370
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK",
+          "lineNumber": 373
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dtype",
+          "lineNumber": 373
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dtype",
+          "lineNumber": 373
+        },
+        {
+          "caller": "Forward",
+          "callee": "global::GetTensorParallelSize",
+          "lineNumber": 376
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<float>",
+          "lineNumber": 383
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<float>",
+          "lineNumber": 383
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<float>",
+          "lineNumber": 384
+        },
+        {
+          "caller": "Forward",
+          "callee": "MaskedFill",
+          "lineNumber": 385
+        },
+        {
+          "caller": "Forward",
+          "callee": "Apply",
+          "lineNumber": 389
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<autograd::Embedding>",
+          "lineNumber": 389
+        },
+        {
+          "caller": "Forward",
+          "callee": "MaskedFill",
+          "lineNumber": 394
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 394
+        },
+        {
+          "caller": "Forward",
+          "callee": "To",
+          "lineNumber": 394
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dtype",
+          "lineNumber": 394
+        },
+        {
+          "caller": "Forward",
+          "callee": "ReduceScatterToSPRegionFunc",
+          "lineNumber": 397
+        },
+        {
+          "caller": "Forward",
+          "callee": "ReduceFromTPRegionFunc",
+          "lineNumber": 398
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 405
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 405
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 409
+        },
+        {
+          "caller": "Forward",
+          "callee": "To",
+          "lineNumber": 409
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 412
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK",
+          "lineNumber": 414
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dtype",
+          "lineNumber": 414
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_GE",
+          "lineNumber": 415
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_LT",
+          "lineNumber": 416
+        },
+        {
+          "caller": "Forward",
+          "callee": "global::GetTensorParallelSize",
+          "lineNumber": 418
+        },
+        {
+          "caller": "Forward",
+          "callee": "Get",
+          "lineNumber": 422
+        },
+        {
+          "caller": "Forward",
+          "callee": "ProcessGroupFactory::Instance",
+          "lineNumber": 422
+        },
+        {
+          "caller": "Forward",
+          "callee": "type",
+          "lineNumber": 422
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetTensorParallelProcessGroupName",
+          "lineNumber": 423
+        },
+        {
+          "caller": "Forward",
+          "callee": "GlobalRank",
+          "lineNumber": 423
+        },
+        {
+          "caller": "Forward",
+          "callee": "Rank",
+          "lineNumber": 423
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetGroupRank",
+          "lineNumber": 424
+        },
+        {
+          "caller": "Forward",
+          "callee": "GlobalRank",
+          "lineNumber": 424
+        },
+        {
+          "caller": "Forward",
+          "callee": "Rank",
+          "lineNumber": 424
+        },
+        {
+          "caller": "Forward",
+          "callee": "back",
+          "lineNumber": 427
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dims",
+          "lineNumber": 427
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 428
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_LE",
+          "lineNumber": 430
+        },
+        {
+          "caller": "Forward",
+          "callee": "NumElements",
+          "lineNumber": 433
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 436
+        },
+        {
+          "caller": "Forward",
+          "callee": "nn::init::Arange",
+          "lineNumber": 439
+        },
+        {
+          "caller": "Forward",
+          "callee": "Add",
+          "lineNumber": 440
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<float>",
+          "lineNumber": 440
+        },
+        {
+          "caller": "Forward",
+          "callee": "View",
+          "lineNumber": 442
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 442
+        },
+        {
+          "caller": "Forward",
+          "callee": "To",
+          "lineNumber": 442
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<float>",
+          "lineNumber": 442
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dtype",
+          "lineNumber": 442
+        },
+        {
+          "caller": "Forward",
+          "callee": "MaskedFill",
+          "lineNumber": 445
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::numeric_limits<float>::infinity",
+          "lineNumber": 445
+        },
+        {
+          "caller": "Forward",
+          "callee": "Max",
+          "lineNumber": 448
+        },
+        {
+          "caller": "Forward",
+          "callee": "AllReduce",
+          "lineNumber": 451
+        },
+        {
+          "caller": "Forward",
+          "callee": "Sub",
+          "lineNumber": 453
+        },
+        {
+          "caller": "Forward",
+          "callee": "Unsqueeze",
+          "lineNumber": 453
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<float>",
+          "lineNumber": 459
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<float>",
+          "lineNumber": 459
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<float>",
+          "lineNumber": 460
+        },
+        {
+          "caller": "Forward",
+          "callee": "MaskedFill",
+          "lineNumber": 461
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 463
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dims",
+          "lineNumber": 463
+        },
+        {
+          "caller": "Forward",
+          "callee": "GetDevice",
+          "lineNumber": 463
+        },
+        {
+          "caller": "Forward",
+          "callee": "Fill",
+          "lineNumber": 464
+        },
+        {
+          "caller": "Forward",
+          "callee": "Exp",
+          "lineNumber": 469
+        },
+        {
+          "caller": "Forward",
+          "callee": "Sum",
+          "lineNumber": 470
+        },
+        {
+          "caller": "Forward",
+          "callee": "ReduceFromTPRegionFunc",
+          "lineNumber": 471
+        },
+        {
+          "caller": "Forward",
+          "callee": "Div",
+          "lineNumber": 474
+        },
+        {
+          "caller": "Forward",
+          "callee": "Unsqueeze",
+          "lineNumber": 474
+        },
+        {
+          "caller": "Forward",
+          "callee": "Squeeze",
+          "lineNumber": 477
+        },
+        {
+          "caller": "Forward",
+          "callee": "Gather",
+          "lineNumber": 477
+        },
+        {
+          "caller": "Forward",
+          "callee": "Unsqueeze",
+          "lineNumber": 477
+        },
+        {
+          "caller": "Forward",
+          "callee": "MaskedFill",
+          "lineNumber": 479
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 479
+        },
+        {
+          "caller": "Forward",
+          "callee": "To",
+          "lineNumber": 479
+        },
+        {
+          "caller": "Forward",
+          "callee": "Dtype",
+          "lineNumber": 479
+        },
+        {
+          "caller": "Forward",
+          "callee": "ReduceFromTPRegionFunc",
+          "lineNumber": 481
+        },
+        {
+          "caller": "Forward",
+          "callee": "Log",
+          "lineNumber": 484
+        },
+        {
+          "caller": "Forward",
+          "callee": "Sub",
+          "lineNumber": 485
+        },
+        {
+          "caller": "Forward",
+          "callee": "View",
+          "lineNumber": 492
+        },
+        {
+          "caller": "Forward",
+          "callee": "Sum",
+          "lineNumber": 493
+        },
+        {
+          "caller": "Forward",
+          "callee": "Mul",
+          "lineNumber": 493
+        },
+        {
+          "caller": "Forward",
+          "callee": "ReduceFromTPRegionFunc",
+          "lineNumber": 496
+        },
+        {
+          "caller": "Forward",
+          "callee": "Sub",
+          "lineNumber": 498
+        },
+        {
+          "caller": "Forward",
+          "callee": "Mul",
+          "lineNumber": 498
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<float>",
+          "lineNumber": 498
+        },
+        {
+          "caller": "Forward",
+          "callee": "Sub",
+          "lineNumber": 501
+        },
+        {
+          "caller": "Forward",
+          "callee": "Mul",
+          "lineNumber": 501
+        },
+        {
+          "caller": "Forward",
+          "callee": "Mul",
+          "lineNumber": 501
+        },
+        {
+          "caller": "Forward",
+          "callee": "SaveForBackward",
+          "lineNumber": 505
+        },
+        {
+          "caller": "Backward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 512
+        },
+        {
+          "caller": "Backward",
+          "callee": "size",
+          "lineNumber": 512
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetSavedTensors",
+          "lineNumber": 515
+        },
+        {
+          "caller": "Backward",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 517
+        },
+        {
+          "caller": "Backward",
+          "callee": "To",
+          "lineNumber": 517
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dtype",
+          "lineNumber": 517
+        },
+        {
+          "caller": "Backward",
+          "callee": "type",
+          "lineNumber": 521
+        },
+        {
+          "caller": "Backward",
+          "callee": "GetDevice",
+          "lineNumber": 521
+        },
+        {
+          "caller": "Backward",
+          "callee": "Call<std::shared_ptr<Tensor>>",
+          "lineNumber": 522
+        },
+        {
+          "caller": "Backward",
+          "callee": "Dispatcher::Instance",
+          "lineNumber": 522
+        },
+        {
+          "caller": "Forward",
+          "callee": "CHECK_EQ",
+          "lineNumber": 530
+        },
+        {
+          "caller": "Forward",
+          "callee": "size",
+          "lineNumber": 530
+        },
+        {
+          "caller": "Forward",
+          "callee": "Apply",
+          "lineNumber": 534
+        },
+        {
+          "caller": "Forward",
+          "callee": "std::make_shared<VocabParallelCrossEntropy>",
+          "lineNumber": 534
+        },
+        {
+          "caller": "Forward",
+          "callee": "Mean",
+          "lineNumber": 537
+        },
+        {
+          "caller": "Forward",
+          "callee": "View",
+          "lineNumber": 537
+        },
+        {
+          "caller": "Forward",
+          "callee": "static_cast<int64_t>",
+          "lineNumber": 537
+        },
+        {
+          "caller": "Forward",
+          "callee": "NumElements",
+          "lineNumber": 537
+        }
+      ],
+      "metrics": {
+        "importCount": 12,
+        "exportCount": 55,
+        "functionCount": 49,
+        "classCount": 6
+      }
+    },
+    {
+      "path": "tests/transformer/test_transformer_architecture.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 355,
+      "nonEmptyLines": 305,
+      "functions": [
+        {
+          "name": "TEST_P",
+          "startLine": 26,
+          "endLine": 38,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 40,
+          "endLine": 49,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 51,
+          "endLine": 60,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 62,
+          "endLine": 77,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 79,
+          "endLine": 96,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 98,
+          "endLine": 114,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 116,
+          "endLine": 131,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 133,
+          "endLine": 144,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 146,
+          "endLine": 162,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 164,
+          "endLine": 170,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 172,
+          "endLine": 193,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 195,
+          "endLine": 218,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 220,
+          "endLine": 249,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 251,
+          "endLine": 271,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 273,
+          "endLine": 311,
+          "params": []
+        },
+        {
+          "name": "TEST_P",
+          "startLine": 313,
+          "endLine": 353,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "TransformerModuleTest",
+          "startLine": 24,
+          "endLine": 24,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "TransformerModuleTest",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 40,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 51,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 98,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 116,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 133,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 146,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 164,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 172,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 195,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 220,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 251,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 273,
+          "isDefault": false
+        },
+        {
+          "name": "TEST_P",
+          "line": 313,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "TEST_P",
+          "callee": "SKIP_CPU",
+          "lineNumber": 27
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::Embedding>",
+          "lineNumber": 28
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 28
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 29
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 29
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Parameters",
+          "lineNumber": 29
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "parameter",
+          "lineNumber": 31
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 32
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 32
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 34
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 34
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "(*embedding)",
+          "lineNumber": 35
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 36
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 36
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 37
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 37
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "SKIP_CPU",
+          "lineNumber": 41
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::LayerNorm>",
+          "lineNumber": 42
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "To",
+          "lineNumber": 43
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 43
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 44
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 44
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Parameters",
+          "lineNumber": 44
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 46
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 46
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "(*layernorm)",
+          "lineNumber": 47
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 48
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 48
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 48
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "SKIP_CPU",
+          "lineNumber": 52
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::RMSNorm>",
+          "lineNumber": 53
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "To",
+          "lineNumber": 54
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 54
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 55
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 55
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Parameters",
+          "lineNumber": 55
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 57
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 57
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "(*rmsnorm)",
+          "lineNumber": 58
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 59
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 59
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 59
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "SKIP_CPU",
+          "lineNumber": 63
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::MLP>",
+          "lineNumber": 70
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "To",
+          "lineNumber": 71
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 71
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 72
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 72
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Parameters",
+          "lineNumber": 72
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 74
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 74
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "(*mlp)",
+          "lineNumber": 75
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 76
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 76
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "SKIP_CPU",
+          "lineNumber": 80
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::MLP>",
+          "lineNumber": 89
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "To",
+          "lineNumber": 90
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 90
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 91
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 91
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Parameters",
+          "lineNumber": 91
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 93
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 93
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "(*mlp)",
+          "lineNumber": 94
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 95
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 95
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "SKIP_CPU",
+          "lineNumber": 99
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::CausalSelfAttention>",
+          "lineNumber": 107
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "To",
+          "lineNumber": 108
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 108
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 109
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 109
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Parameters",
+          "lineNumber": 109
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 111
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 111
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "(*attn)",
+          "lineNumber": 112
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 113
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 113
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 113
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "SKIP_CPU",
+          "lineNumber": 117
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::TransformerLayer>",
+          "lineNumber": 124
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "To",
+          "lineNumber": 125
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 125
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FALSE",
+          "lineNumber": 126
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "empty",
+          "lineNumber": 126
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Parameters",
+          "lineNumber": 126
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 128
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 128
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "(*layer)",
+          "lineNumber": 129
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 130
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 130
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 130
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "SKIP_CPU",
+          "lineNumber": 134
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::TransformerModel>",
+          "lineNumber": 141
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "To",
+          "lineNumber": 142
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 142
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FALSE",
+          "lineNumber": 143
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "empty",
+          "lineNumber": 143
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Parameters",
+          "lineNumber": 143
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "SKIP_CPU",
+          "lineNumber": 147
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::TransformerModel>",
+          "lineNumber": 159
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "To",
+          "lineNumber": 160
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 160
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FALSE",
+          "lineNumber": 161
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "empty",
+          "lineNumber": 161
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Parameters",
+          "lineNumber": 161
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "PrecomputeFreqsCis",
+          "lineNumber": 165
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 166
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 166
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 166
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 167
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 167
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 168
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 168
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 169
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 169
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "SKIP_CPU",
+          "lineNumber": 173
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::TransformerModel>",
+          "lineNumber": 185
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "To",
+          "lineNumber": 186
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 186
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "StateDict",
+          "lineNumber": 187
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Parameters",
+          "lineNumber": 188
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Buffers",
+          "lineNumber": 189
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FALSE",
+          "lineNumber": 191
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "empty",
+          "lineNumber": 191
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_GE",
+          "lineNumber": 192
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 192
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 192
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::moe::MoELayer>",
+          "lineNumber": 209
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "To",
+          "lineNumber": 210
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 210
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 211
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 211
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Uniform",
+          "lineNumber": 212
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "(*moe)",
+          "lineNumber": 214
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ASSERT_EQ",
+          "lineNumber": 215
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 215
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 216
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 216
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 216
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FALSE",
+          "lineNumber": 217
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "empty",
+          "lineNumber": 217
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Parameters",
+          "lineNumber": 217
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::moe::MoELayer>",
+          "lineNumber": 233
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "To",
+          "lineNumber": 234
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 234
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 235
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 235
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Uniform",
+          "lineNumber": 236
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "(*moe)",
+          "lineNumber": 238
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ASSERT_EQ",
+          "lineNumber": 239
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 239
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 240
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 240
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 240
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "StateDict",
+          "lineNumber": 242
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ASSERT_TRUE",
+          "lineNumber": 243
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 243
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ASSERT_TRUE",
+          "lineNumber": 244
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 244
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ASSERT_TRUE",
+          "lineNumber": 245
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "contains",
+          "lineNumber": 245
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 246
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 246
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "at",
+          "lineNumber": 246
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 247
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 247
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "at",
+          "lineNumber": 247
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 248
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 248
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "at",
+          "lineNumber": 248
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::moe::TopKRouter>",
+          "lineNumber": 260
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "To",
+          "lineNumber": 261
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 261
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 262
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "GetDevice",
+          "lineNumber": 262
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Uniform",
+          "lineNumber": 263
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "(*router)",
+          "lineNumber": 265
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ASSERT_EQ",
+          "lineNumber": 266
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 266
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 267
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 267
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 268
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 268
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 269
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dtype",
+          "lineNumber": 269
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 270
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dtype",
+          "lineNumber": 270
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ONLY_CPU",
+          "lineNumber": 274
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 276
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<autograd::TopK>",
+          "lineNumber": 278
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Apply",
+          "lineNumber": 279
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ASSERT_EQ",
+          "lineNumber": 280
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 280
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ASSERT_EQ",
+          "lineNumber": 283
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 283
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ASSERT_EQ",
+          "lineNumber": 284
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 284
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<const float *>",
+          "lineNumber": 285
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "DataPtr",
+          "lineNumber": 285
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<const int64_t *>",
+          "lineNumber": 286
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "DataPtr",
+          "lineNumber": 286
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FLOAT_EQ",
+          "lineNumber": 287
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FLOAT_EQ",
+          "lineNumber": 288
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FLOAT_EQ",
+          "lineNumber": 289
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FLOAT_EQ",
+          "lineNumber": 290
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 291
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 292
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 293
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 294
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<autograd::TopK>",
+          "lineNumber": 296
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Apply",
+          "lineNumber": 297
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ASSERT_EQ",
+          "lineNumber": 298
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "size",
+          "lineNumber": 298
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ASSERT_EQ",
+          "lineNumber": 301
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 301
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ASSERT_EQ",
+          "lineNumber": 302
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "Dims",
+          "lineNumber": 302
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<const float *>",
+          "lineNumber": 303
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "DataPtr",
+          "lineNumber": 303
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<const int64_t *>",
+          "lineNumber": 304
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "DataPtr",
+          "lineNumber": 304
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FLOAT_EQ",
+          "lineNumber": 305
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FLOAT_EQ",
+          "lineNumber": 306
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FLOAT_EQ",
+          "lineNumber": 307
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 308
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 309
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_EQ",
+          "lineNumber": 310
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "ONLY_CPU",
+          "lineNumber": 314
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<nn::moe::TopKRouter>",
+          "lineNumber": 325
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "parameter",
+          "lineNumber": 326
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<float *>",
+          "lineNumber": 327
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "DataPtr",
+          "lineNumber": 327
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "std::make_shared<Tensor>",
+          "lineNumber": 338
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "make_router",
+          "lineNumber": 340
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "(*softmax_router)",
+          "lineNumber": 341
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<const float *>",
+          "lineNumber": 342
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "DataPtr",
+          "lineNumber": 342
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 343
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_GT",
+          "lineNumber": 344
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FLOAT_EQ",
+          "lineNumber": 345
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "make_router",
+          "lineNumber": 347
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "(*sigmoid_router)",
+          "lineNumber": 348
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "static_cast<const float *>",
+          "lineNumber": 349
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "DataPtr",
+          "lineNumber": 349
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_NEAR",
+          "lineNumber": 350
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_GT",
+          "lineNumber": 351
+        },
+        {
+          "caller": "TEST_P",
+          "callee": "EXPECT_FLOAT_EQ",
+          "lineNumber": 352
+        }
+      ],
+      "metrics": {
+        "importCount": 12,
+        "exportCount": 17,
+        "functionCount": 16,
+        "classCount": 1
+      }
+    }
+  ]
+}

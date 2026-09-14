@@ -1,0 +1,3647 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 25,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "pipeline_layout_implementation/chapters/04_pipeline_layout_core/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 12,
+      "nonEmptyLines": 10,
+      "sections": [
+        {
+          "heading": "Chapter 04: PipelineLayout Core",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/04_pipeline_layout_core/src/pipeline_layout.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 567,
+      "nonEmptyLines": 505,
+      "functions": [
+        {
+          "name": "Fail",
+          "startLine": 14,
+          "endLine": 16,
+          "params": [
+            "message"
+          ]
+        },
+        {
+          "name": "CheckStageId",
+          "startLine": 18,
+          "endLine": 26,
+          "params": [
+            "stage_id",
+            "num_stages",
+            "field"
+          ]
+        },
+        {
+          "name": "PipelineLayoutError",
+          "startLine": 42,
+          "endLine": 43,
+          "params": [
+            "message"
+          ]
+        },
+        {
+          "name": "size",
+          "startLine": 45,
+          "endLine": 47,
+          "params": []
+        },
+        {
+          "name": "contains",
+          "startLine": 49,
+          "endLine": 51,
+          "params": [
+            "layer_id"
+          ]
+        },
+        {
+          "name": "BuildDefault",
+          "startLine": 53,
+          "endLine": 112,
+          "params": [
+            "num_layers",
+            "num_stages",
+            "vpp_size",
+            "placement",
+            "policy"
+          ]
+        },
+        {
+          "name": "BuildContiguous",
+          "startLine": 114,
+          "endLine": 169,
+          "params": [
+            "stage_layer_counts",
+            "placement",
+            "policy"
+          ]
+        },
+        {
+          "name": "BuildExplicit",
+          "startLine": 171,
+          "endLine": 185,
+          "params": [
+            "num_layers",
+            "num_stages",
+            "vpp_size",
+            "chunks",
+            "placement",
+            "policy"
+          ]
+        },
+        {
+          "name": "PipelineLayout",
+          "startLine": 187,
+          "endLine": 202,
+          "params": [
+            "num_layers",
+            "num_stages",
+            "vpp_size",
+            "chunks",
+            "placement",
+            "policy"
+          ]
+        },
+        {
+          "name": "NormalizePlacement",
+          "startLine": 204,
+          "endLine": 220,
+          "params": [
+            "placement",
+            "chunks"
+          ]
+        },
+        {
+          "name": "Validate",
+          "startLine": 222,
+          "endLine": 354,
+          "params": []
+        },
+        {
+          "name": "ValidateForCurrentPipelineTransport",
+          "startLine": 356,
+          "endLine": 405,
+          "params": []
+        },
+        {
+          "name": "BuildIndexes",
+          "startLine": 407,
+          "endLine": 445,
+          "params": []
+        },
+        {
+          "name": "num_layers",
+          "startLine": 447,
+          "endLine": 449,
+          "params": []
+        },
+        {
+          "name": "num_stages",
+          "startLine": 451,
+          "endLine": 453,
+          "params": []
+        },
+        {
+          "name": "vpp_size",
+          "startLine": 455,
+          "endLine": 457,
+          "params": []
+        },
+        {
+          "name": "stage_of_layer",
+          "startLine": 488,
+          "endLine": 490,
+          "params": [
+            "layer_id"
+          ]
+        },
+        {
+          "name": "local_layer_index",
+          "startLine": 492,
+          "endLine": 503,
+          "params": [
+            "stage_id",
+            "layer_id"
+          ]
+        },
+        {
+          "name": "owns",
+          "startLine": 509,
+          "endLine": 520,
+          "params": [
+            "module",
+            "stage_id"
+          ]
+        },
+        {
+          "name": "ToString",
+          "startLine": 530,
+          "endLine": 562,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Fail",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "CheckStageId",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "PipelineLayoutError",
+          "line": 42,
+          "isDefault": false
+        },
+        {
+          "name": "size",
+          "line": 45,
+          "isDefault": false
+        },
+        {
+          "name": "contains",
+          "line": 49,
+          "isDefault": false
+        },
+        {
+          "name": "BuildDefault",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "BuildContiguous",
+          "line": 114,
+          "isDefault": false
+        },
+        {
+          "name": "BuildExplicit",
+          "line": 171,
+          "isDefault": false
+        },
+        {
+          "name": "PipelineLayout",
+          "line": 187,
+          "isDefault": false
+        },
+        {
+          "name": "NormalizePlacement",
+          "line": 204,
+          "isDefault": false
+        },
+        {
+          "name": "Validate",
+          "line": 222,
+          "isDefault": false
+        },
+        {
+          "name": "ValidateForCurrentPipelineTransport",
+          "line": 356,
+          "isDefault": false
+        },
+        {
+          "name": "BuildIndexes",
+          "line": 407,
+          "isDefault": false
+        },
+        {
+          "name": "num_layers",
+          "line": 447,
+          "isDefault": false
+        },
+        {
+          "name": "num_stages",
+          "line": 451,
+          "isDefault": false
+        },
+        {
+          "name": "vpp_size",
+          "line": 455,
+          "isDefault": false
+        },
+        {
+          "name": "stage_of_layer",
+          "line": 488,
+          "isDefault": false
+        },
+        {
+          "name": "local_layer_index",
+          "line": 492,
+          "isDefault": false
+        },
+        {
+          "name": "owns",
+          "line": 509,
+          "isDefault": false
+        },
+        {
+          "name": "ToString",
+          "line": 530,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Fail",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 15
+        },
+        {
+          "caller": "CheckStageId",
+          "callee": "Fail",
+          "lineNumber": 20
+        },
+        {
+          "caller": "CheckStageId",
+          "callee": "std::format",
+          "lineNumber": 20
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "Fail",
+          "lineNumber": 60
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "std::format",
+          "lineNumber": 60
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "Fail",
+          "lineNumber": 63
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "std::format",
+          "lineNumber": 63
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "Fail",
+          "lineNumber": 66
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "std::format",
+          "lineNumber": 66
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "static_cast<long long>",
+          "lineNumber": 70
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "static_cast<long long>",
+          "lineNumber": 70
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "std::numeric_limits<int>::max",
+          "lineNumber": 71
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "Fail",
+          "lineNumber": 72
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "static_cast<int>",
+          "lineNumber": 74
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "Fail",
+          "lineNumber": 77
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "std::format",
+          "lineNumber": 77
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "reserve",
+          "lineNumber": 90
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "push_back",
+          "lineNumber": 96
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "PipelineLayout",
+          "lineNumber": 105
+        },
+        {
+          "caller": "BuildDefault",
+          "callee": "std::move",
+          "lineNumber": 109
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "empty",
+          "lineNumber": 118
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "Fail",
+          "lineNumber": 119
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "reserve",
+          "lineNumber": 124
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "size",
+          "lineNumber": 124
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "static_cast<int>",
+          "lineNumber": 128
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "size",
+          "lineNumber": 128
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "Fail",
+          "lineNumber": 131
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "std::format",
+          "lineNumber": 131
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "Fail",
+          "lineNumber": 137
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "std::format",
+          "lineNumber": 137
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "std::numeric_limits<int>::max",
+          "lineNumber": 143
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "Fail",
+          "lineNumber": 144
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "push_back",
+          "lineNumber": 148
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "Fail",
+          "lineNumber": 159
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "PipelineLayout",
+          "lineNumber": 162
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "static_cast<int>",
+          "lineNumber": 163
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "static_cast<int>",
+          "lineNumber": 164
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "size",
+          "lineNumber": 164
+        },
+        {
+          "caller": "BuildContiguous",
+          "callee": "std::move",
+          "lineNumber": 166
+        },
+        {
+          "caller": "BuildExplicit",
+          "callee": "PipelineLayout",
+          "lineNumber": 178
+        },
+        {
+          "caller": "BuildExplicit",
+          "callee": "std::move",
+          "lineNumber": 182
+        },
+        {
+          "caller": "PipelineLayout",
+          "callee": "std::move",
+          "lineNumber": 197
+        },
+        {
+          "caller": "PipelineLayout",
+          "callee": "NormalizePlacement",
+          "lineNumber": 198
+        },
+        {
+          "caller": "PipelineLayout",
+          "callee": "Validate",
+          "lineNumber": 200
+        },
+        {
+          "caller": "PipelineLayout",
+          "callee": "BuildIndexes",
+          "lineNumber": 201
+        },
+        {
+          "caller": "NormalizePlacement",
+          "callee": "empty",
+          "lineNumber": 207
+        },
+        {
+          "caller": "NormalizePlacement",
+          "callee": "Fail",
+          "lineNumber": 208
+        },
+        {
+          "caller": "NormalizePlacement",
+          "callee": "front",
+          "lineNumber": 211
+        },
+        {
+          "caller": "NormalizePlacement",
+          "callee": "back",
+          "lineNumber": 214
+        },
+        {
+          "caller": "NormalizePlacement",
+          "callee": "back",
+          "lineNumber": 217
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 224
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 224
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 227
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 227
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 230
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 230
+        },
+        {
+          "caller": "Validate",
+          "callee": "empty",
+          "lineNumber": 232
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 233
+        },
+        {
+          "caller": "Validate",
+          "callee": "CheckStageId",
+          "lineNumber": 236
+        },
+        {
+          "caller": "Validate",
+          "callee": "CheckStageId",
+          "lineNumber": 237
+        },
+        {
+          "caller": "Validate",
+          "callee": "CheckStageId",
+          "lineNumber": 238
+        },
+        {
+          "caller": "Validate",
+          "callee": "front",
+          "lineNumber": 241
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 242
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 242
+        },
+        {
+          "caller": "Validate",
+          "callee": "front",
+          "lineNumber": 245
+        },
+        {
+          "caller": "Validate",
+          "callee": "back",
+          "lineNumber": 248
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 249
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 249
+        },
+        {
+          "caller": "Validate",
+          "callee": "back",
+          "lineNumber": 252
+        },
+        {
+          "caller": "Validate",
+          "callee": "back",
+          "lineNumber": 255
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 256
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 256
+        },
+        {
+          "caller": "Validate",
+          "callee": "back",
+          "lineNumber": 259
+        },
+        {
+          "caller": "Validate",
+          "callee": "static_cast<int>",
+          "lineNumber": 269
+        },
+        {
+          "caller": "Validate",
+          "callee": "size",
+          "lineNumber": 269
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 272
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 272
+        },
+        {
+          "caller": "Validate",
+          "callee": "CheckStageId",
+          "lineNumber": 277
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 279
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 279
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 285
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 285
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 293
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 293
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 300
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 300
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 311
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 311
+        },
+        {
+          "caller": "Validate",
+          "callee": "push_back",
+          "lineNumber": 318
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 324
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 324
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::sort",
+          "lineNumber": 330
+        },
+        {
+          "caller": "Validate",
+          "callee": "begin",
+          "lineNumber": 330
+        },
+        {
+          "caller": "Validate",
+          "callee": "end",
+          "lineNumber": 330
+        },
+        {
+          "caller": "Validate",
+          "callee": "static_cast<int>",
+          "lineNumber": 331
+        },
+        {
+          "caller": "Validate",
+          "callee": "size",
+          "lineNumber": 331
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 333
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 333
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 342
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 342
+        },
+        {
+          "caller": "Validate",
+          "callee": "Fail",
+          "lineNumber": 347
+        },
+        {
+          "caller": "Validate",
+          "callee": "std::format",
+          "lineNumber": 347
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "Validate",
+          "lineNumber": 357
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "static_cast<long long>",
+          "lineNumber": 360
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "static_cast<long long>",
+          "lineNumber": 360
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "static_cast<long long>",
+          "lineNumber": 361
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "size",
+          "lineNumber": 361
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "Fail",
+          "lineNumber": 362
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "std::format",
+          "lineNumber": 362
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "size",
+          "lineNumber": 366
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "static_cast<int>",
+          "lineNumber": 371
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "size",
+          "lineNumber": 371
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "Fail",
+          "lineNumber": 376
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "std::format",
+          "lineNumber": 376
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "Fail",
+          "lineNumber": 385
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "std::format",
+          "lineNumber": 385
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "Fail",
+          "lineNumber": 397
+        },
+        {
+          "caller": "ValidateForCurrentPipelineTransport",
+          "callee": "std::format",
+          "lineNumber": 397
+        },
+        {
+          "caller": "BuildIndexes",
+          "callee": "clear",
+          "lineNumber": 408
+        },
+        {
+          "caller": "BuildIndexes",
+          "callee": "resize",
+          "lineNumber": 409
+        },
+        {
+          "caller": "BuildIndexes",
+          "callee": "push_back",
+          "lineNumber": 415
+        },
+        {
+          "caller": "BuildIndexes",
+          "callee": "std::sort",
+          "lineNumber": 419
+        },
+        {
+          "caller": "BuildIndexes",
+          "callee": "begin",
+          "lineNumber": 420
+        },
+        {
+          "caller": "BuildIndexes",
+          "callee": "end",
+          "lineNumber": 421
+        },
+        {
+          "caller": "BuildIndexes",
+          "callee": "assign",
+          "lineNumber": 427
+        },
+        {
+          "caller": "stage_of_layer",
+          "callee": "locate_layer",
+          "lineNumber": 489
+        },
+        {
+          "caller": "local_layer_index",
+          "callee": "CheckStageId",
+          "lineNumber": 493
+        },
+        {
+          "caller": "local_layer_index",
+          "callee": "locate_layer",
+          "lineNumber": 494
+        },
+        {
+          "caller": "local_layer_index",
+          "callee": "Fail",
+          "lineNumber": 496
+        },
+        {
+          "caller": "local_layer_index",
+          "callee": "std::format",
+          "lineNumber": 496
+        },
+        {
+          "caller": "owns",
+          "callee": "CheckStageId",
+          "lineNumber": 510
+        },
+        {
+          "caller": "owns",
+          "callee": "Fail",
+          "lineNumber": 519
+        },
+        {
+          "caller": "owns",
+          "callee": "std::format",
+          "lineNumber": 519
+        },
+        {
+          "caller": "owns",
+          "callee": "SpecialModuleName",
+          "lineNumber": 519
+        },
+        {
+          "caller": "ToString",
+          "callee": "empty",
+          "lineNumber": 539
+        },
+        {
+          "caller": "ToString",
+          "callee": "owns",
+          "lineNumber": 551
+        },
+        {
+          "caller": "ToString",
+          "callee": "owns",
+          "lineNumber": 554
+        },
+        {
+          "caller": "ToString",
+          "callee": "owns",
+          "lineNumber": 557
+        },
+        {
+          "caller": "ToString",
+          "callee": "str",
+          "lineNumber": 561
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 20,
+        "functionCount": 20,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/05_parser_validation/include/pipeline_layout_parser.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 27,
+      "nonEmptyLines": 19,
+      "classes": [
+        {
+          "name": "PipelineLayoutCliOptions",
+          "startLine": 11,
+          "endLine": 19,
+          "methods": [],
+          "properties": [
+            "num_layers",
+            "pipeline_parallel",
+            "virtual_pipeline_parallel",
+            "pipeline_layer_partition",
+            "pipeline_embedding_stage",
+            "pipeline_final_norm_stage",
+            "pipeline_lm_head_stage"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "PipelineLayoutCliOptions",
+          "line": 11,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/05_parser_validation/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 11,
+      "nonEmptyLines": 9,
+      "sections": [
+        {
+          "heading": "Chapter 05: Parser and Validation",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/05_parser_validation/src/pipeline_layout_parser.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 143,
+      "nonEmptyLines": 126,
+      "functions": [
+        {
+          "name": "Trim",
+          "startLine": 12,
+          "endLine": 22,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "ParseInteger",
+          "startLine": 24,
+          "endLine": 49,
+          "params": [
+            "token",
+            "index"
+          ]
+        },
+        {
+          "name": "ParseStageLayerCounts",
+          "startLine": 53,
+          "endLine": 73,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "BuildPipelineLayout",
+          "startLine": 75,
+          "endLine": 140,
+          "params": [
+            "options"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Trim",
+          "line": 12,
+          "isDefault": false
+        },
+        {
+          "name": "ParseInteger",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "ParseStageLayerCounts",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "BuildPipelineLayout",
+          "line": 75,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Trim",
+          "callee": "empty",
+          "lineNumber": 13
+        },
+        {
+          "caller": "Trim",
+          "callee": "std::isspace",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Trim",
+          "callee": "static_cast<unsigned char>",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Trim",
+          "callee": "front",
+          "lineNumber": 14
+        },
+        {
+          "caller": "Trim",
+          "callee": "remove_prefix",
+          "lineNumber": 15
+        },
+        {
+          "caller": "Trim",
+          "callee": "empty",
+          "lineNumber": 17
+        },
+        {
+          "caller": "Trim",
+          "callee": "std::isspace",
+          "lineNumber": 18
+        },
+        {
+          "caller": "Trim",
+          "callee": "static_cast<unsigned char>",
+          "lineNumber": 18
+        },
+        {
+          "caller": "Trim",
+          "callee": "back",
+          "lineNumber": 18
+        },
+        {
+          "caller": "Trim",
+          "callee": "remove_suffix",
+          "lineNumber": 19
+        },
+        {
+          "caller": "ParseInteger",
+          "callee": "Trim",
+          "lineNumber": 25
+        },
+        {
+          "caller": "ParseInteger",
+          "callee": "empty",
+          "lineNumber": 26
+        },
+        {
+          "caller": "ParseInteger",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 27
+        },
+        {
+          "caller": "ParseInteger",
+          "callee": "std::format",
+          "lineNumber": 27
+        },
+        {
+          "caller": "ParseInteger",
+          "callee": "data",
+          "lineNumber": 33
+        },
+        {
+          "caller": "ParseInteger",
+          "callee": "data",
+          "lineNumber": 34
+        },
+        {
+          "caller": "ParseInteger",
+          "callee": "size",
+          "lineNumber": 34
+        },
+        {
+          "caller": "ParseInteger",
+          "callee": "std::from_chars",
+          "lineNumber": 35
+        },
+        {
+          "caller": "ParseInteger",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 37
+        },
+        {
+          "caller": "ParseInteger",
+          "callee": "std::format",
+          "lineNumber": 37
+        },
+        {
+          "caller": "ParseInteger",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 43
+        },
+        {
+          "caller": "ParseInteger",
+          "callee": "std::format",
+          "lineNumber": 43
+        },
+        {
+          "caller": "ParseStageLayerCounts",
+          "callee": "Trim",
+          "lineNumber": 54
+        },
+        {
+          "caller": "ParseStageLayerCounts",
+          "callee": "empty",
+          "lineNumber": 55
+        },
+        {
+          "caller": "ParseStageLayerCounts",
+          "callee": "find",
+          "lineNumber": 62
+        },
+        {
+          "caller": "ParseStageLayerCounts",
+          "callee": "substr",
+          "lineNumber": 64
+        },
+        {
+          "caller": "ParseStageLayerCounts",
+          "callee": "push_back",
+          "lineNumber": 65
+        },
+        {
+          "caller": "ParseStageLayerCounts",
+          "callee": "ParseInteger",
+          "lineNumber": 65
+        },
+        {
+          "caller": "ParseStageLayerCounts",
+          "callee": "remove_prefix",
+          "lineNumber": 70
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 77
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "std::format",
+          "lineNumber": 77
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 82
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "std::format",
+          "lineNumber": 82
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 87
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "std::format",
+          "lineNumber": 87
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "ParseStageLayerCounts",
+          "lineNumber": 99
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "empty",
+          "lineNumber": 100
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "PipelineLayout::BuildDefault",
+          "lineNumber": 101
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 109
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "std::format",
+          "lineNumber": 109
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "static_cast<int>",
+          "lineNumber": 114
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "size",
+          "lineNumber": 114
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 115
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "std::format",
+          "lineNumber": 115
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "size",
+          "lineNumber": 118
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 125
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 132
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "std::format",
+          "lineNumber": 132
+        },
+        {
+          "caller": "BuildPipelineLayout",
+          "callee": "PipelineLayout::BuildContiguous",
+          "lineNumber": 139
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/06_model_integration/include/model_layout_plan.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 30,
+      "nonEmptyLines": 22,
+      "classes": [
+        {
+          "name": "LocalChunkModelPlan",
+          "startLine": 9,
+          "endLine": 16,
+          "methods": [],
+          "properties": [
+            "global_chunk_id",
+            "local_chunk_id",
+            "layers",
+            "prepend_embedding",
+            "append_final_norm",
+            "append_lm_head"
+          ]
+        },
+        {
+          "name": "LocalStageModelPlan",
+          "startLine": 18,
+          "endLine": 23,
+          "methods": [],
+          "properties": [
+            "stage_id",
+            "num_local_layers",
+            "global_layers_in_local_order",
+            "chunks"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "LocalChunkModelPlan",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "LocalStageModelPlan",
+          "line": 18,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/06_model_integration/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 25,
+      "nonEmptyLines": 19,
+      "sections": [
+        {
+          "heading": "Chapter 06: Model Integration Adapter",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/06_model_integration/src/model_layout_plan.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 86,
+      "nonEmptyLines": 70,
+      "functions": [
+        {
+          "name": "BuildLocalStageModelPlan",
+          "startLine": 7,
+          "endLine": 82,
+          "params": [
+            "layout",
+            "stage_id"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "BuildLocalStageModelPlan",
+          "line": 7,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "ValidateForCurrentPipelineTransport",
+          "lineNumber": 10
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "stage",
+          "lineNumber": 11
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "chunk",
+          "lineNumber": 21
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "owns",
+          "lineNumber": 29
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "static_cast<int>",
+          "lineNumber": 31
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "size",
+          "lineNumber": 31
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "chunks",
+          "lineNumber": 31
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "owns",
+          "lineNumber": 32
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "static_cast<int>",
+          "lineNumber": 34
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "size",
+          "lineNumber": 34
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "chunks",
+          "lineNumber": 34
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "owns",
+          "lineNumber": 35
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "static_cast<int>",
+          "lineNumber": 44
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "size",
+          "lineNumber": 44
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "local_layer_index",
+          "lineNumber": 46
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 48
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "std::format",
+          "lineNumber": 48
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "push_back",
+          "lineNumber": 56
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "push_back",
+          "lineNumber": 59
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "static_cast<int>",
+          "lineNumber": 63
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "size",
+          "lineNumber": 63
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "owns",
+          "lineNumber": 65
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 66
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "std::format",
+          "lineNumber": 66
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "owns",
+          "lineNumber": 70
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 71
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "std::format",
+          "lineNumber": 71
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "owns",
+          "lineNumber": 75
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 76
+        },
+        {
+          "caller": "BuildLocalStageModelPlan",
+          "callee": "std::format",
+          "lineNumber": 76
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/07_scheduler_integration/include/layout_scheduler.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 35,
+      "nonEmptyLines": 26,
+      "classes": [
+        {
+          "name": "LayoutScheduleTask",
+          "startLine": 9,
+          "endLine": 18,
+          "methods": [],
+          "properties": [
+            "step",
+            "microbatch_id",
+            "global_chunk_id",
+            "local_chunk_idx",
+            "is_forward",
+            "stage_id",
+            "is_first_chunk",
+            "is_last_chunk"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "LayoutScheduleTask",
+          "line": 9,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/07_scheduler_integration/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 25,
+      "nonEmptyLines": 19,
+      "sections": [
+        {
+          "heading": "Chapter 07: Scheduler Integration Adapter",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/07_scheduler_integration/src/layout_scheduler.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 201,
+      "nonEmptyLines": 178,
+      "functions": [
+        {
+          "name": "CreateTask",
+          "startLine": 9,
+          "endLine": 27,
+          "params": [
+            "step",
+            "microbatch_id",
+            "global_chunk_id",
+            "is_forward",
+            "layout"
+          ]
+        },
+        {
+          "name": "ValidateScheduleInputs",
+          "startLine": 29,
+          "endLine": 41,
+          "params": [
+            "num_micro_batches",
+            "layout"
+          ]
+        },
+        {
+          "name": "GenerateLayoutGPipeSchedule",
+          "startLine": 45,
+          "endLine": 103,
+          "params": [
+            "num_micro_batches",
+            "layout"
+          ]
+        },
+        {
+          "name": "GenerateLayoutInterleaved1F1BSchedule",
+          "startLine": 105,
+          "endLine": 182,
+          "params": [
+            "num_micro_batches",
+            "layout"
+          ]
+        },
+        {
+          "name": "TasksForStage",
+          "startLine": 184,
+          "endLine": 197,
+          "params": [
+            "schedule",
+            "stage_id",
+            "layout"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "CreateTask",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "ValidateScheduleInputs",
+          "line": 29,
+          "isDefault": false
+        },
+        {
+          "name": "GenerateLayoutGPipeSchedule",
+          "line": 45,
+          "isDefault": false
+        },
+        {
+          "name": "GenerateLayoutInterleaved1F1BSchedule",
+          "line": 105,
+          "isDefault": false
+        },
+        {
+          "name": "TasksForStage",
+          "line": 184,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "CreateTask",
+          "callee": "chunk",
+          "lineNumber": 15
+        },
+        {
+          "caller": "CreateTask",
+          "callee": "static_cast<int>",
+          "lineNumber": 25
+        },
+        {
+          "caller": "CreateTask",
+          "callee": "size",
+          "lineNumber": 25
+        },
+        {
+          "caller": "CreateTask",
+          "callee": "chunks",
+          "lineNumber": 25
+        },
+        {
+          "caller": "ValidateScheduleInputs",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 33
+        },
+        {
+          "caller": "ValidateScheduleInputs",
+          "callee": "std::format",
+          "lineNumber": 33
+        },
+        {
+          "caller": "ValidateScheduleInputs",
+          "callee": "empty",
+          "lineNumber": 37
+        },
+        {
+          "caller": "ValidateScheduleInputs",
+          "callee": "chunks",
+          "lineNumber": 37
+        },
+        {
+          "caller": "ValidateScheduleInputs",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 38
+        },
+        {
+          "caller": "ValidateScheduleInputs",
+          "callee": "ValidateForCurrentPipelineTransport",
+          "lineNumber": 40
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "ValidateScheduleInputs",
+          "lineNumber": 48
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "static_cast<int>",
+          "lineNumber": 51
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "size",
+          "lineNumber": 51
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "chunks",
+          "lineNumber": 51
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "reserve",
+          "lineNumber": 53
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 54
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "push_back",
+          "lineNumber": 62
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "CreateTask",
+          "lineNumber": 62
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "push_back",
+          "lineNumber": 79
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "CreateTask",
+          "lineNumber": 79
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "std::sort",
+          "lineNumber": 89
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "begin",
+          "lineNumber": 90
+        },
+        {
+          "caller": "GenerateLayoutGPipeSchedule",
+          "callee": "end",
+          "lineNumber": 91
+        },
+        {
+          "caller": "GenerateLayoutInterleaved1F1BSchedule",
+          "callee": "ValidateScheduleInputs",
+          "lineNumber": 108
+        },
+        {
+          "caller": "GenerateLayoutInterleaved1F1BSchedule",
+          "callee": "static_cast<int>",
+          "lineNumber": 111
+        },
+        {
+          "caller": "GenerateLayoutInterleaved1F1BSchedule",
+          "callee": "size",
+          "lineNumber": 111
+        },
+        {
+          "caller": "GenerateLayoutInterleaved1F1BSchedule",
+          "callee": "chunks",
+          "lineNumber": 111
+        },
+        {
+          "caller": "GenerateLayoutInterleaved1F1BSchedule",
+          "callee": "push_back",
+          "lineNumber": 121
+        },
+        {
+          "caller": "GenerateLayoutInterleaved1F1BSchedule",
+          "callee": "CreateTask",
+          "lineNumber": 121
+        },
+        {
+          "caller": "GenerateLayoutInterleaved1F1BSchedule",
+          "callee": "push_back",
+          "lineNumber": 140
+        },
+        {
+          "caller": "GenerateLayoutInterleaved1F1BSchedule",
+          "callee": "CreateTask",
+          "lineNumber": 140
+        },
+        {
+          "caller": "GenerateLayoutInterleaved1F1BSchedule",
+          "callee": "push_back",
+          "lineNumber": 151
+        },
+        {
+          "caller": "GenerateLayoutInterleaved1F1BSchedule",
+          "callee": "CreateTask",
+          "lineNumber": 151
+        },
+        {
+          "caller": "GenerateLayoutInterleaved1F1BSchedule",
+          "callee": "push_back",
+          "lineNumber": 171
+        },
+        {
+          "caller": "GenerateLayoutInterleaved1F1BSchedule",
+          "callee": "CreateTask",
+          "lineNumber": 171
+        },
+        {
+          "caller": "TasksForStage",
+          "callee": "static_cast<void>",
+          "lineNumber": 188
+        },
+        {
+          "caller": "TasksForStage",
+          "callee": "stage",
+          "lineNumber": 188
+        },
+        {
+          "caller": "TasksForStage",
+          "callee": "push_back",
+          "lineNumber": 193
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 5,
+        "functionCount": 5,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/08_checkpoint_integration/include/checkpoint_layout_mapper.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 31,
+      "nonEmptyLines": 22,
+      "classes": [
+        {
+          "name": "LayerLoadDecision",
+          "startLine": 9,
+          "endLine": 15,
+          "methods": [],
+          "properties": [
+            "global_layer_id",
+            "load_on_stage",
+            "local_layer_index",
+            "global_chunk_id",
+            "local_chunk_id"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "LayerLoadDecision",
+          "line": 9,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/08_checkpoint_integration/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 15,
+      "nonEmptyLines": 10,
+      "sections": [
+        {
+          "heading": "Chapter 08: Checkpoint Integration Adapter",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/08_checkpoint_integration/src/checkpoint_layout_mapper.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 53,
+      "nonEmptyLines": 44,
+      "functions": [
+        {
+          "name": "BuildLayerLoadPlan",
+          "startLine": 5,
+          "endLine": 28,
+          "params": [
+            "layout",
+            "stage_id"
+          ]
+        },
+        {
+          "name": "OwnedGlobalLayers",
+          "startLine": 30,
+          "endLine": 43,
+          "params": [
+            "layout",
+            "stage_id"
+          ]
+        },
+        {
+          "name": "ShouldLoadSpecialModule",
+          "startLine": 45,
+          "endLine": 50,
+          "params": [
+            "layout",
+            "stage_id",
+            "module"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "BuildLayerLoadPlan",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "OwnedGlobalLayers",
+          "line": 30,
+          "isDefault": false
+        },
+        {
+          "name": "ShouldLoadSpecialModule",
+          "line": 45,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "BuildLayerLoadPlan",
+          "callee": "static_cast<void>",
+          "lineNumber": 8
+        },
+        {
+          "caller": "BuildLayerLoadPlan",
+          "callee": "stage",
+          "lineNumber": 8
+        },
+        {
+          "caller": "BuildLayerLoadPlan",
+          "callee": "reserve",
+          "lineNumber": 11
+        },
+        {
+          "caller": "BuildLayerLoadPlan",
+          "callee": "num_layers",
+          "lineNumber": 11
+        },
+        {
+          "caller": "BuildLayerLoadPlan",
+          "callee": "num_layers",
+          "lineNumber": 14
+        },
+        {
+          "caller": "BuildLayerLoadPlan",
+          "callee": "locate_layer",
+          "lineNumber": 16
+        },
+        {
+          "caller": "BuildLayerLoadPlan",
+          "callee": "push_back",
+          "lineNumber": 18
+        },
+        {
+          "caller": "OwnedGlobalLayers",
+          "callee": "BuildLayerLoadPlan",
+          "lineNumber": 34
+        },
+        {
+          "caller": "OwnedGlobalLayers",
+          "callee": "push_back",
+          "lineNumber": 39
+        },
+        {
+          "caller": "ShouldLoadSpecialModule",
+          "callee": "owns",
+          "lineNumber": 49
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/09_milestones/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 16,
+      "nonEmptyLines": 13,
+      "sections": [
+        {
+          "heading": "Chapter 09: Milestones",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/10_unit_tests/pipeline_layout_test.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 235,
+      "nonEmptyLines": 213,
+      "functions": [
+        {
+          "name": "Check",
+          "startLine": 20,
+          "endLine": 24,
+          "params": [
+            "condition",
+            "message"
+          ]
+        },
+        {
+          "name": "ExpectLayoutError",
+          "startLine": 26,
+          "endLine": 38,
+          "params": [
+            "function",
+            "expected_fragment"
+          ]
+        },
+        {
+          "name": "TestDefaultLayout",
+          "startLine": 40,
+          "endLine": 56,
+          "params": []
+        },
+        {
+          "name": "TestCustomPartition",
+          "startLine": 58,
+          "endLine": 78,
+          "params": []
+        },
+        {
+          "name": "TestParserErrors",
+          "startLine": 80,
+          "endLine": 103,
+          "params": []
+        },
+        {
+          "name": "TestDefaultVppAndExplicitMapping",
+          "startLine": 105,
+          "endLine": 146,
+          "params": []
+        },
+        {
+          "name": "CheckScheduleCoverage",
+          "startLine": 148,
+          "endLine": 170,
+          "params": [
+            "schedule",
+            "layout",
+            "micro_batches"
+          ]
+        },
+        {
+          "name": "TestSchedulesAndCheckpointPlan",
+          "startLine": 172,
+          "endLine": 192,
+          "params": []
+        },
+        {
+          "name": "TestNumericalComparisonAndCostBalancer",
+          "startLine": 194,
+          "endLine": 214,
+          "params": []
+        },
+        {
+          "name": "main",
+          "startLine": 218,
+          "endLine": 232,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Check",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "ExpectLayoutError",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "TestDefaultLayout",
+          "line": 40,
+          "isDefault": false
+        },
+        {
+          "name": "TestCustomPartition",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "TestParserErrors",
+          "line": 80,
+          "isDefault": false
+        },
+        {
+          "name": "TestDefaultVppAndExplicitMapping",
+          "line": 105,
+          "isDefault": false
+        },
+        {
+          "name": "CheckScheduleCoverage",
+          "line": 148,
+          "isDefault": false
+        },
+        {
+          "name": "TestSchedulesAndCheckpointPlan",
+          "line": 172,
+          "isDefault": false
+        },
+        {
+          "name": "TestNumericalComparisonAndCostBalancer",
+          "line": 194,
+          "isDefault": false
+        },
+        {
+          "name": "main",
+          "line": 218,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Check",
+          "callee": "std::runtime_error",
+          "lineNumber": 22
+        },
+        {
+          "caller": "ExpectLayoutError",
+          "callee": "function",
+          "lineNumber": 30
+        },
+        {
+          "caller": "ExpectLayoutError",
+          "callee": "Check",
+          "lineNumber": 32
+        },
+        {
+          "caller": "ExpectLayoutError",
+          "callee": "find",
+          "lineNumber": 33
+        },
+        {
+          "caller": "ExpectLayoutError",
+          "callee": "std::string",
+          "lineNumber": 33
+        },
+        {
+          "caller": "ExpectLayoutError",
+          "callee": "what",
+          "lineNumber": 33
+        },
+        {
+          "caller": "ExpectLayoutError",
+          "callee": "what",
+          "lineNumber": 34
+        },
+        {
+          "caller": "ExpectLayoutError",
+          "callee": "std::runtime_error",
+          "lineNumber": 37
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "PipelineLayout::BuildDefault",
+          "lineNumber": 41
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "Check",
+          "lineNumber": 42
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "num_layers",
+          "lineNumber": 42
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "Check",
+          "lineNumber": 43
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "stage",
+          "lineNumber": 43
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "Check",
+          "lineNumber": 44
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "chunk",
+          "lineNumber": 44
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "chunk",
+          "lineNumber": 44
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "Check",
+          "lineNumber": 46
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "chunk",
+          "lineNumber": 46
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "chunk",
+          "lineNumber": 46
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "Check",
+          "lineNumber": 48
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "owns",
+          "lineNumber": 48
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "Check",
+          "lineNumber": 49
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "owns",
+          "lineNumber": 49
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "Check",
+          "lineNumber": 50
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "owns",
+          "lineNumber": 50
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "Check",
+          "lineNumber": 52
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "stage_of_layer",
+          "lineNumber": 52
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "Check",
+          "lineNumber": 53
+        },
+        {
+          "caller": "TestDefaultLayout",
+          "callee": "local_layer_index",
+          "lineNumber": 53
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "BuildPipelineLayout",
+          "lineNumber": 65
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "chunk",
+          "lineNumber": 68
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "front",
+          "lineNumber": 68
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "stage",
+          "lineNumber": 68
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "Check",
+          "lineNumber": 69
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "Check",
+          "lineNumber": 70
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "BuildLocalStageModelPlan",
+          "lineNumber": 72
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "Check",
+          "lineNumber": 73
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "Check",
+          "lineNumber": 74
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "back",
+          "lineNumber": 74
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "Check",
+          "lineNumber": 75
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "back",
+          "lineNumber": 75
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "Check",
+          "lineNumber": 76
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "front",
+          "lineNumber": 76
+        },
+        {
+          "caller": "TestCustomPartition",
+          "callee": "BuildLocalStageModelPlan",
+          "lineNumber": 76
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "Check",
+          "lineNumber": 81
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "ParseStageLayerCounts",
+          "lineNumber": 81
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "ExpectLayoutError",
+          "lineNumber": 83
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "ParseStageLayerCounts",
+          "lineNumber": 83
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "ExpectLayoutError",
+          "lineNumber": 84
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "ParseStageLayerCounts",
+          "lineNumber": 84
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "ExpectLayoutError",
+          "lineNumber": 85
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "ParseStageLayerCounts",
+          "lineNumber": 85
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "ExpectLayoutError",
+          "lineNumber": 90
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "BuildPipelineLayout",
+          "lineNumber": 90
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "ExpectLayoutError",
+          "lineNumber": 94
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "BuildPipelineLayout",
+          "lineNumber": 94
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "ExpectLayoutError",
+          "lineNumber": 98
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "BuildPipelineLayout",
+          "lineNumber": 98
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "ExpectLayoutError",
+          "lineNumber": 102
+        },
+        {
+          "caller": "TestParserErrors",
+          "callee": "BuildPipelineLayout",
+          "lineNumber": 102
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "PipelineLayout::BuildDefault",
+          "lineNumber": 106
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "Check",
+          "lineNumber": 107
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "chunk",
+          "lineNumber": 107
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "chunk",
+          "lineNumber": 107
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "Check",
+          "lineNumber": 109
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "chunk",
+          "lineNumber": 109
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "chunk",
+          "lineNumber": 109
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "Check",
+          "lineNumber": 111
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "chunk",
+          "lineNumber": 111
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "chunk",
+          "lineNumber": 111
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "Check",
+          "lineNumber": 113
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "chunk",
+          "lineNumber": 113
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "chunk",
+          "lineNumber": 113
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "PipelineLayout::BuildExplicit",
+          "lineNumber": 116
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "Check",
+          "lineNumber": 126
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "stage_of_layer",
+          "lineNumber": 126
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "Check",
+          "lineNumber": 127
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "local_layer_index",
+          "lineNumber": 127
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "Check",
+          "lineNumber": 128
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "chunk_of_layer",
+          "lineNumber": 128
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "PipelineLayout::BuildExplicit",
+          "lineNumber": 131
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "ExpectLayoutError",
+          "lineNumber": 143
+        },
+        {
+          "caller": "TestDefaultVppAndExplicitMapping",
+          "callee": "GenerateLayoutGPipeSchedule",
+          "lineNumber": 144
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "static_cast<int>",
+          "lineNumber": 152
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "size",
+          "lineNumber": 152
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "chunks",
+          "lineNumber": 152
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "Check",
+          "lineNumber": 153
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "size",
+          "lineNumber": 153
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 153
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 155
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "Check",
+          "lineNumber": 157
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "chunk",
+          "lineNumber": 157
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "Check",
+          "lineNumber": 159
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "chunk",
+          "lineNumber": 159
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "Check",
+          "lineNumber": 161
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 165
+        },
+        {
+          "caller": "CheckScheduleCoverage",
+          "callee": "Check",
+          "lineNumber": 168
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "PipelineLayout::BuildDefault",
+          "lineNumber": 173
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "GenerateLayoutGPipeSchedule",
+          "lineNumber": 174
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "GenerateLayoutInterleaved1F1BSchedule",
+          "lineNumber": 175
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "CheckScheduleCoverage",
+          "lineNumber": 176
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "CheckScheduleCoverage",
+          "lineNumber": 177
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "num_stages",
+          "lineNumber": 179
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "BuildLayerLoadPlan",
+          "lineNumber": 180
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "OwnedGlobalLayers",
+          "lineNumber": 181
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "Check",
+          "lineNumber": 182
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "static_cast<int>",
+          "lineNumber": 182
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "size",
+          "lineNumber": 182
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "static_cast<int>",
+          "lineNumber": 183
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "size",
+          "lineNumber": 183
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "Check",
+          "lineNumber": 184
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "Check",
+          "lineNumber": 188
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "ShouldLoadSpecialModule",
+          "lineNumber": 188
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "Check",
+          "lineNumber": 190
+        },
+        {
+          "caller": "TestSchedulesAndCheckpointPlan",
+          "callee": "ShouldLoadSpecialModule",
+          "lineNumber": 190
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "CompareVectors",
+          "lineNumber": 195
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "Check",
+          "lineNumber": 198
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "CompareVectors",
+          "lineNumber": 199
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "Check",
+          "lineNumber": 201
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "Check",
+          "lineNumber": 202
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "CompareVectors",
+          "lineNumber": 202
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "SuggestContiguousCostLayout",
+          "lineNumber": 205
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "Check",
+          "lineNumber": 207
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "num_layers",
+          "lineNumber": 207
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "Check",
+          "lineNumber": 208
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "size",
+          "lineNumber": 208
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "Check",
+          "lineNumber": 209
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "Check",
+          "lineNumber": 210
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "ExpectLayoutError",
+          "lineNumber": 211
+        },
+        {
+          "caller": "TestNumericalComparisonAndCostBalancer",
+          "callee": "SuggestContiguousCostLayout",
+          "lineNumber": 212
+        },
+        {
+          "caller": "main",
+          "callee": "TestDefaultLayout",
+          "lineNumber": 220
+        },
+        {
+          "caller": "main",
+          "callee": "TestCustomPartition",
+          "lineNumber": 221
+        },
+        {
+          "caller": "main",
+          "callee": "TestParserErrors",
+          "lineNumber": 222
+        },
+        {
+          "caller": "main",
+          "callee": "TestDefaultVppAndExplicitMapping",
+          "lineNumber": 223
+        },
+        {
+          "caller": "main",
+          "callee": "TestSchedulesAndCheckpointPlan",
+          "lineNumber": 224
+        },
+        {
+          "caller": "main",
+          "callee": "TestNumericalComparisonAndCostBalancer",
+          "lineNumber": 225
+        },
+        {
+          "caller": "main",
+          "callee": "what",
+          "lineNumber": 229
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 10,
+        "functionCount": 10,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/10_unit_tests/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 7,
+      "nonEmptyLines": 6,
+      "sections": [
+        {
+          "heading": "Chapter 10: Unit Tests",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/11_numerical_consistency/include/numerical_compare.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 29,
+      "nonEmptyLines": 23,
+      "classes": [
+        {
+          "name": "ComparisonResult",
+          "startLine": 14,
+          "endLine": 22,
+          "methods": [],
+          "properties": [
+            "passed",
+            "expected_size",
+            "actual_size",
+            "max_absolute_error",
+            "max_relative_error",
+            "worst_index",
+            "message"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "ComparisonResult",
+          "line": 14,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/11_numerical_consistency/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 7,
+      "nonEmptyLines": 6,
+      "sections": [
+        {
+          "heading": "Chapter 11: Numerical Consistency",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/11_numerical_consistency/src/numerical_compare.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 92,
+      "nonEmptyLines": 82,
+      "functions": [
+        {
+          "name": "GetTolerance",
+          "startLine": 15,
+          "endLine": 23,
+          "params": [
+            "precision"
+          ]
+        },
+        {
+          "name": "CompareVectors",
+          "startLine": 27,
+          "endLine": 90,
+          "params": [
+            "expected",
+            "actual",
+            "precision"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Tolerance",
+          "startLine": 10,
+          "endLine": 13,
+          "methods": [],
+          "properties": [
+            "absolute",
+            "relative"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Tolerance",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "GetTolerance",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "CompareVectors",
+          "line": 27,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "CompareVectors",
+          "callee": "size",
+          "lineNumber": 32
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "size",
+          "lineNumber": 33
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "size",
+          "lineNumber": 34
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "size",
+          "lineNumber": 34
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::format",
+          "lineNumber": 35
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "size",
+          "lineNumber": 37
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "size",
+          "lineNumber": 38
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "GetTolerance",
+          "lineNumber": 42
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "size",
+          "lineNumber": 44
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::isnan",
+          "lineNumber": 47
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::isnan",
+          "lineNumber": 47
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::format",
+          "lineNumber": 50
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::isinf",
+          "lineNumber": 53
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::isinf",
+          "lineNumber": 53
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::format",
+          "lineNumber": 59
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::abs",
+          "lineNumber": 63
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::max",
+          "lineNumber": 64
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::abs",
+          "lineNumber": 64
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::abs",
+          "lineNumber": 64
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::max",
+          "lineNumber": 70
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::format",
+          "lineNumber": 78
+        },
+        {
+          "caller": "CompareVectors",
+          "callee": "std::format",
+          "lineNumber": 83
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 2,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/12_excellent_extensions/include/cost_balancer.h",
+      "language": "c",
+      "fileCategory": "code",
+      "totalLines": 24,
+      "nonEmptyLines": 18,
+      "classes": [
+        {
+          "name": "CostBalancedLayout",
+          "startLine": 9,
+          "endLine": 15,
+          "methods": [],
+          "properties": [
+            "layout",
+            "stage_costs",
+            "ideal_stage_cost",
+            "imbalance_ratio",
+            "bubble_proxy"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "CostBalancedLayout",
+          "line": 9,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/12_excellent_extensions/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 13,
+      "nonEmptyLines": 10,
+      "sections": [
+        {
+          "heading": "Chapter 12: Excellent-Standard Extensions",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/12_excellent_extensions/src/cost_balancer.cc",
+      "language": "cpp",
+      "fileCategory": "code",
+      "totalLines": 120,
+      "nonEmptyLines": 106,
+      "functions": [
+        {
+          "name": "Fail",
+          "startLine": 13,
+          "endLine": 15,
+          "params": [
+            "message"
+          ]
+        },
+        {
+          "name": "SuggestContiguousCostLayout",
+          "startLine": 19,
+          "endLine": 118,
+          "params": [
+            "layer_costs",
+            "num_stages",
+            "placement"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Fail",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "SuggestContiguousCostLayout",
+          "line": 19,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Fail",
+          "callee": "PipelineLayoutError",
+          "lineNumber": 14
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "empty",
+          "lineNumber": 23
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "Fail",
+          "lineNumber": 24
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "Fail",
+          "lineNumber": 27
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::format",
+          "lineNumber": 27
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<int>",
+          "lineNumber": 29
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "size",
+          "lineNumber": 29
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "Fail",
+          "lineNumber": 30
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::format",
+          "lineNumber": 30
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "size",
+          "lineNumber": 33
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "size",
+          "lineNumber": 35
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::isfinite",
+          "lineNumber": 36
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "Fail",
+          "lineNumber": 37
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::format",
+          "lineNumber": 37
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<int>",
+          "lineNumber": 41
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "size",
+          "lineNumber": 41
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 42
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 44
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 45
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 45
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::numeric_limits<double>::infinity",
+          "lineNumber": 48
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 50
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::vector<double>",
+          "lineNumber": 51
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 51
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 53
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::vector<int>",
+          "lineNumber": 54
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 54
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::isfinite",
+          "lineNumber": 61
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::max",
+          "lineNumber": 65
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::isfinite",
+          "lineNumber": 74
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "Fail",
+          "lineNumber": 75
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 78
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "Fail",
+          "lineNumber": 83
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 85
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "PipelineLayout::BuildContiguous",
+          "lineNumber": 89
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "reserve",
+          "lineNumber": 91
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 91
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::accumulate",
+          "lineNumber": 94
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "begin",
+          "lineNumber": 94
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "begin",
+          "lineNumber": 94
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 96
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<std::size_t>",
+          "lineNumber": 98
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "push_back",
+          "lineNumber": 100
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "back",
+          "lineNumber": 103
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<double>",
+          "lineNumber": 104
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::max_element",
+          "lineNumber": 105
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "begin",
+          "lineNumber": 105
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "end",
+          "lineNumber": 105
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "static_cast<double>",
+          "lineNumber": 108
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::move",
+          "lineNumber": 112
+        },
+        {
+          "caller": "SuggestContiguousCostLayout",
+          "callee": "std::move",
+          "lineNumber": 113
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/13_commit_plan/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 12,
+      "nonEmptyLines": 9,
+      "sections": [
+        {
+          "heading": "Chapter 13: Commit and Review Plan",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/15_completion_gate/completion_checklist.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 22,
+      "nonEmptyLines": 17,
+      "sections": [
+        {
+          "heading": "Chapter 15: Completion Gate",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    }
+  ]
+}

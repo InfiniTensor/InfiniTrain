@@ -1,0 +1,2177 @@
+{
+  "nodes": [
+    {
+      "id": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "type": "file",
+      "name": "lora_utils.cc",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "summary": "实现 lora_utils 的 LoRA 参数管理、权重合并或张量并行适配，为大模型微调提供低秩增量路径。",
+      "tags": [
+        "lora",
+        "参数高效微调",
+        "implementation",
+        "c++",
+        "lora-参数高效微调"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:infini_train/src/nn/modules/linear.cc",
+      "type": "file",
+      "name": "linear.cc",
+      "filePath": "infini_train/src/nn/modules/linear.cc",
+      "summary": "InfiniTrain 运行时相关的 linear.cc 实现，承载该模块的核心接口与运行逻辑。",
+      "tags": [
+        "implementation",
+        "c++",
+        "infinitrain-运行时"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:tests/lora/test_lora.cc",
+      "type": "file",
+      "name": "test_lora.cc",
+      "filePath": "tests/lora/test_lora.cc",
+      "summary": "覆盖 LoRA 参数高效微调 的参数化测试与行为回归，验证前向、反向及边界条件。",
+      "tags": [
+        "test",
+        "lora",
+        "参数高效微调",
+        "implementation",
+        "c++"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:EndsWith",
+      "type": "function",
+      "name": "EndsWith",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        43,
+        45
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 EndsWith，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:ConsumeDDPModulePrefixIfPresent",
+      "type": "function",
+      "name": "ConsumeDDPModulePrefixIfPresent",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        47,
+        54
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 ConsumeDDPModulePrefixIfPresent，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:ResolveLoRAStateDictKey",
+      "type": "function",
+      "name": "ResolveLoRAStateDictKey",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        56,
+        68
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 ResolveLoRAStateDictKey，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:UnwrapDistributedDataParallel",
+      "type": "function",
+      "name": "UnwrapDistributedDataParallel",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        70,
+        73
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 UnwrapDistributedDataParallel，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:LoraANameForLoraB",
+      "type": "function",
+      "name": "LoraANameForLoraB",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        75,
+        79
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 LoraANameForLoraB，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:QualifiedParamName",
+      "type": "function",
+      "name": "QualifiedParamName",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        81,
+        83
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 QualifiedParamName，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:SortedLoRAStateDictNames",
+      "type": "function",
+      "name": "SortedLoRAStateDictNames",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        85,
+        92
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 SortedLoRAStateDictNames，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:BuildLoRATensorShardings",
+      "type": "function",
+      "name": "BuildLoRATensorShardings",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        94,
+        135
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 BuildLoRATensorShardings，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRATensorSharding",
+      "type": "function",
+      "name": "GetLoRATensorSharding",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        137,
+        141
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 GetLoRATensorSharding，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:IsPrimarySaveTPGroupRank",
+      "type": "function",
+      "name": "IsPrimarySaveTPGroupRank",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        143,
+        149
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 IsPrimarySaveTPGroupRank，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:IsSaveWriterRank",
+      "type": "function",
+      "name": "IsSaveWriterRank",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        151,
+        157
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 IsSaveWriterRank，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:ExportLoRATensorForSave",
+      "type": "function",
+      "name": "ExportLoRATensorForSave",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        159,
+        192
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 ExportLoRATensorForSave，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRATensorIntoModel",
+      "type": "function",
+      "name": "LoadLoRATensorIntoModel",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        194,
+        247
+      ],
+      "summary": "读取并解析 LoRA 参数高效微调 的检查点数据，构建模型所需的权重张量。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "checkpoint"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:SlicePackedQKVRowsForTensorParallel",
+      "type": "function",
+      "name": "SlicePackedQKVRowsForTensorParallel",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        255,
+        288
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 SlicePackedQKVRowsForTensorParallel，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:RestorePackedQKVRowsFromTensorParallel",
+      "type": "function",
+      "name": "RestorePackedQKVRowsFromTensorParallel",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        290,
+        325
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 RestorePackedQKVRowsFromTensorParallel，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRAModel",
+      "type": "function",
+      "name": "GetLoRAModel",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        329,
+        341
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 GetLoRAModel，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:ReplaceModuleByPath",
+      "type": "function",
+      "name": "ReplaceModuleByPath",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        343,
+        367
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 ReplaceModuleByPath，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:InjectLoRALayers",
+      "type": "function",
+      "name": "InjectLoRALayers",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        369,
+        435
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 InjectLoRALayers，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:FreezeBaseModel",
+      "type": "function",
+      "name": "FreezeBaseModel",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        437,
+        447
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 FreezeBaseModel，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:UnfreezeModel",
+      "type": "function",
+      "name": "UnfreezeModel",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        449,
+        453
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 UnfreezeModel，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRAParameters",
+      "type": "function",
+      "name": "GetLoRAParameters",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        455,
+        481
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 GetLoRAParameters，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:GetBaseParameters",
+      "type": "function",
+      "name": "GetBaseParameters",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        483,
+        496
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 GetBaseParameters，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:MergeLoRAWeights",
+      "type": "function",
+      "name": "MergeLoRAWeights",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        498,
+        508
+      ],
+      "summary": "在 LoRA 参数高效微调 中合并或拆分增量权重，控制训练与推理权重状态。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "weight-management"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:UnmergeLoRAWeights",
+      "type": "function",
+      "name": "UnmergeLoRAWeights",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        510,
+        520
+      ],
+      "summary": "在 LoRA 参数高效微调 中合并或拆分增量权重，控制训练与推理权重状态。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "weight-management"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:MergeAndUnload",
+      "type": "function",
+      "name": "MergeAndUnload",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        522,
+        586
+      ],
+      "summary": "读取并解析 LoRA 参数高效微调 的检查点数据，构建模型所需的权重张量。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "checkpoint"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:LoRAStateDict",
+      "type": "function",
+      "name": "LoRAStateDict",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        588,
+        602
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 LoRAStateDict，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRAStateDict",
+      "type": "function",
+      "name": "LoadLoRAStateDict",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        604,
+        613
+      ],
+      "summary": "读取并解析 LoRA 参数高效微调 的检查点数据，构建模型所需的权重张量。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "checkpoint"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:SaveLoRAWeights",
+      "type": "function",
+      "name": "SaveLoRAWeights",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        615,
+        687
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 SaveLoRAWeights，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRAWeights",
+      "type": "function",
+      "name": "LoadLoRAWeights",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        689,
+        738
+      ],
+      "summary": "读取并解析 LoRA 参数高效微调 的检查点数据，构建模型所需的权重张量。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "checkpoint"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:CountTrainableParameters",
+      "type": "function",
+      "name": "CountTrainableParameters",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        740,
+        748
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 CountTrainableParameters，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:CountTotalParameters",
+      "type": "function",
+      "name": "CountTotalParameters",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        750,
+        758
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 CountTotalParameters，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:PrintLoRASummary",
+      "type": "function",
+      "name": "PrintLoRASummary",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        760,
+        779
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 PrintLoRASummary，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/lora/lora_utils.cc:ParseLoRATargetModules",
+      "type": "function",
+      "name": "ParseLoRATargetModules",
+      "filePath": "infini_train/src/nn/lora/lora_utils.cc",
+      "lineRange": [
+        781,
+        794
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 ParseLoRATargetModules，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/linear.cc:Linear",
+      "type": "function",
+      "name": "Linear",
+      "filePath": "infini_train/src/nn/modules/linear.cc",
+      "lineRange": [
+        13,
+        25
+      ],
+      "summary": "实现 InfiniTrain 运行时 中的 Linear，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/linear.cc:Forward",
+      "type": "function",
+      "name": "Forward",
+      "filePath": "infini_train/src/nn/modules/linear.cc",
+      "lineRange": [
+        27,
+        32
+      ],
+      "summary": "执行 InfiniTrain 运行时 的前向计算并生成输出张量。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/linear.cc:ResetParameters",
+      "type": "function",
+      "name": "ResetParameters",
+      "filePath": "infini_train/src/nn/modules/linear.cc",
+      "lineRange": [
+        34,
+        41
+      ],
+      "summary": "实现 InfiniTrain 运行时 中的 ResetParameters，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:tests/lora/test_lora.cc:LoRATest",
+      "type": "class",
+      "name": "LoRATest",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        22,
+        22
+      ],
+      "summary": "定义 LoRATest 类，封装 LoRA 参数高效微调 的状态、参数与核心操作。",
+      "tags": [
+        "lora-参数高效微调",
+        "class",
+        "组件",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:MakeRowLabeledTensor",
+      "type": "function",
+      "name": "MakeRowLabeledTensor",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        42,
+        57
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 MakeRowLabeledTensor，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:ExpectRows",
+      "type": "function",
+      "name": "ExpectRows",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        59,
+        70
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 ExpectRows，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P",
+      "type": "function",
+      "name": "TEST_P",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        72,
+        79
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@81",
+      "type": "function",
+      "name": "TEST_P@81",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        81,
+        88
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@90",
+      "type": "function",
+      "name": "TEST_P@90",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        90,
+        97
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@99",
+      "type": "function",
+      "name": "TEST_P@99",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        99,
+        106
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@108",
+      "type": "function",
+      "name": "TEST_P@108",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        108,
+        118
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@120",
+      "type": "function",
+      "name": "TEST_P@120",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        120,
+        152
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@154",
+      "type": "function",
+      "name": "TEST_P@154",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        154,
+        172
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@174",
+      "type": "function",
+      "name": "TEST_P@174",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        174,
+        213
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@215",
+      "type": "function",
+      "name": "TEST_P@215",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        215,
+        235
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@237",
+      "type": "function",
+      "name": "TEST_P@237",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        237,
+        253
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@255",
+      "type": "function",
+      "name": "TEST_P@255",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        255,
+        274
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@276",
+      "type": "function",
+      "name": "TEST_P@276",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        276,
+        316
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@318",
+      "type": "function",
+      "name": "TEST_P@318",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        318,
+        343
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@345",
+      "type": "function",
+      "name": "TEST_P@345",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        345,
+        367
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@369",
+      "type": "function",
+      "name": "TEST_P@369",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        369,
+        396
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/lora/test_lora.cc:TEST_P@398",
+      "type": "function",
+      "name": "TEST_P@398",
+      "filePath": "tests/lora/test_lora.cc",
+      "lineRange": [
+        398,
+        428
+      ],
+      "summary": "验证 LoRA 参数高效微调 的关键行为与回归场景。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:EndsWith",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:EndsWith",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ConsumeDDPModulePrefixIfPresent",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ConsumeDDPModulePrefixIfPresent",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ResolveLoRAStateDictKey",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ResolveLoRAStateDictKey",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:UnwrapDistributedDataParallel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:UnwrapDistributedDataParallel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoraANameForLoraB",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoraANameForLoraB",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:QualifiedParamName",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:QualifiedParamName",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:SortedLoRAStateDictNames",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:SortedLoRAStateDictNames",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:BuildLoRATensorShardings",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:BuildLoRATensorShardings",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRATensorSharding",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRATensorSharding",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:IsPrimarySaveTPGroupRank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:IsPrimarySaveTPGroupRank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:IsSaveWriterRank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:IsSaveWriterRank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ExportLoRATensorForSave",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ExportLoRATensorForSave",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRATensorIntoModel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRATensorIntoModel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:SlicePackedQKVRowsForTensorParallel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:SlicePackedQKVRowsForTensorParallel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:RestorePackedQKVRowsFromTensorParallel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:RestorePackedQKVRowsFromTensorParallel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRAModel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRAModel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ReplaceModuleByPath",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ReplaceModuleByPath",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:InjectLoRALayers",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:InjectLoRALayers",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:FreezeBaseModel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:FreezeBaseModel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:UnfreezeModel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:UnfreezeModel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRAParameters",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRAParameters",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:GetBaseParameters",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:GetBaseParameters",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:MergeLoRAWeights",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:MergeLoRAWeights",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:UnmergeLoRAWeights",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:UnmergeLoRAWeights",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:MergeAndUnload",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:MergeAndUnload",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoRAStateDict",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoRAStateDict",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRAStateDict",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRAStateDict",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:SaveLoRAWeights",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:SaveLoRAWeights",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRAWeights",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRAWeights",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:CountTrainableParameters",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:CountTrainableParameters",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:CountTotalParameters",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:CountTotalParameters",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:PrintLoRASummary",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:PrintLoRASummary",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ParseLoRATargetModules",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ParseLoRATargetModules",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/nn/functional.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/nn/lora/lora_linear.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/nn/lora/lora_parallel_linear.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/nn/lora/lora_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/nn/modules/linear.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/nn/modules/module.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/causal_self_attention.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/nn/parallel/utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/lora/lora_utils.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:ResolveLoRAStateDictKey",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ConsumeDDPModulePrefixIfPresent",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:LoraANameForLoraB",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:EndsWith",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:BuildLoRATensorShardings",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:QualifiedParamName",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:ExportLoRATensorForSave",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRATensorSharding",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:ExportLoRATensorForSave",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoraANameForLoraB",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRATensorIntoModel",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRATensorSharding",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRATensorIntoModel",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoraANameForLoraB",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRAModel",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:InjectLoRALayers",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRAModel",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:FreezeBaseModel",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:InjectLoRALayers",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ReplaceModuleByPath",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:FreezeBaseModel",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:GetLoRAParameters",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:MergeAndUnload",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:MergeLoRAWeights",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:MergeAndUnload",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ReplaceModuleByPath",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:MergeAndUnload",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:UnfreezeModel",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRAStateDict",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:BuildLoRATensorShardings",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRAStateDict",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ResolveLoRAStateDictKey",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRAStateDict",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRATensorIntoModel",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:SaveLoRAWeights",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:UnwrapDistributedDataParallel",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:SaveLoRAWeights",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoRAStateDict",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:SaveLoRAWeights",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:SortedLoRAStateDictNames",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:SaveLoRAWeights",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:BuildLoRATensorShardings",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:SaveLoRAWeights",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:IsPrimarySaveTPGroupRank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:SaveLoRAWeights",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:IsSaveWriterRank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:SaveLoRAWeights",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ExportLoRATensorForSave",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRAWeights",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:BuildLoRATensorShardings",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRAWeights",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:ResolveLoRAStateDictKey",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRAWeights",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:LoadLoRATensorIntoModel",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:PrintLoRASummary",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:CountTrainableParameters",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/lora/lora_utils.cc:PrintLoRASummary",
+      "target": "function:infini_train/src/nn/lora/lora_utils.cc:CountTotalParameters",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/linear.cc",
+      "target": "function:infini_train/src/nn/modules/linear.cc:Linear",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/linear.cc",
+      "target": "function:infini_train/src/nn/modules/linear.cc:Linear",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/linear.cc",
+      "target": "function:infini_train/src/nn/modules/linear.cc:Forward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/linear.cc",
+      "target": "function:infini_train/src/nn/modules/linear.cc:Forward",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/linear.cc",
+      "target": "function:infini_train/src/nn/modules/linear.cc:ResetParameters",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/linear.cc",
+      "target": "function:infini_train/src/nn/modules/linear.cc:ResetParameters",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/linear.cc",
+      "target": "file:infini_train/include/autograd/linear.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/linear.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/linear.cc",
+      "target": "file:infini_train/include/nn/init.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/linear.cc",
+      "target": "file:infini_train/include/nn/modules/linear.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/linear.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:infini_train/src/nn/modules/linear.cc:Linear",
+      "target": "function:infini_train/src/nn/modules/linear.cc:ResetParameters",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "class:tests/lora/test_lora.cc:LoRATest",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "class:tests/lora/test_lora.cc:LoRATest",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:MakeRowLabeledTensor",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:ExpectRows",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@81",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@81",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@90",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@90",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@99",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@99",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@108",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@108",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@120",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@120",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@154",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@154",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@174",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@174",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@215",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@215",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@237",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@237",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@255",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@255",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@276",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@276",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@318",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@318",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@345",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@345",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@369",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@369",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@398",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "function:tests/lora/test_lora.cc:TEST_P@398",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "file:infini_train/include/nn/lora/lora_config.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "file:infini_train/include/nn/lora/lora_linear.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "file:infini_train/include/nn/lora/lora_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "file:infini_train/include/nn/modules/container.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "file:infini_train/include/nn/modules/linear.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "file:infini_train/include/nn/modules/module.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/lora/test_lora.cc",
+      "target": "file:tests/common/test_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:tests/lora/test_lora.cc:TEST_P",
+      "target": "function:tests/lora/test_lora.cc:MakeRowLabeledTensor",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:tests/lora/test_lora.cc:TEST_P",
+      "target": "function:tests/lora/test_lora.cc:ExpectRows",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

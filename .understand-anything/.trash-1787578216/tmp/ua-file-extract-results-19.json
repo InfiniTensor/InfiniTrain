@@ -1,0 +1,688 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 25,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": ".clang-format",
+      "language": "unknown",
+      "fileCategory": "code",
+      "totalLines": 31,
+      "nonEmptyLines": 30,
+      "metrics": {}
+    },
+    {
+      "path": ".gitmodules",
+      "language": "unknown",
+      "fileCategory": "code",
+      "totalLines": 12,
+      "nonEmptyLines": 12,
+      "metrics": {}
+    },
+    {
+      "path": ".understand-anything/.understandignore",
+      "language": "unknown",
+      "fileCategory": "code",
+      "totalLines": 39,
+      "nonEmptyLines": 33,
+      "metrics": {}
+    },
+    {
+      "path": ".understand-anything/config.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 3,
+      "nonEmptyLines": 3,
+      "sections": [
+        {
+          "heading": "outputLanguage",
+          "level": 1,
+          "line": 2
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "cmake/FindNCCL.cmake",
+      "language": "cmake",
+      "fileCategory": "code",
+      "totalLines": 43,
+      "nonEmptyLines": 37,
+      "metrics": {}
+    },
+    {
+      "path": "cmake/test_macros.cmake",
+      "language": "cmake",
+      "fileCategory": "code",
+      "totalLines": 156,
+      "nonEmptyLines": 138,
+      "metrics": {}
+    },
+    {
+      "path": "CMakeLists.txt",
+      "language": "txt",
+      "fileCategory": "docs",
+      "totalLines": 242,
+      "nonEmptyLines": 200,
+      "metrics": {}
+    },
+    {
+      "path": "gradient_clipping_implementation/design/00_background_and_source_guide.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 328,
+      "nonEmptyLines": 222,
+      "sections": [
+        {
+          "heading": "InfiniTrain 梯度范数与梯度裁剪：背景知识和源码导读",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "1. 先建立整体画面",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "2. 梯度、累加和裁剪的基础知识",
+          "level": 2,
+          "line": 45
+        },
+        {
+          "heading": "2.1 Autograd 中的 `grad`",
+          "level": 3,
+          "line": 47
+        },
+        {
+          "heading": "2.2 梯度范数",
+          "level": 3,
+          "line": 63
+        },
+        {
+          "heading": "2.3 PyTorch 语义基线",
+          "level": 3,
+          "line": 84
+        },
+        {
+          "heading": "2.4 为什么必须原地缩放",
+          "level": 3,
+          "line": 111
+        },
+        {
+          "heading": "3. 分布式并行的坐标和所有权",
+          "level": 2,
+          "line": 124
+        },
+        {
+          "heading": "3.1 rank、group 和三维布局",
+          "level": 3,
+          "line": 126
+        },
+        {
+          "heading": "3.2 “统计一次”和“缩放全部”",
+          "level": 3,
+          "line": 138
+        },
+        {
+          "heading": "3.3 DDP：副本不是新的逻辑元素",
+          "level": 3,
+          "line": 162
+        },
+        {
+          "heading": "3.4 TP 和 SP：分片、复制及局部 sequence 贡献",
+          "level": 3,
+          "line": 173
+        },
+        {
+          "heading": "3.5 PP/vPP：stage 是不同参数，不是 DDP 副本",
+          "level": 3,
+          "line": 181
+        },
+        {
+          "heading": "3.6 ZeRO-1/ZeRO-2：以 optimizer 的真实输入为准",
+          "level": 3,
+          "line": 189
+        },
+        {
+          "heading": "4. 当前源码调用链和缺口",
+          "level": 2,
+          "line": 216
+        },
+        {
+          "heading": "4.1 普通 Optimizer",
+          "level": 3,
+          "line": 218
+        },
+        {
+          "heading": "4.2 DistributedOptimizer",
+          "level": 3,
+          "line": 239
+        },
+        {
+          "heading": "4.3 Example 训练循环",
+          "level": 3,
+          "line": 259
+        },
+        {
+          "heading": "5. 必须避免的错误直觉",
+          "level": 2,
+          "line": 281
+        },
+        {
+          "heading": "错误 1：每个 rank 先求自己的范数，再平均",
+          "level": 3,
+          "line": 283
+        },
+        {
+          "heading": "错误 2：看到多个物理 Tensor 就全部累加",
+          "level": 3,
+          "line": 287
+        },
+        {
+          "heading": "错误 3：统计 view 缩放了，其他副本就自动正确",
+          "level": 3,
+          "line": 291
+        },
+        {
+          "heading": "错误 4：ZeRO-2 直接读原始 `param->grad()`",
+          "level": 3,
+          "line": 295
+        },
+        {
+          "heading": "错误 5：在通信尚未完成时读 bucket",
+          "level": 3,
+          "line": 299
+        },
+        {
+          "heading": "错误 6：用新 Tensor 替换 grad",
+          "level": 3,
+          "line": 303
+        },
+        {
+          "heading": "6. 推荐阅读顺序",
+          "level": 2,
+          "line": 307
+        },
+        {
+          "heading": "7. 参考资料和如何使用",
+          "level": 2,
+          "line": 318
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 27
+      }
+    },
+    {
+      "path": "gradient_clipping_implementation/design/01_implementation_plan.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 523,
+      "nonEmptyLines": 374,
+      "sections": [
+        {
+          "heading": "InfiniTrain ClipGradNorm_ 实现方案与验证计划",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "1. 目标、边界和不变式",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "1.1 对外目标",
+          "level": 3,
+          "line": 9
+        },
+        {
+          "heading": "1.2 必须保持的不变式",
+          "level": 3,
+          "line": 36
+        },
+        {
+          "heading": "2. 总体架构",
+          "level": 2,
+          "line": 48
+        },
+        {
+          "heading": "2.1 建议的内部记录",
+          "level": 3,
+          "line": 76
+        },
+        {
+          "heading": "2.2 元数据从哪里来",
+          "level": 3,
+          "line": 108
+        },
+        {
+          "heading": "3. API 和参数语义",
+          "level": 2,
+          "line": 120
+        },
+        {
+          "heading": "3.1 基类和派生类",
+          "level": 3,
+          "line": 122
+        },
+        {
+          "heading": "3.2 参数校验",
+          "level": 3,
+          "line": 138
+        },
+        {
+          "heading": "4. 范数统计和裁剪算法",
+          "level": 2,
+          "line": 149
+        },
+        {
+          "heading": "4.1 单卡/普通 Optimizer",
+          "level": 3,
+          "line": 151
+        },
+        {
+          "heading": "4.2 分布式 Optimizer",
+          "level": 3,
+          "line": 180
+        },
+        {
+          "heading": "4.3 进程组策略",
+          "level": 3,
+          "line": 208
+        },
+        {
+          "heading": "4.4 非有限值的处理",
+          "level": 3,
+          "line": 221
+        },
+        {
+          "heading": "4.5 系数和 dtype",
+          "level": 3,
+          "line": 232
+        },
+        {
+          "heading": "5. Dispatcher 和 kernel 实现",
+          "level": 2,
+          "line": 236
+        },
+        {
+          "heading": "5.1 必要的基础能力",
+          "level": 3,
+          "line": 238
+        },
+        {
+          "heading": "5.2 view、padding 和 alias 检查",
+          "level": 3,
+          "line": 249
+        },
+        {
+          "heading": "5.3 foreach 路径的渐进实现",
+          "level": 3,
+          "line": 261
+        },
+        {
+          "heading": "6. 与现有调用链的具体接入",
+          "level": 2,
+          "line": 271
+        },
+        {
+          "heading": "6.1 普通训练循环",
+          "level": 3,
+          "line": 273
+        },
+        {
+          "heading": "6.2 PP/vPP",
+          "level": 3,
+          "line": 294
+        },
+        {
+          "heading": "6.3 DistributedOptimizer 的生命周期",
+          "level": 3,
+          "line": 309
+        },
+        {
+          "heading": "7. 分阶段实施顺序",
+          "level": 2,
+          "line": 321
+        },
+        {
+          "heading": "阶段 0：基线和接口冻结",
+          "level": 3,
+          "line": 323
+        },
+        {
+          "heading": "阶段 1：普通 Optimizer 的 CPU/CUDA 基础路径",
+          "level": 3,
+          "line": 332
+        },
+        {
+          "heading": "阶段 2：逻辑参数和物理 view resolver",
+          "level": 3,
+          "line": 342
+        },
+        {
+          "heading": "阶段 3：DDP 与 ZeRO-1/ZeRO-2",
+          "level": 3,
+          "line": 351
+        },
+        {
+          "heading": "阶段 4：TP/SP/PP/vPP 归约和集成",
+          "level": 3,
+          "line": 361
+        },
+        {
+          "heading": "阶段 5：example、日志和报告",
+          "level": 3,
+          "line": 370
+        },
+        {
+          "heading": "阶段 6：foreach 和性能优化（优秀标准）",
+          "level": 3,
+          "line": 377
+        },
+        {
+          "heading": "8. 测试设计",
+          "level": 2,
+          "line": 383
+        },
+        {
+          "heading": "8.1 单元测试矩阵",
+          "level": 3,
+          "line": 385
+        },
+        {
+          "heading": "8.2 分布式测试矩阵",
+          "level": 3,
+          "line": 401
+        },
+        {
+          "heading": "8.3 端到端对齐",
+          "level": 3,
+          "line": 423
+        },
+        {
+          "heading": "9. 建议修改的文件边界",
+          "level": 2,
+          "line": 442
+        },
+        {
+          "heading": "10. Review 时逐条检查",
+          "level": 2,
+          "line": 477
+        },
+        {
+          "heading": "数学和边界",
+          "level": 3,
+          "line": 479
+        },
+        {
+          "heading": "物理存储",
+          "level": 3,
+          "line": 487
+        },
+        {
+          "heading": "并行语义",
+          "level": 3,
+          "line": 494
+        },
+        {
+          "heading": "工程集成",
+          "level": 3,
+          "line": 503
+        },
+        {
+          "heading": "11. 完成定义和当前验证状态",
+          "level": 2,
+          "line": 512
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 43
+      }
+    },
+    {
+      "path": "gradient_clipping_implementation/examples/integration_steps.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 31,
+      "nonEmptyLines": 20,
+      "sections": [
+        {
+          "heading": "GPT-2/LLaMA-3/PP 接入步骤",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "gflags",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "普通训练 loop",
+          "level": 2,
+          "line": 11
+        },
+        {
+          "heading": "PP/vPP schedule",
+          "level": 2,
+          "line": 27
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 4
+      }
+    },
+    {
+      "path": "gradient_clipping_implementation/MIGRATION_CHECKLIST.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 15,
+      "nonEmptyLines": 13,
+      "sections": [
+        {
+          "heading": "迁移清单",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 1
+      }
+    },
+    {
+      "path": "gradient_clipping_implementation/patches/01_optimizer_and_parallel_api.patch",
+      "language": "patch",
+      "fileCategory": "code",
+      "totalLines": 163,
+      "nonEmptyLines": 148,
+      "metrics": {}
+    },
+    {
+      "path": "gradient_clipping_implementation/patches/02_tensor_metadata_and_tp.patch",
+      "language": "patch",
+      "fileCategory": "code",
+      "totalLines": 125,
+      "nonEmptyLines": 109,
+      "metrics": {}
+    },
+    {
+      "path": "gradient_clipping_implementation/patches/03_distributed_optimizer_and_buffer.patch",
+      "language": "patch",
+      "fileCategory": "code",
+      "totalLines": 183,
+      "nonEmptyLines": 164,
+      "metrics": {}
+    },
+    {
+      "path": "gradient_clipping_implementation/patches/04_owner_filtering_and_zero_subset.patch",
+      "language": "patch",
+      "fileCategory": "code",
+      "totalLines": 73,
+      "nonEmptyLines": 73,
+      "metrics": {}
+    },
+    {
+      "path": "gradient_clipping_implementation/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 28,
+      "nonEmptyLines": 17,
+      "sections": [
+        {
+          "heading": "InfiniTrain Gradient Clipping Implementation Kit",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "使用顺序",
+          "level": 2,
+          "line": 5
+        },
+        {
+          "heading": "代码状态",
+          "level": 2,
+          "line": 15
+        },
+        {
+          "heading": "迁移原则",
+          "level": 2,
+          "line": 27
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 4
+      }
+    },
+    {
+      "path": "gradient_clipping_implementation/source/infini_train/src/kernels/cuda/gradient_clip.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 115,
+      "nonEmptyLines": 101,
+      "metrics": {}
+    },
+    {
+      "path": "gradient_clipping_implementation/tests/clip_grad_norm_test_plan.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 34,
+      "nonEmptyLines": 22,
+      "sections": [
+        {
+          "heading": "ClipGradNorm 测试骨架",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "CPU/CUDA 单元测试",
+          "level": 2,
+          "line": 5
+        },
+        {
+          "heading": "数学 oracle",
+          "level": 2,
+          "line": 14
+        },
+        {
+          "heading": "分布式测试",
+          "level": 2,
+          "line": 22
+        },
+        {
+          "heading": "黑盒断言",
+          "level": 2,
+          "line": 31
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 5
+      }
+    },
+    {
+      "path": "gradient_clipping_implementation/tests/CMake_integration_snippet.cmake",
+      "language": "cmake",
+      "fileCategory": "code",
+      "totalLines": 6,
+      "nonEmptyLines": 5,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/include/common/cuda/cub_compat.cuh",
+      "language": "cuh",
+      "fileCategory": "code",
+      "totalLines": 17,
+      "nonEmptyLines": 13,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/include/common/cuda/kernel_helper.cuh",
+      "language": "cuh",
+      "fileCategory": "code",
+      "totalLines": 304,
+      "nonEmptyLines": 273,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/accumulate_grad.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 95,
+      "nonEmptyLines": 76,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/cast.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 59,
+      "nonEmptyLines": 46,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/comm.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 83,
+      "nonEmptyLines": 73,
+      "metrics": {}
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/common/gemm.cu",
+      "language": "cu",
+      "fileCategory": "code",
+      "totalLines": 87,
+      "nonEmptyLines": 71,
+      "metrics": {}
+    }
+  ]
+}

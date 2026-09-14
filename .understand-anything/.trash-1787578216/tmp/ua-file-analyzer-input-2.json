@@ -1,0 +1,339 @@
+{
+  "projectRoot": "/home/fabu/桌面/InfiniTrain",
+  "batchFiles": [
+    {
+      "path": "gradient_clipping_implementation/tests/test_clip_grad_norm.cc",
+      "language": "cpp",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/include/nn/parallel/global.h",
+      "language": "c",
+      "sizeLines": 191,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/checkpoint/checkpoint_manager.cc",
+      "language": "cpp",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/nn/modules/transformer/transformer_config.cc",
+      "language": "cpp",
+      "sizeLines": 15,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/nn/parallel/global.cc",
+      "language": "cpp",
+      "sizeLines": 267,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_elementwise_backward.cc",
+      "language": "cpp",
+      "sizeLines": 183,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_linear_backward.cc",
+      "language": "cpp",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_linear_forward.cc",
+      "language": "cpp",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_loss.cc",
+      "language": "cpp",
+      "sizeLines": 51,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_matmul_backward.cc",
+      "language": "cpp",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_matmul_forward.cc",
+      "language": "cpp",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_normalization_backward.cc",
+      "language": "cpp",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_normalization_forward.cc",
+      "language": "cpp",
+      "sizeLines": 64,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_reduction_backward.cc",
+      "language": "cpp",
+      "sizeLines": 89,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_reduction_forward.cc",
+      "language": "cpp",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_softmax_backward.cc",
+      "language": "cpp",
+      "sizeLines": 44,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_softmax_forward.cc",
+      "language": "cpp",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_transform_backward.cc",
+      "language": "cpp",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/autograd/test_autograd_transform_forward.cc",
+      "language": "cpp",
+      "sizeLines": 82,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/checkpoint/test_optimizer_state.cc",
+      "language": "cpp",
+      "sizeLines": 89,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/common/test_main.cc",
+      "language": "cpp",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/common/test_utils.h",
+      "language": "c",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/optimizer/test_optimizer_creation.cc",
+      "language": "cpp",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/optimizer/test_optimizer_step.cc",
+      "language": "cpp",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/tensor/cpu_only/test_tensor_copy.cc",
+      "language": "cpp",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/tensor/cuda_only/test_tensor_copy.cc",
+      "language": "cpp",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/tensor/test_tensor.cc",
+      "language": "cpp",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/tensor/test_tensor_copy.cc",
+      "language": "cpp",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/tensor/test_tensor_create.cc",
+      "language": "cpp",
+      "sizeLines": 47,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/tensor/test_tensor_delete.cc",
+      "language": "cpp",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "gradient_clipping_implementation/tests/test_clip_grad_norm.cc": [
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/optimizer.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "infini_train/include/nn/parallel/global.h": [],
+    "infini_train/src/checkpoint/checkpoint_manager.cc": [
+      "infini_train/include/checkpoint/checkpoint_manager.h",
+      "infini_train/include/nn/modules/transformer/transformer_config.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h"
+    ],
+    "infini_train/src/nn/modules/transformer/transformer_config.cc": [
+      "infini_train/include/nn/modules/transformer/transformer_config.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
+    ],
+    "infini_train/src/nn/parallel/global.cc": [
+      "infini_train/include/nn/parallel/global.h"
+    ],
+    "tests/autograd/test_autograd_elementwise_backward.cc": [
+      "infini_train/include/autograd/elementwise.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_linear_backward.cc": [
+      "infini_train/include/autograd/linear.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_linear_forward.cc": [
+      "infini_train/include/autograd/linear.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_loss.cc": [
+      "infini_train/include/autograd/loss.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_matmul_backward.cc": [
+      "infini_train/include/autograd/matmul.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_matmul_forward.cc": [
+      "infini_train/include/autograd/matmul.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_normalization_backward.cc": [
+      "infini_train/include/autograd/normalization.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_normalization_forward.cc": [
+      "infini_train/include/autograd/normalization.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_reduction_backward.cc": [
+      "infini_train/include/autograd/reduction.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_reduction_forward.cc": [
+      "infini_train/include/autograd/reduction.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_softmax_backward.cc": [
+      "infini_train/include/autograd/softmax.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_softmax_forward.cc": [
+      "infini_train/include/autograd/softmax.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_transform_backward.cc": [
+      "infini_train/include/autograd/transform.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/autograd/test_autograd_transform_forward.cc": [
+      "infini_train/include/autograd/transform.h",
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/checkpoint/test_optimizer_state.cc": [
+      "infini_train/include/optimizer.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/common/test_main.cc": [
+      "infini_train/include/nn/parallel/global.h"
+    ],
+    "tests/common/test_utils.h": [
+      "infini_train/include/device.h",
+      "infini_train/include/tensor.h"
+    ],
+    "tests/optimizer/test_optimizer_creation.cc": [
+      "infini_train/include/optimizer.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/optimizer/test_optimizer_step.cc": [
+      "infini_train/include/nn/parallel/global.h",
+      "infini_train/include/optimizer.h",
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/tensor/cpu_only/test_tensor_copy.cc": [
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/tensor/cuda_only/test_tensor_copy.cc": [
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/tensor/test_tensor.cc": [
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/tensor/test_tensor_copy.cc": [
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/tensor/test_tensor_create.cc": [
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ],
+    "tests/tensor/test_tensor_delete.cc": [
+      "infini_train/include/tensor.h",
+      "tests/common/test_utils.h"
+    ]
+  }
+}

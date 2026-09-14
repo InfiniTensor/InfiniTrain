@@ -1,0 +1,338 @@
+{
+  "nodes": [
+    {
+      "id": "file:pipeline_layout_implementation/chapters/15_completion_gate/verify_standalone.sh",
+      "type": "file",
+      "name": "verify_standalone.sh",
+      "filePath": "pipeline_layout_implementation/chapters/15_completion_gate/verify_standalone.sh",
+      "summary": "流水线布局实现与验证材料，覆盖布局解析、模型集成、调度、checkpoint 映射和测试。",
+      "tags": [
+        "pipeline-parallel",
+        "implementation",
+        "validation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:pipeline_layout_implementation/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "pipeline_layout_implementation/CMakeLists.txt",
+      "summary": "流水线布局实现与验证材料，覆盖布局解析、模型集成、调度、checkpoint 映射和测试。",
+      "tags": [
+        "pipeline-parallel",
+        "implementation",
+        "validation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:pipeline_layout_implementation/README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "pipeline_layout_implementation/README.md",
+      "summary": "流水线布局实现与验证材料，覆盖布局解析、模型集成、调度、checkpoint 映射和测试。",
+      "tags": [
+        "documentation",
+        "design",
+        "reference"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:pipeline_layout_implementation/tools/pipeline_layout_cli.cc",
+      "type": "file",
+      "name": "pipeline_layout_cli.cc",
+      "filePath": "pipeline_layout_implementation/tools/pipeline_layout_cli.cc",
+      "summary": "流水线布局实现与验证材料，覆盖布局解析、模型集成、调度、checkpoint 映射和测试。",
+      "tags": [
+        "pipeline-parallel",
+        "implementation",
+        "validation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "项目总览与快速开始文档，说明构建方式、训练示例、分布式启动参数和支持矩阵。",
+      "tags": [
+        "documentation",
+        "entry-point",
+        "overview"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/assets/prepare_llama3_assets.py",
+      "type": "file",
+      "name": "prepare_llama3_assets.py",
+      "filePath": "scripts/assets/prepare_llama3_assets.py",
+      "summary": "项目脚本，用于资源准备、格式化、性能比较或训练启动。",
+      "tags": [
+        "script",
+        "tooling",
+        "automation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/assets/prepare-infinitrain-assets.sh",
+      "type": "file",
+      "name": "prepare-infinitrain-assets.sh",
+      "filePath": "scripts/assets/prepare-infinitrain-assets.sh",
+      "summary": "项目脚本，用于资源准备、格式化、性能比较或训练启动。",
+      "tags": [
+        "script",
+        "tooling",
+        "automation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/format.py",
+      "type": "file",
+      "name": "format.py",
+      "filePath": "scripts/format.py",
+      "summary": "项目脚本，用于资源准备、格式化、性能比较或训练启动。",
+      "tags": [
+        "script",
+        "tooling",
+        "automation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/precision_check/precision_compare.py",
+      "type": "file",
+      "name": "precision_compare.py",
+      "filePath": "scripts/precision_check/precision_compare.py",
+      "summary": "项目脚本，用于资源准备、格式化、性能比较或训练启动。",
+      "tags": [
+        "script",
+        "tooling",
+        "automation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/run_models_and_profile.bash",
+      "type": "file",
+      "name": "run_models_and_profile.bash",
+      "filePath": "scripts/run_models_and_profile.bash",
+      "summary": "项目脚本，用于资源准备、格式化、性能比较或训练启动。",
+      "tags": [
+        "script",
+        "tooling",
+        "automation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scripts/test_config.json",
+      "type": "config",
+      "name": "test_config.json",
+      "filePath": "scripts/test_config.json",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:tests/autograd/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tests/autograd/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tests/checkpoint/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tests/checkpoint/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tests/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tests/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tests/common/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tests/common/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tests/distributed/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tests/distributed/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tests/dtype/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tests/dtype/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tests/hook/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tests/hook/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tests/lora/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tests/lora/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tests/module/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tests/module/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tests/optimizer/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tests/optimizer/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tests/tensor/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tests/tensor/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tests/transformer/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tests/transformer/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tools/infini_run/CMakeLists.txt",
+      "type": "document",
+      "name": "CMakeLists.txt",
+      "filePath": "tools/infini_run/CMakeLists.txt",
+      "summary": "项目辅助文件，参与构建、文档、测试或训练流程。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:tools/infini_run/infini_run.cc",
+      "type": "file",
+      "name": "infini_run.cc",
+      "filePath": "tools/infini_run/infini_run.cc",
+      "summary": "C++ 源码或头文件，承担 InfiniTrain 的运行时、算子、并行训练或工具实现。",
+      "tags": [
+        "c++",
+        "framework-core",
+        "implementation"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "document:README.md",
+      "target": "file:tools/infini_run/infini_run.cc",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

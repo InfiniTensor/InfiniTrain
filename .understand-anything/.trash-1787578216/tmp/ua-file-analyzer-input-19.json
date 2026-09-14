@@ -1,0 +1,183 @@
+{
+  "projectRoot": "/home/fabu/桌面/InfiniTrain",
+  "batchFiles": [
+    {
+      "path": ".clang-format",
+      "language": "unknown",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".gitmodules",
+      "language": "unknown",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".understand-anything/.understandignore",
+      "language": "unknown",
+      "sizeLines": 39,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".understand-anything/config.json",
+      "language": "json",
+      "sizeLines": 3,
+      "fileCategory": "config"
+    },
+    {
+      "path": "cmake/FindNCCL.cmake",
+      "language": "cmake",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "cmake/test_macros.cmake",
+      "language": "cmake",
+      "sizeLines": 156,
+      "fileCategory": "code"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "language": "txt",
+      "sizeLines": 242,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "gradient_clipping_implementation/design/00_background_and_source_guide.md",
+      "language": "markdown",
+      "sizeLines": 328,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "gradient_clipping_implementation/design/01_implementation_plan.md",
+      "language": "markdown",
+      "sizeLines": 523,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "gradient_clipping_implementation/examples/integration_steps.md",
+      "language": "markdown",
+      "sizeLines": 31,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "gradient_clipping_implementation/MIGRATION_CHECKLIST.md",
+      "language": "markdown",
+      "sizeLines": 15,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "gradient_clipping_implementation/patches/01_optimizer_and_parallel_api.patch",
+      "language": "patch",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "gradient_clipping_implementation/patches/02_tensor_metadata_and_tp.patch",
+      "language": "patch",
+      "sizeLines": 125,
+      "fileCategory": "code"
+    },
+    {
+      "path": "gradient_clipping_implementation/patches/03_distributed_optimizer_and_buffer.patch",
+      "language": "patch",
+      "sizeLines": 183,
+      "fileCategory": "code"
+    },
+    {
+      "path": "gradient_clipping_implementation/patches/04_owner_filtering_and_zero_subset.patch",
+      "language": "patch",
+      "sizeLines": 73,
+      "fileCategory": "code"
+    },
+    {
+      "path": "gradient_clipping_implementation/README.md",
+      "language": "markdown",
+      "sizeLines": 28,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "gradient_clipping_implementation/source/infini_train/src/kernels/cuda/gradient_clip.cu",
+      "language": "cu",
+      "sizeLines": 115,
+      "fileCategory": "code"
+    },
+    {
+      "path": "gradient_clipping_implementation/tests/clip_grad_norm_test_plan.md",
+      "language": "markdown",
+      "sizeLines": 34,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "gradient_clipping_implementation/tests/CMake_integration_snippet.cmake",
+      "language": "cmake",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/include/common/cuda/cub_compat.cuh",
+      "language": "cuh",
+      "sizeLines": 17,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/include/common/cuda/kernel_helper.cuh",
+      "language": "cuh",
+      "sizeLines": 304,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/accumulate_grad.cu",
+      "language": "cu",
+      "sizeLines": 95,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/cast.cu",
+      "language": "cu",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/comm.cu",
+      "language": "cu",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/common/gemm.cu",
+      "language": "cu",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    ".clang-format": [],
+    ".gitmodules": [],
+    ".understand-anything/.understandignore": [],
+    ".understand-anything/config.json": [],
+    "cmake/FindNCCL.cmake": [],
+    "cmake/test_macros.cmake": [],
+    "CMakeLists.txt": [],
+    "gradient_clipping_implementation/design/00_background_and_source_guide.md": [],
+    "gradient_clipping_implementation/design/01_implementation_plan.md": [],
+    "gradient_clipping_implementation/examples/integration_steps.md": [],
+    "gradient_clipping_implementation/MIGRATION_CHECKLIST.md": [],
+    "gradient_clipping_implementation/patches/01_optimizer_and_parallel_api.patch": [],
+    "gradient_clipping_implementation/patches/02_tensor_metadata_and_tp.patch": [],
+    "gradient_clipping_implementation/patches/03_distributed_optimizer_and_buffer.patch": [],
+    "gradient_clipping_implementation/patches/04_owner_filtering_and_zero_subset.patch": [],
+    "gradient_clipping_implementation/README.md": [],
+    "gradient_clipping_implementation/source/infini_train/src/kernels/cuda/gradient_clip.cu": [],
+    "gradient_clipping_implementation/tests/clip_grad_norm_test_plan.md": [],
+    "gradient_clipping_implementation/tests/CMake_integration_snippet.cmake": [],
+    "infini_train/include/common/cuda/cub_compat.cuh": [],
+    "infini_train/include/common/cuda/kernel_helper.cuh": [],
+    "infini_train/src/kernels/cuda/accumulate_grad.cu": [],
+    "infini_train/src/kernels/cuda/cast.cu": [],
+    "infini_train/src/kernels/cuda/comm.cu": [],
+    "infini_train/src/kernels/cuda/common/gemm.cu": []
+  },
+  "neighborMap": {}
+}

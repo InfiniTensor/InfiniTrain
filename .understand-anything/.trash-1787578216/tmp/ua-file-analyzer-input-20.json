@@ -1,0 +1,183 @@
+{
+  "projectRoot": "/home/fabu/桌面/InfiniTrain",
+  "batchFiles": [
+    {
+      "path": "infini_train/src/kernels/cuda/common/gemm.cuh",
+      "language": "cuh",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/concat.cu",
+      "language": "cu",
+      "sizeLines": 247,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/cross_entropy.cu",
+      "language": "cu",
+      "sizeLines": 229,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/elementwise.cu",
+      "language": "cu",
+      "sizeLines": 1266,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/embedding.cu",
+      "language": "cu",
+      "sizeLines": 125,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/fill.cu",
+      "language": "cu",
+      "sizeLines": 47,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/gather.cu",
+      "language": "cu",
+      "sizeLines": 227,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/gradient_clip.cu",
+      "language": "cu",
+      "sizeLines": 115,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/layernorm.cu",
+      "language": "cu",
+      "sizeLines": 207,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/linear.cu",
+      "language": "cu",
+      "sizeLines": 335,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/matmul.cu",
+      "language": "cu",
+      "sizeLines": 227,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/no_op.cu",
+      "language": "cu",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/outer.cu",
+      "language": "cu",
+      "sizeLines": 188,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/reduction.cu",
+      "language": "cu",
+      "sizeLines": 244,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/scatter.cu",
+      "language": "cu",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/slice.cu",
+      "language": "cu",
+      "sizeLines": 208,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/softmax.cu",
+      "language": "cu",
+      "sizeLines": 222,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/split.cu",
+      "language": "cu",
+      "sizeLines": 183,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/stack.cu",
+      "language": "cu",
+      "sizeLines": 160,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/topk.cu",
+      "language": "cu",
+      "sizeLines": 155,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/transform.cu",
+      "language": "cu",
+      "sizeLines": 593,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infini_train/src/kernels/cuda/vocab_parallel_cross_entropy.cu",
+      "language": "cu",
+      "sizeLines": 127,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/01_task_scope/README.md",
+      "language": "markdown",
+      "sizeLines": 13,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/02_current_architecture/README.md",
+      "language": "markdown",
+      "sizeLines": 31,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/04_pipeline_layout_core/include/pipeline_layout.h",
+      "language": "c",
+      "sizeLines": 132,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "infini_train/src/kernels/cuda/common/gemm.cuh": [],
+    "infini_train/src/kernels/cuda/concat.cu": [],
+    "infini_train/src/kernels/cuda/cross_entropy.cu": [],
+    "infini_train/src/kernels/cuda/elementwise.cu": [],
+    "infini_train/src/kernels/cuda/embedding.cu": [],
+    "infini_train/src/kernels/cuda/fill.cu": [],
+    "infini_train/src/kernels/cuda/gather.cu": [],
+    "infini_train/src/kernels/cuda/gradient_clip.cu": [],
+    "infini_train/src/kernels/cuda/layernorm.cu": [],
+    "infini_train/src/kernels/cuda/linear.cu": [],
+    "infini_train/src/kernels/cuda/matmul.cu": [],
+    "infini_train/src/kernels/cuda/no_op.cu": [],
+    "infini_train/src/kernels/cuda/outer.cu": [],
+    "infini_train/src/kernels/cuda/reduction.cu": [],
+    "infini_train/src/kernels/cuda/scatter.cu": [],
+    "infini_train/src/kernels/cuda/slice.cu": [],
+    "infini_train/src/kernels/cuda/softmax.cu": [],
+    "infini_train/src/kernels/cuda/split.cu": [],
+    "infini_train/src/kernels/cuda/stack.cu": [],
+    "infini_train/src/kernels/cuda/topk.cu": [],
+    "infini_train/src/kernels/cuda/transform.cu": [],
+    "infini_train/src/kernels/cuda/vocab_parallel_cross_entropy.cu": [],
+    "pipeline_layout_implementation/chapters/01_task_scope/README.md": [],
+    "pipeline_layout_implementation/chapters/02_current_architecture/README.md": [],
+    "pipeline_layout_implementation/chapters/04_pipeline_layout_core/include/pipeline_layout.h": []
+  },
+  "neighborMap": {}
+}

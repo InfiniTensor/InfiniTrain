@@ -1,0 +1,183 @@
+{
+  "projectRoot": "/home/fabu/桌面/InfiniTrain",
+  "batchFiles": [
+    {
+      "path": "pipeline_layout_implementation/chapters/04_pipeline_layout_core/README.md",
+      "language": "markdown",
+      "sizeLines": 12,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/04_pipeline_layout_core/src/pipeline_layout.cc",
+      "language": "cpp",
+      "sizeLines": 567,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/05_parser_validation/include/pipeline_layout_parser.h",
+      "language": "c",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/05_parser_validation/README.md",
+      "language": "markdown",
+      "sizeLines": 11,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/05_parser_validation/src/pipeline_layout_parser.cc",
+      "language": "cpp",
+      "sizeLines": 143,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/06_model_integration/include/model_layout_plan.h",
+      "language": "c",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/06_model_integration/README.md",
+      "language": "markdown",
+      "sizeLines": 25,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/06_model_integration/src/model_layout_plan.cc",
+      "language": "cpp",
+      "sizeLines": 86,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/07_scheduler_integration/include/layout_scheduler.h",
+      "language": "c",
+      "sizeLines": 35,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/07_scheduler_integration/README.md",
+      "language": "markdown",
+      "sizeLines": 25,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/07_scheduler_integration/src/layout_scheduler.cc",
+      "language": "cpp",
+      "sizeLines": 201,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/08_checkpoint_integration/include/checkpoint_layout_mapper.h",
+      "language": "c",
+      "sizeLines": 31,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/08_checkpoint_integration/README.md",
+      "language": "markdown",
+      "sizeLines": 15,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/08_checkpoint_integration/src/checkpoint_layout_mapper.cc",
+      "language": "cpp",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/09_milestones/README.md",
+      "language": "markdown",
+      "sizeLines": 16,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/10_unit_tests/pipeline_layout_test.cc",
+      "language": "cpp",
+      "sizeLines": 235,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/10_unit_tests/README.md",
+      "language": "markdown",
+      "sizeLines": 7,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/11_numerical_consistency/include/numerical_compare.h",
+      "language": "c",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/11_numerical_consistency/README.md",
+      "language": "markdown",
+      "sizeLines": 7,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/11_numerical_consistency/src/numerical_compare.cc",
+      "language": "cpp",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/12_excellent_extensions/include/cost_balancer.h",
+      "language": "c",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/12_excellent_extensions/README.md",
+      "language": "markdown",
+      "sizeLines": 13,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/12_excellent_extensions/src/cost_balancer.cc",
+      "language": "cpp",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/13_commit_plan/README.md",
+      "language": "markdown",
+      "sizeLines": 12,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "pipeline_layout_implementation/chapters/15_completion_gate/completion_checklist.md",
+      "language": "markdown",
+      "sizeLines": 22,
+      "fileCategory": "docs"
+    }
+  ],
+  "batchImportData": {
+    "pipeline_layout_implementation/chapters/04_pipeline_layout_core/README.md": [],
+    "pipeline_layout_implementation/chapters/04_pipeline_layout_core/src/pipeline_layout.cc": [],
+    "pipeline_layout_implementation/chapters/05_parser_validation/include/pipeline_layout_parser.h": [],
+    "pipeline_layout_implementation/chapters/05_parser_validation/README.md": [],
+    "pipeline_layout_implementation/chapters/05_parser_validation/src/pipeline_layout_parser.cc": [],
+    "pipeline_layout_implementation/chapters/06_model_integration/include/model_layout_plan.h": [],
+    "pipeline_layout_implementation/chapters/06_model_integration/README.md": [],
+    "pipeline_layout_implementation/chapters/06_model_integration/src/model_layout_plan.cc": [],
+    "pipeline_layout_implementation/chapters/07_scheduler_integration/include/layout_scheduler.h": [],
+    "pipeline_layout_implementation/chapters/07_scheduler_integration/README.md": [],
+    "pipeline_layout_implementation/chapters/07_scheduler_integration/src/layout_scheduler.cc": [],
+    "pipeline_layout_implementation/chapters/08_checkpoint_integration/include/checkpoint_layout_mapper.h": [],
+    "pipeline_layout_implementation/chapters/08_checkpoint_integration/README.md": [],
+    "pipeline_layout_implementation/chapters/08_checkpoint_integration/src/checkpoint_layout_mapper.cc": [],
+    "pipeline_layout_implementation/chapters/09_milestones/README.md": [],
+    "pipeline_layout_implementation/chapters/10_unit_tests/pipeline_layout_test.cc": [],
+    "pipeline_layout_implementation/chapters/10_unit_tests/README.md": [],
+    "pipeline_layout_implementation/chapters/11_numerical_consistency/include/numerical_compare.h": [],
+    "pipeline_layout_implementation/chapters/11_numerical_consistency/README.md": [],
+    "pipeline_layout_implementation/chapters/11_numerical_consistency/src/numerical_compare.cc": [],
+    "pipeline_layout_implementation/chapters/12_excellent_extensions/include/cost_balancer.h": [],
+    "pipeline_layout_implementation/chapters/12_excellent_extensions/README.md": [],
+    "pipeline_layout_implementation/chapters/12_excellent_extensions/src/cost_balancer.cc": [],
+    "pipeline_layout_implementation/chapters/13_commit_plan/README.md": [],
+    "pipeline_layout_implementation/chapters/15_completion_gate/completion_checklist.md": []
+  },
+  "neighborMap": {}
+}

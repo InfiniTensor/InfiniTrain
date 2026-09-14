@@ -1,0 +1,3428 @@
+{
+  "nodes": [
+    {
+      "id": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "type": "file",
+      "name": "token_dispatcher.cc",
+      "filePath": "infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "summary": "实现 Transformer MoE 子模块中的 token_dispatcher，负责专家路由、token dispatch 或专家前向计算。",
+      "tags": [
+        "transformer",
+        "模型架构",
+        "implementation",
+        "c++",
+        "transformer-与-moe-模型模块"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "type": "file",
+      "name": "transformer.cc",
+      "filePath": "infini_train/src/nn/modules/transformer/transformer.cc",
+      "summary": "实现 Transformer 模型的 transformer 组件，封装前向计算与并行训练所需的张量操作。",
+      "tags": [
+        "transformer",
+        "模型架构",
+        "implementation",
+        "c++",
+        "transformer-与-moe-模型模块"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:infini_train/src/nn/modules/transformer/utils.cc",
+      "type": "file",
+      "name": "utils.cc",
+      "filePath": "infini_train/src/nn/modules/transformer/utils.cc",
+      "summary": "实现 Transformer 模型的 utils 组件，封装前向计算与并行训练所需的张量操作。",
+      "tags": [
+        "transformer",
+        "模型架构",
+        "implementation",
+        "c++",
+        "transformer-与-moe-模型模块"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "type": "file",
+      "name": "tensor_parallel.cc",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "summary": "定义并实现张量并行通信原语及 Column/Row Parallel 层，支持数据切分、聚合和序列并行。",
+      "tags": [
+        "并行训练",
+        "distributed",
+        "implementation",
+        "c++",
+        "分布式并行训练"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:tests/transformer/test_transformer_architecture.cc",
+      "type": "file",
+      "name": "test_transformer_architecture.cc",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "summary": "覆盖 Transformer 与 MoE 模型模块 的参数化测试与行为回归，验证前向、反向及边界条件。",
+      "tags": [
+        "test",
+        "transformer",
+        "模型架构",
+        "implementation",
+        "c++"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:MoETokenDispatcher",
+      "type": "function",
+      "name": "MoETokenDispatcher",
+      "filePath": "infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "lineRange": [
+        12,
+        12
+      ],
+      "summary": "完成 Transformer 与 MoE 模型模块 中 token 的重排、分发与结果还原。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:Combine",
+      "type": "function",
+      "name": "Combine",
+      "filePath": "infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "lineRange": [
+        22,
+        26
+      ],
+      "summary": "完成 Transformer 与 MoE 模型模块 中 token 的重排、分发与结果还原。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:MoEAllGatherTokenDispatcher",
+      "type": "function",
+      "name": "MoEAllGatherTokenDispatcher",
+      "filePath": "infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "lineRange": [
+        28,
+        31
+      ],
+      "summary": "完成 Transformer 与 MoE 模型模块 中 token 的重排、分发与结果还原。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:DispatchPreprocess",
+      "type": "function",
+      "name": "DispatchPreprocess",
+      "filePath": "infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "lineRange": [
+        33,
+        52
+      ],
+      "summary": "完成 Transformer 与 MoE 模型模块 中 token 的重排、分发与结果还原。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:TokenDispatch",
+      "type": "function",
+      "name": "TokenDispatch",
+      "filePath": "infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "lineRange": [
+        54,
+        60
+      ],
+      "summary": "完成 Transformer 与 MoE 模型模块 中 token 的重排、分发与结果还原。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:CombinePreprocess",
+      "type": "function",
+      "name": "CombinePreprocess",
+      "filePath": "infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "lineRange": [
+        79,
+        85
+      ],
+      "summary": "完成 Transformer 与 MoE 模型模块 中 token 的重排、分发与结果还原。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:TokenCombine",
+      "type": "function",
+      "name": "TokenCombine",
+      "filePath": "infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "lineRange": [
+        87,
+        90
+      ],
+      "summary": "完成 Transformer 与 MoE 模型模块 中 token 的重排、分发与结果还原。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:CombinePostprocess",
+      "type": "function",
+      "name": "CombinePostprocess",
+      "filePath": "infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "lineRange": [
+        92,
+        95
+      ],
+      "summary": "完成 Transformer 与 MoE 模型模块 中 token 的重排、分发与结果还原。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerFirstStage",
+      "type": "function",
+      "name": "TransformerFirstStage",
+      "filePath": "infini_train/src/nn/modules/transformer/transformer.cc",
+      "lineRange": [
+        27,
+        38
+      ],
+      "summary": "实现 Transformer 与 MoE 模型模块 中的 TransformerFirstStage，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward",
+      "type": "function",
+      "name": "Forward",
+      "filePath": "infini_train/src/nn/modules/transformer/transformer.cc",
+      "lineRange": [
+        40,
+        75
+      ],
+      "summary": "执行 Transformer 与 MoE 模型模块 的前向计算并生成输出张量。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerLayer",
+      "type": "function",
+      "name": "TransformerLayer",
+      "filePath": "infini_train/src/nn/modules/transformer/transformer.cc",
+      "lineRange": [
+        77,
+        97
+      ],
+      "summary": "实现 Transformer 与 MoE 模型模块 中的 TransformerLayer，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward@99",
+      "type": "function",
+      "name": "Forward@99",
+      "filePath": "infini_train/src/nn/modules/transformer/transformer.cc",
+      "lineRange": [
+        99,
+        123
+      ],
+      "summary": "执行 Transformer 与 MoE 模型模块 的前向计算并生成输出张量。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerChunk",
+      "type": "function",
+      "name": "TransformerChunk",
+      "filePath": "infini_train/src/nn/modules/transformer/transformer.cc",
+      "lineRange": [
+        125,
+        133
+      ],
+      "summary": "实现 Transformer 与 MoE 模型模块 中的 TransformerChunk，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward@135",
+      "type": "function",
+      "name": "Forward@135",
+      "filePath": "infini_train/src/nn/modules/transformer/transformer.cc",
+      "lineRange": [
+        135,
+        174
+      ],
+      "summary": "执行 Transformer 与 MoE 模型模块 的前向计算并生成输出张量。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerLastStage",
+      "type": "function",
+      "name": "TransformerLastStage",
+      "filePath": "infini_train/src/nn/modules/transformer/transformer.cc",
+      "lineRange": [
+        176,
+        196
+      ],
+      "summary": "实现 Transformer 与 MoE 模型模块 中的 TransformerLastStage，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward@198",
+      "type": "function",
+      "name": "Forward@198",
+      "filePath": "infini_train/src/nn/modules/transformer/transformer.cc",
+      "lineRange": [
+        198,
+        205
+      ],
+      "summary": "执行 Transformer 与 MoE 模型模块 的前向计算并生成输出张量。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerModel",
+      "type": "function",
+      "name": "TransformerModel",
+      "filePath": "infini_train/src/nn/modules/transformer/transformer.cc",
+      "lineRange": [
+        207,
+        273
+      ],
+      "summary": "实现 Transformer 与 MoE 模型模块 中的 TransformerModel，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward@275",
+      "type": "function",
+      "name": "Forward@275",
+      "filePath": "infini_train/src/nn/modules/transformer/transformer.cc",
+      "lineRange": [
+        275,
+        283
+      ],
+      "summary": "执行 Transformer 与 MoE 模型模块 的前向计算并生成输出张量。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/utils.cc:PrecomputeFreqsCis",
+      "type": "function",
+      "name": "PrecomputeFreqsCis",
+      "filePath": "infini_train/src/nn/modules/transformer/utils.cc",
+      "lineRange": [
+        13,
+        33
+      ],
+      "summary": "实现 Transformer 与 MoE 模型模块 中的 PrecomputeFreqsCis，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/modules/transformer/utils.cc:ApplyRotaryEmbedding",
+      "type": "function",
+      "name": "ApplyRotaryEmbedding",
+      "filePath": "infini_train/src/nn/modules/transformer/utils.cc",
+      "lineRange": [
+        35,
+        67
+      ],
+      "summary": "实现 Transformer 与 MoE 模型模块 中的 ApplyRotaryEmbedding，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/src/nn/parallel/tensor_parallel.cc:CopyToTPRegion",
+      "type": "class",
+      "name": "CopyToTPRegion",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        96,
+        111
+      ],
+      "summary": "定义 CopyToTPRegion 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromTPRegion",
+      "type": "class",
+      "name": "GatherFromTPRegion",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        113,
+        128
+      ],
+      "summary": "定义 GatherFromTPRegion 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/src/nn/parallel/tensor_parallel.cc:ScatterToTPRegion",
+      "type": "class",
+      "name": "ScatterToTPRegion",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        130,
+        145
+      ],
+      "summary": "定义 ScatterToTPRegion 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceFromTPRegion",
+      "type": "class",
+      "name": "ReduceFromTPRegion",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        147,
+        161
+      ],
+      "summary": "定义 ReduceFromTPRegion 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterToSPRegion",
+      "type": "class",
+      "name": "ReduceScatterToSPRegion",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        163,
+        178
+      ],
+      "summary": "定义 ReduceScatterToSPRegion 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromSPRegion",
+      "type": "class",
+      "name": "GatherFromSPRegion",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        180,
+        195
+      ],
+      "summary": "定义 GatherFromSPRegion 类，封装 分布式并行训练 的状态、参数与核心操作。",
+      "tags": [
+        "分布式并行训练",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherAlongFirstDim",
+      "type": "function",
+      "name": "GatherAlongFirstDim",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        28,
+        30
+      ],
+      "summary": "实现 分布式并行训练 中的 GatherAlongFirstDim，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherAlongLastDim",
+      "type": "function",
+      "name": "GatherAlongLastDim",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        32,
+        34
+      ],
+      "summary": "实现 分布式并行训练 中的 GatherAlongLastDim，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:SplitAlongLastDim",
+      "type": "function",
+      "name": "SplitAlongLastDim",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        36,
+        52
+      ],
+      "summary": "实现 分布式并行训练 中的 SplitAlongLastDim，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Reduce",
+      "type": "function",
+      "name": "Reduce",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        54,
+        70
+      ],
+      "summary": "实现 分布式并行训练 中的 Reduce，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterAlongFirstDim",
+      "type": "function",
+      "name": "ReduceScatterAlongFirstDim",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        72,
+        93
+      ],
+      "summary": "实现 分布式并行训练 中的 ReduceScatterAlongFirstDim，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:CopyToTPRegion@100",
+      "type": "function",
+      "name": "CopyToTPRegion@100",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        100,
+        100
+      ],
+      "summary": "实现 分布式并行训练 中的 CopyToTPRegion，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "type": "function",
+      "name": "Forward",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        102,
+        106
+      ],
+      "summary": "执行 分布式并行训练 的前向计算并生成输出张量。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward",
+      "type": "function",
+      "name": "Backward",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        108,
+        110
+      ],
+      "summary": "计算 分布式并行训练 的反向梯度并写回自动求导上下文。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "backward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromTPRegion@117",
+      "type": "function",
+      "name": "GatherFromTPRegion@117",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        117,
+        117
+      ],
+      "summary": "实现 分布式并行训练 中的 GatherFromTPRegion，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@119",
+      "type": "function",
+      "name": "Forward@119",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        119,
+        121
+      ],
+      "summary": "执行 分布式并行训练 的前向计算并生成输出张量。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@123",
+      "type": "function",
+      "name": "Backward@123",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        123,
+        127
+      ],
+      "summary": "计算 分布式并行训练 的反向梯度并写回自动求导上下文。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "backward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ScatterToTPRegion@134",
+      "type": "function",
+      "name": "ScatterToTPRegion@134",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        134,
+        134
+      ],
+      "summary": "实现 分布式并行训练 中的 ScatterToTPRegion，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@136",
+      "type": "function",
+      "name": "Forward@136",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        136,
+        140
+      ],
+      "summary": "执行 分布式并行训练 的前向计算并生成输出张量。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@142",
+      "type": "function",
+      "name": "Backward@142",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        142,
+        144
+      ],
+      "summary": "计算 分布式并行训练 的反向梯度并写回自动求导上下文。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "backward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceFromTPRegion@151",
+      "type": "function",
+      "name": "ReduceFromTPRegion@151",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        151,
+        151
+      ],
+      "summary": "实现 分布式并行训练 中的 ReduceFromTPRegion，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@153",
+      "type": "function",
+      "name": "Forward@153",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        153,
+        156
+      ],
+      "summary": "执行 分布式并行训练 的前向计算并生成输出张量。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@158",
+      "type": "function",
+      "name": "Backward@158",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        158,
+        160
+      ],
+      "summary": "计算 分布式并行训练 的反向梯度并写回自动求导上下文。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "backward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterToSPRegion@167",
+      "type": "function",
+      "name": "ReduceScatterToSPRegion@167",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        167,
+        167
+      ],
+      "summary": "实现 分布式并行训练 中的 ReduceScatterToSPRegion，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@169",
+      "type": "function",
+      "name": "Forward@169",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        169,
+        172
+      ],
+      "summary": "执行 分布式并行训练 的前向计算并生成输出张量。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@174",
+      "type": "function",
+      "name": "Backward@174",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        174,
+        177
+      ],
+      "summary": "计算 分布式并行训练 的反向梯度并写回自动求导上下文。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "backward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromSPRegion@184",
+      "type": "function",
+      "name": "GatherFromSPRegion@184",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        184,
+        184
+      ],
+      "summary": "实现 分布式并行训练 中的 GatherFromSPRegion，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@186",
+      "type": "function",
+      "name": "Forward@186",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        186,
+        189
+      ],
+      "summary": "执行 分布式并行训练 的前向计算并生成输出张量。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@191",
+      "type": "function",
+      "name": "Backward@191",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        191,
+        194
+      ],
+      "summary": "计算 分布式并行训练 的反向梯度并写回自动求导上下文。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "backward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:LinearResetParameters",
+      "type": "function",
+      "name": "LinearResetParameters",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        197,
+        204
+      ],
+      "summary": "实现 分布式并行训练 中的 LinearResetParameters，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:CopyToTPRegionFunc",
+      "type": "function",
+      "name": "CopyToTPRegionFunc",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        209,
+        211
+      ],
+      "summary": "实现 分布式并行训练 中的 CopyToTPRegionFunc，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ScatterToTPRegionFunc",
+      "type": "function",
+      "name": "ScatterToTPRegionFunc",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        213,
+        215
+      ],
+      "summary": "实现 分布式并行训练 中的 ScatterToTPRegionFunc，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceFromTPRegionFunc",
+      "type": "function",
+      "name": "ReduceFromTPRegionFunc",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        217,
+        219
+      ],
+      "summary": "实现 分布式并行训练 中的 ReduceFromTPRegionFunc，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromTPRegionFunc",
+      "type": "function",
+      "name": "GatherFromTPRegionFunc",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        221,
+        223
+      ],
+      "summary": "实现 分布式并行训练 中的 GatherFromTPRegionFunc，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterToSPRegionFunc",
+      "type": "function",
+      "name": "ReduceScatterToSPRegionFunc",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        225,
+        227
+      ],
+      "summary": "实现 分布式并行训练 中的 ReduceScatterToSPRegionFunc，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromSPRegionFunc",
+      "type": "function",
+      "name": "GatherFromSPRegionFunc",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        229,
+        231
+      ],
+      "summary": "实现 分布式并行训练 中的 GatherFromSPRegionFunc，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ColumnParallelLinear",
+      "type": "function",
+      "name": "ColumnParallelLinear",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        233,
+        257
+      ],
+      "summary": "实现 分布式并行训练 中的 ColumnParallelLinear，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@259",
+      "type": "function",
+      "name": "Forward@259",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        259,
+        280
+      ],
+      "summary": "执行 分布式并行训练 的前向计算并生成输出张量。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:bias",
+      "type": "function",
+      "name": "bias",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        283,
+        283
+      ],
+      "summary": "实现 分布式并行训练 中的 bias，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:gather_output",
+      "type": "function",
+      "name": "gather_output",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        284,
+        284
+      ],
+      "summary": "实现 分布式并行训练 中的 gather_output，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:input_is_parallel",
+      "type": "function",
+      "name": "input_is_parallel",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        285,
+        285
+      ],
+      "summary": "实现 分布式并行训练 中的 input_is_parallel，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:skip_bias_add",
+      "type": "function",
+      "name": "skip_bias_add",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        286,
+        286
+      ],
+      "summary": "实现 分布式并行训练 中的 skip_bias_add，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:sequence_parallel",
+      "type": "function",
+      "name": "sequence_parallel",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        287,
+        287
+      ],
+      "summary": "实现 分布式并行训练 中的 sequence_parallel，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:RowParallelLinear",
+      "type": "function",
+      "name": "RowParallelLinear",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        289,
+        314
+      ],
+      "summary": "实现 分布式并行训练 中的 RowParallelLinear，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@316",
+      "type": "function",
+      "name": "Forward@316",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        316,
+        336
+      ],
+      "summary": "执行 分布式并行训练 的前向计算并生成输出张量。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:bias@339",
+      "type": "function",
+      "name": "bias@339",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        339,
+        339
+      ],
+      "summary": "实现 分布式并行训练 中的 bias，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:reduce_output",
+      "type": "function",
+      "name": "reduce_output",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        340,
+        340
+      ],
+      "summary": "实现 分布式并行训练 中的 reduce_output，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:input_is_parallel@341",
+      "type": "function",
+      "name": "input_is_parallel@341",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        341,
+        341
+      ],
+      "summary": "实现 分布式并行训练 中的 input_is_parallel，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:skip_bias_add@342",
+      "type": "function",
+      "name": "skip_bias_add@342",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        342,
+        342
+      ],
+      "summary": "实现 分布式并行训练 中的 skip_bias_add，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:sequence_parallel@343",
+      "type": "function",
+      "name": "sequence_parallel@343",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        343,
+        343
+      ],
+      "summary": "实现 分布式并行训练 中的 sequence_parallel，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:VocabParallelEmbedding",
+      "type": "function",
+      "name": "VocabParallelEmbedding",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        345,
+        366
+      ],
+      "summary": "实现 分布式并行训练 中的 VocabParallelEmbedding，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@368",
+      "type": "function",
+      "name": "Forward@368",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        368,
+        401
+      ],
+      "summary": "执行 分布式并行训练 的前向计算并生成输出张量。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@403",
+      "type": "function",
+      "name": "Forward@403",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        403,
+        508
+      ],
+      "summary": "执行 分布式并行训练 的前向计算并生成输出张量。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@510",
+      "type": "function",
+      "name": "Backward@510",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        510,
+        526
+      ],
+      "summary": "计算 分布式并行训练 的反向梯度并写回自动求导上下文。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "backward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@528",
+      "type": "function",
+      "name": "Forward@528",
+      "filePath": "infini_train/src/nn/parallel/tensor_parallel.cc",
+      "lineRange": [
+        528,
+        539
+      ],
+      "summary": "执行 分布式并行训练 的前向计算并生成输出张量。",
+      "tags": [
+        "分布式并行训练",
+        "function",
+        "实现",
+        "forward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:tests/transformer/test_transformer_architecture.cc:TransformerModuleTest",
+      "type": "class",
+      "name": "TransformerModuleTest",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        24,
+        24
+      ],
+      "summary": "定义 TransformerModuleTest 类，封装 Transformer 与 MoE 模型模块 的状态、参数与核心操作。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "class",
+        "组件",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P",
+      "type": "function",
+      "name": "TEST_P",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        26,
+        38
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@40",
+      "type": "function",
+      "name": "TEST_P@40",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        40,
+        49
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@51",
+      "type": "function",
+      "name": "TEST_P@51",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        51,
+        60
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@62",
+      "type": "function",
+      "name": "TEST_P@62",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        62,
+        77
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@79",
+      "type": "function",
+      "name": "TEST_P@79",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        79,
+        96
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@98",
+      "type": "function",
+      "name": "TEST_P@98",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        98,
+        114
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@116",
+      "type": "function",
+      "name": "TEST_P@116",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        116,
+        131
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@133",
+      "type": "function",
+      "name": "TEST_P@133",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        133,
+        144
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@146",
+      "type": "function",
+      "name": "TEST_P@146",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        146,
+        162
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@164",
+      "type": "function",
+      "name": "TEST_P@164",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        164,
+        170
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@172",
+      "type": "function",
+      "name": "TEST_P@172",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        172,
+        193
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@195",
+      "type": "function",
+      "name": "TEST_P@195",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        195,
+        218
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@220",
+      "type": "function",
+      "name": "TEST_P@220",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        220,
+        249
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@251",
+      "type": "function",
+      "name": "TEST_P@251",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        251,
+        271
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@273",
+      "type": "function",
+      "name": "TEST_P@273",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        273,
+        311
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@313",
+      "type": "function",
+      "name": "TEST_P@313",
+      "filePath": "tests/transformer/test_transformer_architecture.cc",
+      "lineRange": [
+        313,
+        353
+      ],
+      "summary": "验证 Transformer 与 MoE 模型模块 的关键行为与回归场景。",
+      "tags": [
+        "transformer-与-moe-模型模块",
+        "function",
+        "实现",
+        "test"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:MoETokenDispatcher",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:MoETokenDispatcher",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:Combine",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:Combine",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:MoEAllGatherTokenDispatcher",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:MoEAllGatherTokenDispatcher",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:DispatchPreprocess",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:DispatchPreprocess",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:TokenDispatch",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:TokenDispatch",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:CombinePreprocess",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:CombinePreprocess",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:TokenCombine",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:TokenCombine",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:CombinePostprocess",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:CombinePostprocess",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/moe/token_dispatcher.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:Combine",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:CombinePreprocess",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:Combine",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:TokenCombine",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:Combine",
+      "target": "function:infini_train/src/nn/modules/transformer/moe/token_dispatcher.cc:CombinePostprocess",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerFirstStage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerFirstStage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerLayer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerLayer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward@99",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward@99",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerChunk",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerChunk",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward@135",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward@135",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerLastStage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerLastStage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward@198",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward@198",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerModel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:TransformerModel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward@275",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/transformer.cc:Forward@275",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/functional.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/init.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/modules/container.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/modules/module.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/modules/normalization.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/modules/sparse.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/causal_self_attention.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/mlp.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/moe/moe_layer.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/transformer.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/nn/parallel/utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/transformer.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/utils.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/utils.cc:PrecomputeFreqsCis",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/utils.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/utils.cc:PrecomputeFreqsCis",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/utils.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/utils.cc:ApplyRotaryEmbedding",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/utils.cc",
+      "target": "function:infini_train/src/nn/modules/transformer/utils.cc:ApplyRotaryEmbedding",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/utils.cc",
+      "target": "file:infini_train/include/nn/functional.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/utils.cc",
+      "target": "file:infini_train/include/nn/init.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/modules/transformer/utils.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "class:infini_train/src/nn/parallel/tensor_parallel.cc:CopyToTPRegion",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "class:infini_train/src/nn/parallel/tensor_parallel.cc:CopyToTPRegion",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "class:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromTPRegion",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "class:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromTPRegion",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "class:infini_train/src/nn/parallel/tensor_parallel.cc:ScatterToTPRegion",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "class:infini_train/src/nn/parallel/tensor_parallel.cc:ScatterToTPRegion",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "class:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceFromTPRegion",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "class:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceFromTPRegion",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "class:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterToSPRegion",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "class:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterToSPRegion",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "class:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromSPRegion",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "class:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromSPRegion",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherAlongFirstDim",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherAlongFirstDim",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherAlongLastDim",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherAlongLastDim",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:SplitAlongLastDim",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:SplitAlongLastDim",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Reduce",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Reduce",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterAlongFirstDim",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterAlongFirstDim",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:CopyToTPRegion@100",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:CopyToTPRegion@100",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromTPRegion@117",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromTPRegion@117",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@119",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@119",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@123",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@123",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ScatterToTPRegion@134",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ScatterToTPRegion@134",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@136",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@136",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@142",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@142",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceFromTPRegion@151",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceFromTPRegion@151",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@153",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@153",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@158",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@158",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterToSPRegion@167",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterToSPRegion@167",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@169",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@169",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@174",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@174",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromSPRegion@184",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromSPRegion@184",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@186",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@186",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@191",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@191",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:LinearResetParameters",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:LinearResetParameters",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:CopyToTPRegionFunc",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:CopyToTPRegionFunc",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ScatterToTPRegionFunc",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ScatterToTPRegionFunc",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceFromTPRegionFunc",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceFromTPRegionFunc",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromTPRegionFunc",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromTPRegionFunc",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterToSPRegionFunc",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterToSPRegionFunc",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromSPRegionFunc",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromSPRegionFunc",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ColumnParallelLinear",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ColumnParallelLinear",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@259",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@259",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:bias",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:bias",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:gather_output",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:gather_output",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:input_is_parallel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:input_is_parallel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:skip_bias_add",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:skip_bias_add",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:sequence_parallel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:sequence_parallel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:RowParallelLinear",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:RowParallelLinear",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@316",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@316",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:bias@339",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:bias@339",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:reduce_output",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:reduce_output",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:input_is_parallel@341",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:input_is_parallel@341",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:skip_bias_add@342",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:skip_bias_add@342",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:sequence_parallel@343",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:sequence_parallel@343",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:VocabParallelEmbedding",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:VocabParallelEmbedding",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@368",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@368",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@403",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@403",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@510",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward@510",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@528",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward@528",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "file:infini_train/include/autograd/linear.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "file:infini_train/include/autograd/sparse.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "file:infini_train/include/dispatcher.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "file:infini_train/include/nn/functional.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "file:infini_train/include/nn/init.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "file:infini_train/include/nn/modules/module.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "file:infini_train/include/nn/parallel/parallel_functional.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "file:infini_train/include/nn/parallel/utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/tensor_parallel.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Reduce",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherAlongLastDim",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:SplitAlongLastDim",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:SplitAlongLastDim",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherAlongLastDim",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Reduce",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterAlongFirstDim",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherAlongFirstDim",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherAlongFirstDim",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Backward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterAlongFirstDim",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ColumnParallelLinear",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:LinearResetParameters",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:CopyToTPRegionFunc",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromSPRegionFunc",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:GatherFromTPRegionFunc",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:RowParallelLinear",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:LinearResetParameters",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ScatterToTPRegionFunc",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceScatterToSPRegionFunc",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/tensor_parallel.cc:Forward",
+      "target": "function:infini_train/src/nn/parallel/tensor_parallel.cc:ReduceFromTPRegionFunc",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "class:tests/transformer/test_transformer_architecture.cc:TransformerModuleTest",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "class:tests/transformer/test_transformer_architecture.cc:TransformerModuleTest",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@40",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@40",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@51",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@51",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@62",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@62",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@79",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@79",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@98",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@98",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@116",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@116",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@133",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@133",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@146",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@146",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@164",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@164",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@172",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@172",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@195",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@195",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@220",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@220",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@251",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@251",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@273",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@273",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@313",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "function:tests/transformer/test_transformer_architecture.cc:TEST_P@313",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "file:infini_train/include/autograd/topk.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "file:infini_train/include/nn/modules/normalization.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "file:infini_train/include/nn/modules/sparse.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/causal_self_attention.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/mlp.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/moe/moe_layer.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/moe/router.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/transformer_config.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/transformer.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "file:infini_train/include/nn/modules/transformer/utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/transformer/test_transformer_architecture.cc",
+      "target": "file:tests/common/test_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

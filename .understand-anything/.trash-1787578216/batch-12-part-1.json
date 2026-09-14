@@ -1,0 +1,548 @@
+{
+  "nodes": [
+    {
+      "id": "file:infini_train/include/autograd/linear.h",
+      "type": "file",
+      "name": "linear.h",
+      "filePath": "infini_train/include/autograd/linear.h",
+      "summary": "声明自动求导图中的 linear Function 节点及其 forward/backward 上下文。",
+      "tags": [
+        "header",
+        "接口定义",
+        "infinitrain-运行时"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/nn/lora/lora_config.h",
+      "type": "file",
+      "name": "lora_config.h",
+      "filePath": "infini_train/include/nn/lora/lora_config.h",
+      "summary": "定义 Mixtral 示例模型的超参数结构，并提供配置清理与默认值校验。",
+      "tags": [
+        "lora",
+        "参数高效微调",
+        "header",
+        "接口定义",
+        "lora-参数高效微调"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/include/nn/lora/lora_linear.h",
+      "type": "file",
+      "name": "lora_linear.h",
+      "filePath": "infini_train/include/nn/lora/lora_linear.h",
+      "summary": "实现 lora_linear 的 LoRA 参数管理、权重合并或张量并行适配，为大模型微调提供低秩增量路径。",
+      "tags": [
+        "lora",
+        "参数高效微调",
+        "header",
+        "接口定义",
+        "lora-参数高效微调"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:infini_train/include/nn/lora/lora_parallel_linear.h",
+      "type": "file",
+      "name": "lora_parallel_linear.h",
+      "filePath": "infini_train/include/nn/lora/lora_parallel_linear.h",
+      "summary": "实现 lora_parallel_linear 的 LoRA 参数管理、权重合并或张量并行适配，为大模型微调提供低秩增量路径。",
+      "tags": [
+        "lora",
+        "参数高效微调",
+        "并行训练",
+        "distributed",
+        "header"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:infini_train/include/autograd/linear.h:Tensor",
+      "type": "class",
+      "name": "Tensor",
+      "filePath": "infini_train/include/autograd/linear.h",
+      "lineRange": [
+        10,
+        10
+      ],
+      "summary": "定义 Tensor 类，封装 InfiniTrain 运行时 的状态、参数与核心操作。",
+      "tags": [
+        "infinitrain-运行时",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/linear.h:Linear",
+      "type": "class",
+      "name": "Linear",
+      "filePath": "infini_train/include/autograd/linear.h",
+      "lineRange": [
+        15,
+        32
+      ],
+      "summary": "定义 Linear 类，封装 InfiniTrain 运行时 的状态、参数与核心操作。",
+      "tags": [
+        "infinitrain-运行时",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/linear.h:Linear@19",
+      "type": "function",
+      "name": "Linear@19",
+      "filePath": "infini_train/include/autograd/linear.h",
+      "lineRange": [
+        19,
+        19
+      ],
+      "summary": "实现 InfiniTrain 运行时 中的 Linear，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "infinitrain-运行时",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/lora/lora_config.h:LoRAConfig",
+      "type": "class",
+      "name": "LoRAConfig",
+      "filePath": "infini_train/include/nn/lora/lora_config.h",
+      "lineRange": [
+        11,
+        37
+      ],
+      "summary": "定义 LoRAConfig 类，封装 LoRA 参数高效微调 的状态、参数与核心操作。",
+      "tags": [
+        "lora-参数高效微调",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/lora/lora_config.h:LoRAConfig@25",
+      "type": "function",
+      "name": "LoRAConfig@25",
+      "filePath": "infini_train/include/nn/lora/lora_config.h",
+      "lineRange": [
+        25,
+        25
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 LoRAConfig，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/lora/lora_config.h:LoRAConfig@28",
+      "type": "function",
+      "name": "LoRAConfig@28",
+      "filePath": "infini_train/include/nn/lora/lora_config.h",
+      "lineRange": [
+        28,
+        29
+      ],
+      "summary": "实现 LoRA 参数高效微调 中的 LoRAConfig，处理模块的核心数据变换或辅助逻辑。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/lora/lora_linear.h:Tensor",
+      "type": "class",
+      "name": "Tensor",
+      "filePath": "infini_train/include/nn/lora/lora_linear.h",
+      "lineRange": [
+        16,
+        16
+      ],
+      "summary": "定义 Tensor 类，封装 LoRA 参数高效微调 的状态、参数与核心操作。",
+      "tags": [
+        "lora-参数高效微调",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/lora/lora_linear.h:Device",
+      "type": "class",
+      "name": "Device",
+      "filePath": "infini_train/include/nn/lora/lora_linear.h",
+      "lineRange": [
+        17,
+        17
+      ],
+      "summary": "定义 Device 类，封装 LoRA 参数高效微调 的状态、参数与核心操作。",
+      "tags": [
+        "lora-参数高效微调",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/lora/lora_linear.h:LoRALinear",
+      "type": "class",
+      "name": "LoRALinear",
+      "filePath": "infini_train/include/nn/lora/lora_linear.h",
+      "lineRange": [
+        25,
+        69
+      ],
+      "summary": "定义 LoRALinear 类，封装 LoRA 参数高效微调 的状态、参数与核心操作。",
+      "tags": [
+        "lora-参数高效微调",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/nn/lora/lora_linear.h:IsMerged",
+      "type": "function",
+      "name": "IsMerged",
+      "filePath": "infini_train/include/nn/lora/lora_linear.h",
+      "lineRange": [
+        41,
+        41
+      ],
+      "summary": "在 LoRA 参数高效微调 中合并或拆分增量权重，控制训练与推理权重状态。",
+      "tags": [
+        "lora-参数高效微调",
+        "function",
+        "实现",
+        "weight-management"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/lora/lora_parallel_linear.h:Tensor",
+      "type": "class",
+      "name": "Tensor",
+      "filePath": "infini_train/include/nn/lora/lora_parallel_linear.h",
+      "lineRange": [
+        10,
+        10
+      ],
+      "summary": "定义 Tensor 类，封装 LoRA 参数高效微调 的状态、参数与核心操作。",
+      "tags": [
+        "lora-参数高效微调",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/lora/lora_parallel_linear.h:Device",
+      "type": "class",
+      "name": "Device",
+      "filePath": "infini_train/include/nn/lora/lora_parallel_linear.h",
+      "lineRange": [
+        11,
+        11
+      ],
+      "summary": "定义 Device 类，封装 LoRA 参数高效微调 的状态、参数与核心操作。",
+      "tags": [
+        "lora-参数高效微调",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/lora/lora_parallel_linear.h:LoRAColumnParallelLinear",
+      "type": "class",
+      "name": "LoRAColumnParallelLinear",
+      "filePath": "infini_train/include/nn/lora/lora_parallel_linear.h",
+      "lineRange": [
+        21,
+        56
+      ],
+      "summary": "定义 LoRAColumnParallelLinear 类，封装 LoRA 参数高效微调 的状态、参数与核心操作。",
+      "tags": [
+        "lora-参数高效微调",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/nn/lora/lora_parallel_linear.h:LoRARowParallelLinear",
+      "type": "class",
+      "name": "LoRARowParallelLinear",
+      "filePath": "infini_train/include/nn/lora/lora_parallel_linear.h",
+      "lineRange": [
+        62,
+        96
+      ],
+      "summary": "定义 LoRARowParallelLinear 类，封装 LoRA 参数高效微调 的状态、参数与核心操作。",
+      "tags": [
+        "lora-参数高效微调",
+        "class",
+        "组件"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:infini_train/include/autograd/linear.h",
+      "target": "class:infini_train/include/autograd/linear.h:Tensor",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/linear.h",
+      "target": "class:infini_train/include/autograd/linear.h:Tensor",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/linear.h",
+      "target": "class:infini_train/include/autograd/linear.h:Linear",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/linear.h",
+      "target": "class:infini_train/include/autograd/linear.h:Linear",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/linear.h",
+      "target": "function:infini_train/include/autograd/linear.h:Linear@19",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/linear.h",
+      "target": "function:infini_train/include/autograd/linear.h:Linear@19",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/linear.h",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_config.h",
+      "target": "class:infini_train/include/nn/lora/lora_config.h:LoRAConfig",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_config.h",
+      "target": "class:infini_train/include/nn/lora/lora_config.h:LoRAConfig",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_config.h",
+      "target": "function:infini_train/include/nn/lora/lora_config.h:LoRAConfig@25",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_config.h",
+      "target": "function:infini_train/include/nn/lora/lora_config.h:LoRAConfig@25",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_config.h",
+      "target": "function:infini_train/include/nn/lora/lora_config.h:LoRAConfig@28",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_config.h",
+      "target": "function:infini_train/include/nn/lora/lora_config.h:LoRAConfig@28",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_linear.h:Tensor",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_linear.h:Tensor",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_linear.h:Device",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_linear.h:Device",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_linear.h:LoRALinear",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_linear.h:LoRALinear",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_linear.h",
+      "target": "function:infini_train/include/nn/lora/lora_linear.h:IsMerged",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_linear.h",
+      "target": "function:infini_train/include/nn/lora/lora_linear.h:IsMerged",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_linear.h",
+      "target": "file:infini_train/include/nn/lora/lora_config.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_linear.h",
+      "target": "file:infini_train/include/nn/modules/linear.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_parallel_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_parallel_linear.h:Tensor",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_parallel_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_parallel_linear.h:Tensor",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_parallel_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_parallel_linear.h:Device",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_parallel_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_parallel_linear.h:Device",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_parallel_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_parallel_linear.h:LoRAColumnParallelLinear",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_parallel_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_parallel_linear.h:LoRAColumnParallelLinear",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_parallel_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_parallel_linear.h:LoRARowParallelLinear",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_parallel_linear.h",
+      "target": "class:infini_train/include/nn/lora/lora_parallel_linear.h:LoRARowParallelLinear",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_parallel_linear.h",
+      "target": "file:infini_train/include/nn/lora/lora_config.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_parallel_linear.h",
+      "target": "file:infini_train/include/nn/parallel/tensor_parallel.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_config.h",
+      "target": "file:tests/lora/test_lora.cc",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:infini_train/include/nn/lora/lora_linear.h",
+      "target": "file:tests/lora/test_lora.cc",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

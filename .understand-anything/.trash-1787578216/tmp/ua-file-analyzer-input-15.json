@@ -1,0 +1,85 @@
+{
+  "projectRoot": "/home/fabu/桌面/InfiniTrain",
+  "batchFiles": [
+    {
+      "path": "docs/device_guard_design.md",
+      "language": "markdown",
+      "sizeLines": 185,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/dtype_registry_design.md",
+      "language": "markdown",
+      "sizeLines": 78,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/gradient_clipping_background_and_source_guide.md",
+      "language": "markdown",
+      "sizeLines": 328,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/gradient_clipping_implementation_plan.md",
+      "language": "markdown",
+      "sizeLines": 523,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/hook_mechanism_design.md",
+      "language": "markdown",
+      "sizeLines": 304,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/lora_usage_guide.md",
+      "language": "markdown",
+      "sizeLines": 319,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/pipeline_layout_implementation_guide.md",
+      "language": "markdown",
+      "sizeLines": 929,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/pipeline_layout_public_validation_addendum.md",
+      "language": "markdown",
+      "sizeLines": 64,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/precision_checker_guide.md",
+      "language": "markdown",
+      "sizeLines": 257,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/test_infrastructure_design.md",
+      "language": "markdown",
+      "sizeLines": 261,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/test_usage_guide.md",
+      "language": "markdown",
+      "sizeLines": 148,
+      "fileCategory": "docs"
+    }
+  ],
+  "batchImportData": {
+    "docs/device_guard_design.md": [],
+    "docs/dtype_registry_design.md": [],
+    "docs/gradient_clipping_background_and_source_guide.md": [],
+    "docs/gradient_clipping_implementation_plan.md": [],
+    "docs/hook_mechanism_design.md": [],
+    "docs/lora_usage_guide.md": [],
+    "docs/pipeline_layout_implementation_guide.md": [],
+    "docs/pipeline_layout_public_validation_addendum.md": [],
+    "docs/precision_checker_guide.md": [],
+    "docs/test_infrastructure_design.md": [],
+    "docs/test_usage_guide.md": []
+  },
+  "neighborMap": {}
+}

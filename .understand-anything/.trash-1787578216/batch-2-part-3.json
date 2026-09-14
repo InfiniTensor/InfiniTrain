@@ -1,0 +1,820 @@
+{
+  "nodes": [
+    {
+      "id": "file:tests/common/test_main.cc",
+      "type": "file",
+      "name": "test_main.cc",
+      "filePath": "tests/common/test_main.cc",
+      "fileCategory": "code",
+      "summary": "测试套件中的“main”用例，验证测试套件相关接口在目标设备和边界条件下的行为。",
+      "tags": [
+        "测试套件",
+        "tests",
+        "测试",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/common/test_main.cc:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "tests/common/test_main.cc",
+      "lineRange": [
+        5,
+        9
+      ],
+      "summary": "驱动示例或训练器完成数据准备、前向计算、反向传播和参数更新。",
+      "tags": [
+        "测试套件",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:tests/common/test_utils.h",
+      "type": "file",
+      "name": "test_utils.h",
+      "filePath": "tests/common/test_utils.h",
+      "fileCategory": "code",
+      "summary": "测试套件中的“utils”用例，验证测试套件相关接口在目标设备和边界条件下的行为。",
+      "tags": [
+        "测试套件",
+        "tests",
+        "测试",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:tests/common/test_utils.h:ExpectTensorFloatEqual",
+      "type": "function",
+      "name": "ExpectTensorFloatEqual",
+      "filePath": "tests/common/test_utils.h",
+      "lineRange": [
+        21,
+        31
+      ],
+      "summary": "实现测试套件子系统中的 ExpectTensorFloatEqual 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "测试套件",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/common/test_utils.h:ExpectTensorNear",
+      "type": "function",
+      "name": "ExpectTensorNear",
+      "filePath": "tests/common/test_utils.h",
+      "lineRange": [
+        48,
+        59
+      ],
+      "summary": "实现测试套件子系统中的 ExpectTensorNear 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "测试套件",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:tests/common/test_utils.h:InfiniTrainTest",
+      "type": "class",
+      "name": "InfiniTrainTest",
+      "filePath": "tests/common/test_utils.h",
+      "lineRange": [
+        108,
+        111
+      ],
+      "summary": "测试套件中的 InfiniTrainTest 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "测试套件",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:tests/optimizer/test_optimizer_creation.cc",
+      "type": "file",
+      "name": "test_optimizer_creation.cc",
+      "filePath": "tests/optimizer/test_optimizer_creation.cc",
+      "fileCategory": "code",
+      "summary": "测试套件中的“optimizer creation”用例，验证优化器相关接口在目标设备和边界条件下的行为。",
+      "tags": [
+        "优化器",
+        "optimization",
+        "测试",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:tests/optimizer/test_optimizer_creation.cc:TEST_P",
+      "type": "function",
+      "name": "TEST_P",
+      "filePath": "tests/optimizer/test_optimizer_creation.cc",
+      "lineRange": [
+        28,
+        37
+      ],
+      "summary": "实现优化器子系统中的 TEST_P 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "优化器",
+        "函数",
+        "测试",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:tests/optimizer/test_optimizer_step.cc",
+      "type": "file",
+      "name": "test_optimizer_step.cc",
+      "filePath": "tests/optimizer/test_optimizer_step.cc",
+      "fileCategory": "code",
+      "summary": "测试套件中的“optimizer step”用例，验证优化器相关接口在目标设备和边界条件下的行为。",
+      "tags": [
+        "优化器",
+        "optimization",
+        "测试",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:tests/optimizer/test_optimizer_step.cc:TEST_P",
+      "type": "function",
+      "name": "TEST_P",
+      "filePath": "tests/optimizer/test_optimizer_step.cc",
+      "lineRange": [
+        47,
+        57
+      ],
+      "summary": "实现优化器子系统中的 TEST_P 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "优化器",
+        "函数",
+        "测试",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:tests/tensor/cpu_only/test_tensor_copy.cc",
+      "type": "file",
+      "name": "test_tensor_copy.cc",
+      "filePath": "tests/tensor/cpu_only/test_tensor_copy.cc",
+      "fileCategory": "code",
+      "summary": "测试套件中的“tensor copy”用例，验证张量核心相关接口在目标设备和边界条件下的行为。",
+      "tags": [
+        "张量核心",
+        "tensor",
+        "测试",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/tensor/cpu_only/test_tensor_copy.cc:TEST_F",
+      "type": "function",
+      "name": "TEST_F",
+      "filePath": "tests/tensor/cpu_only/test_tensor_copy.cc",
+      "lineRange": [
+        14,
+        22
+      ],
+      "summary": "实现张量核心子系统中的 TEST_F 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "张量核心",
+        "函数",
+        "测试",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:tests/tensor/cuda_only/test_tensor_copy.cc",
+      "type": "file",
+      "name": "test_tensor_copy.cc",
+      "filePath": "tests/tensor/cuda_only/test_tensor_copy.cc",
+      "fileCategory": "code",
+      "summary": "测试套件中的“tensor copy”用例，验证张量核心相关接口在目标设备和边界条件下的行为。",
+      "tags": [
+        "张量核心",
+        "tensor",
+        "测试",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:tests/tensor/cuda_only/test_tensor_copy.cc:TEST_F",
+      "type": "function",
+      "name": "TEST_F",
+      "filePath": "tests/tensor/cuda_only/test_tensor_copy.cc",
+      "lineRange": [
+        44,
+        54
+      ],
+      "summary": "实现张量核心子系统中的 TEST_F 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "张量核心",
+        "函数",
+        "测试",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:tests/tensor/test_tensor.cc",
+      "type": "file",
+      "name": "test_tensor.cc",
+      "filePath": "tests/tensor/test_tensor.cc",
+      "fileCategory": "code",
+      "summary": "测试套件中的“tensor”用例，验证张量核心相关接口在目标设备和边界条件下的行为。",
+      "tags": [
+        "张量核心",
+        "tensor",
+        "测试",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/tensor/test_tensor.cc:TEST_P",
+      "type": "function",
+      "name": "TEST_P",
+      "filePath": "tests/tensor/test_tensor.cc",
+      "lineRange": [
+        27,
+        43
+      ],
+      "summary": "实现张量核心子系统中的 TEST_P 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "张量核心",
+        "函数",
+        "测试",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:tests/tensor/test_tensor_copy.cc",
+      "type": "file",
+      "name": "test_tensor_copy.cc",
+      "filePath": "tests/tensor/test_tensor_copy.cc",
+      "fileCategory": "code",
+      "summary": "测试套件中的“tensor copy”用例，验证张量核心相关接口在目标设备和边界条件下的行为。",
+      "tags": [
+        "张量核心",
+        "tensor",
+        "测试",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/tensor/test_tensor_copy.cc:TEST_P",
+      "type": "function",
+      "name": "TEST_P",
+      "filePath": "tests/tensor/test_tensor_copy.cc",
+      "lineRange": [
+        14,
+        20
+      ],
+      "summary": "实现张量核心子系统中的 TEST_P 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "张量核心",
+        "函数",
+        "测试",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:tests/tensor/test_tensor_create.cc",
+      "type": "file",
+      "name": "test_tensor_create.cc",
+      "filePath": "tests/tensor/test_tensor_create.cc",
+      "fileCategory": "code",
+      "summary": "测试套件中的“tensor create”用例，验证张量核心相关接口在目标设备和边界条件下的行为。",
+      "tags": [
+        "张量核心",
+        "tensor",
+        "测试",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:tests/tensor/test_tensor_create.cc:TEST_P",
+      "type": "function",
+      "name": "TEST_P",
+      "filePath": "tests/tensor/test_tensor_create.cc",
+      "lineRange": [
+        14,
+        19
+      ],
+      "summary": "实现张量核心子系统中的 TEST_P 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "张量核心",
+        "函数",
+        "测试",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:tests/tensor/test_tensor_delete.cc",
+      "type": "file",
+      "name": "test_tensor_delete.cc",
+      "filePath": "tests/tensor/test_tensor_delete.cc",
+      "fileCategory": "code",
+      "summary": "测试套件中的“tensor delete”用例，验证张量核心相关接口在目标设备和边界条件下的行为。",
+      "tags": [
+        "张量核心",
+        "tensor",
+        "测试",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:tests/tensor/test_tensor_delete.cc:TEST_P",
+      "type": "function",
+      "name": "TEST_P",
+      "filePath": "tests/tensor/test_tensor_delete.cc",
+      "lineRange": [
+        42,
+        52
+      ],
+      "summary": "实现张量核心子系统中的 TEST_P 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "张量核心",
+        "函数",
+        "测试",
+        "cpp"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:tests/common/test_main.cc",
+      "target": "function:tests/common/test_main.cc:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/common/test_main.cc",
+      "target": "function:tests/common/test_main.cc:main",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/common/test_utils.h",
+      "target": "function:tests/common/test_utils.h:ExpectTensorFloatEqual",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/common/test_utils.h",
+      "target": "function:tests/common/test_utils.h:ExpectTensorFloatEqual",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/common/test_utils.h",
+      "target": "function:tests/common/test_utils.h:ExpectTensorNear",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/common/test_utils.h",
+      "target": "function:tests/common/test_utils.h:ExpectTensorNear",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/common/test_utils.h",
+      "target": "class:tests/common/test_utils.h:InfiniTrainTest",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/common/test_utils.h",
+      "target": "class:tests/common/test_utils.h:InfiniTrainTest",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_creation.cc",
+      "target": "function:tests/optimizer/test_optimizer_creation.cc:TEST_P",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_creation.cc",
+      "target": "function:tests/optimizer/test_optimizer_creation.cc:TEST_P",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_step.cc",
+      "target": "function:tests/optimizer/test_optimizer_step.cc:TEST_P",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_step.cc",
+      "target": "function:tests/optimizer/test_optimizer_step.cc:TEST_P",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/tensor/cpu_only/test_tensor_copy.cc",
+      "target": "function:tests/tensor/cpu_only/test_tensor_copy.cc:TEST_F",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/tensor/cpu_only/test_tensor_copy.cc",
+      "target": "function:tests/tensor/cpu_only/test_tensor_copy.cc:TEST_F",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/tensor/cuda_only/test_tensor_copy.cc",
+      "target": "function:tests/tensor/cuda_only/test_tensor_copy.cc:TEST_F",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/tensor/cuda_only/test_tensor_copy.cc",
+      "target": "function:tests/tensor/cuda_only/test_tensor_copy.cc:TEST_F",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/tensor/test_tensor.cc",
+      "target": "function:tests/tensor/test_tensor.cc:TEST_P",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/tensor/test_tensor.cc",
+      "target": "function:tests/tensor/test_tensor.cc:TEST_P",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_copy.cc",
+      "target": "function:tests/tensor/test_tensor_copy.cc:TEST_P",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_copy.cc",
+      "target": "function:tests/tensor/test_tensor_copy.cc:TEST_P",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_create.cc",
+      "target": "function:tests/tensor/test_tensor_create.cc:TEST_P",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_create.cc",
+      "target": "function:tests/tensor/test_tensor_create.cc:TEST_P",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_delete.cc",
+      "target": "function:tests/tensor/test_tensor_delete.cc:TEST_P",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_delete.cc",
+      "target": "function:tests/tensor/test_tensor_delete.cc:TEST_P",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/common/test_main.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/common/test_utils.h",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/common/test_utils.h",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_creation.cc",
+      "target": "file:infini_train/include/optimizer.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_creation.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_creation.cc",
+      "target": "file:tests/common/test_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_step.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_step.cc",
+      "target": "file:infini_train/include/optimizer.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_step.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_step.cc",
+      "target": "file:tests/common/test_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/tensor/cpu_only/test_tensor_copy.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/tensor/cpu_only/test_tensor_copy.cc",
+      "target": "file:tests/common/test_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/tensor/cuda_only/test_tensor_copy.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/tensor/cuda_only/test_tensor_copy.cc",
+      "target": "file:tests/common/test_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/tensor/test_tensor.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/tensor/test_tensor.cc",
+      "target": "file:tests/common/test_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_copy.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_copy.cc",
+      "target": "file:tests/common/test_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_create.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_create.cc",
+      "target": "file:tests/common/test_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_delete.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_delete.cc",
+      "target": "file:tests/common/test_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/common/test_main.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/common/test_utils.h",
+      "target": "file:infini_train/include/device.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/common/test_utils.h",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_creation.cc",
+      "target": "file:infini_train/include/optimizer.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_creation.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_step.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_step.cc",
+      "target": "file:infini_train/include/optimizer.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_step.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/tensor/cpu_only/test_tensor_copy.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/tensor/cuda_only/test_tensor_copy.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/tensor/test_tensor.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_copy.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_create.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/tensor/test_tensor_delete.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "function:tests/common/test_utils.h:ExpectTensorFloatEqual",
+      "target": "class:infini_train/include/device.h:Device",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:tests/common/test_utils.h:ExpectTensorNear",
+      "target": "class:infini_train/include/device.h:Device",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:tests/tensor/cpu_only/test_tensor_copy.cc:TEST_F",
+      "target": "function:tests/common/test_utils.h:ExpectTensorFloatEqual",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:tests/tensor/test_tensor_delete.cc:TEST_P",
+      "target": "function:tests/common/test_utils.h:ExpectTensorFloatEqual",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

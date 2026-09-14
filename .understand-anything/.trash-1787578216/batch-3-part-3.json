@@ -1,0 +1,542 @@
+{
+  "nodes": [
+    {
+      "id": "file:infini_train/include/autograd/no_op.h",
+      "type": "file",
+      "name": "no_op.h",
+      "filePath": "infini_train/include/autograd/no_op.h",
+      "fileCategory": "code",
+      "summary": "no op，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/no_op.h:NoOp",
+      "type": "function",
+      "name": "NoOp",
+      "filePath": "infini_train/include/autograd/no_op.h",
+      "lineRange": [
+        18,
+        18
+      ],
+      "summary": "实现自动微分子系统中的 NoOp 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/no_op.h:NoOp",
+      "type": "class",
+      "name": "NoOp",
+      "filePath": "infini_train/include/autograd/no_op.h",
+      "lineRange": [
+        14,
+        28
+      ],
+      "summary": "自动微分中的 NoOp 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/autograd/normalization.h",
+      "type": "file",
+      "name": "normalization.h",
+      "filePath": "infini_train/include/autograd/normalization.h",
+      "fileCategory": "code",
+      "summary": "归一化自动微分，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/normalization.h:LayerNorm",
+      "type": "function",
+      "name": "LayerNorm",
+      "filePath": "infini_train/include/autograd/normalization.h",
+      "lineRange": [
+        17,
+        17
+      ],
+      "summary": "实现自动微分子系统中的 LayerNorm 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/normalization.h:LayerNorm",
+      "type": "class",
+      "name": "LayerNorm",
+      "filePath": "infini_train/include/autograd/normalization.h",
+      "lineRange": [
+        13,
+        26
+      ],
+      "summary": "自动微分中的 LayerNorm 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/autograd/outer.h",
+      "type": "file",
+      "name": "outer.h",
+      "filePath": "infini_train/include/autograd/outer.h",
+      "fileCategory": "code",
+      "summary": "outer，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/outer.h:Outer",
+      "type": "function",
+      "name": "Outer",
+      "filePath": "infini_train/include/autograd/outer.h",
+      "lineRange": [
+        17,
+        17
+      ],
+      "summary": "实现自动微分子系统中的 Outer 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/outer.h:Outer",
+      "type": "class",
+      "name": "Outer",
+      "filePath": "infini_train/include/autograd/outer.h",
+      "lineRange": [
+        13,
+        23
+      ],
+      "summary": "自动微分中的 Outer 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/include/autograd/reduction.h",
+      "type": "file",
+      "name": "reduction.h",
+      "filePath": "infini_train/include/autograd/reduction.h",
+      "fileCategory": "code",
+      "summary": "归约自动微分，定义张量算子的前向计算、上下文保存与反向梯度传播逻辑。",
+      "tags": [
+        "自动微分",
+        "autograd",
+        "公共接口",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/include/autograd/reduction.h:Mean",
+      "type": "function",
+      "name": "Mean",
+      "filePath": "infini_train/include/autograd/reduction.h",
+      "lineRange": [
+        17,
+        17
+      ],
+      "summary": "实现自动微分子系统中的 Mean 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/reduction.h:Sum",
+      "type": "function",
+      "name": "Sum",
+      "filePath": "infini_train/include/autograd/reduction.h",
+      "lineRange": [
+        34,
+        34
+      ],
+      "summary": "实现自动微分子系统中的 Sum 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/reduction.h:Max",
+      "type": "function",
+      "name": "Max",
+      "filePath": "infini_train/include/autograd/reduction.h",
+      "lineRange": [
+        51,
+        51
+      ],
+      "summary": "实现自动微分子系统中的 Max 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/include/autograd/reduction.h:Min",
+      "type": "function",
+      "name": "Min",
+      "filePath": "infini_train/include/autograd/reduction.h",
+      "lineRange": [
+        67,
+        67
+      ],
+      "summary": "实现自动微分子系统中的 Min 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "自动微分",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/reduction.h:Mean",
+      "type": "class",
+      "name": "Mean",
+      "filePath": "infini_train/include/autograd/reduction.h",
+      "lineRange": [
+        13,
+        28
+      ],
+      "summary": "自动微分中的 Mean 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/reduction.h:Sum",
+      "type": "class",
+      "name": "Sum",
+      "filePath": "infini_train/include/autograd/reduction.h",
+      "lineRange": [
+        30,
+        45
+      ],
+      "summary": "自动微分中的 Sum 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/reduction.h:Max",
+      "type": "class",
+      "name": "Max",
+      "filePath": "infini_train/include/autograd/reduction.h",
+      "lineRange": [
+        47,
+        61
+      ],
+      "summary": "自动微分中的 Max 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/include/autograd/reduction.h:Min",
+      "type": "class",
+      "name": "Min",
+      "filePath": "infini_train/include/autograd/reduction.h",
+      "lineRange": [
+        63,
+        77
+      ],
+      "summary": "自动微分中的 Min 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "自动微分",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:infini_train/include/autograd/no_op.h",
+      "target": "function:infini_train/include/autograd/no_op.h:NoOp",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/no_op.h",
+      "target": "function:infini_train/include/autograd/no_op.h:NoOp",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/no_op.h",
+      "target": "class:infini_train/include/autograd/no_op.h:NoOp",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/no_op.h",
+      "target": "class:infini_train/include/autograd/no_op.h:NoOp",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/normalization.h",
+      "target": "function:infini_train/include/autograd/normalization.h:LayerNorm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/normalization.h",
+      "target": "function:infini_train/include/autograd/normalization.h:LayerNorm",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/normalization.h",
+      "target": "class:infini_train/include/autograd/normalization.h:LayerNorm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/normalization.h",
+      "target": "class:infini_train/include/autograd/normalization.h:LayerNorm",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/outer.h",
+      "target": "function:infini_train/include/autograd/outer.h:Outer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/outer.h",
+      "target": "function:infini_train/include/autograd/outer.h:Outer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/outer.h",
+      "target": "class:infini_train/include/autograd/outer.h:Outer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/outer.h",
+      "target": "class:infini_train/include/autograd/outer.h:Outer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "function:infini_train/include/autograd/reduction.h:Mean",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "function:infini_train/include/autograd/reduction.h:Mean",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "function:infini_train/include/autograd/reduction.h:Sum",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "function:infini_train/include/autograd/reduction.h:Sum",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "function:infini_train/include/autograd/reduction.h:Max",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "function:infini_train/include/autograd/reduction.h:Max",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "function:infini_train/include/autograd/reduction.h:Min",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "function:infini_train/include/autograd/reduction.h:Min",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "class:infini_train/include/autograd/reduction.h:Mean",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "class:infini_train/include/autograd/reduction.h:Mean",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "class:infini_train/include/autograd/reduction.h:Sum",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "class:infini_train/include/autograd/reduction.h:Sum",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "class:infini_train/include/autograd/reduction.h:Max",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "class:infini_train/include/autograd/reduction.h:Max",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "class:infini_train/include/autograd/reduction.h:Min",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "class:infini_train/include/autograd/reduction.h:Min",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/include/autograd/no_op.h",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/autograd/normalization.h",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/autograd/outer.h",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/include/autograd/reduction.h",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

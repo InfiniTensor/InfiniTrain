@@ -1,0 +1,2267 @@
+{
+  "nodes": [
+    {
+      "id": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "type": "file",
+      "name": "parallel_functional.cc",
+      "filePath": "infini_train/src/nn/parallel/parallel_functional.cc",
+      "fileCategory": "code",
+      "summary": "parallel functional，实现神经网络模块、容器或函数式算子，并与 Tensor/Autograd 图连接。",
+      "tags": [
+        "分布式通信",
+        "distributed-communication",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/parallel_functional.cc:AllReduce",
+      "type": "function",
+      "name": "AllReduce",
+      "filePath": "infini_train/src/nn/parallel/parallel_functional.cc",
+      "lineRange": [
+        16,
+        23
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/parallel_functional.cc:AllGather",
+      "type": "function",
+      "name": "AllGather",
+      "filePath": "infini_train/src/nn/parallel/parallel_functional.cc",
+      "lineRange": [
+        25,
+        32
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/parallel_functional.cc:ReduceScatter",
+      "type": "function",
+      "name": "ReduceScatter",
+      "filePath": "infini_train/src/nn/parallel/parallel_functional.cc",
+      "lineRange": [
+        34,
+        41
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/parallel_functional.cc:Scatter",
+      "type": "function",
+      "name": "Scatter",
+      "filePath": "infini_train/src/nn/parallel/parallel_functional.cc",
+      "lineRange": [
+        43,
+        56
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/parallel_functional.cc:Gather",
+      "type": "function",
+      "name": "Gather",
+      "filePath": "infini_train/src/nn/parallel/parallel_functional.cc",
+      "lineRange": [
+        58,
+        63
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/parallel_functional.cc:BroadcastCoalescedReshape",
+      "type": "function",
+      "name": "BroadcastCoalescedReshape",
+      "filePath": "infini_train/src/nn/parallel/parallel_functional.cc",
+      "lineRange": [
+        65,
+        79
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/parallel_functional.cc:Replicate",
+      "type": "function",
+      "name": "Replicate",
+      "filePath": "infini_train/src/nn/parallel/parallel_functional.cc",
+      "lineRange": [
+        81,
+        143
+      ],
+      "summary": "实现分布式通信子系统中的 Replicate 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "type": "file",
+      "name": "send_recv.cc",
+      "filePath": "infini_train/src/nn/parallel/pp/send_recv.cc",
+      "fileCategory": "code",
+      "summary": "send recv，编排流水线并行的阶段划分、微批调度以及阶段间张量收发。",
+      "tags": [
+        "流水线并行",
+        "pipeline-parallel",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/pp/send_recv.cc:ISend",
+      "type": "function",
+      "name": "ISend",
+      "filePath": "infini_train/src/nn/parallel/pp/send_recv.cc",
+      "lineRange": [
+        112,
+        117
+      ],
+      "summary": "封装流水线并行中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "流水线并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/pp/send_recv.cc:IRecv",
+      "type": "function",
+      "name": "IRecv",
+      "filePath": "infini_train/src/nn/parallel/pp/send_recv.cc",
+      "lineRange": [
+        119,
+        123
+      ],
+      "summary": "封装流水线并行中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "流水线并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/pp/send_recv.cc:Forward",
+      "type": "function",
+      "name": "Forward",
+      "filePath": "infini_train/src/nn/parallel/pp/send_recv.cc",
+      "lineRange": [
+        58,
+        68
+      ],
+      "summary": "执行流水线并行组件的前向计算，并返回后续训练阶段所需的张量结果。",
+      "tags": [
+        "流水线并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/pp/send_recv.cc:Backward",
+      "type": "function",
+      "name": "Backward",
+      "filePath": "infini_train/src/nn/parallel/pp/send_recv.cc",
+      "lineRange": [
+        70,
+        84
+      ],
+      "summary": "读取前向阶段保存的上下文，计算输入或参数梯度并连接自动微分图。",
+      "tags": [
+        "流水线并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/pp/send_recv.cc:SetupContext",
+      "type": "function",
+      "name": "SetupContext",
+      "filePath": "infini_train/src/nn/parallel/pp/send_recv.cc",
+      "lineRange": [
+        94,
+        100
+      ],
+      "summary": "保存流水线并行算子反向传播所需的输入、输出和元数据。",
+      "tags": [
+        "流水线并行",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/src/nn/parallel/pp/send_recv.cc:ISend",
+      "type": "class",
+      "name": "ISend",
+      "filePath": "infini_train/src/nn/parallel/pp/send_recv.cc",
+      "lineRange": [
+        17,
+        35
+      ],
+      "summary": "流水线并行中的 ISend 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "流水线并行",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:infini_train/src/nn/parallel/pp/send_recv.cc:IRecv",
+      "type": "class",
+      "name": "IRecv",
+      "filePath": "infini_train/src/nn/parallel/pp/send_recv.cc",
+      "lineRange": [
+        37,
+        56
+      ],
+      "summary": "流水线并行中的 IRecv 类型，封装相关状态并提供协作方法。",
+      "tags": [
+        "流水线并行",
+        "类",
+        "接口抽象",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/nn/parallel/rank.cc",
+      "type": "file",
+      "name": "rank.cc",
+      "filePath": "infini_train/src/nn/parallel/rank.cc",
+      "fileCategory": "code",
+      "summary": "rank，属于分布式通信子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "分布式通信",
+        "distributed-communication",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/rank.cc:Rank",
+      "type": "function",
+      "name": "Rank",
+      "filePath": "infini_train/src/nn/parallel/rank.cc",
+      "lineRange": [
+        5,
+        7
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/rank.cc:process_rank",
+      "type": "function",
+      "name": "process_rank",
+      "filePath": "infini_train/src/nn/parallel/rank.cc",
+      "lineRange": [
+        9,
+        9
+      ],
+      "summary": "实现分布式通信子系统中的 process_rank 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/rank.cc:thread_rank",
+      "type": "function",
+      "name": "thread_rank",
+      "filePath": "infini_train/src/nn/parallel/rank.cc",
+      "lineRange": [
+        10,
+        10
+      ],
+      "summary": "实现分布式通信子系统中的 thread_rank 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/rank.cc:process_size",
+      "type": "function",
+      "name": "process_size",
+      "filePath": "infini_train/src/nn/parallel/rank.cc",
+      "lineRange": [
+        12,
+        12
+      ],
+      "summary": "实现分布式通信子系统中的 process_size 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/rank.cc:thread_size",
+      "type": "function",
+      "name": "thread_size",
+      "filePath": "infini_train/src/nn/parallel/rank.cc",
+      "lineRange": [
+        13,
+        13
+      ],
+      "summary": "实现分布式通信子系统中的 thread_size 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/rank.cc:GlobalRank",
+      "type": "function",
+      "name": "GlobalRank",
+      "filePath": "infini_train/src/nn/parallel/rank.cc",
+      "lineRange": [
+        15,
+        15
+      ],
+      "summary": "实现分布式通信子系统中的 GlobalRank 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/rank.cc:IsParallel",
+      "type": "function",
+      "name": "IsParallel",
+      "filePath": "infini_train/src/nn/parallel/rank.cc",
+      "lineRange": [
+        17,
+        17
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/rank.cc:IsMainRank",
+      "type": "function",
+      "name": "IsMainRank",
+      "filePath": "infini_train/src/nn/parallel/rank.cc",
+      "lineRange": [
+        19,
+        19
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/rank.cc:IsLastRank",
+      "type": "function",
+      "name": "IsLastRank",
+      "filePath": "infini_train/src/nn/parallel/rank.cc",
+      "lineRange": [
+        21,
+        21
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/nn/parallel/utils.cc",
+      "type": "file",
+      "name": "utils.cc",
+      "filePath": "infini_train/src/nn/parallel/utils.cc",
+      "fileCategory": "code",
+      "summary": "utils，属于分布式通信子系统，提供该模块的公共声明或具体实现。",
+      "tags": [
+        "分布式通信",
+        "distributed-communication",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/utils.cc:GetDataParallelProcessGroupName",
+      "type": "function",
+      "name": "GetDataParallelProcessGroupName",
+      "filePath": "infini_train/src/nn/parallel/utils.cc",
+      "lineRange": [
+        12,
+        14
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/utils.cc:GetTensorParallelProcessGroupName",
+      "type": "function",
+      "name": "GetTensorParallelProcessGroupName",
+      "filePath": "infini_train/src/nn/parallel/utils.cc",
+      "lineRange": [
+        16,
+        18
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/utils.cc:GetPipelineParallelProcessGroupName",
+      "type": "function",
+      "name": "GetPipelineParallelProcessGroupName",
+      "filePath": "infini_train/src/nn/parallel/utils.cc",
+      "lineRange": [
+        20,
+        22
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/utils.cc:GetDataParallelGroupRanks",
+      "type": "function",
+      "name": "GetDataParallelGroupRanks",
+      "filePath": "infini_train/src/nn/parallel/utils.cc",
+      "lineRange": [
+        24,
+        24
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/utils.cc:GetTensorParallelGroupRanks",
+      "type": "function",
+      "name": "GetTensorParallelGroupRanks",
+      "filePath": "infini_train/src/nn/parallel/utils.cc",
+      "lineRange": [
+        26,
+        26
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/utils.cc:GetPipelineParallelGroupRanks",
+      "type": "function",
+      "name": "GetPipelineParallelGroupRanks",
+      "filePath": "infini_train/src/nn/parallel/utils.cc",
+      "lineRange": [
+        28,
+        30
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/utils.cc:GetModelParallelStatsProcessGroupName",
+      "type": "function",
+      "name": "GetModelParallelStatsProcessGroupName",
+      "filePath": "infini_train/src/nn/parallel/utils.cc",
+      "lineRange": [
+        31,
+        35
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/utils.cc:GetModelParallelStatsGroupRanks",
+      "type": "function",
+      "name": "GetModelParallelStatsGroupRanks",
+      "filePath": "infini_train/src/nn/parallel/utils.cc",
+      "lineRange": [
+        37,
+        48
+      ],
+      "summary": "读取或更新分布式通信组件的配置、状态和运行时元数据。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/nn/parallel/utils.cc:GatherTensorParallelShard",
+      "type": "function",
+      "name": "GatherTensorParallelShard",
+      "filePath": "infini_train/src/nn/parallel/utils.cc",
+      "lineRange": [
+        51,
+        80
+      ],
+      "summary": "封装分布式通信中的集合通信或点对点数据传输操作。",
+      "tags": [
+        "分布式通信",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:infini_train/src/optimizer.cc",
+      "type": "file",
+      "name": "optimizer.cc",
+      "filePath": "infini_train/src/optimizer.cc",
+      "fileCategory": "code",
+      "summary": "优化器，负责训练参数更新、优化器状态序列化或学习率随训练进度的调度。",
+      "tags": [
+        "优化器",
+        "optimization",
+        "实现",
+        "结构化代码"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:Optimizer",
+      "type": "function",
+      "name": "Optimizer",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        20,
+        31
+      ],
+      "summary": "实现优化器子系统中的 Optimizer 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:ClipGradNorm_",
+      "type": "function",
+      "name": "ClipGradNorm_",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        33,
+        78
+      ],
+      "summary": "计算参数梯度范数并按阈值缩放梯度，支持分布式统计与非有限值检查。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:ZeroGrad",
+      "type": "function",
+      "name": "ZeroGrad",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        80,
+        82
+      ],
+      "summary": "执行优化器中的ZeroGrad操作，完成核心数据处理或状态变换。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:set_learning_rate",
+      "type": "function",
+      "name": "set_learning_rate",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        84,
+        84
+      ],
+      "summary": "读取或更新优化器组件的配置、状态和运行时元数据。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:learning_rate",
+      "type": "function",
+      "name": "learning_rate",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        86,
+        86
+      ],
+      "summary": "实现优化器子系统中的 learning_rate 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:initial_learning_rate",
+      "type": "function",
+      "name": "initial_learning_rate",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        88,
+        92
+      ],
+      "summary": "初始化优化器组件并建立依赖对象、缓冲区或通信资源。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:initial_lr_set",
+      "type": "function",
+      "name": "initial_lr_set",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        94,
+        94
+      ],
+      "summary": "初始化优化器组件并建立依赖对象、缓冲区或通信资源。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:set_initial_learning_rate",
+      "type": "function",
+      "name": "set_initial_learning_rate",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        96,
+        100
+      ],
+      "summary": "读取或更新优化器组件的配置、状态和运行时元数据。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:SGD",
+      "type": "function",
+      "name": "SGD",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        104,
+        104
+      ],
+      "summary": "实现优化器子系统中的 SGD 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:Step",
+      "type": "function",
+      "name": "Step",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        154,
+        172
+      ],
+      "summary": "执行优化器中的Step操作，完成核心数据处理或状态变换。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:Create",
+      "type": "function",
+      "name": "Create",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        121,
+        125
+      ],
+      "summary": "初始化优化器组件并建立依赖对象、缓冲区或通信资源。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:CreateNamed",
+      "type": "function",
+      "name": "CreateNamed",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        127,
+        131
+      ],
+      "summary": "初始化优化器组件并建立依赖对象、缓冲区或通信资源。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:Adam",
+      "type": "function",
+      "name": "Adam",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        133,
+        142
+      ],
+      "summary": "实现优化器子系统中的 Adam 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:StateDict",
+      "type": "function",
+      "name": "StateDict",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        186,
+        198
+      ],
+      "summary": "序列化或恢复训练状态，保持模型和优化器参数的一致性。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:infini_train/src/optimizer.cc:LoadStateDict",
+      "type": "function",
+      "name": "LoadStateDict",
+      "filePath": "infini_train/src/optimizer.cc",
+      "lineRange": [
+        200,
+        214
+      ],
+      "summary": "序列化或恢复训练状态，保持模型和优化器参数的一致性。",
+      "tags": [
+        "优化器",
+        "函数",
+        "核心逻辑",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:tests/distributed/test_rank.cc",
+      "type": "file",
+      "name": "test_rank.cc",
+      "filePath": "tests/distributed/test_rank.cc",
+      "fileCategory": "code",
+      "summary": "测试套件中的“rank”用例，验证测试套件相关接口在目标设备和边界条件下的行为。",
+      "tags": [
+        "测试套件",
+        "tests",
+        "测试",
+        "结构化代码"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:tests/distributed/test_rank.cc:TEST",
+      "type": "function",
+      "name": "TEST",
+      "filePath": "tests/distributed/test_rank.cc",
+      "lineRange": [
+        9,
+        13
+      ],
+      "summary": "实现测试套件子系统中的 TEST 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "测试套件",
+        "函数",
+        "测试",
+        "cpp"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "type": "file",
+      "name": "test_optimizer_parameter_names.cc",
+      "filePath": "tests/optimizer/test_optimizer_parameter_names.cc",
+      "fileCategory": "code",
+      "summary": "测试套件中的“optimizer parameter names”用例，验证优化器相关接口在目标设备和边界条件下的行为。",
+      "tags": [
+        "优化器",
+        "optimization",
+        "测试",
+        "结构化代码"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:tests/optimizer/test_optimizer_parameter_names.cc:TEST_P",
+      "type": "function",
+      "name": "TEST_P",
+      "filePath": "tests/optimizer/test_optimizer_parameter_names.cc",
+      "lineRange": [
+        55,
+        85
+      ],
+      "summary": "实现优化器子系统中的 TEST_P 逻辑，参与模块计算或运行时协作。",
+      "tags": [
+        "优化器",
+        "函数",
+        "测试",
+        "cpp"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:AllReduce",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:AllReduce",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:AllGather",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:AllGather",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:ReduceScatter",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:ReduceScatter",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:Scatter",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:Scatter",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:Gather",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:Gather",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:BroadcastCoalescedReshape",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:BroadcastCoalescedReshape",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:Replicate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:Replicate",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "function:infini_train/src/nn/parallel/pp/send_recv.cc:ISend",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "function:infini_train/src/nn/parallel/pp/send_recv.cc:ISend",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "function:infini_train/src/nn/parallel/pp/send_recv.cc:IRecv",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "function:infini_train/src/nn/parallel/pp/send_recv.cc:IRecv",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "function:infini_train/src/nn/parallel/pp/send_recv.cc:Forward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "function:infini_train/src/nn/parallel/pp/send_recv.cc:Forward",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "function:infini_train/src/nn/parallel/pp/send_recv.cc:Backward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "function:infini_train/src/nn/parallel/pp/send_recv.cc:Backward",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "function:infini_train/src/nn/parallel/pp/send_recv.cc:SetupContext",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "function:infini_train/src/nn/parallel/pp/send_recv.cc:SetupContext",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "class:infini_train/src/nn/parallel/pp/send_recv.cc:ISend",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "class:infini_train/src/nn/parallel/pp/send_recv.cc:ISend",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "class:infini_train/src/nn/parallel/pp/send_recv.cc:IRecv",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "class:infini_train/src/nn/parallel/pp/send_recv.cc:IRecv",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:Rank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:Rank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:process_rank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:process_rank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:thread_rank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:thread_rank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:process_size",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:process_size",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:thread_size",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:thread_size",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:GlobalRank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:GlobalRank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:IsParallel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:IsParallel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:IsMainRank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:IsMainRank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:IsLastRank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:IsLastRank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetDataParallelProcessGroupName",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetDataParallelProcessGroupName",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetTensorParallelProcessGroupName",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetTensorParallelProcessGroupName",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetPipelineParallelProcessGroupName",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetPipelineParallelProcessGroupName",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetDataParallelGroupRanks",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetDataParallelGroupRanks",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetTensorParallelGroupRanks",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetTensorParallelGroupRanks",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetPipelineParallelGroupRanks",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetPipelineParallelGroupRanks",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetModelParallelStatsProcessGroupName",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetModelParallelStatsProcessGroupName",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetModelParallelStatsGroupRanks",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetModelParallelStatsGroupRanks",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GatherTensorParallelShard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GatherTensorParallelShard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:Optimizer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:Optimizer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:ClipGradNorm_",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:ClipGradNorm_",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:ZeroGrad",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:ZeroGrad",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:set_learning_rate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:set_learning_rate",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:learning_rate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:learning_rate",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:initial_learning_rate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:initial_learning_rate",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:initial_lr_set",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:initial_lr_set",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:set_initial_learning_rate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:set_initial_learning_rate",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:SGD",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:SGD",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:Step",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:Step",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:Create",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:Create",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:CreateNamed",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:CreateNamed",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:Adam",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:Adam",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:StateDict",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:StateDict",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:LoadStateDict",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "function:infini_train/src/optimizer.cc:LoadStateDict",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/distributed/test_rank.cc",
+      "target": "function:tests/distributed/test_rank.cc:TEST",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/distributed/test_rank.cc",
+      "target": "function:tests/distributed/test_rank.cc:TEST",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "function:tests/optimizer/test_optimizer_parameter_names.cc:TEST_P",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "function:tests/optimizer/test_optimizer_parameter_names.cc:TEST_P",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "file:infini_train/include/autograd/comm.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "file:infini_train/include/nn/modules/module.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "file:infini_train/include/nn/parallel/parallel_functional.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "file:infini_train/include/nn/parallel/process_group.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "file:infini_train/include/nn/parallel/reduce_op_type.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/parallel_functional.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "file:infini_train/include/autograd/function.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "file:infini_train/include/nn/parallel/pp/send_recv.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "file:infini_train/include/nn/parallel/process_group.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "file:infini_train/include/nn/parallel/utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/pp/send_recv.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/rank.cc",
+      "target": "file:infini_train/include/nn/parallel/rank.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "file:infini_train/include/nn/functional.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "file:infini_train/include/nn/parallel/process_group.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "file:infini_train/include/nn/parallel/utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/nn/parallel/utils.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "file:infini_train/include/core/runtime/device_guard.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "file:infini_train/include/device.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "file:infini_train/include/dispatcher.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "file:infini_train/include/gradient_clip.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "file:infini_train/include/nn/parallel/process_group.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "file:infini_train/include/nn/parallel/utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "file:infini_train/include/optimizer.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:infini_train/src/optimizer.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/distributed/test_rank.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/distributed/test_rank.cc",
+      "target": "file:infini_train/include/nn/parallel/rank.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/modules/linear.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/ddp/distributed_optimizer.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/process_group.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/rank.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/optimizer.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:tests/common/test_utils.h",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/distributed/test_rank.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/distributed/test_rank.cc",
+      "target": "file:infini_train/include/nn/parallel/rank.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/modules/linear.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/ddp/distributed_data_parallel.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/ddp/distributed_optimizer.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/global.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/process_group.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/rank.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/nn/parallel/utils.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/optimizer.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:tests/optimizer/test_optimizer_parameter_names.cc",
+      "target": "file:infini_train/include/tensor.h",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/parallel_functional.cc:Replicate",
+      "target": "function:infini_train/src/nn/parallel/parallel_functional.cc:BroadcastCoalescedReshape",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/rank.cc:IsParallel",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetWorldSize",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/rank.cc:IsMainRank",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:GlobalRank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/rank.cc:IsLastRank",
+      "target": "function:infini_train/src/nn/parallel/rank.cc:GlobalRank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/rank.cc:IsLastRank",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetWorldSize",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GetDataParallelProcessGroupName",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetGroupId",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GetTensorParallelProcessGroupName",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetGroupId",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GetPipelineParallelProcessGroupName",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetGroupId",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GetDataParallelGroupRanks",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetGroupRanks",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GetTensorParallelGroupRanks",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetGroupRanks",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GetPipelineParallelGroupRanks",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetGroupRanks",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GetModelParallelStatsProcessGroupName",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetCoordOf",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GetModelParallelStatsGroupRanks",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetCoordOf",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GetModelParallelStatsGroupRanks",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetTensorParallelSize",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GetModelParallelStatsGroupRanks",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetPipelineParallelSize",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GetModelParallelStatsGroupRanks",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetRankOf",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GatherTensorParallelShard",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetTensorParallelSize",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/nn/parallel/utils.cc:GatherTensorParallelShard",
+      "target": "function:infini_train/src/nn/parallel/utils.cc:GetTensorParallelProcessGroupName",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/optimizer.cc:ClipGradNorm_",
+      "target": "function:infini_train/include/nn/parallel/global.h:IsInitialized",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/optimizer.cc:ClipGradNorm_",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetWorldSize",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/optimizer.cc:ClipGradNorm_",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetDataParallelSize",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/optimizer.cc:StateDict",
+      "target": "class:infini_train/include/device.h:Device",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:infini_train/src/optimizer.cc:LoadStateDict",
+      "target": "class:infini_train/include/device.h:Device",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:tests/distributed/test_rank.cc:TEST",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetGlobalProcRank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:tests/distributed/test_rank.cc:TEST",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetNprocPerNode",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:tests/distributed/test_rank.cc:TEST",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetNthreadPerProc",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:tests/distributed/test_rank.cc:TEST",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetWorldSize",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:tests/optimizer/test_optimizer_parameter_names.cc:TEST_P",
+      "target": "function:infini_train/include/optimizer.h:StateDict",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:tests/optimizer/test_optimizer_parameter_names.cc:TEST_P",
+      "target": "function:infini_train/include/optimizer.h:LoadStateDict",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:tests/optimizer/test_optimizer_parameter_names.cc:TEST_P",
+      "target": "function:infini_train/include/nn/parallel/global.h:GetDataParallelSize",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}
