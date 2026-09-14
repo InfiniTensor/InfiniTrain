@@ -4,7 +4,7 @@
 
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
-#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
+#include "infini_train/include/nn/parallel/global.h"
 
 namespace infini_train::nn {
 class TransformerLayer : public CloneableModule<TransformerLayer> {
@@ -57,13 +57,15 @@ public:
     static constexpr char kLnFLayerName[] = "ln_f";
     static constexpr char kLMHeadLayerName[] = "lm_head";
 
-    explicit TransformerLastStage(const TransformerConfig &config);
+    TransformerLastStage(const TransformerConfig &config, bool has_final_norm, bool has_lm_head);
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
 private:
     const TransformerConfig config_;
+    bool has_final_norm_ = false;
+    bool has_lm_head_ = false;
 };
 
 class TransformerModel : public CloneableModule<TransformerModel> {
@@ -80,7 +82,7 @@ public:
 
 private:
     const TransformerConfig config_;
-    const infini_train::nn::parallel::StageInfo stage_info_;
+    int num_local_chunks_ = 0;
 };
 
 } // namespace infini_train::nn

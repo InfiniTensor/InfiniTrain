@@ -1,6 +1,8 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
 
 #include <memory>
+#include <stdexcept>
+#include <format>
 
 #include "glog/logging.h"
 
@@ -15,7 +17,24 @@ PipelineStage::PipelineStage(int stage_index /* pp_rank */, int num_stages /* pp
                              std::vector<std::shared_ptr<Module>> &&chunks)
     : stage_index_(stage_index), num_stages_(num_stages), prev_rank_(stage_index > 0 ? stage_index - 1 : -1),
       next_rank_(stage_index < num_stages - 1 ? stage_index + 1 : -1), recv_shape_(recv_shape), device_(device),
-      chunks_(std::move(chunks)) {}
+      chunks_(std::move(chunks)) {
+    if (num_stages_ <= 0) {
+        throw std::invalid_argument("PipelineStage num_stages must be positive");
+    }
+    if (stage_index_ < 0 || stage_index_ >= num_stages_) {
+        throw std::invalid_argument(std::format(
+            "PipelineStage stage_index={} is outside [0, {})", stage_index_, num_stages_));
+    }
+    if (chunks_.empty()) {
+        throw std::invalid_argument("PipelineStage requires at least one local chunk");
+    }
+    for (size_t local_chunk_idx = 0; local_chunk_idx < chunks_.size(); ++local_chunk_idx) {
+        if (chunks_[local_chunk_idx] == nullptr) {
+            throw std::invalid_argument(std::format(
+                "PipelineStage local chunk {} is null", local_chunk_idx));
+        }
+    }
+}
 
 std::vector<std::shared_ptr<Tensor>> PipelineStage::ForwardOneChunk(const std::vector<std::shared_ptr<Tensor>> &inputs,
                                                                     int local_chunk_idx) {
