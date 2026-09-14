@@ -64,7 +64,7 @@ PipelineLayout PipelineLayout::BuildDefault(
         Fail("num_stages * vpp_size exceeds supported integer range");
     }
 
-    // 总层数
+    // Total number of transformer layers.
     const int total_chunks = static_cast<int>(total_chunks_ll);
 
     const int per_chunk_layers = num_layers / total_chunks;
@@ -74,7 +74,7 @@ PipelineLayout PipelineLayout::BuildDefault(
     chunks.reserve(total_chunks);
     int layer_cursor = 0;
     for(int global_chunk_id = 0; global_chunk_id < total_chunks; ++global_chunk_id) {
-        // 把多余的 remainder_layers，分散到前面的chunks，每个chunk多分一个 layer
+        // Distribute remainder layers across the first chunks.
         int chunk_size = per_chunk_layers + (global_chunk_id < remainder_layers ? 1 : 0);
         if(chunk_size == 0) {
             continue;
@@ -128,7 +128,7 @@ PipelineLayout PipelineLayout::BuildContiguous(
           if (count == 0) {
               continue;
           }
-          int global_chunk_id = stage_id;  // vpp_size=1, 所以 global_chunk_id = stage_id
+          int global_chunk_id = stage_id;  // With vpp_size=1, the IDs equal stage IDs.
           chunks.push_back(ChunkLayout{
               .global_chunk_id = global_chunk_id,
               .stage_id = stage_id,
@@ -143,7 +143,7 @@ PipelineLayout PipelineLayout::BuildContiguous(
                             std::move(chunks), normalized_placement, policy);
 }
 
-// 默认把norm 和 lm_head 放到最后一层, embedding 放在第一层
+// By default, place norm and lm_head on the last stage and embedding on the first.
 SpecialModulePlacement PipelineLayout::BuildPlacement(
     SpecialModulePlacement placement,
     int num_stages
@@ -178,7 +178,7 @@ PipelineLayout::PipelineLayout(
 }
 
 void PipelineLayout::BuildIndexes() {
-    // 构建 layer_id -> stage_id 索引
+    // Build the layer_id -> stage_id index.
     layer_locations_.resize(num_layers_);
 
     for(const auto& c: chunks_) {
@@ -191,7 +191,7 @@ void PipelineLayout::BuildIndexes() {
         }
     }
 
-    // 计算 同 stage 内跨 chunk 的连续编号
+    // Compute contiguous local indices across chunks within each stage.
     std::vector<int> stage_counter(num_stages_, 0);
     for(int layer_id = 0; layer_id < num_layers_; ++layer_id) {
         auto& loc = layer_locations_[layer_id];
@@ -200,7 +200,7 @@ void PipelineLayout::BuildIndexes() {
         }
     }
 
-    // 构建 stages , 按照 stage_id 分组， 收集 global_chunk_ids
+    // Build stages grouped by stage_id and collect global_chunk_ids.
     stages_.clear();
     stages_.resize(num_stages_);
     for(int i=0; i<num_stages_; ++i) {
@@ -276,7 +276,7 @@ void PipelineLayout::BuildIndexes() {
   const PipelineLayoutPolicy& PipelineLayout::policy() const { return policy_; }
 
   void PipelineLayout::Validate() const {
-      // 1. 层范围完全覆盖 [0, num_layers_) 且不重复
+      // 1. Layer ranges must cover [0, num_layers_) exactly once.
       std::vector<bool> seen(num_layers_, false);
       for (const auto& c : chunks_) {
           if (c.layers.start < 0 || c.layers.end < c.layers.start || c.layers.end > num_layers_) {
@@ -296,7 +296,7 @@ void PipelineLayout::BuildIndexes() {
           }
       }
 
-      // 2. 所有 chunk/stage 索引合法
+      // 2. All chunk and stage indices must be valid.
       for (const auto& c : chunks_) {
           if (c.stage_id < 0 || c.stage_id >= num_stages_) {
               Fail(std::format("chunk {} stage_id={} out of range [0, {})",
@@ -318,7 +318,7 @@ void PipelineLayout::BuildIndexes() {
           }
       }
 
-      // 3. 特殊模块 stage 合法
+      // 3. Special-module stages must be valid.
       CheckStageId(placement_.embedding_stage, num_stages_, "embedding_stage");
       CheckStageId(placement_.final_norm_stage, num_stages_, "final_norm_stage");
       CheckStageId(placement_.lm_head_stage, num_stages_, "lm_head_stage");
@@ -338,7 +338,7 @@ void PipelineLayout::BuildIndexes() {
           }
       }
 
-      // 4. 默认策略：stage 不能为空
+      // 4. The default policy disallows empty stages.
       if (!policy_.allow_empty_stages) {
           std::vector<bool> stage_has_layers(num_stages_, false);
           for (const auto& c : chunks_) {
@@ -354,9 +354,9 @@ void PipelineLayout::BuildIndexes() {
           }
       }
 
-      // 5. 默认策略：层执行顺序连续（不允许 stage 之间穿插交错）
+      // 5. The default policy requires contiguous execution order.
       if (policy_.require_contiguous_execution) {
-          // 按 layers.start 排序，检查相邻 chunk 的层范围是否连续
+          // Sort by layers.start and verify adjacent ranges are contiguous.
           auto sorted = chunks_;
           std::sort(sorted.begin(), sorted.end(),
                     [](const ChunkLayout& a, const ChunkLayout& b) {
@@ -374,8 +374,8 @@ void PipelineLayout::BuildIndexes() {
 
 void PipelineLayout::ValidateForCurrentPipelineTransport() const {
       Validate();
-      // 当前 send/recv 假设相邻 stage 按 0..num_stages-1 连接
-      // 因此要求每个 stage 至少有一个可执行 chunk
+      // Send/recv currently connects adjacent stages in 0..num_stages-1 order,
+      // so every stage must have at least one executable chunk.
       for (int i = 0; i < num_stages_; ++i) {
           if (stages_[i].global_chunk_ids.empty()) {
               Fail(std::format(
@@ -406,7 +406,7 @@ void PipelineLayout::ValidateForCurrentPipelineTransport() const {
               const auto& c = chunk(gid);
               out << std::format(" [layers {}-{}]", c.layers.start, c.layers.end - 1);
           }
-          // 标注特殊模块
+          // Record special-module ownership.
           std::vector<std::string> specials;
           if (owns(SpecialModule::kEmbedding, sid)) specials.push_back("embedding");
           if (owns(SpecialModule::kFinalNorm, sid)) specials.push_back("final_norm");
@@ -442,7 +442,7 @@ std::vector<int> PipelineLayout::ParseLayerPartition(const std::string &value) {
 
         const std::string_view token(value.data() + begin, end - begin);
 
-        // 只允许非负整数字符，不允许空格、负号、字母等。
+      // Only non-negative integer tokens are accepted; whitespace, signs and letters are rejected.
         for (const char c : token) {
             if (c < '0' || c > '9') {
                 Fail(std::format("pipeline_layer_partition contains invalid character '{}'", c));

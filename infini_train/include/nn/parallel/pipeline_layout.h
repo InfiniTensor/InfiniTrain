@@ -11,7 +11,7 @@ public:
     explicit PipelineLayoutError(const std::string& msg);
 };
 
-// 把三个最特殊的层专门表示出来
+// Represent the three special modules explicitly.
 enum class SpecialModule {
     kEmbedding,
     kFinalNorm,
@@ -33,9 +33,9 @@ struct SpecialModulePlacement {
 };
 
 struct ChunkLayout {
-    int global_chunk_id = -1; // 全局chunk_id
+    int global_chunk_id = -1; // Global chunk identifier.
     int stage_id = -1;
-    int local_chunk_id = -1; // vpp内一个stage有多个chunk
+    int local_chunk_id = -1; // Local chunk index within a stage.
     LayerRange layers;
 };
 
@@ -53,7 +53,7 @@ struct LayerLocation {
 };
 
 
-// 不知道有什么用
+// Optional validation policies for layout construction.
 struct PipelineLayoutPolicy {
     bool allow_empty_stages = false;
     bool require_contiguous_execution = true;
@@ -64,7 +64,7 @@ class PipelineLayout {
 public:
     PipelineLayout();
 
-    // 根据 total_chunks = nums_stages * vpp_size 分配
+    // Build the default layout with total_chunks = num_stages * vpp_size.
     static PipelineLayout BuildDefault(
         int num_layers,
         int num_stages,
@@ -73,7 +73,7 @@ public:
         PipelineLayoutPolicy policy = {}
     );
 
-    // 用户自定义分配
+    // Build a user-defined contiguous layout.
     static PipelineLayout BuildContiguous(
         const std::vector<int>& stage_layer_counts,
         SpecialModulePlacement placement = {},
