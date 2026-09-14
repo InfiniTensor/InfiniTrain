@@ -1,5 +1,0 @@
-if(EXISTS "/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/tensor/test_tensor_cpu_only[1]_tests.cmake")
-  include("/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/tensor/test_tensor_cpu_only[1]_tests.cmake")
-else()
-  add_test(test_tensor_cpu_only_NOT_BUILT test_tensor_cpu_only_NOT_BUILT)
-endif()

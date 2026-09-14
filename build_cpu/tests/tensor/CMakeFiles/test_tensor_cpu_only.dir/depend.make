@@ -1,2 +1,0 @@
-# Empty dependencies file for test_tensor_cpu_only.
-# This may be replaced when dependencies are built.

@@ -1,5 +1,0 @@
-if(EXISTS "/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/distributed/test_rank[1]_tests.cmake")
-  include("/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/distributed/test_rank[1]_tests.cmake")
-else()
-  add_test(test_rank_NOT_BUILT test_rank_NOT_BUILT)
-endif()

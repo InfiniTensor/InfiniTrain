@@ -1,5 +1,0 @@
-if(EXISTS "/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/dtype/test_dtype_cpu[1]_tests.cmake")
-  include("/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/dtype/test_dtype_cpu[1]_tests.cmake")
-else()
-  add_test(test_dtype_cpu_NOT_BUILT test_dtype_cpu_NOT_BUILT)
-endif()

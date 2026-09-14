@@ -1,5 +1,0 @@
-if(EXISTS "/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/lora/test_lora_cpu[1]_tests.cmake")
-  include("/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/tests/lora/test_lora_cpu[1]_tests.cmake")
-else()
-  add_test(test_lora_cpu_NOT_BUILT test_lora_cpu_NOT_BUILT)
-endif()

@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/infini_run.dir/infini_run.cc.o -o ../../infini_run  -Wl,-rpath,/home/fabu/桌面/planning_tmp/InfiniTrain/build_cpu/third_party/glog ../../third_party/gflags/libgflags_nothreads.a ../../third_party/glog/libglog.so.0.7.1 
