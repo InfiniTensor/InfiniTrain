@@ -3,7 +3,9 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "infini_train/include/optimizer.h"
@@ -30,6 +32,10 @@ public:
                          size_t ddp_rank);
 
     void Step() override;
+
+    std::shared_ptr<Tensor> ClipGradNorm_(
+        const std::vector<std::shared_ptr<Tensor>> &parameters, float max_norm, float norm_type = 2.0f,
+        bool error_if_nonfinite = false, std::optional<bool> foreach = std::nullopt) override;
 
     void ZeroGrad(bool set_to_none = true) override;
 
@@ -63,6 +69,9 @@ private:
 
     // Base optimizer (SGD, Adam and etc.)
     std::shared_ptr<Optimizer> base_optimizer_;
+    std::vector<std::shared_ptr<Tensor>> shard_params_;
+    std::vector<std::shared_ptr<Tensor>> shard_param_owners_;
+    std::unordered_set<const Tensor *> tp_replicated_param_owners_;
 };
 
 } // namespace infini_train::nn::parallel

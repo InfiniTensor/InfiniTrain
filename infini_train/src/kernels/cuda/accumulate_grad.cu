@@ -12,6 +12,31 @@
 namespace infini_train::kernels::cuda {
 
 template <typename T>
+__global__ void ScaleInplaceKernel(T *data, float scale, size_t num_elements) {
+    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < num_elements) {
+        data[idx] = common::cuda::Mul(data[idx], common::cuda::Cast<T>(scale));
+    }
+}
+
+void ScaleInplace(const std::shared_ptr<Tensor> &tensor, float scale) {
+    const size_t num_elements = tensor->NumElements();
+    const int threads_per_block = 256;
+    const int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
+    auto device = tensor->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
+        tensor->Dtype(),
+        [=]<typename T>() {
+            ScaleInplaceKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
+                static_cast<T *>(tensor->DataPtr()), scale, num_elements);
+        },
+        "CUDA ScaleInplace");
+}
+
+template <typename T>
 __global__ void AccumulateGradKernel(const T *grad_ptr, float rate, T *tensor_ptr, size_t num_elements) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < num_elements) {
@@ -90,6 +115,7 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
     REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(AccumulateGrad)
+REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(ScaleInplace)
 REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(AdamAccumulateGrad)
 
 #undef REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL

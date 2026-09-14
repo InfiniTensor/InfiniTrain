@@ -5,6 +5,34 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::kernels::cpu {
+
+template <typename T>
+void ScaleInplaceTyped(const std::shared_ptr<Tensor> &tensor, float scale) {
+    auto *data = static_cast<T *>(tensor->DataPtr());
+#pragma omp parallel for
+    for (size_t i = 0; i < tensor->NumElements(); ++i) {
+        data[i] = T(static_cast<float>(data[i]) * scale);
+    }
+}
+
+void ScaleInplace(const std::shared_ptr<Tensor> &tensor, float scale) {
+    switch (tensor->Dtype()) {
+    case DataType::kFLOAT16:
+        ScaleInplaceTyped<FP16>(tensor, scale);
+        return;
+    case DataType::kBFLOAT16:
+        ScaleInplaceTyped<BF16>(tensor, scale);
+        return;
+    case DataType::kFLOAT32:
+        ScaleInplaceTyped<float>(tensor, scale);
+        return;
+    case DataType::kFLOAT64:
+        ScaleInplaceTyped<double>(tensor, scale);
+        return;
+    default:
+        LOG(FATAL) << "ScaleInplace only supports floating point gradients.";
+    }
+}
 void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const std::shared_ptr<Tensor> &tensor) {
     for (int64_t idx = 0; idx < gradient->NumElements(); ++idx) {
         static_cast<float *>(tensor->DataPtr())[idx] += rate * static_cast<const float *>(gradient->DataPtr())[idx];
@@ -40,6 +68,7 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
     REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(AccumulateGrad)
+REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(ScaleInplace)
 REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(AdamAccumulateGrad)
 
 #undef REGISTER_CPU_ACCUMULATE_GRAD_KERNEL

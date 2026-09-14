@@ -1,11 +1,18 @@
 #include "infini_train/include/optimizer.h"
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
+#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
@@ -27,6 +34,137 @@ Optimizer::Optimizer(const NamedParameterList &named_params, float learning_rate
 
 void Optimizer::ZeroGrad(bool set_to_none) {
     for (auto param : params_) { param->ZeroGrad(set_to_none); }
+}
+
+namespace {
+struct GradientNormStats {
+    double sum = 0.0;
+    double max_abs = 0.0;
+    bool has_gradient = false;
+    bool finite = true;
+};
+
+GradientNormStats ComputeGradientNormStats(const std::vector<std::shared_ptr<Tensor>> &parameters, float norm_type) {
+    GradientNormStats stats;
+    std::unordered_set<const Tensor *> seen;
+    for (const auto &parameter : parameters) {
+        if (!parameter || !seen.insert(parameter.get()).second || !parameter->grad()) {
+            continue;
+        }
+        stats.has_gradient = true;
+        const auto &gradient = parameter->grad();
+        Tensor host = gradient->GetDevice().IsCPU() ? Tensor(*gradient, 0, gradient->Dims()) : gradient->To(Device());
+        if (gradient->GetDevice().IsCUDA()) {
+            core::GetDeviceGuardImpl(gradient->GetDevice().type())->SynchronizeDevice(gradient->GetDevice());
+        }
+        Tensor fp32 = host.Dtype() == DataType::kFLOAT32 ? host : host.To(DataType::kFLOAT32);
+        const float *data = static_cast<const float *>(fp32.DataPtr());
+        for (size_t i = 0; i < fp32.NumElements(); ++i) {
+            const double value = static_cast<double>(data[i]);
+            const double abs_value = std::abs(value);
+            if (!std::isfinite(value)) {
+                stats.finite = false;
+                if (std::isinf(norm_type)) {
+                    stats.max_abs = std::numeric_limits<double>::quiet_NaN();
+                }
+            }
+            if (std::isinf(norm_type)) {
+                stats.max_abs = std::max(stats.max_abs, abs_value);
+            } else {
+                stats.sum += std::pow(abs_value, static_cast<double>(norm_type));
+            }
+        }
+    }
+    return stats;
+}
+
+std::shared_ptr<Tensor> MakeScalar(float value) {
+    auto result = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kFLOAT32, Device());
+    *static_cast<float *>(result->DataPtr()) = value;
+    return result;
+}
+
+void ScaleGradientInplace(const std::shared_ptr<Tensor> &gradient, float scale) {
+    if (!gradient || scale == 1.0f) {
+        return;
+    }
+    auto device = gradient->GetDevice();
+    core::DeviceGuard guard(device);
+    auto kernel = Dispatcher::Instance().GetKernel({device.type(), "ScaleInplace"});
+    kernel.Call<void>(gradient, scale);
+}
+} // namespace
+
+void Optimizer::SetClipGradNormConfig(float max_norm, float norm_type, bool error_if_nonfinite,
+                                       std::optional<bool> foreach) {
+    clip_grad_norm_config_ = ClipGradNormConfig{max_norm, norm_type, error_if_nonfinite, foreach};
+}
+
+std::shared_ptr<Tensor> Optimizer::ClipGradNormConfigured() {
+    if (!clip_grad_norm_config_) {
+        return nullptr;
+    }
+    const auto &config = *clip_grad_norm_config_;
+    return ClipGradNorm_(params_, config.max_norm, config.norm_type, config.error_if_nonfinite, config.foreach);
+}
+
+void Optimizer::ScaleGradients_(const std::vector<std::shared_ptr<Tensor>> &parameters, float scale) {
+    std::unordered_set<const Tensor *> seen;
+    for (const auto &parameter : parameters) {
+        if (!parameter || !seen.insert(parameter.get()).second || !parameter->grad()) {
+            continue;
+        }
+        ScaleGradientInplace(parameter->grad(), scale);
+    }
+}
+
+std::shared_ptr<Tensor> Optimizer::ClipGradNorm_(const std::vector<std::shared_ptr<Tensor>> &parameters,
+                                                 float max_norm, float norm_type, bool error_if_nonfinite,
+                                                 std::optional<bool> foreach) {
+    CHECK_GE(max_norm, 0.0f) << "max_norm must be non-negative.";
+    CHECK((norm_type > 0.0f && std::isfinite(norm_type)) || norm_type == std::numeric_limits<float>::infinity())
+        << "norm_type must be positive finite or +inf.";
+    if (foreach.value_or(false)) {
+        LOG(FATAL) << "ClipGradNorm_: foreach=true is not implemented.";
+    }
+
+    const auto stats = ComputeGradientNormStats(parameters, norm_type);
+    double total_norm = 0.0;
+    if (stats.has_gradient) {
+        total_norm = std::isinf(norm_type) ? stats.max_abs : std::pow(stats.sum, 1.0 / norm_type);
+    }
+
+    // Pipeline stages own disjoint parameter sets.  Reduce their statistics so
+    // every stage uses one global clipping coefficient.
+    if (stats.has_gradient && infini_train::nn::parallel::global::GetPipelineParallelSize() > 1) {
+        const auto device = [&]() {
+            for (const auto &parameter : parameters) {
+                if (parameter && parameter->grad()) return parameter->grad()->GetDevice();
+            }
+            return Device();
+        }();
+        auto reduced = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kFLOAT32, device);
+        reduced->Fill(static_cast<float>(std::isinf(norm_type) ? stats.max_abs : stats.sum));
+        const auto *group = nn::parallel::ProcessGroupFactory::Instance(device.type())->Get(
+            nn::parallel::GetPipelineParallelProcessGroupName(device.Rank().GlobalRank()));
+        CHECK(group) << "Pipeline process group is not initialized.";
+        group->AllReduce(reduced, std::isinf(norm_type) ? nn::parallel::function::ReduceOpType::kMax
+                                                        : nn::parallel::function::ReduceOpType::kSum, false);
+        Tensor reduced_cpu = reduced->GetDevice().IsCPU() ? Tensor(*reduced, 0, reduced->Dims()) : reduced->To(Device());
+        const float value = *static_cast<const float *>(reduced_cpu.DataPtr());
+        total_norm = std::isinf(norm_type) ? value : std::pow(static_cast<double>(value), 1.0 / norm_type);
+    }
+    if (error_if_nonfinite && (!std::isfinite(total_norm))) {
+        LOG(FATAL) << "The total gradient norm is non-finite.";
+    }
+
+    const double coefficient = std::isinf(max_norm)
+                                   ? 1.0
+                                   : std::min(static_cast<double>(max_norm) / (total_norm + 1e-6), 1.0);
+    if (stats.has_gradient) {
+        ScaleGradients_(parameters, static_cast<float>(coefficient));
+    }
+    return MakeScalar(static_cast<float>(total_norm));
 }
 
 void Optimizer::set_learning_rate(float lr) { learning_rate_ = lr; }
