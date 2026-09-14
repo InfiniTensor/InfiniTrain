@@ -63,6 +63,10 @@ DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
 DEFINE_double(learning_rate, 1e-5, "Peak learning rate.");
 DEFINE_int32(zero_stage, 0, "ZeRO stage (0/1/2/3); 0 disables DistributedOptimizer");
+DEFINE_double(clip_grad_norm, -1.0, "Maximum gradient norm; negative disables clipping.");
+DEFINE_double(grad_norm_type, 2.0, "Gradient norm type (positive finite p or inf).");
+DEFINE_bool(clip_grad_error_if_nonfinite, true, "Fail if the pre-clipping gradient norm is NaN or Inf.");
+DEFINE_string(clip_grad_foreach, "auto", "Gradient clipping path: auto|true|false.");
 // lr scheduler
 DEFINE_double(min_lr, 0.0, "Minimum learning rate.");
 DEFINE_string(lr_decay_style, "constant", "LR decay style: none|constant|linear|cosine|inverse-square-root");
@@ -334,6 +338,16 @@ void Train(const nn::parallel::Rank &rank) {
         optimizer = optimizer_creator(named_parameters);
     }
 
+    if (FLAGS_clip_grad_norm >= 0.0) {
+        std::optional<bool> foreach = std::nullopt;
+        if (FLAGS_clip_grad_foreach == "true") foreach = true;
+        else if (FLAGS_clip_grad_foreach == "false") foreach = false;
+        else CHECK_EQ(FLAGS_clip_grad_foreach, "auto");
+        optimizer->SetClipGradNormConfig(static_cast<float>(FLAGS_clip_grad_norm),
+                                         static_cast<float>(FLAGS_grad_norm_type),
+                                         FLAGS_clip_grad_error_if_nonfinite, foreach);
+    }
+
     const int64_t lr_decay_iters = FLAGS_lr_decay_iters > 0 ? FLAGS_lr_decay_iters : FLAGS_num_iteration;
     TrainingLRSchedulerConfig sched_config;
     sched_config.lr = static_cast<float>(FLAGS_learning_rate);
@@ -489,6 +503,7 @@ void Train(const nn::parallel::Rank &rank) {
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
             }
 
+            optimizer->ClipGradNormConfigured();
             optimizer->Step();
             if (scheduler) {
                 scheduler->Step();
