@@ -159,7 +159,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
 
     // RowParallel (proj)
     const int64_t in_pp = static_cast<int64_t>(n_embd) / tp_size;
-    // nn::MLP: c_fc/c_fc2（shard along row），c_proj（shard along col）
+    // nn::MLP: packed c_fc [gate | up] (shard each block along row), c_proj (shard along col)
     const int64_t fc_out = ffn_hidden;
     const int64_t fc_pp = fc_out / tp_size;
     const int64_t in_fc_pp = ffn_hidden / tp_size;
@@ -269,7 +269,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         }
     }
 
-    // transformer.h.{i}.mlp.c_fc.weight : ColumnParallelLinear, but actually applies on "rows"
+    // transformer.h.{i}.mlp.c_fc.weight (up) -> local packed c_fc rows [fc_pp : 2*fc_pp)
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
@@ -288,7 +288,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         }
     }
 
-    // transformer.h.{i}.mlp.c_fc2.weight : ColumnParallelLinear, but actually applies on "rows"
+    // transformer.h.{i}.mlp.c_fc2.weight (gate) -> local packed c_fc rows [0 : fc_pp)
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
