@@ -57,12 +57,37 @@ Module::NamedParameters(const std::string &prefix, bool recurse, bool remove_dup
 
     if (recurse) {
         named_modules = const_cast<Module *>(this)->NamedModules(
-            /*memory=*/nullptr, prefix, remove_duplicate);
+            // Do not let an internal pipeline alias mark the shared module as
+            // visited before its canonical model-tree path is reached.  The
+            // parameter-level `remove_duplicate` policy is applied below.
+            /*memory=*/nullptr, prefix, /*remove_duplicate=*/false);
     } else {
         named_modules.emplace_back(prefix, std::const_pointer_cast<Module>(shared_from_this()));
     }
 
     for (const auto &[module_prefix, module] : named_modules) {
+        // Pipeline execution wrappers are registered under reserved `__pp_*`
+        // names.  They alias the canonical model tree and must not leak into
+        // optimizer/checkpoint parameter names (StateDict applies the same
+        // rule).  Skip the wrapper and all of its descendants so the
+        // `transformer.*` path remains authoritative.
+        bool is_pipeline_internal = false;
+        size_t segment_start = 0;
+        while (segment_start < module_prefix.size()) {
+            const auto separator = module_prefix.find('.', segment_start);
+            if (module_prefix.compare(segment_start, 4, "__pp") == 0) {
+                is_pipeline_internal = true;
+                break;
+            }
+            if (separator == std::string::npos) {
+                break;
+            }
+            segment_start = separator + 1;
+        }
+        if (is_pipeline_internal) {
+            continue;
+        }
+
         std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> local_parameters;
         local_parameters.reserve(module->parameters_.size());
 

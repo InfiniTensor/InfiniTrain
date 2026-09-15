@@ -18,6 +18,7 @@
 #include "infini_train/include/nn/modules/transformer/moe/moe_layer.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
@@ -173,42 +174,52 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
     return {x1};
 }
 
-TransformerLastStage::TransformerLastStage(const TransformerConfig &config) : CloneableModule(kType), config_(config) {
-    switch (config.norm_type) {
-    case NormType::kLayerNorm:
-        modules_[kLnFLayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd});
-        break;
-    case NormType::kRMSNorm:
-        modules_[kLnFLayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
-        break;
-    default:
-        LOG(FATAL) << "Unsupported norm type";
+TransformerLastStage::TransformerLastStage(const TransformerConfig &config, bool has_final_norm, bool has_lm_head)
+    : CloneableModule(kType), config_(config), has_final_norm_(has_final_norm), has_lm_head_(has_lm_head) {
+
+    if (has_final_norm) {
+        switch (config.norm_type) {
+        case NormType::kLayerNorm:
+            modules_[kLnFLayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd});
+            break;
+        case NormType::kRMSNorm:
+            modules_[kLnFLayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
+            break;
+        default:
+            LOG(FATAL) << "Unsupported norm type";
+        }
     }
+
     // NOTE(zbl): weight-tying is possible but torch script did not do so
-    modules_[kLMHeadLayerName] = std::make_shared<parallel::ColumnParallelLinear>(
-        /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
-        /*bias=*/config_.add_bias_lm_head,
-        // NOTE(zbl): each rank would get sharded [B, T, V_local] as logits
-        /*gather_output=*/false,
-        /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false,
-        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+    if (has_lm_head) {
+        modules_[kLMHeadLayerName] = std::make_shared<parallel::ColumnParallelLinear>(
+            /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
+            /*bias=*/config_.add_bias_lm_head,
+            // NOTE(zbl): each rank would get sharded [B, T, V_local] as logits
+            /*gather_output=*/false,
+            /*input_is_parallel=*/false,
+            /*skip_bias_add=*/false,
+            /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+    }
 }
 
 std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     // (B, T, C) -> Layernorm -> (B, T, C)
-    auto x1 = (*modules_[kLnFLayerName])(x);
-
-    // TODO(dcj): add inference-time mini-optimization
-    // (B, T, C) -> Linear(C, V) -> (B, T, V)
-    return (*modules_[kLMHeadLayerName])(x1);
+    auto x1 = x[0];
+    if (has_final_norm_) {
+        x1 = (*modules_[kLnFLayerName])({x1})[0];
+    }
+    if (has_lm_head_) {
+        return (*modules_[kLMHeadLayerName])({x1});
+    }
+    return {x1};
 }
 
 TransformerModel::TransformerModel(const TransformerConfig config)
-    : CloneableModule(kType), config_(config),
-      stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
-          config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
-          nn::parallel::global::GetVirtualPipelineParallelSize())) {
+    : CloneableModule(kType), config_(config), num_local_chunks_(0) {
+    const auto &layout = nn::parallel::global::GetPipelineLayout();
+    const int stage_id = nn::parallel::pp_rank;
+    const auto &stage = layout.stage(stage_id);
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
 
     // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
@@ -217,7 +228,7 @@ TransformerModel::TransformerModel(const TransformerConfig config)
     CHECK_EQ(config.vocab_size % tp_world_size, 0) << "Vocab size should be divisible by TP world size";
 
     std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
-    if (stage_info_.is_first_stage) {
+    if (layout.owns(nn::parallel::SpecialModule::kEmbedding, stage_id)) {
         modules_[kPPFirstStageName] = std::make_shared<TransformerFirstStage>(config_);
         transformer[TransformerFirstStage::kWTELayerName]
             = modules_[kPPFirstStageName]->mutable_module(TransformerFirstStage::kWTELayerName);
@@ -228,32 +239,40 @@ TransformerModel::TransformerModel(const TransformerConfig config)
     }
 
     {
-        std::map<int, std::pair<int, std::shared_ptr<TransformerChunk>>> start_layer_to_layer_size_and_chunk;
-        for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
-            const auto [start_layer, end_layer] = stage_info_.layer_ranges_per_chunk[chunk_idx];
-            auto chunk = std::make_shared<TransformerChunk>(config_, start_layer, end_layer);
-            start_layer_to_layer_size_and_chunk[start_layer] = std::make_pair(end_layer - start_layer, chunk);
-        }
         std::vector<std::shared_ptr<nn::Module>> h;
-        int chunk_idx = 0;
-        for (auto &[start_layer, layer_size_and_chunk] : start_layer_to_layer_size_and_chunk) {
-            auto [layer_size, chunk] = layer_size_and_chunk;
-            for (int idx = 0; idx < layer_size; ++idx) {
-                h.push_back(chunk->mutable_module(TransformerChunk::kHLayerName)->mutable_module(std::to_string(idx)));
+        int local_chunk_idx = 0;
+        for (int gid : stage.global_chunk_ids) {
+            const auto &c = layout.chunk(gid);
+            auto chunk = std::make_shared<TransformerChunk>(config_, c.layers.start, c.layers.end);
+            const int layer_count = c.layers.size();
+            for (int i = 0; i < layer_count; ++i) {
+                h.push_back(chunk->mutable_module(TransformerChunk::kHLayerName)->mutable_module(std::to_string(i)));
             }
-            modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)] = std::move(chunk);
-            ++chunk_idx;
+            modules_[kPPChunkNamePrefix + std::to_string(local_chunk_idx)] = std::move(chunk);
+            ++local_chunk_idx;
         }
+        num_local_chunks_ = local_chunk_idx;
         transformer[TransformerChunk::kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
     }
 
-    if (stage_info_.is_last_stage) {
-        modules_[kPPLastStageName] = std::make_shared<TransformerLastStage>(config_);
-        transformer[TransformerLastStage::kLnFLayerName]
-            = modules_[kPPLastStageName]->mutable_module(TransformerLastStage::kLnFLayerName);
-        modules_[TransformerLastStage::kLMHeadLayerName]
-            = modules_[kPPLastStageName]->mutable_module(TransformerLastStage::kLMHeadLayerName);
+    const bool has_final_norm = layout.owns(nn::parallel::SpecialModule::kFinalNorm, stage_id);
+    const bool has_lm_head = layout.owns(nn::parallel::SpecialModule::kLMHead, stage_id);
+    if (has_final_norm || has_lm_head) {
+        modules_[kPPLastStageName] = std::make_shared<TransformerLastStage>(config_, has_final_norm, has_lm_head);
+        if (has_final_norm) {
+            transformer[TransformerLastStage::kLnFLayerName]
+                = modules_[kPPLastStageName]->mutable_module(TransformerLastStage::kLnFLayerName);
+        }
+        if (has_lm_head) {
+            // Keep the canonical checkpoint path under `transformer`, while the
+            // pipeline wrapper owns the same module for execution.  Registering
+            // a second top-level alias would make StateDict emit `lm_head.*`
+            // instead of the compatible `transformer.lm_head.*` key.
+            transformer[TransformerLastStage::kLMHeadLayerName]
+                = modules_[kPPLastStageName]->mutable_module(TransformerLastStage::kLMHeadLayerName);
+        }
     }
+
     modules_[kTransformerModelName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
 
     // FIXME(jym): Assigning the parameter values of wte to LMHead, which is not real tying operation
@@ -267,19 +286,25 @@ TransformerModel::TransformerModel(const TransformerConfig config)
         *mutable_module(kTransformerModelName)
              ->mutable_module(TransformerFirstStage::kWTELayerName)
              ->mutable_parameter(nn::parallel::VocabParallelEmbedding::kParamWeightName)
-            = module(TransformerLastStage::kLMHeadLayerName)
-                  .parameter(nn::parallel::ColumnParallelLinear::kParamWeightName);
+            = mutable_module(kTransformerModelName)
+                  ->mutable_module(TransformerLastStage::kLMHeadLayerName)
+                  ->parameter(nn::parallel::ColumnParallelLinear::kParamWeightName);
     }
 }
 
 std::vector<std::shared_ptr<Tensor>> TransformerModel::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    auto x1 = (*modules_[kPPFirstStageName])(x);
-    for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
-        x1 = (*modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)])(x1);
+    auto x1 = x[0];
+    if (modules_.contains(kPPFirstStageName)) {
+        x1 = (*modules_[kPPFirstStageName])(x)[0];
+    }
+    for (int chunk_idx = 0; chunk_idx < num_local_chunks_; ++chunk_idx) {
+        x1 = (*modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)])({x1})[0];
     }
 
-    auto res = (*modules_[kPPLastStageName])(x1);
-    return res;
+    if (modules_.contains(kPPLastStageName)) {
+        return (*modules_[kPPLastStageName])({x1});
+    }
+    return {x1};
 }
 
 } // namespace infini_train::nn

@@ -7,9 +7,6 @@ namespace infini_train::nn {
 bool TransformerConfig::UseGQA() const { return n_kv_head < n_head; }
 
 int TransformerConfig::GetChunkSize() const {
-    auto stage_info = parallel::PipelineParallel::GetStageInfo(n_layer, parallel::global::GetPipelineParallelSize(),
-                                                               parallel::pp_rank,
-                                                               parallel::global::GetVirtualPipelineParallelSize());
-    return stage_info.layer_ranges_per_chunk.size();
+    return parallel::global::GetPipelineLayout().stage(parallel::pp_rank).global_chunk_ids.size();
 }
 } // namespace infini_train::nn

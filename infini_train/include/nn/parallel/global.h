@@ -1,5 +1,7 @@
 #pragma once
 
+#include "infini_train/include/nn/parallel/pipeline_layout.h"
+
 #include <mutex>
 #include <string>
 #include <vector>
@@ -57,6 +59,14 @@ public:
 
     Layout layout() const;
 
+    const PipelineLayout &pipeline_layout() const;
+
+    void set_pipeline_layout(const PipelineLayout &layout);
+
+    int pp_rank() const;
+
+    void set_pp_rank(int rank);
+
 private:
     GlobalEnv() = default;
     ~GlobalEnv() = default;
@@ -85,6 +95,9 @@ private:
     bool initialized_ = false;
 
     Layout layout_;
+    PipelineLayout pipeline_layout_;
+
+    int pp_rank_ = 0;
 };
 
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
@@ -106,6 +119,13 @@ inline bool GetSequenceParallelEnabled() { return GlobalEnv::Instance().sequence
 inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
 inline int GetPipelineParallelSize() { return GlobalEnv::Instance().pipeline_parallel_size(); }
 inline int GetVirtualPipelineParallelSize() { return GlobalEnv::Instance().virtual_pipeline_parallel_size(); }
+inline const PipelineLayout &GetPipelineLayout() { return GlobalEnv::Instance().pipeline_layout(); }
+inline void InstallPipelineLayout(const PipelineLayout &layout) {
+    layout.Validate();
+    layout.ValidateForCurrentPipelineTransport();
+    GlobalEnv::Instance().set_pipeline_layout(layout);
+}
+inline int GetPPRank() { return GlobalEnv::Instance().pp_rank(); }
 
 // =========================
 // Layout Helper Functions

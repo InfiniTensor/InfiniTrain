@@ -1,27 +1,45 @@
 // pipeline_schedule.cc
 #include "infini_train/include/nn/parallel/pp/pipeline_schedule.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstddef>
+#include <cstdlib>
+#include <format>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pipeline_layout.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
 #include "infini_train/include/nn/parallel/pp/send_recv.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
+namespace {
+bool StageTimingEnabled() {
+    const char *value = std::getenv("INFINI_PIPELINE_STAGE_TIMING");
+    return value != nullptr && std::string(value) == "1";
+}
+
+void SynchronizeStageStream(const Device &device) {
+    auto *impl = core::GetDeviceGuardImpl(device.type());
+    impl->SynchronizeStream(impl->GetStream(device));
+}
+} // namespace
 
 void PrintScheduleTable(const std::vector<PipelineParallelScheduler::Task> &schedule, int n, int num_stages,
-                        int vpp_size) {
+                        int vpp_size, const PipelineLayout &layout) {
     int total_global_chunks = num_stages * vpp_size;
 
     LOG(INFO) << std::format("=== Schedule Table ===\n"
@@ -32,8 +50,9 @@ void PrintScheduleTable(const std::vector<PipelineParallelScheduler::Task> &sche
     LOG(INFO) << "-----|-----------|------------|--------------|-------------|-------";
 
     for (const auto &task : schedule) {
-        int owning_stage = task.global_chunk_id % num_stages;
-        int local_chunk = task.global_chunk_id / num_stages;
+        const auto &chunk = layout.chunk(task.global_chunk_id);
+        int owning_stage = chunk.stage_id;
+        int local_chunk = chunk.local_chunk_id;
 
         std::string type_str = task.is_forward ? "Forward" : "Backward";
 
@@ -69,22 +88,33 @@ std::vector<std::shared_ptr<Tensor>> PipelineSchedule::SendToNext(const std::vec
 }
 
 PipelineParallelScheduler::Task PipelineParallelScheduler::CreateTask(int step, int mb, int global_chunk,
-                                                                      int num_stages, int total_chunks,
-                                                                      bool is_forward) {
+                                                                      int num_stages, int total_chunks, bool is_forward,
+                                                                      const PipelineLayout &layout) {
+    if (num_stages != layout.num_stages()) {
+        throw PipelineLayoutError(std::format("scheduler stage count mismatch: num_stages={}, layout.num_stages={}",
+                                              num_stages, layout.num_stages()));
+    }
+    const auto &chunk = layout.chunk(global_chunk);
+
     PipelineParallelScheduler::Task task;
     task.step = step;
     task.microbatch_id = mb;
     task.global_chunk_id = global_chunk;
-    task.local_chunk_idx = global_chunk / num_stages;
+    task.local_chunk_idx = chunk.local_chunk_id;
     task.is_forward = is_forward;
-    task.stage_id = global_chunk % num_stages;
+    task.stage_id = chunk.stage_id;
     task.is_last_chunk = (global_chunk == total_chunks - 1);
     task.is_first_chunk = (global_chunk == 0);
     return task;
 }
 
-std::vector<PipelineParallelScheduler::Task> PipelineParallelScheduler::GenerateGPipeSchedule(int n, int num_stages,
-                                                                                              int vpp_size) {
+std::vector<PipelineParallelScheduler::Task>
+PipelineParallelScheduler::GenerateGPipeSchedule(int n, int num_stages, int vpp_size, const PipelineLayout &layout) {
+    if (layout.num_stages() != num_stages || layout.vpp_size() != vpp_size) {
+        throw PipelineLayoutError(
+            std::format("scheduler topology mismatch: requested stages={}, vpp={}, layout stages={}, vpp={}",
+                        num_stages, vpp_size, layout.num_stages(), layout.vpp_size()));
+    }
     std::vector<Task> schedule;
     int total_global_chunks = num_stages * vpp_size;
     int total_steps = n + total_global_chunks - 1;
@@ -95,7 +125,7 @@ std::vector<PipelineParallelScheduler::Task> PipelineParallelScheduler::Generate
             int global_chunk_id = step - mb;
             if (global_chunk_id >= 0 && global_chunk_id < total_global_chunks) {
                 auto is_forward = true;
-                auto task = CreateTask(step, mb, global_chunk_id, num_stages, total_global_chunks, is_forward);
+                auto task = CreateTask(step, mb, global_chunk_id, num_stages, total_global_chunks, is_forward, layout);
                 schedule.push_back(task);
             }
         }
@@ -107,8 +137,8 @@ std::vector<PipelineParallelScheduler::Task> PipelineParallelScheduler::Generate
             int global_chunk_id = (total_steps - 1 - step) - mb;
             if (global_chunk_id >= 0 && global_chunk_id < total_global_chunks) {
                 auto is_forward = false;
-                auto task
-                    = CreateTask(step + total_steps, mb, global_chunk_id, num_stages, total_global_chunks, is_forward);
+                auto task = CreateTask(step + total_steps, mb, global_chunk_id, num_stages, total_global_chunks,
+                                       is_forward, layout);
                 schedule.push_back(task);
             }
         }
@@ -127,11 +157,17 @@ std::vector<PipelineParallelScheduler::Task> PipelineParallelScheduler::Generate
 }
 
 std::vector<PipelineParallelScheduler::Task>
-PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(int n, int num_stages, int vpp_size) {
+PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(int n, int num_stages, int vpp_size,
+                                                           const PipelineLayout &layout) {
     std::vector<Task> schedule;
 
     if (n <= 0 || num_stages <= 0 || vpp_size <= 0) {
         return schedule;
+    }
+    if (layout.num_stages() != num_stages || layout.vpp_size() != vpp_size) {
+        throw PipelineLayoutError(
+            std::format("scheduler topology mismatch: requested stages={}, vpp={}, layout stages={}, vpp={}",
+                        num_stages, vpp_size, layout.num_stages(), layout.vpp_size()));
     }
 
     int total_global_chunks = num_stages * vpp_size;
@@ -145,7 +181,8 @@ PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(int n, int num_stages
             int forward_global_chunk = step - mb;
             if (forward_global_chunk >= 0 && forward_global_chunk < total_global_chunks) {
                 auto is_forward = true;
-                auto task = CreateTask(step, mb, forward_global_chunk, num_stages, total_global_chunks, is_forward);
+                auto task
+                    = CreateTask(step, mb, forward_global_chunk, num_stages, total_global_chunks, is_forward, layout);
                 schedule.push_back(task);
             }
         }
@@ -160,7 +197,8 @@ PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(int n, int num_stages
             int forward_global_chunk = step - mb;
             if (forward_global_chunk >= 0 && forward_global_chunk < total_global_chunks) {
                 auto is_forward = true;
-                auto task = CreateTask(step, mb, forward_global_chunk, num_stages, total_global_chunks, is_forward);
+                auto task
+                    = CreateTask(step, mb, forward_global_chunk, num_stages, total_global_chunks, is_forward, layout);
                 schedule.push_back(task);
             }
 
@@ -169,7 +207,8 @@ PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(int n, int num_stages
 
             if (backward_global_chunk >= 0 && backward_global_chunk < total_global_chunks) {
                 auto is_forward = false;
-                auto task = CreateTask(step, mb, backward_global_chunk, num_stages, total_global_chunks, is_forward);
+                auto task
+                    = CreateTask(step, mb, backward_global_chunk, num_stages, total_global_chunks, is_forward, layout);
                 schedule.push_back(task);
             }
         }
@@ -182,7 +221,8 @@ PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(int n, int num_stages
             int backward_global_chunk = (total_global_chunks - 1) - (backward_step - mb);
             if (backward_global_chunk >= 0 && backward_global_chunk < total_global_chunks) {
                 auto is_forward = false;
-                auto task = CreateTask(step, mb, backward_global_chunk, num_stages, total_global_chunks, is_forward);
+                auto task
+                    = CreateTask(step, mb, backward_global_chunk, num_stages, total_global_chunks, is_forward, layout);
                 schedule.push_back(task);
             }
         }
@@ -199,11 +239,12 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
     int stage_idx = stage_->stage_index();
     int vpp_size = global::GetVirtualPipelineParallelSize();
 
-    auto schedule = PipelineParallelScheduler::GenerateGPipeSchedule(n, num_stages, vpp_size);
+    const auto &layout = global::GetPipelineLayout();
+    auto schedule = PipelineParallelScheduler::GenerateGPipeSchedule(n, num_stages, vpp_size, layout);
 
     static bool has_printed = false;
     if (!has_printed && stage_idx == 0) {
-        PrintScheduleTable(schedule, n, num_stages, vpp_size);
+        PrintScheduleTable(schedule, n, num_stages, vpp_size, layout);
         has_printed = true;
     }
 
@@ -239,7 +280,18 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 }
             }
 
+            const bool time_stage = StageTimingEnabled();
+            const auto stage_start = std::chrono::steady_clock::now();
             activations[task.local_chunk_idx][mb] = stage_->ForwardOneChunk(inputs, task.local_chunk_idx);
+            if (time_stage) {
+                SynchronizeStageStream(stage_->device());
+                const auto stage_end = std::chrono::steady_clock::now();
+                const double elapsed_ms
+                    = std::chrono::duration<double, std::milli>(stage_end - stage_start).count();
+                LOG(INFO) << std::format("pipeline_stage_timing direction=forward stage={} chunk={} "
+                                         "microbatch={} elapsed_ms={:.3f}",
+                                         stage_idx, task.local_chunk_idx, mb, elapsed_ms);
+            }
 
             if (!task.is_last_chunk) {
                 if (stage_->IsLastStage()) {
@@ -264,7 +316,18 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                         {activations[task.local_chunk_idx][mb][0], std::make_shared<Tensor>(target_on_device)})[0];
                     loss = loss / n;
                 }
+                const bool time_stage = StageTimingEnabled();
+                const auto stage_start = std::chrono::steady_clock::now();
                 loss->Backward();
+                if (time_stage) {
+                    SynchronizeStageStream(stage_->device());
+                    const auto stage_end = std::chrono::steady_clock::now();
+                    const double elapsed_ms
+                        = std::chrono::duration<double, std::milli>(stage_end - stage_start).count();
+                    LOG(INFO) << std::format("pipeline_stage_timing direction=backward stage={} chunk={} "
+                                             "microbatch={} elapsed_ms={:.3f}",
+                                             stage_idx, task.local_chunk_idx, mb, elapsed_ms);
+                }
                 // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
                 // between forward and backward.
                 total_loss += static_cast<const float *>(loss->To(Device()).DataPtr())[0];
@@ -274,7 +337,18 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 auto dummy_gradient
                     = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
 
+                const bool time_stage = StageTimingEnabled();
+                const auto stage_start = std::chrono::steady_clock::now();
                 out_tensor->Backward(dummy_gradient);
+                if (time_stage) {
+                    SynchronizeStageStream(stage_->device());
+                    const auto stage_end = std::chrono::steady_clock::now();
+                    const double elapsed_ms
+                        = std::chrono::duration<double, std::milli>(stage_end - stage_start).count();
+                    LOG(INFO) << std::format("pipeline_stage_timing direction=backward stage={} chunk={} "
+                                             "microbatch={} elapsed_ms={:.3f}",
+                                             stage_idx, task.local_chunk_idx, mb, elapsed_ms);
+                }
             }
         }
     }

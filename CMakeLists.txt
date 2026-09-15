@@ -225,6 +225,9 @@ link_infini_train_exe(llama3)
 add_subdirectory(tools/infini_run)
 set_target_properties(infini_run PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
+add_executable(pipeline_layout_suggest tools/pipeline_layout_suggest.cc)
+target_link_libraries(pipeline_layout_suggest PRIVATE infini_train)
+
 # Tests
 if(BUILD_TEST)
   add_subdirectory(tests)

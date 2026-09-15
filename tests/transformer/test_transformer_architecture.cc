@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <vector>
@@ -14,6 +15,9 @@
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
+#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pipeline_layout.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
@@ -141,6 +145,113 @@ TEST_P(TransformerModuleTest, GPT2Model) {
     auto model = std::make_shared<nn::TransformerModel>(config);
     model->To(GetDevice());
     EXPECT_FALSE(model->Parameters().empty());
+}
+
+TEST(TransformerPipelineLayoutTest, BuildsOnlyTheCurrentStageModules) {
+    using infini_train::nn::parallel::PipelineLayout;
+    using infini_train::nn::parallel::PipelineLayoutPolicy;
+    using infini_train::nn::parallel::global::GlobalEnv;
+
+    auto layout = PipelineLayout::BuildContiguous({2, 4, 3, 3});
+    GlobalEnv::Instance().set_pipeline_layout(layout);
+
+    nn::TransformerConfig config;
+    config.n_layer = 12;
+    config.n_head = 4;
+    config.n_kv_head = 4;
+    config.n_embd = 32;
+    config.vocab_size = 64;
+    config.original_vocab_size = 64;
+    config.position_embedding_type = nn::PositionEmbeddingType::kLearnedAbsolute;
+    config.activation_type = nn::MLPType::kGELU;
+    config.norm_type = nn::NormType::kLayerNorm;
+    config.add_bias_linear = true;
+    config.tie_weights = false;
+
+    auto has_key
+        = [](const auto &state_dict, const std::string &key) { return state_dict.find(key) != state_dict.end(); };
+    auto has_named_parameter = [](const auto &named_parameters, const std::string &key) {
+        return std::any_of(named_parameters.begin(), named_parameters.end(),
+                           [&](const auto &entry) { return entry.first == key; });
+    };
+
+    nn::parallel::pp_rank = 0;
+    auto stage0 = std::make_shared<nn::TransformerModel>(config);
+    auto state0 = stage0->StateDict();
+    auto named0 = stage0->NamedParameters();
+    EXPECT_TRUE(has_key(state0, "transformer.wte.weight"));
+    EXPECT_TRUE(has_key(state0, "transformer.wpe.weight"));
+    EXPECT_TRUE(has_key(state0, "transformer.h.0.ln_1.weight"));
+    EXPECT_TRUE(has_key(state0, "transformer.h.1.ln_1.weight"));
+    EXPECT_FALSE(has_key(state0, "transformer.h.2.ln_1.weight"));
+    EXPECT_FALSE(has_key(state0, "transformer.ln_f.weight"));
+    EXPECT_FALSE(has_key(state0, "transformer.lm_head.weight"));
+    EXPECT_TRUE(has_named_parameter(named0, "transformer.wte.weight"));
+    EXPECT_FALSE(has_named_parameter(named0, "transformer.lm_head.weight"));
+
+    nn::parallel::pp_rank = 1;
+    auto stage1 = std::make_shared<nn::TransformerModel>(config);
+    auto state1 = stage1->StateDict();
+    auto named1 = stage1->NamedParameters();
+    EXPECT_FALSE(has_key(state1, "transformer.wte.weight"));
+    EXPECT_TRUE(has_key(state1, "transformer.h.0.ln_1.weight"));
+    EXPECT_TRUE(has_key(state1, "transformer.h.3.ln_1.weight"));
+    EXPECT_FALSE(has_key(state1, "transformer.h.4.ln_1.weight"));
+    EXPECT_FALSE(has_key(state1, "transformer.ln_f.weight"));
+    EXPECT_FALSE(has_key(state1, "transformer.lm_head.weight"));
+    EXPECT_TRUE(has_named_parameter(named1, "transformer.h.0.ln_1.weight"));
+    EXPECT_FALSE(has_named_parameter(named1, "transformer.wte.weight"));
+
+    nn::parallel::pp_rank = 3;
+    auto stage3 = std::make_shared<nn::TransformerModel>(config);
+    auto state3 = stage3->StateDict();
+    auto named3 = stage3->NamedParameters();
+    EXPECT_FALSE(has_key(state3, "transformer.wte.weight"));
+    EXPECT_TRUE(has_key(state3, "transformer.h.0.ln_1.weight"));
+    EXPECT_TRUE(has_key(state3, "transformer.h.2.ln_1.weight"));
+    EXPECT_FALSE(has_key(state3, "transformer.h.3.ln_1.weight"));
+    EXPECT_TRUE(has_key(state3, "transformer.ln_f.weight"));
+    EXPECT_TRUE(has_key(state3, "transformer.lm_head.weight"));
+    EXPECT_TRUE(has_named_parameter(named3, "transformer.ln_f.weight"));
+    EXPECT_TRUE(has_named_parameter(named3, "transformer.lm_head.weight"));
+    EXPECT_FALSE(has_named_parameter(named3, "lm_head.weight"));
+
+    nn::parallel::pp_rank = 2;
+    auto stage2 = std::make_shared<nn::TransformerModel>(config);
+    auto state2 = stage2->StateDict();
+    auto named2 = stage2->NamedParameters();
+    EXPECT_FALSE(has_key(state2, "transformer.wte.weight"));
+    EXPECT_TRUE(has_key(state2, "transformer.h.0.ln_1.weight"));
+    EXPECT_TRUE(has_key(state2, "transformer.h.2.ln_1.weight"));
+    EXPECT_FALSE(has_key(state2, "transformer.h.3.ln_1.weight"));
+    EXPECT_FALSE(has_key(state2, "transformer.ln_f.weight"));
+    EXPECT_FALSE(has_key(state2, "transformer.lm_head.weight"));
+    EXPECT_TRUE(has_named_parameter(named2, "transformer.h.0.ln_1.weight"));
+    EXPECT_FALSE(has_named_parameter(named2, "transformer.ln_f.weight"));
+
+    // The layout API also permits final norm and LM head to live on different
+    // stages when the transport policy explicitly allows it.  The model must
+    // construct each optional part independently in that case.
+    PipelineLayoutPolicy split_policy;
+    split_policy.require_boundary_special_modules = false;
+    auto split_layout = PipelineLayout::BuildContiguous(
+        {2, 4, 3, 3}, {.embedding_stage = 0, .final_norm_stage = 2, .lm_head_stage = 3}, split_policy);
+    GlobalEnv::Instance().set_pipeline_layout(split_layout);
+
+    nn::parallel::pp_rank = 2;
+    auto norm_stage = std::make_shared<nn::TransformerModel>(config);
+    auto norm_state = norm_stage->StateDict();
+    EXPECT_TRUE(has_key(norm_state, "transformer.ln_f.weight"));
+    EXPECT_FALSE(has_key(norm_state, "transformer.lm_head.weight"));
+
+    nn::parallel::pp_rank = 3;
+    auto head_stage = std::make_shared<nn::TransformerModel>(config);
+    auto head_state = head_stage->StateDict();
+    EXPECT_FALSE(has_key(head_state, "transformer.ln_f.weight"));
+    EXPECT_TRUE(has_key(head_state, "transformer.lm_head.weight"));
+
+    nn::parallel::pp_rank = 0;
+    GlobalEnv::Instance().set_pipeline_layout(PipelineLayout::BuildDefault(1, 1, 1));
 }
 
 TEST_P(TransformerModuleTest, LLaMA3Model) {
