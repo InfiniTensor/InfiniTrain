@@ -41,7 +41,8 @@ public:
     }
 
     // Scale selected gradients without replacing their storage.
-    void ScaleGradients_(const std::vector<std::shared_ptr<Tensor>> &parameters, float scale);
+    void ScaleGradients_(const std::vector<std::shared_ptr<Tensor>> &parameters, float scale,
+                         bool foreach = false);
 
     void SetClipGradNormConfig(float max_norm, float norm_type = 2.0f, bool error_if_nonfinite = false,
                                std::optional<bool> foreach = std::nullopt);

@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <memory>
+#include <vector>
 
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
@@ -28,6 +29,53 @@ void ScaleInplace(const std::shared_ptr<Tensor> &tensor, float scale) {
         return;
     default:
         LOG(FATAL) << "ScaleInplace only supports floating point gradients.";
+    }
+}
+
+template <typename T>
+void ScaleInplaceMultiTyped(const std::vector<std::shared_ptr<Tensor>> &tensors, float scale) {
+    size_t total = 0;
+    for (const auto &tensor : tensors) {
+        if (tensor && tensor->NumElements() != 0) {
+            total += tensor->NumElements();
+        }
+    }
+#pragma omp parallel for
+    for (int64_t flat = 0; flat < static_cast<int64_t>(total); ++flat) {
+        size_t offset = static_cast<size_t>(flat);
+        for (const auto &tensor : tensors) {
+            if (!tensor || tensor->NumElements() == 0 || offset >= tensor->NumElements()) {
+                if (tensor && tensor->NumElements() != 0) {
+                    offset -= tensor->NumElements();
+                }
+                continue;
+            }
+            auto *data = static_cast<T *>(tensor->DataPtr());
+            data[offset] = T(static_cast<float>(data[offset]) * scale);
+            break;
+        }
+    }
+}
+
+void ScaleInplaceMulti(std::vector<std::shared_ptr<Tensor>> tensors, float scale) {
+    if (tensors.empty() || scale == 1.0f) {
+        return;
+    }
+    switch (tensors.front()->Dtype()) {
+    case DataType::kFLOAT16:
+        ScaleInplaceMultiTyped<FP16>(tensors, scale);
+        return;
+    case DataType::kBFLOAT16:
+        ScaleInplaceMultiTyped<BF16>(tensors, scale);
+        return;
+    case DataType::kFLOAT32:
+        ScaleInplaceMultiTyped<float>(tensors, scale);
+        return;
+    case DataType::kFLOAT64:
+        ScaleInplaceMultiTyped<double>(tensors, scale);
+        return;
+    default:
+        LOG(FATAL) << "ScaleInplaceMulti only supports floating point gradients.";
     }
 }
 void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const std::shared_ptr<Tensor> &tensor) {
@@ -66,6 +114,7 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
 
 REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(AccumulateGrad)
 REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(ScaleInplace)
+REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(ScaleInplaceMulti)
 REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(AdamAccumulateGrad)
 
 #undef REGISTER_CPU_ACCUMULATE_GRAD_KERNEL

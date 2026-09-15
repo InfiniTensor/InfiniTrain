@@ -15,8 +15,8 @@
         "RUN_PROFILE_TEST": "true",
         "MIXTRAL_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
         "MIXTRAL_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/mixtral/mixtral_megatron_export.bin",
-        "GPT2_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc",
-        "LLAMA3_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc",
+        "GPT2_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc,gradient_clipping_excellent",
+        "LLAMA3_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc,gradient_clipping_excellent",
         "MIXTRAL_TEST_GROUPS": "moe"
     },
     "basic_compile_commands": [
@@ -26,6 +26,72 @@
         }
     ],
     "test_groups": [
+        {
+            "tag": "gradient_clipping_excellent",
+            "tests": [
+                {
+                    "id": "single_fp32_foreach",
+                    "args": {
+                        "dtype": "float32",
+                        "num_iteration": 1,
+                        "batch_size": 1,
+                        "total_batch_size": 64,
+                        "sequence_length": 64,
+                        "overfit_single_batch": true,
+                        "clip_grad_norm": 0.1,
+                        "grad_norm_type": 2.0,
+                        "clip_grad_error_if_nonfinite": true,
+                        "clip_grad_foreach": "true"
+                    }
+                },
+                {
+                    "id": "single_bf16_p0",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "num_iteration": 1,
+                        "batch_size": 1,
+                        "total_batch_size": 64,
+                        "sequence_length": 64,
+                        "overfit_single_batch": true,
+                        "clip_grad_norm": 0.1,
+                        "grad_norm_type": 0.0,
+                        "clip_grad_foreach": "auto"
+                    }
+                },
+                {
+                    "id": "tp4_sp_zero2",
+                    "args": {
+                        "dtype": "float32",
+                        "num_iteration": 1,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "zero_stage": 2,
+                        "clip_grad_norm": 1.0,
+                        "grad_norm_type": 2.0,
+                        "clip_grad_foreach": "true"
+                    }
+                },
+                {
+                    "id": "pp2_vpp2_lora",
+                    "args": {
+                        "dtype": "float32",
+                        "num_iteration": 1,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "lora_rank": 4,
+                        "lora_alpha": 8.0,
+                        "lora_target_modules": "c_fc,c_proj",
+                        "clip_grad_norm": 1.0,
+                        "grad_norm_type": 2.0,
+                        "clip_grad_foreach": "auto"
+                    }
+                }
+            ]
+        },
         {
             "tag": "basic",
             "tests": [

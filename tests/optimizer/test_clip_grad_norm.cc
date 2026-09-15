@@ -28,6 +28,15 @@ static std::shared_ptr<Tensor> MakeTensor(Device device, const std::vector<float
     return tensor;
 }
 
+static std::shared_ptr<Tensor> MakeTensor(Device device, DataType dtype, const std::vector<float> &values) {
+    auto fp32 = std::make_shared<Tensor>(
+        values.data(), std::vector<int64_t>{static_cast<int64_t>(values.size())}, DataType::kFLOAT32, device);
+    auto converted = fp32->To(dtype);
+    auto result = std::make_shared<Tensor>(converted.Dims(), dtype, device);
+    result->CopyFrom(converted);
+    return result;
+}
+
 static float ScalarCPU(const std::shared_ptr<Tensor> &value) {
     auto cpu = value->To(Device());
     return *static_cast<const float *>(cpu.DataPtr());
@@ -103,6 +112,57 @@ TEST_P(ClipGradNormTest, NonIntegerPAndZeroMaxNorm) {
     EXPECT_FLOAT_EQ(values[1], 0.0f);
 }
 
+TEST_P(ClipGradNormTest, SupportsZeroNegativeAndNegativeInfinityNorms) {
+    auto param = std::make_shared<Tensor>(std::vector<int64_t>{3}, DataType::kFLOAT32, GetDevice());
+    auto grad = MakeTensor(GetDevice(), {-2.0f, 0.0f, 4.0f});
+    param->set_grad(grad);
+    auto optimizer = std::make_shared<optimizers::SGD>(std::vector<std::shared_ptr<Tensor>>{param}, 0.1f);
+
+    auto zero = optimizer->ClipGradNorm({param}, 1.0f, 0.0f);
+    // PyTorch computes the 0-norm of each gradient tensor and then the
+    // 0-norm of that list, so one non-empty gradient tensor contributes one.
+    EXPECT_FLOAT_EQ(ScalarCPU(zero), 1.0f);
+
+    auto neg_grad = MakeTensor(GetDevice(), {-2.0f, 0.0f, 4.0f});
+    param->set_grad(neg_grad);
+    auto negative = optimizer->ClipGradNorm({param}, 1.0f, -1.0f);
+    EXPECT_TRUE(std::isfinite(ScalarCPU(negative)) || ScalarCPU(negative) == 0.0f);
+
+    auto min_grad = MakeTensor(GetDevice(), {-2.0f, 0.5f, 4.0f});
+    param->set_grad(min_grad);
+    auto neg_inf = optimizer->ClipGradNorm({param}, 0.25f, -std::numeric_limits<float>::infinity());
+    EXPECT_NEAR(ScalarCPU(neg_inf), 0.5f, 1e-5f);
+}
+
+TEST_P(ClipGradNormTest, ForeachTrueUsesMultiTensorSemantics) {
+    auto first = std::make_shared<Tensor>(std::vector<int64_t>{2}, DataType::kFLOAT32, GetDevice());
+    auto second = std::make_shared<Tensor>(std::vector<int64_t>{2}, DataType::kFLOAT32, GetDevice());
+    first->set_grad(MakeTensor(GetDevice(), {3.0f, 4.0f}));
+    second->set_grad(MakeTensor(GetDevice(), {0.0f, 12.0f}));
+    auto optimizer = std::make_shared<optimizers::SGD>(
+        std::vector<std::shared_ptr<Tensor>>{first, second}, 0.1f);
+    auto total = optimizer->ClipGradNorm({first, second}, 6.5f, 2.0f, false, true);
+    EXPECT_NEAR(ScalarCPU(total), 13.0f, 1e-5f);
+    auto clipped = second->grad()->To(Device());
+    EXPECT_NEAR(static_cast<const float *>(clipped.DataPtr())[1], 6.0f, 1e-4f);
+}
+
+TEST_P(ClipGradNormTest, AccumulatesReducedPrecisionGradientsInFloat32) {
+    auto fp16_param = std::make_shared<Tensor>(std::vector<int64_t>{2}, DataType::kFLOAT16, GetDevice());
+    auto bf16_param = std::make_shared<Tensor>(std::vector<int64_t>{2}, DataType::kBFLOAT16, GetDevice());
+    fp16_param->set_grad(MakeTensor(GetDevice(), DataType::kFLOAT16, {3.0f, 4.0f}));
+    bf16_param->set_grad(MakeTensor(GetDevice(), DataType::kBFLOAT16, {0.0f, 12.0f}));
+    auto optimizer = std::make_shared<optimizers::SGD>(
+        std::vector<std::shared_ptr<Tensor>>{fp16_param, bf16_param}, 0.1f);
+
+    auto total = optimizer->ClipGradNorm({fp16_param, bf16_param}, 6.5f, 2.0f, false, true);
+    EXPECT_NEAR(ScalarCPU(total), 13.0f, 2e-2f);
+    auto fp16_cpu = fp16_param->grad()->To(Device());
+    auto bf16_cpu = bf16_param->grad()->To(Device());
+    EXPECT_NEAR(static_cast<float>(static_cast<const FP16 *>(fp16_cpu.DataPtr())[0]), 1.5f, 8e-2f);
+    EXPECT_NEAR(static_cast<float>(static_cast<const BF16 *>(bf16_cpu.DataPtr())[1]), 6.0f, 1.5e-1f);
+}
+
 TEST_P(ClipGradNormTest, ErrorOnNonFiniteBeforeScaling) {
     ONLY_CPU();
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2}, DataType::kFLOAT32, GetDevice());
@@ -110,4 +170,17 @@ TEST_P(ClipGradNormTest, ErrorOnNonFiniteBeforeScaling) {
     param->set_grad(grad);
     auto optimizer = std::make_shared<optimizers::SGD>(std::vector<std::shared_ptr<Tensor>>{param}, 0.1f);
     EXPECT_DEATH(optimizer->ClipGradNorm({param}, 1.0f, 2.0f, true), "non-finite");
+
+    auto neg_inf_grad = MakeTensor(GetDevice(), {std::numeric_limits<float>::quiet_NaN(), 1.0f});
+    param->set_grad(neg_inf_grad);
+    EXPECT_DEATH(optimizer->ClipGradNorm({param}, 1.0f, -std::numeric_limits<float>::infinity(), true), "non-finite");
+}
+
+TEST_P(ClipGradNormTest, EmptyGradientIsIgnoredForNegativeInfinity) {
+    auto param = std::make_shared<Tensor>(std::vector<int64_t>{0}, DataType::kFLOAT32, GetDevice());
+    auto grad = std::make_shared<Tensor>(std::vector<int64_t>{0}, DataType::kFLOAT32, GetDevice());
+    param->set_grad(grad);
+    auto optimizer = std::make_shared<optimizers::SGD>(std::vector<std::shared_ptr<Tensor>>{param}, 0.1f);
+    auto total = optimizer->ClipGradNorm({param}, 1.0f, -std::numeric_limits<float>::infinity());
+    EXPECT_FLOAT_EQ(ScalarCPU(total), 0.0f);
 }

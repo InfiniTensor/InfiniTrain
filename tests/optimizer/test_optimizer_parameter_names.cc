@@ -1,3 +1,4 @@
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -123,7 +124,7 @@ TEST_P(OptimizerParameterNamesTest, DistributedOptimizerClipGradNormUsesZero2Loc
     full_grad->Fill(1.0f);
     auto group = ddp_model->bucket_groups().front();
     group->AccumulateParamGrad(parameter, full_grad, /*overwrite=*/true, /*learning_rate=*/1.0f);
-    auto total_norm = optimizer.ClipGradNorm(model->Parameters(), 8.0f, 2.0f);
+    auto total_norm = optimizer.ClipGradNorm(model->Parameters(), 8.0f, 2.0f, false, true);
     auto total_norm_cpu = total_norm->To(Device());
     EXPECT_NEAR(*static_cast<const float *>(total_norm_cpu.DataPtr()), 16.0f, 1e-4f);
     auto local_shard = group->GetLocalGradShardBuffer(0)->To(Device());
@@ -154,7 +155,7 @@ TEST_P(OptimizerParameterNamesTest, DistributedOptimizerClipGradNormHandlesEmpty
     auto parameter = model->Parameters().front();
     ASSERT_NE(parameter->grad(), nullptr);
     parameter->grad()->Fill(1.0f);
-    auto total_norm = optimizer.ClipGradNorm(model->Parameters(), 2.0f, 2.0f);
+    auto total_norm = optimizer.ClipGradNorm(model->Parameters(), 2.0f, 2.0f, false, true);
     auto total_norm_cpu = total_norm->To(Device());
     EXPECT_NEAR(*static_cast<const float *>(total_norm_cpu.DataPtr()), 4.0f, 1e-4f);
 }
@@ -191,7 +192,46 @@ TEST_P(OptimizerParameterNamesTest, DistributedOptimizerClipGradNormUsesGlobalSh
         parameter->grad()->Fill(1.0f);
     }
 
-    auto total_norm = optimizer.ClipGradNorm(model->Parameters(), 2.0f, 2.0f);
+    auto total_norm = optimizer.ClipGradNorm(model->Parameters(), 2.0f, 2.0f, false, true);
     auto total_norm_cpu = total_norm->To(Device());
     EXPECT_NEAR(*static_cast<const float *>(total_norm_cpu.DataPtr()), 16.0f, 1e-4f);
+}
+
+TEST_P(OptimizerParameterNamesTest, DistributedOptimizerClipGradNormSupportsZeroAndNegativeInfinity) {
+    ONLY_CUDA();
+    REQUIRE_MIN_DEVICES(2);
+    if (nn::parallel::global::GetDataParallelSize() != 2) {
+        GTEST_SKIP() << "requires WORLD_SIZE=2";
+    }
+    const nn::parallel::Rank rank(nn::parallel::global::GetGlobalProcRank(), /*thread_rank=*/0,
+                                  nn::parallel::global::GetNprocPerNode(), /*thread_size=*/1);
+    auto *pg_factory = nn::parallel::ProcessGroupFactory::Instance(Device::DeviceType::kCUDA);
+    pg_factory->GetOrCreate(nn::parallel::GetDataParallelProcessGroupName(rank.GlobalRank()),
+                            nn::parallel::GetDataParallelGroupRanks(rank.GlobalRank()));
+    auto model = std::make_shared<nn::Linear>(
+        64, 4, /*bias=*/false, Device(Device::DeviceType::kCUDA, nn::parallel::global::GetLocalProcRank()));
+    nn::parallel::DistributedDataParallelConfig ddp_config;
+    ddp_config.zero_stage = 1;
+    ddp_config.overlap_grad_reduce = false;
+    ddp_config.overlap_param_gather = false;
+    auto ddp_model = std::make_shared<nn::parallel::DistributedDataParallel>(model, rank, ddp_config);
+    nn::parallel::DistributedOptimizer optimizer(optimizers::SGD::CreateNamed(0.1f), model->NamedParameters(),
+                                                 std::vector<std::shared_ptr<nn::Module>>{ddp_model},
+                                                 /*ddp_world_size=*/2, /*ddp_rank=*/rank.GlobalRank());
+    for (const auto &parameter : model->Parameters()) {
+        ASSERT_NE(parameter->grad(), nullptr);
+        parameter->grad()->Fill(1.0f);
+    }
+
+    auto zero_norm = optimizer.ClipGradNorm(model->Parameters(), 1.0f, 0.0f, false, true);
+    auto zero_cpu = zero_norm->To(Device());
+    EXPECT_NEAR(*static_cast<const float *>(zero_cpu.DataPtr()), 2.0f, 1e-4f);
+
+    for (const auto &parameter : model->Parameters()) {
+        parameter->grad()->Fill(1.0f);
+    }
+    auto neg_inf_norm =
+        optimizer.ClipGradNorm(model->Parameters(), 0.5f, -std::numeric_limits<float>::infinity(), false, true);
+    auto neg_inf_cpu = neg_inf_norm->To(Device());
+    EXPECT_NEAR(*static_cast<const float *>(neg_inf_cpu.DataPtr()), 1.0f, 1e-4f);
 }

@@ -64,7 +64,7 @@ DEFINE_uint32(text_length, 64, "the length of the generated text");
 DEFINE_double(learning_rate, 1e-5, "Peak learning rate.");
 DEFINE_int32(zero_stage, 0, "ZeRO stage (0/1/2/3); 0 disables DistributedOptimizer");
 DEFINE_double(clip_grad_norm, -1.0, "Maximum gradient norm; negative disables clipping.");
-DEFINE_double(grad_norm_type, 2.0, "Gradient norm type (positive finite p or inf).");
+DEFINE_double(grad_norm_type, 2.0, "Gradient norm type (finite p, inf, or -inf).");
 DEFINE_bool(clip_grad_error_if_nonfinite, true, "Fail if the pre-clipping gradient norm is NaN or Inf.");
 DEFINE_string(clip_grad_foreach, "auto", "Gradient clipping path: auto|true|false.");
 // lr scheduler
@@ -525,6 +525,14 @@ void Train(const nn::parallel::Rank &rank) {
             y = std::make_shared<Tensor>(y->To(device));
 
             lossf = model->TrainStep({x}, {y}, optimizer, loss_fn, dtype);
+            if (optimizer->HasClipGradNormConfig()) {
+                auto *pp_model = dynamic_cast<nn::parallel::PipelineParallel *>(model.get());
+                auto norm_tensor = pp_model ? pp_model->last_grad_norm() : nullptr;
+                if (norm_tensor) {
+                    auto total_grad_norm_cpu = norm_tensor->To(Device());
+                    total_grad_norm = *static_cast<const float *>(total_grad_norm_cpu.DataPtr());
+                }
+            }
             if (scheduler) {
                 scheduler->Step();
             }
