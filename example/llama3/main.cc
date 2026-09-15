@@ -463,6 +463,7 @@ void Train(const nn::parallel::Rank &rank) {
 
         const float current_lr = scheduler ? scheduler->learning_rate() : static_cast<float>(FLAGS_learning_rate);
         float lossf = 0.0f;
+        std::optional<float> total_grad_norm;
         if (pp_world_size == 1) {
             // model->Train();
             optimizer->ZeroGrad();
@@ -507,7 +508,13 @@ void Train(const nn::parallel::Rank &rank) {
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
             }
 
-            optimizer->ClipGradNormConfigured();
+            if (optimizer->HasClipGradNormConfig()) {
+                auto norm_tensor = optimizer->ClipGradNormConfigured();
+                if (norm_tensor) {
+                    auto total_grad_norm_cpu = norm_tensor->To(Device());
+                    total_grad_norm = *static_cast<const float *>(total_grad_norm_cpu.DataPtr());
+                }
+            }
             optimizer->Step();
             if (scheduler) {
                 scheduler->Step();
@@ -536,11 +543,15 @@ void Train(const nn::parallel::Rank &rank) {
         if (rank.IsLastRank()) {
             size_t used_mb = 0, reserved_mb = 0;
             std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
-            LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
-                                      "peak used: {:5d} MB | peak reserved: {:5d} MB, DP={}, TP={}, SP={}, PP={})",
-                                      step + 1, FLAGS_num_iteration, lossf, current_lr, duration_us / 1e3f, tps,
-                                      used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size,
-                                      pp_world_size);
+            auto message = std::format(
+                "step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
+                "peak used: {:5d} MB | peak reserved: {:5d} MB, DP={}, TP={}, SP={}, PP={})",
+                step + 1, FLAGS_num_iteration, lossf, current_lr, duration_us / 1e3f, tps, used_mb, reserved_mb,
+                ddp_world_size, tp_world_size, sp_world_size, pp_world_size);
+            if (total_grad_norm) {
+                message += std::format(" | total_grad_norm {:.6f}", *total_grad_norm);
+            }
+            LOG(ERROR) << message;
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
                 // FIXME(jym): to support PP
