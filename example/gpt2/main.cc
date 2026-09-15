@@ -64,6 +64,10 @@ DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
 DEFINE_double(learning_rate, 1e-4, "Peak learning rate.");
 DEFINE_int32(zero_stage, 0, "ZeRO stage (0/1/2/3); 0 disables DistributedOptimizer");
+DEFINE_double(clip_grad_norm, -1.0, "Maximum gradient norm; negative disables clipping.");
+DEFINE_double(grad_norm_type, 2.0, "Gradient norm type (finite p, inf, or -inf).");
+DEFINE_bool(clip_grad_error_if_nonfinite, true, "Fail if the pre-clipping gradient norm is NaN or Inf.");
+DEFINE_string(clip_grad_foreach, "auto", "Gradient clipping path: auto|true|false.");
 // lr scheduler
 DEFINE_double(min_lr, 0.0, "Minimum learning rate.");
 DEFINE_string(lr_decay_style, "constant", "LR decay style: none|constant|linear|cosine|inverse-square-root");
@@ -352,6 +356,20 @@ void Train(const nn::parallel::Rank &rank) {
         optimizer = optimizer_creator(named_parameters);
     }
 
+    if (FLAGS_clip_grad_norm >= 0.0) {
+        std::optional<bool> foreach_option = std::nullopt;
+        if (FLAGS_clip_grad_foreach == "true") {
+            foreach_option = true;
+        } else if (FLAGS_clip_grad_foreach == "false") {
+            foreach_option = false;
+        } else {
+            CHECK_EQ(FLAGS_clip_grad_foreach, "auto");
+        }
+        optimizer->SetClipGradNormConfig(static_cast<float>(FLAGS_clip_grad_norm),
+                                         static_cast<float>(FLAGS_grad_norm_type), FLAGS_clip_grad_error_if_nonfinite,
+                                         foreach_option);
+    }
+
     const int64_t lr_decay_iters = FLAGS_lr_decay_iters > 0 ? FLAGS_lr_decay_iters : FLAGS_num_iteration;
     TrainingLRSchedulerConfig sched_config;
     sched_config.lr = static_cast<float>(FLAGS_learning_rate);
@@ -465,6 +483,7 @@ void Train(const nn::parallel::Rank &rank) {
 
         const float current_lr = scheduler ? scheduler->learning_rate() : static_cast<float>(FLAGS_learning_rate);
         float lossf = 0.0f;
+        std::optional<float> total_grad_norm;
         // model->Train();
         if (pp_world_size == 1) {
             optimizer->ZeroGrad();
@@ -510,6 +529,13 @@ void Train(const nn::parallel::Rank &rank) {
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
             }
 
+            if (optimizer->HasClipGradNormConfig()) {
+                auto norm_tensor = optimizer->ClipGradNormConfigured();
+                if (norm_tensor) {
+                    auto total_grad_norm_cpu = norm_tensor->To(Device());
+                    total_grad_norm = *static_cast<const float *>(total_grad_norm_cpu.DataPtr());
+                }
+            }
             optimizer->Step();
             if (scheduler) {
                 scheduler->Step();
@@ -520,6 +546,14 @@ void Train(const nn::parallel::Rank &rank) {
             y = std::make_shared<Tensor>(y->To(device));
 
             lossf = model->TrainStep({x}, {y}, optimizer, loss_fn, dtype);
+            if (optimizer->HasClipGradNormConfig()) {
+                auto *pp_model = dynamic_cast<nn::parallel::PipelineParallel *>(model.get());
+                auto norm_tensor = pp_model ? pp_model->last_grad_norm() : nullptr;
+                if (norm_tensor) {
+                    auto total_grad_norm_cpu = norm_tensor->To(Device());
+                    total_grad_norm = *static_cast<const float *>(total_grad_norm_cpu.DataPtr());
+                }
+            }
             if (scheduler) {
                 scheduler->Step();
             }
@@ -538,11 +572,15 @@ void Train(const nn::parallel::Rank &rank) {
         if (rank.IsLastRank()) {
             size_t used_mb = 0, reserved_mb = 0;
             std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
-            LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
-                                      "peak used: {:5d} MB | peak reserved: {:5d} MB, DP={}, TP={}, SP={}, PP={})",
-                                      step + 1, FLAGS_num_iteration, lossf, current_lr, duration_us / 1e3f, tps,
-                                      used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size,
-                                      pp_world_size);
+            auto message = std::format(
+                "step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
+                "peak used: {:5d} MB | peak reserved: {:5d} MB, DP={}, TP={}, SP={}, PP={})",
+                step + 1, FLAGS_num_iteration, lossf, current_lr, duration_us / 1e3f, tps, used_mb, reserved_mb,
+                ddp_world_size, tp_world_size, sp_world_size, pp_world_size);
+            if (total_grad_norm) {
+                message += std::format(" | total_grad_norm {:.6f}", *total_grad_norm);
+            }
+            LOG(ERROR) << message;
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
                 if (tokenizer) {

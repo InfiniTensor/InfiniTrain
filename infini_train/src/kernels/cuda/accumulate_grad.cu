@@ -1,6 +1,8 @@
 #include <cmath>
 #include <memory>
+#include <vector>
 
+#include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dispatcher.h"
@@ -10,6 +12,97 @@
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::kernels::cuda {
+
+template <typename T> __global__ void ScaleInplaceKernel(T *data, float scale, size_t num_elements) {
+    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < num_elements) {
+        data[idx] = common::cuda::Mul(data[idx], common::cuda::Cast<T>(scale));
+    }
+}
+
+void ScaleInplace(const std::shared_ptr<Tensor> &tensor, float scale) {
+    const size_t num_elements = tensor->NumElements();
+    const int threads_per_block = 256;
+    const int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
+    auto device = tensor->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
+        tensor->Dtype(),
+        [=]<typename T>() {
+            ScaleInplaceKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(static_cast<T *>(tensor->DataPtr()),
+                                                                                  scale, num_elements);
+        },
+        "CUDA ScaleInplace");
+}
+
+template <typename T>
+__global__ void ScaleInplaceMultiKernel(T **ptrs, const size_t *offsets, size_t total, int num_tensors, float scale) {
+    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= total) {
+        return;
+    }
+    int lo = 0;
+    int hi = num_tensors;
+    while (lo + 1 < hi) {
+        const int mid = lo + (hi - lo) / 2;
+        if (offsets[mid] <= idx) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    const size_t local_idx = idx - offsets[lo];
+    ptrs[lo][local_idx] = common::cuda::Mul(ptrs[lo][local_idx], common::cuda::Cast<T>(scale));
+}
+
+void ScaleInplaceMulti(std::vector<std::shared_ptr<Tensor>> tensors, float scale) {
+    if (tensors.empty() || scale == 1.0f) {
+        return;
+    }
+    std::vector<void *> host_ptrs;
+    std::vector<size_t> host_offsets;
+    host_ptrs.reserve(tensors.size());
+    host_offsets.reserve(tensors.size() + 1);
+    host_offsets.push_back(0);
+    for (const auto &tensor : tensors) {
+        if (!tensor || tensor->NumElements() == 0) {
+            continue;
+        }
+        host_ptrs.push_back(tensor->DataPtr());
+        host_offsets.push_back(host_offsets.back() + tensor->NumElements());
+    }
+    const size_t total = host_offsets.back();
+    if (total == 0 || host_ptrs.empty()) {
+        return;
+    }
+
+    auto device = tensors.front()->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+    void *device_ptrs = nullptr;
+    size_t *device_offsets = nullptr;
+    CUDA_CHECK(cudaMallocAsync(&device_ptrs, sizeof(void *) * host_ptrs.size(), cuda_stream));
+    CUDA_CHECK(cudaMallocAsync(&device_offsets, sizeof(size_t) * host_offsets.size(), cuda_stream));
+    CUDA_CHECK(cudaMemcpyAsync(device_ptrs, host_ptrs.data(), sizeof(void *) * host_ptrs.size(),
+                               cudaMemcpyHostToDevice, cuda_stream));
+    CUDA_CHECK(cudaMemcpyAsync(device_offsets, host_offsets.data(), sizeof(size_t) * host_offsets.size(),
+                               cudaMemcpyHostToDevice, cuda_stream));
+
+    const int threads_per_block = 256;
+    const int num_blocks = static_cast<int>((total + threads_per_block - 1) / threads_per_block);
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
+        tensors.front()->Dtype(),
+        [=]<typename T>() {
+            ScaleInplaceMultiKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
+                static_cast<T **>(device_ptrs), device_offsets, total, static_cast<int>(host_ptrs.size()), scale);
+        },
+        "CUDA ScaleInplaceMulti");
+    CUDA_CHECK(cudaFreeAsync(device_ptrs, cuda_stream));
+    CUDA_CHECK(cudaFreeAsync(device_offsets, cuda_stream));
+}
 
 template <typename T>
 __global__ void AccumulateGradKernel(const T *grad_ptr, float rate, T *tensor_ptr, size_t num_elements) {
@@ -90,6 +183,8 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
     REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(AccumulateGrad)
+REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(ScaleInplace)
+REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(ScaleInplaceMulti)
 REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(AdamAccumulateGrad)
 
 #undef REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL
