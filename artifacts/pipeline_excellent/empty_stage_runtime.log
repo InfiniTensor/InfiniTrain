@@ -1,5 +1,0 @@
-W0915 03:58:37.246000 70355 torch/distributed/run.py:792]
-W0915 03:58:37.246000 70355 torch/distributed/run.py:792] *****************************************
-W0915 03:58:37.246000 70355 torch/distributed/run.py:792] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
-W0915 03:58:37.246000 70355 torch/distributed/run.py:792] *****************************************
-E20260915 03:58:50.529025 140521232506880 main.cc:603] step    1/1 | train loss 6.407298 | lr 1.00e-04 | (131.49 ms | 243 tok/s | peak used:   654 MB | peak reserved:   672 MB, DP=1, TP=1, SP=1, PP=3)

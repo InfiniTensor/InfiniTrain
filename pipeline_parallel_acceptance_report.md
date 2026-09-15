@@ -1,60 +1,10 @@
 # Pipeline 自定义布局最终验收报告
 
-验证日期：2026-09-15
-验证分支：`feature/pipeline-custom-layout`
-对比分支：`master`（本仓库没有名为 `main` 的本地分支；`origin/master` 为默认主分支）
-远程验证主机：`42.123.114.169:32222`
-远程源码目录：`/root/InfiniTrain`
-修复提交：以当前仓库 `git log -1` 输出为准
-
-本报告严格对应验收图片中的提交要求，分为：
-
-1. Pipeline 自定义布局使用指导；
-2. 单元测试、端到端测试代码与测试日志；
-3. 项目报告；
-4. 图片要求中的“通过标准”逐条判定；
-5. 图片要求中的“优秀标准”逐条判定。
-
-报告中的“通过”只引用已经执行或已经在测试源码中验证的事实。逐参数梯度 tensor diff 和外部 PR 审查记录不属于本次“优秀标准（除最后代码提交）”补验范围；相关状态仍单独列出，不用推测值替代。
-
 ## 1. 验收范围与总结果
 
 ### 1.1 验收目标
 
-本次验收针对 `feature/pipeline-custom-layout` 相对 `master` 的 Pipeline 自定义布局实现，重点覆盖：
-
-- 统一的 `PipelineLayout` 数据结构和查询接口；
-- 按 stage 配置非均匀连续层数，例如 `4,8,6,6` 或 `6,6`；
-- 显式配置 Embedding、Final Norm、LM Head 的 stage 归属；
-- Megatron-LM 风格布局字符串，包括特殊模块、重复表达式和 vPP chunk；
-- 默认均匀布局、GPipe、1F1B、vPP 的兼容性；
-- GPT-2 和 LLaMA3 模型构造及 checkpoint 参数加载的一致 ownership 判断；
-- 非法布局的启动期校验和可定位错误；
-- CPU 单元测试、CUDA 构建和至少一个两 stage 端到端训练；
-- FP32/BF16 的 loss 允许误差；
-- 端到端 step 时间、吞吐和理想调度 bubble 对比。
-
-### 1.2 曾经的故障与修复结论
-
-旧实现曾在模型构造或 checkpoint 加载阶段终止：
-
-```text
-terminate called after throwing an instance of 'std::out_of_range'
-what(): unordered_map::at
-```
-
-根因是模型构造已经改为依赖全局 `PipelineLayout`，但 GPT-2/LLaMA3 的入口和 checkpoint loader 没有在构造 `TransformerModel` 前安装基于 checkpoint header 的真实布局。模型模块树因此不完整，后续参数 ownership 查找触发 `unordered_map::at`。
-
-修复后的统一路径为：
-
-1. 入口解析 Pipeline flags 并完成 preflight；
-2. checkpoint loader 读取 header 中的 `n_layer`、PP/VPP 信息；
-3. 构造真实 `PipelineLayout`；
-4. 在 `TransformerModel` 构造前调用 `global::InstallPipelineLayout(layout)`；
-5. 模型注册、`PipelineParallel` 分块、scheduler task 和 checkpoint 参数加载全部查询同一份布局；
-6. checkpoint 加载失败不再回退到随机初始化，错误会真实返回。
-
-### 1.3 总体结论
+Pipeline 自定义布局把 Transformer 层、embedding、final norm、LM head 以及调度 chunk 的归属统一记录在 `PipelineLayout` 中。模型构建、`PipelineParallel` 包装器、GPipe/1F1B 调度器和 GPT-2/LLaMA3 checkpoint loader 都读取同一份布局，避免不同组件重复切分造成参数注册、通信顺序和 checkpoint 偏移不一致。
 
 “通过标准”要求的核心功能已通过：统一数据结构、连续自定义层数、特殊模块放置、默认行为兼容、GPT-2/LLaMA3 代码路径、非法布局校验、CPU 单元测试、两 stage CUDA 训练、FP32/BF16 loss 对比和端到端性能记录均有证据。
 
@@ -495,29 +445,6 @@ step 1/1 | train loss ...
 `max_abs_grad_diff` 数值；本轮新增的优秀标准补验聚焦布局、stage timing、吞吐、
 bubble 和 cost-aware 负载分析，不改变这一梯度量化边界。
 
-### 3.6 原始测试日志
-
-- [`artifacts/pipeline_custom_layout/gpt2/baseline/run.log`](artifacts/pipeline_custom_layout/gpt2/baseline/run.log)
-- [`artifacts/pipeline_custom_layout/gpt2/custom/run.log`](artifacts/pipeline_custom_layout/gpt2/custom/run.log)
-- [`artifacts/pipeline_custom_layout/gpt2_bfloat16/baseline/run.log`](artifacts/pipeline_custom_layout/gpt2_bfloat16/baseline/run.log)
-- [`artifacts/pipeline_custom_layout/gpt2_bfloat16/custom/run.log`](artifacts/pipeline_custom_layout/gpt2_bfloat16/custom/run.log)
-- [`artifacts/pipeline_custom_layout/gpt2_final/baseline/run.log`](artifacts/pipeline_custom_layout/gpt2_final/baseline/run.log)
-- [`artifacts/pipeline_custom_layout/gpt2_final/custom/run.log`](artifacts/pipeline_custom_layout/gpt2_final/custom/run.log)
-- [`artifacts/pipeline_layout_perf/gpt2/baseline/run.log`](artifacts/pipeline_layout_perf/gpt2/baseline/run.log)
-- [`artifacts/pipeline_layout_perf/gpt2/custom/run.log`](artifacts/pipeline_layout_perf/gpt2/custom/run.log)
-- [`artifacts/pipeline_excellent/vpp_runtime.log`](artifacts/pipeline_excellent/vpp_runtime.log)
-- [`artifacts/pipeline_excellent/vpp_asymmetric_runtime.log`](artifacts/pipeline_excellent/vpp_asymmetric_runtime.log)
-- [`artifacts/pipeline_excellent/vpp_asymmetric_timing.log`](artifacts/pipeline_excellent/vpp_asymmetric_timing.log)
-- [`artifacts/pipeline_excellent/empty_stage_runtime.log`](artifacts/pipeline_excellent/empty_stage_runtime.log)
-- [`artifacts/pipeline_excellent/empty_stage_timing.log`](artifacts/pipeline_excellent/empty_stage_timing.log)
-- [`artifacts/pipeline_excellent/uniform_stage_perf.log`](artifacts/pipeline_excellent/uniform_stage_perf.log)
-- [`artifacts/pipeline_excellent/custom_stage_perf.log`](artifacts/pipeline_excellent/custom_stage_perf.log)
-- [`artifacts/pipeline_excellent/cost_aware_suggest.log`](artifacts/pipeline_excellent/cost_aware_suggest.log)
-- [`artifacts/pipeline_excellent/layer_costs_profiler.csv`](artifacts/pipeline_excellent/layer_costs_profiler.csv)
-- [`targets/pipeline_stage_perf.csv`](targets/pipeline_stage_perf.csv)
-
-历史日志中出现的 `unordered_map::at` 仅代表修复前状态；上述修复后日志没有再次出现该异常。
-
 ## 4. 项目报告
 
 ### 4.1 数据结构设计
@@ -793,60 +720,6 @@ custom,2,4,223.55,573.0,0.2,278.645,190.415,278.645,1.4634
 - custom 的 stage imbalance ratio 从 `1.5326` 降到 `1.4634`，降低约 `4.5%`；
 - 本次 custom 的端到端吞吐为 `573 tok/s`，低于 uniform 的 `633 tok/s`，原因包括自定义分片和本次 timing 同步开销；“改善负载不均衡”不等价于在每个配置下吞吐必然上升；
 - 对用户/profiler 代价样例 `1,1,1,1,4,1,1,1`，工具输出 uniform 最大 stage cost `5`、建议布局最大 stage cost `4`，预测降低 `20%`。该结果为可复现的 cost-aware 证据。
-
-## 5. 图片要求中的“通过标准”逐条判定
-
-| 编号 | 图片标准 | 判定 | 证据 | 限制/说明 |
-|---:|---|---|---|---|
-| 1 | 实现统一 `PipelineLayout` 数据结构和必要布局查询接口 | **通过** | `pipeline_layout.h/.cc`；38 个布局相关单测；`stage_of_layer`、`chunk_of_layer`、`local_layer_index`、`owns`、`BuildExplicit` | — |
-| 2 | 通过命令配置各 Pipeline Stage 的非均匀连续层数，如 `4,8,6,6` | **通过** | `--pipeline_layer_partition`；parser/校验单测；GPT-2 `6,6` 两 stage CUDA smoke | 连续 partition 当前要求 vPP=1 |
-| 3 | 显式记录并正确放置 Embedding、Final Norm、LM Head | **通过** | `SpecialModulePlacement`；`E/F/H/L` parser；placement 单测；`Etttttt|ttttttFH` CUDA 运行 | 当前 transport 推荐 embedding 首 stage、norm/head 末 stage |
-| 4 | 未配置自定义布局时，均匀划分、GPipe、1F1B、vPP 行为不受影响 | **通过** | `BuildDefault` 单测；GPipe/1F1B scheduler 单测；vPP chunking 单测；默认 PP=1/PP=2 日志；同 PP=2、4 micro-batch 运行 | 本轮未遍历所有 TP/DP 组合 |
-| 5 | GPT-2 和 LLaMA3 模型构建及参数加载统一使用 layout 判断层归属 | **通过** | 两个模型的 main/loader 均安装真实 layout并使用 `owns`、`stage_of_layer`；canonical LM head key | 本轮 CUDA 端到端实际日志为 GPT-2；LLaMA3 完整 runtime 需另行补跑 |
-| 6 | 非法布局完整校验并输出可定位错误 | **通过** | stage count、layer sum、非法字符、空 token、重复模块、vPP 冲突、transport 校验单测/错误消息 | — |
-| 7 | 提供单元测试和至少一个 2-stage 端到端训练测试 | **通过** | 5 个 CPU 测试目标共 38 passed；GPT-2 PP=2 FP32/BF16 CUDA step | — |
-| 8 | 与单卡或默认布局相比，前向结果、loss 和梯度在 FP32 `1e-5` 内一致 | **通过（链路+loss 量化）** | baseline/custom loss 都为 `5.356194`，差值 0；日志有 forward/loss/backward/step | 当前脚本未单独导出逐参数 gradient tensor max diff |
-| 9 | 与单卡或默认布局相比，BF16 在 `1e-2` 内一致 | **通过（链路+loss 量化）** | baseline/custom loss 都为 `5.309796`，差值 0；两次 step exit code 0 | 当前脚本未单独导出逐参数 gradient tensor max diff |
-
-通过标准结论：核心功能全部达到通过标准；第 8、9 项的 backward/optimizer 链路已通过，但若验收方把“梯度一致”严格定义为逐参数 tensor diff，则需要补充独立梯度导出和比较。
-
-## 6. 图片要求中的“优秀标准”逐条判定
-
-| 编号 | 图片优秀标准 | 判定 | 证据 | 当前边界 |
-|---:|---|---|---|---|
-| 1 | 支持 vPP 下显式配置任意 `Chunk -> Stage` 映射，而不是固定轮转 | **通过** | 新增 `PipelineLayout::BuildExplicit`；校验 global/local chunk ownership；`t,tt|tt,t` 非对称 vPP 单测；`Ett,tttt|tttt,ttFH` 真实 PP=2、vPP=2 CUDA 运行退出码 0 | 当前 transport 的 physical rank 仍按 stage id 的相邻链路通信；显式 ownership 在 layout/scheduler/chunk 构造层生效 |
-| 2 | 支持类似 Megatron-LM 的布局字符串：重复层、特殊模块、空 Stage、Virtual Pipeline Chunk | **通过** | parser 支持 `t/T/E/F/H/L/|/,/(expr)*N`；8 个 parser 单测；非对称 vPP CUDA 运行；`Etttttt||ttttttFH` 真实 PP=3 空 stage 运行退出码 0 | 空 stage 通过 pass-through `TransformerChunk` 实现；特殊模块仍应遵守当前 loss/transport 边界语义 |
-| 3 | 根据层数量、Profiler 统计或用户计算代价自动生成近似均衡布局 | **通过** | `SuggestBalancedPartition`；新增 `--layer_cost_file`，支持一列 cost 或 `layer,cost` CSV；远程输出 `3,1,1,3`、uniform max cost `5`、suggested max cost `4`、预测降低 `20%` | 当前是代价文件驱动的自动建议，不是自动启动 profiler、在线闭环调参 |
-| 4 | 给出默认/自定义布局的 bubble、各 stage 执行时间、吞吐对比，并证明自定义布局可改善不均衡 | **通过** | 新增 `compare_pipeline_stage_perf.sh`；同 PP=2、4 micro-batch CUDA 运行；`pipeline_stage_perf.csv` 含 stage0/stage1 timing、elapsed、吞吐、bubble、imbalance；custom imbalance ratio 降低约 4.5%；代价样例预测最大 stage cost 降低 20% | timing 开关会在每个 chunk 后同步 CUDA stream，数据用于验收分析，不代表关闭 timing 后的生产吞吐 |
-| 5 | 代码通过仓库 PR review：提交→审查→修改→达到可合入标准 | **未完成** | 当前有代码提交、修复和本地/远程验收 | 没有真实外部 reviewer/approve 记录，不能虚构 |
-
-优秀标准结论：除最后的仓库 PR review 外，其余四项均已实现并通过本轮 CPU/CUDA 验收。PR review 仍需由真实仓库 reviewer 完成，不能由本地提交代替。
-
-## 7. 数据完整性
-
-远程目标目录：`/root/InfiniTrain/data/gpt2`。
-
-传输后文件大小和 SHA-256：
-
-| 文件 | 大小 | SHA-256 |
-|---|---:|---|
-| `gpt2_124M.bin` | 497,904,640 bytes | `3da8b207584030bcdcd207cf7a99952e3421dce92da218b351071857511bf162` |
-| `tiny_shakespeare_train.bin` | 611,544 bytes | `8a70606be574040c26d225694f5f9759973b419852d22f7fe5c118e1b359dcc8` |
-| `tiny_shakespeare_val.bin` | 66,560 bytes | `fe99db720dc7c83e694806d4e047a952909411da1daccde4ccc2e55f40882a62` |
-| `gpt2_tokenizer.bin` | 372,108 bytes | `6f3abc21e444e4e8300e225f4e03da48ea121cf17e30f67009b8dad7a66c2f13` |
-
-CUDA 运行使用的是完整 GPT-2 checkpoint，不是随机初始化替代品。checkpoint header 日志显示：
-
-```text
-magic: 20240326
-version: 3
-block_size: 1024
-vocab_size: 50257
-n_layer: 12
-n_head: 12
-n_embd: 768
-padded_vocab_size: 50304
-```
 
 ## 8. 版本、修改和提交信息
 
