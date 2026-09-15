@@ -10,6 +10,7 @@
 
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
+#include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
@@ -74,6 +75,41 @@ void CausalSelfAttention::SetupAttention(const TransformerConfig &config) {
         n_kv_head_ = n_head_;
         n_rep_ = 1;
     }
+}
+
+checkpoint::ShardedStateDict CausalSelfAttention::ShardedStateDict(const std::string &prefix) const {
+    auto state = Module::ShardedStateDict(prefix);
+    const int tp_size = parallel::global::GetTensorParallelSize();
+    const int rank = parallel::tp_rank;
+    const int64_t q_global = n_head_ * head_dim_;
+    const int64_t kv_global = n_kv_head_ * head_dim_;
+    const int64_t q_local = q_global / tp_size;
+    const int64_t kv_local = kv_global / tp_size;
+
+    const auto c_attn_prefix = prefix.empty() ? kCAttnLayerName : prefix + "." + kCAttnLayerName;
+    auto set_qkv_segments = [&](const std::string &parameter_name) {
+        const auto key = c_attn_prefix + "." + parameter_name;
+        auto it = state.tensors.find(key);
+        if (it == state.tensors.end()) {
+            return;
+        }
+        auto &tensor = it->second;
+        tensor.global_offset.assign(tensor.global_shape.size(), 0);
+        tensor.segments = {
+            {.global_offset = rank * q_local, .local_offset = 0, .length = q_local},
+            {.global_offset = q_global + rank * kv_local, .local_offset = q_local, .length = kv_local},
+            {.global_offset = q_global + kv_global + rank * kv_local,
+             .local_offset = q_local + kv_local,
+             .length = kv_local},
+        };
+    };
+
+    set_qkv_segments(parallel::ColumnParallelLinear::kParamWeightName);
+    if (config_.add_bias_linear) {
+        set_qkv_segments(parallel::ColumnParallelLinear::kParamBiasName);
+    }
+    set_qkv_segments(lora::LoRAColumnParallelLinear::kParamLoraBName);
+    return state;
 }
 
 std::shared_ptr<infini_train::Tensor> CausalSelfAttention::RepeatKV(const std::shared_ptr<infini_train::Tensor> &x,

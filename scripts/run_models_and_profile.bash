@@ -372,9 +372,10 @@ args_string_for_test() {
 
     jq -r --argjson g "$group_idx" --argjson t "$test_idx" --arg model "$model_name" --arg test_id "$test_id" '
     def namespaced_path($p; $model; $mode):
-        if ($p | test("/checkpoint_step_[0-9]+($|/)")) then
-            ($p | capture("^(?<prefix>.*)/(?<step>checkpoint_step_[0-9]+(?:/.*)?)$")) as $m
-            | ($m.prefix + "/" + $model + "/" + $mode + "/" + $m.step)
+        if ($p | test("/(?:checkpoint_step_|iter_)[0-9]+($|/)")) then
+            ($p | capture("^(?<prefix>.*)/(?:checkpoint_step_|iter_)(?<iteration>[0-9]+)(?<suffix>/.*)?$")) as $m
+            | ("0000000" + $m.iteration)[-7:] as $iteration
+            | ($m.prefix + "/" + $model + "/" + $mode + "/iter_" + $iteration + ($m.suffix // ""))
         else
             ($p + "/" + $model + "/" + $mode)
         end;
