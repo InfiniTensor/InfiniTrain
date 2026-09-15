@@ -12,6 +12,7 @@ GPT-2 和 LLaMA3 都支持：
 --pipeline_parallel=N
 --virtual_pipeline_parallel=N
 --pipeline_layer_partition=4,8,6,6
+--pipeline_layout='Etttttt|ttttttFH'
 --pipeline_embedding_stage=0
 --pipeline_final_norm_stage=-1
 --pipeline_lm_head_stage=-1
@@ -34,8 +35,9 @@ stage 2: layers [12,18)
 stage 3: layers [18,24)
 ```
 
-当前通过标准限制自定义 partition 必须使用 `--virtual_pipeline_parallel=1`。
-需要 vPP 的非轮转 chunk 映射尚未接入 Megatron 风格布局字符串解析器。
+当前连续 `pipeline_layer_partition` 必须使用 `--virtual_pipeline_parallel=1`。
+需要 vPP 的非对称 chunk 映射时使用 Megatron 风格布局字符串，或在 C++ 集成中
+调用显式 chunk 构造接口。
 
 ### Megatron 风格布局（增强功能）
 
@@ -44,8 +46,22 @@ Transformer 层，`E`/`F`/`H` 分别表示 embedding、final norm、LM head，`|
 分隔 stage，`,` 分隔同一 stage 内的 vPP chunk，括号后使用 `*N` 重复。
 例如 `--pipeline_parallel=2 --virtual_pipeline_parallel=2
 --pipeline_layout='tt,tt|tt,tt'` 将 8 层映射为 4 个显式 chunk。该参数与
-`--pipeline_layer_partition` 互斥；每个 stage 必须恰好给出 `vpp` 个 chunk，
+`--pipeline_layer_partition` 互斥（同时传入会在启动期报错）；每个 stage 必须恰好给出 `vpp` 个 chunk，
 所有 `t` 的总数必须等于模型层数。布局解析和校验在训练启动前完成。
+
+如果需要在 C++ 集成中完全控制每一个 chunk 的 stage 归属，可调用
+`PipelineLayout::BuildExplicit(num_layers, pp_size, vpp_size, chunks)`。该接口要求
+global chunk id 连续，但以 `ChunkLayout.stage_id` 和 `local_chunk_id` 为权威，不从
+global chunk id 反推 stage；因此可以表达非对称的 vPP chunk 大小和显式 ownership。
+
+显式布局也允许空 chunk/空 stage。当前 Pipeline transport 会让空
+`TransformerChunk` 原样传递激活和梯度，因此只要 layout 中保留该 stage 的
+chunk id，就可以用于真实 PP 运行。例如：
+
+```bash
+--pipeline_parallel=3
+--pipeline_layout='Etttttt||ttttttFH'
+```
 
 ### 自动负载均衡建议与性能对比
 
@@ -71,6 +87,33 @@ BUILD_DIR=build_cuda scripts/compare_pipeline_layout_perf.sh gpt2 cuda
 `TOTAL_BATCH_SIZE` 可通过环境变量覆盖；bubble 使用
 `(pipeline_parallel-1)/(micro_batches+pipeline_parallel-1)` 估算，属于
 调度上界，不代替真实 profiler。
+
+如需在相同 PP degree 下比较均匀布局和 cost-aware 自定义布局，并记录每个 stage
+的真实计算时间，可运行：
+
+```bash
+BUILD_DIR=build_cuda \
+LAUNCHER='torchrun --standalone --no-python' \
+TOTAL_BATCH_SIZE=128 \
+scripts/compare_pipeline_stage_perf.sh gpt2 cuda
+```
+
+`INFINI_PIPELINE_STAGE_TIMING=1` 会在每个 stage/chunk 的 forward、backward 完成
+CUDA stream 同步后输出 `pipeline_stage_timing` 记录；脚本将这些记录汇总到
+`targets/pipeline_stage_perf.csv`，并同时写出端到端 elapsed、吞吐、理想 bubble
+和 stage imbalance ratio。
+
+均衡建议工具支持直接读取 profiler/用户代价 CSV。文件可以是一列 cost，也可以
+是带 `layer,cost` 表头的两列 CSV：
+
+```bash
+./build_cuda/pipeline_layout_suggest \
+  --num_layers=8 --pp_size=4 \
+  --layer_cost_file=layer_costs.csv
+```
+
+输出除了 `pipeline_layer_partition`，还会给出均匀 partition 与建议 partition
+的最大 stage 代价及预计降低比例。
 
 ## 特殊模块和 checkpoint
 

@@ -5,6 +5,9 @@
 #include <memory>
 #include <optional>
 #include <unordered_map>
+#include <stdexcept>
+#include <execinfo.h>
+#include <unistd.h>
 #include <unordered_set>
 
 #include "gflags/gflags.h"
@@ -85,6 +88,11 @@ DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
+DEFINE_string(pipeline_layer_partition, "", "Comma-separated layer counts per PP stage, e.g. 4,8,6,6");
+DEFINE_string(pipeline_layout, "", "Megatron-style pipeline layout expression, e.g. Ett|tttt|tttFH");
+DEFINE_int32(pipeline_embedding_stage, 0, "Stage that owns embedding.");
+DEFINE_int32(pipeline_final_norm_stage, -1, "Stage that owns final norm; -1 means last PP stage.");
+DEFINE_int32(pipeline_lm_head_stage, -1, "Stage that owns LM head; -1 means last PP stage.");
 
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
@@ -137,6 +145,72 @@ DEFINE_validator(lr_decay_style,
 
 void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
+
+    if (FLAGS_pipeline_parallel == 0 || FLAGS_virtual_pipeline_parallel == 0) {
+        throw PipelineLayoutError(std::format(
+            "pipeline_parallel and virtual_pipeline_parallel must be positive (got {}, {})",
+            FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel));
+    }
+    const auto check_stage_flag = [](const char *name, int stage) {
+        if (stage < -1 || stage >= static_cast<int>(FLAGS_pipeline_parallel)) {
+            throw PipelineLayoutError(std::format(
+                "{}={} is outside valid stage range [-1, {})", name, stage, FLAGS_pipeline_parallel));
+        }
+    };
+    check_stage_flag("pipeline_embedding_stage", FLAGS_pipeline_embedding_stage);
+    check_stage_flag("pipeline_final_norm_stage", FLAGS_pipeline_final_norm_stage);
+    check_stage_flag("pipeline_lm_head_stage", FLAGS_pipeline_lm_head_stage);
+
+    if (!FLAGS_pipeline_layer_partition.empty() && !FLAGS_pipeline_layout.empty()) {
+        throw PipelineLayoutError("pipeline_layer_partition and pipeline_layout are mutually exclusive");
+    }
+
+    // Validate and install the layout before constructing any model module.
+    // Checkpoint-backed runs repeat this after reading the authoritative
+    // layer count from the checkpoint header.
+    if (!FLAGS_pipeline_layer_partition.empty()) {
+        const auto partition = PipelineLayout::ParseLayerPartition(FLAGS_pipeline_layer_partition);
+        if (static_cast<int>(partition.size()) != static_cast<int>(FLAGS_pipeline_parallel)) {
+            throw PipelineLayoutError(std::format(
+                "stage count mismatch: pipeline_parallel={}, partition_entries={}",
+                FLAGS_pipeline_parallel, partition.size()));
+        }
+        if (FLAGS_virtual_pipeline_parallel != 1) {
+            throw PipelineLayoutError(std::format(
+                "custom layer partition is not supported with vpp_size={}",
+                FLAGS_virtual_pipeline_parallel));
+        }
+    }
+
+    if (FLAGS_llmc_filepath.empty()) {
+        auto preflight_config = gpt2::GPT2Config();
+        if (kModelToConfigs.count(FLAGS_model)) {
+            preflight_config = kModelToConfigs.at(FLAGS_model);
+        }
+        gpt2::SanitizeGPT2Config(preflight_config);
+        SpecialModulePlacement placement{
+            .embedding_stage = FLAGS_pipeline_embedding_stage,
+            .final_norm_stage = FLAGS_pipeline_final_norm_stage,
+            .lm_head_stage = FLAGS_pipeline_lm_head_stage,
+        };
+        auto preflight_layout = FLAGS_pipeline_layout.empty()
+            ? PipelineLayout::BuildPipelineLayout(
+                  preflight_config.n_layer,
+                  static_cast<int>(FLAGS_pipeline_parallel),
+                  static_cast<int>(FLAGS_virtual_pipeline_parallel),
+                  FLAGS_pipeline_layer_partition,
+                  placement)
+            : PipelineLayout::ParseMegatronStyleLayout(
+                  FLAGS_pipeline_layout,
+                  preflight_config.n_layer,
+                  static_cast<int>(FLAGS_pipeline_parallel),
+                  static_cast<int>(FLAGS_virtual_pipeline_parallel),
+                  placement);
+        global::InstallPipelineLayout(preflight_layout);
+        if (rank.IsMainRank()) {
+            LOG(INFO) << preflight_layout.ToString();
+        }
+    }
 
     {
         if (rank.IsLastRank()) {
@@ -568,6 +642,10 @@ void Train(const nn::parallel::Rank &rank) {
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
+    if (const char *stage_timing = std::getenv("INFINI_PIPELINE_STAGE_TIMING");
+        stage_timing != nullptr && stage_timing[0] == '1' && stage_timing[1] == '\0') {
+        google::LogToStderr();
+    }
 
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
@@ -588,7 +666,15 @@ int main(int argc, char *argv[]) {
     } else {
         nn::parallel::Rank rank(nn::parallel::global::GetGlobalProcRank(), 0, nn::parallel::global::GetNprocPerNode(),
                                 FLAGS_nthread_per_process);
-        Train(rank);
+        try {
+            Train(rank);
+        } catch (const std::out_of_range &e) {
+            void *frames[64];
+            int n = backtrace(frames, 64);
+            LOG(ERROR) << "out_of_range during GPT-2 Train initialization: " << e.what();
+            backtrace_symbols_fd(frames, n, STDERR_FILENO);
+            return 1;
+        }
     }
 
     gflags::ShutDownCommandLineFlags();

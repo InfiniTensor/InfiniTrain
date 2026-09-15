@@ -1,0 +1,23 @@
+Log file created at: 2026/09/15 03:59:22
+Running on machine: f63d38dd817c
+Running duration (h:mm:ss): 0:00:00
+Log line format: [IWEF]yyyymmdd hh:mm:ss.uuuuuu threadid file:line] msg
+I20260915 03:59:22.321320 140246818672640 main.cc:651]
+=== Parallel Communication Groups ===
+world_size = 2, config: {DP=1, TP=1, PP=2}, order: {TP -> DP -> PP}
+[DP] size=1, unenabled
+[TP] size=1, unenabled
+[PP] size=2, num_groups=1
+  - PP 0 (dp=0, tp=0, pp=-): [0, 1]
+
+I20260915 03:59:23.257514 140246818672640 main.cc:289] total desired batch size: 64 => calculated gradient accumulation steps: 2
+I20260915 03:59:34.766963 140246818672640 checkpoint_loader.cc:118] magic: 20240326 version: 3 block_size: 1024 vocab_size: 50257 n_layer: 12 n_head: 12 n_embd: 768 padded_vocab_size: 50304
+I20260915 03:59:34.989167 140246818672640 main.cc:354] Optimizing 75 model parameters
+I20260915 03:59:34.994699 140246818672640 main.cc:444] Rank 1: start training
+I20260915 03:59:34.994712 140246818672640 checkpoint_manager.cc:26] No checkpoint specified for resume. Starting training from scratch.
+I20260915 03:59:34.994721 140246818672640 main.cc:491] start training
+I20260915 03:59:35.120772 140246818672640 pipeline_schedule.cc:286] pipeline_stage_timing direction=forward stage=1 chunk=0 microbatch=0 elapsed_ms=98.589
+I20260915 03:59:35.127588 140246818672640 pipeline_schedule.cc:286] pipeline_stage_timing direction=forward stage=1 chunk=0 microbatch=1 elapsed_ms=6.676
+I20260915 03:59:35.150460 140246818672640 pipeline_schedule.cc:318] pipeline_stage_timing direction=backward stage=1 chunk=0 microbatch=1 elapsed_ms=22.268
+I20260915 03:59:35.167537 140246818672640 pipeline_schedule.cc:318] pipeline_stage_timing direction=backward stage=1 chunk=0 microbatch=0 elapsed_ms=16.859
+E20260915 03:59:35.168020 140246818672640 main.cc:603] step    1/1 | train loss 6.297672 | lr 1.00e-04 | (173.26 ms | 369 tok/s | peak used:   826 MB | peak reserved:   864 MB, DP=1, TP=1, SP=1, PP=2)

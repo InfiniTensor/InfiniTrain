@@ -30,10 +30,15 @@ common=(--device="$device" --input_bin="${INPUT_BIN:-$repo_dir/data/$model/tiny_
   --batch_size="$batch_size" --sequence_length="$sequence_length" --total_batch_size="$total_batch_size")
 [[ -e "${INPUT_VAL_BIN:-$repo_dir/data/$model/tiny_shakespeare_val.bin}" ]] && common+=(--input_val_bin="${INPUT_VAL_BIN:-$repo_dir/data/$model/tiny_shakespeare_val.bin}")
 [[ "$model" == gpt2 && -e "${TOKENIZER_BIN:-$repo_dir/data/gpt2/gpt2_tokenizer.bin}" ]] && common+=(--tokenizer_bin="${TOKENIZER_BIN:-$repo_dir/data/gpt2/gpt2_tokenizer.bin}")
-launcher=("${LAUNCHER:-$build_dir/infini_run}")
+launcher_spec="${LAUNCHER:-$build_dir/infini_run}"
 run_case() {
   local name="$1" pp="$2" layout="$3" log="$4"; local -a cmd
-  if [[ "${LAUNCHER:-}" == direct ]]; then cmd=("$exe"); else cmd=("${launcher[@]}" --nnodes=1 --nproc_per_node="$pp" "$exe"); fi
+  if [[ "$launcher_spec" == direct ]]; then
+    cmd=("$exe")
+  else
+    read -r -a launcher_command <<< "$launcher_spec"
+    cmd=("${launcher_command[@]}" --nnodes=1 --nproc_per_node="$pp" "$exe")
+  fi
   cmd+=("${common[@]}" --pipeline_parallel="$pp")
   [[ -n "$layout" ]] && cmd+=(--pipeline_layout="$layout")
   echo "[$name] ${cmd[*]}"

@@ -1,0 +1,1 @@
+E20260915 02:52:32.866542 139744396308480 main.cc:603] step    1/1 | train loss 6.407298 | lr 1.00e-04 | (95.33 ms | 336 tok/s | peak used:  1308 MB | peak reserved:  1344 MB, DP=1, TP=1, SP=1, PP=1)

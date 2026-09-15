@@ -123,6 +123,68 @@ PipelineLayout PipelineLayout::BuildContiguous(const std::vector<int> &stage_lay
     return PipelineLayout(num_layers, num_stages, vpp_size, std::move(chunks), normalized_placement, policy);
 }
 
+PipelineLayout PipelineLayout::BuildExplicit(int num_layers, int num_stages, int vpp_size,
+                                             const std::vector<ChunkLayout> &chunks,
+                                             SpecialModulePlacement placement, PipelineLayoutPolicy policy) {
+    if (num_layers <= 0 || num_stages <= 0 || vpp_size <= 0) {
+        Fail(std::format("num_layers, num_stages and vpp_size must be positive (got {}, {}, {})", num_layers,
+                         num_stages, vpp_size));
+    }
+    const long long expected_chunks = static_cast<long long>(num_stages) * static_cast<long long>(vpp_size);
+    if (static_cast<long long>(chunks.size()) != expected_chunks) {
+        Fail(std::format("explicit chunk count mismatch: expected={}, actual={}", expected_chunks, chunks.size()));
+    }
+
+    std::vector<ChunkLayout> ordered = chunks;
+    std::sort(ordered.begin(), ordered.end(),
+              [](const ChunkLayout &a, const ChunkLayout &b) { return a.global_chunk_id < b.global_chunk_id; });
+    std::vector<bool> seen_global(static_cast<size_t>(expected_chunks), false);
+    std::vector<std::vector<bool>> seen_local(static_cast<size_t>(num_stages),
+                                              std::vector<bool>(static_cast<size_t>(vpp_size), false));
+    for (const auto &chunk : ordered) {
+        if (chunk.global_chunk_id < 0 || chunk.global_chunk_id >= expected_chunks) {
+            Fail(std::format("explicit chunk global_chunk_id={} outside [0, {})", chunk.global_chunk_id,
+                             expected_chunks));
+        }
+        if (seen_global[static_cast<size_t>(chunk.global_chunk_id)]) {
+            Fail(std::format("duplicate explicit global_chunk_id={}", chunk.global_chunk_id));
+        }
+        seen_global[static_cast<size_t>(chunk.global_chunk_id)] = true;
+        CheckStageId(chunk.stage_id, num_stages, "chunk.stage_id");
+        if (chunk.local_chunk_id < 0 || chunk.local_chunk_id >= vpp_size) {
+            Fail(std::format("explicit chunk {} local_chunk_id={} outside [0, {})", chunk.global_chunk_id,
+                             chunk.local_chunk_id, vpp_size));
+        }
+        const auto stage_index = static_cast<size_t>(chunk.stage_id);
+        const auto local_index = static_cast<size_t>(chunk.local_chunk_id);
+        if (seen_local[stage_index][local_index]) {
+            Fail(std::format("stage {} has duplicate local_chunk_id={}", chunk.stage_id, chunk.local_chunk_id));
+        }
+        seen_local[stage_index][local_index] = true;
+        if (chunk.layers.start < 0 || chunk.layers.end < chunk.layers.start || chunk.layers.end > num_layers) {
+            Fail(std::format("explicit chunk {} layer range [{}, {}) is outside [0, {})", chunk.global_chunk_id,
+                             chunk.layers.start, chunk.layers.end, num_layers));
+        }
+        if (chunk.layers.size() == 0) {
+            policy.allow_empty_stages = true;
+        }
+    }
+    for (int gid = 0; gid < expected_chunks; ++gid) {
+        if (!seen_global[static_cast<size_t>(gid)]) {
+            Fail(std::format("missing explicit global_chunk_id={}", gid));
+        }
+    }
+    for (int stage_id = 0; stage_id < num_stages; ++stage_id) {
+        for (int local_chunk_id = 0; local_chunk_id < vpp_size; ++local_chunk_id) {
+            if (!seen_local[static_cast<size_t>(stage_id)][static_cast<size_t>(local_chunk_id)]) {
+                Fail(std::format("stage {} is missing local_chunk_id={}", stage_id, local_chunk_id));
+            }
+        }
+    }
+    return PipelineLayout(num_layers, num_stages, vpp_size, std::move(ordered), BuildPlacement(placement, num_stages),
+                          policy);
+}
+
 // By default, place norm and lm_head on the last stage and embedding on the first.
 SpecialModulePlacement PipelineLayout::BuildPlacement(SpecialModulePlacement placement, int num_stages) {
     if (placement.embedding_stage < 0) {

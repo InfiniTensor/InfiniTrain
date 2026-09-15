@@ -2,14 +2,18 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_schedule.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
+#include <cstdlib>
 #include <format>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/init.h"
@@ -22,6 +26,17 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
+namespace {
+bool StageTimingEnabled() {
+    const char *value = std::getenv("INFINI_PIPELINE_STAGE_TIMING");
+    return value != nullptr && std::string(value) == "1";
+}
+
+void SynchronizeStageStream(const Device &device) {
+    auto *impl = core::GetDeviceGuardImpl(device.type());
+    impl->SynchronizeStream(impl->GetStream(device));
+}
+} // namespace
 
 void PrintScheduleTable(const std::vector<PipelineParallelScheduler::Task> &schedule, int n, int num_stages,
                         int vpp_size, const PipelineLayout &layout) {
@@ -260,7 +275,18 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 }
             }
 
+            const bool time_stage = StageTimingEnabled();
+            const auto stage_start = std::chrono::steady_clock::now();
             activations[task.local_chunk_idx][mb] = stage_->ForwardOneChunk(inputs, task.local_chunk_idx);
+            if (time_stage) {
+                SynchronizeStageStream(stage_->device());
+                const auto stage_end = std::chrono::steady_clock::now();
+                const double elapsed_ms
+                    = std::chrono::duration<double, std::milli>(stage_end - stage_start).count();
+                LOG(INFO) << std::format("pipeline_stage_timing direction=forward stage={} chunk={} "
+                                         "microbatch={} elapsed_ms={:.3f}",
+                                         stage_idx, task.local_chunk_idx, mb, elapsed_ms);
+            }
 
             if (!task.is_last_chunk) {
                 if (stage_->IsLastStage()) {
@@ -281,7 +307,18 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                         {activations[task.local_chunk_idx][mb][0], std::make_shared<Tensor>(target_on_device)})[0];
                     loss = loss / n;
                 }
+                const bool time_stage = StageTimingEnabled();
+                const auto stage_start = std::chrono::steady_clock::now();
                 loss->Backward();
+                if (time_stage) {
+                    SynchronizeStageStream(stage_->device());
+                    const auto stage_end = std::chrono::steady_clock::now();
+                    const double elapsed_ms
+                        = std::chrono::duration<double, std::milli>(stage_end - stage_start).count();
+                    LOG(INFO) << std::format("pipeline_stage_timing direction=backward stage={} chunk={} "
+                                             "microbatch={} elapsed_ms={:.3f}",
+                                             stage_idx, task.local_chunk_idx, mb, elapsed_ms);
+                }
                 // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
                 // between forward and backward.
                 total_loss += static_cast<const float *>(loss->To(Device()).DataPtr())[0];
@@ -291,7 +328,18 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 auto dummy_gradient
                     = std::make_shared<Tensor>(out_tensor->Dims(), out_tensor->Dtype(), out_tensor->GetDevice());
 
+                const bool time_stage = StageTimingEnabled();
+                const auto stage_start = std::chrono::steady_clock::now();
                 out_tensor->Backward(dummy_gradient);
+                if (time_stage) {
+                    SynchronizeStageStream(stage_->device());
+                    const auto stage_end = std::chrono::steady_clock::now();
+                    const double elapsed_ms
+                        = std::chrono::duration<double, std::milli>(stage_end - stage_start).count();
+                    LOG(INFO) << std::format("pipeline_stage_timing direction=backward stage={} chunk={} "
+                                             "microbatch={} elapsed_ms={:.3f}",
+                                             stage_idx, task.local_chunk_idx, mb, elapsed_ms);
+                }
             }
         }
     }

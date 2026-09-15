@@ -71,6 +71,14 @@ public:
     static PipelineLayout BuildContiguous(const std::vector<int> &stage_layer_counts,
                                           SpecialModulePlacement placement = {}, PipelineLayoutPolicy policy = {});
 
+    // Build an explicit chunk-to-stage layout.  Chunks must use contiguous
+    // global ids [0, num_stages * vpp_size), and each stage must provide one
+    // chunk for every local_chunk_id in [0, vpp_size).  The stage id of each
+    // chunk is authoritative; it is not inferred from global_chunk_id.
+    static PipelineLayout BuildExplicit(int num_layers, int num_stages, int vpp_size,
+                                        const std::vector<ChunkLayout> &chunks,
+                                        SpecialModulePlacement placement = {}, PipelineLayoutPolicy policy = {});
+
     int num_layers() const;
     int num_stages() const;
     int vpp_size() const;

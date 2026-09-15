@@ -102,6 +102,17 @@ TEST(PipelineParallelChunkingTest, VirtualPipelinePreservesLocalChunkOrder) {
     EXPECT_EQ(second->module("0").type(), nn::TransformerChunk::kType);
 }
 
+TEST(PipelineParallelChunkingTest, EmptyStageBuildsPassThroughChunk) {
+    const auto layout
+        = nn::parallel::PipelineLayout::ParseMegatronStyleLayout("Etttttt||ttttttFH", 12, 3, 1);
+    auto pipeline = BuildPipeline(layout, 1);
+
+    ASSERT_EQ(pipeline->mutable_chunks()->size(), 1U);
+    auto chunk = AsSequential(pipeline, 0);
+    ASSERT_NE(chunk, nullptr);
+    EXPECT_EQ(chunk->module("0").type(), nn::TransformerChunk::kType);
+}
+
 TEST(PipelineParallelChunkingTest, RejectsStageCountMismatchWithCatchableError) {
     const auto layout = nn::parallel::PipelineLayout::BuildContiguous({2, 4, 3, 3});
     nn::parallel::global::GlobalEnv::Instance().set_pipeline_layout(layout);

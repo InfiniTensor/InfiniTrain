@@ -1,0 +1,42 @@
+W0915 02:38:27.236000 37514 torch/distributed/run.py:792]
+W0915 02:38:27.236000 37514 torch/distributed/run.py:792] *****************************************
+W0915 02:38:27.236000 37514 torch/distributed/run.py:792] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+W0915 02:38:27.236000 37514 torch/distributed/run.py:792] *****************************************
+I20260915 02:38:27.564974 140459512438784 main.cc:651]
+=== Parallel Communication Groups ===
+world_size = 2, config: {DP=1, TP=1, PP=2}, order: {TP -> DP -> PP}
+[DP] size=1, unenabled
+[TP] size=1, unenabled
+[PP] size=2, num_groups=1
+  - PP 0 (dp=0, tp=0, pp=-): [0, 1]
+
+I20260915 02:38:27.565040 140226827431936 main.cc:651]
+=== Parallel Communication Groups ===
+world_size = 2, config: {DP=1, TP=1, PP=2}, order: {TP -> DP -> PP}
+[DP] size=1, unenabled
+[TP] size=1, unenabled
+[PP] size=2, num_groups=1
+  - PP 0 (dp=0, tp=0, pp=-): [0, 1]
+
+I20260915 02:38:28.465191 140459512438784 main.cc:289] total desired batch size: 256 => calculated gradient accumulation steps: 1
+I20260915 02:38:28.465191 140226827431936 main.cc:289] total desired batch size: 256 => calculated gradient accumulation steps: 1
+I20260915 02:38:34.777675 140459512438784 checkpoint_loader.cc:118] magic: 20240326 version: 3 block_size: 1024 vocab_size: 50257 n_layer: 12 n_head: 12 n_embd: 768 padded_vocab_size: 50304
+I20260915 02:38:35.069771 140459512438784 main.cc:354] Optimizing 74 model parameters
+I20260915 02:38:35.095557 140459512438784 main.cc:444] Rank 0: start training
+I20260915 02:38:35.095574 140459512438784 checkpoint_manager.cc:26] No checkpoint specified for resume. Starting training from scratch.
+I20260915 02:38:35.095578 140459512438784 main.cc:491] start training
+I20260915 02:38:35.096300 140459512438784 pipeline_schedule.cc:30] === Schedule Table ===
+n: 1, stages: 2, vpp: 1, total_chunks: 2
+I20260915 02:38:35.096322 140459512438784 pipeline_schedule.cc:33]
+I20260915 02:38:35.096324 140459512438784 pipeline_schedule.cc:34] Step |    Type   | Microbatch | Global Chunk | Local Chunk | Stage
+I20260915 02:38:35.096327 140459512438784 pipeline_schedule.cc:35] -----|-----------|------------|--------------|-------------|-------
+I20260915 02:38:35.096337 140459512438784 pipeline_schedule.cc:46]    0 | Forward   |          0 |            0 |           0 |     0
+I20260915 02:38:35.096344 140459512438784 pipeline_schedule.cc:46]    1 | Forward   |          0 |            1 |           0 |     1
+I20260915 02:38:35.096351 140459512438784 pipeline_schedule.cc:46]    2 | Backward  |          0 |            1 |           0 |     1
+I20260915 02:38:35.096358 140459512438784 pipeline_schedule.cc:46]    3 | Backward  |          0 |            0 |           0 |     0
+I20260915 02:38:39.928523 140226827431936 checkpoint_loader.cc:118] magic: 20240326 version: 3 block_size: 1024 vocab_size: 50257 n_layer: 12 n_head: 12 n_embd: 768 padded_vocab_size: 50304
+I20260915 02:38:40.096697 140226827431936 main.cc:354] Optimizing 75 model parameters
+I20260915 02:38:40.122476 140226827431936 main.cc:444] Rank 1: start training
+I20260915 02:38:40.122500 140226827431936 checkpoint_manager.cc:26] No checkpoint specified for resume. Starting training from scratch.
+I20260915 02:38:40.122504 140226827431936 main.cc:491] start training
+E20260915 02:38:40.252167 140226827431936 main.cc:603] step    1/1 | train loss 5.356194 | lr 1.00e-04 | (129.61 ms | 1975 tok/s | peak used:   738 MB | peak reserved:   768 MB, DP=1, TP=1, SP=1, PP=2)

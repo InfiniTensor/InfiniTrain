@@ -1,0 +1,19 @@
+I20260915 02:38:20.469311 139849506938880 main.cc:651]
+=== Parallel Communication Groups ===
+world_size = 1, config: {DP=1, TP=1, PP=1}, order: {TP -> DP -> PP}
+[DP] size=1, unenabled
+[TP] size=1, unenabled
+[PP] size=1, unenabled
+
+I20260915 02:38:20.469460 139849506938880 main.cc:289] total desired batch size: 256 => calculated gradient accumulation steps: 1
+I20260915 02:38:24.288238 139849506938880 checkpoint_loader.cc:118] magic: 20240326 version: 3 block_size: 1024 vocab_size: 50257 n_layer: 12 n_head: 12 n_embd: 768 padded_vocab_size: 50304
+I20260915 02:38:24.994120 139849506938880 main.cc:354] Optimizing 149 model parameters
+I20260915 02:38:25.020612 139849506938880 main.cc:444] Rank 0: start training
+I20260915 02:38:25.020630 139849506938880 checkpoint_manager.cc:26] No checkpoint specified for resume. Starting training from scratch.
+I20260915 02:38:25.020633 139849506938880 main.cc:491] start training
+I20260915 02:38:25.020752 139849506938880 main.cc:548] Rank 0: start forward
+I20260915 02:38:25.103274 139849506938880 main.cc:552] Rank 0: finish model forward, start loss forward
+I20260915 02:38:25.103916 139849506938880 main.cc:560] Rank 0: finish loss forward
+I20260915 02:38:25.103930 139849506938880 main.cc:562] Rank 0: start backward
+I20260915 02:38:25.118459 139849506938880 main.cc:568] Rank 0: finish backward
+E20260915 02:38:25.119181 139849506938880 main.cc:603] step    1/1 | train loss 5.356194 | lr 1.00e-04 | (98.51 ms | 2599 tok/s | peak used:  1422 MB | peak reserved:  1440 MB, DP=1, TP=1, SP=1, PP=1)
