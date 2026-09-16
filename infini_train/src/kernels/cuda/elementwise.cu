@@ -1013,7 +1013,9 @@ bool LaunchBinaryBackwardMixed(FuncA fn_a, FuncB fn_b, const std::shared_ptr<Ten
         return false;
     }
     if (needs_broadcast) {
-        grad_a->Fill(0.0f);
+        // grad_a needs no zero-init: a is never broadcast (one-way b->a only), so every kernel here
+        // writes output_a[a_offset] directly with full coverage (each element exactly once). Only
+        // grad_b is accumulated via atomicAdd and thus requires a zero start.
         grad_b->Fill(0.0f);
     }
     switch (a_dtype) {
@@ -1192,7 +1194,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     switch (promoted_type) {
         DISPATCH_CASE(WRAP({
                           if (needs_broadcast) {
-                              grad_a->Fill(0.0f);
+                              // grad_a is written directly & fully covered (a never broadcast); only
+                              // grad_b needs zero-init for atomicAdd accumulation.
                               grad_b->Fill(0.0f);
                           }
                           LaunchBackward<float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
@@ -1201,7 +1204,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
                           if (needs_broadcast) {
-                              grad_a->Fill(0.0f);
+                              // grad_a is written directly & fully covered (a never broadcast); only
+                              // grad_b needs zero-init for atomicAdd accumulation.
                               grad_b->Fill(0.0f);
                           }
                           LaunchBackward<nv_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
