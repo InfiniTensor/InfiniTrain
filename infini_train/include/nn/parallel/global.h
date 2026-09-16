@@ -29,7 +29,8 @@ public:
     static GlobalEnv &Instance();
 
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-              int pipeline_parallel_size, int virtual_pipeline_parallel_size);
+              int pipeline_parallel_size, int virtual_pipeline_parallel_size,
+              const std::vector<int> &pipeline_layer_partition = {});
 
     int nnodes() const;
 
@@ -54,6 +55,8 @@ public:
     int pipeline_parallel_size() const;
 
     int virtual_pipeline_parallel_size() const;
+
+    const std::vector<int> &pipeline_layer_partition() const;
 
     Layout layout() const;
 
@@ -80,6 +83,7 @@ private:
 
     int pipeline_parallel_size_ = 1;
     int virtual_pipeline_parallel_size_ = 1;
+    std::vector<int> pipeline_layer_partition_;
 
     mutable std::mutex mutex_;
     bool initialized_ = false;
@@ -88,9 +92,10 @@ private:
 };
 
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                       int pipeline_parallel_size, int virtual_pipeline_parallel) {
+                       int pipeline_parallel_size, int virtual_pipeline_parallel,
+                       const std::vector<int> &pipeline_layer_partition = {}) {
     GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
-                               pipeline_parallel_size, virtual_pipeline_parallel);
+                               pipeline_parallel_size, virtual_pipeline_parallel, pipeline_layer_partition);
 }
 inline int GetNnodes() { return GlobalEnv::Instance().nnodes(); }
 inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }
@@ -106,6 +111,7 @@ inline bool GetSequenceParallelEnabled() { return GlobalEnv::Instance().sequence
 inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
 inline int GetPipelineParallelSize() { return GlobalEnv::Instance().pipeline_parallel_size(); }
 inline int GetVirtualPipelineParallelSize() { return GlobalEnv::Instance().virtual_pipeline_parallel_size(); }
+inline const std::vector<int> &GetPipelineLayerPartition() { return GlobalEnv::Instance().pipeline_layer_partition(); }
 
 // =========================
 // Layout Helper Functions

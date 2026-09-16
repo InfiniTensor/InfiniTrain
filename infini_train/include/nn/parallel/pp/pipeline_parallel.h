@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_layout.h"
 
 namespace infini_train {
 class Tensor;
@@ -18,27 +19,23 @@ class PipelineSchedule;
 
 extern thread_local int pp_rank;
 
-struct StageInfo {
-    bool is_first_stage;
-    bool is_last_stage;
-
-    // Layer index ranges for chunks assigned to this pipeline stage.
-    // Each element is a pair: (inclusive_start_layer, exclusive_end_layer)
-    std::vector<std::pair<int, int>> layer_ranges_per_chunk;
-};
-
 class PipelineParallel : public Module {
 public:
     PipelineParallel(const std::shared_ptr<nn::Module> module, int num_stages, int num_micro_batches,
-                     const std::vector<std::vector<int64_t>> &recv_shape, int rank, Device device, int vpp);
+                     const std::vector<std::vector<int64_t>> &recv_shape, int rank, Device device,
+                     const StageInfo &stage_info);
 
     float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input,
                     const std::vector<std::shared_ptr<Tensor>> &target, const std::shared_ptr<Optimizer> &optimizer,
                     const std::shared_ptr<nn::Module> &loss_fn, DataType dtype) override;
 
-    static StageInfo GetStageInfo(int total_layers, int pp_size, int pp_rank, int chunks_per_stage = 1);
-
     std::vector<std::shared_ptr<Module>> *mutable_chunks();
+
+    // Gather per-stage forward/backward compute times across the pipeline process group and
+    // print a summary of per-stage execution time, measured load-imbalance bubble and pipeline
+    // efficiency. This is a collective over the pipeline group (all PP ranks must call it); only
+    // the first pipeline rank prints. No-op when num_stages <= 1.
+    void ReportPipelineStats();
 
 private:
     void BuildPipelineStage(const std::vector<std::vector<int64_t>> &recv_shape, Device device,

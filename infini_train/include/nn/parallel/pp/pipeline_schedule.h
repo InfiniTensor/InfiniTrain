@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -17,12 +18,13 @@ namespace infini_train::nn::parallel {
 
 class PipelineStage;
 
+class StageTimer;
+
 class PipelineSchedule {
 public:
-    PipelineSchedule(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches)
-        : stage_(std::move(stage)), num_micro_batches_(num_micro_batches) {}
+    PipelineSchedule(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches);
 
-    virtual ~PipelineSchedule() = default;
+    virtual ~PipelineSchedule();
 
     float Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tensor> target,
                const std::shared_ptr<Optimizer> &optimizer, const std::shared_ptr<nn::Module> &loss_fn, DataType dtype);
@@ -34,9 +36,17 @@ public:
     std::vector<std::shared_ptr<Tensor>> ReceiveFromPrev(int peer_rank);
     std::vector<std::shared_ptr<Tensor>> SendToNext(const std::vector<std::shared_ptr<Tensor>> &tensors, int peer_rank);
 
+    // Accumulated per-stage compute time (forward / backward) in seconds, measured across all
+    // `StepMicroBatches` calls since construction. Used by PipelineParallel::ReportPipelineStats.
+    double ForwardSeconds() const;
+    double BackwardSeconds() const;
+    int64_t ForwardTaskCount() const;
+    int64_t BackwardTaskCount() const;
+
 protected:
     int num_micro_batches_ = -1;
     std::shared_ptr<PipelineStage> stage_ = nullptr;
+    std::unique_ptr<StageTimer> timer_;
 };
 
 class PipelineParallelScheduler {

@@ -24,6 +24,7 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_layout.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
@@ -85,6 +86,12 @@ DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
+DEFINE_string(pipeline_layer_partition, "",
+              "comma-separated per-stage layer counts for a custom pipeline layout, e.g. 4,8,6,6");
+DEFINE_string(pipeline_layer_costs, "",
+              "comma-separated per-layer compute costs used to auto-suggest a balanced layout, e.g. 1,2,1.5");
+DEFINE_bool(pipeline_auto_layout, false,
+            "auto-suggest a load-balanced pipeline layout using per-layer parameter counts");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 DEFINE_uint32(save_interval, 0, "save checkpoint every N steps; 0 disables saving");
@@ -116,6 +123,24 @@ constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles
     = {"none", "constant", "linear", "cosine", "inverse-square-root"};
+
+std::string PartitionToString(const std::vector<int> &partition) {
+    std::string s;
+    for (size_t i = 0; i < partition.size(); ++i) {
+        if (i > 0) {
+            s += ",";
+        }
+        s += std::to_string(partition[i]);
+    }
+    return s;
+}
+
+nn::TransformerConfig ResolveLLaMA3Config() {
+    nn::TransformerConfig config = llama3::LLaMA3Config();
+    llama3::SanitizeLLaMA3Config(config);
+    return config;
+}
+
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
@@ -132,14 +157,12 @@ void Train(const nn::parallel::Rank &rank) {
         if (rank.IsLastRank()) {
             if (!FLAGS_save.empty() && FLAGS_save_interval == 0) {
                 LOG(FATAL) << "Invalid configuration: --save is set ('" << FLAGS_save
-                           << "'), but --save_interval is 0. "
-                           << "They must be set together.";
+                           << "'), but --save_interval is 0. " << "They must be set together.";
             }
 
             if (FLAGS_save.empty() && FLAGS_save_interval > 0) {
                 LOG(FATAL) << "Invalid configuration: --save_interval is set to " << FLAGS_save_interval
-                           << ", but --save is empty. "
-                           << "They must be set together.";
+                           << ", but --save is empty. " << "They must be set together.";
             }
         }
     }
@@ -222,6 +245,10 @@ void Train(const nn::parallel::Rank &rank) {
 
     utils::PrecisionChecker::BuildNameMap(model.get());
 
+    // Cache the transformer stage info before wrapping with LoRA / PipelineParallel.
+    auto llama_model = std::dynamic_pointer_cast<nn::TransformerModel>(model);
+    CHECK(llama_model) << "LLaMA3 example expects a TransformerModel.";
+
     // Apply LoRA using GetLoRAModel (in-place injection)
     bool lora_enabled = FLAGS_lora_rank > 0;
     if (lora_enabled) {
@@ -261,7 +288,7 @@ void Train(const nn::parallel::Rank &rank) {
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
         model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
-                                                                 pp_rank, device, model_config.GetChunkSize());
+                                                                 pp_rank, device, llama_model->stage_info());
         if (ddp_world_size > 1) {
             auto ddp_config = DistributedDataParallelConfig{.zero_stage = FLAGS_zero_stage};
             auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
@@ -544,6 +571,11 @@ void Train(const nn::parallel::Rank &rank) {
         }
     }
 
+    // Print per-stage execution time, load-imbalance bubble and pipeline efficiency.
+    if (pp_world_size > 1) {
+        dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->ReportPipelineStats();
+    }
+
     // Save LoRA weights if enabled and path specified
     if (lora_enabled && !FLAGS_lora_save_path.empty()) {
         LOG(INFO) << "Saving LoRA weights to: " << FLAGS_lora_save_path;
@@ -561,8 +593,35 @@ int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
 
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
+
+    const bool has_explicit_partition = !FLAGS_pipeline_layer_partition.empty();
+    const bool has_layer_costs = !FLAGS_pipeline_layer_costs.empty();
+    CHECK(!(has_explicit_partition && (has_layer_costs || FLAGS_pipeline_auto_layout)))
+        << "--pipeline_layer_partition cannot be combined with --pipeline_layer_costs or --pipeline_auto_layout";
+    CHECK(!(has_layer_costs && FLAGS_pipeline_auto_layout))
+        << "--pipeline_layer_costs and --pipeline_auto_layout are mutually exclusive";
+
+    std::vector<int> pipeline_layer_partition;
+    if (has_explicit_partition) {
+        pipeline_layer_partition = nn::parallel::ParsePipelineLayerPartition(FLAGS_pipeline_layer_partition);
+    } else if (has_layer_costs) {
+        const auto layer_costs = nn::parallel::ParsePipelineLayerCosts(FLAGS_pipeline_layer_costs);
+        pipeline_layer_partition = nn::parallel::SuggestBalancedPartition(static_cast<int>(layer_costs.size()),
+                                                                          FLAGS_pipeline_parallel, layer_costs);
+        LOG(INFO) << "Auto-suggested pipeline layout from --pipeline_layer_costs: "
+                  << PartitionToString(pipeline_layer_partition);
+    } else if (FLAGS_pipeline_auto_layout) {
+        const auto config = ResolveLLaMA3Config();
+        const auto layer_costs = nn::ComputePerLayerParamCounts(config);
+        pipeline_layer_partition = nn::parallel::SuggestBalancedPartition(static_cast<int>(config.n_layer),
+                                                                          FLAGS_pipeline_parallel, layer_costs);
+        LOG(INFO) << "Auto-suggested pipeline layout from per-layer parameter counts: "
+                  << PartitionToString(pipeline_layer_partition);
+    }
+
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
-                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
+                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel,
+                                     pipeline_layer_partition);
     utils::PrecisionCheckEnv::Instance().Init(precision_config);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();

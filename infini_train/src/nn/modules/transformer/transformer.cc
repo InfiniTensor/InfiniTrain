@@ -18,6 +18,8 @@
 #include "infini_train/include/nn/modules/transformer/moe/moe_layer.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_layout.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
@@ -206,9 +208,14 @@ std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(const std::ve
 
 TransformerModel::TransformerModel(const TransformerConfig config)
     : CloneableModule(kType), config_(config),
-      stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
-          config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
-          nn::parallel::global::GetVirtualPipelineParallelSize())) {
+      layout_(nn::parallel::PipelineLayout::Create(
+          static_cast<int>(config_.n_layer), nn::parallel::global::GetPipelineParallelSize(),
+          nn::parallel::global::GetVirtualPipelineParallelSize(), nn::parallel::global::GetPipelineLayerPartition())),
+      stage_info_(layout_.GetStageInfo(nn::parallel::pp_rank)) {
+    if (nn::parallel::global::GetPipelineParallelSize() > 1 && nn::parallel::pp_rank == 0) {
+        LOG(INFO) << layout_.Describe();
+    }
+
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
 
     // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
@@ -280,6 +287,55 @@ std::vector<std::shared_ptr<Tensor>> TransformerModel::Forward(const std::vector
 
     auto res = (*modules_[kPPLastStageName])(x1);
     return res;
+}
+
+namespace {
+// Mirror of MLP::MLP's hidden-dimension computation so the analytic per-layer parameter
+// count matches the module that will actually be constructed.
+int64_t FfnHiddenDim(const TransformerConfig &config) {
+    int64_t ffn_hidden = static_cast<int64_t>(config.n_embd * config.ffn_expansion_ratio);
+    if (config.activation_type == MLPType::kSwiGLU) {
+        ffn_hidden = static_cast<int64_t>(2 * ffn_hidden) / 3; // SwiGLU intermediate
+    }
+    if (config.ffn_dim_multiplier.has_value()) {
+        ffn_hidden
+            = static_cast<int64_t>(std::llround(static_cast<double>(ffn_hidden) * config.ffn_dim_multiplier.value()));
+    }
+    ffn_hidden = (ffn_hidden + config.multiple_of - 1) / config.multiple_of * config.multiple_of;
+    return ffn_hidden;
+}
+} // namespace
+
+std::vector<double> ComputePerLayerParamCounts(const TransformerConfig &config) {
+    CHECK_GT(config.n_layer, 0) << "n_layer must be positive";
+    CHECK(config.ffn_type == FFNType::kDense)
+        << "ComputePerLayerParamCounts does not support MoE layers; pass --pipeline_layer_costs instead";
+
+    const int64_t n_embd = config.n_embd;
+    const int64_t head_dim = n_embd / config.n_head;
+    const int64_t qkv_dim = (config.n_head + 2 * config.n_kv_head) * head_dim;
+    const int64_t ffn_hidden = FfnHiddenDim(config);
+
+    // LayerNorm contributes weight + bias (2 * n_embd); RMSNorm contributes weight only.
+    const int64_t norm_params = (config.norm_type == NormType::kLayerNorm) ? 2 * n_embd : n_embd;
+
+    // Full (unsharded) parameters of a Linear(in, out) with optional bias.
+    auto linear_params = [&config](int64_t in_features, int64_t out_features) {
+        const double weight = static_cast<double>(in_features) * static_cast<double>(out_features);
+        const double bias = config.add_bias_linear ? static_cast<double>(out_features) : 0.0;
+        return weight + bias;
+    };
+
+    double per_layer = 2.0 * static_cast<double>(norm_params); // ln_1 + ln_2
+    per_layer += linear_params(n_embd, qkv_dim);               // attn.c_attn
+    per_layer += linear_params(n_embd, n_embd);                // attn.c_proj
+    per_layer += linear_params(n_embd, ffn_hidden);            // mlp.c_fc
+    if (config.activation_type == MLPType::kSwiGLU) {
+        per_layer += linear_params(n_embd, ffn_hidden); // mlp.c_fc2
+    }
+    per_layer += linear_params(ffn_hidden, n_embd); // mlp.c_proj
+
+    return std::vector<double>(static_cast<size_t>(config.n_layer), per_layer);
 }
 
 } // namespace infini_train::nn
