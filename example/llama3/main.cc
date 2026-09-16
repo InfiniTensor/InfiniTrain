@@ -18,7 +18,6 @@
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/checkpoint/checkpoint.h"
 #include "infini_train/include/checkpoint/checkpoint_manager.h"
-#include "infini_train/include/core/privateuse1_backend.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
@@ -121,10 +120,6 @@ constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles
     = {"none", "constant", "linear", "cosine", "inverse-square-root"};
 
-bool IsMacaBackend(Device::DeviceType device_type) {
-    return device_type == Device::DeviceType::kPrivateUse1 && core::HasPrivateUse1Backend()
-        && core::GetPrivateUse1BackendName() == "maca";
-}
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
@@ -230,12 +225,12 @@ void Train(const nn::parallel::Rank &rank) {
 
     model->To(device);
 
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS
     // FIXME(cx): MACA requires model upload to finish before communication begins.
-    // Replace this backend-name check with a provider post-upload hook.
-    if (IsMacaBackend(device.type())) {
-        auto *upload_impl = core::GetDeviceGuardImpl(device.type());
-        upload_impl->SynchronizeDevice(device);
+    if (INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS && device.type() == Device::DeviceType::kPrivateUse1) {
+        core::GetDeviceGuardImpl(device.type())->SynchronizeDevice(device);
     }
+#endif
 
     utils::PrecisionChecker::BuildNameMap(model.get());
 
@@ -572,16 +567,12 @@ void Train(const nn::parallel::Rank &rank) {
     Profiler::Instance().PrintRecords("llama3.records.log");
 #endif
 
-    // FIXME(cx): MACA requires a step-boundary synchronization to flush pending mcFreeAsync operations.
-    // Replace this backend-name check with a provider step-completion hook.
-    // Releasing the pending operations ensures that ATU entries for
-    // activation/gradient tensors from this step are released before the next
-    // forward pass begins.  Without this, the ATU (address-translation unit)
-    // accumulates deferred frees across steps and becomes full, causing
-    // xnack(0x8) ATU-fault crashes in CastKernel and other large-tensor kernels.
-    if (IsMacaBackend(device.type())) {
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS
+    // FIXME(cx): MACA needs synchronization before training teardown.
+    if (INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS && device.type() == Device::DeviceType::kPrivateUse1) {
         impl->SynchronizeDevice(device);
     }
+#endif
 }
 
 int main(int argc, char *argv[]) {
@@ -615,17 +606,15 @@ int main(int argc, char *argv[]) {
         Train(rank);
     }
 
-    const bool bypass_maca_static_teardown
-        = IsMacaBackend(Device::ParseType(FLAGS_device).value()) && nn::parallel::global::GetWorldSize() > 1;
-
     gflags::ShutDownCommandLineFlags();
     google::ShutdownGoogleLogging();
 
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS
     // FIXME(cx): MACA parallel execution bypasses static destruction to avoid teardown failures.
-    // Replace this backend-name check with a provider shutdown hook.
-    if (bypass_maca_static_teardown) {
+    if (INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS
+        && Device::ParseType(FLAGS_device).value() == Device::DeviceType::kPrivateUse1) {
         std::_Exit(0);
     }
-
+#endif
     return 0;
 }
