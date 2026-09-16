@@ -570,3 +570,43 @@ E 的窗口敏感性：step3–10 **75.93 ms** / step4–10 **75.17 ms** / step5
 > **架构价值**：P1 的核心收益不在 wall，而在**把 Fill(0) 从 kernel 家族里摘出去**。这为后续优化铺路：① 档 4 CUDA Graph 捕获时，memset 节点比 kernel 节点更轻；② 多 stream 并行时，memset 走 copy engine 可与 compute stream 真正重叠；③ nsys timeline 上 `Fill·f32` 条目消失，可读性大幅提升。
 
 **产物**：`build_new/llama3`（含 P0 + P1 改动）；未生成新 nsys trace（待后续统一复测）。
+### 3.4 其他kernel级优化
+#### 3.4.1 slice Kernel：元数据改走 kernel parameter space
+
+Section 2.1 结论 6 指出 `SliceForward` 每次有 5 次微小 H2D 拷贝，其中几次因命令队列耗尽而耗时很长。每 step 约 **290 次 Slice**（forward ~145 + backward ~145），每次拷 5 个长度 = `num_dims`（典型 3–4）的 int64 数组，合计 **~1450 次 H2D + ~290 次 `cudaMallocAsync`/`cudaFreeAsync`**，正是 2.3 里「每轮 1515 次微小 HtoD」的主因。
+
+**方案**：把 5 个元数据数组打包进定长 POD 结构 `SliceMeta`，经 kernel parameter space 按值传入，彻底消除 `cudaMallocAsync` + 5×`cudaMemcpyAsync` + `cudaFreeAsync` 整条序列。
+
+```cpp
+constexpr int kMaxDims = 8;
+struct SliceMeta {
+    int64_t new_dims[kMaxDims], starts[kMaxDims], steps[kMaxDims];
+    int64_t in_strides[kMaxDims], out_strides[kMaxDims];
+};
+// SliceForwardKernel<<<...>>>(in, out, meta, num_dims, total_elements);  // meta 按值 → constant cache
+```
+
+- **为何不能用 `std::vector`**：kernel 参数须 trivially copyable，`vector` 内部是指向 host 堆的裸指针，按值传入后 GPU 解引用的是非法设备地址；定长数组是 POD，`sizeof(SliceMeta)=320 B` ≪ sm_80 的 4 KB 参数上限。
+- **守卫**：host 端加 `CHECK_LE(num_dims, kMaxDims)`，防 `std::copy` 写越界。
+- **附带收益**：元数据访问从 global memory（经 L2）升级为 constant cache，所有 thread 读同一地址走 zero-conflict broadcast，延迟更低。
+
+**验证**：`test_autograd_cuda` **263 pass / 1 pre-existing skip**、`test_tensor_cuda`、`test_transformer_cuda` 全通过；E/F 共 6 次运行 step1 loss 恒为 **`4.898438`**（逐位一致）→ 前向 bit-exact。
+
+**端到端稳态时延**（同会话内 E/F 各 10 iter × 3 次，每步取中位数再对窗口求均值，与 3.2.4 同口径；E 由暂存 slice 改动重编得到，非引用旧值）：
+
+| 配置 | 构建目录 | step5–10 稳态 | 运行间极差 |
+|---|---|---|---|
+| E ＋P0+P1（基线） | `build_new`（stash slice） | **74.90 ms** | ±2.39% |
+| F ＋Slice 参数化 | `build_new` | **71.83 ms** | ±0.87% |
+
+| 增量 | 稳态时延 | 降幅 | 折合每轮 |
+|---|---|---|---|
+| E→F（Slice 参数化） | 74.90 → 71.83 ms | **−4.09%** | −3.07 ms |
+
+F 的窗口敏感性：step3–10 **73.28 ms** / step4–10 **72.32 ms** / step5–10 **71.83 ms**。
+
+> **可信度**：−3.07 ms 远超 F 自身噪声带（±0.87% ≈ ±0.62 ms），也超出 E 的噪声带（±2.39% ≈ ±1.79 ms），可作强信号采信。与 P0/P1 的 wall 收益（各 −0.2~0.5 ms）相比本次显著更大，原因是 slice 消除的不只是 kernel launch，还有 **290 次 `cudaMallocAsync`/`cudaFreeAsync`**（async mempool 分配器带锁，host 开销远高于普通 launch）与 ~1450 次 memcpy API；且 F 的噪声带收窄到 E 的约 1/3，印证结论 6 里「队列耗尽导致的长尾阻塞」被消除。
+
+> **产物**：`build_new/llama3`（含 P0+P1+Slice 参数化）；未生成新 nsys trace（待统一复测）。该模式可推广到 `transform.cu` 的 `TransposeForward`（3 数组 × ndim 同样可并入 kernel 参数）。
+
+
