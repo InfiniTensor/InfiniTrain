@@ -118,15 +118,17 @@ void PipelineParallel::ReportPipelineStats() {
     const double efficiency = bottleneck > 0.0 ? average / bottleneck : 0.0;
     const double imbalance_bubble = 1.0 - efficiency;
 
-    LOG(INFO) << std::format("=== Pipeline Timing Summary ({} stages) ===", num_stages);
-    LOG(INFO) << std::format("{:<6} {:>14} {:>14} {:>14}", "Stage", "Fwd(ms)", "Bwd(ms)", "Total(ms)");
+    // Use LOG(ERROR) so the summary reaches stderr even when glog's stderrthreshold
+    // filters out INFO; this matches the per-step progress lines above.
+    LOG(ERROR) << std::format("=== Pipeline Timing Summary ({} stages) ===", num_stages);
+    LOG(ERROR) << std::format("{:<6} {:>14} {:>14} {:>14}", "Stage", "Fwd(ms)", "Bwd(ms)", "Total(ms)");
     for (int s = 0; s < num_stages; ++s) {
-        LOG(INFO) << std::format("{:<6} {:>14.3f} {:>14.3f} {:>14.3f}", s, stage_fwd[s] * 1e3, stage_bwd[s] * 1e3,
-                                 stage_total[s] * 1e3);
+        LOG(ERROR) << std::format("{:<6} {:>14.3f} {:>14.3f} {:>14.3f}", s, stage_fwd[s] * 1e3, stage_bwd[s] * 1e3,
+                                  stage_total[s] * 1e3);
     }
-    LOG(INFO) << std::format("Compute tasks per stage: {} forward + {} backward", fwd_count, bwd_count);
-    LOG(INFO) << std::format("Bottleneck stage: {:.3f} ms | average: {:.3f} ms", bottleneck * 1e3, average * 1e3);
-    LOG(INFO) << std::format("Load-imbalance bubble: {:.1f}% | pipeline efficiency: {:.1f}%", imbalance_bubble * 100.0,
-                             efficiency * 100.0);
+    LOG(ERROR) << std::format("Compute tasks per stage: {} forward + {} backward", fwd_count, bwd_count);
+    LOG(ERROR) << std::format("Bottleneck stage: {:.3f} ms | average: {:.3f} ms", bottleneck * 1e3, average * 1e3);
+    LOG(ERROR) << std::format("Load-imbalance bubble: {:.1f}% | pipeline efficiency: {:.1f}%",
+                              imbalance_bubble * 100.0, efficiency * 100.0);
 }
 } // namespace infini_train::nn::parallel

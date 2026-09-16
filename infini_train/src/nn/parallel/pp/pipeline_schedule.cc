@@ -44,6 +44,10 @@ public:
             cpu_active_ = true;
             return;
         }
+        // Pin the device so the CUDA event is created in this stage's context; otherwise
+        // EventCreate() uses the thread's current device, which may differ from device_,
+        // and EventRecord() on this stage's stream fails with cudaErrorInvalidResourceHandle.
+        core::DeviceGuard guard(device_);
         core::Event *start = nullptr;
         impl_->EventCreate(&start);
         impl_->EventRecord(start, CurrentStream());
@@ -65,6 +69,7 @@ public:
             return;
         }
         CHECK(!pending_starts_.empty()) << "StageTimer::End called without a matching Begin";
+        core::DeviceGuard guard(device_);
         core::Event *start = pending_starts_.back();
         pending_starts_.pop_back();
         core::Event *stop = nullptr;
