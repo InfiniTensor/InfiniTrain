@@ -24,6 +24,8 @@ inline nn::TransformerConfig Qwen3Config() {
             .rope_theta = 1000000.0f,
             .use_scaled_rope = false,
             .rotary_interleaved = false,
-            .norm_eps = 1e-6f};
+            .norm_eps = 1e-6f,
+            .use_qk_norm = true,
+            .qk_norm_eps = 1e-6f};
 }
 } // namespace qwen3
