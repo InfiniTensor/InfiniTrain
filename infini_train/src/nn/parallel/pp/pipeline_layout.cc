@@ -39,9 +39,7 @@ std::vector<int> ParsePipelineLayerPartition(const std::string &str) {
     }
     std::stringstream ss(str);
     std::string token;
-    while (std::getline(ss, token, ',')) {
-        partition.push_back(ParseLayerCount(token, str));
-    }
+    while (std::getline(ss, token, ',')) { partition.push_back(ParseLayerCount(token, str)); }
     return partition;
 }
 
@@ -85,17 +83,15 @@ std::vector<int> SuggestBalancedPartition(int total_layers, int num_stages, cons
         CHECK_EQ(layer_costs.size(), static_cast<size_t>(total_layers))
             << "layer_costs has " << layer_costs.size() << " entries but total_layers is " << total_layers;
         for (int i = 0; i < total_layers; ++i) {
-            CHECK_GE(layer_costs[i], 0.0) << "layer_costs must be non-negative, layer " << i << " has "
-                                          << layer_costs[i];
+            CHECK_GE(layer_costs[i], 0.0)
+                << "layer_costs must be non-negative, layer " << i << " has " << layer_costs[i];
             costs[i] = layer_costs[i];
         }
     }
 
     // prefix[t] = sum of costs[0 .. t-1].
     std::vector<double> prefix(total_layers + 1, 0.0);
-    for (int i = 0; i < total_layers; ++i) {
-        prefix[i + 1] = prefix[i] + costs[i];
-    }
+    for (int i = 0; i < total_layers; ++i) { prefix[i + 1] = prefix[i] + costs[i]; }
 
     // dp[i][j] is the minimal achievable maximum per-segment cost when the first j layers
     // are split into i contiguous segments; split[i][j] records the boundary that reaches it
@@ -104,9 +100,7 @@ std::vector<int> SuggestBalancedPartition(int total_layers, int num_stages, cons
     std::vector<std::vector<double>> dp(num_stages + 1, std::vector<double>(total_layers + 1, kInf));
     std::vector<std::vector<int>> split(num_stages + 1, std::vector<int>(total_layers + 1, 0));
 
-    for (int j = 0; j <= total_layers; ++j) {
-        dp[1][j] = prefix[j];
-    }
+    for (int j = 0; j <= total_layers; ++j) { dp[1][j] = prefix[j]; }
     for (int i = 2; i <= num_stages; ++i) {
         for (int j = i; j <= total_layers; ++j) {
             for (int p = i - 1; p <= j - 1; ++p) {
@@ -143,8 +137,8 @@ PipelineLoadStats ComputePipelineLoadAnalysis(int total_layers, int num_stages, 
         CHECK_EQ(layer_costs.size(), static_cast<size_t>(total_layers))
             << "layer_costs has " << layer_costs.size() << " entries but total_layers is " << total_layers;
         for (int i = 0; i < total_layers; ++i) {
-            CHECK_GE(layer_costs[i], 0.0) << "layer_costs must be non-negative, layer " << i << " has "
-                                          << layer_costs[i];
+            CHECK_GE(layer_costs[i], 0.0)
+                << "layer_costs must be non-negative, layer " << i << " has " << layer_costs[i];
             costs[i] = layer_costs[i];
         }
     }
@@ -177,7 +171,8 @@ PipelineLoadStats ComputePipelineLoadAnalysis(int total_layers, int num_stages, 
     stats.average = std::accumulate(stats.stage_loads.begin(), stats.stage_loads.end(), 0.0) / num_stages;
     stats.efficiency = stats.bottleneck > 0.0 ? stats.average / stats.bottleneck : 0.0;
     stats.imbalance_bubble = 1.0 - stats.efficiency;
-    stats.structural_bubble = static_cast<double>(num_stages - 1) / static_cast<double>(num_stages - 1 + num_micro_batches);
+    stats.structural_bubble
+        = static_cast<double>(num_stages - 1) / static_cast<double>(num_stages - 1 + num_micro_batches);
     return stats;
 }
 
@@ -225,8 +220,7 @@ PipelineLayout PipelineLayout::Create(int total_layers, int num_stages, int vpp_
         CHECK_EQ(partition.size(), static_cast<size_t>(num_stages))
             << "pipeline_layer_partition has " << partition.size() << " entries but pipeline_parallel is "
             << num_stages;
-        CHECK_EQ(vpp_size, 1)
-            << "Custom pipeline_layer_partition is incompatible with virtual_pipeline_parallel > 1";
+        CHECK_EQ(vpp_size, 1) << "Custom pipeline_layer_partition is incompatible with virtual_pipeline_parallel > 1";
         int cursor = 0;
         for (int stage = 0; stage < num_stages; ++stage) {
             const int count = partition[stage];
@@ -235,8 +229,8 @@ PipelineLayout PipelineLayout::Create(int total_layers, int num_stages, int vpp_
             layout.stage_layer_ranges_[stage].push_back({cursor, cursor + count});
             cursor += count;
         }
-        CHECK_EQ(cursor, total_layers) << "pipeline_layer_partition sums to " << cursor
-                                       << " layers but the model has " << total_layers;
+        CHECK_EQ(cursor, total_layers) << "pipeline_layer_partition sums to " << cursor << " layers but the model has "
+                                       << total_layers;
     }
 
     // Build the layer -> stage lookup and verify layers are neither missing nor duplicated.
@@ -280,8 +274,8 @@ int PipelineLayout::StageOfChunk(int global_chunk_id, int num_stages) { return g
 int PipelineLayout::LocalChunkIndexOfChunk(int global_chunk_id, int num_stages) { return global_chunk_id / num_stages; }
 
 std::string PipelineLayout::Describe() const {
-    std::string s = "PipelineLayout: num_stages=" + std::to_string(num_stages_) +
-                    ", total_layers=" + std::to_string(total_layers_) + ", vpp=" + std::to_string(vpp_size_) + "\n";
+    std::string s = "PipelineLayout: num_stages=" + std::to_string(num_stages_)
+                  + ", total_layers=" + std::to_string(total_layers_) + ", vpp=" + std::to_string(vpp_size_) + "\n";
     for (int stage = 0; stage < num_stages_; ++stage) {
         s += "  stage " + std::to_string(stage) + ": ";
         for (size_t i = 0; i < stage_layer_ranges_[stage].size(); ++i) {

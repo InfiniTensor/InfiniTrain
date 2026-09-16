@@ -22,9 +22,7 @@ TEST(PipelineLayoutSuggestTest, CostImbalanceShiftsLayersToLightStage) {
     // Four "light" layers (cost 1) followed by eight "heavy" layers (cost 2). Balancing
     // total cost (20 / 2 = 10 per stage) yields {7, 5} instead of the uniform {6, 6}.
     std::vector<double> costs(12, 2.0);
-    for (int i = 0; i < 4; ++i) {
-        costs[i] = 1.0;
-    }
+    for (int i = 0; i < 4; ++i) { costs[i] = 1.0; }
     const std::vector<int> expected{7, 5};
     EXPECT_EQ(SuggestBalancedPartition(12, 2, costs), expected);
 }
@@ -62,25 +60,15 @@ TEST(PipelineLayerCostsTest, ParsesValidCosts) {
     EXPECT_EQ(ParsePipelineLayerCosts("1.0,2.0,1.5"), expected);
 }
 
-TEST(PipelineLayerCostsTest, EmptyStringGivesNoCosts) {
-    EXPECT_TRUE(ParsePipelineLayerCosts("").empty());
-}
+TEST(PipelineLayerCostsTest, EmptyStringGivesNoCosts) { EXPECT_TRUE(ParsePipelineLayerCosts("").empty()); }
 
-TEST(PipelineLayerCostsTest, RejectsNegativeCost) {
-    EXPECT_DEATH(ParsePipelineLayerCosts("-1,2"), "non-negative");
-}
+TEST(PipelineLayerCostsTest, RejectsNegativeCost) { EXPECT_DEATH(ParsePipelineLayerCosts("-1,2"), "non-negative"); }
 
-TEST(PipelineLayerCostsTest, RejectsNonNumber) {
-    EXPECT_DEATH(ParsePipelineLayerCosts("1,abc"), "not a number");
-}
+TEST(PipelineLayerCostsTest, RejectsNonNumber) { EXPECT_DEATH(ParsePipelineLayerCosts("1,abc"), "not a number"); }
 
-TEST(PipelineLayerCostsTest, RejectsEmptyEntry) {
-    EXPECT_DEATH(ParsePipelineLayerCosts("1,,2"), "empty entry");
-}
+TEST(PipelineLayerCostsTest, RejectsEmptyEntry) { EXPECT_DEATH(ParsePipelineLayerCosts("1,,2"), "empty entry"); }
 
-TEST(PipelineLayerCostsTest, RejectsInfinity) {
-    EXPECT_DEATH(ParsePipelineLayerCosts("inf"), "finite");
-}
+TEST(PipelineLayerCostsTest, RejectsInfinity) { EXPECT_DEATH(ParsePipelineLayerCosts("inf"), "finite"); }
 
 TEST(ComputePerLayerParamCountsTest, MatchesAnalyticGELULayerNorm) {
     nn::TransformerConfig config{
@@ -122,9 +110,7 @@ TEST(ComputePerLayerParamCountsTest, SwigluRMSNormYieldsPositiveUniformCounts) {
     };
     auto counts = nn::ComputePerLayerParamCounts(config);
     ASSERT_EQ(counts.size(), 3u);
-    for (double c : counts) {
-        EXPECT_GT(c, 0.0);
-    }
+    for (double c : counts) { EXPECT_GT(c, 0.0); }
     EXPECT_EQ(counts[0], counts[1]);
     EXPECT_EQ(counts[1], counts[2]);
 }
@@ -138,9 +124,7 @@ TEST(PipelineLoadAnalysisTest, UniformCostsArePerfectlyBalanced) {
     // 12 layers / 3 stages with unit costs: uniform {4,4,4} -> every stage load == 4.
     auto stats = ComputePipelineLoadAnalysis(12, 3, {4, 4, 4}, {}, /*num_micro_batches=*/8);
     ASSERT_EQ(stats.stage_loads.size(), 3u);
-    for (double load : stats.stage_loads) {
-        EXPECT_DOUBLE_EQ(load, 4.0);
-    }
+    for (double load : stats.stage_loads) { EXPECT_DOUBLE_EQ(load, 4.0); }
     EXPECT_DOUBLE_EQ(stats.bottleneck, 4.0);
     EXPECT_DOUBLE_EQ(stats.average, 4.0);
     EXPECT_DOUBLE_EQ(stats.imbalance_bubble, 0.0);
@@ -152,9 +136,7 @@ TEST(PipelineLoadAnalysisTest, ImbalancedCostsMakeUniformLayoutSkewed) {
     // 4 light layers (cost 1) + 8 heavy layers (cost 2). Uniform {6,6} assigns
     // stage 0: 4*1 + 2*2 = 8, stage 1: 6*2 = 12.
     std::vector<double> costs(12, 2.0);
-    for (int i = 0; i < 4; ++i) {
-        costs[i] = 1.0;
-    }
+    for (int i = 0; i < 4; ++i) { costs[i] = 1.0; }
     auto stats = ComputePipelineLoadAnalysis(12, 2, {6, 6}, costs, 8);
     EXPECT_DOUBLE_EQ(stats.stage_loads[0], 8.0);
     EXPECT_DOUBLE_EQ(stats.stage_loads[1], 12.0);
@@ -167,9 +149,7 @@ TEST(PipelineLoadAnalysisTest, ImbalancedCostsMakeUniformLayoutSkewed) {
 TEST(PipelineLoadAnalysisTest, BalancedPartitionRemovesImbalanceBubble) {
     // Same costs, but the cost-balanced partition {7,5} yields load 10 / 10.
     std::vector<double> costs(12, 2.0);
-    for (int i = 0; i < 4; ++i) {
-        costs[i] = 1.0;
-    }
+    for (int i = 0; i < 4; ++i) { costs[i] = 1.0; }
     auto stats = ComputePipelineLoadAnalysis(12, 2, {7, 5}, costs, 8);
     EXPECT_DOUBLE_EQ(stats.stage_loads[0], 10.0);
     EXPECT_DOUBLE_EQ(stats.stage_loads[1], 10.0);
@@ -180,9 +160,7 @@ TEST(PipelineLoadAnalysisTest, BalancedPartitionRemovesImbalanceBubble) {
 TEST(PipelineLoadAnalysisTest, EmptyPartitionDefaultsToUniform) {
     auto stats = ComputePipelineLoadAnalysis(12, 3, {}, {}, 1);
     ASSERT_EQ(stats.stage_loads.size(), 3u);
-    for (double load : stats.stage_loads) {
-        EXPECT_DOUBLE_EQ(load, 4.0);
-    }
+    for (double load : stats.stage_loads) { EXPECT_DOUBLE_EQ(load, 4.0); }
 }
 
 TEST(PipelineLoadAnalysisTest, StructuralBubbleFollowsGpipeFormula) {

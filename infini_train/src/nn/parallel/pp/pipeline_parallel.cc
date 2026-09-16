@@ -128,7 +128,7 @@ void PipelineParallel::ReportPipelineStats() {
     }
     LOG(ERROR) << std::format("Compute tasks per stage: {} forward + {} backward", fwd_count, bwd_count);
     LOG(ERROR) << std::format("Bottleneck stage: {:.3f} ms | average: {:.3f} ms", bottleneck * 1e3, average * 1e3);
-    LOG(ERROR) << std::format("Load-imbalance bubble: {:.1f}% | pipeline efficiency: {:.1f}%",
-                              imbalance_bubble * 100.0, efficiency * 100.0);
+    LOG(ERROR) << std::format("Load-imbalance bubble: {:.1f}% | pipeline efficiency: {:.1f}%", imbalance_bubble * 100.0,
+                              efficiency * 100.0);
 }
 } // namespace infini_train::nn::parallel

@@ -119,9 +119,7 @@ private:
             impl_->EventDestroy(interval.stop);
         }
         pending_intervals_.clear();
-        for (core::Event *start : pending_starts_) {
-            impl_->EventDestroy(start);
-        }
+        for (core::Event *start : pending_starts_) { impl_->EventDestroy(start); }
         pending_starts_.clear();
     }
 

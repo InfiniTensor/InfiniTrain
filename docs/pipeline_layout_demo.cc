@@ -30,9 +30,7 @@ using infini_train::nn::parallel::SuggestBalancedPartition;
 // or a mixture-of-experts tail whose per-layer compute is no longer uniform.
 std::vector<double> ImbalancedCosts() {
     std::vector<double> costs(12, 2.0);
-    for (int i = 0; i < 4; ++i) {
-        costs[i] = 1.0;
-    }
+    for (int i = 0; i < 4; ++i) { costs[i] = 1.0; }
     return costs;
 }
 
@@ -58,19 +56,16 @@ void PrintComparison(const char *title, const std::vector<int> &uniform_partitio
     const int total_layers = static_cast<int>(costs.size());
     const int num_stages = static_cast<int>(uniform_partition.size());
 
-    const PipelineLoadStats uniform =
-        ComputePipelineLoadAnalysis(total_layers, num_stages, uniform_partition, costs, n);
-    const PipelineLoadStats custom =
-        ComputePipelineLoadAnalysis(total_layers, num_stages, custom_partition, costs, n);
+    const PipelineLoadStats uniform
+        = ComputePipelineLoadAnalysis(total_layers, num_stages, uniform_partition, costs, n);
+    const PipelineLoadStats custom = ComputePipelineLoadAnalysis(total_layers, num_stages, custom_partition, costs, n);
 
     const std::string u_part = PartitionStr(uniform_partition);
     const std::string c_part = PartitionStr(custom_partition);
 
     std::printf("=== %s ===\n", title);
     std::printf("per-layer costs: [");
-    for (size_t i = 0; i < costs.size(); ++i) {
-        std::printf("%s%.0f", i ? "," : "", costs[i]);
-    }
+    for (size_t i = 0; i < costs.size(); ++i) { std::printf("%s%.0f", i ? "," : "", costs[i]); }
     std::printf("]   (S=%d stages, n=%d micro-batches)\n\n", num_stages, n);
 
     const std::string u_col = "uniform (" + u_part + ")";

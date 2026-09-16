@@ -82,9 +82,7 @@ struct PipelineLoadStats {
 // when empty, fall back to the default uniform partition). `layer_costs[i]` is the compute cost
 // of layer i; when empty, every layer has unit cost (load == layer count). `num_micro_batches`
 // only affects the structural fill/drain bubble.
-PipelineLoadStats ComputePipelineLoadAnalysis(int total_layers, int num_stages,
-                                              const std::vector<int> &partition,
-                                              const std::vector<double> &layer_costs = {},
-                                              int num_micro_batches = 1);
+PipelineLoadStats ComputePipelineLoadAnalysis(int total_layers, int num_stages, const std::vector<int> &partition,
+                                              const std::vector<double> &layer_costs = {}, int num_micro_batches = 1);
 
 } // namespace infini_train::nn::parallel

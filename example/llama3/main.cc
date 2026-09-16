@@ -156,14 +156,12 @@ void Train(const nn::parallel::Rank &rank) {
         if (rank.IsLastRank()) {
             if (!FLAGS_save.empty() && FLAGS_save_interval == 0) {
                 LOG(FATAL) << "Invalid configuration: --save is set ('" << FLAGS_save
-                           << "'), but --save_interval is 0. "
-                           << "They must be set together.";
+                           << "'), but --save_interval is 0. " << "They must be set together.";
             }
 
             if (FLAGS_save.empty() && FLAGS_save_interval > 0) {
                 LOG(FATAL) << "Invalid configuration: --save_interval is set to " << FLAGS_save_interval
-                           << ", but --save is empty. "
-                           << "They must be set together.";
+                           << ", but --save is empty. " << "They must be set together.";
             }
         }
     }
@@ -596,15 +594,15 @@ int main(int argc, char *argv[]) {
         pipeline_layer_partition = nn::parallel::ParsePipelineLayerPartition(FLAGS_pipeline_layer_partition);
     } else if (has_layer_costs) {
         const auto layer_costs = nn::parallel::ParsePipelineLayerCosts(FLAGS_pipeline_layer_costs);
-        pipeline_layer_partition = nn::parallel::SuggestBalancedPartition(
-            static_cast<int>(layer_costs.size()), FLAGS_pipeline_parallel, layer_costs);
+        pipeline_layer_partition = nn::parallel::SuggestBalancedPartition(static_cast<int>(layer_costs.size()),
+                                                                          FLAGS_pipeline_parallel, layer_costs);
         LOG(INFO) << "Auto-suggested pipeline layout from --pipeline_layer_costs: "
                   << PartitionToString(pipeline_layer_partition);
     } else if (FLAGS_pipeline_auto_layout) {
         const auto config = ResolveLLaMA3Config();
         const auto layer_costs = nn::ComputePerLayerParamCounts(config);
-        pipeline_layer_partition = nn::parallel::SuggestBalancedPartition(
-            static_cast<int>(config.n_layer), FLAGS_pipeline_parallel, layer_costs);
+        pipeline_layer_partition = nn::parallel::SuggestBalancedPartition(static_cast<int>(config.n_layer),
+                                                                          FLAGS_pipeline_parallel, layer_costs);
         LOG(INFO) << "Auto-suggested pipeline layout from per-layer parameter counts: "
                   << PartitionToString(pipeline_layer_partition);
     }

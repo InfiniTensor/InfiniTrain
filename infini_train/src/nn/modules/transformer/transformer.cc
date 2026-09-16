@@ -210,8 +210,7 @@ TransformerModel::TransformerModel(const TransformerConfig config)
     : CloneableModule(kType), config_(config),
       layout_(nn::parallel::PipelineLayout::Create(
           static_cast<int>(config_.n_layer), nn::parallel::global::GetPipelineParallelSize(),
-          nn::parallel::global::GetVirtualPipelineParallelSize(),
-          nn::parallel::global::GetPipelineLayerPartition())),
+          nn::parallel::global::GetVirtualPipelineParallelSize(), nn::parallel::global::GetPipelineLayerPartition())),
       stage_info_(layout_.GetStageInfo(nn::parallel::pp_rank)) {
     if (nn::parallel::global::GetPipelineParallelSize() > 1 && nn::parallel::pp_rank == 0) {
         LOG(INFO) << layout_.Describe();
@@ -299,8 +298,8 @@ int64_t FfnHiddenDim(const TransformerConfig &config) {
         ffn_hidden = static_cast<int64_t>(2 * ffn_hidden) / 3; // SwiGLU intermediate
     }
     if (config.ffn_dim_multiplier.has_value()) {
-        ffn_hidden = static_cast<int64_t>(
-            std::llround(static_cast<double>(ffn_hidden) * config.ffn_dim_multiplier.value()));
+        ffn_hidden
+            = static_cast<int64_t>(std::llround(static_cast<double>(ffn_hidden) * config.ffn_dim_multiplier.value()));
     }
     ffn_hidden = (ffn_hidden + config.multiple_of - 1) / config.multiple_of * config.multiple_of;
     return ffn_hidden;

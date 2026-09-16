@@ -89,8 +89,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     // Unified pipeline layout: which layers / special modules this rank owns.
     auto layout = nn::parallel::PipelineLayout::Create(
         static_cast<int>(n_layer), nn::parallel::global::GetPipelineParallelSize(),
-        nn::parallel::global::GetVirtualPipelineParallelSize(),
-        nn::parallel::global::GetPipelineLayerPartition());
+        nn::parallel::global::GetVirtualPipelineParallelSize(), nn::parallel::global::GetPipelineLayerPartition());
     const auto stage_info = layout.GetStageInfo(nn::parallel::pp_rank);
     const bool is_first_stage = stage_info.is_first_stage;
     const bool is_last_stage = stage_info.is_last_stage;

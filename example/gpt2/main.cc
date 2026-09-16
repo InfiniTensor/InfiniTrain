@@ -146,8 +146,8 @@ std::string PartitionToString(const std::vector<int> &partition) {
 
 nn::TransformerConfig ResolveGPT2Config() {
     if (!kModelToConfigs.count(FLAGS_model)) {
-        LOG(FATAL) << "--pipeline_auto_layout requires a config-map model (--model d12/d24/d36/d48); '"
-                   << FLAGS_model << "' has no static config";
+        LOG(FATAL) << "--pipeline_auto_layout requires a config-map model (--model d12/d24/d36/d48); '" << FLAGS_model
+                   << "' has no static config";
     }
     nn::TransformerConfig config = kModelToConfigs.at(FLAGS_model);
     gpt2::SanitizeGPT2Config(config);
@@ -170,14 +170,12 @@ void Train(const nn::parallel::Rank &rank) {
         if (rank.IsLastRank()) {
             if (!FLAGS_save.empty() && FLAGS_save_interval == 0) {
                 LOG(FATAL) << "Invalid configuration: --save is set ('" << FLAGS_save
-                           << "'), but --save_interval is 0. "
-                           << "They must be set together.";
+                           << "'), but --save_interval is 0. " << "They must be set together.";
             }
 
             if (FLAGS_save.empty() && FLAGS_save_interval > 0) {
                 LOG(FATAL) << "Invalid configuration: --save_interval is set to " << FLAGS_save_interval
-                           << ", but --save is empty. "
-                           << "They must be set together.";
+                           << ", but --save is empty. " << "They must be set together.";
             }
         }
     }
@@ -392,7 +390,7 @@ void Train(const nn::parallel::Rank &rank) {
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(
-              std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
+                                    std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": start training";
@@ -616,15 +614,15 @@ int main(int argc, char *argv[]) {
         pipeline_layer_partition = nn::parallel::ParsePipelineLayerPartition(FLAGS_pipeline_layer_partition);
     } else if (has_layer_costs) {
         const auto layer_costs = nn::parallel::ParsePipelineLayerCosts(FLAGS_pipeline_layer_costs);
-        pipeline_layer_partition = nn::parallel::SuggestBalancedPartition(
-            static_cast<int>(layer_costs.size()), FLAGS_pipeline_parallel, layer_costs);
+        pipeline_layer_partition = nn::parallel::SuggestBalancedPartition(static_cast<int>(layer_costs.size()),
+                                                                          FLAGS_pipeline_parallel, layer_costs);
         LOG(INFO) << "Auto-suggested pipeline layout from --pipeline_layer_costs: "
                   << PartitionToString(pipeline_layer_partition);
     } else if (FLAGS_pipeline_auto_layout) {
         const auto config = ResolveGPT2Config();
         const auto layer_costs = nn::ComputePerLayerParamCounts(config);
-        pipeline_layer_partition = nn::parallel::SuggestBalancedPartition(
-            static_cast<int>(config.n_layer), FLAGS_pipeline_parallel, layer_costs);
+        pipeline_layer_partition = nn::parallel::SuggestBalancedPartition(static_cast<int>(config.n_layer),
+                                                                          FLAGS_pipeline_parallel, layer_costs);
         LOG(INFO) << "Auto-suggested pipeline layout from per-layer parameter counts: "
                   << PartitionToString(pipeline_layer_partition);
     }
