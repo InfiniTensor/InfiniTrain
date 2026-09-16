@@ -163,6 +163,39 @@ set_cmake_option() {
     printf '%s' "$cmd"
 }
 
+apply_selected_group_cmake_options() {
+    local cmd="$1"
+    local -A option_values=()
+    local gi
+
+    for ((gi=0; gi<num_groups; ++gi)); do
+        local group_tag
+        group_tag=$(jq -r ".test_groups[$gi].tag" "$CONFIG_FILE")
+        if [[ ${#SELECTED_TAGS[@]} -gt 0 && -z "${SELECTED_TAGS[$group_tag]:-}" ]]; then
+            continue
+        fi
+
+        local option
+        local value
+        while IFS=$'\t' read -r option value; do
+            [[ -z "$option" ]] && continue
+            if [[ -n "${option_values[$option]:-}" && "${option_values[$option]}" != "$value" ]]; then
+                echo "Error: selected test groups require conflicting CMake values for ${option}: " \
+                     "${option_values[$option]} and ${value}." >&2
+                return 1
+            fi
+            option_values[$option]="$value"
+        done < <(jq -r ".test_groups[$gi].cmake_options // {} | to_entries[] | [.key, (.value | tostring)] | @tsv" \
+                      "$CONFIG_FILE")
+    done
+
+    for option in "${!option_values[@]}"; do
+        cmd="$(set_cmake_option "$cmd" "$option" "${option_values[$option]}")"
+    done
+
+    printf '%s' "$cmd"
+}
+
 if [[ -n "$ONLY_RUN_TAGS" ]]; then
     IFS=',' read -r -a requested_tags <<< "$ONLY_RUN_TAGS"
     for raw_tag in "${requested_tags[@]}"; do
@@ -478,6 +511,7 @@ check_model_inputs
 for ((id=0; id<num_basic_compile_commands; ++id)); do
     basic_compile_id=$(jq -r ".basic_compile_commands[$id].id" "$CONFIG_FILE")
     basic_compile_cmake=$(jq -r ".basic_compile_commands[$id].cmd" "$CONFIG_FILE")
+    basic_compile_cmake="$(apply_selected_group_cmake_options "$basic_compile_cmake")"
 
     for build_profile in false true; do
         if [[ "$build_profile" == "true" && "$RUN_PROFILE_TEST" != "true" ]]; then
