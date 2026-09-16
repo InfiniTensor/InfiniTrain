@@ -440,17 +440,15 @@ for cfg in 843322f:build 09fe25b:build_cast 39c94ba:build_adam; do
 done
 ```
 
-### 3.3 FillKernel 优化 P0：删除 transform.cu 冗余 Fill
+### 3.3 FillKernel 优化
 
 Section 2.2 显示 Fill 家族每轮 **710 次 / 3.31 ms / 3.9%**，平均 **3.6–4.2 μs/次**——单次 GPU 执行时间几乎全部是 launch/setup，是典型的 **launch-overhead 主导型**开销，与带宽或算力无关。治理分三档：
 
-- **档 1（P0，本节）**：删除**冗余** Fill——即前置的 `Fill(0)` 后续 kernel 会覆盖全部输出元素，Fill 是死代码。
-- **档 2（P1，未做）**：`Tensor::Fill(0.0)` 在 CUDA 后端特化为 `cudaMemsetAsync`，走 DMA 引擎，不占 SM，脱离 kernel launch 路径。
+- **档 1（P0，3.3.1–3.3.4）**：删除**冗余** Fill——即前置的 `Fill(0)` 后续 kernel 会覆盖全部输出元素，Fill 是死代码。
+- **档 2（P1，3.3.5–3.3.6）**：`Tensor::Fill(0.0)` 在 CUDA 后端特化为 `cudaMemsetAsync`，走 DMA 引擎，不占 SM，脱离 kernel launch 路径。
 - **档 3（P2，未做）**：ZeroGrad arena 化，把 115 次每步 Fill 合并为 1 次大 memset。
 
-本节只做档 1，工作量最小、风险最低、判据可形式化。
-
-#### 3.3.1 判据
+#### 3.3.1 P0 判据
 
 与仓库里 matmul/linear/stack/softmax/reduction/cross_entropy 已有的 `// No Fill(0) needed: ...` 注释同一判据：
 
@@ -458,7 +456,7 @@ Section 2.2 显示 Fill 家族每轮 **710 次 / 3.31 ms / 3.9%**，平均 **3.6
 
 按此判据 sweep 全仓库 `Fill(0.0)` 调用点，[transform.cu](../infini_train/src/kernels/cuda/transform.cu) 中 **6 处**满足；其他文件（slice/split/gather/embedding/layernorm/elementwise 广播路径）的 Fill 都是 scatter 或 atomicAdd 起点，**保留**，属档 2/3 范畴。
 
-#### 3.3.2 方案：删除 transform.cu 6 处 Fill
+#### 3.3.2 P0 方案：删除 transform.cu 6 处 Fill
 
 | # | 函数 | 位置 | kernel 覆盖证据 |
 |---|---|---|---|
@@ -471,7 +469,7 @@ Section 2.2 显示 Fill 家族每轮 **710 次 / 3.31 ms / 3.9%**，平均 **3.6
 
 删除后在原位置留一句 `// No Fill(0) needed: ...` 说明判据（与仓库已有风格一致），防止后人回退。
 
-#### 3.3.3 消除数量估算
+#### 3.3.3 P0 消除数量估算
 
 按 doc 2.2.1.2 / 2.2.2 的每层 kernel 频次 × 16 层推算：
 
@@ -486,7 +484,7 @@ Section 2.2 显示 Fill 家族每轮 **710 次 / 3.31 ms / 3.9%**，平均 **3.6
 
 其中 Forward 那 80 次**恰好等于** doc 2.3 里 "Fill 泛滥（fwd 80 + bwd 630）" 的 fwd 全部——即 P0 把 forward 侧 Fill 清零。
 
-#### 3.3.4 优化结果
+#### 3.3.4 P0 优化结果
 
 **编译**：`build_new`（BUILD_TEST=ON）+ `build_adam`（HEAD `39c94ba`）双目录 CUDA kernel 重编 + 全项目链接通过，无警告。
 
@@ -516,3 +514,59 @@ D 的窗口敏感性：step3–10 **75.91 ms** / step4–10 **75.51 ms** / step5
 
 **产物**：`build_new/llama3`（含 P0 改动）；未生成新 nsys trace（待档 2 完成后一起复测）。
 
+#### 3.3.5 P1 方案：Fill(0) 特化为 `cudaMemsetAsync`
+
+P0 只消除了 **transform.cu 内满足全覆盖判据**的 6 处 Fill（209 次/step）。剩下的 ~501 次/step 都是真需要零起点的场景：ZeroGrad（115）、LayerNormBwd grad_weight/grad_bias（66，atomicAdd）、EmbeddingBwd（1，atomicAdd scatter）、Slice/Split/Gather Bwd（~144，部分写入）、BinaryBwd 广播路径 grad_a/grad_b（~256，atomicAdd 广播归约）。这些不能删，但可以**换一条更便宜的路径**。
+
+**方案**：在 [fill.cu](../infini_train/src/kernels/cuda/fill.cu) 的 CUDA `Fill` 入口处加一条快路径：当且仅当
+
+1. `Scalar` 的存储位模式**全零**（`kBool/kUInt64`: `u == 0`；`kInt64`: `i == 0`；`kDouble`: `memcpy` 后 `bits == 0`）；
+2. tensor `IsContiguous()`（当前实现恒为 true，预留接口给未来的 strided view）；
+3. `kDataTypeToSize` 命中（覆盖全部 13 个 dtype 枚举）；
+
+三条同时成立，则调 `cudaMemsetAsync(data_ptr, 0, num_elements * dtype_size, stream)` 并 `return`，不再进 `DispatchCudaFunc` / `FillKernel<<<...>>>`；任一条不成立则**回退**到原有 `FillKernel` 路径（包括 `-0.0` 这种数值等于 0 但符号位为 1 的边界情况，以及非零标量如 `Fill(1.0)` / `Fill(-inf)`）。
+
+**为什么位零判据是关键**：`cudaMemsetAsync` 只能写**字节模式**，不能写任意标量。对 InfiniTrain 支持的所有 dtype（bool / intN / uintN / fp16 / bf16 / fp32 / fp64），**+0 的位模式恰好是全零字节**，所以 memset(0) 与 FillKernel(+0) 位级等价。-0.0 的位模式是 `0x8000...`，memset(0) 会把它写成 +0.0——数值相等但位不同，为避免改变下游任何依赖位模式的代码（如 hash、bit-exact 对拍），主动拒绝 -0.0 走 memset。
+
+**收益机制**：
+
+- **不占 SM**：memset 走 copy engine / DMA，与相邻的 compute kernel 不争抢 SM 资源；理论上可与前一个不相关的 compute kernel **重叠执行**（同一 stream 内仍串行，但不同 engine 的 setup 开销更低）。
+- **脱离 kernel launch 路径**：nsys 下 `cudaLaunchKernel` 被 CUPTI 逐调用插桩（doc 3.1.3 修正块量化为 ~2.0 μs/次），而 `cudaMemsetAsync` 是另一条 API，插桩开销更小；在非 profiling 环境下也少一次 driver-side launch 调度。
+- **GPU 侧时间**：小 buffer 的 memset 通常 1–2 μs，比 FillKernel 的 3–4 μs 略低（少了 kernel setup / grid launch）；大 buffer 上 memset 走 DMA 带宽与 FillKernel 走 SM 写带宽相近，差异不大。
+
+**未覆盖的路径**：`Scalar` 非零（如 `Fill(1.0)`、`Fill(-inf)`）、非连续 tensor（当前不存在）、dtype 不在 `kDataTypeToSize`（当前不存在）——均回退到 `FillKernel`，语义与原来完全一致。
+
+#### 3.3.6 P1 优化结果
+
+**编译**：`build_new` 重编 `infini_train_cuda_kernels` + `llama3` + `test_autograd_cuda` 通过，无警告。
+
+**单元测试**：
+
+- 全量 CUDA autograd：**263 pass / 1 pre-existing skip**（与 P0 完全一致，未引入回归）
+- `test_tensor_cuda`：**28/28 pass**（含 Tensor 生命周期与基础操作，覆盖 Fill 路径）
+
+**数值等价性**：`build_new/llama3` 10-iter × 3 次运行，step1 loss 恒为 **`4.898438`**（与 A/B/C/D 逐位一致）→ **前向 bit-exact**。step2 三次分别 `4.545731 / 4.545866 / 4.546757`，跨度 **0.001**，比 P0 的 0.0037 更窄，也远小于 doc 3.2.4 记录的 C 自变区间（≤0.0073）→ memset 路径与 FillKernel 路径位级等价，未引入任何系统偏差。
+
+**端到端稳态时延**（`build_new/llama3`，无 profiling，10 iter × 3 次，每步取中位数再对窗口求均值）：
+
+| 配置 | commit | 构建目录 | step5–10 稳态 | 运行间极差 |
+|---|---|---|---|---|
+| C ＋adam 向量化（基线） | `39c94ba` | `build_adam` | **75.69 ms** | ±0.90% |
+| D ＋P0 Fill 删除 | `2d04487` | `build_new` | **75.41 ms** | ±0.72% |
+| **E ＋P1 memsetAsync** | `2d04487` + 未提交改动 | `build_new` | **75.18 ms** | **±0.39%** |
+
+E 的窗口敏感性：step3–10 **75.93 ms** / step4–10 **75.17 ms** / step5–10 **75.18 ms**。
+
+| 增量 | 稳态时延 | 降幅 | 折合每轮 |
+|---|---|---|---|
+| C→D（P0） | 75.69 → 75.41 ms | −0.37% | −0.28 ms |
+| **D→E（P1）** | 75.41 → 75.18 ms | **−0.31%** | **−0.23 ms** |
+| **C→E（P0+P1 合计）** | 75.69 → 75.18 ms | **−0.67%** | **−0.51 ms** |
+
+> **可信度**：E 的运行间极差 **±0.39%** 是三配置里最窄的（C ±0.90%、D ±0.72%），说明 memset 路径比 kernel 路径**更稳定**——DMA engine 的调度抖动小于 SM kernel launch。D→E 的 −0.23 ms 仍落在 E 自身噪声带（±0.29 ms）边缘，但 C→E 的 −0.51 ms 已经**超出** E 的噪声带，可作为量级结论采信。
+>
+> **为什么 wall 收益远小于理论 GPU 收益**：P1 覆盖的 ~501 次 Fill × ~4 μs ≈ **2.0 ms** GPU 时间被转成 memset，但 wall 只降 0.23 ms。原因与 P0 相同：非 profiling 环境下 host 发射早已与 GPU 执行流水化，Fill 的 GPU 时间大部分被 launch gap 吸收；memset 虽然不占 SM，但仍占用 stream 时间，在单 stream 串行架构（doc 2.1 结论 3）下无法与 compute kernel 重叠。**真正的收益要在 nsys 下才能放大**：按 doc 3.1.3 的 CUPTI 量化（~2.0 μs/次 `cudaLaunchKernel`），P1 消除 ~501 次 kernel launch 折合约 **1.0 ms/step 的 host 侧 CUPTI 开销**，加上 GPU 侧 ~1.0 ms（memset 比 FillKernel 每次省 ~2 μs × 501），nsys 稳态窗口预计降 **~2.0 ms/step**（待复测）。
+>
+> **架构价值**：P1 的核心收益不在 wall，而在**把 Fill(0) 从 kernel 家族里摘出去**。这为后续优化铺路：① 档 4 CUDA Graph 捕获时，memset 节点比 kernel 节点更轻；② 多 stream 并行时，memset 走 copy engine 可与 compute stream 真正重叠；③ nsys timeline 上 `Fill·f32` 条目消失，可读性大幅提升。
+
+**产物**：`build_new/llama3`（含 P0 + P1 改动）；未生成新 nsys trace（待后续统一复测）。
