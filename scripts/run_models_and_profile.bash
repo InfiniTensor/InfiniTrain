@@ -362,7 +362,7 @@ move_profile_logs() {
     done
 }
 
-# Build "--key value" arg string from tests[i].args.
+# Build "--key=value" arg string from tests[i].args.
 # For checkpoint-related args, automatically isolate by model and run mode
 # (resume/no_resume) to avoid cross-test overwrites in one-click runs.
 args_string_for_test() {
@@ -387,7 +387,7 @@ args_string_for_test() {
     | (if has("save") then .save = namespaced_path(.save; $model; $run_mode) else . end)
     | (if has("load") then .load = namespaced_path(.load; $model; $resume_src_mode) else . end)
     | to_entries[]
-    | "--\(.key) \(.value|tostring)"
+    | "--\(.key)=\(.value|tostring)"
     ' "$CONFIG_FILE" | paste -sd' ' - | \
        sed "s|@CKPT_ROOT_DIR@|${CKPT_ROOT_DIR}|g"
 }
