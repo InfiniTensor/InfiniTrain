@@ -5,14 +5,10 @@
 namespace infini_train::test {
 namespace {
 
-void UnusedRegistrationCallback() {}
-
 core::PrivateUse1BackendRegistration MinimalRegistration() {
     core::PrivateUse1BackendRegistration registration;
     registration.name = "valid_name";
     registration.default_autocast_dtype = DataType::kBFLOAT16;
-    registration.register_runtime = &UnusedRegistrationCallback;
-    registration.register_kernels = &UnusedRegistrationCallback;
     return registration;
 }
 
@@ -22,7 +18,7 @@ TEST(PrivateUse1BackendValidationTest, RejectsReservedBackendNames) {
     EXPECT_DEATH(core::RegisterPrivateUse1Backend(registration), "non-reserved");
 }
 
-TEST(PrivateUse1BackendValidationTest, RejectsNonAsciiBackendNames) {
+TEST(PrivateUse1BackendValidationTest, RejectsUnsupportedBackendNameCharacters) {
     auto registration = MinimalRegistration();
     registration.name = "invalid-name";
     EXPECT_DEATH(core::RegisterPrivateUse1Backend(registration), "lowercase ASCII");

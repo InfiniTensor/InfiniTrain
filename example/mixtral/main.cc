@@ -66,13 +66,13 @@ void ValidateRuntimeFlags(const infini_train::nn::TransformerConfig &config) {
 } // namespace
 
 int main(int argc, char *argv[]) {
-    google::InitGoogleLogging(argv[0]);
     // Register provider metadata and implementations before gflags validates
     // --device. The device runtime initializes lazily on first DeviceGuard use.
 #ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR
     INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR();
 #endif
     gflags::ParseCommandLineFlags(&argc, &argv, true);
+    google::InitGoogleLogging(argv[0]);
 
     infini_train::nn::parallel::global::InitAllEnv(
         /*nthread_per_process=*/1,

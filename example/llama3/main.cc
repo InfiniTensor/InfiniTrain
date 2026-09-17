@@ -81,7 +81,9 @@ DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 // debugging
 DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 // memory management
-DEFINE_string(device, "cuda", "device type, useless if using parallel training mode");
+DEFINE_string(device, "cuda",
+              "device type (cpu/cuda/privateuse1/<registered privateuse1 backend name>), useless if using parallel "
+              "training mode");
 // parallel
 DEFINE_int32(nthread_per_process, 1,
              "Number of threads to use for each process. "
@@ -576,13 +578,13 @@ void Train(const nn::parallel::Rank &rank) {
 }
 
 int main(int argc, char *argv[]) {
-    google::InitGoogleLogging(argv[0]);
     // Register provider metadata and implementations before gflags validates
     // --device. The device runtime initializes lazily on first DeviceGuard use.
 #ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR
     INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR();
 #endif
     gflags::ParseCommandLineFlags(&argc, &argv, true);
+    google::InitGoogleLogging(argv[0]);
 
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,

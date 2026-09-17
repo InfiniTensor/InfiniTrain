@@ -7,7 +7,6 @@
 
 #include "glog/logging.h"
 
-#include "infini_train/include/core/ccl/ccl.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dispatcher.h"
 
@@ -53,9 +52,6 @@ void RegisterPrivateUse1Backend(const PrivateUse1BackendRegistration &registrati
     CHECK(*registration.default_autocast_dtype == DataType::kFLOAT16
           || *registration.default_autocast_dtype == DataType::kBFLOAT16)
         << "PrivateUse1 default autocast dtype must be float16 or bfloat16";
-    CHECK(registration.register_runtime != nullptr) << "PrivateUse1 backend must register a runtime";
-    CHECK(registration.register_kernels != nullptr) << "PrivateUse1 backend must register kernels";
-
     {
         std::lock_guard<std::mutex> lock(g_backend_mutex);
         CHECK(g_backend_state.status == PrivateUse1BackendState::Status::kUnregistered)
@@ -65,19 +61,8 @@ void RegisterPrivateUse1Backend(const PrivateUse1BackendRegistration &registrati
         g_backend_state.default_autocast_dtype = registration.default_autocast_dtype;
     }
 
-    // Backend callbacks may query the provider metadata, so they must run
-    // outside g_backend_mutex.
-    registration.register_runtime();
     CHECK(DeviceGuardImplRegistry::Instance().Has(Device::DeviceType::kPrivateUse1))
-        << "PrivateUse1 runtime callback did not register DeviceGuardImpl";
-
-    if (registration.register_ccl != nullptr) {
-        registration.register_ccl();
-        CHECK(CclImplRegistry::Instance().Has(Device::DeviceType::kPrivateUse1))
-            << "PrivateUse1 CCL callback did not register CclImpl";
-    }
-
-    registration.register_kernels();
+        << "PrivateUse1 backend did not register DeviceGuardImpl";
     for (const auto kernel : kRequiredKernels) {
         CHECK(Dispatcher::Instance().HasKernel({Device::DeviceType::kPrivateUse1, std::string(kernel)}))
             << "PrivateUse1 backend is missing required kernel " << kernel;
