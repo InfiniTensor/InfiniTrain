@@ -32,6 +32,9 @@ TransformerFirstStage::TransformerFirstStage(const TransformerConfig &config)
     // Only learned absolute position embedding uses a trainable WPE table.
     if (config_.position_embedding_type == PositionEmbeddingType::kLearnedAbsolute) {
         modules_[kWPELayerName] = std::make_shared<Embedding>(config_.block_size, config_.n_embd);
+        if (parallel::global::GetSequenceParallelEnabled()) {
+            modules_[kWPELayerName]->parameter(Embedding::kParamWeightName)->set_sequence_parallel(true);
+        }
     } else if (config_.position_embedding_type != PositionEmbeddingType::kRoPE) {
         LOG(FATAL) << "Unsupported position embedding type";
     }

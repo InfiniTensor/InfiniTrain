@@ -18,6 +18,8 @@ LayerNorm::LayerNorm(const std::vector<int64_t> &normalized_shape, float eps, De
         = std::make_shared<Tensor>(normalized_shape, DataType::kFLOAT32, device_)->RequiresGrad();
     parameters_[kParamBiasName]
         = std::make_shared<Tensor>(normalized_shape, DataType::kFLOAT32, device_)->RequiresGrad();
+    parameters_[kParamWeightName]->set_sequence_parallel(true);
+    parameters_[kParamBiasName]->set_sequence_parallel(true);
     ResetParameters();
 }
 
@@ -35,6 +37,7 @@ void LayerNorm::ResetParameters() {
 RMSNorm::RMSNorm(int64_t dim, float eps, Device device) : CloneableModule(kType), eps_(eps) {
     parameters_[kParamWeightName]
         = std::make_shared<Tensor>(std::vector<int64_t>{dim}, DataType::kFLOAT32, device)->RequiresGrad();
+    parameters_[kParamWeightName]->set_sequence_parallel(true);
     nn::init::Ones(parameters_[kParamWeightName]);
 }
 
