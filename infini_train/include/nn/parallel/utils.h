@@ -31,4 +31,6 @@ std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_pt
 std::vector<std::shared_ptr<Tensor>> ScatterToTPRegionFunc(const std::shared_ptr<Tensor> &input);
 std::vector<std::shared_ptr<Tensor>> ReduceFromTPRegionFunc(const std::shared_ptr<Tensor> &input);
 std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(const std::shared_ptr<Tensor> &input);
+
+void FinalizeModelGrads(const std::vector<std::shared_ptr<Tensor>> &params);
 } // namespace infini_train::nn::parallel

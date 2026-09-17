@@ -5,9 +5,38 @@
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
+namespace {
+const ProcessGroup *GetTensorParallelGroup(const Tensor &tensor) {
+    const int global_rank = tensor.GetDevice().Rank().GlobalRank();
+    return ProcessGroupFactory::Instance(tensor.GetDevice().type())
+        ->Get(GetTensorParallelProcessGroupName(global_rank));
+}
+
+void FinalizeSequenceParallelGradients(const std::vector<std::shared_ptr<Tensor>> &params) {
+    // SP replicas see different sequence shards, so replicated parameter grads
+    // must be summed across TP before the optimizer consumes them.
+    if (!global::GetSequenceParallelEnabled() || global::GetTensorParallelSize() <= 1 || params.empty()) {
+        return;
+    }
+
+    const ProcessGroup *tp_group = nullptr;
+    for (const auto &param : params) {
+        if (!param || !param->sequence_parallel() || !param->grad()) {
+            continue;
+        }
+
+        if (tp_group == nullptr) {
+            tp_group = GetTensorParallelGroup(*param);
+            CHECK_NOTNULL(tp_group);
+        }
+        tp_group->AllReduce(param->grad(), function::ReduceOpType::kSum, /*async_op=*/false);
+    }
+}
+} // namespace
 
 std::string GetDataParallelProcessGroupName(int global_rank) {
     return "DP" + std::to_string(global::GetGroupId(global::DP, global_rank));
@@ -58,6 +87,13 @@ std::shared_ptr<Tensor> GatherTensorParallelShard(const std::shared_ptr<Tensor> 
     // AllGather stacks shards along dim 0. Restore rank-major shards before concatenating on the requested dimension.
     auto rank_major_shards = gathered->Split(tensor->Dims()[0], 0);
     return nn::function::Concat(rank_major_shards, dim)->Contiguous();
+}
+
+void FinalizeModelGrads(const std::vector<std::shared_ptr<Tensor>> &params) {
+    FinalizeSequenceParallelGradients(params);
+
+    // TODO(zbl): Future model-gradient finalization goes here, such as PP tied embeddings,
+    //            MoE shared parameters, and loss normalization.
 }
 
 } // namespace infini_train::nn::parallel
