@@ -29,7 +29,8 @@ public:
                          const std::vector<std::shared_ptr<Module>> &model_chunks, size_t ddp_world_size,
                          size_t ddp_rank);
 
-    void Step() override;
+    void FinalizeModelGrads() override;
+    void StepImpl() override;
 
     void ZeroGrad(bool set_to_none = true) override;
 

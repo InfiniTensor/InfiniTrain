@@ -57,6 +57,7 @@ Tensor::Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &
     : buffer_(tensor.buffer_), offset_(tensor.offset_ + offset), dims_(dims),
       num_elements_(std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>())), dtype_(tensor.dtype_) {
     CHECK_LE(offset_ + kDataTypeToSize.at(dtype_) * num_elements_, buffer_->Size());
+    sequence_parallel_ = tensor.sequence_parallel_;
 }
 
 Tensor::Tensor(const float *data, const std::vector<int64_t> &dims, DataType dtype, Device device)
@@ -170,6 +171,7 @@ Tensor Tensor::To(Device device) {
     }
 
     new_tensor.requires_grad_ = requires_grad_;
+    new_tensor.sequence_parallel_ = sequence_parallel_;
 
     return new_tensor;
 }
@@ -194,6 +196,7 @@ Tensor Tensor::To(DataType dtype) {
     }
 
     new_tensor.requires_grad_ = requires_grad_;
+    new_tensor.sequence_parallel_ = sequence_parallel_;
 
     return new_tensor;
 }

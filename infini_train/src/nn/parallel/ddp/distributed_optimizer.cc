@@ -107,6 +107,7 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads(const AddShardParam &add
 
                 auto param_piece = std::make_shared<Tensor>(*bucket_param, param_piece_offset_bytes,
                                                             std::vector<int64_t>{static_cast<int64_t>(piece_numel)});
+                param_piece->set_sequence_parallel(param->sequence_parallel());
 
                 auto grad_piece = std::make_shared<Tensor>(*bucket_grad, grad_piece_offset_bytes,
                                                            std::vector<int64_t>{static_cast<int64_t>(piece_numel)});
@@ -170,15 +171,18 @@ float DistributedOptimizer::learning_rate() const {
     return Optimizer::learning_rate();
 }
 
-void DistributedOptimizer::Step() {
-    // 1. Ensure grads are synced
+void DistributedOptimizer::FinalizeModelGrads() {
     FinishGradSync();
+    if (model_grad_finalizer_) {
+        model_grad_finalizer_(base_optimizer_->parameters());
+    }
+}
 
-    // 2. Base optimizer step on owned param pieces
+void DistributedOptimizer::StepImpl() {
     CHECK(base_optimizer_) << "DistributedOptimizer: base optimizer is null.";
     base_optimizer_->Step();
 
-    // 3. Gather updated param shards back to full params
+    // Gather updated param shards back to full params
     StartParamSync(/*force_sync=*/false);
     // TODO(zbl): Delay sync call until param is actually used in next step
     FinishParamSync(/*skip_next_bucket_dispatch=*/true);
