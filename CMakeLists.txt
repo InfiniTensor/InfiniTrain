@@ -107,7 +107,12 @@ if(USE_CUDA)
   file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
 
   add_library(infini_train_cuda_kernels STATIC ${CUDA_KERNELS})
-  set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "75;80;90")
+  # 默认与上游一致（三档 SASS）；可用 -DINFINI_TRAIN_CUDA_ARCHS=... 覆盖。
+  # 若本机 GPU 比 nvcc 支持的架构更新（例如 GPU 为 sm_120 而 nvcc 只支持到 sm_90），
+  # 必须额外产出 PTX（*-virtual）交给驱动 JIT，否则运行时报 "no kernel image is available"。
+  set(INFINI_TRAIN_CUDA_ARCHS "75;80;90" CACHE STRING "CUDA architectures to compile for")
+  set_target_properties(infini_train_cuda_kernels PROPERTIES
+    CUDA_ARCHITECTURES "${INFINI_TRAIN_CUDA_ARCHS}")
 
   target_link_libraries(infini_train_cuda_kernels
     PUBLIC
