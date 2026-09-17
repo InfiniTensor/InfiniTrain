@@ -122,18 +122,11 @@ std::shared_ptr<Tensor> FakeNoOpBackward(const std::vector<int64_t> &dims, const
     return std::make_shared<Tensor>(*grad_output, 0, dims);
 }
 
-void RegisterFakeRuntime() {
-    CHECK_EQ(core::GetPrivateUse1BackendName(), "fake");
-    CHECK_EQ(Device(Device::DeviceType::kPrivateUse1, 0).ToString(), "Device(fake, 0)");
-    INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL(Device::DeviceType::kPrivateUse1, FakePrivateUse1GuardImpl)
-}
-
-void RegisterFakeKernels() {
-    REGISTER_KERNEL(Device::DeviceType::kPrivateUse1, Cast, FakeCast)
-    REGISTER_KERNEL(Device::DeviceType::kPrivateUse1, Fill, FakeFill)
-    REGISTER_KERNEL(Device::DeviceType::kPrivateUse1, NoOpForward, FakeNoOpForward)
-    REGISTER_KERNEL(Device::DeviceType::kPrivateUse1, NoOpBackward, FakeNoOpBackward)
-}
+INFINI_TRAIN_REGISTER_DEVICE_GUARD_IMPL(Device::DeviceType::kPrivateUse1, FakePrivateUse1GuardImpl)
+REGISTER_KERNEL(Device::DeviceType::kPrivateUse1, Cast, FakeCast)
+REGISTER_KERNEL(Device::DeviceType::kPrivateUse1, Fill, FakeFill)
+REGISTER_KERNEL(Device::DeviceType::kPrivateUse1, NoOpForward, FakeNoOpForward)
+REGISTER_KERNEL(Device::DeviceType::kPrivateUse1, NoOpBackward, FakeNoOpBackward)
 
 void InitializeFakeBackend() {
     static std::once_flag once;
@@ -141,8 +134,6 @@ void InitializeFakeBackend() {
         core::PrivateUse1BackendRegistration registration;
         registration.name = "fake";
         registration.default_autocast_dtype = DataType::kBFLOAT16;
-        registration.register_runtime = &RegisterFakeRuntime;
-        registration.register_kernels = &RegisterFakeKernels;
         core::RegisterPrivateUse1Backend(registration);
     });
 }
