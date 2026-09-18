@@ -18,6 +18,7 @@ namespace infini_train {
 
 constexpr uint32_t kGpt2Eot = 50256;
 constexpr uint32_t kLLaMA3Eot = 128001;
+constexpr uint32_t kQwen3Eot = 151645;
 constexpr uint64_t kRandomU32Multiplier = 0x2545F4914F6CDD1Dull;
 constexpr float kF32Divisor = 16777216.0f; // 2^24
 constexpr uint64_t kRngState = 1337;
@@ -27,6 +28,7 @@ using Version = Tokenizer::Version;
 const std::unordered_map<uint32_t, uint32_t> kEotMap = {
     {20240328, kGpt2Eot},   // GPT-2
     {20240801, kLLaMA3Eot}, // LLaMA-3
+    {20240916, kQwen3Eot},  // Qwen3
 };
 
 const std::unordered_map<uint32_t, std::vector<uint32_t>> kPromptMap = {
@@ -34,6 +36,7 @@ const std::unordered_map<uint32_t, std::vector<uint32_t>> kPromptMap = {
     // ref: https://tiktokenizer.vercel.app/
     {20240328, std::vector<uint32_t>{464, 3616, 286, 1204, 318}}, // GPT-2
     {20240801, std::vector<uint32_t>{791, 7438, 315, 2324, 374}}, // LLaMA-3
+    {20240916, std::vector<uint32_t>{785, 7290, 315, 2272, 374}}, // Qwen3
 };
 
 unsigned int RandomU32(uint64_t &state) {
@@ -78,7 +81,7 @@ Tokenizer::Tokenizer(const std::string &filepath) {
     Version version = static_cast<Version>(version_num);
     if (version == Version::kV1) {
         eot_token_ = kEotMap.at(magic_number_);
-    } else if (version == Version::kV2) {
+    } else if (version == Version::kV2 || version == Version::kV3) {
         const uint32_t eot_token_2 = BytesToType<uint32_t>(header, 12);
         eot_token_ = eot_token_2;
     } else {
@@ -88,8 +91,16 @@ Tokenizer::Tokenizer(const std::string &filepath) {
 
     token_table_.resize(vocab_size_);
     for (uint32_t i = 0; i < vocab_size_; ++i) {
-        uint8_t length;
-        ifs.read(reinterpret_cast<char *>(&length), sizeof(length));
+        size_t length = 0;
+        if (version == Version::kV3) {
+            uint8_t length_bytes[2];
+            ifs.read(reinterpret_cast<char *>(length_bytes), sizeof(length_bytes));
+            length = static_cast<size_t>(length_bytes[0]) | (static_cast<size_t>(length_bytes[1]) << 8U);
+        } else {
+            uint8_t length_v2 = 0;
+            ifs.read(reinterpret_cast<char *>(&length_v2), sizeof(length_v2));
+            length = length_v2;
+        }
 
         std::vector<char> buffer(length);
         ifs.read(buffer.data(), length);

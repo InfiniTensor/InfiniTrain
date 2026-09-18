@@ -13,6 +13,7 @@ public:
     enum class Version : uint32_t {
         kV1 = 1,
         kV2 = 2,
+        kV3 = 3,
     };
 
     Tokenizer(const std::string &filepath);
