@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "gflags/gflags.h"
 #include "glog/logging.h"
 
 #include "infini_train/include/nn/modules/normalization.h"
@@ -17,6 +18,7 @@
 #include "infini_train/include/nn/modules/transformer/mlp.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
@@ -25,6 +27,12 @@
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
+
+DECLARE_string(pipeline_layer_partition);
+DECLARE_string(pipeline_layout);
+DECLARE_int32(pipeline_embedding_stage);
+DECLARE_int32(pipeline_final_norm_stage);
+DECLARE_int32(pipeline_lm_head_stage);
 
 namespace {
 constexpr int kRandomSeed = 42;
@@ -82,18 +90,35 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     llama3_config.norm_eps = norm_eps;
     llama3_config.max_gen_batch_size = max_gen_bs;
     llama3::SanitizeLLaMA3Config(llama3_config);
+    nn::parallel::SpecialModulePlacement placement{
+        .embedding_stage = FLAGS_pipeline_embedding_stage,
+        .final_norm_stage = FLAGS_pipeline_final_norm_stage,
+        .lm_head_stage = FLAGS_pipeline_lm_head_stage,
+    };
+    auto layout = FLAGS_pipeline_layout.empty()
+        ? nn::parallel::PipelineLayout::BuildPipelineLayout(
+              static_cast<int>(n_layer),
+              nn::parallel::global::GetPipelineParallelSize(),
+              nn::parallel::global::GetVirtualPipelineParallelSize(),
+              FLAGS_pipeline_layer_partition, placement)
+        : nn::parallel::PipelineLayout::ParseMegatronStyleLayout(
+              FLAGS_pipeline_layout, static_cast<int>(n_layer),
+              nn::parallel::global::GetPipelineParallelSize(),
+              nn::parallel::global::GetVirtualPipelineParallelSize(), placement);
+    layout.ValidateForCurrentPipelineTransport();
+    nn::parallel::global::InstallPipelineLayout(layout);
     auto llama3 = std::make_shared<nn::TransformerModel>(llama3_config);
 
     // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
-    int pp_size = nn::parallel::global::GetPipelineParallelSize();
-    int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
     auto pp_rank = nn::parallel::pp_rank;
-    auto [is_first_stage, is_last_stage, layer_ranges_per_chunk]
-        = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size, pp_rank, vpp_size);
-    // ========== layer to chunk ==========
+    const auto &installed_layout = nn::parallel::global::GetPipelineLayout();
+    const bool owns_embedding = installed_layout.owns(nn::parallel::SpecialModule::kEmbedding, pp_rank);
+    const bool owns_final_norm = installed_layout.owns(nn::parallel::SpecialModule::kFinalNorm, pp_rank);
+    const bool owns_lm_head = installed_layout.owns(nn::parallel::SpecialModule::kLMHead, pp_rank);
+
     std::vector<bool> owned_layers(n_layer, false);
-    for (const auto &[start, end] : layer_ranges_per_chunk) {
-        for (int i = start; i < end; ++i) { owned_layers[i] = true; }
+    for (int layer = 0; layer < static_cast<int>(n_layer); ++layer) {
+        owned_layers[layer] = installed_layout.stage_of_layer(layer) == pp_rank;
     }
 
     const int tp_size = nn::parallel::global::GetTensorParallelSize();
@@ -122,9 +147,10 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         LOG(INFO) << "  version_minor      = " << version_minor;
 
         LOG(INFO) << "Pipeline Parallel Chunks:";
-        for (size_t i = 0; i < layer_ranges_per_chunk.size(); ++i) {
-            LOG(INFO) << "  Chunk " << i << ": layers " << layer_ranges_per_chunk[i].first << " to "
-                      << layer_ranges_per_chunk[i].second;
+        const auto &local_stage = installed_layout.stage(pp_rank);
+        for (size_t i = 0; i < local_stage.global_chunk_ids.size(); ++i) {
+            const auto &chunk = installed_layout.chunk(local_stage.global_chunk_ids[i]);
+            LOG(INFO) << "  Chunk " << i << ": layers " << chunk.layers.start << " to " << chunk.layers.end;
         }
     }
 
@@ -168,7 +194,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
 
     // ========== Read Sharded Params ==========
     // transformer.wte.weight : (vocab_size, n_embd) -> local tp_rank: rows of [v_start : v_start+vpp)
-    if (is_first_stage) {
+    if (owns_embedding) {
         auto &wte = state_dict[std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                            nn::TransformerFirstStage::kWTELayerName,
                                            nn::parallel::VocabParallelEmbedding::kParamWeightName)];
@@ -326,16 +352,25 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     // transformer.ln_f.weight : Full version nn::RMSNorm
     // lm_head.weight : (vocab_size, n_embd) -> ColumnParallelLinear, but actually applies on "rows"
     {
-        if (is_last_stage) {
+        if (owns_final_norm || owns_lm_head) {
             auto &ln_f
                 = state_dict[std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                          nn::TransformerLastStage::kLnFLayerName, nn::RMSNorm::kParamWeightName)];
-            auto &lm_head = state_dict[std::format("{}.{}", nn::TransformerLastStage::kLMHeadLayerName,
-                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
-            ReadVectorAllFloat(ifs, static_cast<float *>(ln_f->DataPtr()), n_embd);
-            ReadMatrixRowShardFloat(ifs, static_cast<float *>(lm_head->DataPtr()),
-                                    /*rows=*/vocab_size, /*cols=*/n_embd,
-                                    /*row_start=*/v_start, /*row_cnt=*/vpp);
+            if (owns_final_norm) {
+                ReadVectorAllFloat(ifs, static_cast<float *>(ln_f->DataPtr()), n_embd);
+            } else {
+                ifs.seekg(static_cast<size_t>(n_embd) * sizeof(float), std::ios::cur);
+            }
+            if (owns_lm_head) {
+                auto &lm_head = state_dict[std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                                       nn::TransformerLastStage::kLMHeadLayerName,
+                                                       nn::parallel::ColumnParallelLinear::kParamWeightName)];
+                ReadMatrixRowShardFloat(ifs, static_cast<float *>(lm_head->DataPtr()),
+                                        /*rows=*/vocab_size, /*cols=*/n_embd,
+                                        /*row_start=*/v_start, /*row_cnt=*/vpp);
+            } else {
+                ifs.seekg(static_cast<size_t>(vocab_size) * n_embd * sizeof(float), std::ios::cur);
+            }
         } else {
             size_t ln_f_bytes = static_cast<size_t>(n_embd) * sizeof(float);
             size_t lm_head_bytes = static_cast<size_t>(vocab_size) * n_embd * sizeof(float);

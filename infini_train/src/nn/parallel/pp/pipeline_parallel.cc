@@ -2,11 +2,16 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 
 #include <cstdint>
+#include <format>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
+#include "glog/logging.h"
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pipeline_layout.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_schedule.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
 
@@ -78,22 +83,79 @@ StageInfo PipelineParallel::GetStageInfo(int total_layers, int pp_size, int rank
 
 PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num_stages, int num_micro_batches,
                                    const std::vector<std::vector<int64_t>> &recv_shape, int pp_rank, Device device,
-                                   int chunk_size)
+                                   int vpp)
     : num_stages_(num_stages), rank_(pp_rank) {
-    modules_[kModuleName] = std::move(module);
+    const auto &layout = global::GetPipelineLayout();
+    if (module == nullptr) {
+        throw std::invalid_argument("PipelineParallel requires a non-null model module");
+    }
+    if (num_stages != layout.num_stages()) {
+        throw PipelineLayoutError(
+            std::format("PipelineParallel num_stages={} does not match installed PipelineLayout num_stages={}",
+                        num_stages, layout.num_stages()));
+    }
+    if (pp_rank < 0 || pp_rank >= layout.num_stages()) {
+        throw PipelineLayoutError(
+            std::format("PipelineParallel rank={} is outside installed PipelineLayout stage range [0, {})", pp_rank,
+                        layout.num_stages()));
+    }
+    layout.ValidateForCurrentPipelineTransport();
 
-    int stage_id = pp_rank;
-    int stage_size = num_stages;
+    // vpp is retained for source compatibility with existing callers. The
+    // installed layout is authoritative for local chunk ownership/order.
+    (void)vpp;
+
+    const auto &stage = layout.stage(rank_);
+    const int num_local_chunks = static_cast<int>(stage.global_chunk_ids.size());
+    if (num_local_chunks == 0) {
+        throw PipelineLayoutError(std::format("PipelineLayout stage {} has no local chunks", rank_));
+    }
+
+    const auto wrapped_module = module;
+    modules_[kModuleName] = wrapped_module;
 
     std::vector<std::shared_ptr<Module>> chunks;
-    for (int chunk_id = 0; chunk_id < chunk_size; ++chunk_id) {
-        std::vector<std::shared_ptr<Module>> chunk_parts;
-        if (chunk_id == 0 && stage_id == 0) {
-            chunk_parts.push_back(module->mutable_module(kPPFirstStageName));
+    chunks.reserve(num_local_chunks);
+
+    const bool owns_embedding = layout.owns(SpecialModule::kEmbedding, rank_);
+    const bool owns_final_norm = layout.owns(SpecialModule::kFinalNorm, rank_);
+    const bool owns_lm_head = layout.owns(SpecialModule::kLMHead, rank_);
+    const bool stages_last_module = owns_final_norm || owns_lm_head;
+
+    for (int local_chunk_idx = 0; local_chunk_idx < num_local_chunks; ++local_chunk_idx) {
+        const int global_chunk_id = stage.global_chunk_ids.at(local_chunk_idx);
+        const auto &chunk_layout = layout.chunk(global_chunk_id);
+        if (chunk_layout.stage_id != rank_) {
+            throw PipelineLayoutError(
+                std::format("Global chunk {} belongs to stage {}, but PipelineParallel is building stage {}",
+                            global_chunk_id, chunk_layout.stage_id, rank_));
         }
-        chunk_parts.push_back(module->mutable_module(kPPChunkNamePrefix + std::to_string(chunk_id)));
-        if (chunk_id == chunk_size - 1 && stage_id == stage_size - 1) {
-            chunk_parts.push_back(module->mutable_module(kPPLastStageName));
+
+        std::vector<std::shared_ptr<Module>> chunk_parts;
+        if (local_chunk_idx == 0 && owns_embedding) {
+            auto &first_stage = wrapped_module->mutable_module(kPPFirstStageName);
+            if (first_stage == nullptr) {
+                throw std::invalid_argument("Pipeline model owns embedding but __pp_first_stage is null");
+            }
+            chunk_parts.push_back(first_stage);
+        }
+
+        const std::string chunk_name = kPPChunkNamePrefix + std::to_string(chunk_layout.local_chunk_id);
+        auto &transformer_chunk = wrapped_module->mutable_module(chunk_name);
+        if (transformer_chunk == nullptr) {
+            throw std::invalid_argument(std::format("Local transformer chunk module '{}' is null", chunk_name));
+        }
+        chunk_parts.push_back(transformer_chunk);
+        if (local_chunk_idx == num_local_chunks - 1 && stages_last_module) {
+            auto &last_stage = wrapped_module->mutable_module(kPPLastStageName);
+            if (last_stage == nullptr) {
+                throw std::invalid_argument("Pipeline model owns final norm or LM head but __pp_last_stage is null");
+            }
+            chunk_parts.push_back(last_stage);
+        }
+        if (chunk_parts.empty()) {
+            throw std::invalid_argument(
+                std::format("Pipeline stage {} local chunk {} has no executable modules", rank_, local_chunk_idx));
         }
         chunks.push_back(std::make_shared<Sequential>(std::move(chunk_parts)));
     }

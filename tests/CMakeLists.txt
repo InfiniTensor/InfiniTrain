@@ -9,6 +9,8 @@ add_subdirectory(common)
 
 # Distributed tests
 add_subdirectory(distributed)
+# Parallel tests
+add_subdirectory(parallel)
 # Module tests
 add_subdirectory(module)
 # Backend extension contract tests

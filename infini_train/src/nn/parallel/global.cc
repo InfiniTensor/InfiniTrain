@@ -119,6 +119,7 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     layout_.sizes[PP] = pipeline_parallel_size_;
     layout_.InitStrides();
 
+    pipeline_layout_ = PipelineLayout();
     initialized_ = true;
 }
 
@@ -185,6 +186,13 @@ int GlobalEnv::virtual_pipeline_parallel_size() const {
 Layout GlobalEnv::layout() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return layout_;
+}
+
+const PipelineLayout &GlobalEnv::pipeline_layout() const { return pipeline_layout_; }
+
+void GlobalEnv::set_pipeline_layout(const PipelineLayout &layout) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    pipeline_layout_ = layout;
 }
 
 namespace {
