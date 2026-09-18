@@ -18,6 +18,7 @@ using NamedParameter = std::pair<std::string, std::shared_ptr<Tensor>>;
 using NamedParameterList = std::vector<NamedParameter>;
 using OptimizerCreator = std::function<std::shared_ptr<Optimizer>(const std::vector<std::shared_ptr<Tensor>> &params)>;
 using OptimizerCreatorNamed = std::function<std::shared_ptr<Optimizer>(const NamedParameterList &named_params)>;
+using ModelGradFinalizer = std::function<void(const std::vector<std::shared_ptr<Tensor>> &params)>;
 
 class Optimizer {
 public:
@@ -27,7 +28,11 @@ public:
 
     virtual void ZeroGrad(bool set_to_none = true);
 
-    virtual void Step() = 0;
+    virtual void Step() final;
+
+    void set_model_grad_finalizer(ModelGradFinalizer finalizer) { model_grad_finalizer_ = std::move(finalizer); }
+
+    const std::vector<std::shared_ptr<Tensor>> &parameters() const { return params_; }
 
     virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const { return {}; };
 
@@ -44,11 +49,16 @@ public:
     void set_initial_learning_rate(float lr);
 
 protected:
+    virtual void FinalizeModelGrads();
+    virtual void StepImpl() = 0;
+
     std::vector<std::shared_ptr<Tensor>> params_;
     std::vector<std::string> parameter_names_;
     float learning_rate_ = 0.0f;
     float initial_learning_rate_ = 0.0f;
     bool initial_lr_set_ = false;
+
+    ModelGradFinalizer model_grad_finalizer_;
 };
 
 namespace optimizers {
@@ -57,7 +67,7 @@ public:
     SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate);
     SGD(const NamedParameterList &named_params, float learning_rate);
 
-    void Step() override;
+    void StepImpl() override;
 
     static OptimizerCreator Create(float learning_rate);
     static OptimizerCreatorNamed CreateNamed(float learning_rate);
@@ -70,7 +80,7 @@ public:
     Adam(const NamedParameterList &named_params, float learning_rate = 1e-3, float beta1 = 0.9, float beta2 = 0.999,
          float eps = 1e-8);
 
-    void Step() override;
+    void StepImpl() override;
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
 

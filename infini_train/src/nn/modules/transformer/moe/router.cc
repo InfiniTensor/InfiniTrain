@@ -11,6 +11,7 @@
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/transformer/moe/moe_utils.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::moe {
@@ -24,12 +25,18 @@ TopKRouter::TopKRouter(const TransformerConfig &config) : CloneableModule(kType)
         = std::make_shared<Tensor>(std::vector<int64_t>{moe_config.num_experts, config_.n_embd}, DataType::kFLOAT32,
                                    device_)
               ->RequiresGrad();
+    if (parallel::global::GetSequenceParallelEnabled()) {
+        parameters_[kParamWeightName]->set_sequence_parallel(true);
+    }
     init::KaimingUniform(parameters_[kParamWeightName]);
 
     if (config_.add_bias_linear) {
         parameters_[kParamBiasName]
             = std::make_shared<Tensor>(std::vector<int64_t>{moe_config.num_experts}, DataType::kFLOAT32, device_)
                   ->RequiresGrad();
+        if (parallel::global::GetSequenceParallelEnabled()) {
+            parameters_[kParamBiasName]->set_sequence_parallel(true);
+        }
         parameters_[kParamBiasName]->Fill(0.0f);
     }
 }
