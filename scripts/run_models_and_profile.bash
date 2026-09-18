@@ -77,6 +77,9 @@ MIXTRAL_INPUT_BIN="$(read_var MIXTRAL_INPUT_BIN)";       : "${MIXTRAL_INPUT_BIN:
 MIXTRAL_LLMC_FILEPATH="$(read_var MIXTRAL_LLMC_FILEPATH)"; : "${MIXTRAL_LLMC_FILEPATH:=/data/shared/InfiniTrain-dev/data/llmc/mixtral/mixtral_megatron_export.bin}"
 GPT2_TEST_GROUPS="$(read_var GPT2_TEST_GROUPS)";          : "${GPT2_TEST_GROUPS:=basic,zero,lora,checkpoint}"
 LLAMA3_TEST_GROUPS="$(read_var LLAMA3_TEST_GROUPS)";      : "${LLAMA3_TEST_GROUPS:=basic,zero,lora,checkpoint}"
+QWEN3_INPUT_BIN="$(read_var QWEN3_INPUT_BIN)";                    : "${QWEN3_INPUT_BIN:=/data1/shared/InfiniTrain-dev/data/llmc/qwen3/tinyshakespeare/tiny_shakespeare_train.bin}"
+QWEN3_LLMC_FILEPATH="$(read_var QWEN3_LLMC_FILEPATH)"; : "${QWEN3_LLMC_FILEPATH:=/data1/shared/InfiniTrain-dev/data/llmc/qwen3/qwen3-8b-fp32.llmc}"
+QWEN3_TEST_GROUPS="$(read_var QWEN3_TEST_GROUPS)";        : "${QWEN3_TEST_GROUPS:=}"
 MIXTRAL_TEST_GROUPS="$(read_var MIXTRAL_TEST_GROUPS)";    : "${MIXTRAL_TEST_GROUPS:=moe}"
 DEVICE_BACKEND="$(read_var DEVICE_BACKEND)";             : "${DEVICE_BACKEND:=cuda}"
 
@@ -428,6 +431,17 @@ model_has_selected_group() {
 }
 
 check_model_inputs() {
+    if model_has_selected_group "$QWEN3_TEST_GROUPS"; then
+        if [[ ! -f "$QWEN3_INPUT_BIN" ]]; then
+            echo "Error: missing QWEN3_INPUT_BIN: $QWEN3_INPUT_BIN" >&2
+            exit 1
+        fi
+        if [[ ! -f "$QWEN3_LLMC_FILEPATH" ]]; then
+            echo "Error: missing QWEN3_LLMC_FILEPATH: $QWEN3_LLMC_FILEPATH" >&2
+            exit 1
+        fi
+    fi
+
     if model_has_selected_group "$MIXTRAL_TEST_GROUPS"; then
         if [[ ! -f "$MIXTRAL_INPUT_BIN" ]]; then
             echo "Error: missing MIXTRAL_INPUT_BIN: $MIXTRAL_INPUT_BIN" >&2
@@ -544,6 +558,16 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
                         llama3_cmd="${prefix}./llama3 --input_bin ${LLAMA3_INPUT_BIN} --llmc_filepath ${LLAMA3_LLMC_FILEPATH} --device ${DEVICE_BACKEND} ${llama3_arg_str}"
                     fi
                     run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
+                fi
+
+                if tag_enabled_for_model "$group_tag" "$QWEN3_TEST_GROUPS"; then
+                    qwen3_arg_str="$(args_string_for_test "$gi" "$ti" "qwen3" "$test_id")"
+                    if [[ -n "$nproc_per_node" ]]; then
+                        qwen3_cmd="$(infini_run_cmd_for_test "./qwen3" "$QWEN3_INPUT_BIN" "$QWEN3_LLMC_FILEPATH" "$qwen3_arg_str" "$nproc_per_node")"
+                    else
+                        qwen3_cmd="${prefix}./qwen3 --input_bin $QWEN3_INPUT_BIN --llmc_filepath $QWEN3_LLMC_FILEPATH --device cuda $qwen3_arg_str"
+                    fi
+                    run_and_log "$qwen3_cmd" "qwen3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
 
                 if tag_enabled_for_model "$group_tag" "$MIXTRAL_TEST_GROUPS"; then

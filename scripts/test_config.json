@@ -6,6 +6,8 @@
         "LLAMA3_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
         "LLAMA3_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_fp32.bin",
         "LLAMA3_LORA_WEIGHTS_DIR": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_lora_weights_rank8_alpha16.bin",
+        "QWEN3_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/qwen3/tinyshakespeare/tiny_shakespeare_train.bin",
+        "QWEN3_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/qwen3/qwen3-8b-fp32.llmc",
         "GPT2_LORA_WEIGHTS_DIR": "/data1/shared/InfiniTrain-dev/data/llmc/gpt2/gpt2_124M_lora_weights_rank8_alpha16.bin",
         "PROFILE_LOG_DIR": "./profile_logs",
         "LOG_DIR": "./logs",
@@ -17,6 +19,7 @@
         "MIXTRAL_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/mixtral/mixtral_megatron_export.bin",
         "GPT2_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc",
         "LLAMA3_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc",
+        "QWEN3_TEST_GROUPS": "qwen3",
         "MIXTRAL_TEST_GROUPS": "moe"
     },
     "basic_compile_commands": [
@@ -857,6 +860,70 @@
                         "load": "@CKPT_ROOT_DIR@/3d_ddp2_tp2_pp2_no_resume/checkpoint_step_000030",
                         "save": "@CKPT_ROOT_DIR@/3d_tp2_pp2_resume",
                         "max_checkpoint_keep": 5
+                    }
+                }
+            ]
+        },
+        {
+            "tag": "qwen3",
+            "tests": [
+                {
+                    "id": "tp8_fp32",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 2,
+                        "batch_size": 1,
+                        "total_batch_size": 64,
+                        "tensor_parallel": 8
+                    }
+                },
+                {
+                    "id": "tp8_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 2,
+                        "batch_size": 1,
+                        "total_batch_size": 64,
+                        "tensor_parallel": 8
+                    }
+                },
+                {
+                    "id": "tp8_sp_fp32",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 2,
+                        "batch_size": 1,
+                        "total_batch_size": 64,
+                        "tensor_parallel": 8,
+                        "sequence_parallel": true
+                    }
+                },
+                {
+                    "id": "pp8_fp32",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 2,
+                        "batch_size": 1,
+                        "total_batch_size": 64,
+                        "pipeline_parallel": 8
+                    }
+                },
+                {
+                    "id": "tp8_lora_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 2,
+                        "batch_size": 1,
+                        "total_batch_size": 64,
+                        "tensor_parallel": 8,
+                        "lora_rank": 8,
+                        "lora_alpha": 16.0,
+                        "lora_target_modules": "c_attn,c_proj,c_fc,c_fc2"
                     }
                 }
             ]
