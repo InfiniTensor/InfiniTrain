@@ -2,6 +2,7 @@
 #include <cstddef>
 
 #include "infini_train/include/common/common.h"
+#include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/common/cuda/kernel_helper.cuh"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/datatype.h"
@@ -14,6 +15,7 @@ namespace infini_train::kernels::cuda {
 namespace {
 using namespace infini_train::common::cuda;
 
+// TODO(zbl): Optimize the packed [gate, up] accesses with vectorized loads/stores.
 template <typename T>
 __global__ void SwiGLUForwardKernel(T *__restrict__ output, const T *__restrict__ input, int64_t hidden,
                                     size_t num_elements) {
@@ -47,18 +49,6 @@ __global__ void SwiGLUBackwardKernel(T *__restrict__ grad_input, const InputT *_
     }
 }
 
-inline size_t ChooseBlockSize(size_t num_elements) {
-    if (num_elements < 1024) {
-        return 64;
-    }
-    if (num_elements < 65536) {
-        return 128;
-    }
-    if (num_elements < 1048576) {
-        return 256;
-    }
-    return 512;
-}
 } // namespace
 
 std::shared_ptr<Tensor> SwiGLUForward(const std::shared_ptr<Tensor> &input) {

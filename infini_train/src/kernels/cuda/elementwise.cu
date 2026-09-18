@@ -193,20 +193,6 @@ __global__ void BinaryBackwardKernelNoBroadcastVectorized(T *__restrict__ outA, 
     }
 }
 
-// Helper to choose optimal block size based on tensor size
-inline size_t ChooseBlockSize(size_t num_elements) {
-    if (num_elements < 1024) {
-        return 64;
-    }
-    if (num_elements < 65536) {
-        return 128;
-    }
-    if (num_elements < 1048576) {
-        return 256;
-    }
-    return 512;
-}
-
 inline dim3 ChooseBlockDims(size_t num_elements) { return dim3(ChooseBlockSize(num_elements)); }
 
 // launch the given kernel function with the given output and inputs
