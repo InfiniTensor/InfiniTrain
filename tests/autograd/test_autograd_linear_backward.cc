@@ -124,7 +124,7 @@ TEST_P(AutogradLinearBackwardTest, LinearBackwardBiasValues) {
 // The bf16 branch accumulates in fp32 and returns a promoted fp32 grad_bias;
 // bf16 kernels are CUDA-only (the CPU Linear path is fp32-only).
 TEST_P(AutogradLinearBackwardTest, LinearBackwardBiasBFloat16) {
-    ONLY_CUDA();
+    SKIP_CPU();
     const std::vector<float> grad_values{0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f};
 
     auto grad_f32
