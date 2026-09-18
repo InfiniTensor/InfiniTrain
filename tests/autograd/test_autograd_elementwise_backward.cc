@@ -73,7 +73,7 @@ TEST_P(AutogradElementwiseBackwardTest, SwiGLUForwardBackward) {
 }
 
 TEST_P(AutogradElementwiseBackwardTest, SwiGLUAutocastBackward) {
-    ONLY_CUDA();
+    SKIP_CPU();
     const std::vector<int64_t> input_dims{1, 4};
     const std::vector<float> input_values{0.5f, -1.0f, 1.0f, -0.5f};
     const std::vector<float> grad_values{2.0f, -0.25f};

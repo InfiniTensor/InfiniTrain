@@ -87,6 +87,41 @@ std::string QualifiedParamName(const std::string &module_name, const std::string
     return module_name.empty() ? param_name : module_name + "." + param_name;
 }
 
+void MarkLoRAColumnParallelBSharding(const std::string &module_name, const std::shared_ptr<Module> &module,
+                                     const std::string &projection_name, LoRATensorSharding sharding,
+                                     std::unordered_map<std::string, LoRATensorSharding> &shardings) {
+    auto projection = module->mutable_module(projection_name);
+    if (!dynamic_cast<LoRAColumnParallelLinear *>(projection.get())) {
+        return;
+    }
+
+    const auto projection_module_name = QualifiedParamName(module_name, projection_name);
+    shardings[QualifiedParamName(projection_module_name, LoRAColumnParallelLinear::kParamLoraBName)] = sharding;
+}
+
+void MarkPackedQKVLoRASharding(const std::string &module_name, const std::shared_ptr<Module> &module,
+                               std::unordered_map<std::string, LoRATensorSharding> &shardings) {
+    MarkLoRAColumnParallelBSharding(module_name, module, CausalSelfAttention::kCAttnLayerName,
+                                    LoRATensorSharding::kPackedQKVColumnParallelDim0, shardings);
+}
+
+void MarkPackedSwiGLULoRASharding(const std::string &module_name, const std::shared_ptr<Module> &module,
+                                  std::unordered_map<std::string, LoRATensorSharding> &shardings) {
+    bool is_swiglu = false;
+    for (const auto &child : module->modules()) {
+        if (dynamic_cast<SwiGLU *>(child.get())) {
+            is_swiglu = true;
+            break;
+        }
+    }
+    if (!is_swiglu) {
+        return;
+    }
+
+    MarkLoRAColumnParallelBSharding(module_name, module, MLP::kCFcLayerName,
+                                    LoRATensorSharding::kPackedSwiGLUColumnParallelDim0, shardings);
+}
+
 std::vector<std::string>
 SortedLoRAStateDictNames(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
     std::vector<std::string> names;
@@ -119,48 +154,14 @@ std::unordered_map<std::string, LoRATensorSharding> BuildLoRATensorShardings(con
         }
     }
 
-    // Packed QKV is a property of the attention module topology, not the
-    // parameter name. Mark the LoRA-B of the attention QKV projection explicitly.
+    // Packed projections are properties of their parent module topology, not
+    // only their parameter names.
     for (const auto &[module_name, module] : named_modules) {
-        if (!dynamic_cast<CausalSelfAttention *>(module.get())) {
-            continue;
+        if (dynamic_cast<CausalSelfAttention *>(module.get())) {
+            MarkPackedQKVLoRASharding(module_name, module, shardings);
+        } else if (dynamic_cast<MLP *>(module.get())) {
+            MarkPackedSwiGLULoRASharding(module_name, module, shardings);
         }
-
-        auto qkv_projection = module->mutable_module(CausalSelfAttention::kCAttnLayerName);
-        if (!dynamic_cast<LoRAColumnParallelLinear *>(qkv_projection.get())) {
-            continue;
-        }
-
-        const auto qkv_module_name = QualifiedParamName(module_name, CausalSelfAttention::kCAttnLayerName);
-        shardings[QualifiedParamName(qkv_module_name, LoRAColumnParallelLinear::kParamLoraBName)]
-            = LoRATensorSharding::kPackedQKVColumnParallelDim0;
-    }
-
-    // For packed SwiGLU: FC1 projection is stored locally as [gate_i | up_i] on each TP rank.
-    for (const auto &[module_name, module] : named_modules) {
-        if (!dynamic_cast<MLP *>(module.get())) {
-            continue;
-        }
-
-        bool is_swiglu = false;
-        for (const auto &child : module->modules()) {
-            if (dynamic_cast<SwiGLU *>(child.get())) {
-                is_swiglu = true;
-                break;
-            }
-        }
-        if (!is_swiglu) {
-            continue;
-        }
-
-        auto fc_projection = module->mutable_module(MLP::kCFcLayerName);
-        if (!dynamic_cast<LoRAColumnParallelLinear *>(fc_projection.get())) {
-            continue;
-        }
-
-        const auto fc_module_name = QualifiedParamName(module_name, MLP::kCFcLayerName);
-        shardings[QualifiedParamName(fc_module_name, LoRAColumnParallelLinear::kParamLoraBName)]
-            = LoRATensorSharding::kPackedSwiGLUColumnParallelDim0;
     }
 
     return shardings;
@@ -294,6 +295,70 @@ void LoadLoRATensorIntoModel(const std::string &name, const std::shared_ptr<Tens
     dst->CopyFrom(sliced);
 }
 
+std::shared_ptr<Tensor> SlicePackedProjectionRowsForTensorParallel(const std::shared_ptr<Tensor> &full_tensor,
+                                                                   const std::vector<int64_t> &projection_rows,
+                                                                   int tp_rank, int tp_size) {
+    CHECK(full_tensor != nullptr);
+    CHECK(!projection_rows.empty());
+
+    const auto &dims = full_tensor->Dims();
+    CHECK_GE(dims.size(), 1);
+    CHECK_GT(tp_size, 0);
+    CHECK_GE(tp_rank, 0);
+    CHECK_LT(tp_rank, tp_size);
+
+    int64_t total_rows = 0;
+    for (int64_t rows : projection_rows) {
+        CHECK_GT(rows, 0);
+        CHECK_EQ(rows % tp_size, 0) << "Packed projection rows must be divisible by TP size";
+        total_rows += rows;
+    }
+    CHECK_EQ(dims[0], total_rows) << "Packed projection row counts do not match tensor shape";
+
+    std::vector<std::shared_ptr<Tensor>> shards;
+    shards.reserve(projection_rows.size());
+    int64_t offset = 0;
+    for (int64_t rows : projection_rows) {
+        const int64_t local_rows = rows / tp_size;
+        const int64_t start = offset + static_cast<int64_t>(tp_rank) * local_rows;
+        shards.push_back(full_tensor->Slice(0, start, start + local_rows));
+        offset += rows;
+    }
+    return nn::function::Concat(shards, 0);
+}
+
+std::shared_ptr<Tensor> RestorePackedProjectionRowsFromTensorParallel(const std::shared_ptr<Tensor> &gathered_tensor,
+                                                                      const std::vector<int64_t> &local_projection_rows,
+                                                                      int tp_size) {
+    CHECK(gathered_tensor != nullptr);
+    CHECK(!local_projection_rows.empty());
+
+    const auto &dims = gathered_tensor->Dims();
+    CHECK_GE(dims.size(), 1);
+    CHECK_GT(tp_size, 0);
+    CHECK_EQ(dims[0] % tp_size, 0) << "Gathered packed projection rows must be divisible by TP size";
+
+    int64_t rows_per_rank = 0;
+    for (int64_t rows : local_projection_rows) {
+        CHECK_GT(rows, 0);
+        rows_per_rank += rows;
+    }
+    CHECK_EQ(dims[0] / tp_size, rows_per_rank)
+        << "Local packed projection row counts do not match gathered tensor shape";
+
+    std::vector<std::shared_ptr<Tensor>> reordered_shards;
+    reordered_shards.reserve(static_cast<size_t>(tp_size) * local_projection_rows.size());
+    int64_t projection_offset = 0;
+    for (int64_t local_rows : local_projection_rows) {
+        for (int rank = 0; rank < tp_size; ++rank) {
+            const int64_t base = static_cast<int64_t>(rank) * rows_per_rank + projection_offset;
+            reordered_shards.push_back(gathered_tensor->Slice(0, base, base + local_rows));
+        }
+        projection_offset += local_rows;
+    }
+    return nn::function::Concat(reordered_shards, 0);
+}
+
 } // namespace
 
 namespace detail {
@@ -303,123 +368,56 @@ namespace detail {
 std::shared_ptr<Tensor> SlicePackedQKVRowsForTensorParallel(const std::shared_ptr<Tensor> &full_tensor, int64_t q_rows,
                                                             int tp_rank, int tp_size) {
     CHECK(full_tensor != nullptr);
-
-    const auto &dims = full_tensor->Dims();
-    CHECK_GE(dims.size(), 1);
-    CHECK_GT(tp_size, 0);
-    CHECK_GE(tp_rank, 0);
-    CHECK_LT(tp_rank, tp_size);
+    CHECK_GE(full_tensor->Dims().size(), 1);
     CHECK_GT(q_rows, 0);
+    CHECK_GT(full_tensor->Dims()[0], q_rows) << "Packed QKV tensor must contain Q, K, and V rows";
+    CHECK_EQ((full_tensor->Dims()[0] - q_rows) % 2, 0) << "Packed QKV K/V rows must be balanced";
 
-    const int64_t total_rows = dims[0];
-    CHECK_GT(total_rows, q_rows) << "Packed QKV tensor must contain Q, K, and V rows";
-    CHECK_EQ((total_rows - q_rows) % 2, 0) << "Packed QKV K/V rows must be balanced";
-
-    const int64_t kv_rows = (total_rows - q_rows) / 2;
+    const int64_t kv_rows = (full_tensor->Dims()[0] - q_rows) / 2;
     CHECK_GT(kv_rows, 0);
-    CHECK_EQ(q_rows % tp_size, 0) << "Q rows must be divisible by TP size";
-    CHECK_EQ(kv_rows % tp_size, 0) << "K/V rows must be divisible by TP size";
-
-    const int64_t q_local_rows = q_rows / tp_size;
-    const int64_t kv_local_rows = kv_rows / tp_size;
-    CHECK_GT(q_local_rows, 0);
-    CHECK_GT(kv_local_rows, 0);
-
-    auto q_shard = full_tensor->Slice(0, static_cast<int64_t>(tp_rank) * q_local_rows,
-                                      static_cast<int64_t>(tp_rank + 1) * q_local_rows);
-    auto k_shard = full_tensor->Slice(0, q_rows + static_cast<int64_t>(tp_rank) * kv_local_rows,
-                                      q_rows + static_cast<int64_t>(tp_rank + 1) * kv_local_rows);
-    auto v_shard = full_tensor->Slice(0, q_rows + kv_rows + static_cast<int64_t>(tp_rank) * kv_local_rows,
-                                      q_rows + kv_rows + static_cast<int64_t>(tp_rank + 1) * kv_local_rows);
-
-    return infini_train::nn::function::Concat({q_shard, k_shard, v_shard}, 0);
+    return SlicePackedProjectionRowsForTensorParallel(full_tensor, {q_rows, kv_rows, kv_rows}, tp_rank, tp_size);
 }
 
 std::shared_ptr<Tensor> RestorePackedQKVRowsFromTensorParallel(const std::shared_ptr<Tensor> &gathered_tensor,
                                                                int64_t q_rows, int tp_size) {
     CHECK(gathered_tensor != nullptr);
-
-    const auto &dims = gathered_tensor->Dims();
-    CHECK_GE(dims.size(), 1);
+    CHECK_GE(gathered_tensor->Dims().size(), 1);
     CHECK_GT(tp_size, 0);
     CHECK_GT(q_rows, 0);
-    CHECK_EQ(dims[0] % tp_size, 0) << "Gathered packed QKV rows must be divisible by TP size";
-
-    const int64_t local_rows = dims[0] / tp_size;
     CHECK_EQ(q_rows % tp_size, 0) << "Q rows must be divisible by TP size";
+
     const int64_t q_local_rows = q_rows / tp_size;
+    const int64_t local_rows = gathered_tensor->Dims()[0] / tp_size;
     CHECK_GT(local_rows, q_local_rows) << "Gathered packed QKV tensor must contain local Q, K, and V rows";
     CHECK_EQ((local_rows - q_local_rows) % 2, 0) << "Local packed QKV K/V rows must be balanced";
     const int64_t kv_local_rows = (local_rows - q_local_rows) / 2;
     CHECK_GT(kv_local_rows, 0);
-
-    std::vector<std::shared_ptr<Tensor>> reordered_shards;
-    reordered_shards.reserve(static_cast<size_t>(tp_size) * 3);
-    for (int rank = 0; rank < tp_size; ++rank) {
-        const int64_t base = static_cast<int64_t>(rank) * local_rows;
-        reordered_shards.push_back(gathered_tensor->Slice(0, base, base + q_local_rows));
-    }
-    for (int rank = 0; rank < tp_size; ++rank) {
-        const int64_t base = static_cast<int64_t>(rank) * local_rows;
-        reordered_shards.push_back(gathered_tensor->Slice(0, base + q_local_rows, base + q_local_rows + kv_local_rows));
-    }
-    for (int rank = 0; rank < tp_size; ++rank) {
-        const int64_t base = static_cast<int64_t>(rank) * local_rows;
-        reordered_shards.push_back(
-            gathered_tensor->Slice(0, base + q_local_rows + kv_local_rows, base + q_local_rows + 2 * kv_local_rows));
-    }
-
-    return nn::function::Concat(reordered_shards, 0);
+    return RestorePackedProjectionRowsFromTensorParallel(gathered_tensor, {q_local_rows, kv_local_rows, kv_local_rows},
+                                                         tp_size);
 }
 
 std::shared_ptr<Tensor> SlicePackedSwiGLURowsForTensorParallel(const std::shared_ptr<Tensor> &full_tensor, int tp_rank,
                                                                int tp_size) {
     CHECK(full_tensor != nullptr);
+    CHECK_GE(full_tensor->Dims().size(), 1);
+    CHECK_EQ(full_tensor->Dims()[0] % 2, 0) << "Packed SwiGLU tensor must contain balanced gate and up rows";
 
-    const auto &dims = full_tensor->Dims();
-    CHECK_GE(dims.size(), 1);
-    CHECK_GT(tp_size, 0);
-    CHECK_GE(tp_rank, 0);
-    CHECK_LT(tp_rank, tp_size);
-    CHECK_EQ(dims[0] % 2, 0) << "Packed SwiGLU tensor must contain balanced gate and up rows";
-
-    const int64_t rows_per_projection = dims[0] / 2;
+    const int64_t rows_per_projection = full_tensor->Dims()[0] / 2;
     CHECK_GT(rows_per_projection, 0);
-    CHECK_EQ(rows_per_projection % tp_size, 0) << "SwiGLU projection rows must be divisible by TP size";
-    const int64_t local_rows = rows_per_projection / tp_size;
-
-    auto gate_shard = full_tensor->Slice(0, static_cast<int64_t>(tp_rank) * local_rows,
-                                         static_cast<int64_t>(tp_rank + 1) * local_rows);
-    auto up_shard = full_tensor->Slice(0, rows_per_projection + static_cast<int64_t>(tp_rank) * local_rows,
-                                       rows_per_projection + static_cast<int64_t>(tp_rank + 1) * local_rows);
-    return nn::function::Concat({gate_shard, up_shard}, 0);
+    return SlicePackedProjectionRowsForTensorParallel(full_tensor, {rows_per_projection, rows_per_projection}, tp_rank,
+                                                      tp_size);
 }
 
 std::shared_ptr<Tensor> RestorePackedSwiGLURowsFromTensorParallel(const std::shared_ptr<Tensor> &gathered_tensor,
                                                                   int tp_size) {
     CHECK(gathered_tensor != nullptr);
-
-    const auto &dims = gathered_tensor->Dims();
-    CHECK_GE(dims.size(), 1);
+    CHECK_GE(gathered_tensor->Dims().size(), 1);
     CHECK_GT(tp_size, 0);
-    CHECK_EQ(dims[0] % tp_size, 0) << "Gathered packed SwiGLU rows must be divisible by TP size";
-
-    const int64_t rows_per_rank = dims[0] / tp_size;
+    const int64_t rows_per_rank = gathered_tensor->Dims()[0] / tp_size;
     CHECK_EQ(rows_per_rank % 2, 0) << "Local packed SwiGLU tensor must contain balanced gate and up rows";
     const int64_t local_rows = rows_per_rank / 2;
     CHECK_GT(local_rows, 0);
-
-    std::vector<std::shared_ptr<Tensor>> reordered_shards;
-    reordered_shards.reserve(static_cast<size_t>(tp_size) * 2);
-    for (int rank = 0; rank < tp_size; ++rank) {
-        const int64_t base = static_cast<int64_t>(rank) * rows_per_rank;
-        reordered_shards.push_back(gathered_tensor->Slice(0, base, base + local_rows));
-    }
-    for (int rank = 0; rank < tp_size; ++rank) {
-        const int64_t base = static_cast<int64_t>(rank) * rows_per_rank;
-        reordered_shards.push_back(gathered_tensor->Slice(0, base + local_rows, base + 2 * local_rows));
-    }
-    return nn::function::Concat(reordered_shards, 0);
+    return RestorePackedProjectionRowsFromTensorParallel(gathered_tensor, {local_rows, local_rows}, tp_size);
 }
 
 } // namespace detail
