@@ -22,15 +22,16 @@ size_t CheckedCeilDiv(size_t numerator, size_t denominator) {
 // TODO(dcj): Use official stack implementation later.
 std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &tensors) {
     CHECK(!tensors.empty()) << "Cannot stack an empty batch. Check DataLoader iterator end handling.";
-    const int batch_size = tensors.size();
-    const auto &dims = tensors[0]->Dims();
-    const int stacked_dim = std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>());
-    auto stacked_tensor = std::make_shared<Tensor>(std::vector<int64_t>{batch_size, stacked_dim}, tensors[0]->Dtype());
+    const int64_t batch_size = static_cast<int64_t>(tensors.size());
+    const auto &sample_dims = tensors[0]->Dims();
     for (const auto &tensor : tensors) {
-        CHECK_EQ(static_cast<int>(tensors[0]->Dtype()), static_cast<int>(tensor->Dtype()));
-        const auto &dims = tensor->Dims();
-        CHECK_EQ(stacked_dim, std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>()));
+        CHECK_EQ(static_cast<int>(tensors[0]->Dtype()), static_cast<int>(tensor->Dtype()))
+            << "Cannot stack tensors with different dtypes.";
+        CHECK(tensor->Dims() == sample_dims) << "Cannot stack tensors with different shapes.";
     }
+    std::vector<int64_t> stacked_dims = {batch_size};
+    stacked_dims.insert(stacked_dims.end(), sample_dims.begin(), sample_dims.end());
+    auto stacked_tensor = std::make_shared<Tensor>(stacked_dims, tensors[0]->Dtype());
 
     size_t offset = 0;
     for (const auto &tensor : tensors) {

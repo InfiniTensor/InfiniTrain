@@ -38,3 +38,6 @@ add_subdirectory(transformer)
 
 # Checkpoint tests
 add_subdirectory(checkpoint)
+
+# Example tests
+add_subdirectory(example)

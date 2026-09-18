@@ -87,9 +87,18 @@ MNISTDataset::MNISTDataset(const std::string &dataset, bool train)
         ReadSN3PascalVincentFile(std::format("{}/{}-images-idx3-ubyte", dataset, train ? kTrainPrefix : kTestPrefix))),
       label_file_(ReadSN3PascalVincentFile(
           std::format("{}/{}-labels-idx1-ubyte", dataset, train ? kTrainPrefix : kTestPrefix))),
-      image_dims_(image_file_.dims.begin() + 1, image_file_.dims.end()),
+      // Insert a leading channel dim so samples are [1, 28, 28] (NCHW-ready); the
+      // underlying buffer is unchanged, only the per-sample view dims gain the channel.
+      // Built inline so image_size_in_bytes_ below (init-list order) already sees [1, 28, 28].
+      image_dims_([&] {
+          std::vector<int64_t> dims = {1};
+          dims.insert(dims.end(), image_file_.dims.begin() + 1, image_file_.dims.end());
+          return dims;
+      }()),
       label_dims_(label_file_.dims.begin() + 1, label_file_.dims.end()),
-      image_size_in_bytes_(kSN3TypeToSize.at(image_file_.type)
+      // NOTE: image_file_.tensor is converted to FLOAT32 below, so the per-sample stride must count FLOAT32 bytes,
+      // not the on-disk UINT8 bytes from kSN3TypeToSize.
+      image_size_in_bytes_(sizeof(float)
                            * std::accumulate(image_dims_.begin(), image_dims_.end(), 1, std::multiplies<int>())),
       label_size_in_bytes_(kSN3TypeToSize.at(label_file_.type)
                            * std::accumulate(label_dims_.begin(), label_dims_.end(), 1, std::multiplies<int>())) {
