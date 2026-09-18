@@ -11,6 +11,19 @@
 
 namespace infini_train::common::cuda {
 
+inline size_t ChooseBlockSize(size_t num_elements) {
+    if (num_elements < 1024) {
+        return 64;
+    }
+    if (num_elements < 65536) {
+        return 128;
+    }
+    if (num_elements < 1048576) {
+        return 256;
+    }
+    return 512;
+}
+
 // Common CUDA Macros
 #define CUDA_CHECK(call)                                                                                               \
     do {                                                                                                               \

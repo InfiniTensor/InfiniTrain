@@ -105,6 +105,24 @@ TEST_P(LoRATest, PackedQKVRestoreFromTPGather) {
     ExpectRows(restored, {0, 1, 6, 7, 2, 3, 8, 9, 4, 5, 10, 11});
 }
 
+TEST_P(LoRATest, PackedSwiGLUShard) {
+    auto full_swiglu = MakeRowLabeledTensor(/*rows=*/8, /*cols=*/3, GetDevice());
+    auto shard = infini_train::nn::lora::detail::SlicePackedSwiGLURowsForTensorParallel(full_swiglu, /*tp_rank=*/1,
+                                                                                        /*tp_size=*/2);
+
+    EXPECT_EQ(shard->Dims(), (std::vector<int64_t>{4, 3}));
+    ExpectRows(shard, {2, 3, 6, 7});
+}
+
+TEST_P(LoRATest, PackedSwiGLURestoreFromTPGather) {
+    auto rank_major_swiglu = MakeRowLabeledTensor(/*rows=*/8, /*cols=*/3, GetDevice());
+    auto restored = infini_train::nn::lora::detail::RestorePackedSwiGLURowsFromTensorParallel(rank_major_swiglu,
+                                                                                              /*tp_size=*/2);
+
+    EXPECT_EQ(restored->Dims(), (std::vector<int64_t>{8, 3}));
+    ExpectRows(restored, {0, 1, 4, 5, 2, 3, 6, 7});
+}
+
 TEST_P(LoRATest, LoRAConfigShouldApply) {
     LoRAConfig config;
     config.rank = 8;
