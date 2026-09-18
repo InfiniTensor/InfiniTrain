@@ -456,6 +456,10 @@ void Train(const nn::parallel::Rank &rank) {
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
+                std::unique_ptr<nn::NoSyncGuard> no_sync_guard;
+                if (ddp_world_size > 1 && micro_step != grad_accum_steps - 1) {
+                    no_sync_guard = model->no_sync();
+                }
                 loss->Backward();
                 // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
                 // between forward and backward.

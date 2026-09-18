@@ -35,9 +35,6 @@ private:
     int64_t n_rep_ = 0;
     int64_t head_dim_ = 0;
 
-    std::shared_ptr<infini_train::nn::RMSNorm> q_norm_;
-    std::shared_ptr<infini_train::nn::RMSNorm> k_norm_;
-
     // Setup method for different attention modes
     void SetupAttention(const TransformerConfig &config);
 
