@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -27,6 +28,27 @@ public:
 
     virtual void ZeroGrad(bool set_to_none = true);
 
+    // Return the pre-clipping norm and scale selected gradients in place.
+    virtual std::shared_ptr<Tensor> ClipGradNorm_(const std::vector<std::shared_ptr<Tensor>> &parameters,
+                                                  float max_norm, float norm_type = 2.0f,
+                                                  bool error_if_nonfinite = false,
+                                                  std::optional<bool> foreach = std::nullopt);
+
+    std::shared_ptr<Tensor> ClipGradNorm(const std::vector<std::shared_ptr<Tensor>> &parameters, float max_norm,
+                                         float norm_type = 2.0f, bool error_if_nonfinite = false,
+                                         std::optional<bool> foreach = std::nullopt) {
+        return ClipGradNorm_(parameters, max_norm, norm_type, error_if_nonfinite, foreach);
+    }
+
+    // Scale selected gradients without replacing their storage.
+    void ScaleGradients_(const std::vector<std::shared_ptr<Tensor>> &parameters, float scale,
+                         bool foreach = false);
+
+    void SetClipGradNormConfig(float max_norm, float norm_type = 2.0f, bool error_if_nonfinite = false,
+                               std::optional<bool> foreach = std::nullopt);
+    bool HasClipGradNormConfig() const { return clip_grad_norm_config_.has_value(); }
+    std::shared_ptr<Tensor> ClipGradNormConfigured();
+
     virtual void Step() = 0;
 
     virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const { return {}; };
@@ -49,6 +71,13 @@ protected:
     float learning_rate_ = 0.0f;
     float initial_learning_rate_ = 0.0f;
     bool initial_lr_set_ = false;
+    struct ClipGradNormConfig {
+        float max_norm;
+        float norm_type;
+        bool error_if_nonfinite;
+        std::optional<bool> foreach;
+    };
+    std::optional<ClipGradNormConfig> clip_grad_norm_config_;
 };
 
 namespace optimizers {

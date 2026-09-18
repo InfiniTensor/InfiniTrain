@@ -40,6 +40,8 @@ public:
 
     std::vector<std::shared_ptr<Module>> *mutable_chunks();
 
+    std::shared_ptr<Tensor> last_grad_norm() const;
+
 private:
     void BuildPipelineStage(const std::vector<std::vector<int64_t>> &recv_shape, Device device,
                             std::vector<std::shared_ptr<Module>> &&chunks);
