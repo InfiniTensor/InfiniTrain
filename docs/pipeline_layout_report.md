@@ -25,6 +25,13 @@ Stage 数、正整数、总层数和 vPP 兼容性。`Uniform` 封装原有默�
 确定且不改变层的执行顺序。`ResolvePipelineLayout` 统一选择手工分区、代价均衡或默认均匀布局，
 并拒绝多个布局来源同时生效。
 
+只按 Transformer 层均衡会漏掉两端的特殊模块：Embedding 恒在 stage 0，Final Norm 和 LM Head
+恒在最后一个 Stage，大词表模型上 LM Head 往往是真正的瓶颈。因此代价串额外接受 `E:<cost>` 和
+`L:<cost>` 两个可选标签，它们不占层数，只在 DP 转移里作为常数加到首段和末段的代价上（末段常数
+只在 `s == S && i == L` 的状态生效，中间状态不受影响，因此最优子结构保持成立）。标签代价允许为 0
+表示「可忽略」，未标注项仍必须是正数并且个数等于模型层数。`scripts/suggest_pipeline_layout.py`
+用 `--embedding-cost` / `--lm-head-cost` 实现同一套转移，保证线下建议和运行时求解结果一致。
+
 GPT-2 和 LLaMA 3 在模型配置确定后设置布局。对于 LLMC checkpoint，布局在读取 header 中真实
 `n_layer` 后解析。`TransformerModel` 用布局创建本 rank 的层和特殊模块；`TransformerConfig::GetChunkSize`
 和 `PipelineParallel` 用相同布局构造调度 Stage；两个 checkpoint loader 用布局筛选本 rank 权重。
@@ -47,12 +54,28 @@ GPT-2 和 LLaMA 3 在模型配置确定后设置布局。对于 LLMC checkpoint�
 | 双卡 GPT-2 PP E2E | 已实测 | H200，loss、梯度与单卡一致 |
 | 任意 vPP Chunk owner | 已实测 | H200，owner `[0,1,1,0]` 无死锁 |
 | Megatron 风格布局 | 已实测 | H200，包含空逻辑 Chunk |
+| PP × DP × TP 组合矩阵 | 已实测 | 8×H20，14 个组合全部与单卡一致 |
+| 特殊模块代价均衡 | 已实测 | 8×H20，`L:` 代价自动选中最优分区，吞吐 +18.8% |
 
-DDP/TP 组合保留既有 InfiniTrain 并行入口；本次新增回归重点是布局解析、PP 调度、参数加载和
-跨布局数值一致性。若提交环境要求完整 DP×TP×PP 组合矩阵，应在目标集群补跑对应资源规模的回归。
+组合矩阵由 `tests/distributed/test_pipeline_layout_parallel_matrix.sh` 固化，在 8 张 H20 上
+覆盖手工分区、逐层代价、特殊模块代价、任意 Chunk 映射和 Megatron 表达式五类布局与
+PP / PP×DP2 / PP×DP4 / PP×TP2 / PP×TP2×DP2 的组合：
 
-CPU 单元测试覆盖 `4,8,6,6`、完整 layer-to-stage 反查、特殊模块、默认 vPP 轮转，以及错误的
-Stage 数、总和、负数、零、空项、越界查询和自定义布局/vPP 冲突。验证命令：
+| 布局来源 | PP | PP + DDP | PP + TP | PP + DDP + TP |
+| --- | --- | --- | --- | --- |
+| 手工层数分区 | PASS (PP2/PP4) | PASS (DP2/DP4) | PASS (PP2/PP4 × TP2) | PASS (PP2×TP2×DP2) |
+| 逐层代价 | PASS (PP2) | — | — | — |
+| 逐层代价 + `L:` 标签 | PASS (PP2) | PASS (×DP2) | — | — |
+| 任意 Chunk 映射 | PASS (PP2×vPP2) | PASS (×DP2) | — | — |
+| Megatron 表达式 | PASS (PP4) | PASS (×DP2) | — | — |
+
+单卡参考 loss `7.016952`；全部 14 个用例 loss 最大偏差 `1e-6`，非 TP 用例的 101 个逐参数
+梯度在 `atol=1e-5, rtol=0` 下全部一致。TP 用例只比较 loss，因为 TP 切分参数后各 rank 导出的
+是梯度分片，无法与单卡逐参数对齐。表中 `—` 表示未跑该格，不表示不支持。
+
+CPU 单元测试覆盖 `4,8,6,6`、完整 layer-to-stage 反查、特殊模块、默认 vPP 轮转、`E:`/`L:`
+代价标签，以及错误的 Stage 数、总和、负数、零、空项、未知标签、重复标签、越界查询和
+自定义布局/vPP 冲突。验证命令：
 
 ```bash
 cmake -S . -B /tmp/infinitrain-pipeline-build \
@@ -61,8 +84,9 @@ cmake --build /tmp/infinitrain-pipeline-build --target test_pipeline_layout gpt2
 ctest --test-dir /tmp/infinitrain-pipeline-build -R PipelineLayoutTest --output-on-failure
 ```
 
-结果：10/10 布局与建议测试通过，CPU 全量测试通过，GPT-2、LLaMA3 和 Mixtral 目标编译、
-链接通过。CUDA 13.0/NCCL 构建后，在两张 H200 上完成 GPT-2 124M 自定义 `4,8` 两阶段训练，
+结果：11/11 布局与建议测试通过（10 个 GTest 用例 + 1 个建议脚本用例集），CPU 全量测试通过，
+GPT-2、LLaMA3 和 Mixtral 目标编译、链接通过。
+CUDA 13.0/NCCL 构建后，在两张 H200 上完成 GPT-2 124M 自定义 `4,8` 两阶段训练，
 两步 loss 为 `5.250158`、`4.913960`，无通信死锁。同参数单 GPU loss 完全一致；默认 `6,6` PP
 第二步 loss 为 `4.913958`，最大打印差值 `2e-6`，满足 fp32 `1e-5` 容差。逐参数梯度自动 diff
 使用规范化全局参数名比较单 GPU 和自定义 PP 的 149 个梯度；`atol=1e-5, rtol=0` 下
@@ -91,3 +115,18 @@ CPU `ctest` 不会默认注册该用例。
 
 建议布局实测吞吐提升 9.45%，峰值显存降低 130 MB；理论 bubble（4 microbatch、2 Stage）为 20%。
 Profiler 输入为 3 步 PROFILE_MODE 记录，每层丢弃一个 warmup 样本后得到 7,5，模型代价上界下降 6.84%。
+
+特殊模块代价在两张 H20 上单独做了验证。模型为 8 层 / 384 hidden / vocab 50304 / seq 512，
+LM Head 的参数量约等于 10.9 层，是明确的瓶颈端：
+
+| 布局 | 中位 step | 吞吐 | 末级 Stage 峰值显存 |
+| --- | ---: | ---: | ---: |
+| 默认 4,4 | 189.13 ms | 86,628 tok/s | 8308 MB |
+| `1×8,L:4.5` → 6,2 | 159.22 ms | 102,904 tok/s | 6020 MB |
+| `1×8,L:10.9` → 7,1 | 177.09 ms | 92,516 tok/s | 4876 MB |
+
+标定后的 `L:4.5` 自动选中的 `6,2` 与手工扫描 `5,3`/`6,2`/`7,1` 得到的最优点一致，吞吐提升
+18.8%。直接用参数量比值 `V·d / 12·d²` 得到的 `L:10.9` 会过度倾斜，只提升 6.8%：大 GEMM 的
+实际效率高于参数量假设。因此特殊模块代价和逐层代价适用同一条结论——参数量只能当上界，真实
+代价要用 profiler 或一次扫描标定。当 LM Head 代价小于一层时（如 768 hidden 的同款模型），
+求解器会保持默认均匀分区不变，这是期望行为。

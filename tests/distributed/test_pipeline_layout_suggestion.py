@@ -18,6 +18,25 @@ class PipelineLayoutSuggestionTest(unittest.TestCase):
         self.assertEqual(counts, [1, 5])
         self.assertEqual(stage_costs, [10, 5])
 
+    def test_balances_embedding_and_lm_head_cost(self):
+        layers = [1] * 8
+        self.assertEqual(MODULE.balanced_partition(layers, 2)[0], [4, 4])
+
+        counts, stage_costs = MODULE.balanced_partition(layers, 2, lm_head_cost=2)
+        self.assertEqual(counts, [5, 3])
+        self.assertEqual(stage_costs, [5, 5])
+
+        counts, stage_costs = MODULE.balanced_partition(layers, 2, embedding_cost=2)
+        self.assertEqual(counts, [3, 5])
+        self.assertEqual(stage_costs, [5, 5])
+
+        # Equal costs on both ends cancel out; a zero cost means "negligible".
+        self.assertEqual(MODULE.balanced_partition(layers, 2, 2, 2)[0], [4, 4])
+        self.assertEqual(MODULE.balanced_partition(layers, 2, 0, 0)[0], [4, 4])
+
+        with self.assertRaises(ValueError):
+            MODULE.balanced_partition(layers, 2, lm_head_cost=-1)
+
     def test_reads_layer_profiler_records(self):
         records = """
 0 2026-08-21 TransformerLayer.0 cuda:0 12 100 1

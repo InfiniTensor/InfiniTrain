@@ -146,3 +146,89 @@ improvement:       +9.45% throughput, -130 MB peak memory
 
 Profiler 建议来自 3 步单卡 PROFILE_MODE 记录，每层丢弃一个 warmup 样本；建议工具单测和实际记录
 解析均已通过。
+
+## 8×H20 并行组合矩阵（2026-09-19）
+
+### 环境
+
+| 项目 | 值 |
+| --- | --- |
+| GPU | 8 × NVIDIA H20 96 GB |
+| 构建 | CUDA 12.8 + NCCL，`-DUSE_CUDA=ON -DUSE_NCCL=ON -DBUILD_TEST=ON` |
+| 模型 | 合成 LLMC fp32 checkpoint，8 层 / 12 头 / 384 hidden / vocab 1024 |
+| 训练参数 | `--batch_size=4 --sequence_length=64 --total_batch_size=2048 --dtype=float32` |
+
+该机器的出口代理屏蔽了 HuggingFace CDN，无法下载 GPT-2 124M starter pack，因此改用
+`scripts/assets/make_synthetic_gpt2_assets.py` 生成格式兼容、按 seed 逐字节可复现的
+checkpoint 和 token 文件。权重是随机初始化的，首步 loss 接近 `ln(vocab)`；本节比较的是
+「同一份输入在不同布局/并行组合下是否得到同一个结果」，与权重是否预训练无关。
+
+### 单元测试
+
+```text
+ctest -R PipelineLayout --output-on-failure
+100% tests passed, 0 tests failed out of 11
+```
+
+### 组合矩阵
+
+```bash
+tests/distributed/test_pipeline_layout_parallel_matrix.sh \
+  build data/gpt2-synthetic/tokens_train.bin data/gpt2-synthetic/gpt2_synthetic.bin 8
+```
+
+单卡参考：loss `7.016952`，101 个梯度。全部 14 个用例通过：
+
+| 用例 | GPU | 布局来源 | 组合 | 比较 | 结果 |
+| --- | ---: | --- | --- | --- | --- |
+| pp2_partition | 2 | 手工 `2,6` | PP2 | loss + 101 梯度 | PASS |
+| pp4_partition | 4 | 手工 `1,5,1,1` | PP4 | loss + 101 梯度 | PASS |
+| pp2_ddp2 | 4 | 手工 `2,6` | PP2 × DP2 | loss + 101 梯度 | PASS |
+| pp2_ddp4 | 8 | 手工 `2,6` | PP2 × DP4 | loss + 101 梯度 | PASS |
+| pp2_tp2 | 4 | 手工 `2,6` | PP2 × TP2 | loss | PASS |
+| pp2_tp2_ddp2 | 8 | 手工 `2,6` | PP2 × TP2 × DP2 | loss | PASS |
+| pp4_tp2 | 8 | 手工 `1,5,1,1` | PP4 × TP2 | loss | PASS |
+| pp2_costs | 2 | 逐层代价 `10,1,…` | PP2 | loss + 101 梯度 | PASS |
+| pp2_costs_lm_head | 2 | 代价 `1×8,L:2` → `5,3` | PP2 | loss + 101 梯度 | PASS |
+| pp2_costs_lm_head_ddp2 | 4 | 代价 `1×8,L:2` → `5,3` | PP2 × DP2 | loss + 101 梯度 | PASS |
+| pp2_vpp2_chunk | 2 | `0:2,1:2,1:2,0:2` | PP2 × vPP2 | loss + 101 梯度 | PASS |
+| pp2_vpp2_chunk_ddp2 | 4 | `0:2,1:2,1:2,0:2` | PP2 × vPP2 × DP2 | loss + 101 梯度 | PASS |
+| pp4_megatron | 4 | `Et*2\|t*2\|t*2\|t*2NL` | PP4 | loss + 101 梯度 | PASS |
+| pp4_megatron_ddp2 | 8 | `Et*2\|t*2\|t*2\|t*2NL` | PP4 × DP2 | loss + 101 梯度 | PASS |
+
+所有用例的打印 loss 落在 `7.016951`~`7.016952`，最大差值 `1e-6`，满足 fp32 `1e-5` 容差；
+非 TP 用例（11 个）的 101 个梯度在 `atol=1e-5, rtol=0` 下全部通过且文件集合一致。
+
+两点限制需要声明：
+
+- TP 用例只比较 loss。TP 会切分参数，各 rank 导出的梯度是分片，无法与单卡逐参数直接对齐。
+- DP 用例中每个 DP rank 会把同名梯度写进同一个目录。比较全部通过，但这是重复写同一份内容，
+  严格来说存在并发写的理论风险；如需逐 DP rank 分别校验，应给 `--dump_gradients` 加 rank 后缀。
+
+## 特殊模块代价均衡实测（8×H20 中的 2 卡）
+
+`--pipeline_layer_costs` 的 `E:`/`L:` 标签把 Embedding 和 LM Head 的代价纳入均衡。用一个
+LM Head 明显占主导的形状验证：8 层 / 384 hidden / vocab 50304 / seq 512，PP=2，
+8 个 microbatch，12 迭代取后 8 步中位数。
+
+```text
+layout                     median step      throughput    last-stage peak
+uniform 4,4 (默认)           189.13 ms     86,628 tok/s          8308 MB
+手工 5,3                     169.05 ms     96,916 tok/s          7164 MB
+手工 6,2                     160.77 ms    101,934 tok/s          6020 MB
+手工 7,1                     177.75 ms     92,172 tok/s          4876 MB
+--pipeline_layer_costs=1×8,L:4.5   159.22 ms    102,904 tok/s    6020 MB   <- 自动选中 6,2
+--pipeline_layer_costs=1×8,L:10.9  177.09 ms     92,516 tok/s    4876 MB   <- 自动选中 7,1
+```
+
+结论有两层：
+
+1. 代价标签确实生效。`L:4.5` 自动生成 `6,2`，与手工扫描出的最优点一致，相对默认均匀布局
+   吞吐提升 **18.8%**、单步耗时下降 **15.8%**、末级 Stage 峰值显存下降 2288 MB。
+2. 代价必须实测，不能直接用参数量比值。按 `V·d / 12·d²` 估算 LM Head 相当于 10.9 层，
+   据此得到的 `7,1` 反而比默认布局只快 6.8%——大 GEMM 的实际效率高于参数量比值的假设。
+   这与逐层代价的既有建议一致：用 profiler 或扫描标定代价，参数量只能作为上界参考。
+
+作为对照，把同一实验换成 768 hidden / vocab 50304（LM Head 约等于 5.5 层）时，默认 `4,4`
+已经是 8 层粒度下的最优点（`4,4` 380.93 ms vs `5,3` 390.72 ms vs `3,5` 425.50 ms），
+`L:` 代价在小于一层时不会改变布局——这是期望行为，不是失效。

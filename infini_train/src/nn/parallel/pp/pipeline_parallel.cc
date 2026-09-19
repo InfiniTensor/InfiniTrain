@@ -187,6 +187,13 @@ PipelineLayout PipelineLayout::FromLayerCosts(int total_layers, int pp_size, con
     }
 
     std::vector<double> costs;
+    // Embedding and lm head run on the first and last stage no matter how the layers are
+    // split, so their cost has to enter the balancing too. They are optional entries tagged
+    // "E:<cost>" and "L:<cost>"; every untagged entry is a Transformer layer, in layer order.
+    double embedding_cost = 0.0;
+    double lm_head_cost = 0.0;
+    bool has_embedding_cost = false;
+    bool has_lm_head_cost = false;
     size_t begin = 0;
     while (begin <= layer_costs.size()) {
         const size_t comma = layer_costs.find(',', begin);
@@ -198,13 +205,44 @@ PipelineLayout PipelineLayout::FromLayerCosts(int total_layers, int pp_size, con
             throw std::invalid_argument("pipeline layer costs contain an empty entry: '" + layer_costs + "'");
         }
         token = token.substr(first, last - first + 1);
+        const std::string_view entry = token;
+
+        double *special = nullptr;
+        bool *already_seen = nullptr;
+        if (token.size() > 1 && token[1] == ':') {
+            if (token[0] == 'E' || token[0] == 'e') {
+                special = &embedding_cost;
+                already_seen = &has_embedding_cost;
+            } else if (token[0] == 'L' || token[0] == 'l') {
+                special = &lm_head_cost;
+                already_seen = &has_lm_head_cost;
+            } else {
+                throw std::invalid_argument("pipeline layer costs only accept the 'E:' (embedding) and "
+                                            "'L:' (lm head) tags; got '"
+                                            + std::string(entry) + "'");
+            }
+            if (*already_seen) {
+                throw std::invalid_argument("pipeline layer costs repeat the '" + std::string(1, entry[0])
+                                            + ":' entry: '" + layer_costs + "'");
+            }
+            *already_seen = true;
+            token = token.substr(2);
+        }
+
         double cost = 0.0;
         const auto [ptr, ec] = std::from_chars(token.data(), token.data() + token.size(), cost);
-        if (ec != std::errc() || ptr != token.data() + token.size() || !std::isfinite(cost) || cost <= 0.0) {
+        // A zero cost is a meaningful "this module is negligible" for the tagged entries,
+        // but an unweighted Transformer layer is not.
+        const bool out_of_range = special == nullptr ? cost <= 0.0 : cost < 0.0;
+        if (ec != std::errc() || ptr != token.data() + token.size() || !std::isfinite(cost) || out_of_range) {
             throw std::invalid_argument("pipeline layer costs must be finite positive numbers; got '"
-                                        + std::string(token) + "'");
+                                        + std::string(entry) + "'");
         }
-        costs.push_back(cost);
+        if (special != nullptr) {
+            *special = cost;
+        } else {
+            costs.push_back(cost);
+        }
         if (comma == std::string::npos) { break; }
         begin = comma + 1;
     }
@@ -220,14 +258,22 @@ PipelineLayout PipelineLayout::FromLayerCosts(int total_layers, int pp_size, con
             throw std::invalid_argument("pipeline layer costs have a non-finite total");
         }
     }
+    if (!std::isfinite(prefix[total_layers] + embedding_cost + lm_head_cost)) {
+        throw std::invalid_argument("pipeline layer costs have a non-finite total");
+    }
     const double infinity = std::numeric_limits<double>::infinity();
     std::vector<std::vector<double>> best(pp_size + 1, std::vector<double>(total_layers + 1, infinity));
     std::vector<std::vector<int>> split(pp_size + 1, std::vector<int>(total_layers + 1, -1));
     best[0][0] = 0.0;
     for (int stages = 1; stages <= pp_size; ++stages) {
+        // Stage 0 always owns the embedding; the lm head always lands on the last stage,
+        // which is the one closed off by best[pp_size][total_layers].
+        const double leading = stages == 1 ? embedding_cost : 0.0;
         for (int end = stages; end <= total_layers; ++end) {
+            const double trailing = (stages == pp_size && end == total_layers) ? lm_head_cost : 0.0;
             for (int start = stages - 1; start < end; ++start) {
-                const double candidate = std::max(best[stages - 1][start], prefix[end] - prefix[start]);
+                const double segment = prefix[end] - prefix[start] + leading + trailing;
+                const double candidate = std::max(best[stages - 1][start], segment);
                 if (candidate < best[stages][end]) {
                     best[stages][end] = candidate;
                     split[stages][end] = start;

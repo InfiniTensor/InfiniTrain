@@ -90,7 +90,8 @@ DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 DEFINE_string(pipeline_layer_partition, "",
               "Comma-separated Transformer layer counts for each pipeline stage (for example: 4,8,6,6).");
 DEFINE_string(pipeline_layer_costs, "",
-              "Comma-separated positive compute costs for every Transformer layer; generates a balanced layout.");
+              "Comma-separated positive compute costs for every Transformer layer; generates a balanced layout. "
+              "Optional 'E:<cost>' and 'L:<cost>' entries add the embedding and lm head cost to the balancing.");
 DEFINE_string(pipeline_chunk_layout, "", "Ordered STAGE:LAYER_COUNT chunks for an arbitrary vPP mapping.");
 DEFINE_string(pipeline_model_parallel_layout, "", "Megatron-style E/t/N/L pipeline layout expression.");
 DEFINE_string(dump_gradients, "",

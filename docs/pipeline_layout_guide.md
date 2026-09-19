@@ -46,6 +46,27 @@ Stage 至少拥有一层。
 `--pipeline_layer_costs` 与 `--pipeline_layer_partition` 互斥，且当前同样要求
 `--virtual_pipeline_parallel=1`。程序会在模型构建前打印自动生成的最终布局。
 
+### 把 Embedding / LM Head 的代价算进去
+
+只按 Transformer 层均衡会漏掉两端：Embedding 恒在 stage 0，Final Norm 和 LM Head 恒在最后
+一个 Stage。大词表模型上 LM Head 常常才是最慢的部分。代价串支持两个可选标签，单位与逐层代价
+相同，不占层数：
+
+```bash
+./gpt2 \
+  --pipeline_parallel 2 \
+  --pipeline_layer_costs '1,1,1,1,1,1,1,1,L:4.5' \
+  [其他训练参数]
+```
+
+8 层等代价模型默认会切成 `4,4`；加上 `L:4.5` 后末级 Stage 的代价变成 `2+4.5`，求解器改为
+`6,2`。同理 `E:<cost>` 会把层从 stage 0 推走。标签大小写不敏感，各自最多出现一次，位置任意，
+代价允许为 `0` 表示可忽略；未标注项仍必须是正数。
+
+标签代价要实测标定，不要直接用参数量比值。实测中 `V·d / 12·d²` 给出的 `L:10.9` 会过度倾斜，
+比标定值 `L:4.5` 少拿一半收益，详见 `docs/pipeline_layout_test_log.md`。`scripts/suggest_pipeline_layout.py`
+的 `--embedding-cost` / `--lm-head-cost` 使用同一套求解，可先线下看分区和代价分布再上机。
+
 ## 默认行为与 vPP
 
 不传 `--pipeline_layer_partition` 时，保持原有均匀划分。余数从执行顺序靠前的 chunk 开始各多分一层；
@@ -109,6 +130,8 @@ Pipeline layout (24 layers, 4 stages):
 - `incompatible with --virtual_pipeline_parallel != 1`：自定义物理布局和 vPP 同时启用。
 - `must contain exactly N entries`：逐层代价数量和模型层数不一致。
 - `costs must be finite positive numbers`：逐层代价包含零、负数、NaN、无穷或非数字。
+- `only accept the 'E:' ... and 'L:' ... tags`：代价串里出现了 `E:`/`L:` 之外的标签。
+- `repeat the 'E:' entry`：同一个标签出现了多次。
 - `cannot be used together`：同时指定了手工分区和自动均衡代价。
 
 ## C++ 查询接口
@@ -119,13 +142,19 @@ Pipeline layout (24 layers, 4 stages):
 
 ## 并行组合与限制
 
+下表中「已实测」指 `tests/distributed/test_pipeline_layout_parallel_matrix.sh` 在 8×H20 上
+跑过且与单卡结果一致（见 `docs/pipeline_layout_test_log.md`）；「支持」指代码路径打通但该格
+没有单独跑过回归。
+
 | 组合 | 默认均匀布局 | 手工层数分区 | 任意 Chunk / Megatron 布局 |
 | --- | --- | --- | --- |
-| PP | 支持 | 支持 | 支持 |
-| PP + DDP | 支持 | 支持 | 支持 |
-| PP + TP | 支持 | 支持 | 支持 |
-| PP + DDP + TP | 支持 | 支持 | 支持 |
-| vPP | 默认轮转映射 | 拒绝物理分区参数 | 支持显式 Chunk owner |
+| PP | 支持 | 已实测 PP2 / PP4 | 已实测 |
+| PP + DDP | 支持 | 已实测 DP2 / DP4 | 已实测 DP2 |
+| PP + TP | 支持 | 已实测 TP2 | 支持 |
+| PP + DDP + TP | 支持 | 已实测 TP2 × DP2 | 支持 |
+| vPP | 默认轮转映射 | 拒绝物理分区参数 | 已实测显式 Chunk owner |
+
+逐层代价布局（含 `E:`/`L:` 标签）生成的是普通物理分区，已实测 PP2 和 PP2 × DP2。
 
 `||` 表示空逻辑 Chunk；它不表示物理 Stage 没有 Chunk。当前调度器要求每个物理 Stage 拥有相同数量的
 正数 Chunk，因此会拒绝 Chunk 数不平衡的映射。
@@ -161,3 +190,36 @@ tests/distributed/test_pipeline_layout_e2e.sh \
 
 该测试需要 CUDA/NCCL 构建、两张 GPU、NumPy 以及 GPT-2 124M LLMC checkpoint。测试使用临时目录，
 退出时自动清理梯度和日志。
+
+## 并行组合矩阵回归
+
+`test_pipeline_layout_parallel_matrix.sh` 把手工分区、逐层代价、特殊模块代价、任意 Chunk 映射
+和 Megatron 表达式五类布局与 PP / DDP / TP 的组合跑成一个矩阵，
+每个用例都和同一份单卡参考比较 loss；参数未被 TP 切分的用例还会逐参数比较梯度：
+
+~~~bash
+tests/distributed/test_pipeline_layout_parallel_matrix.sh \
+  /path/to/cuda-build \
+  data/gpt2/tiny_shakespeare_train.bin \
+  data/gpt2/gpt2_124M.bin \
+  8
+~~~
+
+最后一个参数是可用 GPU 数（默认 8）。分区由 checkpoint header 里的真实层数推导，因此换模型
+不用改脚本；需要的 GPU 多于实际数量的用例会标记为 SKIP，所以在 2 卡或 4 卡机器上同样可用。
+任何用例失败都会返回非零退出码。
+
+TP 用例只比较 loss：TP 切分参数后，各 rank 导出的是梯度分片，无法与单卡逐参数对齐。DP 用例
+中各 DP rank 会把同名梯度写进同一目录（内容相同）。
+
+## 离线生成测试资产
+
+如果机器无法下载 llm.c starter pack，可以本地合成格式兼容的 checkpoint 和 token 文件：
+
+~~~bash
+python3 scripts/assets/make_synthetic_gpt2_assets.py --out-dir data/gpt2-synthetic
+~~~
+
+输出按 `--seed` 逐字节可复现，因此不同布局读到的是同一份权重和同一批 token——这正是布局回归
+需要的性质。权重是随机初始化的，loss 接近 `ln(vocab)`，不能用来判断收敛质量。
+注意 `--n-head` 必须保持 12：LLMC loader 不覆盖 `n_kv_head`，而配置校验要求两者相等。

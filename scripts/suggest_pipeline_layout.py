@@ -47,10 +47,14 @@ def parse_profiler_records(paths: list[str], warmup_samples: int = 0) -> list[fl
     ]
 
 
-def balanced_partition(costs: list[float], stages: int) -> tuple[list[int], list[float]]:
+def balanced_partition(
+    costs: list[float], stages: int, embedding_cost: float = 0.0, lm_head_cost: float = 0.0
+) -> tuple[list[int], list[float]]:
     layers = len(costs)
     if stages <= 0 or stages > layers:
         raise ValueError("stages must satisfy 0 < stages <= number of layers")
+    if embedding_cost < 0 or lm_head_cost < 0:
+        raise ValueError("embedding and lm head costs must not be negative")
     prefix = [0.0]
     for cost in costs:
         prefix.append(prefix[-1] + cost)
@@ -58,9 +62,14 @@ def balanced_partition(costs: list[float], stages: int) -> tuple[list[int], list
     split = [[-1] * (layers + 1) for _ in range(stages + 1)]
     best[0][0] = 0.0
     for stage_count in range(1, stages + 1):
+        # The embedding always sits on stage 0 and the lm head on the last stage, so their
+        # cost joins the segment that closes those stages off.
+        leading = embedding_cost if stage_count == 1 else 0.0
         for end in range(stage_count, layers + 1):
+            trailing = lm_head_cost if stage_count == stages and end == layers else 0.0
             for start in range(stage_count - 1, end):
-                candidate = max(best[stage_count - 1][start], prefix[end] - prefix[start])
+                segment = prefix[end] - prefix[start] + leading + trailing
+                candidate = max(best[stage_count - 1][start], segment)
                 if candidate < best[stage_count][end]:
                     best[stage_count][end] = candidate
                     split[stage_count][end] = start
@@ -70,12 +79,20 @@ def balanced_partition(costs: list[float], stages: int) -> tuple[list[int], list
         start = split[stage + 1][end]
         counts[stage] = end - start
         end = start
+    return counts, stage_costs_of(costs, counts, embedding_cost, lm_head_cost)
+
+
+def stage_costs_of(
+    costs: list[float], counts: list[int], embedding_cost: float, lm_head_cost: float
+) -> list[float]:
     stage_costs = []
     start = 0
     for count in counts:
         stage_costs.append(sum(costs[start : start + count]))
         start += count
-    return counts, stage_costs
+    stage_costs[0] += embedding_cost
+    stage_costs[-1] += lm_head_cost
+    return stage_costs
 
 
 def main() -> None:
@@ -86,6 +103,10 @@ def main() -> None:
     sources.add_argument("--profiler-records", nargs="+", help="Profiler record files or glob patterns")
     parser.add_argument("--profiler-warmup-samples", type=int, default=1)
     parser.add_argument("--pipeline-parallel", type=int, required=True)
+    parser.add_argument("--embedding-cost", type=float, default=0.0,
+                        help="extra cost the first stage carries for the embedding, in the same unit as the layers")
+    parser.add_argument("--lm-head-cost", type=float, default=0.0,
+                        help="extra cost the last stage carries for the final norm and lm head")
     parser.add_argument("--microbatches", type=int, default=1)
     parser.add_argument("--json-output", type=Path)
     args = parser.parse_args()
@@ -95,20 +116,20 @@ def main() -> None:
         if args.profiler_records
         else parse_numbers(args.costs or args.parameter_counts)
     )
-    counts, stage_costs = balanced_partition(costs, args.pipeline_parallel)
+    counts, stage_costs = balanced_partition(
+        costs, args.pipeline_parallel, args.embedding_cost, args.lm_head_cost
+    )
     uniform_counts = [len(costs) // args.pipeline_parallel] * args.pipeline_parallel
     for stage in range(len(costs) % args.pipeline_parallel):
         uniform_counts[stage] += 1
-    uniform_costs = []
-    offset = 0
-    for count in uniform_counts:
-        uniform_costs.append(sum(costs[offset : offset + count]))
-        offset += count
+    uniform_costs = stage_costs_of(costs, uniform_counts, args.embedding_cost, args.lm_head_cost)
     bubble = (args.pipeline_parallel - 1) / (args.microbatches + args.pipeline_parallel - 1)
     result = {
         "partition": counts,
         "stage_costs": stage_costs,
         "maximum_stage_cost": max(stage_costs),
+        "embedding_cost": args.embedding_cost,
+        "lm_head_cost": args.lm_head_cost,
         "uniform_partition": uniform_counts,
         "uniform_stage_costs": uniform_costs,
         "uniform_maximum_stage_cost": max(uniform_costs),

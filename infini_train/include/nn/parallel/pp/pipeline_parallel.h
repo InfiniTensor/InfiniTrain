@@ -33,6 +33,9 @@ class PipelineLayout {
 public:
     static PipelineLayout Uniform(int total_layers, int pp_size, int chunks_per_stage = 1);
     static PipelineLayout Parse(int total_layers, int pp_size, const std::string &partition, int chunks_per_stage = 1);
+    // `layer_costs` is one positive cost per Transformer layer, plus optional "E:<cost>"
+    // and "L:<cost>" entries for the embedding and lm head that the first and last stage
+    // carry on top of their layers.
     static PipelineLayout FromLayerCosts(int total_layers, int pp_size, const std::string &layer_costs,
                                          int chunks_per_stage = 1);
     static PipelineLayout FromChunkLayout(int total_layers, int pp_size, const std::string &chunk_layout);

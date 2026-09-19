@@ -56,6 +56,34 @@ TEST(PipelineLayoutTest, BalancesUserProvidedLayerCosts) {
     EXPECT_EQ(layout.stage_for_layer(5), 1);
 }
 
+TEST(PipelineLayoutTest, BalancesEmbeddingAndLmHeadCost) {
+    // Eight equal layers alone split 4/4, but a heavy lm head has to pull layers off the
+    // last stage and a heavy embedding off the first one.
+    const std::string layers = "1,1,1,1,1,1,1,1";
+    EXPECT_EQ(PipelineLayout::FromLayerCosts(8, 2, layers).layer_ranges(0),
+              (std::vector<std::pair<int, int>>{{0, 4}}));
+
+    const auto heavy_lm_head = PipelineLayout::FromLayerCosts(8, 2, layers + ",L:2");
+    EXPECT_EQ(heavy_lm_head.layer_ranges(0), (std::vector<std::pair<int, int>>{{0, 5}}));
+    EXPECT_EQ(heavy_lm_head.layer_ranges(1), (std::vector<std::pair<int, int>>{{5, 8}}));
+
+    const auto heavy_embedding = PipelineLayout::FromLayerCosts(8, 2, "E:2," + layers);
+    EXPECT_EQ(heavy_embedding.layer_ranges(0), (std::vector<std::pair<int, int>>{{0, 3}}));
+    EXPECT_EQ(heavy_embedding.layer_ranges(1), (std::vector<std::pair<int, int>>{{3, 8}}));
+
+    // Equal special-module costs cancel out, and a zero cost means "negligible".
+    EXPECT_EQ(PipelineLayout::FromLayerCosts(8, 2, "E:2," + layers + ",L:2").layer_ranges(0),
+              (std::vector<std::pair<int, int>>{{0, 4}}));
+    EXPECT_EQ(PipelineLayout::FromLayerCosts(8, 2, "e:0," + layers + ",l:0").layer_ranges(0),
+              (std::vector<std::pair<int, int>>{{0, 4}}));
+
+    // Every stage still owns at least one layer, so a dominant lm head can only shrink the
+    // last stage down to a single layer.
+    const auto four_stages = PipelineLayout::FromLayerCosts(8, 4, layers + ",L:3");
+    EXPECT_EQ(four_stages.stage_for_layer(7), 3);
+    EXPECT_EQ(four_stages.stage_for_layer(6), 2);
+}
+
 TEST(PipelineLayoutTest, SupportsArbitraryVirtualChunkOwnership) {
     const auto layout = PipelineLayout::FromChunkLayout(8, 2, "0:2,1:2,1:2,0:2");
 
@@ -98,6 +126,13 @@ TEST(PipelineLayoutTest, RejectsInvalidAutomaticLayoutInputs) {
     EXPECT_THROW(PipelineLayout::FromLayerCosts(2, 2, "1.7e308,1.7e308"), std::invalid_argument);
     EXPECT_THROW(PipelineLayout::FromLayerCosts(3, 4, "1,1,1"), std::invalid_argument);
     EXPECT_THROW(PipelineLayout::FromLayerCosts(3, 2, "1,1,1", 2), std::invalid_argument);
+    EXPECT_THROW(PipelineLayout::FromLayerCosts(3, 2, "N:1,1,1,1"), std::invalid_argument);
+    EXPECT_THROW(PipelineLayout::FromLayerCosts(3, 2, "E:1,E:1,1,1,1"), std::invalid_argument);
+    EXPECT_THROW(PipelineLayout::FromLayerCosts(3, 2, "L:-1,1,1,1"), std::invalid_argument);
+    EXPECT_THROW(PipelineLayout::FromLayerCosts(3, 2, "E:x,1,1,1"), std::invalid_argument);
+    EXPECT_THROW(PipelineLayout::FromLayerCosts(2, 2, "1.7e308,1,L:1.7e308"), std::invalid_argument);
+    // The tagged entries are extra, not a substitute for a per-layer cost.
+    EXPECT_THROW(PipelineLayout::FromLayerCosts(3, 2, "E:1,1,1"), std::invalid_argument);
     EXPECT_THROW(ResolvePipelineLayout(3, 2, 1, "1,2", "1,1,1"), std::invalid_argument);
     EXPECT_THROW(PipelineLayout::FromChunkLayout(4, 2, "0:2,1:1"), std::invalid_argument);
     EXPECT_THROW(PipelineLayout::FromChunkLayout(4, 2, "0:2,1:2,0:0"), std::invalid_argument);
