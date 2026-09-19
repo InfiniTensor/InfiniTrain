@@ -138,8 +138,37 @@ MNIST 四个 IDX 文件可按字节数 + 首 16 字节 magic 校验（images 0x0
 | P11 e2e smoke（1 epoch） | mlp acc 0.60；cnn cpu acc 0.90、loss 2.3→0.06；cnn cuda 与 CPU bit-identical，2.3s/epoch |
 | P12 网络级 parity | 140/140 @1e-5（worst 9.5e-7）；10-step loss 双边严格单调递减 |
 | P13a DDP（main.cc only） | 单进程 cuda acc 0.9028；NCCL-ON 可编译（需手动 `-I/-L/-rpath`，顶层 CMake 未加 NCCL include 路径）；2 进程止步于 `SetDevice(cuda:1)`——单卡机上限 |
-| P13b 双卡等价 | PASS（口径：`Step` 后 cross-rank 权重一致）：RTX 4090D ×2，CNN，SGD lr=0.01，3 epoch，`1×128` vs `2×64`，`post-bcast w0` 两 rank 均为 `-0.0836399`，`post-epoch w0` 两 rank 均为 `-0.001326`（修前 `-0.00206 vs -0.00215` 分叉）。loss：单卡 `0.596128/0.325636/0.301542`（acc 0.9123），双卡 `0.594806/0.322919/0.298881`（acc 0.9018，eval 9984 样本）；残差来自 floor 掉尾（训练少 96/epoch、eval 少 16）与 rank0-local 打印口径，非同步问题。根因：`example/mnist/main.cc` 曾用 `Forward → ZeroGrad(true)`，清掉 `PrepareForBackward` 建立的 bucket-view 绑定致静默不同步；fix（`ed8d51a`）改为 `ZeroGrad → Forward`，与 gpt2/mixtral/llama3 对齐。限定：单机双卡；多机/更大 world size/grad-accum 未测；train loss 打印仍为 rank0-local |
+| P13b 双卡等价 | PASS。判据为 `Step` 后 cross-rank 权重一致（详见下文复测结论小节） |
 | 全量 ctest（NCCL-OFF） | 354/355 通过；唯一失败 `stacktrace`（glog 符号化环境问题，本分支未触及该文件，属 HEAD 预存失败）；CUDA/CPU 交叉实例化 SKIP 系 `ONLY_*` 宏按设计跳过 |
+
+### P13b 复测结论（2026-09-19，RTX 4090D ×2）
+
+配置：CNN，SGD lr=0.01，3 epoch，`1×128` vs `2×64`。
+
+**主判据（权重一致性）：**
+
+| 探针 | rank0 | rank1 | 结论 |
+| --- | --- | --- | --- |
+| `post-bcast w0` | `-0.0836399` | `-0.0836399` | 初值一致 |
+| `post-epoch w0`（修前） | `-0.00206` | `-0.00215` | 分叉 |
+| `post-epoch w0`（修后） | `-0.001326` | `-0.001326` | 一致 ✅ |
+
+**Loss 对照（参考，非主判据）：**
+
+| 配置 | epoch0 / 1 / 2 loss | test acc |
+| --- | --- | --- |
+| 1卡 bs=128 | 0.596128 / 0.325636 / 0.301542 | 0.9123（10000） |
+| 2卡 2×64 | 0.594806 / 0.322919 / 0.298881 | 0.9018（9984） |
+
+残差来自 floor 掉尾（训练每 epoch 少 96 样本、eval 少 16 样本）与 rank0-local 打印口径，非同步问题。
+
+**根因与 fix：**
+
+- 根因：`example/mnist/main.cc` 曾用 `Forward → ZeroGrad(true)`，清掉 `PrepareForBackward` 建立的 bucket-view 绑定，致静默不同步。
+- `ed8d51a`：改为 `ZeroGrad → Forward`，与 gpt2/mixtral/llama3 对齐。
+- `8770716`：训练/eval 改走 `Module::operator()`，eval 加 `NoGradGuard`（抄 PR 219/220）；双卡复测行为零变化（上表即含该改动的结果）。
+
+**限定：** 单机双卡；多机、更大 world size、grad-accum 未测；train loss 打印仍为 rank0-local。
 
 HEAD 预存 bug 修复（保留，与上游 #220 一致）：`main.cc` 改用 `shared_ptr` 持有 Module（Module 是 `enable_shared_from_this`，栈实例触发 `bad_weak_ptr` 崩溃）。
 
