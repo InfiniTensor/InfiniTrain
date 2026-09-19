@@ -9,6 +9,8 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
+#include "infini_train/include/autograd/grad_mode.h"
+
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
@@ -127,9 +129,9 @@ int main(int argc, char *argv[]) {
             // binding, so backward would accumulate into a standalone grad that the
             // reducer never all-reduces (silent no-sync, cross-rank weight fork).
             optimizer.ZeroGrad();
-            auto outputs = network->Forward({new_image});
+            auto outputs = (*network)({new_image});
 
-            auto loss = loss_fn->Forward({outputs[0], new_label});
+            auto loss = (*loss_fn)({outputs[0], new_label});
             loss[0]->Backward();
 
             // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
@@ -159,7 +161,10 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // TODO(dcj): Add no_grad() context manager later.
+    // Evaluation builds forward-only graphs; keep it under NoGradGuard so it never
+    // primes grad accumulators with a dependency count the next backward cannot satisfy
+    // (which would silently stop gradient accumulation). Resolves TODO(dcj) no_grad().
+    autograd::NoGradGuard no_grad;
     std::vector<float> test_losses;
     int correct = 0;
     int total = 0;
@@ -170,9 +175,9 @@ int main(int argc, char *argv[]) {
         auto new_label = std::make_shared<Tensor>(label->To(device));
 
         auto label_cpu = label->To(cpu_device);
-        auto outputs = network->Forward({new_image});
+        auto outputs = (*network)({new_image});
         auto output_cpu = outputs[0]->To(cpu_device);
-        auto loss = loss_fn->Forward({outputs[0], new_label});
+        auto loss = (*loss_fn)({outputs[0], new_label});
         auto loss_cpu = loss[0]->To(cpu_device);
 
         const int batch_size = output_cpu.Dims()[0];
