@@ -5,9 +5,12 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <random>
+#include <span>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
@@ -22,6 +25,7 @@
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
+#include "example/common/parser.h"
 #include "example/common/utils.h"
 #include "example/gpt2/config.h"
 
@@ -56,8 +60,13 @@ std::tuple<int32_t, infini_train::DataType> DetermineAndCheckVersion(const std::
 } // namespace
 
 namespace gpt2 {
+namespace {
+using LayerIndex = nn::parallel::LayerIndex;
+using PipelineLayout = nn::parallel::PipelineLayout;
 
-std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) {
+std::shared_ptr<nn::TransformerModel>
+LoadFromLLMCImpl(const std::string &filepath,
+                 std::optional<infini_train::examples::PipelineLayoutRequest> layout_request) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -80,16 +89,29 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     const auto padded_vocab_size = BytesToType<uint32_t>(header, 28);
     // NOTE(zbl): vocab_size needs to be padded to multiple of TP size
     const auto model_vocab_size = tp_size > 1 ? padded_vocab_size : vocab_size;
-
+    // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
+    int pp_size = nn::parallel::global::GetPipelineParallelSize();
+    int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
+    auto pp_rank = nn::parallel::pp_rank;
     nn::TransformerConfig gpt2_config = gpt2::GPT2Config();
     gpt2_config.block_size = block_size;
     gpt2_config.vocab_size = model_vocab_size;
     gpt2_config.original_vocab_size = vocab_size;
     gpt2_config.n_layer = n_layer;
     gpt2_config.n_head = n_head;
+    gpt2_config.n_kv_head = n_head;
     gpt2_config.n_embd = n_embd;
+    // Cross-rank tying is not implemented. Keep every PP>1 layout on the
+    // existing split-weight semantics, even when both endpoints share a rank.
+    gpt2_config.tie_weights = gpt2_config.tie_weights && pp_size == 1;
     gpt2::SanitizeGPT2Config(gpt2_config);
-    auto local_gpt2 = std::make_shared<nn::TransformerModel>(gpt2_config);
+    std::shared_ptr<const PipelineLayout> pipeline_layout;
+    if (layout_request.has_value()) {
+        pipeline_layout = infini_train::examples::ResolvePipelineLayout(static_cast<LayerIndex>(n_layer), pp_size,
+                                                                        vpp_size, *layout_request);
+    }
+    auto local_gpt2 = pipeline_layout ? std::make_shared<nn::TransformerModel>(gpt2_config, pipeline_layout, pp_rank)
+                                      : std::make_shared<nn::TransformerModel>(gpt2_config);
 
     LOG(INFO) << "magic: " << magic << " version: " << version << " block_size: " << block_size
               << " vocab_size: " << vocab_size << " n_layer: " << n_layer << " n_head: " << n_head
@@ -99,16 +121,42 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     CHECK_EQ(n_embd % n_head, 0) << "n_embd must be divisible by n_head.";
     CHECK_EQ(n_head % tp_size, 0) << "n_head must be divisible by TP world size.";
 
-    // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
-    int pp_size = nn::parallel::global::GetPipelineParallelSize();
-    int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
-    auto pp_rank = nn::parallel::pp_rank;
-    auto [is_first_stage, is_last_stage, layer_ranges_per_chunk]
-        = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size, pp_rank, vpp_size);
-    // ========== layer to chunk ==========
+    bool has_embedding = false;
+    bool has_final_norm = false;
+    bool has_lm_head = false;
+
     std::vector<bool> owned_layers(n_layer, false);
-    for (const auto &[start, end] : layer_ranges_per_chunk) {
-        for (int i = start; i < end; ++i) { owned_layers[i] = true; }
+    std::vector<LayerIndex> local_indices(n_layer, -1);
+
+    if (pipeline_layout) {
+        const auto &stage = pipeline_layout->GetStage(pp_rank);
+        has_embedding = stage.has_embedding;
+        has_final_norm = stage.has_final_norm;
+        has_lm_head = stage.has_lm_head;
+
+        for (const auto &chunk : stage.chunks) {
+            for (LayerIndex layer = chunk.layer_range.begin; layer < chunk.layer_range.end; ++layer) {
+                owned_layers.at(layer) = true;
+                local_indices.at(layer) = pipeline_layout->GetLocalLayerIndex(pp_rank, layer);
+            }
+        }
+    } else {
+        const auto legacy = nn::parallel::PipelineParallel::GetStageInfo(n_layer, pp_size, pp_rank, vpp_size);
+
+        has_embedding = legacy.is_first_stage;
+        has_final_norm = legacy.is_last_stage;
+        has_lm_head = legacy.is_last_stage;
+
+        for (const auto &[begin, end] : legacy.layer_ranges_per_chunk) {
+            for (int layer = begin; layer < end; ++layer) { owned_layers.at(layer) = true; }
+        }
+
+        LayerIndex local = 0;
+        for (std::size_t layer = 0; layer < owned_layers.size(); ++layer) {
+            if (owned_layers[layer]) {
+                local_indices[layer] = local++;
+            }
+        }
     }
 
     auto tp_rank = nn::parallel::tp_rank;
@@ -130,28 +178,30 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     // transformer.wte.weight (also transformer.lm_head.weight)
     // full: (model_vocab_size, n_embd)
     // local: (vocab_size_per_partition, n_embd)
-    if (is_first_stage) {
+    const auto wte_offset = ifs.tellg();
+    if (has_embedding) {
         auto &transformer_wte_weight = state_dict[std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                               nn::TransformerFirstStage::kWTELayerName,
                                                               nn::parallel::VocabParallelEmbedding::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(transformer_wte_weight->DataPtr()), model_vocab_size, n_embd,
                                 v_start, vpp);
-    } else if (pp_size > 1 && is_last_stage) {
+    }
+    if (has_lm_head) {
+        ifs.seekg(wte_offset);
         auto &lm_head_weight = state_dict[std::format("{}.{}", nn::TransformerLastStage::kLMHeadLayerName,
                                                       nn::parallel::ColumnParallelLinear::kParamWeightName)];
         ReadMatrixRowShardFloat(ifs, static_cast<float *>(lm_head_weight->DataPtr()), model_vocab_size, n_embd, v_start,
                                 vpp);
-    } else {
-        size_t wte_bytes = model_vocab_size * n_embd * sizeof(float);
-        ifs.seekg(wte_bytes, std::ios::cur);
     }
+    ifs.seekg(wte_offset
+              + static_cast<std::streamoff>(static_cast<uint64_t>(model_vocab_size) * n_embd * sizeof(float)));
 
     if (tp_size == 1) {
         // Skip padded vocab part when TP is not enabled
         ifs.ignore((padded_vocab_size - model_vocab_size) * n_embd * sizeof(float));
     }
 
-    if (is_first_stage) {
+    if (has_embedding) {
         // transformer.wpe.weight
         auto &transformer_wpe_weight
             = state_dict[std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
@@ -163,15 +213,14 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     // transformer.h.{i}.ln_1.weight
-    int local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
-        if (owned_layers[idx]) {
+        if (owned_layers.at(idx)) {
+            const LayerIndex local_layer_index = local_indices.at(idx);
             auto &tensor
                 = state_dict[std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                          nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                          nn::TransformerLayer::kLn1LayerName, nn::LayerNorm::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
-            ++local_layer_index;
         } else {
             size_t ln_1_w_bytes = n_embd * sizeof(float);
             ifs.seekg(ln_1_w_bytes, std::ios::cur);
@@ -179,14 +228,13 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     // transformer.h.{i}.ln_1.bias
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
-        if (owned_layers[idx]) {
+        if (owned_layers.at(idx)) {
+            const LayerIndex local_layer_index = local_indices.at(idx);
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                                   nn::TransformerLayer::kLn1LayerName, nn::LayerNorm::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
-            ++local_layer_index;
         } else {
             size_t ln_1_b_bytes = n_embd * sizeof(float);
             ifs.seekg(ln_1_b_bytes, std::ios::cur);
@@ -194,9 +242,9 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     // transformer.h.{i}.attn.c_attn.weight (ColumnParallelLinear, but actually applies on "rows")
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
-        if (owned_layers[idx]) {
+        if (owned_layers.at(idx)) {
+            const LayerIndex local_layer_index = local_indices.at(idx);
             auto &tensor = state_dict[std::format(
                 "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
                 std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
@@ -229,7 +277,6 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
                                     /*rows=*/rows_all, /*cols=*/cols_all,
                                     /*row_start=*/2 * n_embd + tp_rank * local_C, /*row_cnt=*/local_C);
 
-            ++local_layer_index;
         } else {
             size_t c_attn_w_bytes = qkv_out * n_embd * sizeof(float);
             ifs.seekg(c_attn_w_bytes, std::ios::cur);
@@ -237,9 +284,9 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     // transformer.h.{i}.attn.c_attn.bias (ColumnParallelLinear)
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
-        if (owned_layers[idx]) {
+        if (owned_layers.at(idx)) {
+            const LayerIndex local_layer_index = local_indices.at(idx);
             auto &tensor = state_dict[std::format(
                 "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
                 std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
@@ -271,7 +318,6 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
                                  /*len=*/len_all,
                                  /*start=*/2 * n_embd + tp_rank * local_C, /*cnt=*/local_C);
 
-            ++local_layer_index;
         } else {
             size_t c_attn_b_bytes = qkv_out * sizeof(float);
             ifs.seekg(c_attn_b_bytes, std::ios::cur);
@@ -279,16 +325,15 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     // transformer.h.{i}.attn.c_proj.weight (RowParallelLinear, but actually applies on "columns")
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
-        if (owned_layers[idx]) {
+        if (owned_layers.at(idx)) {
+            const LayerIndex local_layer_index = local_indices.at(idx);
             auto &tensor = state_dict[std::format(
                 "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
                 std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
                 nn::CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];
             ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, n_embd, tp_rank * in_pp,
                                     in_pp);
-            ++local_layer_index;
         } else {
             size_t c_proj_w_bytes = n_embd * n_embd * sizeof(float);
             ifs.seekg(c_proj_w_bytes, std::ios::cur);
@@ -296,15 +341,14 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     // transformer.h.{i}.attn.c_proj.bias (RowParallelLinear, no shard on bias)
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
-        if (owned_layers[idx]) {
+        if (owned_layers.at(idx)) {
+            const LayerIndex local_layer_index = local_indices.at(idx);
             auto &tensor = state_dict[std::format(
                 "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
                 std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
                 nn::CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
-            ++local_layer_index;
         } else {
             size_t c_proj_b_bytes = n_embd * sizeof(float);
             ifs.seekg(c_proj_b_bytes, std::ios::cur);
@@ -312,15 +356,14 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     // transformer.h.{i}.ln_2.weight
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
-        if (owned_layers[idx]) {
+        if (owned_layers.at(idx)) {
+            const LayerIndex local_layer_index = local_indices.at(idx);
             auto &tensor
                 = state_dict[std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                          nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                          nn::TransformerLayer::kLn2LayerName, nn::LayerNorm::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
-            ++local_layer_index;
         } else {
             size_t ln_2_w_bytes = n_embd * sizeof(float);
             ifs.seekg(ln_2_w_bytes, std::ios::cur);
@@ -328,14 +371,13 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     // transformer.h.{i}.ln_2.bias
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
-        if (owned_layers[idx]) {
+        if (owned_layers.at(idx)) {
+            const LayerIndex local_layer_index = local_indices.at(idx);
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                                   nn::TransformerLayer::kLn2LayerName, nn::LayerNorm::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
-            ++local_layer_index;
         } else {
             size_t ln_2_b_bytes = n_embd * sizeof(float);
             ifs.seekg(ln_2_b_bytes, std::ios::cur);
@@ -343,15 +385,14 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     // transformer.h.{i}.mlp.c_fc.weight (ColumnParallelLinear, but actually applies on "rows")
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
-        if (owned_layers[idx]) {
+        if (owned_layers.at(idx)) {
+            const LayerIndex local_layer_index = local_indices.at(idx);
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                                   nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, n_embd, fc_start, fc_pp);
-            ++local_layer_index;
         } else {
             size_t c_fc_w_bytes = fc_out * n_embd * sizeof(float);
             ifs.seekg(c_fc_w_bytes, std::ios::cur);
@@ -359,15 +400,14 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     // transformer.h.{i}.mlp.c_fc.bias (ColumnParallelLinear)
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
-        if (owned_layers[idx]) {
+        if (owned_layers.at(idx)) {
+            const LayerIndex local_layer_index = local_indices.at(idx);
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                                   nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamBiasName)];
             ReadVectorShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, fc_start, fc_pp);
-            ++local_layer_index;
         } else {
             size_t c_fc_b_bytes = fc_out * sizeof(float);
             ifs.seekg(c_fc_b_bytes, std::ios::cur);
@@ -375,16 +415,15 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     // transformer.h.{i}.mlp.c_proj.weight (RowParallelLinear, but actually applies on "columns")
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
-        if (owned_layers[idx]) {
+        if (owned_layers.at(idx)) {
+            const LayerIndex local_layer_index = local_indices.at(idx);
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                                   nn::TransformerLayer::kMlpLayerName, nn::MLP::kCProjLayerName,
                                                   nn::parallel::RowParallelLinear::kParamWeightName)];
             ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, fc_out, tp_rank * in4_pp,
                                     in4_pp);
-            ++local_layer_index;
         } else {
             size_t c_proj_w_bytes = fc_out * n_embd * sizeof(float);
             ifs.seekg(c_proj_w_bytes, std::ios::cur);
@@ -392,22 +431,21 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     // transformer.h.{i}.mlp.c_proj.bias (RowParallelLinear, no shard on bias)
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
-        if (owned_layers[idx]) {
+        if (owned_layers.at(idx)) {
+            const LayerIndex local_layer_index = local_indices.at(idx);
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                                   nn::TransformerLayer::kMlpLayerName, nn::MLP::kCProjLayerName,
                                                   nn::parallel::RowParallelLinear::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
-            ++local_layer_index;
         } else {
             size_t c_proj_b_bytes = n_embd * sizeof(float);
             ifs.seekg(c_proj_b_bytes, std::ios::cur);
         }
     }
 
-    if (is_last_stage) {
+    if (has_final_norm) {
         // transformer.ln_f.weight
         auto &transformer_ln_f_weight
             = state_dict[std::format("{}.{}.{}", nn::TransformerModel::kTransformerModelName,
@@ -425,5 +463,14 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     return local_gpt2;
+}
+} // namespace
+
+std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) {
+    return LoadFromLLMCImpl(filepath, std::nullopt);
+}
+std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
+                                                   const infini_train::examples::PipelineLayoutRequest &request) {
+    return LoadFromLLMCImpl(filepath, request);
 }
 } // namespace gpt2

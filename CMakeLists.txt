@@ -199,6 +199,7 @@ add_executable(gpt2
   example/gpt2/main.cc
   example/common/tiny_shakespeare_dataset.cc
   example/common/utils.cc
+  example/common/parser.cc
   example/common/tokenizer.cc
   example/gpt2/checkpoint_loader.cc
 )
@@ -215,6 +216,7 @@ link_infini_train_exe(mixtral)
 add_executable(llama3
   example/llama3/main.cc
   example/common/tiny_shakespeare_dataset.cc
+  example/common/parser.cc
   example/common/utils.cc
   example/common/tokenizer.cc
   example/llama3/checkpoint_loader.cc

@@ -1,10 +1,12 @@
 // pipeline_parallel.h
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_layout.h"
 
 namespace infini_train {
 class Tensor;
@@ -31,6 +33,9 @@ class PipelineParallel : public Module {
 public:
     PipelineParallel(const std::shared_ptr<nn::Module> module, int num_stages, int num_micro_batches,
                      const std::vector<std::vector<int64_t>> &recv_shape, int rank, Device device, int vpp);
+    PipelineParallel(const std::shared_ptr<nn::Module> module, int num_stages, int num_micro_batches,
+                     const std::vector<std::vector<int64_t>> &recv_shape, int rank, Device device,
+                     std::shared_ptr<const PipelineLayout> pipeline_layout, bool explicit_chunk_mode = false);
 
     float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input,
                     const std::vector<std::shared_ptr<Tensor>> &target, const std::shared_ptr<Optimizer> &optimizer,
@@ -39,6 +44,7 @@ public:
     static StageInfo GetStageInfo(int total_layers, int pp_size, int pp_rank, int chunks_per_stage = 1);
 
     std::vector<std::shared_ptr<Module>> *mutable_chunks();
+    const std::shared_ptr<const PipelineLayout> &GetPipelineLayout() const { return pipeline_layout_; }
 
 private:
     void BuildPipelineStage(const std::vector<std::vector<int64_t>> &recv_shape, Device device,
@@ -50,5 +56,7 @@ private:
     int rank_ = -1;
     std::shared_ptr<PipelineSchedule> schedule_ = nullptr;
     std::shared_ptr<PipelineStage> pipeline_stage_ = nullptr;
+    std::shared_ptr<const PipelineLayout> pipeline_layout_ = nullptr;
+    bool explicit_chunk_mode_ = false;
 };
 } // namespace infini_train::nn::parallel

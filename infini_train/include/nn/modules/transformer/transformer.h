@@ -1,9 +1,11 @@
 #pragma once
 
+#include <memory>
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_layout.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 
 namespace infini_train::nn {
@@ -72,15 +74,24 @@ public:
     static constexpr char kTransformerModelName[] = "transformer";
 
     explicit TransformerModel(const TransformerConfig config);
+    TransformerModel(TransformerConfig config, std::shared_ptr<const parallel::PipelineLayout> pipeline_layout,
+                     int pipeline_stage_id);
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
     const TransformerConfig &Config() const { return config_; }
+    const std::shared_ptr<const parallel::PipelineLayout> &GetPipelineLayout() const { return pipeline_layout_; }
+    int GetStageId() const { return pipeline_stage_id_; }
+    int GetNumChunks() const { return static_cast<int>(stage_info_.layer_ranges_per_chunk.size()); }
 
 private:
     const TransformerConfig config_;
+    const std::shared_ptr<const parallel::PipelineLayout> pipeline_layout_;
+    const int pipeline_stage_id_ = -1;
     const infini_train::nn::parallel::StageInfo stage_info_;
+
+    void BuildModules();
 };
 
 } // namespace infini_train::nn

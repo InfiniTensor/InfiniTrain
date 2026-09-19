@@ -1,5 +1,7 @@
 #pragma once
 
+#include "example/common/parser.h"
+
 #include <memory>
 #include <string>
 
@@ -9,4 +11,7 @@ class TransformerModel;
 
 namespace llama3 {
 std::shared_ptr<infini_train::nn::TransformerModel> LoadFromLLMC(const std::string &filepath);
+std::shared_ptr<infini_train::nn::TransformerModel>
+LoadFromLLMC(const std::string &filepath, const infini_train::examples::PipelineLayoutRequest &layout_request);
+
 } // namespace llama3

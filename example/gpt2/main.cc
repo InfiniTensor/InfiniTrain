@@ -1,12 +1,18 @@
+#include "example/common/parser.h"
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <format>
+#include <limits>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -136,21 +142,22 @@ DEFINE_validator(zero_stage, [](const char *, int32_t value) { return value >= 0
 DEFINE_validator(lr_decay_style,
                  [](const char *, const std::string &value) { return kSupportedLRDecayStyles.contains(value); });
 
-void Train(const nn::parallel::Rank &rank) {
+DEFINE_string(pipeline_layer_partition, "", "Layer counts in global chunk order; requires PP * vPP entries.");
+DEFINE_string(pipeline_chunk_layout, "", "Ordered stage:layer_count entries with explicit chunk owners.");
+
+void Train(const nn::parallel::Rank &rank, examples::PipelineLayoutRequest layout_request) try {
     using namespace nn::parallel;
 
     {
         if (rank.IsLastRank()) {
             if (!FLAGS_save.empty() && FLAGS_save_interval == 0) {
                 LOG(FATAL) << "Invalid configuration: --save is set ('" << FLAGS_save
-                           << "'), but --save_interval is 0. "
-                           << "They must be set together.";
+                           << "'), but --save_interval is 0. " << "They must be set together.";
             }
 
             if (FLAGS_save.empty() && FLAGS_save_interval > 0) {
                 LOG(FATAL) << "Invalid configuration: --save_interval is set to " << FLAGS_save_interval
-                           << ", but --save is empty. "
-                           << "They must be set together.";
+                           << ", but --save is empty. " << "They must be set together.";
             }
         }
     }
@@ -162,7 +169,7 @@ void Train(const nn::parallel::Rank &rank) {
     int tp_world_size = global::GetTensorParallelSize();
     int sp_world_size = global::GetSequenceParallelEnabled() ? tp_world_size : 1;
     int pp_world_size = global::GetPipelineParallelSize();
-
+    const bool explicit_chunk_mode = examples::IsExplicitChunkRequest(layout_request);
     if (FLAGS_sequence_parallel) {
         CHECK_EQ(FLAGS_sequence_length % tp_world_size, 0)
             << "sequence_length must be divisible by tp_world_size when SP is enabled (pad later if needed).";
@@ -224,20 +231,33 @@ void Train(const nn::parallel::Rank &rank) {
     std::shared_ptr<nn::Module> model = nullptr;
 
     if (!FLAGS_llmc_filepath.empty()) {
-        model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath);
-    } else if (kModelToConfigs.count(FLAGS_model)) {
-        model_config = kModelToConfigs.at(FLAGS_model);
+        model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath, layout_request);
+    } else if (FLAGS_model == "gpt2" || kModelToConfigs.count(FLAGS_model)) {
+        if (kModelToConfigs.count(FLAGS_model)) {
+            model_config = kModelToConfigs.at(FLAGS_model);
+        }
+        model_config.n_kv_head = model_config.n_head;
+        // Cross-rank tying is not implemented. Keep every PP>1 layout on the
+        // existing split-weight semantics, even when both endpoints share a rank.
+        model_config.tie_weights = model_config.tie_weights && pp_world_size == 1;
         gpt2::SanitizeGPT2Config(model_config);
-        model = std::make_shared<nn::TransformerModel>(model_config);
+        const auto layout = examples::ResolvePipelineLayout(model_config.n_layer, pp_world_size,
+                                                            FLAGS_virtual_pipeline_parallel, layout_request);
+        model = layout ? std::make_shared<nn::TransformerModel>(model_config, layout, pp_rank)
+                       : std::make_shared<nn::TransformerModel>(model_config);
     }
 
+    CHECK(model) << "Unable to create GPT-2 model.";
+    const auto gpt2_model = std::dynamic_pointer_cast<nn::TransformerModel>(model);
+    CHECK(gpt2_model) << "GPT2 example expects GPT2 model.";
+    model_config = gpt2_model->Config();
+    const auto pipeline_layout = gpt2_model->GetPipelineLayout();
+    if (rank.GlobalRank() == 0 && pipeline_layout) {
+        LOG(INFO) << examples::FormatPipelineLayout(*pipeline_layout);
+    }
     model->To(device);
 
-    utils::PrecisionChecker::BuildNameMap(model.get());
-
-    // Get chunk size before wrapping with LoRA (needed for PipelineParallel)
-    auto gpt2_model = std::dynamic_pointer_cast<nn::TransformerModel>(model);
-    CHECK(gpt2_model) << "GPT2 example expects GPT2 model.";
+    utils::PrecisionChecker::BuildNameMap(model.get(), pipeline_layout, pp_rank);
 
     // Apply LoRA using GetLoRAModel (in-place injection)
     bool lora_enabled = FLAGS_lora_rank > 0;
@@ -287,8 +307,13 @@ void Train(const nn::parallel::Rank &rank) {
         auto shapes = std::vector<std::vector<int64_t>>{
             {FLAGS_batch_size, FLAGS_sequence_length / sp_world_size, model_config.n_embd}};
 
-        model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
-                                                                 pp_rank, device, model_config.GetChunkSize());
+        if (pipeline_layout) {
+            model = std::make_shared<nn::parallel::PipelineParallel>(
+                model, pp_world_size, num_micro_batches, shapes, pp_rank, device, pipeline_layout, explicit_chunk_mode);
+        } else {
+            model = std::make_shared<nn::parallel::PipelineParallel>(model, pp_world_size, num_micro_batches, shapes,
+                                                                     pp_rank, device, model_config.GetChunkSize());
+        }
         if (ddp_world_size > 1) {
             auto ddp_config = DistributedDataParallelConfig{.zero_stage = FLAGS_zero_stage};
             auto *mutable_chunks = dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks();
@@ -365,13 +390,12 @@ void Train(const nn::parallel::Rank &rank) {
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
         = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(
-              std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
+                                    std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": start training";
 
     auto impl = core::GetDeviceGuardImpl(device.type());
-
     int start_step = 0;
     TrainerState state;
     const auto resume_result = ResumeFromCheckpoint({.resume_root = FLAGS_load,
@@ -535,7 +559,10 @@ void Train(const nn::parallel::Rank &rank) {
         const double duration_us = std::chrono::duration<double, std::micro>(iter_end - iter_start).count();
         const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
 
-        if (rank.IsLastRank()) {
+        // PP loss is local: only the logical output stage has a valid value.
+        // Select one DP/TP replica for logging; the DP AllReduce above remains collective.
+        const int output_stage = pipeline_layout ? pipeline_layout->GetOutputStage() : pp_world_size - 1;
+        if (pp_rank == output_stage && ddp_rank == ddp_world_size - 1 && tp_rank == tp_world_size - 1) {
             size_t used_mb = 0, reserved_mb = 0;
             std::tie(used_mb, reserved_mb) = impl->GetMemPoolPeakMB(device);
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
@@ -544,7 +571,7 @@ void Train(const nn::parallel::Rank &rank) {
                                       used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size,
                                       pp_world_size);
 
-            if ((step + 1) % FLAGS_freq_generate_txt == 0) {
+            if (FLAGS_freq_generate_txt > 0 && (step + 1) % FLAGS_freq_generate_txt == 0) {
                 if (tokenizer) {
                     // FIXME(jym): to support PP
                     CHECK_EQ(pp_world_size, 1);
@@ -575,11 +602,38 @@ void Train(const nn::parallel::Rank &rank) {
     Profiler::Instance().Report("gpt2.report", Profiler::SortBy::DeviceTimePercentage);
     Profiler::Instance().PrintRecords("gpt2.records.log");
 #endif
+} catch (const std::exception &error) {
+    LOG(FATAL) << "Rank " << rank.GlobalRank() << ": --pipeline_layer_partition=\"" << FLAGS_pipeline_layer_partition
+               << "\", --pipeline_chunk_layout=\"" << FLAGS_pipeline_chunk_layout << "\": " << error.what();
 }
 
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
+
+    examples::PipelineLayoutRequest layout_request;
+    try {
+        const auto limit = static_cast<uint32_t>(std::numeric_limits<int>::max());
+        if (FLAGS_pipeline_parallel == 0 || FLAGS_virtual_pipeline_parallel == 0 || FLAGS_pipeline_parallel > limit
+            || FLAGS_virtual_pipeline_parallel > limit
+            || FLAGS_pipeline_parallel > limit / FLAGS_virtual_pipeline_parallel) {
+            throw std::invalid_argument("PP/vPP must be positive and their product must fit int");
+        }
+        layout_request
+            = examples::ParsePipelineLayoutRequest(FLAGS_pipeline_layer_partition, FLAGS_pipeline_chunk_layout,
+                                                   FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
+        if (examples::IsExplicitChunkRequest(layout_request)
+            && (FLAGS_pipeline_parallel < 2 || FLAGS_sequence_parallel || FLAGS_freq_generate_txt != 0
+                || FLAGS_val_loss_every != 0 || FLAGS_sample_every != 0)) {
+            throw std::invalid_argument("explicit chunks require PP>=2, SP off, and generation/validation disabled");
+        }
+    } catch (const std::exception &error) {
+        LOG(ERROR) << "Invalid --pipeline_layer_partition=" << FLAGS_pipeline_layer_partition
+                   << ", --pipeline_chunk_layout=" << FLAGS_pipeline_chunk_layout << ", PP=" << FLAGS_pipeline_parallel
+                   << ", vPP=" << FLAGS_virtual_pipeline_parallel << ": " << error.what();
+        google::ShutdownGoogleLogging();
+        return EXIT_FAILURE;
+    }
 
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
@@ -593,14 +647,14 @@ int main(int argc, char *argv[]) {
         for (int idx = 0; idx < FLAGS_nthread_per_process; ++idx) {
             nn::parallel::Rank rank(nn::parallel::global::GetGlobalProcRank(), idx,
                                     nn::parallel::global::GetNprocPerNode(), FLAGS_nthread_per_process);
-            threads.emplace_back(Train, rank);
+            threads.emplace_back(Train, rank, layout_request);
         }
 
         for (auto &thread : threads) { thread.join(); }
     } else {
         nn::parallel::Rank rank(nn::parallel::global::GetGlobalProcRank(), 0, nn::parallel::global::GetNprocPerNode(),
                                 FLAGS_nthread_per_process);
-        Train(rank);
+        Train(rank, layout_request);
     }
 
     gflags::ShutDownCommandLineFlags();

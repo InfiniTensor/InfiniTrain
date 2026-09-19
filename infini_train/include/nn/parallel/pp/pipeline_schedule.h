@@ -16,11 +16,12 @@ class Module;
 namespace infini_train::nn::parallel {
 
 class PipelineStage;
+class PipelineLayout;
 
 class PipelineSchedule {
 public:
-    PipelineSchedule(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches)
-        : stage_(std::move(stage)), num_micro_batches_(num_micro_batches) {}
+    PipelineSchedule(std::shared_ptr<PipelineStage> stage, int num_stages, int num_micro_batches,
+                     std::shared_ptr<const PipelineLayout> layout = nullptr, bool explicit_chunk_mode = false);
 
     virtual ~PipelineSchedule() = default;
 
@@ -35,8 +36,11 @@ public:
     std::vector<std::shared_ptr<Tensor>> SendToNext(const std::vector<std::shared_ptr<Tensor>> &tensors, int peer_rank);
 
 protected:
+    bool has_printed_schedule_ = false;
     int num_micro_batches_ = -1;
     std::shared_ptr<PipelineStage> stage_ = nullptr;
+    std::shared_ptr<const PipelineLayout> layout_;
+    bool explicit_chunk_mode_ = false;
 };
 
 class PipelineParallelScheduler {
@@ -52,11 +56,14 @@ public:
         bool is_last_chunk;
     };
 
-    static Task CreateTask(int step, int mb, int global_chunk, int num_stages, int total_chunks, bool is_forward);
+    static Task CreateTask(int step, int mb, int global_chunk, int num_stages, int total_chunks, bool is_forward,
+                           const PipelineLayout *layout = nullptr);
 
-    static std::vector<Task> GenerateGPipeSchedule(int n, int num_stages, int vpp_size);
+    static std::vector<Task> GenerateGPipeSchedule(int n, int num_stages, int vpp_size,
+                                                   const PipelineLayout *layout = nullptr);
 
-    static std::vector<Task> GenerateInterleaved1F1BSchedule(int n, int num_stages, int vpp_size);
+    static std::vector<Task> GenerateInterleaved1F1BSchedule(int n, int num_stages, int vpp_size,
+                                                             const PipelineLayout *layout = nullptr);
 };
 
 } // namespace infini_train::nn::parallel

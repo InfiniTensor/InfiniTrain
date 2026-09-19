@@ -16,6 +16,9 @@ class Function;
 
 namespace nn {
 class Module;
+namespace parallel {
+class PipelineLayout;
+}
 } // namespace nn
 
 namespace utils {
@@ -40,7 +43,8 @@ public:
 
     // Build name map from root_model without registering hooks
     // Called by PrecisionCheckEnv::RegisterWithRootModel
-    static void BuildNameMap(nn::Module *root_model);
+    static void BuildNameMap(nn::Module *root_model,
+                             std::shared_ptr<const nn::parallel::PipelineLayout> layout = nullptr, int pp_rank = 0);
 
     static void RegisterForFunction(autograd::Function *func, const std::string &name = "",
                                     const Config &config = DefaultConfig());
