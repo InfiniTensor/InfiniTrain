@@ -311,6 +311,21 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DivBackward(const st
         [](float x, float y) { return -x / (y * y); });
 }
 
+// ReLU前向: y = max(x, 0)
+std::shared_ptr<Tensor> ReluForward(const std::shared_ptr<Tensor> &input) {
+    return UnaryForward(input, [](float x) { return x > 0.0f ? x : 0.0f; });
+}
+
+
+// ReLU反向：grad_input = grad_output * (y > 0 ? 1 : 0)
+std::shared_ptr<Tensor> ReluBackward(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &grad_output) {
+    return UnaryBackward(grad_output, output, [](float y) { return y > 0.0f ? 1.0f : 0.0f; });
+}
+
+
+
+
+
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_ELEMENTWISE_KERNEL(kernel_name)                                                                   \
@@ -358,5 +373,8 @@ REGISTER_CPU_ELEMENTWISE_KERNEL(MulScalarForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(MulScalarBackward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(DivForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(DivBackward)
+
+REGISTER_CPU_ELEMENTWISE_KERNEL(ReluForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(ReluBackward)
 
 #undef REGISTER_CPU_ELEMENTWISE_KERNEL
