@@ -11,6 +11,12 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
+// Out-of-tree builds inject the selected provider's declaration without adding
+// a vendor dependency to the upstream example.
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_HEADER
+#include INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_HEADER
+#endif
+
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/checkpoint/checkpoint.h"
 #include "infini_train/include/core/runtime/device_guard.h"
@@ -76,12 +82,13 @@ DEFINE_uint32(sample_every, 0, "how often to sample from the model?");
 // debugging
 DEFINE_bool(overfit_single_batch, true, "overfit just one batch of data");
 // memory management
-DEFINE_string(device, "cuda", "device type (cpu/cuda), useless if using parallel training mode");
+DEFINE_string(device, "cuda",
+              "device type (cpu/cuda/privateuse1/<registered privateuse1 backend name>), useless if using parallel "
+              "training mode");
 // parallel
-DEFINE_int32(
-    nthread_per_process, 1,
-    "Number of threads to use for each process. "
-    "When set > 1, enables data parallelism with device=cuda on the specified number of visible CUDA devices.");
+DEFINE_int32(nthread_per_process, 1,
+             "Number of threads to use for each process. "
+             "When set > 1, enables data parallelism on the specified accelerator devices.");
 DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
@@ -112,8 +119,6 @@ namespace {
 // validation
 const std::unordered_set<std::string> kSupportedModels
     = {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "d12", "d24", "d36", "d48"};
-constexpr char kDeviceCPU[] = "cpu";
-constexpr char kDeviceCUDA[] = "cuda";
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles
@@ -130,8 +135,7 @@ const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
-DEFINE_validator(device,
-                 [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
+DEFINE_validator(device, [](const char *, const std::string &value) { return Device::ParseType(value).has_value(); });
 DEFINE_validator(zero_stage, [](const char *, int32_t value) { return value >= 0 && value <= 3; });
 DEFINE_validator(lr_decay_style,
                  [](const char *, const std::string &value) { return kSupportedLRDecayStyles.contains(value); });
@@ -157,6 +161,7 @@ void Train(const nn::parallel::Rank &rank) {
 
     // select the device
     Device device;
+    const auto device_type = Device::ParseType(FLAGS_device).value();
 
     int ddp_world_size = global::GetDataParallelSize();
     int tp_world_size = global::GetTensorParallelSize();
@@ -181,7 +186,8 @@ void Train(const nn::parallel::Rank &rank) {
     const ProcessGroup *pp_pg = nullptr;
 
     if (rank.IsParallel()) {
-        device = Device(Device::DeviceType::kCUDA, global::GetDeviceIndex(rank.thread_rank()));
+        CHECK(device_type != Device::DeviceType::kCPU) << "Parallel training requires an accelerator backend";
+        device = Device(device_type, global::GetDeviceIndex(rank.thread_rank()));
         auto *pg_factory = ProcessGroupFactory::Instance(device.type());
 
         if (ddp_world_size > 1) {
@@ -206,7 +212,7 @@ void Train(const nn::parallel::Rank &rank) {
             nn::parallel::pp_rank = pp_rank;
         }
     } else {
-        device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
+        device = Device(device_type, 0);
     }
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
@@ -498,6 +504,10 @@ void Train(const nn::parallel::Rank &rank) {
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
+                std::unique_ptr<nn::NoSyncGuard> no_sync_guard;
+                if (ddp_world_size > 1 && micro_step != grad_accum_steps - 1) {
+                    no_sync_guard = model->no_sync();
+                }
                 loss->Backward();
                 // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
                 // between forward and backward.
@@ -571,9 +581,21 @@ void Train(const nn::parallel::Rank &rank) {
     Profiler::Instance().Report("gpt2.report", Profiler::SortBy::DeviceTimePercentage);
     Profiler::Instance().PrintRecords("gpt2.records.log");
 #endif
+
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS
+    // FIXME(cx): MACA needs synchronization before training teardown.
+    if (INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS && device.type() == Device::DeviceType::kPrivateUse1) {
+        impl->SynchronizeDevice(device);
+    }
+#endif
 }
 
 int main(int argc, char *argv[]) {
+    // Register provider metadata and implementations before gflags validates
+    // --device. The device runtime initializes lazily on first DeviceGuard use.
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR
+    INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR();
+#endif
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
@@ -602,5 +624,12 @@ int main(int argc, char *argv[]) {
     gflags::ShutDownCommandLineFlags();
     google::ShutdownGoogleLogging();
 
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS
+    // FIXME(cx): MACA parallel execution bypasses static destruction to avoid teardown failures.
+    if (INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS
+        && Device::ParseType(FLAGS_device).value() == Device::DeviceType::kPrivateUse1) {
+        std::_Exit(0);
+    }
+#endif
     return 0;
 }

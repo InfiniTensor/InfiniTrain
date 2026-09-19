@@ -212,6 +212,11 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
     std::vector<std::vector<std::vector<std::shared_ptr<Tensor>>>> activations(
         vpp_size, std::vector<std::vector<std::shared_ptr<Tensor>>>(n));
 
+    std::vector<std::unique_ptr<nn::NoSyncGuard>> no_sync_guards;
+    no_sync_guards.reserve(stage_->chunks().size());
+    for (const auto &chunk : stage_->chunks()) { no_sync_guards.push_back(chunk->no_sync()); }
+    std::vector<int> backward_counts(vpp_size, 0);
+
     for (size_t i = 0; i < schedule.size(); ++i) {
         const auto &task = schedule[i];
         if (task.stage_id != stage_idx) {
@@ -244,6 +249,10 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 }
             }
         } else {
+            const bool is_last_microbatch = ++backward_counts[task.local_chunk_idx] == n;
+            if (is_last_microbatch) {
+                no_sync_guards[task.local_chunk_idx].reset();
+            }
             if (task.is_last_chunk) {
                 auto target = microbatch_targets[mb];
                 std::shared_ptr<Tensor> loss;
