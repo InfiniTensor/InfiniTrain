@@ -1,8 +1,11 @@
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
-#include <map>
+#include <limits>
+#include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
@@ -23,6 +26,46 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
+namespace {
+parallel::StageInfo ConvertLayoutToStageInfo(parallel::LayerIndex num_layers,
+                                             const std::shared_ptr<const parallel::PipelineLayout> &pipeline_layout,
+                                             int stage_id) {
+    if (pipeline_layout == nullptr) {
+        throw std::invalid_argument("pipeline layout must not be null");
+    }
+    if (pipeline_layout->GetNumLayers() != num_layers) {
+        throw std::invalid_argument("pipeline_layout layer count does not match TransformerConfig::n_layer");
+    }
+
+    const parallel::PipelineStageLayout &stage = pipeline_layout->GetStage(stage_id);
+    if (stage.has_final_norm != stage.has_lm_head) {
+        throw std::invalid_argument("final norm and LM head must belong to the same pipeline stage");
+    }
+
+    std::vector<std::pair<int, int>> layer_ranges_per_chunk;
+    layer_ranges_per_chunk.reserve(stage.chunks.size());
+    for (std::size_t chunk_idx = 0; chunk_idx < stage.chunks.size(); ++chunk_idx) {
+        const parallel::PipelineChunkLayout &chunk = stage.chunks[chunk_idx];
+        if (chunk.stage_id != stage.stage_id || chunk.global_chunk_id < 0) {
+            throw std::invalid_argument("pipeline chunk identity is inconsistent with its stage");
+        }
+        if (chunk.local_chunk_idx != static_cast<int>(chunk_idx)) {
+            throw std::invalid_argument("pipeline local chunk indices must be contiguous and start at zero");
+        }
+        if (chunk.layer_range.begin < 0 || chunk.layer_range.end < chunk.layer_range.begin
+            || chunk.layer_range.end > std::numeric_limits<int>::max()) {
+            throw std::invalid_argument("pipeline layer range cannot be represented by TransformerChunk");
+        }
+        layer_ranges_per_chunk.emplace_back(static_cast<int>(chunk.layer_range.begin),
+                                            static_cast<int>(chunk.layer_range.end));
+    }
+    return parallel::StageInfo{
+        .is_first_stage = stage.has_embedding,
+        .is_last_stage = stage.has_lm_head,
+        .layer_ranges_per_chunk = std::move(layer_ranges_per_chunk),
+    };
+}
+} // namespace
 
 TransformerFirstStage::TransformerFirstStage(const TransformerConfig &config)
     : CloneableModule(kType), config_(config) {
@@ -204,17 +247,30 @@ std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(const std::ve
     return (*modules_[kLMHeadLayerName])(x1);
 }
 
-TransformerModel::TransformerModel(const TransformerConfig config)
-    : CloneableModule(kType), config_(config),
+TransformerModel::TransformerModel(TransformerConfig config)
+    : CloneableModule(kType), config_(config), pipeline_stage_id_(parallel::pp_rank),
       stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
-          config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
+          config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), pipeline_stage_id_,
           nn::parallel::global::GetVirtualPipelineParallelSize())) {
+    BuildModules();
+}
+
+TransformerModel::TransformerModel(TransformerConfig config,
+                                   std::shared_ptr<const parallel::PipelineLayout> pipeline_layout,
+                                   int pipeline_stage_id)
+    : CloneableModule(kType), config_(std::move(config)), pipeline_layout_(std::move(pipeline_layout)),
+      pipeline_stage_id_(pipeline_stage_id),
+      stage_info_(ConvertLayoutToStageInfo(config_.n_layer, pipeline_layout_, pipeline_stage_id_)) {
+    BuildModules();
+}
+
+void TransformerModel::BuildModules() {
     auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
 
     // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
     //            Megatron-LM has an optional argument `--make-vocab-size-divisible-by`, would do padding to vocab
     //            Here we introduce padding by default, might need modify Tokenizer correspondingly later
-    CHECK_EQ(config.vocab_size % tp_world_size, 0) << "Vocab size should be divisible by TP world size";
+    CHECK_EQ(config_.vocab_size % tp_world_size, 0) << "Vocab size should be divisible by TP world size";
 
     std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
     if (stage_info_.is_first_stage) {
@@ -228,17 +284,11 @@ TransformerModel::TransformerModel(const TransformerConfig config)
     }
 
     {
-        std::map<int, std::pair<int, std::shared_ptr<TransformerChunk>>> start_layer_to_layer_size_and_chunk;
-        for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
-            const auto [start_layer, end_layer] = stage_info_.layer_ranges_per_chunk[chunk_idx];
-            auto chunk = std::make_shared<TransformerChunk>(config_, start_layer, end_layer);
-            start_layer_to_layer_size_and_chunk[start_layer] = std::make_pair(end_layer - start_layer, chunk);
-        }
         std::vector<std::shared_ptr<nn::Module>> h;
         int chunk_idx = 0;
-        for (auto &[start_layer, layer_size_and_chunk] : start_layer_to_layer_size_and_chunk) {
-            auto [layer_size, chunk] = layer_size_and_chunk;
-            for (int idx = 0; idx < layer_size; ++idx) {
+        for (const auto &[start_layer, end_layer] : stage_info_.layer_ranges_per_chunk) {
+            auto chunk = std::make_shared<TransformerChunk>(config_, start_layer, end_layer);
+            for (int idx = 0; idx < end_layer - start_layer; ++idx) {
                 h.push_back(chunk->mutable_module(TransformerChunk::kHLayerName)->mutable_module(std::to_string(idx)));
             }
             modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)] = std::move(chunk);
@@ -262,7 +312,7 @@ TransformerModel::TransformerModel(const TransformerConfig config)
     // applied after loading weights so it won't be overwritten. Also fix GPT2::FromLLMC() loading logic to respect
     // weight tying (do not create/load a separate lm_head.weight tensor; load once into the tied weight) so
     // parameter counting matches PyTorch/PEFT.
-    if (config_.tie_weights && nn::parallel::global::GetPipelineParallelSize() == 1) {
+    if (config_.tie_weights && stage_info_.is_first_stage && stage_info_.is_last_stage) {
         // https://paperswithcode.com/method/weight-tying
         *mutable_module(kTransformerModelName)
              ->mutable_module(TransformerFirstStage::kWTELayerName)

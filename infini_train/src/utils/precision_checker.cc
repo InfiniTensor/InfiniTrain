@@ -1,5 +1,6 @@
 #include "infini_train/include/utils/precision_checker.h"
 
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -11,10 +12,14 @@
 #include <limits>
 #include <mutex>
 #include <sstream>
+#include <stdexcept>
+#include <string_view>
+#include <system_error>
 
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_layout.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/global_module_hook_registry.h"
@@ -337,10 +342,9 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
                 // Original precision MD5
                 md5 = ComputeMD5(cpu_tensor->DataPtr(), byte_size);
             }
-            log_stream << context_key << " " << log_name << " tensor[" << i << "]: "
-                       << "dtype=" << DataTypeToString(cpu_tensor->Dtype()) << " "
-                       << "shape=" << FormatShape(cpu_tensor->Dims()) << " "
-                       << "md5=" << md5 << std::endl;
+            log_stream << context_key << " " << log_name << " tensor[" << i
+                       << "]: " << "dtype=" << DataTypeToString(cpu_tensor->Dtype()) << " "
+                       << "shape=" << FormatShape(cpu_tensor->Dims()) << " " << "md5=" << md5 << std::endl;
         } else {
             // Simple format (default)
             TensorStats stats = ComputeStats(float_data, num_elements);
@@ -349,12 +353,10 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
                 = (config.check_nan && stats.nan_count > 0) || (config.check_inf && stats.inf_count > 0);
             const std::string error_marker = has_error ? " <- ERROR" : "";
 
-            log_stream << context_key << " " << log_name << " tensor[" << i << "]: "
-                       << "dtype=" << DataTypeToString(cpu_tensor->Dtype()) << " "
-                       << "shape=" << FormatShape(cpu_tensor->Dims()) << " "
-                       << "min=" << stats.min_val << " "
-                       << "max=" << stats.max_val << " "
-                       << "mean=" << stats.mean_val << " [";
+            log_stream << context_key << " " << log_name << " tensor[" << i
+                       << "]: " << "dtype=" << DataTypeToString(cpu_tensor->Dtype()) << " "
+                       << "shape=" << FormatShape(cpu_tensor->Dims()) << " " << "min=" << stats.min_val << " "
+                       << "max=" << stats.max_val << " " << "mean=" << stats.mean_val << " [";
 
             // Print first 6 values
             constexpr size_t max_print = 6;
@@ -406,7 +408,34 @@ static inline bool ShouldSkipNameMap(std::string_view name) {
     return name.rfind("__pp", 0) == 0; // starts_with("__pp")
 }
 
-void PrecisionChecker::BuildNameMap(nn::Module *root_model) {
+static std::string ToGlobalModuleName(std::string_view name,
+                                      const std::shared_ptr<const nn::parallel::PipelineLayout> &layout, int pp_rank) {
+
+    constexpr std::string_view prefix = "transformer.h.";
+    if (!layout || !name.starts_with(prefix)) {
+        return std::string(name);
+    }
+    const auto &stage = layout->GetStage(pp_rank);
+    const auto tail = name.substr(prefix.size());
+    const auto dot = tail.find('.');
+    const auto token = tail.substr(0, dot);
+    nn::parallel::LayerIndex local = -1;
+    const auto [end, error] = std::from_chars(token.data(), token.data() + token.size(), local);
+    if (token.empty() || error != std::errc{} || end != token.data() + token.size() || local < 0) {
+        throw std::out_of_range("invalid local layer in precision name: " + std::string(name));
+    }
+    for (const auto &chunk : stage.chunks) {
+        if (local < chunk.layer_range.Size()) {
+            return std::string(prefix) + std::to_string(chunk.layer_range.begin + local)
+                 + (dot == std::string_view::npos ? "" : std::string(tail.substr(dot)));
+        }
+        local -= chunk.layer_range.Size();
+    }
+    throw std::out_of_range("local layer is not owned by stage: " + std::string(name));
+}
+
+void PrecisionChecker::BuildNameMap(nn::Module *root_model, std::shared_ptr<const nn::parallel::PipelineLayout> layout,
+                                    int pp_rank) {
     const auto &global_config = PrecisionCheckEnv::Instance().GetConfig();
     if (global_config.level == PrecisionCheckLevel::OFF || root_model == nullptr) {
         return;
@@ -423,7 +452,7 @@ void PrecisionChecker::BuildNameMap(nn::Module *root_model) {
         if (ShouldSkipNameMap(name)) {
             continue; // skip PP internal tree
         }
-        g_module_name_map[module.get()] = name; // keep InfiniTrain path directly
+        g_module_name_map[module.get()] = ToGlobalModuleName(name, layout, pp_rank);
     }
 }
 
