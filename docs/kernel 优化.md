@@ -609,4 +609,42 @@ F 的窗口敏感性：step3–10 **73.28 ms** / step4–10 **72.32 ms** / step5
 
 > **产物**：`build_new/llama3`（含 P0+P1+Slice 参数化）；未生成新 nsys trace（待统一复测）。该模式可推广到 `transform.cu` 的 `TransposeForward`（3 数组 × ndim 同样可并入 kernel 参数）。
 
+### 3.5 RMSNorm Kernel 融合
+
+Section 2.1 结论 4 与 2.2.1.2 的 timeline 给出了 RMSNorm 的开销画像：16 层 × 2 个 RMSNorm + 收尾 ln_f 共 **33 个实例**，每实例由 Pow → Mean → AddScalar → Rsqrt → Mul → Mul **六个独立 kernel** 组成（其中两次 Mul 各 ~22 μs，是单实例内的大头），forward 侧合计 **198 个 kernel/step**；backward 侧再把 Pow/Rsqrt/AddScalar 反向、GenericReduceBwd、BinaryBwd[Mul] 等展开近十个节点。本节把整个 RMSNorm 融合为单 Function：forward、backward 各一个 kernel——这也是 Section 2.3「CUDA Graph 或算子融合」方向的第一炮。
+
+#### 3.5.1 方案：autograd::RMSNorm + 融合 kernel（对齐 LayerNorm 模式）
+
+- **Function 层**：新增 `autograd::RMSNorm`（kType = `RMSNormFunction`）。Forward 经 `Dispatcher` 调 host wrapper `RMSNormForward`，一次返回 `{output, rstd}`；`rstd` 标记 `MarkNonDifferentiable` 并连同 `{input, weight, rstd}` 存入反向上下文。Backward 调 `RMSNormBackward` 返回 `{grad_input, grad_weight}`。
+- **数学**：forward 保持与 composite **相同的两步舍入顺序**——先 `n = x·rstd` 再 `y = n·w`，不合并为 `x·(rstd·w)`（避免 FMA 结合律改变舍入行为）；backward 用 `S1 = Σ g·w·x`、`K = (S1/H)·rstd`、`dx = rstd·(g·w − n·K)`、`dw = Σ g·n`（跨 token 块 `atomicAdd`）。
+- **rank-agnostic**：与 composite 路径（Mean(-1) 支持任意秩）保持同等一般性——`embed_dim = dims.back()`、`rows = NumElements()/embed_dim`、`rstd` 形状取前 n−1 维；非连续输入按惯例回退 `Contiguous()`。
+- **grad_weight 清零**：权重梯度跨 token 块累加，起点必须在 launch 前清零——放 host 侧 `grad_weight->Fill(0.0)`（同 stream 先于 backward kernel，由 stream 顺序提供全局 happens-before）。**反例（已实测否决）**：kernel 内 per-block `grad_weight[blockIdx.x] = 0` + `__syncthreads()` **不能**替代——`__syncthreads` 只是块内屏障，而 `grad_weight` 的累加跨全部 block；最小复现实验（`build_new/grad_weight_clear_race.cu`）在三种规模（行数 <、=、> embed_dim）下 200/200 全部出错，其中行数 > embed_dim 时每次越界写显存（llama3 的 B·S 远大于 embed_dim，即真实场景必现）。
+- **autocast**：注册 `"RMSNorm" → kFP32`（与其 fp32 残差流语义一致）；顺带修复既有大小写 bug——`kFP32Ops` 表中的 `"Layernorm"` 与 `GetBaseOpName("LayerNormFunction")` 返回的 `"LayerNorm"` 永不匹配，LayerNorm 的 kFP32 策略此前实际从未生效，本次一并改为 `"LayerNorm"`。
+- **CPU fallback**：`kernels/cpu/rmsnorm.cc` 同步实现（rank-agnostic、fp32），CPU 测试实例可跑。
+
+#### 3.5.2 优化结果
+
+**单元测试**：`test_autograd_cuda` 全量 **270/270 通过**（含新增用例：forward/backward 数值断言、2D 输入秩无关性、autocast bf16→fp32 集成、rstd 非可微）；`test_transformer_cuda` 全绿（RMSNorm / LLaMA3Model 端到端）。
+
+**数值等价性**：step1 loss **4.898438 → 4.896993**——融合改变了归约顺序（块内 BlockReduce vs composite 的 Mean kernel），不再 bit-exact，差 0.0014（相对 3×10⁻⁴）为预期量级；step2 起各配置的差值落在训练固有自变区间（同一二进制 3 次运行跨度 ≤0.0075）内，未引入系统偏差。
+
+**端到端稳态时延**（同会话 A/B 配对：`git stash` 暂存融合改动 → reconfigure + 重建基线 → 10 iter × 3 次 → 恢复改动重建并经 sha256 校验；每步取中位数再对窗口均值，与 3.2.4 同口径）：
+
+| 配置 | commit | 构建目录 | step5–10 稳态 | 运行间极差 |
+|---|---|---|---|---|
+| G 基线（无融合） | `7491863` | `build_new` | **70.36 ms** | ±0.33% |
+| H ＋RMSNorm 融合 | 本次提交 | `build_new` | **66.41 ms** | ±0.37% |
+
+| 增量 | 稳态时延 | 降幅 | 折合每轮 | 吞吐量 |
+|---|---|---|---|---|
+| G→H（RMSNorm 融合） | 70.36 → 66.41 ms | **−5.61%** | −3.95 ms | 3638 → 3855 tok/s（+6.0%） |
+
+窗口敏感性（G→H）：step3–10 71.04 → 66.56（−6.31%）；step4–10 70.41 → 66.44（−5.64%）；warm-up step1 190.52 → 181.23 ms。
+
+> **基线口径**：G 为当前 HEAD `7491863`，在 3.4.1 的 F 配置（71.83 ms）之上另含两项未入档的中间提交（CrossEntropy 设备端归约、grad_a Fill 删除）；本节对照全部为同会话配对，不引用历史绝对值。恢复改动后的独立冒烟复核 66.36 ms。
+>
+> **可信度**：−3.95 ms 约为 H 自身噪声带（±0.37% ≈ ±0.25 ms）的 16 倍，属强信号。收益大于此前估算（1–2 ms）的原因主要在 backward：composite 侧近十个节点的反向链 × 33 实例被一并消除，而估算时只计了 forward 的舍入往返。
+
+**产物**：`build_new/run_base_{1,2,3}.log`、`run_fused_{1,2,3}.log`（配对原始日志）、`parse_wall_log.py`（解析脚本）；nsys 复测（逐 kernel 验证 launch 数下降）待后续统一进行。
+
 
