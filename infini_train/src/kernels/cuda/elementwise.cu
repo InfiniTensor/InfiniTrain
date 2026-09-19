@@ -19,11 +19,32 @@ constexpr int kLogicalWarpSize = 32;
 static_assert(kLogicalWarpSize == 32, "BinaryBackwardKernel assumes a 32-lane logical warp");
 
 // Aligned vector type for vectorized loads/stores (128-bit).
-template <typename T, int N> struct __align__(sizeof(T) * N) aligned_vector { T val[N]; };
+template <typename T, int N> struct __align__(sizeof(T) * N) aligned_vector {
+    T val[N];
+};
 
 // Elements per vectorized load/store: 128-bit / sizeof(T).
 // float → 4, bf16/half → 8, double → 2.
 template <typename T> constexpr int kVecSize = 16 / sizeof(T);
+
+// Whether the 128-bit path is usable for an elementwise op over `num_elements` elements
+// whose operands are the given (possibly null) pointers. All non-null pointers must be
+// 16-byte aligned, which holds for freshly allocated tensors but not necessarily for
+// arbitrary views, so every call site checks before taking the vectorized branch.
+template <typename T>
+inline bool CanVectorize(size_t num_elements, const void *p0, const void *p1 = nullptr, const void *p2 = nullptr,
+                         const void *p3 = nullptr) {
+    if (num_elements < static_cast<size_t>(kVecSize<T>)) {
+        return false;
+    }
+    const void *ptrs[] = {p0, p1, p2, p3};
+    for (const void *p : ptrs) {
+        if (p != nullptr && reinterpret_cast<uintptr_t>(p) % 16 != 0) {
+            return false;
+        }
+    }
+    return true;
+}
 
 // Maximum number of dimensions supported by the broadcast metadata.
 // Real-world tensors in this codebase top out at 4-5 dims, so 8 leaves comfortable headroom
@@ -78,6 +99,32 @@ __global__ void UnaryForwardKernel(T *output, Func fn, size_t num_elements, size
     }
 }
 
+// Vectorized unary forward: each thread moves 16 bytes (VecSize elements) per load/store.
+// The scalar kernel is memory-bound but emits 16/sizeof(T) separate accesses per 16 bytes
+// (8 for bf16/half), which keeps it well below DRAM bandwidth; this version issues one
+// 128-bit load + one 128-bit store instead. Tail elements are handled scalar.
+template <typename T, int VecSize, typename Func>
+__global__ void UnaryForwardKernelVectorized(T *__restrict__ output, Func fn, size_t num_elements,
+                                             const T *__restrict__ input) {
+    using VecT = aligned_vector<T, VecSize>;
+    const size_t num_vecs = num_elements / VecSize;
+    const size_t grid_stride = static_cast<size_t>(gridDim.x) * blockDim.x;
+
+    for (size_t vid = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; vid < num_vecs; vid += grid_stride) {
+        const size_t base = vid * VecSize;
+        const VecT in_vec = *reinterpret_cast<const VecT *>(input + base);
+        VecT out_vec;
+#pragma unroll
+        for (int i = 0; i < VecSize; ++i) { out_vec.val[i] = fn(in_vec.val[i]); }
+        *reinterpret_cast<VecT *>(output + base) = out_vec;
+    }
+
+    for (size_t idx = num_vecs * VecSize + static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+         idx < num_elements; idx += grid_stride) {
+        output[idx] = fn(input[idx]);
+    }
+}
+
 // Helper for broadcast indexing
 __device__ inline int64_t CalcOffset(int64_t idx, int ndim, const int64_t *strides, const int64_t *shape,
                                      const int64_t *out_strides) {
@@ -123,6 +170,30 @@ __global__ void BinaryForwardKernelNoBroadcast(T *__restrict__ output, Func fn, 
     const size_t grid_stride = static_cast<size_t>(gridDim.x) * blockDim.x;
     for (size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; idx < num_elements;
          idx += grid_stride) {
+        output[idx] = fn(a[idx], b[idx]);
+    }
+}
+
+// Vectorized no-broadcast forward: 128-bit loads/stores, one vector per thread per iteration.
+template <typename T, int VecSize, typename Func>
+__global__ void BinaryForwardKernelNoBroadcastVectorized(T *__restrict__ output, Func fn, const T *__restrict__ a,
+                                                         const T *__restrict__ b, size_t num_elements) {
+    using VecT = aligned_vector<T, VecSize>;
+    const size_t num_vecs = num_elements / VecSize;
+    const size_t grid_stride = static_cast<size_t>(gridDim.x) * blockDim.x;
+
+    for (size_t vid = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; vid < num_vecs; vid += grid_stride) {
+        const size_t base = vid * VecSize;
+        const VecT a_vec = *reinterpret_cast<const VecT *>(a + base);
+        const VecT b_vec = *reinterpret_cast<const VecT *>(b + base);
+        VecT out_vec;
+#pragma unroll
+        for (int i = 0; i < VecSize; ++i) { out_vec.val[i] = fn(a_vec.val[i], b_vec.val[i]); }
+        *reinterpret_cast<VecT *>(output + base) = out_vec;
+    }
+
+    for (size_t idx = num_vecs * VecSize + static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+         idx < num_elements; idx += grid_stride) {
         output[idx] = fn(a[idx], b[idx]);
     }
 }
@@ -239,10 +310,23 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
 
     if constexpr (sizeof...(inputs) == 1) {
         // Unary case
+        const T *input_ptr
+            = std::get<0>(std::make_tuple(static_cast<const T *>(inputs ? inputs->DataPtr() : nullptr)...));
+        const size_t num_elements = output->NumElements();
+
+        if (CanVectorize<T>(num_elements, output_ptr, input_ptr)) {
+            constexpr int VecSize = kVecSize<T>;
+            const size_t num_vecs = num_elements / VecSize;
+            dim3 block_dims(std::min(static_cast<size_t>(256), num_vecs));
+            dim3 grid_dims(std::min(CEIL_DIV(num_vecs, block_dims.x), static_cast<size_t>(65535)));
+            UnaryForwardKernelVectorized<T, VecSize>
+                <<<grid_dims, block_dims, 0, cuda_stream>>>(output_ptr, func, num_elements, input_ptr);
+            return;
+        }
+
         LaunchKernel<T>(
             [&](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
-                UnaryForwardKernel<<<grid, block, 0, cuda_stream>>>(output_ptr, func, output->NumElements(), offset,
-                                                                    ptrs...);
+                UnaryForwardKernel<<<grid, block, 0, cuda_stream>>>(output_ptr, func, num_elements, offset, ptrs...);
             },
             output, inputs...);
     } else if constexpr (sizeof...(inputs) == 2) {
@@ -263,10 +347,19 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
             const size_t num_elements = output->NumElements();
             const T *a_ptr = static_cast<const T *>(input_a->DataPtr());
             const T *b_ptr = static_cast<const T *>(input_b->DataPtr());
-            dim3 block_dims = ChooseBlockDims(num_elements);
-            dim3 grid_dims(std::min(CEIL_DIV(num_elements, block_dims.x), static_cast<size_t>(65535)));
-            BinaryForwardKernelNoBroadcast<<<grid_dims, block_dims, 0, cuda_stream>>>(output_ptr, func, a_ptr, b_ptr,
-                                                                                      num_elements);
+            if (CanVectorize<T>(num_elements, output_ptr, a_ptr, b_ptr)) {
+                constexpr int VecSize = kVecSize<T>;
+                const size_t num_vecs = num_elements / VecSize;
+                dim3 block_dims(std::min(static_cast<size_t>(256), num_vecs));
+                dim3 grid_dims(std::min(CEIL_DIV(num_vecs, block_dims.x), static_cast<size_t>(65535)));
+                BinaryForwardKernelNoBroadcastVectorized<T, VecSize>
+                    <<<grid_dims, block_dims, 0, cuda_stream>>>(output_ptr, func, a_ptr, b_ptr, num_elements);
+            } else {
+                dim3 block_dims = ChooseBlockDims(num_elements);
+                dim3 grid_dims(std::min(CEIL_DIV(num_elements, block_dims.x), static_cast<size_t>(65535)));
+                BinaryForwardKernelNoBroadcast<<<grid_dims, block_dims, 0, cuda_stream>>>(output_ptr, func, a_ptr,
+                                                                                          b_ptr, num_elements);
+            }
         } else {
             // Broadcast path: pass strides/shapes by value via kernel parameter memory.
             // This avoids the per-call cudaMallocAsync/cudaMemcpyAsync/cudaFreeAsync that previously
@@ -293,6 +386,33 @@ __global__ void UnaryBackwardKernel(T *output, Func fn, size_t num_elements, siz
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x + offset;
 
     if (idx < num_elements) {
+        output[idx] = Mul<T>(grad_output[idx], fn(input ? input[idx] : T(0)));
+    }
+}
+
+// Vectorized unary backward (see UnaryForwardKernelVectorized for the rationale).
+template <typename T, int VecSize, typename Func>
+__global__ void UnaryBackwardKernelVectorized(T *__restrict__ output, Func fn, size_t num_elements,
+                                              const T *__restrict__ grad_output, const T *__restrict__ input) {
+    using VecT = aligned_vector<T, VecSize>;
+    const size_t num_vecs = num_elements / VecSize;
+    const size_t grid_stride = static_cast<size_t>(gridDim.x) * blockDim.x;
+
+    for (size_t vid = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; vid < num_vecs; vid += grid_stride) {
+        const size_t base = vid * VecSize;
+        const VecT g_vec = *reinterpret_cast<const VecT *>(grad_output + base);
+        VecT in_vec;
+        if (input) {
+            in_vec = *reinterpret_cast<const VecT *>(input + base);
+        }
+        VecT out_vec;
+#pragma unroll
+        for (int i = 0; i < VecSize; ++i) { out_vec.val[i] = Mul<T>(g_vec.val[i], fn(input ? in_vec.val[i] : T(0))); }
+        *reinterpret_cast<VecT *>(output + base) = out_vec;
+    }
+
+    for (size_t idx = num_vecs * VecSize + static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+         idx < num_elements; idx += grid_stride) {
         output[idx] = Mul<T>(grad_output[idx], fn(input ? input[idx] : T(0)));
     }
 }
@@ -630,11 +750,27 @@ void LaunchBackward(Func func, const std::shared_ptr<Tensor> &output, const std:
 
     T *output_ptr = static_cast<T *>(output->DataPtr());
     const T *grad_ptr = static_cast<const T *>(grad_output->DataPtr());
+    const size_t num_elements = output->NumElements();
+
+    const T *input_ptr = nullptr;
+    if constexpr (sizeof...(inputs) == 1) {
+        input_ptr = std::get<0>(std::make_tuple(static_cast<const T *>(inputs ? inputs->DataPtr() : nullptr)...));
+    }
+
+    if (CanVectorize<T>(num_elements, output_ptr, grad_ptr, input_ptr)) {
+        constexpr int VecSize = kVecSize<T>;
+        const size_t num_vecs = num_elements / VecSize;
+        dim3 block_dims(std::min(static_cast<size_t>(256), num_vecs));
+        dim3 grid_dims(std::min(CEIL_DIV(num_vecs, block_dims.x), static_cast<size_t>(65535)));
+        UnaryBackwardKernelVectorized<T, VecSize>
+            <<<grid_dims, block_dims, 0, cuda_stream>>>(output_ptr, func, num_elements, grad_ptr, input_ptr);
+        return;
+    }
 
     LaunchKernel<T>(
         [=](dim3 grid, dim3 block, size_t offset, auto... ptrs) {
-            UnaryBackwardKernel<<<grid, block, 0, cuda_stream>>>(output_ptr, func, output->NumElements(), offset,
-                                                                 grad_ptr, ptrs...);
+            UnaryBackwardKernel<<<grid, block, 0, cuda_stream>>>(output_ptr, func, num_elements, offset, grad_ptr,
+                                                                 ptrs...);
         },
         output, inputs...);
 }
