@@ -121,8 +121,13 @@ int main(int argc, char *argv[]) {
             auto new_image = std::make_shared<Tensor>(image->To(device));
             auto new_label = std::make_shared<Tensor>(label->To(device));
 
-            auto outputs = network->Forward({new_image});
+            // NOTE: ZeroGrad must run BEFORE DDP Forward. Reducer::PrepareForBackward()
+            // (inside DDP Forward, gradient_as_bucket_view=true) binds param.grad to the
+            // bucket view; ZeroGrad(set_to_none=true) after Forward would reset that
+            // binding, so backward would accumulate into a standalone grad that the
+            // reducer never all-reduces (silent no-sync, cross-rank weight fork).
             optimizer.ZeroGrad();
+            auto outputs = network->Forward({new_image});
 
             auto loss = loss_fn->Forward({outputs[0], new_label});
             loss[0]->Backward();
