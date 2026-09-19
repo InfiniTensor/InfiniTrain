@@ -16,6 +16,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_compile_options(-Wunused -Wunused-function)
+add_compile_options(-D_USE_MATH_DEFINES)
 
 # ------------------------------------------------------------------------------
 # GoogleTest (submodule)
@@ -222,8 +223,8 @@ add_executable(llama3
 link_infini_train_exe(llama3)
 
 # Tools
-add_subdirectory(tools/infini_run)
-set_target_properties(infini_run PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+#add_subdirectory(tools/infini_run)
+#set_target_properties(infini_run PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Tests
 if(BUILD_TEST)

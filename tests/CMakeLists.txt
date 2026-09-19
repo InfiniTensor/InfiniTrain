@@ -38,3 +38,6 @@ add_subdirectory(transformer)
 
 # Checkpoint tests
 add_subdirectory(checkpoint)
+
+# Conv2d tests
+add_subdirectory(conv2d)
