@@ -129,8 +129,15 @@ if(USE_CUDA)
     message(STATUS "Add USE_NCCL, use NCCL with CUDA")
     list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
     find_package(NCCL REQUIRED)
-    add_compile_definitions(USE_NCCL=1)
-    target_link_libraries(infini_train_cuda_kernels PUBLIC nccl)
+    # add_compile_definitions(USE_NCCL=1)
+    # target_link_libraries(infini_train_cuda_kernels PUBLIC nccl)
+
+    # 不再用目录级 add_compile_definitions 影响所有target, 只标到真正需要NCCL的target
+    target_compile_definitions(infini_train_cuda_kernels PUBLIC USE_NCCL=1)
+    # 加头文件
+    target_include_directories(infini_train_cuda_kernels PUBLIC ${NCCL_INCLUDE_DIRS})
+    # 用FindNCCL找到完整库路径
+    target_link_libraries(infini_train_cuda_kernels PUBLIC ${NCCL_LIBRARIES})
   endif()
 endif()
 
@@ -168,7 +175,13 @@ if(USE_CUDA)
   if(USE_NCCL)
     # If your core library code also directly references NCCL symbols (not only kernels),
     # keep this. Otherwise it's harmless.
-    target_link_libraries(infini_train PUBLIC nccl)
+
+    # target_link_libraries(infini_train PUBLIC nccl)
+
+    # nccl_impl.cc需要nccl.h和NCCL库
+    target_compile_definitions(infini_train PUBLIC USE_NCCL=1)
+    target_include_directories(infini_train PUBLIC ${NCCL_INCLUDE_DIRS})
+    target_link_libraries(infini_train PUBLIC ${NCCL_LIBRARIES})
   endif()
 endif()
 
