@@ -19,19 +19,21 @@ void Embedding::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_t
                              const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
     const auto &input = input_tensors[0];
     const auto &weight = input_tensors[1];
-    weight_dims_ = weight->Dims();
-    ctx_.SaveForBackward({input});
+    // The weight itself (not only its dims) is needed by the backward kernel: the CUDA path routes
+    // the grad into a persistent per-weight sparse buffer keyed by the weight tensor.
+    ctx_.SaveForBackward({input, weight});
 }
 
 std::vector<std::shared_ptr<Tensor>> Embedding::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
     CHECK_EQ(grad_outputs.size(), 1);
     auto saved_tensors = ctx_.GetSavedTensors();
     const auto &input = saved_tensors[0];
+    const auto &weight = saved_tensors[1];
     const auto &grad_output = grad_outputs[0];
 
     auto device = input->GetDevice().type();
     auto grad_weight = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "EmbeddingBackward"}, input,
-                                                                            weight_dims_, grad_output);
+                                                                            weight, grad_output);
     return {nullptr, grad_weight};
 }
 } // namespace infini_train::autograd

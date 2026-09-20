@@ -647,4 +647,58 @@ Section 2.1 结论 4 与 2.2.1.2 的 timeline 给出了 RMSNorm 的开销画像�
 
 **产物**：`build_new/run_base_{1,2,3}.log`、`run_fused_{1,2,3}.log`（配对原始日志）、`parse_wall_log.py`（解析脚本）；nsys 复测（逐 kernel 验证 launch 数下降）待后续统一进行。
 
+### 3.6 Embedding 稀疏梯度（Sparse Row）优化
 
+Section 2.2.2/2.2.3 记录的 embedding 画像（`EmbeddingBwd·f32` 1.3 ms、大参数 Adam 5.7 ms）在 3.2 向量化后仍是每步最大的单体浪费：`tok_embeddings` 权重 [128256, 2048] fp32 = **1.05 GB**，而每步实际命中仅 **256 个 token 行（0.2%）**。3.3.3 的判据把 `EmbeddingBwd` 的 Fill 归入「真需要零起点、保留」的档 2/3 场景——本节把「零起点」从每步整表缩小到每步只清命中行，连同反向与 Adam 一并稀疏化。
+
+三项浪费（同会话 nsys 实测，`nsys/out/llama3_5iter_sparse_base`，bf16，每步）：① 整表 memset 1.05 GB / **680 µs**（backward 前 `Fill(0)`，3.3.5 特化后形态）；② `EmbeddingBackwardKernel` 全表 scan **1090 µs**（max 1335 µs）；③ `tok_embeddings` dense vectorized Adam 单 kernel **5.74 ms**。
+
+#### 3.6.1 方案：持久 grad buffer + 行清单 + 稀疏 Adam
+
+- **持久 grad buffer 不变量**：`EmbeddingBackward` 的 `grad_weight` 改为跨步常驻，维持不变量「除行清单记录的命中行外恒零」。首次 backward 一次性 `Fill(0)`（走 3.3.5 的 memset 快路径）；此后 `ZeroGrad` 只清零上一步的 **~256 行（≈2 MB）** 并递增 `generation` 使去重 stamp 失效。返回的梯度是 buffer 的**零拷贝视图**（`make_shared<Tensor>(*buffer, 0, dims)`）。
+- **行去重 claim**：backward kernel 改 2D grid，`(blockIdx.y==0, threadIdx.x==0)` 的线程经 `stamp[vocab]`（int32，按 `generation` 区分批次）`atomicCAS` 争抢写入 `row_list`（capacity=vocab，天然无溢出）；命中数 `count` 常驻**设备端**，host 全程零同步（消除 2.3 类 D2H 风险）。
+- **稀疏 Adam**：新增 `AdamSparseRows(Shadow)Kernel`，grid-strided 遍历 `row_list[0..*count)`，只对命中行更新 param/m/v（及 shadow），行内复刻既有 128-bit 向量化（`dim%4==0` + 对齐守卫，否则标量回退）。
+- **兼容机制**（正确性兜底）：① **alias 防双计**——`accumulate.cc` 检测待累加梯度与视图同址（DataPtr 相等）时跳过；② **poison + flush**——出现非 alias 的 dense 写入（未来 `lm_head` 真 weight-tying、DDP bucket 摊平）时标记 `poisoned` 永久回退 dense Adam，同时清行保证每个 micro-batch 只贡献 delta；③ **dtype 回退**——`grad_output` 与 weight dtype 不一致时回退 dense 路径。
+
+#### 3.6.2 正确性验证
+
+- **单元测试**：全量 **331 项 0 失败**（autograd / optimizer / module / transformer CUDA 套件）。
+- **数值等价性**（本次 3×3 配对，10 iter）：step1 `4.896993`、step2 `4.544800` 在全部 6 次运行**逐位一致**（首步更新与 dense LazyAdam 数学等价）；step3 差 4.3×10⁻⁵、step4 差 1.2×10⁻³，至 step5 起差值（3–9×10⁻³）落入**运行间固有自变带**（基线自身 step6 起三次运行分叉至 ≤6×10⁻³，新代码 step5 起分叉，量级相同）。差异来源：① LazyAdam 语义（未命中行冻结 vs dense 用陈旧动量继续更新）；② 原子累加顺序（同一二进制重跑亦抖动）。
+
+#### 3.6.3 优化结果
+
+**端到端稳态时延**（同会话配对：`git stash` 切基线重编，各 10 iter × 3 次，每步取中位数再对窗口均值，与 3.2.4 同口径）：
+
+| 配置 | commit | 构建目录 | step5–10 稳态 | 运行间极差 |
+|---|---|---|---|---|
+| I 基线（HEAD，含 3.1–3.5 全部优化） | `bb68775` | `build_new`（stash 本次改动） | **66.46 ms** | ±0.49% |
+| J ＋Embedding 稀疏梯度 | 未提交改动 | `build_new` | **59.27 ms** | ±0.91% |
+
+| 增量 | 稳态时延 | 降幅 | 折合每轮 | 吞吐量 |
+|---|---|---|---|---|
+| I→J（Embedding 稀疏梯度） | 66.46 → 59.27 ms | **−10.82%** | −7.19 ms | 3859 → 4342 tok/s（+12.5%） |
+
+窗口敏感性（I→J）：step3–10 67.51 → 60.76（−10.0%）；step4–10 66.63 → 59.93（−10.1%）；warm-up step1 186.5 → 198.6 ms（含首次持久 buffer 分配与 kernel 首启，运行间极差较大）。
+
+> **可信度**：−7.19 ms ≈ J 自身噪声带（±0.91% ≈ ±0.54 ms）的 13 倍，属强信号；基线 10 步内始终维持 66.26–66.72 ms 平台（无时钟漂移）。J 的 step2–3（66.2–66.6 ms）恰等于基线平台、step4 起进入 59 ms 稳态——与 3.4.1/3.5.2 一致的「收益从上一步末尾开始兑现」流水填充现象。
+
+**GPU 侧 kernel 账**（同会话 nsys 对照，`llama3_5iter_sparse_base` vs `llama3_5iter_sparse`，均 5 iter bf16）：
+
+| 项目（每步） | 基线 | 新代码 | Δ |
+|---|---|---|---|
+| 1.05 GB memset | **5 次**（678–683 µs/次） | **0 次**（仅首步 1 次初始化） | −680 µs |
+| embedding backward | `EmbeddingBackwardKernel` 1090 µs avg（max 1335 µs） | `EmbeddingBackwardSparseKernel` **7.1 µs avg**（max 11.1 µs） | −1083 µs |
+| 大参数 Adam | vectorized 346 次 Σ137.2 ms，含 **8 个 5.74 ms 大 call**（tok_emb + lm_head 各 1/步） | vectorized 343 次 Σ114.5 ms，大 call 仅 **4 个（lm_head）**；tok_emb 改走 `AdamSparseRowsShadow` **14 µs/步** | −5727 µs |
+| 新增清行 | — | `SparseRowClearRows` 3.6 µs + `SparseRowResetCount` 1.5 µs | +5 µs |
+| **合计** | — | — | **≈ −7.48 ms** |
+
+> **分解核对**：两次采集小 kernel 部分几乎重合（Σ 91.3 vs 91.6 ms），vectorized Adam 总量差 22.7 ms 与「大 call 少 4 个 × 5.74 ms」吻合（两次采集截断深度不同，大 call 计数 8 vs 4 同源）。nsys 口径 −7.48 ms 与 wall −7.19 ms 一致。
+>
+> **显存**：峰值 used 25999 → 26008 MB（stamp 0.5 MB + row_list 0.5 MB 常驻；1.05 GB buffer 基线本就每步分配同尺寸，峰值口径不变）。
+
+#### 3.6.4 边界与后续
+
+- **残留 dense Adam 5.74 ms/步是 `lm_head`**：当前 `tok_embeddings` 与 `lm_head` 为两个独立 fp32 参数（`transformer.cc` 的 weight-tying TODO 未实现），且 `lm_head` 梯度经 softmax 本质稠密（全词表），不在本优化射程；未来实现真 tying 后 poison 机制自动保证正确性。
+- **LazyAdam 语义为有意取舍**：未命中行完全冻结（保留 m/v），与 dense 「陈旧动量继续更新」不同；如需严格对齐可加低频 dense 兜底。
+
+**产物**：`build_new/run_bsl_{1,2,3}.log`、`run_sparse_{1,2,3}.log`（10 iter 配对原始日志）；nsys `nsys/out/llama3_5iter_sparse_base.*`（基线对照）、`nsys/out/llama3_5iter_sparse.*`（本次改动，stats 输出见 `build_new/run_llama3_5iter_sparse_nsys.log`）；查询脚本 `build_new/query3_nsys.py`、`query_memset.py`；实现为本轮 7 个改动文件 + 新增 `infini_train/include/sparse_row_grad.h`。

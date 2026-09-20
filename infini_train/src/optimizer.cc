@@ -6,6 +6,7 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
+#include "infini_train/include/sparse_row_grad.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
@@ -35,7 +36,25 @@ Optimizer::Optimizer(const NamedParameterList &named_params, float learning_rate
 }
 
 void Optimizer::ZeroGrad(bool set_to_none) {
-    for (auto param : params_) { param->ZeroGrad(set_to_none); }
+    for (auto param : params_) {
+        auto *sparse_state = GetSparseRowGradState(param.get());
+        if (sparse_state) {
+            auto device = param->GetDevice();
+            core::DeviceGuard guard(device);
+            // Zero only the rows made dirty since the last clear: the persistent buffer is zero
+            // everywhere else by construction, so no full-size memset is needed. This also bumps
+            // the claim generation, re-arming the dedup for the next accumulation cycle.
+            ClearSparseRowGradRows(sparse_state);
+            // Non-poisoned: the cleared buffer *is* the accumulator, so nothing else has to be
+            // reset. Poisoned: the live storage is some dense foreign buffer and needs the dense
+            // reset path (grad_.reset() or a full fill).
+            if (set_to_none || sparse_state->poisoned) {
+                param->ZeroGrad(set_to_none);
+            }
+            continue;
+        }
+        param->ZeroGrad(set_to_none);
+    }
 }
 
 void Optimizer::set_learning_rate(float lr) { learning_rate_ = lr; }
@@ -172,6 +191,22 @@ void Adam::Step() {
 
         auto device = param->GetDevice();
         core::DeviceGuard guard(device);
+        auto *sparse_state = GetSparseRowGradState(param.get());
+        if (sparse_state && !sparse_state->poisoned) {
+            // Sparse weight (embedding): only the rows hit since the last clear exist in the
+            // persistent buffer, so update just those rows of param/m/v/shadow.
+            if (shadow_enable_) {
+                auto shadow_weight = shadow_weights_[i];
+                auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamSparseRowsShadow"});
+                kernel.Call<void>(grad, param, shadow_weight, m, v, sparse_state->row_list, sparse_state->count,
+                                  learning_rate_, beta1_, beta2_, eps_, t_);
+            } else {
+                auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamSparseRows"});
+                kernel.Call<void>(grad, param, m, v, sparse_state->row_list, sparse_state->count, learning_rate_,
+                                  beta1_, beta2_, eps_, t_);
+            }
+            continue;
+        }
         if (shadow_enable_) {
             auto shadow_weight = shadow_weights_[i];
             auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGradShadow"});

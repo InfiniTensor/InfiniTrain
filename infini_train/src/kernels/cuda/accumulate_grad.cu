@@ -254,6 +254,103 @@ __global__ void AdamAccumulateGradShadowKernelVectorized(const T *__restrict__ g
     }
 }
 
+// Sparse-row Adam: walk only the rows claimed since the last clear (row_list[0, *count)) instead
+// of the whole parameter. Rows that were never hit keep their param/m/v at their initialization,
+// which is exactly what a dense step computes for a zero row with zero EMAs; rows hit in an
+// earlier step but idle now are left untouched (LazyAdam semantics) rather than decaying in place.
+// The row count lives on the device, so the host never synchronizes to size the grid. One block
+// sweeps rows grid-strided; within a row the access pattern mirrors AdamAccumulateGradKernel.
+template <typename T, int VecSize>
+__global__ void AdamSparseRowsKernel(const T *__restrict__ grad_data, T *__restrict__ param_data,
+                                     const int32_t *__restrict__ row_list, const int32_t *__restrict__ count,
+                                     size_t dim, T *__restrict__ m_data, T *__restrict__ v_data, float learning_rate,
+                                     float beta1, float beta2, float eps, const float bias_correction_m,
+                                     const float bias_correction_v) {
+    using VecT = aligned_vector<T, VecSize>;
+    const AdamParams<T> p = MakeAdamParams<T>(learning_rate, beta1, beta2, eps, bias_correction_m, bias_correction_v);
+    const int num_rows = *count;
+    const size_t num_vecs = dim / VecSize;
+    const size_t tail_start = num_vecs * VecSize;
+
+    for (int r = blockIdx.x; r < num_rows; r += gridDim.x) {
+        const size_t base = static_cast<size_t>(row_list[r]) * dim;
+        const T *row_grad = grad_data + base;
+        T *row_param = param_data + base;
+        T *row_m = m_data + base;
+        T *row_v = v_data + base;
+
+        for (size_t vid = threadIdx.x; vid < num_vecs; vid += blockDim.x) {
+            const size_t idx = vid * VecSize;
+            VecT grad_vec = *reinterpret_cast<const VecT *>(&row_grad[idx]);
+            VecT param_vec = *reinterpret_cast<const VecT *>(&row_param[idx]);
+            VecT m_vec = *reinterpret_cast<const VecT *>(&row_m[idx]);
+            VecT v_vec = *reinterpret_cast<const VecT *>(&row_v[idx]);
+#pragma unroll
+            for (int i = 0; i < VecSize; ++i) {
+                AdamUpdateElement<T>(grad_vec.val[i], param_vec.val[i], m_vec.val[i], v_vec.val[i], p);
+            }
+            *reinterpret_cast<VecT *>(&row_param[idx]) = param_vec;
+            *reinterpret_cast<VecT *>(&row_m[idx]) = m_vec;
+            *reinterpret_cast<VecT *>(&row_v[idx]) = v_vec;
+        }
+
+        // Tail: dim % VecSize != 0 (empty when it divides)
+        for (size_t idx = tail_start + threadIdx.x; idx < dim; idx += blockDim.x) {
+            AdamUpdateElement<T>(row_grad[idx], row_param[idx], row_m[idx], row_v[idx], p);
+        }
+    }
+}
+
+// Sparse-row counterpart of AdamAccumulateGradShadowKernel/VecSize conventions.
+template <typename T, typename TShadow, int VecSize>
+__global__ void AdamSparseRowsShadowKernel(const T *__restrict__ grad_data, T *__restrict__ param_data,
+                                           TShadow *__restrict__ shadow_data, const int32_t *__restrict__ row_list,
+                                           const int32_t *__restrict__ count, size_t dim, T *__restrict__ m_data,
+                                           T *__restrict__ v_data, float learning_rate, float beta1, float beta2,
+                                           float eps, const float bias_correction_m, const float bias_correction_v) {
+    using VecT = aligned_vector<T, VecSize>;
+    using VecTShadow = aligned_vector<TShadow, VecSize>;
+    const AdamParams<T> p = MakeAdamParams<T>(learning_rate, beta1, beta2, eps, bias_correction_m, bias_correction_v);
+    const int num_rows = *count;
+    const size_t num_vecs = dim / VecSize;
+    const size_t tail_start = num_vecs * VecSize;
+
+    for (int r = blockIdx.x; r < num_rows; r += gridDim.x) {
+        const size_t base = static_cast<size_t>(row_list[r]) * dim;
+        const T *row_grad = grad_data + base;
+        T *row_param = param_data + base;
+        TShadow *row_shadow = shadow_data + base;
+        T *row_m = m_data + base;
+        T *row_v = v_data + base;
+
+        for (size_t vid = threadIdx.x; vid < num_vecs; vid += blockDim.x) {
+            const size_t idx = vid * VecSize;
+            VecT grad_vec = *reinterpret_cast<const VecT *>(&row_grad[idx]);
+            VecT param_vec = *reinterpret_cast<const VecT *>(&row_param[idx]);
+            VecT m_vec = *reinterpret_cast<const VecT *>(&row_m[idx]);
+            VecT v_vec = *reinterpret_cast<const VecT *>(&row_v[idx]);
+
+            VecTShadow shadow_vec;
+#pragma unroll
+            for (int i = 0; i < VecSize; ++i) {
+                AdamUpdateElement<T>(grad_vec.val[i], param_vec.val[i], m_vec.val[i], v_vec.val[i], p);
+                shadow_vec.val[i] = common::cuda::Cast<TShadow>(param_vec.val[i]);
+            }
+
+            *reinterpret_cast<VecT *>(&row_param[idx]) = param_vec;
+            *reinterpret_cast<VecT *>(&row_m[idx]) = m_vec;
+            *reinterpret_cast<VecT *>(&row_v[idx]) = v_vec;
+            *reinterpret_cast<VecTShadow *>(&row_shadow[idx]) = shadow_vec;
+        }
+
+        // Tail: dim % VecSize != 0 (empty when it divides)
+        for (size_t idx = tail_start + threadIdx.x; idx < dim; idx += blockDim.x) {
+            AdamUpdateElement<T>(row_grad[idx], row_param[idx], row_m[idx], row_v[idx], p);
+            row_shadow[idx] = common::cuda::Cast<TShadow>(row_param[idx]);
+        }
+    }
+}
+
 void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_ptr<Tensor> &param,
                         const std::shared_ptr<Tensor> &m, const std::shared_ptr<Tensor> &v, float learning_rate,
                         float beta1, float beta2, float eps, int64_t t) {
@@ -361,6 +458,109 @@ void AdamAccumulateGradShadow(const std::shared_ptr<Tensor> &grad, const std::sh
         },
         "CUDA AdamAccumulateGradShadow");
 }
+
+void AdamSparseRows(const std::shared_ptr<Tensor> &grad, const std::shared_ptr<Tensor> &param,
+                    const std::shared_ptr<Tensor> &m, const std::shared_ptr<Tensor> &v,
+                    const std::shared_ptr<Tensor> &row_list, const std::shared_ptr<Tensor> &count,
+                    float learning_rate, float beta1, float beta2, float eps, int64_t t) {
+    const float bias_correction_m = 1.0f - std::pow(beta1, t);
+    const float bias_correction_v = 1.0f - std::pow(beta2, t);
+
+    constexpr int threads_per_block = 256;
+    // Grid-strided over rows and sized for the common case (a few hundred rows = one row per
+    // block); idle blocks only read *count and exit.
+    constexpr int max_blocks = 512;
+    const size_t dim = static_cast<size_t>(grad->Dims()[1]);
+
+    auto device = grad->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
+        grad->Dtype(),
+        [=]<typename T>() {
+            const T *grad_ptr = static_cast<const T *>(grad->DataPtr());
+            T *param_ptr = static_cast<T *>(param->DataPtr());
+            T *m_ptr = static_cast<T *>(m->DataPtr());
+            T *v_ptr = static_cast<T *>(v->DataPtr());
+            const int32_t *row_ptr = static_cast<const int32_t *>(row_list->DataPtr());
+            const int32_t *count_ptr = static_cast<const int32_t *>(count->DataPtr());
+
+            // Rows start at multiples of dim, so a whole-row vector access needs dim % vec_size
+            // == 0 plus aligned bases; anything else falls back to the scalar form (identical
+            // values, VecSize == 1).
+            constexpr int vec_size = kVecSize<T>;
+            const bool can_vectorize = (dim % vec_size == 0) && IsAlignedTo(grad_ptr, sizeof(T) * vec_size)
+                                    && IsAlignedTo(param_ptr, sizeof(T) * vec_size)
+                                    && IsAlignedTo(m_ptr, sizeof(T) * vec_size)
+                                    && IsAlignedTo(v_ptr, sizeof(T) * vec_size);
+
+            if (can_vectorize) {
+                AdamSparseRowsKernel<T, vec_size><<<max_blocks, threads_per_block, 0, cuda_stream>>>(
+                    grad_ptr, param_ptr, row_ptr, count_ptr, dim, m_ptr, v_ptr, learning_rate, beta1, beta2, eps,
+                    bias_correction_m, bias_correction_v);
+            } else {
+                AdamSparseRowsKernel<T, 1><<<max_blocks, threads_per_block, 0, cuda_stream>>>(
+                    grad_ptr, param_ptr, row_ptr, count_ptr, dim, m_ptr, v_ptr, learning_rate, beta1, beta2, eps,
+                    bias_correction_m, bias_correction_v);
+            }
+        },
+        "CUDA AdamSparseRows");
+}
+
+void AdamSparseRowsShadow(const std::shared_ptr<Tensor> &grad, const std::shared_ptr<Tensor> &param,
+                          const std::shared_ptr<Tensor> &shadow, const std::shared_ptr<Tensor> &m,
+                          const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &row_list,
+                          const std::shared_ptr<Tensor> &count, float learning_rate, float beta1, float beta2,
+                          float eps, int64_t t) {
+    const float bias_correction_m = 1.0f - std::pow(beta1, t);
+    const float bias_correction_v = 1.0f - std::pow(beta2, t);
+
+    constexpr int threads_per_block = 256;
+    constexpr int max_blocks = 512;
+    const size_t dim = static_cast<size_t>(grad->Dims()[1]);
+
+    auto device = grad->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+
+    core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
+        grad->Dtype(),
+        [=]<typename T>() {
+            core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
+                shadow->Dtype(),
+                [=]<typename TShadow>() {
+                    const T *grad_ptr = static_cast<const T *>(grad->DataPtr());
+                    T *param_ptr = static_cast<T *>(param->DataPtr());
+                    TShadow *shadow_ptr = static_cast<TShadow *>(shadow->DataPtr());
+                    T *m_ptr = static_cast<T *>(m->DataPtr());
+                    T *v_ptr = static_cast<T *>(v->DataPtr());
+                    const int32_t *row_ptr = static_cast<const int32_t *>(row_list->DataPtr());
+                    const int32_t *count_ptr = static_cast<const int32_t *>(count->DataPtr());
+
+                    constexpr int vec_size = kMixedVecSize<T, TShadow>;
+                    const bool can_vectorize = (dim % vec_size == 0) && IsAlignedTo(grad_ptr, sizeof(T) * vec_size)
+                                            && IsAlignedTo(param_ptr, sizeof(T) * vec_size)
+                                            && IsAlignedTo(m_ptr, sizeof(T) * vec_size)
+                                            && IsAlignedTo(v_ptr, sizeof(T) * vec_size)
+                                            && IsAlignedTo(shadow_ptr, sizeof(TShadow) * vec_size);
+
+                    if (can_vectorize) {
+                        AdamSparseRowsShadowKernel<T, TShadow, vec_size><<<max_blocks, threads_per_block, 0, cuda_stream>>>(
+                            grad_ptr, param_ptr, shadow_ptr, row_ptr, count_ptr, dim, m_ptr, v_ptr, learning_rate, beta1,
+                            beta2, eps, bias_correction_m, bias_correction_v);
+                    } else {
+                        AdamSparseRowsShadowKernel<T, TShadow, 1><<<max_blocks, threads_per_block, 0, cuda_stream>>>(
+                            grad_ptr, param_ptr, shadow_ptr, row_ptr, count_ptr, dim, m_ptr, v_ptr, learning_rate, beta1,
+                            beta2, eps, bias_correction_m, bias_correction_v);
+                    }
+                },
+                "CUDA AdamSparseRowsShadow");
+        },
+        "CUDA AdamSparseRowsShadow");
+}
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(kernel_name)                                                              \
@@ -369,4 +569,6 @@ void AdamAccumulateGradShadow(const std::shared_ptr<Tensor> &grad, const std::sh
 REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(AccumulateGrad)
 REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(AdamAccumulateGrad)
 REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(AdamAccumulateGradShadow)
+REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(AdamSparseRows)
+REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(AdamSparseRowsShadow)
 #undef REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL

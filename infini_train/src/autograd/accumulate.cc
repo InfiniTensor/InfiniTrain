@@ -5,6 +5,7 @@
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dispatcher.h"
+#include "infini_train/include/sparse_row_grad.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
@@ -43,15 +44,33 @@ AccumulateGrad::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_output
         }
 
         auto grad = tensor_->grad();
+        auto *sparse_state = GetSparseRowGradState(tensor_.get());
         if (grad) {
-            if (overwrite) {
-                // If the tensor is marked to overrite its current grad on next grad update
-                // See notes in `infini_train::nn::parallel::Reducer::PrepareForBackward()`
-                // NOTE(zbl): must copy, cannot change grad buffer address
-                grad->CopyFrom(grad_output);
+            if (sparse_state && grad->DataPtr() == grad_output->DataPtr()) {
+                // Sparse embedding path: grad_output is a view of the persistent buffer the
+                // embedding backward already scatter-added into (learning_rate_ is 1.0f for
+                // AccumulateGrad nodes), so accumulating it again would double count.
             } else {
-                auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
-                kernel.Call<void>(grad_output, learning_rate_, grad);
+                if (overwrite) {
+                    // If the tensor is marked to overrite its current grad on next grad update
+                    // See notes in `infini_train::nn::parallel::Reducer::PrepareForBackward()`
+                    // NOTE(zbl): must copy, cannot change grad buffer address
+                    grad->CopyFrom(grad_output);
+                } else {
+                    auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
+                    kernel.Call<void>(grad_output, learning_rate_, grad);
+                }
+                if (sparse_state) {
+                    // A dense grad from another producer (matmul on a tied weight, DDP bucket)
+                    // landed in the storage; from here on the sparse optimizer shortcut is off.
+                    sparse_state->poisoned = true;
+                    if (grad->DataPtr() != sparse_state->grad_buffer->DataPtr()) {
+                        // The accumulator belongs to that other producer: grad_output was the
+                        // cumulative sparse buffer and the add/copy above merged it in full.
+                        // Flush it so the next micro-batch contributes only its own delta.
+                        ClearSparseRowGradRows(sparse_state);
+                    }
+                }
             }
         } else {
             // FIXME(zbl): check whether need to do copying instead of slicing
