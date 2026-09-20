@@ -10,10 +10,10 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
-thread_local std::unordered_map<const Tensor*, std::shared_ptr<Tensor>> g_shadow_registry;
+thread_local std::unordered_map<const Tensor *, std::shared_ptr<Tensor>> g_shadow_registry;
 
-// 自由函数：供 autocast.h 查询影子权重（与 Optimizer 具体类型解耦）。
-// 命中返回 shadow；未命中（激活或未启用影子）返回 nullptr，autocast 走 fallback Cast。
+// Free function for autocast.h to query shadow weights (decoupled from the concrete Optimizer type).
+// Returns the shadow on a hit; nullptr on a miss (activations, or shadow disabled), letting autocast fall back to Cast.
 std::shared_ptr<Tensor> GetShadow(const Tensor *param) {
     auto it = g_shadow_registry.find(param);
     return it != g_shadow_registry.end() ? it->second : nullptr;
@@ -127,13 +127,13 @@ Adam::Adam(const NamedParameterList &named_params, float learning_rate, float be
     }
 }
 
-void Adam::EnableShadowWeights(DataType shadow_dtype){
+void Adam::EnableShadowWeights(DataType shadow_dtype) {
     shadow_enable_ = true;
     shadow_dtype_ = shadow_dtype;
     shadow_weights_.clear();
     shadow_weights_.reserve(params_.size());
     // init shadow weights form param
-    for (auto &param : params_){
+    for (auto &param : params_) {
         auto shadow_weight = std::make_shared<Tensor>(param->Dims(), shadow_dtype_, param->GetDevice());
         auto casted = param->To(shadow_dtype);
         shadow_weight->CopyFrom(casted);
@@ -143,12 +143,12 @@ void Adam::EnableShadowWeights(DataType shadow_dtype){
     LOG(INFO) << "Enable shadow weights for Adam optimizer, shadow dtype: " << static_cast<int>(shadow_dtype_);
 }
 
-void Adam::DisableShadowWeights(){
-    if (shadow_enable_ == false) return;
-    shadow_enable_ = false;
-    for (auto &param : params_){
-        g_shadow_registry.erase(param.get());
+void Adam::DisableShadowWeights() {
+    if (shadow_enable_ == false) {
+        return;
     }
+    shadow_enable_ = false;
+    for (auto &param : params_) { g_shadow_registry.erase(param.get()); }
     shadow_weights_.clear();
     LOG(INFO) << "Disable shadow weights for Adam optimizer";
 }
@@ -157,8 +157,8 @@ void Adam::RefreshShadowWeights() {
     if (!shadow_enable_) {
         return;
     }
-    // param 已被 checkpoint 原地更新（LoadStateDict 走 CopyFrom，指针不变），
-    // 重新从当前 FP32 主权重 cast 到 shadow；registry 映射无需改动。
+    // The param was updated in place by the checkpoint (LoadStateDict uses CopyFrom, so the pointer is unchanged):
+    // just re-cast the current FP32 master weights into the shadows; the registry mapping needs no changes.
     for (size_t i = 0; i < params_.size(); ++i) {
         auto casted = params_[i]->To(shadow_dtype_);
         shadow_weights_[i]->CopyFrom(casted);
@@ -166,7 +166,7 @@ void Adam::RefreshShadowWeights() {
     LOG(INFO) << "Refreshed " << shadow_weights_.size() << " shadow weights from current params";
 }
 
-std::shared_ptr<Tensor> Adam::GetShadow(const Tensor* param) const {
+std::shared_ptr<Tensor> Adam::GetShadow(const Tensor *param) const {
     auto it = g_shadow_registry.find(param);
     if (it != g_shadow_registry.end()) {
         return it->second;
@@ -215,8 +215,7 @@ void Adam::Step() {
             auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGrad"});
             kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
         }
-    }   
-
+    }
 }
 
 OptimizerCreator Adam::Create(float learning_rate, float beta1, float beta2, float eps) {

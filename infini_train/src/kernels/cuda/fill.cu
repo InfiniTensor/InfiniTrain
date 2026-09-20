@@ -47,7 +47,9 @@ static bool IsZeroBitsScalar(const Scalar &s) {
 // TODO(dcj): refactor Fill kernel with elementwise template
 void Fill(std::shared_ptr<Tensor> tensor, Scalar scalar) {
     const size_t num_elements = tensor->NumElements();
-    if (num_elements == 0) { return; }
+    if (num_elements == 0) {
+        return;
+    }
 
     auto device = tensor->GetDevice();
     const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(

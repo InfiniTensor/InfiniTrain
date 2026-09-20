@@ -975,9 +975,8 @@ void LaunchBackwardMixed(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor>
 
     if (ShapesEqual(a_dims, b_dims) && ShapesEqual(a_dims, out_dims)) {
         dim3 grid_dims(std::min(CEIL_DIV(num_elements, block_dims.x), static_cast<size_t>(65535)));
-        BinaryBackwardKernelNoBroadcastFastMixed<Ta, Tb, Tout, FuncA, FuncB>
-            <<<grid_dims, block_dims, 0, stream>>>(out_a_ptr, out_b_ptr, fun_a, fun_b, num_elements, grad_out_ptr,
-                                                   a_ptr, b_ptr);
+        BinaryBackwardKernelNoBroadcastFastMixed<Ta, Tb, Tout, FuncA, FuncB><<<grid_dims, block_dims, 0, stream>>>(
+            out_a_ptr, out_b_ptr, fun_a, fun_b, num_elements, grad_out_ptr, a_ptr, b_ptr);
         return;
     }
 
@@ -986,9 +985,8 @@ void LaunchBackwardMixed(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor>
     const int block_threads = static_cast<int>(block_dims.x);
     const int num_warps = CEIL_DIV(block_threads, kWarpSize);
     const size_t smem_size = num_warps * sizeof(cub::WarpReduce<float>::TempStorage);
-    BinaryBackwardKernelMixed<Tout, Ta, Tb, FuncA, FuncB>
-        <<<grid_dims, block_dims, smem_size, stream>>>(out_a_ptr, out_b_ptr, fun_a, fun_b, meta, num_elements,
-                                                       grad_out_ptr, a_ptr, b_ptr);
+    BinaryBackwardKernelMixed<Tout, Ta, Tb, FuncA, FuncB><<<grid_dims, block_dims, smem_size, stream>>>(
+        out_a_ptr, out_b_ptr, fun_a, fun_b, meta, num_elements, grad_out_ptr, a_ptr, b_ptr);
 }
 
 // Dispatch the mixed-input backward for supported (Ta, Tb) combinations. Returns false (caller falls
@@ -1002,9 +1000,8 @@ bool LaunchBinaryBackwardMixed(FuncA fn_a, FuncB fn_b, const std::shared_ptr<Ten
                                bool needs_broadcast) {
     const DataType a_dtype = a ? a->Dtype() : DataType::kFLOAT32;
     const DataType b_dtype = b ? b->Dtype() : DataType::kFLOAT32;
-    auto is_float = [](DataType d) {
-        return d == DataType::kFLOAT32 || d == DataType::kBFLOAT16 || d == DataType::kFLOAT16;
-    };
+    auto is_float
+        = [](DataType d) { return d == DataType::kFLOAT32 || d == DataType::kBFLOAT16 || d == DataType::kFLOAT16; };
     const bool mixed = (a && a_dtype != DataType::kFLOAT32) || (b && b_dtype != DataType::kFLOAT32);
     if (!mixed || !is_float(a_dtype) || !is_float(b_dtype)) {
         return false;

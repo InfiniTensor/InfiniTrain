@@ -27,8 +27,8 @@ RMSNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
     const int64_t rows = input_c->NumElements() / embed_dim;
 
     auto output = std::make_shared<Tensor>(input_c->Dims(), DataType::kFLOAT32);
-    auto rstd = std::make_shared<Tensor>(
-        std::vector<int64_t>(input_c->Dims().begin(), input_c->Dims().end() - 1), DataType::kFLOAT32);
+    auto rstd = std::make_shared<Tensor>(std::vector<int64_t>(input_c->Dims().begin(), input_c->Dims().end() - 1),
+                                         DataType::kFLOAT32);
 
     for (int64_t t = 0; t < rows; ++t) {
         float sqsum = 0.0f;
@@ -40,7 +40,7 @@ RMSNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tenso
 
         for (int i = 0; i < embed_dim; ++i) {
             float x = static_cast<float *>(input_c->DataPtr())[t * embed_dim + i];
-            float n = x * s; // normalize
+            float n = x * s;                                          // normalize
             float o = n * static_cast<float *>(weight->DataPtr())[i]; // scale
             static_cast<float *>(output->DataPtr())[t * embed_dim + i] = o;
         }

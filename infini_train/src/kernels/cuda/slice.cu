@@ -23,8 +23,8 @@ struct SliceMeta {
 };
 
 template <typename T>
-__global__ void SliceForwardKernel(const T *input, T *output, const SliceMeta meta,
-                                   int num_dims, int64_t total_elements) {
+__global__ void SliceForwardKernel(const T *input, T *output, const SliceMeta meta, int num_dims,
+                                   int64_t total_elements) {
     int64_t out_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (out_idx >= total_elements) {
         return;
@@ -94,9 +94,9 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype,
         [=]<typename T>() {
-            SliceForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
-                static_cast<const T *>(input->DataPtr()), static_cast<T *>(new_tensor->DataPtr()), meta, num_dims,
-                total_elements);
+            SliceForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(static_cast<const T *>(input->DataPtr()),
+                                                                             static_cast<T *>(new_tensor->DataPtr()),
+                                                                             meta, num_dims, total_elements);
         },
         "CUDA SliceForward");
 
@@ -104,8 +104,8 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
 }
 
 template <typename T>
-__global__ void SliceBackwardKernel(const T *grad_output, T *grad_input, const SliceMeta meta,
-                                    int num_dims, int64_t total_elements) {
+__global__ void SliceBackwardKernel(const T *grad_output, T *grad_input, const SliceMeta meta, int num_dims,
+                                    int64_t total_elements) {
     int64_t out_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (out_idx >= total_elements) {
         return;

@@ -38,9 +38,9 @@
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/utils/global_module_hook_registry.h"
+#include "infini_train/include/utils/nvtx.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
-#include "infini_train/include/utils/nvtx.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
 #endif
@@ -382,7 +382,8 @@ void Train(const nn::parallel::Rank &rank) {
     size_t consumed_train_samples = resume_result.consumed_train_samples;
 
     // enable shadow weights (polymorphic; DistributedOptimizer degrades to a no-op with a warning).
-    // 注意：此处位于 ResumeFromCheckpoint 之后，shadow 直接从已恢复的 FP32 param 构建，无需额外 refresh。
+    // Note: this point is after ResumeFromCheckpoint, so the shadows are built directly from the
+    // already-restored FP32 params; no extra refresh is needed.
     if (FLAGS_dtype == kDtypeBF16) {
         optimizer->EnableShadowWeights(DataType::kBFLOAT16);
     }

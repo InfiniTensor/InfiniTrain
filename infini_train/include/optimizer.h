@@ -48,11 +48,12 @@ public:
     void set_initial_learning_rate(float lr);
 
     // ========== Shadow weights API (default no-op; Adam overrides) ==========
-    // 启用影子权重：为每个 param 创建低精度副本并注册到全局表，供 autocast 直接取用，
-    // 跳过 forward 中重复的 CastKernel。默认 no-op，仅 Adam 实现。
+    // Enable shadow weights: create a low-precision copy per param and register it in the global registry
+    // so autocast can reuse it directly, skipping the repeated CastKernel in forward.
+    // No-op by default; only Adam implements it.
     virtual void EnableShadowWeights(DataType shadow_dtype = DataType::kBFLOAT16) {}
     virtual void DisableShadowWeights() {}
-    // 从当前 FP32 主权重重新同步所有影子权重（checkpoint 恢复后调用）。
+    // Re-sync all shadow weights from the current FP32 master weights (called after a checkpoint restore).
     virtual void RefreshShadowWeights() {}
     virtual bool ShadowWeightsEnabled() const { return false; }
 
@@ -92,8 +93,8 @@ public:
                                    float eps = 1e-8);
     static OptimizerCreatorNamed CreateNamed(float learning_rate = 1e-3, float beta1 = 0.9, float beta2 = 0.999,
                                              float eps = 1e-8);
-    
-    // add shadow weights API                                         
+
+    // add shadow weights API
     void EnableShadowWeights(DataType shadow_dtype) override;
 
     void DisableShadowWeights() override;
@@ -101,12 +102,10 @@ public:
     void RefreshShadowWeights() override;
 
     bool ShadowWeightsEnabled() const override { return shadow_enable_; }
-    
-    std::shared_ptr<Tensor> GetShadow(const Tensor* param) const;
 
-    ~Adam() override {
-        DisableShadowWeights();
-    }
+    std::shared_ptr<Tensor> GetShadow(const Tensor *param) const;
+
+    ~Adam() override { DisableShadowWeights(); }
 
 private:
     int64_t t_;

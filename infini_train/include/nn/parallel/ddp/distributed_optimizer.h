@@ -46,8 +46,8 @@ public:
     virtual void set_learning_rate(float lr) override;
     virtual float learning_rate() const override;
 
-    // 影子权重在分布式下暂不支持：base_optimizer_ 管理 shard param，
-    // 而 autocast 在 forward 看到的是 full param，registry 无法命中。优雅降级为 no-op。
+    // Shadow weights are not supported in the distributed setting: base_optimizer_ manages shard params,
+    // while autocast sees the full param in forward, so the registry never hits. Degrades to a no-op.
     void EnableShadowWeights(DataType shadow_dtype) override;
 
 private:

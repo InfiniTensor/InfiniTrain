@@ -27,8 +27,7 @@ template <typename T> constexpr int kVecSize = 16 / sizeof(T);
 // Vector width for kernels touching two dtypes (e.g. fp32 master weight + bf16 shadow). Sizing by the
 // wider element keeps both payloads inside a single 128-bit access; the narrower one then uses a
 // 64/32-bit access, still one instruction instead of VecSize scalar ones.
-template <typename T, typename U>
-constexpr int kMixedVecSize = 16 / (sizeof(T) > sizeof(U) ? sizeof(T) : sizeof(U));
+template <typename T, typename U> constexpr int kMixedVecSize = 16 / (sizeof(T) > sizeof(U) ? sizeof(T) : sizeof(U));
 
 // Vectorized access also needs the payload width to divide the pointer. Optimizer state is freshly
 // allocated (hence 16B-aligned), but a param that is a view into a larger buffer may not be.
@@ -85,8 +84,14 @@ template <typename T> struct AdamParams {
 template <typename T>
 __device__ __forceinline__ AdamParams<T> MakeAdamParams(float learning_rate, float beta1, float beta2, float eps,
                                                         float bias_correction_m, float bias_correction_v) {
-    return AdamParams<T>{common::cuda::Cast<T>(beta1), common::cuda::Cast<T>(1 - beta1), common::cuda::Cast<T>(beta2),
-                         common::cuda::Cast<T>(1 - beta2), learning_rate, bias_correction_m, bias_correction_v, eps};
+    return AdamParams<T>{common::cuda::Cast<T>(beta1),
+                         common::cuda::Cast<T>(1 - beta1),
+                         common::cuda::Cast<T>(beta2),
+                         common::cuda::Cast<T>(1 - beta2),
+                         learning_rate,
+                         bias_correction_m,
+                         bias_correction_v,
+                         eps};
 }
 
 // One Adam update step for a single element: m/v EMAs, bias correction, then the param update.
@@ -379,8 +384,7 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
             // tensor is big enough for the vec_size-times narrower grid to still fill the device.
             // Anything else falls back to the scalar kernel, which produces identical values.
             const size_t min_elements = MinVectorizedElements(device.index(), vec_size, threads_per_block);
-            const bool can_vectorize = num_elements >= min_elements
-                                    && IsAlignedTo(grad_ptr, sizeof(T) * vec_size)
+            const bool can_vectorize = num_elements >= min_elements && IsAlignedTo(grad_ptr, sizeof(T) * vec_size)
                                     && IsAlignedTo(param_ptr, sizeof(T) * vec_size)
                                     && IsAlignedTo(m_ptr, sizeof(T) * vec_size)
                                     && IsAlignedTo(v_ptr, sizeof(T) * vec_size);
@@ -433,12 +437,11 @@ void AdamAccumulateGradShadow(const std::shared_ptr<Tensor> &grad, const std::sh
                     // payload width; the shadow check is what makes a narrower TShadow legal here.
                     constexpr int vec_size = kMixedVecSize<T, TShadow>;
                     const size_t min_elements = MinVectorizedElements(device.index(), vec_size, threads_per_block);
-                    const bool can_vectorize = num_elements >= min_elements
-                                            && IsAlignedTo(grad_ptr, sizeof(T) * vec_size)
-                                            && IsAlignedTo(param_ptr, sizeof(T) * vec_size)
-                                            && IsAlignedTo(m_ptr, sizeof(T) * vec_size)
-                                            && IsAlignedTo(v_ptr, sizeof(T) * vec_size)
-                                            && IsAlignedTo(shadow_ptr, sizeof(TShadow) * vec_size);
+                    const bool can_vectorize
+                        = num_elements >= min_elements && IsAlignedTo(grad_ptr, sizeof(T) * vec_size)
+                       && IsAlignedTo(param_ptr, sizeof(T) * vec_size) && IsAlignedTo(m_ptr, sizeof(T) * vec_size)
+                       && IsAlignedTo(v_ptr, sizeof(T) * vec_size)
+                       && IsAlignedTo(shadow_ptr, sizeof(TShadow) * vec_size);
 
                     if (can_vectorize) {
                         const size_t num_vecs = num_elements / vec_size;
@@ -461,8 +464,8 @@ void AdamAccumulateGradShadow(const std::shared_ptr<Tensor> &grad, const std::sh
 
 void AdamSparseRows(const std::shared_ptr<Tensor> &grad, const std::shared_ptr<Tensor> &param,
                     const std::shared_ptr<Tensor> &m, const std::shared_ptr<Tensor> &v,
-                    const std::shared_ptr<Tensor> &row_list, const std::shared_ptr<Tensor> &count,
-                    float learning_rate, float beta1, float beta2, float eps, int64_t t) {
+                    const std::shared_ptr<Tensor> &row_list, const std::shared_ptr<Tensor> &count, float learning_rate,
+                    float beta1, float beta2, float eps, int64_t t) {
     const float bias_correction_m = 1.0f - std::pow(beta1, t);
     const float bias_correction_v = 1.0f - std::pow(beta2, t);
 
@@ -548,13 +551,14 @@ void AdamSparseRowsShadow(const std::shared_ptr<Tensor> &grad, const std::shared
                                             && IsAlignedTo(shadow_ptr, sizeof(TShadow) * vec_size);
 
                     if (can_vectorize) {
-                        AdamSparseRowsShadowKernel<T, TShadow, vec_size><<<max_blocks, threads_per_block, 0, cuda_stream>>>(
-                            grad_ptr, param_ptr, shadow_ptr, row_ptr, count_ptr, dim, m_ptr, v_ptr, learning_rate, beta1,
-                            beta2, eps, bias_correction_m, bias_correction_v);
+                        AdamSparseRowsShadowKernel<T, TShadow, vec_size>
+                            <<<max_blocks, threads_per_block, 0, cuda_stream>>>(
+                                grad_ptr, param_ptr, shadow_ptr, row_ptr, count_ptr, dim, m_ptr, v_ptr, learning_rate,
+                                beta1, beta2, eps, bias_correction_m, bias_correction_v);
                     } else {
                         AdamSparseRowsShadowKernel<T, TShadow, 1><<<max_blocks, threads_per_block, 0, cuda_stream>>>(
-                            grad_ptr, param_ptr, shadow_ptr, row_ptr, count_ptr, dim, m_ptr, v_ptr, learning_rate, beta1,
-                            beta2, eps, bias_correction_m, bias_correction_v);
+                            grad_ptr, param_ptr, shadow_ptr, row_ptr, count_ptr, dim, m_ptr, v_ptr, learning_rate,
+                            beta1, beta2, eps, bias_correction_m, bias_correction_v);
                     }
                 },
                 "CUDA AdamSparseRowsShadow");

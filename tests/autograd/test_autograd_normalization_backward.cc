@@ -72,10 +72,10 @@ TEST_P(AutogradNormalizationBackwardTest, RMSNormBackward) {
     auto grad = std::make_shared<Tensor>(grad_values.data(), input_dims, DataType::kFLOAT32, GetDevice());
     auto grad_inputs = rmsnorm_fn->Backward({grad});
     ASSERT_EQ(grad_inputs.size(), 2);
-    test::ExpectTensorNear(grad_inputs[0],
-                           {3.17518568f, 1.65467763f, -3.44352484f, 4.87462664f, -0.17888442f, -0.35777023f,
-                            -0.76026261f, -0.04472215f},
-                           1e-5f);
+    test::ExpectTensorNear(
+        grad_inputs[0],
+        {3.17518568f, 1.65467763f, -3.44352484f, 4.87462664f, -0.17888442f, -0.35777023f, -0.76026261f, -0.04472215f},
+        1e-5f);
     test::ExpectTensorNear(grad_inputs[1], {-2.01245522f, -0.44721046f, 2.23606181f, 4.69572210f}, 1e-5f);
 }
 

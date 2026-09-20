@@ -75,10 +75,10 @@ TEST_P(AutogradNormalizationForwardTest, RMSNormForward) {
     ASSERT_EQ(result.size(), 2);
     EXPECT_FALSE(result[1]->requires_grad());
     EXPECT_EQ(result[1]->grad_fn(), nullptr);
-    test::ExpectTensorNear(result[0],
-                           {-1.34163547f, -0.22360590f, -0.44721180f, 2.68327093f, -1.34163940f, -0.22360657f,
-                            -0.44721314f, 2.68327880f},
-                           1e-5f);
+    test::ExpectTensorNear(
+        result[0],
+        {-1.34163547f, -0.22360590f, -0.44721180f, 2.68327093f, -1.34163940f, -0.22360657f, -0.44721314f, 2.68327880f},
+        1e-5f);
     // rstd is the normalization statistic kept for the backward pass: 1/sqrt(mean(x^2) + eps) per row.
     test::ExpectTensorNear(result[1], {0.89442360f, 0.44721314f}, 1e-5f);
 }

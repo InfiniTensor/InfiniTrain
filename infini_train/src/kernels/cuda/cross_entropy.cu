@@ -108,11 +108,13 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
             // w.r.t. the host and stalled every forward step until the whole stream queue drained.
             // Accumulate in fp32 (as the old host-side float accumulate did), then narrow once.
             auto batched_f32 = input->Dtype() == DataType::kFLOAT32
-                                   ? batched_output
-                                   : std::make_shared<Tensor>(batched_output->To(DataType::kFLOAT32));
+                                 ? batched_output
+                                 : std::make_shared<Tensor>(batched_output->To(DataType::kFLOAT32));
             auto mean = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device.type(), "MeanForward"},
                                                                              batched_f32, int64_t{0}, false);
-            if (mean->Dtype() != input->Dtype()) { mean = std::make_shared<Tensor>(mean->To(input->Dtype())); }
+            if (mean->Dtype() != input->Dtype()) {
+                mean = std::make_shared<Tensor>(mean->To(input->Dtype()));
+            }
             return mean;
         },
         "CUDA CrossEntropyForward");

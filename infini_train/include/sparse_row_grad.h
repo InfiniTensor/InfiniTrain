@@ -22,14 +22,14 @@ struct SparseRowGradState {
     std::weak_ptr<Tensor> weight_guard; // detects a recycled pointer after the weight was freed
     int64_t vocab = 0;
     int64_t dim = 0;
-    int64_t capacity = 0; // row_list capacity; == vocab, so dedup alone guarantees no overflow
-    int32_t generation = 1;  // stamp value identifying the current accumulation cycle
-    bool initialized = false; // one-time device zero-fill of grad_buffer/stamp/count is done
-    bool poisoned = false; // a dense (non-aliased) accumulation landed in a foreign storage
+    int64_t capacity = 0;                // row_list capacity; == vocab, so dedup alone guarantees no overflow
+    int32_t generation = 1;              // stamp value identifying the current accumulation cycle
+    bool initialized = false;            // one-time device zero-fill of grad_buffer/stamp/count is done
+    bool poisoned = false;               // a dense (non-aliased) accumulation landed in a foreign storage
     std::shared_ptr<Tensor> grad_buffer; // dense [vocab, dim], persistent storage for the grad
-    std::shared_ptr<Tensor> stamp; // kINT32 [vocab], per-row claim tags
-    std::shared_ptr<Tensor> row_list; // kINT32 [capacity], deduplicated rows since the last clear
-    std::shared_ptr<Tensor> count; // kINT32 [1], number of valid entries in row_list
+    std::shared_ptr<Tensor> stamp;       // kINT32 [vocab], per-row claim tags
+    std::shared_ptr<Tensor> row_list;    // kINT32 [capacity], deduplicated rows since the last clear
+    std::shared_ptr<Tensor> count;       // kINT32 [1], number of valid entries in row_list
 };
 
 class SparseRowGradRegistry {

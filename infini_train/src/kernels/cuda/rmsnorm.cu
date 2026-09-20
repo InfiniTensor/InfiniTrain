@@ -130,8 +130,8 @@ __global__ void RMSNormBackwardKernel(const T *__restrict__ input, const T *__re
         float go = common::cuda::Cast<float>(g_out[i]);
         float norm = xv * rstd_val;
         g_in[i] = common::cuda::Cast<T>((go * wv - shared_K * norm) * rstd_val);
-        common::cuda::fastAtomicAdd<T, size_t>(grad_weight, i, weight_num_elements,
-                                               common::cuda::Cast<T>(go * norm), true);
+        common::cuda::fastAtomicAdd<T, size_t>(grad_weight, i, weight_num_elements, common::cuda::Cast<T>(go * norm),
+                                               true);
     }
 }
 

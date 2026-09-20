@@ -35,7 +35,8 @@ namespace infini_train::common::cuda {
     do {                                                                                                               \
         cublasStatus_t status = call;                                                                                  \
         if (status != CUBLAS_STATUS_SUCCESS) {                                                                         \
-            LOG(FATAL) << "CUBLASLT Error: " << cublasGetStatusString(status) << " at " << __FILE__ << ":" << __LINE__; \
+            LOG(FATAL) << "CUBLASLT Error: " << cublasGetStatusString(status) << " at " << __FILE__ << ":"             \
+                       << __LINE__;                                                                                    \
         }                                                                                                              \
     } while (0)
 
