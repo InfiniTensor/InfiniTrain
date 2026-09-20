@@ -12,7 +12,7 @@
 | 训练配置 | batch_size 4 × seq_len 64，total_batch_size 256；Section 2 采集 5 iter，3.2.4 对照 10 iter ×3 次 |
 | Profiling | Nsight Systems（nsys）+ NVTX，逐 step / 逐阶段标注 |
 
-Section 2 的 trace 用基线 commit `843322f` 的 `build/llama3`——与 3.2.4 三配置对照里的 **A 配置是同一个二进制**，所以本章的基线与第三章的收益可以直接对齐，不存在构建口径差。
+Section 2 的 trace 用基线 commit `9946886` 的 `build/llama3`——与 3.2.4 三配置对照里的 **A 配置是同一个二进制**，所以本章的基线与第三章的收益可以直接对齐，不存在构建口径差。
 
 采集与汇总：
 
@@ -36,7 +36,7 @@ python3 nsys/out/extract_timeline.py  nsys/out/llama3_5iter_nvtx_release.sqlite
 
 ### 2.1 nsys分析结果
 
-非 profiling 的稳态每轮 **82.05 ms**，单 A100 吞吐 **3122 tok/s**。nsys 采集下稳态每轮 94.80 ms——两者的差是 CUPTI 开销，见下方口径说明；本章所有 kernel 层面的数量与 GPU 时间与 profiling 无关，可直接采信。
+非 profiling 的稳态每轮 **82.05 ms**，单 A100 吞吐 **3122 tok/s**。nsys 采集下稳态每轮 94.80 ms——两者的差是 CUPTI 开销，见下方口径说明；
 
 | step | wall (ms) | Σ kernel (ms) | Σ memcpy (ms) | kernels | GPU busy (ms) | GPU util |
 |---|---|---|---|---|---|---|
@@ -59,253 +59,47 @@ Step_1 Top kernel（分母 = 该窗口 Σ kernel 83.74 ms）：
 | – | **全部 GEMM（BF16 Tensor Core）** | 339 | **16.85** | **20.0%** |
 | – | **全部 Cast（autocast）** | 661 | **10.74** | **12.8%** |
 
-两行「全部」按 host 发射归属统计整轮 3574 个 kernel（分母 84.07 ms），与上面按 GPU 起始时刻落在窗口内的行分母略不同；Adam 的 114 vs 2.2.3 的 115 同理（异步发射的窗口边界效应）。
 
-nsys 下稳态 GPU util 为 84–85%；非 profiling 下约 **93%**（见结论 3）。
+nsys 下稳态 GPU util 为 84–85%；非 profiling 下约 **93%**。
 
-> **测量口径**：本次 trace 由基线 commit `843322f` 的 **Release** 构建采集。需要区分两类量：
+> **测量口径**：本次 trace 由基线 commit `9946886` 的 **Release** 构建采集。需要区分两类量：
 ![nsys timeline](image.png)
 
 **关键结论**：
+
 1）BF16 训练引入了大量 Cast kernel 完成 bf16↔FP32 转换：**661 个/轮、10.74 ms、占 kernel 时间 12.8%**；其中 f32→bf16 下转 356 个就占 9.47 ms（以权重下转为主，见 2.2.1.3 的 ★★）。
-2）Adam 优化器是所有 kernel 中耗时最多的：**115 次发射、32.29 ms、占 38.4%**，单一 kernel 家族接近全部 GPU 时间的四成。
-3）整个训练过程只使用了一个 stream：Step_1 的 GPU busy（87.27 ms）恰等于 Σ kernel（83.74）+ Σ memcpy（3.53），说明 kernel 间**零重叠**，GPU 的 kernel 与 memory 操作没有并行。
-4）FillKernel占据的时间也比较长，可以尝试kernel融合。
-5) CrossEntropyForward API占据了大量的host时间完成D2H的memcpy_async。当然并不是copy本身需要很长的时间，这个异步DMA会排在一个异步执行队列中，他要等前面的执行完成才能执行。并且CrossEntrypyForward后续mean计算放在了CPU中，他依赖于这次D2H拷贝的数据。也就是说CrossEntropy引入了一个同步点。
+
+2）Adam 优化器是所有 kernel 中耗时最多的：**115 次发射、32.29 ms、占 38.4%**，单一 kernel 家族接近全部 GPU 时间的四成,其中lm_head和embedding的参数优化，单个kernel就占了5ms左右的时间。
+
+3）整个训练过程只使用了一个 stream。
+
+4）FillKernel占据的时间也比较长，可以尝试用异步memset替换。
+
+5）CrossEntropyForward API占据了大量的host时间完成D2H的memcpy_async。当然并不是copy本身需要很长的时间，这个异步DMA会排在一个异步执行队列中，他要等前面的执行完成才能执行。并且CrossEntrypyForward后续mean计算放在了CPU中，他依赖于这次D2H拷贝的数据。也就是说CrossEntropy引入了一个同步点。
+
 6）SliceForward Kernel中有5次异步H2D memory copy，其中有几次时间很长推测原因为队列耗尽，
 
 ### 2.2 Timeline分析
 
-按 host 发射归属（kernel 经 correlationId 关联到其发射时刻所在的 NVTX 子区间，避开异步偏移），每轮 step 分三个阶段：
-
-| 阶段 | kernel 数 | Σ GPU 时间 | host 窗口 | 特征 |
-|---|---|---|---|---|
-| Forward | 1343 | 23.50 ms（含 339 Cast） | 62.84 ms | host 窗口是 GPU 时间的 2.7 倍，但其中 27.55 ms（44%）是 3 次 >1 ms 的阻塞调用（含一次 16.30 ms 的 loss DtoH 读回），扣除后真实发射工作约 35 ms，所以这不是单纯的 **host-bound** |
-| Backward | 2116 | 28.28 ms（含 322 Cast） | 34.91 ms | host 与 GPU 接近平衡 |
-| Optimizer | 115 | 32.29 ms（FP32 Adam，第一大头） | 0.86 ms | 115 个大 kernel 异步发完即返回，GPU 工作拖到后续窗口才排空 |
-| **合计** | **3574** | **84.07 ms** | **98.61 ms** | 再加 ZeroGrad/DataUpload/LossReadback 三个不发 kernel 的窗口共 101.89 ms ≈ Step_1 wall 102.08 ms，nsys 下 host 全程无空闲 |
-
-另有三个不发射 kernel 的子区间：ZeroGrad 0.46 ms、DataUpload 0.03 ms、LossReadback 2.79 ms（host 窗口）。六个窗口之和 101.89 ms ≈ Step_1 wall 102.08 ms，说明 nsys 下整轮 host 全程无空闲。但「无空闲」不等于「都在发射」：Forward 那 62.84 ms 里 Σ CUDA API 占 51.24 ms，其中 27.55 ms 集中在 3 次 >1 ms 的阻塞调用上，真正逐次发射 3477 个 API 只花 23.69 ms（见结论 6）。全轮 API 合计 71.29 ms 已被 CUPTI 放大，非 profiling 下会明显缩短，故「Forward host-bound」只是 nsys 下的强结论；跨阶段看，host 有相当比例的时间其实是在等 GPU。
-
-按 kernel 家族聚合：
-
-| 家族 | kernel 数 | Σ (ms) | 占比 |
-|---|---|---|---|
-| Adam（optimizer，fp32） | 115 | 32.29 | 38.4% |
-| 其它 elementwise / 结构 | 1749 | 20.87 | 24.8% |
-| GEMM（BF16 Tensor Core） | 339 | 16.85 | 20.0% |
-| Cast（autocast 新增） | 661 | 10.74 | 12.8% |
-| Fill | 710 | 3.31 | 3.9% |
-| **合计** | **3574** | **84.07** | 100% |
-
-其中 Cast 再拆方向：f32→bf16 下转 356 个 / 9.47 ms（权重下转为主，平均 26.6 μs），bf16→f32 上转 305 个 / 1.28 ms（激活上转，平均 4.2 μs）——下转个数只多 17% 但耗时是上转的 **7.4 倍**，这就是 3.1 优先消除权重下转的依据。
-
-#### 2.2.1 Forward Timeline
-Forward 共 **1343 kernels / 23.502 ms**（含 339 个 autocast Cast）。
-
-##### 2.2.1.1 迭代入口（整轮各 1 次）
-
-```
-[ 0] +0.547ms   8.54us  EmbeddingFwd·f32   token embedding: (4,64) → (4,64,2048)
-[ 1] +0.597ms   5.21us  SliceFwd·f32       freqs_cis 取本轮窗口的 cos/sin
-[ 2] +0.654ms   2.78us  TriuFwd·f32        causal mask = Triu(ones(64,64),1)
-```
-
-之后进入 **16 层结构相同的 TransformerLayer**（单层 = RMSNorm(ln1) → Attention → 残差 → RMSNorm(ln2) → MLP → 残差），最后接 ln_f → lm_head → CrossEntropy。
-
-##### 2.2.1.2 实测：Layer 0 的 Attention 半区（kernels [3..66]，含 cast）
-
-`+ms` 为相对 Step_1 起点的 host 发射时刻，`us` 为 GPU 执行时间：
-
-```
-── RMSNorm ln1（6 kernels，全 fp32）────────────────────────────────
-  [ 3] +0.679ms    8.03us  UnaryFwd[Pow]·f32        x²
-  [ 4] +0.695ms    6.59us  Mean(Reduce)·f32         mean(x², -1)
-  [ 5] +0.710ms    2.46us  UnaryFwd[AddScalar]·f32  + eps
-  [ 6] +0.724ms    2.53us  UnaryFwd[Rsqrt]·f32      1/√(·)
-  [ 7] +0.740ms   22.05us  BinaryFwd[Mul]·f32       x * rsqrt
-  [ 8] +0.760ms   21.50us  BinaryFwd[Mul]·f32       norm * weight
-
-── QKV 投影（2 Cast + 1 bf16 GEMM）─────────────────────────────────
-  [ 9] +0.779ms    4.80us  Cast[f32->bf16]          ln1 输出 → bf16（Linear 输入）
-  [10] +0.789ms   41.50us  Cast[f32->bf16]          QKV master 权重 → bf16 ★
-  [11] +0.834ms   28.67us  ampere_bf16_...f2f_..._tn Linear 2048→3072 (=(H+2·KV)·D)
-
-── 拆分 q/k/v + 取 RoPE cos/sin/even/odd（7 Slice）─────────────────
-  [12] +0.869ms   16.48us  SliceFwd·bf16            q = qkv[..., :2048]
-  [13] +0.903ms    6.72us  SliceFwd·bf16            k = qkv[..., 2048:2560]
-  [14] +0.932ms    6.75us  SliceFwd·bf16            v = qkv[..., 2560:3072]
-  [15] +0.969ms    6.24us  SliceFwd·f32             cos = freqs_cis[...,0]
-  [16] +1.002ms    5.60us  SliceFwd·f32             sin = freqs_cis[...,1]
-  [17] +1.033ms   11.23us  SliceFwd·bf16            q_even = q[..., 0::2]
-  [18] +1.063ms   11.10us  SliceFwd·bf16            q_odd  = q[..., 1::2]
-
-── RoPE 作用于 q（fp32 算术：每个 Mul 前先 Cast[bf16->f32] 上转）────
-  [19] +1.077ms    3.52us  Cast[bf16->f32]          q_even ↑f32
-  [20] +1.086ms   15.90us  BinaryFwd[Mul]·f32       q_even * cos
-  [21] +1.107ms    3.39us  Cast[bf16->f32]          q_odd ↑f32
-  [22] +1.116ms   15.81us  BinaryFwd[Mul]·f32       q_odd * sin
-  [23] +1.131ms    4.13us  BinaryFwdNB[Sub]·f32     left = q_even·cos − q_odd·sin
-  [24] +1.153ms    3.42us  Cast[bf16->f32]          q_even ↑f32
-  [25] +1.162ms   15.87us  BinaryFwd[Mul]·f32       q_even * sin
-  [26] +1.176ms    3.36us  Cast[bf16->f32]          q_odd ↑f32
-  [27] +1.185ms   15.84us  BinaryFwd[Mul]·f32       q_odd * cos
-  [28] +1.200ms    4.16us  BinaryFwdNB[Add]·f32     right = q_even·sin + q_odd·cos
-  [29] +1.224ms    8.38us  StackFwd·f32             stack(left,right) → flatten
-
-── RoPE 作用于 k（2 Slice + 4×[Cast+Mul] + Sub + Add + Stack）──────
-  [30] +1.261ms    6.01us  SliceFwd·bf16            k_even
-  [31] +1.288ms    5.95us  SliceFwd·bf16            k_odd
-  [32] +1.301ms    2.78us  Cast[bf16->f32]
-  [33] +1.310ms    7.71us  BinaryFwd[Mul]·f32       k_even * cos
-  [34] +1.324ms    2.78us  Cast[bf16->f32]
-  [35] +1.333ms    7.68us  BinaryFwd[Mul]·f32       k_odd * sin
-  [36] +1.345ms    3.07us  BinaryFwdNB[Sub]·f32     k left
-  [37] +1.361ms    2.78us  Cast[bf16->f32]
-  [38] +1.369ms    7.68us  BinaryFwd[Mul]·f32       k_even * sin
-  [39] +1.383ms    2.78us  Cast[bf16->f32]
-  [40] +1.392ms    7.68us  BinaryFwd[Mul]·f32       k_odd * cos
-  [41] +1.406ms    2.98us  BinaryFwdNB[Add]·f32     k right
-  [42] +1.429ms    4.51us  StackFwd·f32             k stack
-
-── GQA：K/V 8 头复制到 32 头（2 RepeatInterleave）──────────────────
-  [43] +1.461ms    9.60us  RepeatInterleaveFwd·f32  k: repeat_interleave(n_rep=4)
-  [44] +1.487ms    9.50us  RepeatInterleaveFwd·bf16 v: repeat_interleave(n_rep=4)
-
-── 转置到 (B,H,T,D) 并算 Kᵀ（4×[Fill + Transpose]）─────────────────
-  [45] +1.516ms    4.19us  Fill·f32            [46] 19.23us  TransposeFwd·f32   q
-  [47] +1.543ms    4.13us  Fill·f32            [48] 18.46us  TransposeFwd·f32   k
-  [49] +1.568ms    4.16us  Fill·bf16           [50] 18.08us  TransposeFwd·bf16  v
-  [51] +1.595ms    4.13us  Fill·f32            [52] 19.97us  TransposeFwd·f32   kᵀ
-
-── ★ Attention 核心（全 bf16 Tensor Core / WMMA）───────────────────
-  [53] +1.628ms    4.96us  Cast[f32->bf16]          q → bf16
-  [54] +1.639ms    4.80us  Cast[f32->bf16]          kᵀ → bf16
-  [55] +1.681ms    7.29us  cutlass_wmma_bf16_nn     SCORE  att = q · kᵀ   (B·H=128 批)
-  [56] +1.697ms    4.96us  UnaryFwd[MulScalar]·bf16 att *= 1/√D (=0.125)
-  [57] +1.719ms    2.82us  Cast[f32->bf16]          mask → bf16
-  [58] +1.729ms    6.34us  MaskFwd·bf16             masked_fill(causal, -inf)
-  [59] +1.749ms   26.17us  SoftmaxFwd·bf16          softmax(att, -1)
-  [60] +1.773ms    7.17us  cutlass_wmma_bf16_nn     y = att · v
-
-── 输出整理 + 投影（[Fill+Transpose] + Cast + bf16 GEMM + Cast）─────
-  [61] +1.794ms    4.10us  Fill·bf16           [62] 18.34us  TransposeFwd·bf16  y→(B,T,H,D)
-  [63] +1.824ms   28.48us  Cast[f32->bf16]          out_proj master 权重 → bf16 ★
-  [64] +1.844ms   23.93us  ampere_bf16_...f2f_..._tn OutProj Linear 2048→2048
-  [65] +1.872ms    4.99us  Cast[bf16->f32]          attn 输出 → fp32
-  [66] +1.882ms    6.33us  BinaryFwdNB[Add]·f32     x = x + attn_out（残差，fp32）
-```
-
-##### 2.2.1.3 实测：Layer 0 的 MLP(SwiGLU) 半区（kernels [67..85]）
-
-```
-── RMSNorm ln2（6 kernels，全 fp32）[67..72] ───────────────────────
-  [67] Pow·f32  [68] Mean·f32  [69] AddScalar·f32  [70] Rsqrt·f32  [71] Mul·f32  [72] Mul·f32
-
-── MLP SwiGLU（每个 Linear = 2 Cast + 1 bf16 GEMM）─────────────────
-  [73] +1.997ms    4.80us  Cast[f32->bf16]          c_fc 输入 → bf16
-  [74] +2.008ms  102.29us  Cast[f32->bf16]          c_fc 权重(2048×8192) → bf16 ★★
-  [75] +2.025ms   73.24us  ampere_bf16_...f2f_..._tn c_fc  Linear 2048→8192  (x1)
-  [76] +2.044ms    6.59us  Cast[f32->bf16]          c_fc2 输入 → bf16
-  [77] +2.054ms  100.57us  Cast[f32->bf16]          c_fc2 权重(2048×8192) → bf16 ★★
-  [78] +2.068ms   73.14us  ampere_bf16_...f2f_..._tn c_fc2 Linear 2048→8192  (x2)
-  [79] +2.083ms   14.21us  UnaryFwd[Sigmoid]·bf16   σ(x2)
-  [80] +2.098ms   12.57us  BinaryFwdNB[Mul]·bf16    SiLU = x2 * σ(x2)
-  [81] +2.112ms   14.72us  BinaryFwdNB[Mul]·bf16    x3 = x1 * SiLU(x2)（门控）
-  [82] +2.125ms  102.58us  Cast[f32->bf16]          c_proj 权重(8192×2048) → bf16 ★★
-  [83] +2.150ms   90.78us  ampere_bf16_...f2f_..._tn c_proj Linear 8192→2048
-  [84] +2.171ms    5.34us  Cast[bf16->f32]          mlp 输出 → fp32
-  [85] +2.181ms    6.72us  BinaryFwdNB[Add]·f32     x = x + mlp_out（残差，fp32）
-```
-
-> **★★ 首要发现：权重 cast 比 bf16 GEMM 本身还贵。**  
-
-##### 2.2.1.4 迭代收尾（整轮各 1 次）
-
-```
-[1331..1336] RMSNorm ln_f（6 kernels·f32）   Pow 7.87 / Mean 6.59 / AddScalar 2.40 / Rsqrt 2.50 / Mul 21.76 / Mul 21.60 us   —— 第 33 个 RMSNorm，+46.852ms 起
-[1337] +46.927ms    4.93us  Cast f32→bf16            lm_head 输入 → bf16
-[1338] +46.937ms 1533.17us  Cast f32→bf16            lm_head 权重 2048×128256 → bf16
-                           ★★ 全步最贵的单个 kernel（不只是最贵 Cast），是其 GEMM 698.65us 的 2.19 倍
-[1339] +46.955ms  698.65us  ampere_bf16_...f2f_..._tn（128x256，grid 覆盖 vocab=128256）   lm_head Linear 2048→128256
-[1340] +46.998ms  197.04us  Cast bf16→f32：logits 上转（autocast 让 CE 走 fp32）
-[1341] +47.010ms  268.13us  CrossEntropyFwd·f32   损失
-[1342] +63.353ms    2.65us  UnaryFwd MulScalar·f32   loss / grad_accum_steps 为 1
-
-注：[1341] 与 [1342] 之间空了 16.34 ms——正是结论 6 里那次 1024 B loss DtoH 读回造成的 host 阻塞。
-Forward 的 GPU 工作在 +47.0 ms 就已全部发出，host 却要等到 +63.3 ms 才能发出最后一个标量 kernel。
-```
-
-#### 2.2.2 Backward Timeline
-Backward 是 Forward 的逆序 autograd，共 **2116 kernels / 28.276 ms**（host 发射）。结构：
-
-```
-CrossEntropyBwd·f32        损失反向（700 us，autocast 保持 fp32）
-lm_head 反向               ampere_s16816gemm_bf16_128x256_nn（dW，单 kernel 686 us）+ dX
-── 每层逆序（ln_f→…→layer0）──────────────────────────────────────
-  残差 Add 反向            BinaryBwdNB[Add]·f32
-  MLP 反向                 c_proj/c_fc/c_fc2 各 2 bf16 GEMM（dX+dW）+ 权重 Cast[f32->bf16]
-                           门控：BinaryBwdNBVec[Mul]·bf16、UnaryBwd[Sigmoid]·bf16
-  RMSNorm ln2 反向         UnaryBwd[Pow/Rsqrt/AddScalar]·f32、GenericReduceBwd·f32、BinaryBwd[Mul]·f32
-  残差 Add 反向
-  Attention 反向           out_proj 2 GEMM；att·V 反向 cutlass_wmma_bf16_{nt,tn}；
-                           SoftmaxBwd·bf16、MaskBwd、MulScalar 反向；Q·Kᵀ 反向 cutlass_wmma_bf16
-                           RoPE 反向 StackBwd/SliceBwd/BinaryBwd[Mul]/Sub/Add；RepeatInterleaveBwd
-                           qkv 2 bf16 GEMM + Cast
-  RMSNorm ln1 反向
-  ★ AccumulateGrad         每个产生梯度的张量：grad += rate·g（209 f32 + 16 bf16）
-EmbeddingBwd·f32           词嵌入反向（scatter，1.313 ms）
-```
-
-Backward kernel Top（Σ GPU 时间，host 发射归属）：
-
-| Kernel | n | Σ | 角色 |
-|---|---|---|---|
-| `ampere_s16816gemm_bf16_128x128_..._32x5_nt` | 49 | 4.635 ms | Linear 反向 dX/dW（bf16 Tensor Core） |
-| `BinaryBwd[Mul]·f32` | 194 | 3.674 ms | RoPE/RMSNorm 乘法反向（fp32） |
-| `Fill·f32` | 630 | 2.982 ms | 梯度/输出缓冲清零 |
-| `ampere_s16816gemm_bf16_128x128_..._64x3_nn` | 32 | 2.137 ms | Linear 反向 |
-| `TransposeFwd·f32` | 80 | 1.551 ms | 反向中的转置 |
-| `Cast[f32->bf16]` | 178 | 1.492 ms | 反向 Linear 输入/权重下转 |
-| `EmbeddingBwd·f32` | 1 | 1.313 ms | 词嵌入 scatter 反向 |
-| `ampere_s16816gemm_bf16_256x128_..._{nt,nn}` | 48 | 2.428 ms | Linear 反向 |
-| `AccumulateGrad`（f32+bf16） | 225 | 1.267 ms | autograd 梯度累加 |
-| `cutlass_wmma_bf16_..._{nt,tn}` | 64 | 0.506 ms | Attention batched 反向 |
-
-> `Fill` 在反向仍高达 **630 次**（2.982 ms）：每个需累加梯度的张量都要先清零 `.grad`，是「小 kernel 过多、launch 开销大」的主要来源。bf16 计算变快后，这类 launch/访存开销占比反而更突出。
-
-#### 2.2.3 Optimizer Timeline
-
-```
-AdamAccumulateGrad·f32  ×115   Σ=32.292 ms   avg=280.80 us
-```
-
-- `AdamAccumulateGradKernel<float>` 是**融合的 Adam 更新**：单 kernel 内完成 `m=β1·m+(1-β1)g`、`v=β2·v+(1-β2)g²`、bias-correction、`param -= lr·m̂/(√v̂+eps)`（`accumulate_grad.cu`）。
-- **115 ≈ 参数张量数**：每层 7 个（ln1.w、ln2.w、qkv.w、proj.w、c_fc.w、c_fc2.w、c_proj.w）×16 = 112，加 embedding、ln_f、lm_head。
+参考timeline.md
 
 
 ### 2.3 优化项
-- **★ 首要优化点——权重 Cast 比 GEMM 还贵（81 个权重 cast = 7.508 ms，占全部 Cast 时间的 69.9%）**
-- **FP32 Adam** 现为第一大头（32.3 ms / 115 次串行发射），可考虑优化器状态降精度或融合。
-- **Fill 泛滥**（fwd 80 + bwd 630 = 710 次），合并为更少的大 fill 可降 launch 开销。
-- **单 CUDA stream 串行**、无 kernel 并发；**CUDA Graph 或算子融合**（尤其把 Cast 融进 GEMM prologue）收益最大。
+- **cast kernel泛滥**
+- **FP32 Adam 降低内存带宽要求**
+- **Fill 泛滥**
+- **单 CUDA stream 串行**
 - **Forward 末的 1024 B loss DtoH 读回**：GPU 侧仅 3.46 us，却让 host 阻塞 16.30 ms 等整条队列排空（四个构建都测到 12.2–16.3 ms）。改 pinned memory 异步读回、或只在需要打日志的轮次读，可直接消掉这段阻塞。
 - **每轮 1515 次微小 HtoD**（合计仅 76 KB、平均 50.4 B/次）：标量是逐个拷上 GPU 的，可合并为一次批量拷贝。
 
 ## 3 单GPU优化
 ### 3.1 Cast Kernel优化
 
-Section 2 定位到 Cast 是 BF16 训练的第一大新增开销（Step_1 661 次 / 10.7 ms / 12.8%），且分**两类正交来源**，需分别治理：
+Section 2 定位到 Cast 是 BF16 训练的第二大开销（Step_1 661 次 / 10.7 ms / 12.8%），且分**两类正交来源**，需分别治理：
 
-| 类别 | 触发点 | 典型场景 | 方向 |
-|---|---|---|---|
-| ① autocast 边界 cast | `Function::Apply → cast_arg`（`autograd/function.cc`） | Linear/Matmul 前把**权重/激活** f32→bf16 | 下转 f32→bf16 |
-| ② kernel 内 PromoteDataTypes | `BinaryForward/Backward`（`elementwise.cu`） | RoPE `q_even(bf16)×cos(f32)`、残差 `x(f32)+attn(bf16)` | 上转 bf16→f32 |
+#### 3.1.1 优化一：影子权重（Shadow Weights）——消除gemm前的cast kernel
 
-> 关键：`Add/Mul` 不在 `kOpCastPolicyMap` 中、不经 autocast，影子权重管不到；权重 cast 是 autocast 边界行为，融合 elementwise 也管不到。二者**各治一类、互不干扰**。
-
-#### 3.1.1 优化一：影子权重（Shadow Weights）——消除权重 f32→bf16 下转
-
+有两个方案：1）将cast kernel和后续的gemm kernel进行融合
 **为什么不能把权重 cast 直接融进 GEMM**：GEMM 走 cuBLAS `cublasGemmEx`（`common/gemm.cu:60-69`），其 `type_a/type_b` 必须声明 A/B 指针在显存中的**真实 dtype**，cuBLAS 按该类型直接读显存——**不支持「fp32 存储 → bf16 Tensor Core 计算」的内部转换，也没有 cast-in-prologue 的融合能力**。要吃到 bf16 Tensor Core，权重就必须**事先**在显存里是 bf16。三条路：①每步单独 cast（原始做法，权重张量大、单次 ~80–100 us，比 GEMM 还贵）；②CUTLASS mixed-input GEMM 自定义 `PredicatedTileIterator`/`MmaCore`（工程量大、收益不确定，已否决）；③**影子权重**——常驻一份 bf16 副本、在 Adam kernel 内近乎零成本刷新，autocast 直接复用。故选 ③。
 
 > 对比：elementwise 是项目**自有 kernel**，可把上转直接融进 kernel（见 3.1.2）；而 GEMM 是 cuBLAS **闭源算子**、无法融合 → 只能靠影子权重「预物化 + 复用」绕过每步重复 cast。
@@ -338,7 +132,7 @@ Cast 减少中，影子权重消除下转 81 个/轮、P0 融合消除上转 288
 
 > **修正**：本节此前记录的 `114.6 → 87.7 ms（−23%）` 取自两份 nsys 的 NVTX 稳态窗口，把 26.95 ms 的差值整体当成了收益，实际高估 **5.2×**。其中只有 5.18 ms 属于 cast 优化，另外 21.77 ms 是测量偏差：
 >
-> - **19.83 ms**：基线那份 nsys 用旧 `build/llama3` 采集，其 `CMAKE_BUILD_TYPE` 为空（host 侧无 `-O3`/`-DNDEBUG`）。非 profiling 下这只值 6.67 ms（同一 commit `843322f` 以 Release 重建后，稳态 88.72 → 82.05 ms）；但在 nsys 下，同一 commit 的 `-O0` trace 稳态窗口是 114.63 ms、Release trace 是 94.80 ms，即值 **19.83 ms**（3.0 倍）。`-O0` 与 CUPTI 是「相乘」而非「相加」：host 越慢，逐调用插桩越落在关键路径上。
+> - **19.83 ms**：基线那份 nsys 用旧 `build/llama3` 采集，其 `CMAKE_BUILD_TYPE` 为空（host 侧无 `-O3`/`-DNDEBUG`）。非 profiling 下这只值 6.67 ms（同一 commit `9946886` 以 Release 重建后，稳态 88.72 → 82.05 ms）；但在 nsys 下，同一 commit 的 `-O0` trace 稳态窗口是 114.63 ms、Release trace 是 94.80 ms，即值 **19.83 ms**（3.0 倍）。`-O0` 与 CUPTI 是「相乘」而非「相加」：host 越慢，逐调用插桩越落在关键路径上。
 > - **1.94 ms**：CUPTI 逐调用插桩，而基线每轮比优化后多 ~351 次 launch，开销因此不对称。用同一二进制的 nsys 与非 nsys 运行按 step 配对（steps 2–5，各 3 次取逐步中位数再求窗口均值）实测：nsys 给基线叠加 +10.02 ms（+11.8%），给 cast 版叠加 +8.08 ms（+10.2%），折合基线 ≈2.0 μs/次 API（每步 3478 次 `cudaLaunchKernel` 与 1515 次 `cudaMemcpyAsync`）；两者之差 1.94 ms 才是差异化的 CUPTI 开销。
 >
 > 三分量 5.18＋1.94＋19.83＝26.95 ms，与两份 trace 稳态窗口之差 114.63 − 87.68 精确闭合；非 profiling 配对下 A 84.78 → B 79.60 ms，真实 cast 收益 5.18 ms（与上表 step5–10 口径的 4.92 ms 同量级，差异来自取样窗口与中位数取法）。
@@ -402,9 +196,9 @@ VecT v_vec = *reinterpret_cast<const VecT *>(&v_data[base]);
 
 | 配置 | commit | 构建目录 | peak used | step5–10 稳态 | 吞吐量 | step1 warm-up |
 |---|---|---|---|---|---|---|
-| A 基线（无优化） | `843322f` | `build` | 23143 MB | **82.05 ms** | 3122 tok/s | 185.9 ms |
-| B ＋cast 优化 | `09fe25b` | `build_cast` | 26001 MB | **77.13 ms** | 3321 tok/s | 212.2 ms |
-| C ＋adam 向量化 | `39c94ba` | `build_adam` | 26001 MB | **75.69 ms** | 3378 tok/s | 214.9 ms |
+| A 基线（无优化） | `9946886` | `build` | 23143 MB | **82.05 ms** | 3122 tok/s | 185.9 ms |
+| B ＋cast 优化 | `0e2dc18` | `build_cast` | 26001 MB | **77.13 ms** | 3321 tok/s | 212.2 ms |
+| C ＋adam 向量化 | `25c3bd8` | `build_adam` | 26001 MB | **75.69 ms** | 3378 tok/s | 214.9 ms |
 
 | 增量 | 稳态时延 | 降幅 | 吞吐量 | 折合每轮 |
 |---|---|---|---|---|
@@ -424,7 +218,7 @@ VecT v_vec = *reinterpret_cast<const VecT *>(&v_data[base]);
 
 ```bash
 export PATH=/usr/local/cuda/bin:$PATH
-for cfg in 843322f:build 09fe25b:build_cast 39c94ba:build_adam; do
+for cfg in 9946886:build 0e2dc18:build_cast 25c3bd8:build_adam; do
   git checkout "${cfg%%:*}"
   cmake --fresh -S . -B "${cfg##*:}" -DUSE_CUDA=ON -DUSE_NCCL=ON -DNVTX_MODE=ON \
         -DBUILD_TEST=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=80
@@ -486,7 +280,7 @@ Section 2.2 显示 Fill 家族每轮 **710 次 / 3.31 ms / 3.9%**，平均 **3.6
 
 #### 3.3.4 P0 优化结果
 
-**编译**：`build_new`（BUILD_TEST=ON）+ `build_adam`（HEAD `39c94ba`）双目录 CUDA kernel 重编 + 全项目链接通过，无警告。
+**编译**：`build_new`（BUILD_TEST=ON）+ `build_adam`（HEAD `25c3bd8`）双目录 CUDA kernel 重编 + 全项目链接通过，无警告。
 
 **单元测试**：
 
@@ -499,8 +293,8 @@ Section 2.2 显示 Fill 家族每轮 **710 次 / 3.31 ms / 3.9%**，平均 **3.6
 
 | 配置 | commit | 构建目录 | step5–10 稳态 | 运行间极差 |
 |---|---|---|---|---|
-| C ＋adam 向量化（基线） | `39c94ba` | `build_adam` | **75.69 ms** | ±0.90% |
-| D ＋P0 Fill 删除 | `39c94ba` + 未提交改动 | `build_new` | **75.41 ms** | ±0.72% |
+| C ＋adam 向量化（基线） | `25c3bd8` | `build_adam` | **75.69 ms** | ±0.90% |
+| D ＋P0 Fill 删除 | `25c3bd8` + 未提交改动 | `build_new` | **75.41 ms** | ±0.72% |
 
 D 的窗口敏感性：step3–10 **75.91 ms** / step4–10 **75.51 ms** / step5–10 **75.41 ms**（C 基线的 step3–10 / step4–10 绝对值在 doc 3.2.4 中未直接记录，仅给出相对降幅，故不列对照）。
 
@@ -551,9 +345,9 @@ P0 只消除了 **transform.cu 内满足全覆盖判据**的 6 处 Fill（209 �
 
 | 配置 | commit | 构建目录 | step5–10 稳态 | 运行间极差 |
 |---|---|---|---|---|
-| C ＋adam 向量化（基线） | `39c94ba` | `build_adam` | **75.69 ms** | ±0.90% |
-| D ＋P0 Fill 删除 | `2d04487` | `build_new` | **75.41 ms** | ±0.72% |
-| **E ＋P1 memsetAsync** | `2d04487` + 未提交改动 | `build_new` | **75.18 ms** | **±0.39%** |
+| C ＋adam 向量化（基线） | `25c3bd8` | `build_adam` | **75.69 ms** | ±0.90% |
+| D ＋P0 Fill 删除 | `a696321` | `build_new` | **75.41 ms** | ±0.72% |
+| **E ＋P1 memsetAsync** | `a696321` + 未提交改动 | `build_new` | **75.18 ms** | **±0.39%** |
 
 E 的窗口敏感性：step3–10 **75.93 ms** / step4–10 **75.17 ms** / step5–10 **75.18 ms**。
 
@@ -632,7 +426,7 @@ Section 2.1 结论 4 与 2.2.1.2 的 timeline 给出了 RMSNorm 的开销画像�
 
 | 配置 | commit | 构建目录 | step5–10 稳态 | 运行间极差 |
 |---|---|---|---|---|
-| G 基线（无融合） | `7491863` | `build_new` | **70.36 ms** | ±0.33% |
+| G 基线（无融合） | `4548686` | `build_new` | **70.36 ms** | ±0.33% |
 | H ＋RMSNorm 融合 | 本次提交 | `build_new` | **66.41 ms** | ±0.37% |
 
 | 增量 | 稳态时延 | 降幅 | 折合每轮 | 吞吐量 |
@@ -641,7 +435,7 @@ Section 2.1 结论 4 与 2.2.1.2 的 timeline 给出了 RMSNorm 的开销画像�
 
 窗口敏感性（G→H）：step3–10 71.04 → 66.56（−6.31%）；step4–10 70.41 → 66.44（−5.64%）；warm-up step1 190.52 → 181.23 ms。
 
-> **基线口径**：G 为当前 HEAD `7491863`，在 3.4.1 的 F 配置（71.83 ms）之上另含两项未入档的中间提交（CrossEntropy 设备端归约、grad_a Fill 删除）；本节对照全部为同会话配对，不引用历史绝对值。恢复改动后的独立冒烟复核 66.36 ms。
+> **基线口径**：G 为当前 HEAD `4548686`，在 3.4.1 的 F 配置（71.83 ms）之上另含两项未入档的中间提交（CrossEntropy 设备端归约、grad_a Fill 删除）；本节对照全部为同会话配对，不引用历史绝对值。恢复改动后的独立冒烟复核 66.36 ms。
 >
 > **可信度**：−3.95 ms 约为 H 自身噪声带（±0.37% ≈ ±0.25 ms）的 16 倍，属强信号。收益大于此前估算（1–2 ms）的原因主要在 backward：composite 侧近十个节点的反向链 × 33 实例被一并消除，而估算时只计了 forward 的舍入往返。
 
@@ -671,7 +465,7 @@ Section 2.2.2/2.2.3 记录的 embedding 画像（`EmbeddingBwd·f32` 1.3 ms、�
 
 | 配置 | commit | 构建目录 | step5–10 稳态 | 运行间极差 |
 |---|---|---|---|---|
-| I 基线（HEAD，含 3.1–3.5 全部优化） | `bb68775` | `build_new`（stash 本次改动） | **66.46 ms** | ±0.49% |
+| I 基线（HEAD，含 3.1–3.5 全部优化） | `195b0fb` | `build_new`（stash 本次改动） | **66.46 ms** | ±0.49% |
 | J ＋Embedding 稀疏梯度 | 未提交改动 | `build_new` | **59.27 ms** | ±0.91% |
 
 | 增量 | 稳态时延 | 降幅 | 折合每轮 | 吞吐量 |
