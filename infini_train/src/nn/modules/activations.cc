@@ -12,6 +12,14 @@ std::vector<std::shared_ptr<Tensor>> Sigmoid::Forward(const std::vector<std::sha
     return std::make_shared<autograd::Sigmoid>()->Apply(input_tensors);
 }
 
+
+std::vector<std::shared_ptr<Tensor>> Relu::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    return std::make_shared<autograd::Relu>()->Apply(input_tensors);
+}
+
+
+
+
 std::vector<std::shared_ptr<Tensor>> NewGELU::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
     auto &input = x[0];
     return {0.5 * input
