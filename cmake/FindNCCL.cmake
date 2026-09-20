@@ -40,4 +40,12 @@ find_package_handle_standard_args(NCCL
 if (NCCL_FOUND)
     set(NCCL_INCLUDE_DIRS ${NCCL_INCLUDE_DIR})
     set(NCCL_LIBRARIES ${NCCL_LIBRARY})
+    # Honor NCCL_ROOT for both headers and linkage instead of resolving bare
+    # -lnccl against an unrelated system installation.
+    if(NOT TARGET nccl)
+        add_library(nccl UNKNOWN IMPORTED)
+        set_target_properties(nccl PROPERTIES
+            IMPORTED_LOCATION "${NCCL_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${NCCL_INCLUDE_DIR}")
+    endif()
 endif()

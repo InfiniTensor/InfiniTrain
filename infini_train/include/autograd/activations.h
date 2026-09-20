@@ -10,6 +10,16 @@ class Tensor;
 }
 
 namespace infini_train::autograd {
+class ReLU : public Function {
+public:
+    static constexpr char kType[] = "ReLUFunction";
+    ReLU() : Function(kType) {}
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) override;
+    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &inputs,
+                      const std::vector<std::shared_ptr<Tensor>> &outputs) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grads) override;
+};
+
 class Sigmoid : public Function {
 public:
     static constexpr char kType[] = "SigmoidFunction";

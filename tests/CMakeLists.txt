@@ -9,10 +9,15 @@ add_subdirectory(common)
 
 # Distributed tests
 add_subdirectory(distributed)
+
 # Module tests
 add_subdirectory(module)
+
 # Backend extension contract tests
 add_subdirectory(backend)
+
+# MNIST tests
+add_subdirectory(mnist)
 
 # DataLoader tests
 add_subdirectory(dataloader)
