@@ -133,6 +133,7 @@ Tensor Tensor::To(Device device) {
         if (grad_) {
             new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), grad_->offset_, grad_->dims_);
         }
+        new_tensor.requires_grad_ = requires_grad_;
         return new_tensor;
     }
 
@@ -179,6 +180,7 @@ Tensor Tensor::To(DataType dtype) {
         if (grad_) {
             new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), grad_->offset_, grad_->dims_);
         }
+        new_tensor.requires_grad_ = requires_grad_;
         return new_tensor;
     }
 

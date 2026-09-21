@@ -42,4 +42,20 @@ TEST_P(TensorOpTest, Detach) {
     EXPECT_EQ(data->output_idx(), 0);
 }
 
+TEST_P(TensorOpTest, ToSameDevicePreservesRequiresGrad) {
+    auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
+
+    auto converted = tensor->To(GetDevice());
+
+    EXPECT_TRUE(converted.requires_grad());
+}
+
+TEST_P(TensorOpTest, ToSameDtypePreservesRequiresGrad) {
+    auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
+
+    auto converted = tensor->To(DataType::kFLOAT32);
+
+    EXPECT_TRUE(converted.requires_grad());
+}
+
 INFINI_TRAIN_REGISTER_TEST(TensorOpTest);
