@@ -46,6 +46,10 @@ public:
     virtual void set_learning_rate(float lr) override;
     virtual float learning_rate() const override;
 
+    // Shadow weights are not supported in the distributed setting: base_optimizer_ manages shard params,
+    // while autocast sees the full param in forward, so the registry never hits. Degrades to a no-op.
+    void EnableShadowWeights(DataType shadow_dtype) override;
+
 private:
     using AddShardParam = std::function<void(const std::shared_ptr<Tensor> &, const std::shared_ptr<Tensor> &)>;
 

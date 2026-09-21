@@ -38,6 +38,7 @@
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/utils/global_module_hook_registry.h"
+#include "infini_train/include/utils/nvtx.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
 #ifdef PROFILE_MODE
@@ -380,6 +381,13 @@ void Train(const nn::parallel::Rank &rank) {
     start_step = resume_result.global_step;
     size_t consumed_train_samples = resume_result.consumed_train_samples;
 
+    // enable shadow weights (polymorphic; DistributedOptimizer degrades to a no-op with a warning).
+    // Note: this point is after ResumeFromCheckpoint, so the shadows are built directly from the
+    // already-restored FP32 params; no extra refresh is needed.
+    if (FLAGS_dtype == kDtypeBF16) {
+        optimizer->EnableShadowWeights(DataType::kBFLOAT16);
+    }
+
     auto advance_train_iter = [&]() {
         ++train_iter;
         if (train_iter == train_loader.end()) {
@@ -456,12 +464,20 @@ void Train(const nn::parallel::Rank &rank) {
 #ifdef PROFILE_MODE
         Profiler::Instance().SetTag("Step_" + std::to_string(step));
 #endif
+#ifdef NVTX_MODE
+        // Spans one whole training step. A scoped object is used here rather than
+        // a push/pop pair because the loop body has several exits.
+        const auto nvtx_step_name = "Step_" + std::to_string(step);
+        infini_train::utils::NvtxRange nvtx_step(nvtx_step_name.c_str());
+#endif
 
         const float current_lr = scheduler ? scheduler->learning_rate() : static_cast<float>(FLAGS_learning_rate);
         float lossf = 0.0f;
         if (pp_world_size == 1) {
             // model->Train();
+            INFINI_TRAIN_NVTX_PUSH("ZeroGrad");
             optimizer->ZeroGrad();
+            INFINI_TRAIN_NVTX_POP();
 
             // if we are trying to overfit a single batch, we reset the loader here
             if (FLAGS_overfit_single_batch) {
@@ -474,16 +490,20 @@ void Train(const nn::parallel::Rank &rank) {
 
                 // (bs, seq_len), (bs, seq_len)
                 auto [x, y] = next_train_batch();
+                INFINI_TRAIN_NVTX_PUSH("DataUpload");
                 x = std::make_shared<Tensor>(x->To(device));
                 y = std::make_shared<Tensor>(y->To(device));
+                INFINI_TRAIN_NVTX_POP();
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start forward";
+                INFINI_TRAIN_NVTX_PUSH("Forward");
                 // (bs, seq_len, vocab_size)
                 auto logits = (*model)({x, y})[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish model forward, start loss forward";
                 auto loss = (*loss_fn)({logits, y})[0];
                 // FIXME(jym): verify gradient accumulation precision
                 loss = loss / grad_accum_steps;
+                INFINI_TRAIN_NVTX_POP();
 
                 // disable autocast for the current step (backward is not under autocast)
                 autocast_guard.Disable();
@@ -495,24 +515,32 @@ void Train(const nn::parallel::Rank &rank) {
                 if (ddp_world_size > 1 && micro_step != grad_accum_steps - 1) {
                     no_sync_guard = model->no_sync();
                 }
+                INFINI_TRAIN_NVTX_PUSH("Backward");
                 loss->Backward();
+                INFINI_TRAIN_NVTX_POP();
                 // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
                 // between forward and backward.
+                INFINI_TRAIN_NVTX_PUSH("LossReadback");
                 auto loss_cpu = loss->To(Device());
                 lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
+                INFINI_TRAIN_NVTX_POP();
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
             }
 
+            INFINI_TRAIN_NVTX_PUSH("Optimizer");
             optimizer->Step();
             if (scheduler) {
                 scheduler->Step();
             }
+            INFINI_TRAIN_NVTX_POP();
         } else {
             auto [x, y] = next_train_batch();
             x = std::make_shared<Tensor>(x->To(device));
             y = std::make_shared<Tensor>(y->To(device));
 
+            INFINI_TRAIN_NVTX_PUSH("TrainStep");
             lossf = model->TrainStep({x}, {y}, optimizer, loss_fn, dtype);
+            INFINI_TRAIN_NVTX_POP();
             if (scheduler) {
                 scheduler->Step();
             }

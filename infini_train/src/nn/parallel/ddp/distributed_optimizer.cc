@@ -170,6 +170,12 @@ float DistributedOptimizer::learning_rate() const {
     return Optimizer::learning_rate();
 }
 
+void DistributedOptimizer::EnableShadowWeights(DataType /*shadow_dtype*/) {
+    LOG(WARNING) << "DistributedOptimizer: shadow weights are not supported in distributed mode "
+                 << "(base optimizer manages sharded params while autocast sees full params); "
+                 << "falling back to the regular cast path.";
+}
+
 void DistributedOptimizer::Step() {
     // 1. Ensure grads are synced
     FinishGradSync();

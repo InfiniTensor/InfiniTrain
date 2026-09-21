@@ -11,6 +11,7 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
+std::shared_ptr<Tensor> GetShadow(const Tensor *param);
 namespace {
 inline std::string_view GetBaseOpName(std::string_view op) {
     constexpr std::string_view function_suffix = "Function";
@@ -37,10 +38,10 @@ enum class CastPolicy : uint8_t {
 // Cast-policy maps and their associated operations. The op names should match the ones defined in the op registry.
 inline constexpr std::array kLowerPrecisionOps = {"Matmul", "Linear"};
 inline constexpr std::array kFP32Ops
-    = {"Sin",      "Cos",        "Tan",   "Asin",  "Acos",  "Atan",         "Sinh",
-       "Cosh",     "Tanh",       "Asinh", "Acosh", "Atanh", "Exp",          "Log",
-       "Sqrt",     "Reciprocal", "Rsqrt", "Prod",  "Pow",   "CrossEntropy", "VocabParallelCrossEntropy",
-       "Layernorm"};
+    = {"Sin",       "Cos",        "Tan",   "Asin",  "Acos",  "Atan",         "Sinh",
+       "Cosh",      "Tanh",       "Asinh", "Acosh", "Atanh", "Exp",          "Log",
+       "Sqrt",      "Reciprocal", "Rsqrt", "Prod",  "Pow",   "CrossEntropy", "VocabParallelCrossEntropy",
+       "LayerNorm", "RMSNorm"};
 
 // Mapping from operation names to their cast policies. This is the primary construct that is used in autocasting. The
 // op names should match the ones defined in the op registry.
@@ -69,7 +70,8 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
     {"Pow", CastPolicy::kFP32},
     {"CrossEntropy", CastPolicy::kFP32},
     {"VocabParallelCrossEntropy", CastPolicy::kFP32},
-    {"Layernorm", CastPolicy::kFP32},
+    {"LayerNorm", CastPolicy::kFP32},
+    {"RMSNorm", CastPolicy::kFP32},
 };
 
 inline DataType GetDefaultAutocastDtype(Device::DeviceType device_type) {
@@ -131,7 +133,12 @@ struct AutocastContext {
                     if (is_floating_point(current_dtype)) {
                         DataType target_dtype = get_target_dtype();
                         if (current_dtype != target_dtype) {
-                            arg = std::make_shared<Tensor>(arg->To(target_dtype));
+                            auto shadow = GetShadow(arg.get());
+                            if (shadow && shadow->Dtype() == target_dtype) {
+                                arg = shadow;
+                            } else {
+                                arg = std::make_shared<Tensor>(arg->To(target_dtype));
+                            }
                         }
                     }
                 }

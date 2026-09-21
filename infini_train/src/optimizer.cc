@@ -6,9 +6,19 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
+#include "infini_train/include/sparse_row_grad.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
+thread_local std::unordered_map<const Tensor *, std::shared_ptr<Tensor>> g_shadow_registry;
+
+// Free function for autocast.h to query shadow weights (decoupled from the concrete Optimizer type).
+// Returns the shadow on a hit; nullptr on a miss (activations, or shadow disabled), letting autocast fall back to Cast.
+std::shared_ptr<Tensor> GetShadow(const Tensor *param) {
+    auto it = g_shadow_registry.find(param);
+    return it != g_shadow_registry.end() ? it->second : nullptr;
+}
+
 Optimizer::Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate)
     : params_(params), learning_rate_(learning_rate) {}
 
@@ -26,7 +36,25 @@ Optimizer::Optimizer(const NamedParameterList &named_params, float learning_rate
 }
 
 void Optimizer::ZeroGrad(bool set_to_none) {
-    for (auto param : params_) { param->ZeroGrad(set_to_none); }
+    for (auto param : params_) {
+        auto *sparse_state = GetSparseRowGradState(param.get());
+        if (sparse_state) {
+            auto device = param->GetDevice();
+            core::DeviceGuard guard(device);
+            // Zero only the rows made dirty since the last clear: the persistent buffer is zero
+            // everywhere else by construction, so no full-size memset is needed. This also bumps
+            // the claim generation, re-arming the dedup for the next accumulation cycle.
+            ClearSparseRowGradRows(sparse_state);
+            // Non-poisoned: the cleared buffer *is* the accumulator, so nothing else has to be
+            // reset. Poisoned: the live storage is some dense foreign buffer and needs the dense
+            // reset path (grad_.reset() or a full fill).
+            if (set_to_none || sparse_state->poisoned) {
+                param->ZeroGrad(set_to_none);
+            }
+            continue;
+        }
+        param->ZeroGrad(set_to_none);
+    }
 }
 
 void Optimizer::set_learning_rate(float lr) { learning_rate_ = lr; }
@@ -99,6 +127,55 @@ Adam::Adam(const NamedParameterList &named_params, float learning_rate, float be
     }
 }
 
+void Adam::EnableShadowWeights(DataType shadow_dtype) {
+    shadow_enable_ = true;
+    shadow_dtype_ = shadow_dtype;
+    shadow_weights_.clear();
+    shadow_weights_.reserve(params_.size());
+    // init shadow weights form param
+    for (auto &param : params_) {
+        auto shadow_weight = std::make_shared<Tensor>(param->Dims(), shadow_dtype_, param->GetDevice());
+        auto casted = param->To(shadow_dtype);
+        shadow_weight->CopyFrom(casted);
+        shadow_weights_.push_back(shadow_weight);
+        g_shadow_registry[param.get()] = shadow_weight;
+    }
+    LOG(INFO) << "Enable shadow weights for Adam optimizer, shadow dtype: " << static_cast<int>(shadow_dtype_);
+}
+
+void Adam::DisableShadowWeights() {
+    if (shadow_enable_ == false) {
+        return;
+    }
+    shadow_enable_ = false;
+    for (auto &param : params_) { g_shadow_registry.erase(param.get()); }
+    shadow_weights_.clear();
+    LOG(INFO) << "Disable shadow weights for Adam optimizer";
+}
+
+void Adam::RefreshShadowWeights() {
+    if (!shadow_enable_) {
+        return;
+    }
+    // The param was updated in place by the checkpoint (LoadStateDict uses CopyFrom, so the pointer is unchanged):
+    // just re-cast the current FP32 master weights into the shadows; the registry mapping needs no changes.
+    for (size_t i = 0; i < params_.size(); ++i) {
+        auto casted = params_[i]->To(shadow_dtype_);
+        shadow_weights_[i]->CopyFrom(casted);
+    }
+    LOG(INFO) << "Refreshed " << shadow_weights_.size() << " shadow weights from current params";
+}
+
+std::shared_ptr<Tensor> Adam::GetShadow(const Tensor *param) const {
+    auto it = g_shadow_registry.find(param);
+    if (it != g_shadow_registry.end()) {
+        return it->second;
+    } else {
+        LOG(WARNING) << "Shadow weight not found for the given parameter.";
+        return nullptr;
+    }
+}
+
 void Adam::Step() {
     ++t_;
 
@@ -114,8 +191,30 @@ void Adam::Step() {
 
         auto device = param->GetDevice();
         core::DeviceGuard guard(device);
-        auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGrad"});
-        kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
+        auto *sparse_state = GetSparseRowGradState(param.get());
+        if (sparse_state && !sparse_state->poisoned) {
+            // Sparse weight (embedding): only the rows hit since the last clear exist in the
+            // persistent buffer, so update just those rows of param/m/v/shadow.
+            if (shadow_enable_) {
+                auto shadow_weight = shadow_weights_[i];
+                auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamSparseRowsShadow"});
+                kernel.Call<void>(grad, param, shadow_weight, m, v, sparse_state->row_list, sparse_state->count,
+                                  learning_rate_, beta1_, beta2_, eps_, t_);
+            } else {
+                auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamSparseRows"});
+                kernel.Call<void>(grad, param, m, v, sparse_state->row_list, sparse_state->count, learning_rate_,
+                                  beta1_, beta2_, eps_, t_);
+            }
+            continue;
+        }
+        if (shadow_enable_) {
+            auto shadow_weight = shadow_weights_[i];
+            auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGradShadow"});
+            kernel.Call<void>(grad, param, shadow_weight, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
+        } else {
+            auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGrad"});
+            kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_, t_);
+        }
     }
 }
 

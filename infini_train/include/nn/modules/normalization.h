@@ -36,6 +36,6 @@ public:
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &x) override;
 
 private:
-    float eps_ = 1e-5f;
+    float eps_ = 1e-6f;
 };
 } // namespace infini_train::nn

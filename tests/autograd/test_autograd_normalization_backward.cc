@@ -55,4 +55,28 @@ TEST_P(AutogradNormalizationBackwardTest, LayerNormBackwardZeroBias) {
     EXPECT_EQ(grad_inputs.size(), 3);
 }
 
+TEST_P(AutogradNormalizationBackwardTest, RMSNormBackward) {
+    const std::vector<int64_t> input_dims{1, 2, 4};
+    std::vector<float> input_values{-1.5f, -0.5f, 0.5f, 1.5f, -3.0f, -1.0f, 1.0f, 3.0f};
+    std::vector<float> weight_values{1.0f, 0.5f, -1.0f, 2.0f};
+    auto input = std::make_shared<Tensor>(input_values.data(), input_dims, DataType::kFLOAT32, GetDevice());
+    auto weight
+        = std::make_shared<Tensor>(weight_values.data(), std::vector<int64_t>{4}, DataType::kFLOAT32, GetDevice());
+
+    auto rmsnorm_fn = std::make_shared<autograd::RMSNorm>(1e-5f);
+    auto result = rmsnorm_fn->Apply({input, weight});
+    ASSERT_EQ(result.size(), 2);
+    test::ExpectTensorNear(result[1], {0.89442360f, 0.44721314f}, 1e-5f);
+
+    std::vector<float> grad_values{1.0f, 2.0f, 3.0f, 4.0f, 0.5f, -1.0f, 2.0f, -0.5f};
+    auto grad = std::make_shared<Tensor>(grad_values.data(), input_dims, DataType::kFLOAT32, GetDevice());
+    auto grad_inputs = rmsnorm_fn->Backward({grad});
+    ASSERT_EQ(grad_inputs.size(), 2);
+    test::ExpectTensorNear(
+        grad_inputs[0],
+        {3.17518568f, 1.65467763f, -3.44352484f, 4.87462664f, -0.17888442f, -0.35777023f, -0.76026261f, -0.04472215f},
+        1e-5f);
+    test::ExpectTensorNear(grad_inputs[1], {-2.01245522f, -0.44721046f, 2.23606181f, 4.69572210f}, 1e-5f);
+}
+
 INFINI_TRAIN_REGISTER_TEST(AutogradNormalizationBackwardTest);

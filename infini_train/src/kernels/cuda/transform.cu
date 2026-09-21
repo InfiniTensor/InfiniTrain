@@ -93,7 +93,8 @@ std::shared_ptr<Tensor> TrilBackward(const std::shared_ptr<Tensor> &grad_output,
     core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype,
         [=]<typename T>() {
-            grad_input->Fill(0.0);
+            // No Fill(0) needed: TrilBackwardKernel writes every element of grad_input exactly once
+            // (in-region -> grad_output[idx]; out-of-region -> T(0)). Grid covers [0, rows*cols).
             TrilBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), rows, cols,
                 diagonal);
@@ -180,7 +181,8 @@ std::shared_ptr<Tensor> TriuBackward(const std::shared_ptr<Tensor> &grad_output,
     core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype,
         [=]<typename T>() {
-            grad_input->Fill(0.0);
+            // No Fill(0) needed: TriuBackwardKernel writes every element of grad_input exactly once
+            // (in-region -> grad_output[idx]; out-of-region -> T(0)). Grid covers [0, rows*cols).
             TriuBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), rows, cols,
                 diagonal);
@@ -272,7 +274,9 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
     core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype,
         [=]<typename T>() {
-            output->Fill(0.0);
+            // No Fill(0) needed: TransposeForwardKernel writes output[idx] = input[in_flat_idx] for every
+            // idx in [0, num_elements); num_blocks = ceil(num_elements / threads_per_block) covers all,
+            // each element written exactly once, no atomicAdd. Fill was pure dead launch.
             TransposeForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
                 static_cast<const T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), in_dims_dev,
                 in_strides_dev, out_strides_dev, ndim, dim0, dim1, num_elements);
@@ -438,7 +442,9 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
         core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
             dtype,
             [=]<typename T>() {
-                grad_input->Fill(0.0);
+                // No Fill(0) needed: MaskLeadsBackwardKernel writes grad_input[i] for every i in
+                // [0, rows*inner) = [0, grad_output->NumElements()); mask-hit lanes are written as T(0)
+                // by the kernel itself, so no zero-init is required.
                 MaskLeadsBackwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                     static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask_casted->DataPtr()),
                     static_cast<T *>(grad_input->DataPtr()), rows, inner);
@@ -452,7 +458,9 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
         core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
             dtype,
             [=]<typename T>() {
-                grad_input->Fill(0.0);
+                // No Fill(0) needed: MaskBackwardKernel writes grad_input[i] for every i in
+                // [0, batch_size*mask_size) = [0, grad_output->NumElements()); mask-hit lanes are
+                // written as T(0) by the kernel itself, so no zero-init is required.
                 MaskBackwardKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                     static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask_casted->DataPtr()),
                     static_cast<T *>(grad_input->DataPtr()), static_cast<int>(batch_size), static_cast<int>(mask_size));
@@ -565,7 +573,10 @@ std::shared_ptr<Tensor> RepeatInterleaveBackward(const std::shared_ptr<Tensor> &
     core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
         grad_output->Dtype(),
         [=]<typename T>() {
-            grad_input->Fill(0.0);
+            // No Fill(0) needed: RepeatInterleaveBackwardKernel is a gather-reduce (not scatter):
+            // each thread owns one grad_input[idx], sequentially sums `repeat` grad_output entries
+            // in registers, then writes grad_input[idx] = sum exactly once. No atomicAdd, so the
+            // buffer does not need to start at zero.
             RepeatInterleaveBackwardKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), outer,
                 dim_size, inner, repeat);

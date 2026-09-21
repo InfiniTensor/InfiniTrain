@@ -7,10 +7,33 @@ import struct
 from pathlib import Path
 
 import numpy as np
-from huggingface_hub import get_token, snapshot_download
 from transformers import AutoTokenizer
 
-MODEL_ID = "meta-llama/Llama-3.2-1B"
+MODEL_SOURCE = os.environ.get("MODEL_SOURCE", "huggingface").lower()
+MODEL_REPO_ID = os.environ.get("MODEL_REPO_ID")
+if MODEL_REPO_ID is None:
+    MODEL_REPO_ID = "meta-llama/Llama-3.2-1B"
+MODEL_ID = MODEL_REPO_ID
+
+if MODEL_SOURCE == "huggingface":
+    from huggingface_hub import get_token, snapshot_download
+    token = os.environ.get("HF_TOKEN") or get_token()
+    if not token:
+        raise SystemExit(
+            f"\nLLaMA3 preparation needs access to {MODEL_ID}.\n"
+            "1) Accept the model license on Hugging Face.\n"
+            "2) Run `hf auth login` or export HF_TOKEN=hf_xxx.\n"
+        )
+elif MODEL_SOURCE == "modelscope":
+    try:
+        from modelscope import snapshot_download as ms_snapshot_download
+    except ImportError as exc:
+        raise SystemExit(
+            "ModelScope support requires `pip install modelscope` in the asset-prep environment."
+        ) from exc
+    token = None
+else:
+    raise SystemExit(f"Unsupported MODEL_SOURCE={MODEL_SOURCE!r}; expected 'huggingface' or 'modelscope'.")
 
 out_dir = Path(os.environ["LLAMA3_OUTPUT_DIR"])
 cache_dir = Path(os.environ["LLAMA3_CACHE_DIR"])
@@ -20,14 +43,6 @@ skip_weights = os.environ.get("SKIP_LLAMA3_WEIGHTS", "0") == "1"
 
 out_dir.mkdir(parents=True, exist_ok=True)
 cache_dir.mkdir(parents=True, exist_ok=True)
-
-token = os.environ.get("HF_TOKEN") or get_token()
-if not token:
-    raise SystemExit(
-        f"\nLLaMA3 preparation needs access to {MODEL_ID}.\n"
-        "1) Accept the model license on Hugging Face.\n"
-        "2) Run `hf auth login` or export HF_TOKEN=hf_xxx.\n"
-    )
 
 allow_patterns = [
     "config.json",
@@ -45,13 +60,35 @@ if not skip_weights:
         "model.safetensors.index.json",
     ])
 
-print(f"[llama3] downloading/reusing Hugging Face files for {MODEL_ID}")
-model_dir = Path(snapshot_download(
-    repo_id=MODEL_ID,
-    token=token,
-    cache_dir=str(cache_dir),
-    allow_patterns=allow_patterns,
-))
+if MODEL_SOURCE == "huggingface":
+    print(f"[llama3] downloading/reusing Hugging Face files for {MODEL_ID}")
+    model_dir = Path(snapshot_download(
+        repo_id=MODEL_ID,
+        token=token,
+        cache_dir=str(cache_dir),
+        allow_patterns=allow_patterns,
+    ))
+else:
+    print(f"[llama3] downloading/reusing ModelScope files for {MODEL_ID}")
+    try:
+        model_dir = Path(ms_snapshot_download(
+            model_id=MODEL_ID,
+            cache_dir=str(cache_dir),
+            allow_patterns=allow_patterns,
+        ))
+    except TypeError:
+        model_dir = Path(ms_snapshot_download(
+            MODEL_ID,
+            cache_dir=str(cache_dir),
+            allow_patterns=allow_patterns,
+        ))
+    except Exception as exc:  # pragma: no cover - message is for users
+        raise SystemExit(
+            "\nModelScope download failed for the requested repo.\n"
+            f"repo_id={MODEL_ID}\n"
+            "This official Meta-Llama 3.2 1B repo is not publicly available on ModelScope.\n"
+            "Use Hugging Face with HF_TOKEN=hf_xxx, or set MODEL_REPO_ID to a valid mirror/private repo."
+        ) from exc
 
 # ---------------------------------------------------------------------------
 # TinyShakespeare -> InfiniTrain / llm.c LLaMA-3 data format
@@ -83,7 +120,7 @@ def write_datafile(path: Path, toks):
 tokenizer = AutoTokenizer.from_pretrained(
     model_dir,
     local_files_only=True,
-    token=token,
+    token=token if MODEL_SOURCE == "huggingface" else None,
     use_fast=True,
 )
 

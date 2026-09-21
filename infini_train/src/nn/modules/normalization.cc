@@ -5,7 +5,6 @@
 
 #include "infini_train/include/autograd/normalization.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/tensor.h"
 
@@ -39,8 +38,7 @@ RMSNorm::RMSNorm(int64_t dim, float eps, Device device) : CloneableModule(kType)
 }
 
 std::vector<std::shared_ptr<Tensor>> RMSNorm::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    // broadcasted Mul([4, 64, 2048] * [4, 64, 1])
-    auto norm = x[0] * function::Rsqrt(function::Mean(function::Pow(x[0], 2), -1, true) + eps_);
-    return {norm * parameters_[kParamWeightName]};
+    auto outputs = std::make_shared<autograd::RMSNorm>(eps_)->Apply({x[0], parameters_[kParamWeightName]});
+    return {outputs[0]};
 }
 } // namespace infini_train::nn

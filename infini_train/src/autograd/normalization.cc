@@ -51,4 +51,41 @@ std::vector<std::shared_ptr<Tensor>> LayerNorm::Backward(const std::vector<std::
                   {device, "LayerNormBackward"}, input, weight, bias, mean, rstd, grad_output);
     return {grad_input, grad_weight, grad_bias};
 }
+
+std::vector<std::shared_ptr<Tensor>> RMSNorm::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 2);
+    const auto &input = input_tensors[0];
+    const auto &weight = input_tensors[1];
+
+    auto device = input->GetDevice().type();
+    auto [output, rstd] = Dispatcher::Instance().Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+        {device, "RMSNormForward"}, input, weight, eps_);
+    return {output, rstd};
+}
+
+void RMSNorm::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                           const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+    CHECK_EQ(output_tensors.size(), 2);
+    const auto &input = input_tensors[0];
+    const auto &weight = input_tensors[1];
+    const auto &rstd = output_tensors[1];
+    ctx_.MarkNonDifferentiable({rstd});
+    ctx_.SaveForBackward({input, weight, rstd});
+}
+
+std::vector<std::shared_ptr<Tensor>> RMSNorm::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 3);
+    const auto &input = saved_tensors[0];
+    const auto &weight = saved_tensors[1];
+    const auto &rstd = saved_tensors[2];
+    CHECK_GE(grad_outputs.size(), 1);
+    const auto &grad_output = grad_outputs[0];
+
+    auto device = input->GetDevice().type();
+    auto [grad_input, grad_weight]
+        = Dispatcher::Instance().Call<std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+            {device, "RMSNormBackward"}, input, weight, rstd, grad_output);
+    return {grad_input, grad_weight};
+}
 } // namespace infini_train::autograd

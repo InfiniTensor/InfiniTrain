@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cublasLt.h>
 #include <cublas_v2.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -25,6 +26,17 @@ namespace infini_train::common::cuda {
         cublasStatus_t status = call;                                                                                  \
         if (status != CUBLAS_STATUS_SUCCESS) {                                                                         \
             LOG(FATAL) << "CUBLAS Error: " << cublasGetStatusString(status) << " at " << __FILE__ << ":" << __LINE__;  \
+        }                                                                                                              \
+    } while (0)
+
+// cuBLASLt shares cublasStatus_t with cuBLAS, so the same stringifier applies; only the
+// log prefix differs, to tell the two libraries apart when a call fails.
+#define CUBLASLT_CHECK(call)                                                                                           \
+    do {                                                                                                               \
+        cublasStatus_t status = call;                                                                                  \
+        if (status != CUBLAS_STATUS_SUCCESS) {                                                                         \
+            LOG(FATAL) << "CUBLASLT Error: " << cublasGetStatusString(status) << " at " << __FILE__ << ":"             \
+                       << __LINE__;                                                                                    \
         }                                                                                                              \
     } while (0)
 

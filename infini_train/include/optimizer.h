@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+#include "infini_train/include/datatype.h"
+
 namespace infini_train {
 class Tensor;
 }
@@ -24,6 +26,8 @@ public:
     explicit Optimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate);
 
     Optimizer(const NamedParameterList &named_params, float learning_rate);
+
+    virtual ~Optimizer() = default;
 
     virtual void ZeroGrad(bool set_to_none = true);
 
@@ -42,6 +46,16 @@ public:
     bool initial_lr_set() const;
 
     void set_initial_learning_rate(float lr);
+
+    // ========== Shadow weights API (default no-op; Adam overrides) ==========
+    // Enable shadow weights: create a low-precision copy per param and register it in the global registry
+    // so autocast can reuse it directly, skipping the repeated CastKernel in forward.
+    // No-op by default; only Adam implements it.
+    virtual void EnableShadowWeights(DataType shadow_dtype = DataType::kBFLOAT16) {}
+    virtual void DisableShadowWeights() {}
+    // Re-sync all shadow weights from the current FP32 master weights (called after a checkpoint restore).
+    virtual void RefreshShadowWeights() {}
+    virtual bool ShadowWeightsEnabled() const { return false; }
 
 protected:
     std::vector<std::shared_ptr<Tensor>> params_;
@@ -80,6 +94,19 @@ public:
     static OptimizerCreatorNamed CreateNamed(float learning_rate = 1e-3, float beta1 = 0.9, float beta2 = 0.999,
                                              float eps = 1e-8);
 
+    // add shadow weights API
+    void EnableShadowWeights(DataType shadow_dtype) override;
+
+    void DisableShadowWeights() override;
+
+    void RefreshShadowWeights() override;
+
+    bool ShadowWeightsEnabled() const override { return shadow_enable_; }
+
+    std::shared_ptr<Tensor> GetShadow(const Tensor *param) const;
+
+    ~Adam() override { DisableShadowWeights(); }
+
 private:
     int64_t t_;
     const float beta1_;
@@ -87,6 +114,10 @@ private:
     const float eps_;
     std::vector<std::shared_ptr<Tensor>> m_;
     std::vector<std::shared_ptr<Tensor>> v_;
+    // add shadow weights variable
+    bool shadow_enable_ = false;
+    DataType shadow_dtype_ = DataType::kBFLOAT16;
+    std::vector<std::shared_ptr<Tensor>> shadow_weights_;
 };
 } // namespace optimizers
 } // namespace infini_train

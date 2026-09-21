@@ -1,6 +1,10 @@
 build/
+build_new/
+build_cast/
+build_adam/
 .cache/
 .vscode/
+nsys/out/
 
 *.log
 *.report.rank*

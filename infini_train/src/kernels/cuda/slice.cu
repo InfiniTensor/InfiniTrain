@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 
@@ -12,11 +13,18 @@
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
 
 namespace infini_train::kernels::cuda {
+constexpr int kMaxDims = 8;
+struct SliceMeta {
+    int64_t new_dims[kMaxDims];
+    int64_t starts[kMaxDims];
+    int64_t steps[kMaxDims];
+    int64_t in_strides[kMaxDims];
+    int64_t out_strides[kMaxDims];
+};
 
 template <typename T>
-__global__ void SliceForwardKernel(const T *input, T *output, const int64_t *new_dims, const int64_t *starts,
-                                   const int64_t *steps, const int64_t *in_strides, const int64_t *out_strides,
-                                   int num_dims, int64_t total_elements) {
+__global__ void SliceForwardKernel(const T *input, T *output, const SliceMeta meta, int num_dims,
+                                   int64_t total_elements) {
     int64_t out_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (out_idx >= total_elements) {
         return;
@@ -24,8 +32,8 @@ __global__ void SliceForwardKernel(const T *input, T *output, const int64_t *new
 
     int64_t in_index = 0;
     for (int i = 0; i < num_dims; ++i) {
-        int64_t idx = (out_idx / out_strides[i]) % new_dims[i];
-        in_index += (starts[i] + idx * steps[i]) * in_strides[i];
+        int64_t idx = (out_idx / meta.out_strides[i]) % meta.new_dims[i];
+        in_index += (meta.starts[i] + idx * meta.steps[i]) * meta.in_strides[i];
     }
 
     output[out_idx] = input[in_index];
@@ -38,6 +46,7 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     auto &dims = input->Dims();
     CHECK_EQ(starts.size(), dims.size());
     const int64_t num_dims = dims.size();
+    CHECK_LE(num_dims, kMaxDims);
 
     std::vector<int64_t> new_dims;
     for (int i = 0; i < starts.size(); ++i) {
@@ -65,28 +74,19 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
 
     int64_t total_elements = stride;
 
-    int64_t *new_dims_dev, *starts_dev, *steps_dev, *input_strides_dev, *output_strides_dev;
-
     auto device = input->GetDevice();
     const auto &stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
                              infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                              ->cuda_stream();
 
-    cudaMallocAsync(&new_dims_dev,
-                    (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
-                    stream);
-    starts_dev = new_dims_dev + ends.size();
-    steps_dev = starts_dev + starts.size();
-    input_strides_dev = steps_dev + steps.size();
-    output_strides_dev = input_strides_dev + dims.size();
-
-    cudaMemcpyAsync(new_dims_dev, new_dims.data(), ends.size() * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
-    cudaMemcpyAsync(starts_dev, starts.data(), starts.size() * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
-    cudaMemcpyAsync(steps_dev, steps.data(), steps.size() * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
-    cudaMemcpyAsync(input_strides_dev, src_strides.data(), dims.size() * sizeof(int64_t), cudaMemcpyHostToDevice,
-                    stream);
-    cudaMemcpyAsync(output_strides_dev, dst_strides.data(), new_dims.size() * sizeof(int64_t), cudaMemcpyHostToDevice,
-                    stream);
+    // Metadata (5 arrays x num_dims int64) is passed by value through kernel parameter space
+    // (constant cache), so no device buffer / H2D memcpy is needed.
+    SliceMeta meta{};
+    std::copy(new_dims.begin(), new_dims.end(), meta.new_dims);
+    std::copy(starts.begin(), starts.end(), meta.starts);
+    std::copy(steps.begin(), steps.end(), meta.steps);
+    std::copy(src_strides.begin(), src_strides.end(), meta.in_strides);
+    std::copy(dst_strides.begin(), dst_strides.end(), meta.out_strides);
 
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
@@ -94,21 +94,18 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
         dtype,
         [=]<typename T>() {
-            SliceForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
-                static_cast<const T *>(input->DataPtr()), static_cast<T *>(new_tensor->DataPtr()), new_dims_dev,
-                starts_dev, steps_dev, input_strides_dev, output_strides_dev, num_dims, total_elements);
+            SliceForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(static_cast<const T *>(input->DataPtr()),
+                                                                             static_cast<T *>(new_tensor->DataPtr()),
+                                                                             meta, num_dims, total_elements);
         },
         "CUDA SliceForward");
-
-    cudaFreeAsync(new_dims_dev, stream);
 
     return new_tensor;
 }
 
 template <typename T>
-__global__ void SliceBackwardKernel(const T *grad_output, T *grad_input, const int64_t *new_dims, const int64_t *starts,
-                                    const int64_t *steps, const int64_t *in_strides, const int64_t *out_strides,
-                                    int num_dims, int64_t total_elements) {
+__global__ void SliceBackwardKernel(const T *grad_output, T *grad_input, const SliceMeta meta, int num_dims,
+                                    int64_t total_elements) {
     int64_t out_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (out_idx >= total_elements) {
         return;
@@ -116,8 +113,8 @@ __global__ void SliceBackwardKernel(const T *grad_output, T *grad_input, const i
 
     int64_t in_index = 0;
     for (int i = 0; i < num_dims; ++i) {
-        int64_t idx = (out_idx / out_strides[i]) % new_dims[i];
-        in_index += (starts[i] + idx * steps[i]) * in_strides[i];
+        int64_t idx = (out_idx / meta.out_strides[i]) % meta.new_dims[i];
+        in_index += (meta.starts[i] + idx * meta.steps[i]) * meta.in_strides[i];
     }
     grad_input[in_index] = grad_output[out_idx];
 }
@@ -130,6 +127,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     auto &dims = input->Dims();
     CHECK_EQ(starts.size(), dims.size());
     const int64_t num_dims = dims.size();
+    CHECK_LE(num_dims, kMaxDims);
 
     std::vector<int64_t> new_dims;
     for (int i = 0; i < starts.size(); ++i) {
@@ -158,28 +156,18 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
 
     int64_t total_elements = stride;
 
-    int dims_size = dims.size();
-    int64_t *new_dims_dev, *starts_dev, *steps_dev, *input_strides_dev, *output_strides_dev;
-
     auto device = input->GetDevice();
     const auto &stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
                              infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                              ->cuda_stream();
-    cudaMallocAsync(&new_dims_dev,
-                    (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
-                    stream);
-    starts_dev = new_dims_dev + ends.size();
-    steps_dev = starts_dev + starts.size();
-    input_strides_dev = steps_dev + steps.size();
-    output_strides_dev = input_strides_dev + dims.size();
 
-    cudaMemcpyAsync(new_dims_dev, new_dims.data(), ends.size() * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
-    cudaMemcpyAsync(starts_dev, starts.data(), starts.size() * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
-    cudaMemcpyAsync(steps_dev, steps.data(), steps.size() * sizeof(int64_t), cudaMemcpyHostToDevice, stream);
-    cudaMemcpyAsync(input_strides_dev, src_strides.data(), dims.size() * sizeof(int64_t), cudaMemcpyHostToDevice,
-                    stream);
-    cudaMemcpyAsync(output_strides_dev, dst_strides.data(), new_dims.size() * sizeof(int64_t), cudaMemcpyHostToDevice,
-                    stream);
+    // Metadata is passed by value through kernel parameter space; no device buffer / H2D memcpy.
+    SliceMeta meta{};
+    std::copy(new_dims.begin(), new_dims.end(), meta.new_dims);
+    std::copy(starts.begin(), starts.end(), meta.starts);
+    std::copy(steps.begin(), steps.end(), meta.steps);
+    std::copy(src_strides.begin(), src_strides.end(), meta.in_strides);
+    std::copy(dst_strides.begin(), dst_strides.end(), meta.out_strides);
 
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
@@ -188,12 +176,10 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
         grad_output_dtype,
         [=]<typename T>() {
             SliceBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
-                static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), new_dims_dev,
-                starts_dev, steps_dev, input_strides_dev, output_strides_dev, num_dims, total_elements);
+                static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), meta, num_dims,
+                total_elements);
         },
         "CUDA SliceBackward");
-
-    cudaFreeAsync(new_dims_dev, stream);
 
     return grad_input;
 }

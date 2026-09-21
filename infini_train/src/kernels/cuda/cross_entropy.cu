@@ -99,20 +99,23 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
             const Ttarget *target_ptr = static_cast<const Ttarget *>(target->DataPtr());
             const Tinput *input_ptr = static_cast<const Tinput *>(input->DataPtr());
             Tinput *batched_loss_ptr = static_cast<Tinput *>(batched_output->DataPtr());
-            // FIXME(dcj): do reduce on GPU
             CrossEntropyForwardKernel<threads_per_block, Ttarget, Tinput>
                 <<<num_blocks, threads_per_block, 0, cuda_stream>>>(input_ptr, target_ptr, batched_loss_ptr, bs,
                                                                     num_classes);
 
-            auto loss_cpu = batched_output->To(Device());
-            auto loss = std::make_shared<Tensor>(std::vector<int64_t>{}, input->Dtype(), Device());
-            auto loss_cpu_typed_ptr = static_cast<const Tinput *>(loss_cpu.DataPtr());
-            static_cast<Tinput *>(loss->DataPtr())[0]
-                = std::accumulate(loss_cpu_typed_ptr, loss_cpu_typed_ptr + bs, 0.0f,
-                                  [](float acc, const Tinput &val) { return acc + common::cuda::Cast<float>(val); })
-                / bs;
-
-            return std::make_shared<Tensor>(loss->To(input->GetDevice()));
+            // Reduce the per-sample losses to the scalar mean on-device. The previous host-side
+            // accumulate needed a D2H copy of batched_output into pageable memory, which is synchronous
+            // w.r.t. the host and stalled every forward step until the whole stream queue drained.
+            // Accumulate in fp32 (as the old host-side float accumulate did), then narrow once.
+            auto batched_f32 = input->Dtype() == DataType::kFLOAT32
+                                 ? batched_output
+                                 : std::make_shared<Tensor>(batched_output->To(DataType::kFLOAT32));
+            auto mean = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device.type(), "MeanForward"},
+                                                                             batched_f32, int64_t{0}, false);
+            if (mean->Dtype() != input->Dtype()) {
+                mean = std::make_shared<Tensor>(mean->To(input->Dtype()));
+            }
+            return mean;
         },
         "CUDA CrossEntropyForward");
 }

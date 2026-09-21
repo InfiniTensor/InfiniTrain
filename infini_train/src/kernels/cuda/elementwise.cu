@@ -127,6 +127,35 @@ __global__ void BinaryForwardKernelNoBroadcast(T *__restrict__ output, Func fn, 
     }
 }
 
+// Mixed-input forward (broadcast path): operand a has dtype Ta, b has dtype Tb, output has dtype
+// Tout (= PromoteDataTypes(Ta, Tb)). Both operands are widened to Tout *in registers*, so no
+// intermediate Cast kernel is materialized. Numerically identical to promoting each input with
+// Tensor::To(Tout) before the op, because Cast<Tout> is exactly what To(Tout) applies per element.
+template <typename Ta, typename Tb, typename Tout, typename Func>
+__global__ void BinaryForwardKernelMixed(Tout *output, Func fn, BroadcastMeta meta, const Ta *a, const Tb *b,
+                                         size_t num_elements) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= num_elements) {
+        return;
+    }
+
+    int64_t a_offset = CalcOffset(idx, meta.ndim, meta.a_strides, meta.a_shape, meta.out_strides);
+    int64_t b_offset = CalcOffset(idx, meta.ndim, meta.b_strides, meta.b_shape, meta.out_strides);
+
+    output[idx] = fn(common::cuda::Cast<Tout>(a[a_offset]), common::cuda::Cast<Tout>(b[b_offset]));
+}
+
+// Mixed-input forward fast path: no broadcast, contiguous tensors — skip CalcOffset entirely.
+template <typename Ta, typename Tb, typename Tout, typename Func>
+__global__ void BinaryForwardKernelNoBroadcastMixed(Tout *__restrict__ output, Func fn, const Ta *__restrict__ a,
+                                                    const Tb *__restrict__ b, size_t num_elements) {
+    const size_t grid_stride = static_cast<size_t>(gridDim.x) * blockDim.x;
+    for (size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; idx < num_elements;
+         idx += grid_stride) {
+        output[idx] = fn(common::cuda::Cast<Tout>(a[idx]), common::cuda::Cast<Tout>(b[idx]));
+    }
+}
+
 // Fast path backward: no broadcast, contiguous — skip CalcOffset entirely
 template <typename T, typename FuncA, typename FuncB>
 __global__ void BinaryBackwardKernelNoBroadcastFast(T *__restrict__ outA, T *__restrict__ outB, FuncA fn_a, FuncB fn_b,
@@ -191,6 +220,22 @@ __global__ void BinaryBackwardKernelNoBroadcastVectorized(T *__restrict__ outA, 
         const T b = inB ? inB[idx] : T(0);
         outA[idx] = Mul<T>(grad_out[idx], fn_a(a, b));
         outB[idx] = Mul<T>(grad_out[idx], fn_b(a, b));
+    }
+}
+
+// Mixed-input backward fast path: no broadcast, contiguous. grad_out/outputs are Tout; saved operands
+// a/b are Ta/Tb and widened to Tout in registers, so no Cast kernel is materialized. Bit-identical to
+// promoting a/b with To(Tout) before the homogeneous backward.
+template <typename Ta, typename Tb, typename Tout, typename FuncA, typename FuncB>
+__global__ void BinaryBackwardKernelNoBroadcastFastMixed(Tout *__restrict__ outA, Tout *__restrict__ outB, FuncA fn_a,
+                                                         FuncB fn_b, size_t numel, const Tout *__restrict__ grad_out,
+                                                         const Ta *__restrict__ inA, const Tb *__restrict__ inB) {
+    const size_t grid_stride = static_cast<size_t>(gridDim.x) * blockDim.x;
+    for (size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; idx < numel; idx += grid_stride) {
+        const Tout a = inA ? common::cuda::Cast<Tout>(inA[idx]) : Tout(0);
+        const Tout b = inB ? common::cuda::Cast<Tout>(inB[idx]) : Tout(0);
+        outA[idx] = Mul<Tout>(grad_out[idx], fn_a(a, b));
+        outB[idx] = Mul<Tout>(grad_out[idx], fn_b(a, b));
     }
 }
 
@@ -283,6 +328,90 @@ void LaunchForward(Func func, const std::shared_ptr<Tensor> &output, const Input
     } else {
         static_assert(sizeof...(inputs) == 1 || sizeof...(inputs) == 2,
                       "LaunchForward currently only supports unary and binary operations.");
+    }
+}
+
+// Mixed-input forward launcher: reads input_a as Ta and input_b as Tb, computes in Tout and writes
+// an output of dtype Tout. Used by BinaryForward to avoid materializing a Cast kernel when the two
+// operands have different dtypes (e.g. bf16 activation * f32 RoPE cos/sin, f32 residual + bf16 block
+// output). Requires both inputs to be contiguous; the broadcast metadata assumes contiguous strides.
+template <typename Ta, typename Tb, typename Tout, typename Func>
+void LaunchForwardMixed(Func func, const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input_a,
+                        const std::shared_ptr<Tensor> &input_b) {
+    auto device = output->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+    Tout *output_ptr = static_cast<Tout *>(output->DataPtr());
+
+    const auto &a_dims = input_a->Dims();
+    const auto &b_dims = input_b->Dims();
+    const auto &out_dims = output->Dims();
+    const size_t num_elements = output->NumElements();
+
+    const Ta *a_ptr = static_cast<const Ta *>(input_a->DataPtr());
+    const Tb *b_ptr = static_cast<const Tb *>(input_b->DataPtr());
+    dim3 block_dims = ChooseBlockDims(num_elements);
+
+    if (ShapesEqual(a_dims, out_dims) && ShapesEqual(b_dims, out_dims)) {
+        dim3 grid_dims(std::min(CEIL_DIV(num_elements, block_dims.x), static_cast<size_t>(65535)));
+        BinaryForwardKernelNoBroadcastMixed<Ta, Tb, Tout>
+            <<<grid_dims, block_dims, 0, cuda_stream>>>(output_ptr, func, a_ptr, b_ptr, num_elements);
+    } else {
+        BroadcastMeta meta = MakeBroadcastMeta(a_dims, b_dims, out_dims);
+        dim3 grid_dims(CEIL_DIV(num_elements, block_dims.x));
+        BinaryForwardKernelMixed<Ta, Tb, Tout>
+            <<<grid_dims, block_dims, 0, cuda_stream>>>(output_ptr, func, meta, a_ptr, b_ptr, num_elements);
+    }
+}
+
+// Dispatch the mixed-input forward for the supported (Ta, Tb) combinations. The promoted output type
+// for any two *different* floating dtypes is always float32 (see PromoteDataTypes), so Tout is fixed
+// to float here. Returns false when the combination is not covered (e.g. non-floating, or a/b not
+// contiguous), letting the caller fall back to the promote-via-To() path.
+template <typename Func>
+bool LaunchBinaryForwardMixed(Func func, const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &a,
+                              const std::shared_ptr<Tensor> &b, DataType a_dtype, DataType b_dtype,
+                              DataType promoted_type) {
+    if (promoted_type != DataType::kFLOAT32 || !a->IsContiguous() || !b->IsContiguous()) {
+        return false;
+    }
+    switch (a_dtype) {
+    case DataType::kFLOAT32:
+        switch (b_dtype) {
+        case DataType::kBFLOAT16:
+            LaunchForwardMixed<float, nv_bfloat16, float>(func, output, a, b);
+            return true;
+        case DataType::kFLOAT16:
+            LaunchForwardMixed<float, half, float>(func, output, a, b);
+            return true;
+        default:
+            return false;
+        }
+    case DataType::kBFLOAT16:
+        switch (b_dtype) {
+        case DataType::kFLOAT32:
+            LaunchForwardMixed<nv_bfloat16, float, float>(func, output, a, b);
+            return true;
+        case DataType::kFLOAT16:
+            LaunchForwardMixed<nv_bfloat16, half, float>(func, output, a, b);
+            return true;
+        default:
+            return false;
+        }
+    case DataType::kFLOAT16:
+        switch (b_dtype) {
+        case DataType::kFLOAT32:
+            LaunchForwardMixed<half, float, float>(func, output, a, b);
+            return true;
+        case DataType::kBFLOAT16:
+            LaunchForwardMixed<half, nv_bfloat16, float>(func, output, a, b);
+            return true;
+        default:
+            return false;
+        }
+    default:
+        return false;
     }
 }
 
@@ -551,6 +680,76 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
     }
 }
 
+// Mixed-input variant of the float broadcast backward kernel above. Identical control flow and float
+// accumulation; the only difference is that the saved operands are read as Ta/Tb and widened to Tout
+// (= float) in registers, so BinaryBackward never materializes a bf16->f32 Cast kernel for them.
+template <typename Tout, typename Ta, typename Tb, typename FuncA, typename FuncB>
+__global__ void BinaryBackwardKernelMixed(Tout *output_a, Tout *output_b, FuncA fn_a, FuncB fn_b, BroadcastMeta meta,
+                                          size_t num_elements, const Tout *grad_output, const Ta *input_a,
+                                          const Tb *input_b) {
+    extern __shared__ char shared_memory[];
+    const int tid = threadIdx.x;
+    const int lane_id = tid % kLogicalWarpSize;
+    const int logical_warp_id = tid / kLogicalWarpSize;
+
+    using WarpReduce = cub::WarpReduce<float, kLogicalWarpSize>;
+    auto *temp_storage = reinterpret_cast<typename WarpReduce::TempStorage *>(shared_memory);
+
+    size_t idx = blockIdx.x * blockDim.x + tid;
+    bool in_bounds = (idx < num_elements);
+
+    int64_t a_offset = 0, b_offset = 0;
+    Tout a_val = Tout(0), b_val = Tout(0);
+    float grad_val = 0.0f;
+
+    if (in_bounds) {
+        a_offset = CalcOffset(idx, meta.ndim, meta.a_strides, meta.a_shape, meta.out_strides);
+        b_offset = CalcOffset(idx, meta.ndim, meta.b_strides, meta.b_shape, meta.out_strides);
+        a_val = input_a ? common::cuda::Cast<Tout>(input_a[a_offset]) : Tout(0);
+        b_val = input_b ? common::cuda::Cast<Tout>(input_b[b_offset]) : Tout(0);
+        output_a[a_offset] = Mul<Tout>(grad_output[idx], fn_a(a_val, b_val));
+        grad_val = common::cuda::Cast<float>(Mul<Tout>(grad_output[idx], fn_b(a_val, b_val)));
+    }
+
+    using WarpMask = decltype(__ballot_sync(~uint64_t{0}, true));
+    const WarpMask full_mask = ~WarpMask{0};
+    const WarpMask physical_active_mask = __ballot_sync(full_mask, in_bounds);
+    const int physical_lane = tid % warpSize;
+    const int logical_base = (physical_lane / kLogicalWarpSize) * kLogicalWarpSize;
+    const WarpMask logical_lane_mask = static_cast<WarpMask>(uint64_t{0xffffffff} << logical_base);
+    const WarpMask active_mask = physical_active_mask & logical_lane_mask;
+    if (active_mask == 0) {
+        return;
+    }
+
+    const unsigned logical_active_mask = static_cast<unsigned>(static_cast<uint64_t>(active_mask) >> logical_base);
+    const int leader = __ffs(logical_active_mask) - 1;
+    // All lanes in a nonempty logical warp participate, including out-of-bounds lanes with zero gradients.
+    // Use the active mask only to select valid offsets so warp_uniform agrees across all lanes before Sum.
+    const int64_t common_offset = __shfl_sync(logical_lane_mask, b_offset, leader, kLogicalWarpSize);
+
+    bool warp_uniform = true;
+    for (int i = 0; i < kLogicalWarpSize; ++i) {
+        if (!(logical_active_mask & (unsigned{1} << i))) {
+            continue;
+        }
+        const int64_t offset_i = __shfl_sync(logical_lane_mask, b_offset, i, kLogicalWarpSize);
+        if (offset_i != common_offset) {
+            warp_uniform = false;
+            break;
+        }
+    }
+
+    if (warp_uniform) {
+        const float reduced = WarpReduce(temp_storage[logical_warp_id]).Sum(grad_val);
+        if (lane_id == leader) {
+            atomicAdd(&output_b[common_offset], common::cuda::Cast<Tout>(reduced));
+        }
+    } else if (in_bounds) {
+        atomicAdd(&output_b[b_offset], common::cuda::Cast<Tout>(grad_val));
+    }
+}
+
 // NOTE(dcj): Specialized BinaryBackwardKernel for low-precision types (__half / bfloat16)
 template <typename T, typename FuncA, typename FuncB>
 __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB fn_b, BroadcastMeta meta,
@@ -759,6 +958,114 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
     }
 }
 
+// Mixed-input backward launcher: grad_output and both gradient outputs are Tout (= float for every
+// mixed floating combination), while the saved operands a/b keep their native Ta/Tb and are widened
+// in registers. Mirrors the fast/broadcast split of the homogeneous LaunchBackward above.
+template <typename Ta, typename Tb, typename Tout, typename FuncA, typename FuncB>
+void LaunchBackwardMixed(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &grad_a,
+                         const std::shared_ptr<Tensor> &grad_b, const std::vector<int64_t> &a_dims,
+                         const std::vector<int64_t> &b_dims, const std::shared_ptr<Tensor> &grad_output,
+                         const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b) {
+    auto device = grad_a->GetDevice();
+    const auto &stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                             infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                             ->cuda_stream();
+
+    Tout *out_a_ptr = static_cast<Tout *>(grad_a->DataPtr());
+    Tout *out_b_ptr = static_cast<Tout *>(grad_b->DataPtr());
+    const Tout *grad_out_ptr = static_cast<const Tout *>(grad_output->DataPtr());
+    const Ta *a_ptr = a ? static_cast<const Ta *>(a->DataPtr()) : nullptr;
+    const Tb *b_ptr = b ? static_cast<const Tb *>(b->DataPtr()) : nullptr;
+
+    const auto &out_dims = grad_output->Dims();
+    const size_t num_elements = grad_output->NumElements();
+    dim3 block_dims = ChooseBlockDims(num_elements);
+
+    if (ShapesEqual(a_dims, b_dims) && ShapesEqual(a_dims, out_dims)) {
+        dim3 grid_dims(std::min(CEIL_DIV(num_elements, block_dims.x), static_cast<size_t>(65535)));
+        BinaryBackwardKernelNoBroadcastFastMixed<Ta, Tb, Tout, FuncA, FuncB><<<grid_dims, block_dims, 0, stream>>>(
+            out_a_ptr, out_b_ptr, fun_a, fun_b, num_elements, grad_out_ptr, a_ptr, b_ptr);
+        return;
+    }
+
+    BroadcastMeta meta = MakeBroadcastMeta(a_dims, b_dims, out_dims);
+    dim3 grid_dims(CEIL_DIV(num_elements, block_dims.x));
+    const int block_threads = static_cast<int>(block_dims.x);
+    const int num_warps = CEIL_DIV(block_threads, kLogicalWarpSize);
+    const size_t smem_size = num_warps * sizeof(cub::WarpReduce<float, kLogicalWarpSize>::TempStorage);
+    BinaryBackwardKernelMixed<Tout, Ta, Tb, FuncA, FuncB><<<grid_dims, block_dims, smem_size, stream>>>(
+        out_a_ptr, out_b_ptr, fun_a, fun_b, meta, num_elements, grad_out_ptr, a_ptr, b_ptr);
+}
+
+// Dispatch the mixed-input backward for supported (Ta, Tb) combinations. Returns false (caller falls
+// back to promote-via-To()) when: not actually mixed, operands are non-floating or non-contiguous.
+// Fills grad_a/grad_b with zero only when a broadcast reduction (atomicAdd) will be used.
+template <typename FuncA, typename FuncB>
+bool LaunchBinaryBackwardMixed(FuncA fn_a, FuncB fn_b, const std::shared_ptr<Tensor> &grad_a,
+                               const std::shared_ptr<Tensor> &grad_b, const std::vector<int64_t> &a_dims,
+                               const std::vector<int64_t> &b_dims, const std::shared_ptr<Tensor> &grad_output,
+                               const std::shared_ptr<Tensor> &a, const std::shared_ptr<Tensor> &b,
+                               bool needs_broadcast) {
+    const DataType a_dtype = a ? a->Dtype() : DataType::kFLOAT32;
+    const DataType b_dtype = b ? b->Dtype() : DataType::kFLOAT32;
+    auto is_float
+        = [](DataType d) { return d == DataType::kFLOAT32 || d == DataType::kBFLOAT16 || d == DataType::kFLOAT16; };
+    const bool mixed = (a && a_dtype != DataType::kFLOAT32) || (b && b_dtype != DataType::kFLOAT32);
+    if (!mixed || !is_float(a_dtype) || !is_float(b_dtype)) {
+        return false;
+    }
+    if (!grad_output->IsContiguous() || (a && !a->IsContiguous()) || (b && !b->IsContiguous())) {
+        return false;
+    }
+    if (needs_broadcast) {
+        // grad_a needs no zero-init: a is never broadcast (one-way b->a only), so every kernel here
+        // writes output_a[a_offset] directly with full coverage (each element exactly once). Only
+        // grad_b is accumulated via atomicAdd and thus requires a zero start.
+        grad_b->Fill(0.0f);
+    }
+    switch (a_dtype) {
+    case DataType::kFLOAT32:
+        switch (b_dtype) {
+        case DataType::kBFLOAT16:
+            LaunchBackwardMixed<float, nv_bfloat16, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
+                                                           b);
+            return true;
+        case DataType::kFLOAT16:
+            LaunchBackwardMixed<float, half, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a, b);
+            return true;
+        default:
+            return false;
+        }
+    case DataType::kBFLOAT16:
+        switch (b_dtype) {
+        case DataType::kFLOAT32:
+            LaunchBackwardMixed<nv_bfloat16, float, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
+                                                           b);
+            return true;
+        case DataType::kFLOAT16:
+            LaunchBackwardMixed<nv_bfloat16, half, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
+                                                          b);
+            return true;
+        default:
+            return false;
+        }
+    case DataType::kFLOAT16:
+        switch (b_dtype) {
+        case DataType::kFLOAT32:
+            LaunchBackwardMixed<half, float, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a, b);
+            return true;
+        case DataType::kBFLOAT16:
+            LaunchBackwardMixed<half, nv_bfloat16, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a,
+                                                          b);
+            return true;
+        default:
+            return false;
+        }
+    default:
+        return false;
+    }
+}
+
 template <typename Func> std::shared_ptr<Tensor> UnaryForward(const std::shared_ptr<Tensor> &input, Func unary_fn) {
     auto dtype = input->Dtype();
     auto output = std::make_shared<Tensor>(input->Dims(), dtype, input->GetDevice());
@@ -808,13 +1115,23 @@ std::shared_ptr<Tensor> BinaryForward(const std::shared_ptr<Tensor> &a, const st
 
     DataType promoted_type = PromoteDataTypes(a_dtype, b_dtype);
 
-    auto a_promoted = a_dtype == promoted_type ? a : std::make_shared<Tensor>(a->To(promoted_type));
-    auto b_promoted = b_dtype == promoted_type ? b : std::make_shared<Tensor>(b->To(promoted_type));
     // Currently a and b should have the same data type and only one-way broadcasting from b to a is assumed by
     // default
     CHECK(a->NumElements() >= b->NumElements() && a->NumElements() % b->NumElements() == 0);
 
     auto output = std::make_shared<Tensor>(a->Dims(), promoted_type, a->GetDevice());
+
+    // Mixed-dtype fast path: widen operands to the promoted type *in registers* instead of
+    // materializing a Cast kernel. Bit-identical to the promote-via-To() path below (Cast<Tout> is
+    // exactly the per-element conversion To(Tout) performs), but removes the bf16->f32 upcast kernels
+    // that dominate the timeline before RoPE Mul and the residual Add. Falls back to To() for
+    // combinations the mixed launcher does not cover.
+    if (a_dtype != b_dtype && LaunchBinaryForwardMixed(binary_fn, output, a, b, a_dtype, b_dtype, promoted_type)) {
+        return output;
+    }
+
+    auto a_promoted = a_dtype == promoted_type ? a : std::make_shared<Tensor>(a->To(promoted_type));
+    auto b_promoted = b_dtype == promoted_type ? b : std::make_shared<Tensor>(b->To(promoted_type));
 
     switch (promoted_type) {
         DISPATCH_CASE(WRAP(LaunchForward<float>(binary_fn, output, a_promoted, b_promoted);), DataType::kFLOAT32)
@@ -849,6 +1166,22 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
 
     CHECK(a_num_elements >= b_num_elements && a_num_elements % b_num_elements == 0);
 
+    auto grad_a = std::make_shared<Tensor>(a_dims, promoted_type, device);
+    auto grad_b = std::make_shared<Tensor>(b_dims, promoted_type, device);
+
+    // Only Fill(0) when broadcast is needed (atomicAdd requires zero-init).
+    // The no-broadcast fast path writes every element directly.
+    const bool needs_broadcast = !ShapesEqual(a_dims, b_dims) || !ShapesEqual(a_dims, grad_output->Dims());
+
+    // Mixed-dtype fast path (mirror of BinaryForward): promoted compute/output type is float32,
+    // grad_output is already float32, and the saved operands are contiguous floats of possibly
+    // narrower dtype. Widens in registers instead of materializing Cast kernels, and must run BEFORE
+    // any promote-via-To() below so the bf16->f32 upcast is never launched. Uses the ORIGINAL a/b.
+    if (promoted_type == DataType::kFLOAT32 && dtype == DataType::kFLOAT32
+        && LaunchBinaryBackwardMixed(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output, a, b, needs_broadcast)) {
+        return {grad_a, grad_b};
+    }
+
     auto promote_if_needed = [&](std::shared_ptr<Tensor> &t, size_t expected_numel, DataType promoted_type) {
         if (t) {
             CHECK(expected_numel == t->NumElements());
@@ -863,17 +1196,11 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
         grad_output_promoted = std::make_shared<Tensor>(grad_output_promoted->To(promoted_type));
     }
 
-    auto grad_a = std::make_shared<Tensor>(a_dims, promoted_type, device);
-    auto grad_b = std::make_shared<Tensor>(b_dims, promoted_type, device);
-
-    // Only Fill(0) when broadcast is needed (atomicAdd requires zero-init).
-    // The no-broadcast fast path writes every element directly.
-    const bool needs_broadcast = !ShapesEqual(a_dims, b_dims) || !ShapesEqual(a_dims, grad_output->Dims());
-
     switch (promoted_type) {
         DISPATCH_CASE(WRAP({
                           if (needs_broadcast) {
-                              grad_a->Fill(0.0f);
+                              // grad_a is written directly & fully covered (a never broadcast); only
+                              // grad_b needs zero-init for atomicAdd accumulation.
                               grad_b->Fill(0.0f);
                           }
                           LaunchBackward<float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
@@ -882,7 +1209,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
                           if (needs_broadcast) {
-                              grad_a->Fill(0.0f);
+                              // grad_a is written directly & fully covered (a never broadcast); only
+                              // grad_b needs zero-init for atomicAdd accumulation.
                               grad_b->Fill(0.0f);
                           }
                           LaunchBackward<nv_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
