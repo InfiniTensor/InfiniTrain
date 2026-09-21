@@ -199,7 +199,7 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
     int stage_idx = stage_->stage_index();
     int vpp_size = global::GetVirtualPipelineParallelSize();
 
-    auto schedule = PipelineParallelScheduler::GenerateGPipeSchedule(n, num_stages, vpp_size);
+    auto schedule = PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(n, num_stages, vpp_size);
 
     static bool has_printed = false;
     if (!has_printed && stage_idx == 0) {
