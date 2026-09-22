@@ -39,18 +39,16 @@
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
-#include "example/llama3/checkpoint_loader.h"
-#include "example/llama3/config.h"
+#include "example/fm9gv/checkpoint_loader.h"
+#include "example/fm9gv/config.h"
 
 // TODO(jym): Reorganize CLI flags into categories for better readability and maintainability.
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_string(input_val_bin, "", "input .bin to eval validation loss on");
 DEFINE_string(tokenizer_bin, "", "input .bin to tokenizer");
-// model bin file is downloaded and processed using the script at
-// https://github.com/karpathy/llm.c/blob/master/train_llama3.py
-DEFINE_string(llmc_filepath, "", "llmc model file path to load from");
-DEFINE_string(model, "llama3", "meta-llama/Meta-Llama-3.1-8B");
+DEFINE_string(fm9gv_filepath, "", "converted FM9G text-only FP32 checkpoint");
+DEFINE_bool(fm9gv_tiny, false, "use a small FM9G-shaped model for integration smoke tests");
 // token layout for each step of the optimization
 DEFINE_uint32(batch_size, 4, "batch size, in units of #batch dimensions");
 DEFINE_uint32(sequence_length, 64, "sequence length");
@@ -61,6 +59,7 @@ DEFINE_uint32(freq_generate_txt, 10, "frequency of text generation");
 DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
 DEFINE_double(learning_rate, 1e-5, "Peak learning rate.");
+DEFINE_bool(forward_only, false, "run forward and loss only without allocating optimizer state or updating weights");
 DEFINE_int32(zero_stage, 0, "ZeRO stage (0/1/2/3); 0 disables DistributedOptimizer");
 // lr scheduler
 DEFINE_double(min_lr, 0.0, "Minimum learning rate.");
@@ -108,7 +107,6 @@ using namespace infini_train;
 
 namespace {
 // validation
-const std::unordered_set<std::string> kSupportedModels = {"llama3"};
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
 constexpr char kDeviceDCU[] = "dcu";
@@ -118,7 +116,6 @@ const std::unordered_set<std::string> kSupportedLRDecayStyles
     = {"none", "constant", "linear", "cosine", "inverse-square-root"};
 } // namespace
 
-DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
 DEFINE_validator(device, [](const char *, const std::string &value) {
     return value == kDeviceCPU || value == kDeviceCUDA || value == kDeviceDCU;
 });
@@ -215,21 +212,34 @@ void Train(const nn::parallel::Rank &rank) {
     // rng / reproducibility
     // ManualSeed(42);
 
-    nn::TransformerConfig model_config = llama3::LLaMA3Config();
+    nn::TransformerConfig model_config
+        = FLAGS_fm9gv_tiny ? fm9gv::FM9GVTinyTextConfig() : fm9gv::FM9GVTextConfig();
     std::shared_ptr<nn::Module> model = nullptr;
-    if (!FLAGS_llmc_filepath.empty()) {
-        model = llama3::LoadFromLLMC(FLAGS_llmc_filepath);
+    if (!FLAGS_fm9gv_filepath.empty()) {
+        model = fm9gv::LoadFromFM9GBin(FLAGS_fm9gv_filepath);
+        model_config = std::dynamic_pointer_cast<nn::TransformerModel>(model)->Config();
     } else {
-        llama3::SanitizeLLaMA3Config(model_config);
+        fm9gv::SanitizeFM9GVTextConfig(model_config);
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
 
+    DataType dtype;
+    if (FLAGS_dtype == kDtypeFP32) {
+        dtype = DataType::kFLOAT32;
+    } else if (FLAGS_dtype == kDtypeBF16) {
+        dtype = DataType::kBFLOAT16;
+    } else {
+        LOG(FATAL) << "Rank " << rank.GlobalRank() << ": Datatype " << FLAGS_dtype << " not supported.";
+    }
+
+    // Convert before the device transfer so large models do not temporarily occupy FP32 device memory.
+    model->To(dtype);
     model->To(device);
 
     utils::PrecisionChecker::BuildNameMap(model.get());
 
     // Apply LoRA using GetLoRAModel (in-place injection)
-    bool lora_enabled = FLAGS_lora_rank > 0;
+    const bool lora_enabled = FLAGS_lora_rank > 0;
     if (lora_enabled) {
         nn::lora::LoRAConfig lora_config{FLAGS_lora_rank, static_cast<float>(FLAGS_lora_alpha), 0.0f,
                                          nn::lora::ParseLoRATargetModules(FLAGS_lora_target_modules)};
@@ -248,15 +258,6 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": Model loaded to device.";
-
-    DataType dtype;
-    if (FLAGS_dtype == kDtypeFP32) {
-        dtype = DataType::kFLOAT32;
-    } else if (FLAGS_dtype == kDtypeBF16) {
-        dtype = DataType::kBFLOAT16;
-    } else {
-        LOG(FATAL) << "Rank " << rank.GlobalRank() << ": Datatype " << FLAGS_dtype << " not supported.";
-    }
 
     auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
 
@@ -330,14 +331,19 @@ void Train(const nn::parallel::Rank &rank) {
     }
     CHECK_EQ(named_parameters.size(), params_to_optimize.size());
 
-    if (FLAGS_zero_stage >= 1) {
-        auto model_chunks = (pp_world_size > 1)
-                              ? *(dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks())
-                              : std::vector<std::shared_ptr<nn::Module>>{model};
-        optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, named_parameters,
-                                                                         model_chunks, ddp_world_size, ddp_rank);
+    if (!FLAGS_forward_only) {
+        if (FLAGS_zero_stage >= 1) {
+            auto model_chunks = (pp_world_size > 1)
+                                  ? *(dynamic_cast<nn::parallel::PipelineParallel *>(model.get())->mutable_chunks())
+                                  : std::vector<std::shared_ptr<nn::Module>>{model};
+            optimizer = std::make_shared<nn::parallel::DistributedOptimizer>(optimizer_creator, named_parameters,
+                                                                             model_chunks, ddp_world_size, ddp_rank);
+        } else {
+            optimizer = optimizer_creator(named_parameters);
+        }
     } else {
-        optimizer = optimizer_creator(named_parameters);
+        CHECK_EQ(pp_world_size, 1) << "forward_only currently supports PP=1";
+        LOG(INFO) << "Forward-only mode: optimizer state and parameter updates are disabled.";
     }
 
     const int64_t lr_decay_iters = FLAGS_lr_decay_iters > 0 ? FLAGS_lr_decay_iters : FLAGS_num_iteration;
@@ -348,7 +354,8 @@ void Train(const nn::parallel::Rank &rank) {
     sched_config.lr_decay_iters = lr_decay_iters;
     sched_config.lr_warmup_iters = FLAGS_lr_warmup_iters;
     sched_config.lr_warmup_init = static_cast<float>(FLAGS_lr_warmup_init);
-    auto scheduler = CreateLRScheduler(optimizer, sched_config);
+    std::shared_ptr<LRScheduler> scheduler = nullptr;
+    if (!FLAGS_forward_only) { scheduler = CreateLRScheduler(optimizer, sched_config); }
 
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
@@ -398,7 +405,7 @@ void Train(const nn::parallel::Rank &rank) {
             .max_checkpoint_keep = FLAGS_max_checkpoint_keep,
             .rank = rank,
             .model = *model,
-            .optimizer = FLAGS_save_optimizer_state ? optimizer.get() : nullptr,
+            .optimizer = FLAGS_save_optimizer_state && optimizer ? optimizer.get() : nullptr,
             .lr_scheduler = scheduler.get(),
         });
     };
@@ -438,7 +445,7 @@ void Train(const nn::parallel::Rank &rank) {
         float lossf = 0.0f;
         if (pp_world_size == 1) {
             // model->Train();
-            optimizer->ZeroGrad();
+            if (!FLAGS_forward_only) { optimizer->ZeroGrad(); }
 
             // if we are trying to overfit a single batch, we reset the loader here
             if (FLAGS_overfit_single_batch) {
@@ -470,18 +477,20 @@ void Train(const nn::parallel::Rank &rank) {
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish loss forward";
 
-                LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
-                loss->Backward();
-                // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
-                // between forward and backward.
+                if (!FLAGS_forward_only) {
+                    LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
+                    loss->Backward();
+                    LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
+                }
+                // In training mode, defer the loss D2H copy until after backward to avoid
+                // synchronizing CUDA between forward and backward.
                 auto loss_cpu = loss->To(Device());
                 lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
-                LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
             }
 
-            optimizer->Step();
-            if (scheduler) {
-                scheduler->Step();
+            if (!FLAGS_forward_only) {
+                optimizer->Step();
+                if (scheduler) { scheduler->Step(); }
             }
         } else {
             auto [x, y] = *train_iter;
@@ -545,8 +554,8 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
 #ifdef PROFILE_MODE
-    Profiler::Instance().Report("llama3.report", Profiler::SortBy::DeviceTimePercentage);
-    Profiler::Instance().PrintRecords("llama3.records.log");
+    Profiler::Instance().Report("fm9gv.report", Profiler::SortBy::DeviceTimePercentage);
+    Profiler::Instance().PrintRecords("fm9gv.records.log");
 #endif
 }
 

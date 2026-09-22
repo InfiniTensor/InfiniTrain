@@ -294,9 +294,17 @@ add_executable(llama3
   example/common/utils.cc
   example/common/tokenizer.cc
   example/llama3/checkpoint_loader.cc
-  example/fm9gv/checkpoint_loader.cc
 )
 link_infini_train_exe(llama3)
+
+add_executable(fm9gv
+  example/fm9gv/main.cc
+  example/common/tiny_shakespeare_dataset.cc
+  example/common/utils.cc
+  example/common/tokenizer.cc
+  example/fm9gv/checkpoint_loader.cc
+)
+link_infini_train_exe(fm9gv)
 
 # Tools
 add_subdirectory(tools/infini_run)
