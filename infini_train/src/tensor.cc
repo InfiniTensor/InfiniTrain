@@ -105,6 +105,10 @@ size_t Tensor::NumElements() const { return num_elements_; }
 
 DataType Tensor::Dtype() const { return dtype_; }
 
+void Tensor::set_sequence_parallel(bool enabled) { sequence_parallel_ = enabled; }
+
+bool Tensor::sequence_parallel() const { return sequence_parallel_; }
+
 std::shared_ptr<Tensor> Tensor::Detach() const { return std::make_shared<Tensor>(*this, 0, dims_); }
 
 void Tensor::Fill(Scalar value) {
