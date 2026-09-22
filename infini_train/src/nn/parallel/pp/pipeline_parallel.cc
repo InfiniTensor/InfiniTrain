@@ -104,4 +104,8 @@ PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num
 }
 
 std::vector<std::shared_ptr<Module>> *PipelineParallel::mutable_chunks() { return pipeline_stage_->mutable_chunks(); }
+
+std::shared_ptr<Tensor> PipelineParallel::last_grad_norm() const {
+    return schedule_ ? schedule_->last_grad_norm() : nullptr;
+}
 } // namespace infini_train::nn::parallel

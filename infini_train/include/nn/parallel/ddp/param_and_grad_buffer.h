@@ -125,6 +125,8 @@ public:
 
     const DistributedDataParallelConfig &config() const { return ddp_config_; }
 
+    const ProcessGroup *collective_pg() const { return collective_pg_; }
+
 private:
     std::vector<std::shared_ptr<ParamAndGradBucket>> buckets_;
     const ProcessGroup *collective_pg_ = nullptr;

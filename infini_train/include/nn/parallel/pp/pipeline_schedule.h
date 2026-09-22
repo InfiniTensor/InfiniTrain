@@ -31,12 +31,15 @@ public:
                                    const std::vector<std::shared_ptr<Tensor>> &target_mbs,
                                    const std::shared_ptr<nn::Module> &loss_fn, DataType dtype);
 
+    std::shared_ptr<Tensor> last_grad_norm() const { return last_grad_norm_; }
+
     std::vector<std::shared_ptr<Tensor>> ReceiveFromPrev(int peer_rank);
     std::vector<std::shared_ptr<Tensor>> SendToNext(const std::vector<std::shared_ptr<Tensor>> &tensors, int peer_rank);
 
 protected:
     int num_micro_batches_ = -1;
     std::shared_ptr<PipelineStage> stage_ = nullptr;
+    std::shared_ptr<Tensor> last_grad_norm_ = nullptr;
 };
 
 class PipelineParallelScheduler {
