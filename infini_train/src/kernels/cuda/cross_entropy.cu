@@ -23,7 +23,7 @@ constexpr float kNegativeInfinity = -std::numeric_limits<float>::infinity();
 template <size_t BLOCK_SIZE, typename TargetType, typename InputType>
 __global__ void CrossEntropyForwardKernel(const InputType *__restrict__ input_ptr,
                                           const TargetType *__restrict__ target_ptr, InputType *__restrict__ loss_ptr,
-                                          int bs, int num_classes) {
+                                          int bs, int num_classes, int64_t ignore_index) {
     __shared__ struct {
         float max_logit;
         float sum_exp;
@@ -43,6 +43,11 @@ __global__ void CrossEntropyForwardKernel(const InputType *__restrict__ input_pt
         shared.target_class = target_ptr[sample_idx];
     }
     __syncthreads();
+
+    if (static_cast<int64_t>(shared.target_class) == ignore_index) {
+        if (tid == 0) { loss_ptr[sample_idx] = common::cuda::Cast<InputType>(0.0f); }
+        return;
+    }
 
     // calculate the max
     float thread_max = kNegativeInfinity;
@@ -76,7 +81,8 @@ __global__ void CrossEntropyForwardKernel(const InputType *__restrict__ input_pt
 }
 
 std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input,
-                                            const std::shared_ptr<Tensor> &target) {
+                                            const std::shared_ptr<Tensor> &target, int64_t ignore_index,
+                                            int64_t valid_count) {
     const auto &input_dims = input->Dims();
     CHECK_GE(input_dims.size(), 2);
     const int bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
@@ -102,15 +108,20 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
             // FIXME(dcj): do reduce on GPU
             CrossEntropyForwardKernel<threads_per_block, Ttarget, Tinput>
                 <<<num_blocks, threads_per_block, 0, cuda_stream>>>(input_ptr, target_ptr, batched_loss_ptr, bs,
-                                                                    num_classes);
+                                                                    num_classes, ignore_index);
 
             auto loss_cpu = batched_output->To(Device());
             auto loss = std::make_shared<Tensor>(std::vector<int64_t>{}, input->Dtype(), Device());
             auto loss_cpu_typed_ptr = static_cast<const Tinput *>(loss_cpu.DataPtr());
             static_cast<Tinput *>(loss->DataPtr())[0]
-                = std::accumulate(loss_cpu_typed_ptr, loss_cpu_typed_ptr + bs, 0.0f,
-                                  [](float acc, const Tinput &val) { return acc + common::cuda::Cast<float>(val); })
-                / bs;
+                = valid_count == 0
+                      ? common::cuda::Cast<Tinput>(std::numeric_limits<float>::quiet_NaN())
+                      : common::cuda::Cast<Tinput>(
+                            std::accumulate(loss_cpu_typed_ptr, loss_cpu_typed_ptr + bs, 0.0f,
+                                            [](float acc, const Tinput &val) {
+                                                return acc + common::cuda::Cast<float>(val);
+                                            })
+                            / valid_count);
 
             return std::make_shared<Tensor>(loss->To(input->GetDevice()));
         },
@@ -121,7 +132,8 @@ template <size_t BLOCK_SIZE, typename TargetType, typename InputType>
 __global__ void CrossEntropyBackwardKernel(const InputType *__restrict__ input_ptr,
                                            InputType *__restrict__ input_grad_ptr,
                                            const TargetType *__restrict__ target_ptr,
-                                           const InputType *__restrict__ output_grad_ptr, int bs, int num_classes) {
+                                           const InputType *__restrict__ output_grad_ptr, int bs, int num_classes,
+                                           int64_t ignore_index, int64_t valid_count) {
     __shared__ struct {
         float max_logit;
         float sum_exp;
@@ -142,6 +154,13 @@ __global__ void CrossEntropyBackwardKernel(const InputType *__restrict__ input_p
         shared.target_class = static_cast<int>(target_ptr[idx]);
     }
     __syncthreads();
+
+    if (static_cast<int64_t>(shared.target_class) == ignore_index) {
+        for (int i = tid; i < num_classes; i += BLOCK_SIZE) {
+            input_grad_ptr[idx_base + i] = common::cuda::Cast<InputType>(0.0f);
+        }
+        return;
+    }
 
     // calculate the max
     float thread_max = kNegativeInfinity;
@@ -167,7 +186,7 @@ __global__ void CrossEntropyBackwardKernel(const InputType *__restrict__ input_p
     __syncthreads();
 
     // calculate the gradient
-    const float inv_bs = 1.0f / bs;
+    const float inv_bs = 1.0f / valid_count;
     const float scale = 1.0f / shared.sum_exp;
     const int target = shared.target_class;
 
@@ -181,7 +200,8 @@ __global__ void CrossEntropyBackwardKernel(const InputType *__restrict__ input_p
 
 std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &input,
                                              const std::shared_ptr<Tensor> &target,
-                                             const std::shared_ptr<Tensor> &grad_output) {
+                                             const std::shared_ptr<Tensor> &grad_output, int64_t ignore_index,
+                                             int64_t valid_count) {
     const auto &input_dims = input->Dims();
     CHECK_GE(input_dims.size(), 2);
     const int bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
@@ -212,7 +232,8 @@ std::shared_ptr<Tensor> CrossEntropyBackward(const std::shared_ptr<Tensor> &inpu
 
             CrossEntropyBackwardKernel<threads_per_block, Ttarget, Tinput>
                 <<<num_blocks, threads_per_block, 0, cuda_stream>>>(input_ptr, input_grad_ptr, target_ptr,
-                                                                    output_grad_ptr, bs, num_classes);
+                                                                    output_grad_ptr, bs, num_classes, ignore_index,
+                                                                    valid_count);
         },
         "CUDA CrossEntropyBackward");
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -9,8 +10,11 @@ namespace infini_train::nn {
 class CrossEntropyLoss : public CloneableModule<CrossEntropyLoss> {
 public:
     static constexpr char kType[] = "CrossEntropyLoss";
-    CrossEntropyLoss() : CloneableModule(kType) {}
+    explicit CrossEntropyLoss(int64_t ignore_index = -100) : CloneableModule(kType), ignore_index_(ignore_index) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+private:
+    int64_t ignore_index_ = -100;
 };
 } // namespace infini_train::nn

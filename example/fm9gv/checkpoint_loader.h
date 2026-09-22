@@ -3,11 +3,8 @@
 #include <memory>
 #include <string>
 
-namespace infini_train::nn {
-class TransformerModel;
-} // namespace infini_train::nn
+#include "example/fm9gv/model.h"
 
 namespace fm9gv {
-std::shared_ptr<infini_train::nn::TransformerModel> LoadFromFM9GBin(const std::string &filepath);
+std::shared_ptr<Model> LoadFromFM9GBin(const std::string &filepath);
 } // namespace fm9gv
-

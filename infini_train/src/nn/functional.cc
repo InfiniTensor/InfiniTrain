@@ -6,6 +6,7 @@
 
 #include "infini_train/include/autograd/activations.h"
 #include "infini_train/include/autograd/elementwise.h"
+#include "infini_train/include/autograd/scatter_src.h"
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/softmax.h"
 #include "infini_train/include/autograd/transform.h"
@@ -69,6 +70,29 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &inputs
 
 std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim) {
     return std::make_shared<autograd::Concat>(dim)->Apply(inputs)[0];
+}
+
+std::shared_ptr<Tensor> Scatter(const std::shared_ptr<Tensor> &input, int64_t dim,
+                                const std::shared_ptr<Tensor> &index,
+                                const std::shared_ptr<Tensor> &src) {
+    CHECK_EQ(input->Dims().size(), 3);
+    CHECK_EQ(src->Dims().size(), 3);
+    CHECK_EQ(index->Dims().size(), 2);
+    CHECK(index->Dtype() == DataType::kINT64);
+    CHECK(input->Dtype() == src->Dtype());
+    CHECK(input->GetDevice() == src->GetDevice());
+    CHECK(input->GetDevice() == index->GetDevice());
+    CHECK_EQ(dim, 1) << "DCU Scatter currently supports dim=1";
+
+    const int64_t batch = input->Dims()[0];
+    const int64_t hidden = input->Dims()[2];
+    const int64_t rows = src->Dims()[1];
+    CHECK_EQ(src->Dims()[0], batch);
+    CHECK_EQ(src->Dims()[2], hidden);
+    CHECK_EQ(index->Dims()[0], batch);
+    CHECK_EQ(index->Dims()[1], rows);
+
+    return std::make_shared<autograd::ScatterSrc>(dim)->Apply({input, index, src})[0];
 }
 
 std::shared_ptr<Tensor> Softmax(const std::shared_ptr<Tensor> &input, int64_t dim) {

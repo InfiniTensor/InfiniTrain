@@ -11,6 +11,7 @@
 
 #include "example/common/utils.h"
 #include "example/fm9gv/config.h"
+#include "example/fm9gv/model.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
@@ -30,7 +31,7 @@ constexpr int32_t kFM9GFP32Version = 1;
 
 namespace fm9gv {
 
-std::shared_ptr<nn::TransformerModel> LoadFromFM9GBin(const std::string &filepath) {
+std::shared_ptr<Model> LoadFromFM9GBin(const std::string &filepath) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -62,7 +63,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromFM9GBin(const std::string &filepat
     config.scale_depth = BytesToType<float>(header, 60);
     config.norm_eps = BytesToType<float>(header, 64);
 
-    auto model = std::make_shared<nn::TransformerModel>(config);
+    auto model = std::make_shared<Model>(config);
     auto state_dict = model->StateDict();
 
     const int pp_size = nn::parallel::global::GetPipelineParallelSize();
@@ -232,4 +233,3 @@ std::shared_ptr<nn::TransformerModel> LoadFromFM9GBin(const std::string &filepat
 }
 
 } // namespace fm9gv
-

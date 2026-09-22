@@ -183,4 +183,17 @@ std::shared_ptr<Tensor> Stack(const std::vector<std::shared_ptr<Tensor>> &inputs
 //   Concatenation of the input tensors.
 std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim = 0);
 
+// Out-of-place equivalent of torch.scatter(input, dim, index, src).
+//
+// Args:
+//   input: destination tensor copied before scattering.
+//   dim: dimension along which to scatter (currently dim=1 on DCU).
+//   index: destination indices. A compact [batch, rows] index is accepted when
+//          src is [batch, rows, hidden], avoiding torch's explicit repeat.
+//   src: source tensor.
+//
+std::shared_ptr<Tensor> Scatter(const std::shared_ptr<Tensor> &input, int64_t dim,
+                                const std::shared_ptr<Tensor> &index,
+                                const std::shared_ptr<Tensor> &src);
+
 } // namespace infini_train::nn::function

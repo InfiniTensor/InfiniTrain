@@ -15,6 +15,7 @@ namespace infini_train::kernels::dcu {
 namespace {
 using namespace infini_train::common::dcu;
 constexpr int kWarpSize = warpSize;
+constexpr int kSharedBankWidth = 32;
 
 // Aligned vector type for vectorized loads/stores (128-bit).
 template <typename T, int N> struct __align__(sizeof(T) * N) aligned_vector { T val[N]; };
@@ -540,9 +541,9 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
 
 // NOTE(dcj): Specialized BinaryBackwardKernel for low-precision types (__half / bfloat16)
 template <typename T, typename FuncA, typename FuncB>
-__global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB fn_b, BroadcastMeta meta,
-                                     size_t num_elements, size_t b_num_elements, const T *grad_output, const T *input_a,
-                                     const T *input_b, bool fast_atomics) {
+__global__ void BinaryBackwardLowPrecisionKernel(T *output_a, float *output_b_accum, FuncA fn_a, FuncB fn_b,
+                                                 BroadcastMeta meta, size_t num_elements, const T *grad_output,
+                                                 const T *input_a, const T *input_b) {
 
     const int tid = threadIdx.x;
     const int block_threads = blockDim.x;
@@ -552,10 +553,10 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
     // Dynamic shared memory layout: split offsets and gradients into parallel arrays.
     extern __shared__ char shared_memory[];
     int64_t *s_offset = reinterpret_cast<int64_t *>(shared_memory);
-    float *s_grad = reinterpret_cast<float *>(s_offset + block_threads + block_threads / kWarpSize);
+    float *s_grad = reinterpret_cast<float *>(s_offset + block_threads + block_threads / kSharedBankWidth);
 
     // Padding: insert one slot per 32 threads to avoid bank conflicts.
-    const int padded_tid = tid + (tid >> 5);
+    const int padded_tid = tid + tid / kSharedBankWidth;
 
     // Each thread calculates its own a_offset and b_offset
     int64_t a_offset = 0, b_offset = 0;
@@ -585,8 +586,8 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
     for (int stride = 1; stride < block_threads; stride *= 2) {
         __syncthreads();
         if ((tid % (2 * stride)) == 0 && (tid + stride) < block_threads) {
-            const int p1 = tid + (tid >> 5);
-            const int p2 = (tid + stride) + ((tid + stride) >> 5);
+            const int p1 = tid + tid / kSharedBankWidth;
+            const int p2 = (tid + stride) + (tid + stride) / kSharedBankWidth;
 
             if (s_offset[p1] == s_offset[p2] && s_offset[p1] != -1) {
                 s_grad[p1] += s_grad[p2];
@@ -598,10 +599,9 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
 
     // Write final result back to global memory
     if (in_bounds) {
-        const int shared_idx = tid + (tid >> 5);
+        const int shared_idx = tid + tid / kSharedBankWidth;
         if (s_offset[shared_idx] != -1) {
-            fastAtomicAdd<T, size_t>(output_b, s_offset[shared_idx], b_num_elements,
-                                     common::dcu::Cast<T>(s_grad[shared_idx]), fast_atomics);
+            atomicAdd(output_b_accum + s_offset[shared_idx], s_grad[shared_idx]);
         }
     }
 }
@@ -731,16 +731,29 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
             return;
         }
 
-        // Otherwise fall back to the block-reduction kernel with SoA layout and fast atomics.
+        // Otherwise fall back to the block-reduction kernel. Accumulate the
+        // broadcast gradient in FP32: repeated BF16 atomic additions stop
+        // changing once the partial sum's ULP exceeds an individual update.
+        float *grad_b_accum = nullptr;
+        HIP_CHECK(hipMallocAsync(&grad_b_accum, b_num_elements * sizeof(float), stream));
+        HIP_CHECK(hipMemsetAsync(grad_b_accum, 0, b_num_elements * sizeof(float), stream));
         LaunchKernel<BLOCK_SIZE, T>(
             [=](dim3 grid, dim3 block, size_t /*offset*/, auto... ptrs) {
-                const int padded_block = BLOCK_SIZE + BLOCK_SIZE / kWarpSize;
+                // padded_tid inserts one slot for every 32 threads. DCU uses
+                // wave64, so kWarpSize would under-allocate these arrays and
+                // let the offset and gradient regions overlap.
+                const int padded_block = BLOCK_SIZE + BLOCK_SIZE / kSharedBankWidth;
                 const size_t smem_size = static_cast<size_t>(padded_block) * (sizeof(int64_t) + sizeof(float));
-                BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(
-                    output_a_ptr, output_b_ptr, fun_a, fun_b, meta, num_elements, output_b->NumElements(),
-                    grad_output_ptr, ptrs..., /*fast_atomics=*/true);
+                BinaryBackwardLowPrecisionKernel<<<grid, block, smem_size, stream>>>(
+                    output_a_ptr, grad_b_accum, fun_a, fun_b, meta, num_elements, grad_output_ptr, ptrs...);
             },
             output_a, inputs...);
+        constexpr int kCastThreads = 256;
+        const dim3 cast_grid(CEIL_DIV(b_num_elements, static_cast<size_t>(kCastThreads)));
+        CastFloatToTBhist<T><<<cast_grid, kCastThreads, 0, stream>>>(
+            grad_b_accum, output_b_ptr, static_cast<int>(b_num_elements));
+        HIP_CHECK(hipGetLastError());
+        HIP_CHECK(hipFree(grad_b_accum));
     }
 }
 
