@@ -34,6 +34,8 @@ public:
 
     std::unique_ptr<nn::NoSyncGuard> no_sync() override;
 
+    void FinishGradSync();
+
     DistributedDataParallelConfig ddp_config() const { return ddp_config_; }
 
     const std::vector<std::shared_ptr<ParamAndGradBuffer>> &param_grad_buffers() const { return param_grad_buffers_; }
