@@ -68,6 +68,7 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads(const AddShardParam &add
     size_t num_shard_params = 0;
 
     for (const auto &group : bucket_groups_) {
+        std::vector<LocalGradShard> local_grad_shards;
         const bool use_grad_shard = group->config().zero_stage >= 2;
         const auto &buckets = group->buckets();
         for (size_t bucket_idx = 0; bucket_idx < buckets.size(); ++bucket_idx) {
@@ -116,22 +117,16 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads(const AddShardParam &add
                 // NOTE(zbl): Do not call `param->set_grad(grad_piece);` under ZeRO-2.
                 //            The base optimizer updates param_piece views only; original param->grad()
                 //            would be a partial flattened shard and does not represent the full parameter grad.
+                local_grad_shards.emplace_back(param, grad_piece);
                 add_shard_param(param, param_piece);
                 ++num_shard_params;
             }
         }
+        group->set_local_grad_shards(std::move(local_grad_shards));
     }
 
     CHECK_GT(num_shard_params, 0) << "DistributedOptimizer: this DP rank owns no param pieces. "
                                   << "Check bucket padding/divisibility and param bucketing order.";
-}
-
-void DistributedOptimizer::StartGradSync() {
-    for (auto &group : bucket_groups_) { group->StartGradSync(); }
-}
-
-void DistributedOptimizer::FinishGradSync() {
-    for (auto &group : bucket_groups_) { group->FinishGradSync(); }
 }
 
 void DistributedOptimizer::StartParamSync(bool force_sync) {
@@ -171,14 +166,7 @@ float DistributedOptimizer::learning_rate() const {
     return Optimizer::learning_rate();
 }
 
-void DistributedOptimizer::FinalizeModelGrads() {
-    FinishGradSync();
-    if (model_grad_finalizer_) {
-        model_grad_finalizer_(base_optimizer_->parameters());
-    }
-}
-
-void DistributedOptimizer::StepImpl() {
+void DistributedOptimizer::Step() {
     CHECK(base_optimizer_) << "DistributedOptimizer: base optimizer is null.";
     base_optimizer_->Step();
 

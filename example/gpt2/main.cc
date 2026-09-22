@@ -357,8 +357,6 @@ void Train(const nn::parallel::Rank &rank) {
     } else {
         optimizer = optimizer_creator(named_parameters);
     }
-    optimizer->set_model_grad_finalizer(nn::parallel::FinalizeModelGrads);
-
     const int64_t lr_decay_iters = FLAGS_lr_decay_iters > 0 ? FLAGS_lr_decay_iters : FLAGS_num_iteration;
     TrainingLRSchedulerConfig sched_config;
     sched_config.lr = static_cast<float>(FLAGS_learning_rate);
@@ -517,6 +515,7 @@ void Train(const nn::parallel::Rank &rank) {
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
             }
 
+            nn::parallel::FinalizeModelGrads({model});
             optimizer->Step();
             if (scheduler) {
                 scheduler->Step();

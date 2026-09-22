@@ -231,6 +231,10 @@ std::unique_ptr<nn::NoSyncGuard> DistributedDataParallel::no_sync() {
     return std::make_unique<nn::NoSyncGuard>([this, previous] { SetIsLastMicrobatch(previous); });
 }
 
+void DistributedDataParallel::FinishGradSync() {
+    for (auto &group : bucket_groups_) { group->FinishGradSync(); }
+}
+
 void DistributedDataParallel::SetIsLastMicrobatch(bool is_last_microbatch) {
     is_last_microbatch_->store(is_last_microbatch, std::memory_order_relaxed);
     if (reducer_) {
