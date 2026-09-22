@@ -29,17 +29,13 @@ public:
                          const std::vector<std::shared_ptr<Module>> &model_chunks, size_t ddp_world_size,
                          size_t ddp_rank);
 
-    void FinalizeModelGrads() override;
-    void StepImpl() override;
+    void Step() override;
 
     void ZeroGrad(bool set_to_none = true) override;
 
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
 
     void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
-
-    void StartGradSync();
-    void FinishGradSync();
 
     void StartParamSync(bool force_sync = false);
     void FinishParamSync(bool skip_next_bucket_dispatch = false);

@@ -29,21 +29,6 @@ void Optimizer::ZeroGrad(bool set_to_none) {
     for (auto param : params_) { param->ZeroGrad(set_to_none); }
 }
 
-void Optimizer::Step() {
-    FinalizeModelGrads();
-    StepImpl();
-}
-
-// NOTE(zbl): Centralize model-gradient finalization here. This is the boundary
-//            for gradients that a regular DDP reducer cannot express automatically,
-//            such as SP norms, PP tied embeddings, MoE shared parameters, and loss
-//            normalization.
-void Optimizer::FinalizeModelGrads() {
-    if (model_grad_finalizer_) {
-        model_grad_finalizer_(params_);
-    }
-}
-
 void Optimizer::set_learning_rate(float lr) { learning_rate_ = lr; }
 
 float Optimizer::learning_rate() const { return learning_rate_; }
@@ -68,7 +53,7 @@ SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate
 
 SGD::SGD(const NamedParameterList &named_params, float learning_rate) : Optimizer(named_params, learning_rate) {}
 
-void SGD::StepImpl() {
+void SGD::Step() {
     for (auto param : params_) {
         if (!param->grad()) {
             LOG(INFO) << "Skipping param with null grad.";
@@ -114,7 +99,7 @@ Adam::Adam(const NamedParameterList &named_params, float learning_rate, float be
     }
 }
 
-void Adam::StepImpl() {
+void Adam::Step() {
     ++t_;
 
     for (size_t i = 0; i < params_.size(); ++i) {

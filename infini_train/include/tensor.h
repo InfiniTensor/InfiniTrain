@@ -80,8 +80,8 @@ public:
     size_t NumElements() const;
     DataType Dtype() const;
 
-    void set_sequence_parallel(bool enabled) { sequence_parallel_ = enabled; }
-    bool sequence_parallel() const { return sequence_parallel_; }
+    void set_sequence_parallel(bool enabled);
+    bool sequence_parallel() const;
 
     std::shared_ptr<Tensor> Detach() const;
 
