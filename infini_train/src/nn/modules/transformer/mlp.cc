@@ -1,6 +1,5 @@
 #include "infini_train/include/nn/modules/transformer/mlp.h"
 
-#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -20,23 +19,7 @@
 namespace infini_train::nn {
 
 MLP::MLP(const TransformerConfig &config) : CloneableModule(kType) {
-    // Compute hidden dimension
-    // Base dimension: n_embd * ffn_expansion_ratio
-    int64_t ffn_hidden = static_cast<int64_t>(config.n_embd * config.ffn_expansion_ratio);
-
-    // Apply SwiGLU adjustment
-    if (config.activation_type == MLPType::kSwiGLU) {
-        ffn_hidden = int(2 * ffn_hidden) / 3; // SwiGLU intermediate
-    }
-
-    // Apply multiplier
-    if (config.ffn_dim_multiplier.has_value()) {
-        ffn_hidden
-            = static_cast<int64_t>(std::llround(static_cast<double>(ffn_hidden) * config.ffn_dim_multiplier.value()));
-    }
-
-    // Round up to multiple_of
-    ffn_hidden = (ffn_hidden + config.multiple_of - 1) / config.multiple_of * config.multiple_of;
+    int64_t ffn_hidden = config.ffn_hidden_size.value_or(4 * config.n_embd);
 
     if (config.ffn_type == FFNType::kMoE) {
         const auto &moe_config = moe::RequireMoEConfig(config);
