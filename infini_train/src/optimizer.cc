@@ -82,8 +82,8 @@ Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_ra
     : Optimizer(params, learning_rate), t_(0), beta1_(beta1), beta2_(beta2), eps_(eps) {
 
     for (const auto &param : params_) {
-        m_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
-        v_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
+        m_.emplace_back(std::make_shared<Tensor>(param->Dims(), DataType::kFLOAT32, param->GetDevice()));
+        v_.emplace_back(std::make_shared<Tensor>(param->Dims(), DataType::kFLOAT32, param->GetDevice()));
         m_.back()->Fill(0.0);
         v_.back()->Fill(0.0);
     }
@@ -92,8 +92,8 @@ Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params, float learning_ra
 Adam::Adam(const NamedParameterList &named_params, float learning_rate, float beta1, float beta2, float eps)
     : Optimizer(named_params, learning_rate), t_(0), beta1_(beta1), beta2_(beta2), eps_(eps) {
     for (const auto &[name, param] : named_params) {
-        m_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
-        v_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(), param->GetDevice()));
+        m_.emplace_back(std::make_shared<Tensor>(param->Dims(), DataType::kFLOAT32, param->GetDevice()));
+        v_.emplace_back(std::make_shared<Tensor>(param->Dims(), DataType::kFLOAT32, param->GetDevice()));
         m_.back()->Fill(0.0);
         v_.back()->Fill(0.0);
     }

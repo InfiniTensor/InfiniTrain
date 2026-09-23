@@ -30,6 +30,26 @@ TEST_P(OptimizerStepTest, AdamStep) {
     optimizer->Step();
 }
 
+TEST_P(OptimizerStepTest, AdamUpdatesBF16ParameterWithFP32State) {
+    if (GetDevice().type() != Device::DeviceType::kCUDA) {
+        GTEST_SKIP() << "BF16 Adam update is CUDA-only";
+    }
+    auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kBFLOAT16, GetDevice());
+    param->set_requires_grad(true);
+    param->Fill(1.0f);
+    auto grad = std::make_shared<Tensor>(param->Dims(), DataType::kBFLOAT16, GetDevice());
+    grad->Fill(0.5f);
+    param->set_grad(grad);
+
+    auto optimizer = std::make_shared<optimizers::Adam>(std::vector<std::shared_ptr<Tensor>>{param}, 0.01);
+    optimizer->Step();
+
+    const auto updated = param->To(DataType::kFLOAT32).To(Device());
+    const auto *data = static_cast<const float *>(updated.DataPtr());
+    EXPECT_LT(data[0], 1.0f);
+    EXPECT_EQ(optimizer->StateDict().at("adam.m.0")->Dtype(), DataType::kFLOAT32);
+}
+
 TEST_P(OptimizerStepTest, ZeroGrad) {
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
     param->set_requires_grad(true);
