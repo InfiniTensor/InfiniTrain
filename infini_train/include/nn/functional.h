@@ -187,9 +187,9 @@ std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &input
 //
 // Args:
 //   input: destination tensor copied before scattering.
-//   dim: dimension along which to scatter (currently dim=1 on DCU).
-//   index: destination indices. A compact [batch, rows] index is accepted when
-//          src is [batch, rows, hidden], avoiding torch's explicit repeat.
+//   dim: dimension along which to scatter.
+//   index: destination indices. As in PyTorch's Tensor.scatter, index and src
+//          must have the same shape for the autograd-enabled tensor overload.
 //   src: source tensor.
 //
 std::shared_ptr<Tensor> Scatter(const std::shared_ptr<Tensor> &input, int64_t dim,

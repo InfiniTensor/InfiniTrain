@@ -6,6 +6,7 @@
 
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/tensor.h"
 
 namespace fm9gv {
 
@@ -25,7 +26,8 @@ std::vector<std::shared_ptr<Tensor>> Model::Forward(const std::vector<std::share
         << "FM9GV multimodal embedding replacement currently requires VPP=1";
 
     auto hidden = (*modules_[kPPFirstStageName])({inputs[0]})[0];
-    hidden = nn::function::Scatter(hidden, 1, inputs[2], inputs[1]);
+    auto image_indices = inputs[2]->Unsqueeze(2)->RepeatInterleave(inputs[1]->Dims().back(), 2);
+    hidden = nn::function::Scatter(hidden, 1, image_indices, inputs[1]);
     hidden = (*modules_[std::string(kPPChunkNamePrefix) + "0"])({hidden})[0];
     return (*modules_[kPPLastStageName])({hidden});
 }

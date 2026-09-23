@@ -75,22 +75,21 @@ std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &input
 std::shared_ptr<Tensor> Scatter(const std::shared_ptr<Tensor> &input, int64_t dim,
                                 const std::shared_ptr<Tensor> &index,
                                 const std::shared_ptr<Tensor> &src) {
-    CHECK_EQ(input->Dims().size(), 3);
-    CHECK_EQ(src->Dims().size(), 3);
-    CHECK_EQ(index->Dims().size(), 2);
+    CHECK_EQ(input->Dims().size(), src->Dims().size());
+    CHECK_EQ(index->Dims().size(), src->Dims().size());
     CHECK(index->Dtype() == DataType::kINT64);
     CHECK(input->Dtype() == src->Dtype());
     CHECK(input->GetDevice() == src->GetDevice());
     CHECK(input->GetDevice() == index->GetDevice());
-    CHECK_EQ(dim, 1) << "DCU Scatter currently supports dim=1";
-
-    const int64_t batch = input->Dims()[0];
-    const int64_t hidden = input->Dims()[2];
-    const int64_t rows = src->Dims()[1];
-    CHECK_EQ(src->Dims()[0], batch);
-    CHECK_EQ(src->Dims()[2], hidden);
-    CHECK_EQ(index->Dims()[0], batch);
-    CHECK_EQ(index->Dims()[1], rows);
+    const int64_t rank = static_cast<int64_t>(input->Dims().size());
+    if (dim < 0) { dim += rank; }
+    CHECK_GE(dim, 0);
+    CHECK_LT(dim, rank);
+    for (int64_t axis = 0; axis < rank; ++axis) {
+        CHECK_EQ(index->Dims()[axis], src->Dims()[axis])
+            << "Scatter backward follows PyTorch and requires index.shape == src.shape";
+        if (axis != dim) { CHECK_LE(index->Dims()[axis], input->Dims()[axis]); }
+    }
 
     return std::make_shared<autograd::ScatterSrc>(dim)->Apply({input, index, src})[0];
 }
