@@ -22,7 +22,8 @@ inline nn::TransformerConfig LLaMA3Config() {
             .tie_weights = false,
             .ffn_expansion_ratio = 4.0f,
             .ffn_dim_multiplier = 1.5f,
-            .multiple_of = 256};
+            .multiple_of = 256,
+            .rotary_interleaved = true};
 }
 
 inline void SanitizeLLaMA3Config(const nn::TransformerConfig &c) {

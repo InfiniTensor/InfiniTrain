@@ -1,13 +1,13 @@
-#include "example/llama3/checkpoint_loader.h"
+#include "example/qwen3/checkpoint_loader.h"
 
-#include <cmath>
-#include <cstdlib>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <memory>
-#include <random>
 #include <string>
-#include <unordered_map>
+#include <system_error>
 #include <vector>
 
 #include "glog/logging.h"
@@ -21,37 +21,38 @@
 #include "infini_train/include/tensor.h"
 
 #include "example/common/utils.h"
-#include "example/llama3/config.h"
+#include "example/qwen3/config.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
 
 namespace {
-constexpr int kRandomSeed = 42;
-
-// TODO(zbl): make this rng generator compatible with torch later
-static std::mt19937 gen{kRandomSeed};
+constexpr int32_t kQwen3Magic = 20240804;
+constexpr int32_t kQwen3FP32Version = 4;
+constexpr size_t kQwen3HeaderBytes = 256 * sizeof(int32_t);
 } // namespace
 
-namespace {
-constexpr int32_t kLLaMA3Magic = 20240803;
-constexpr int32_t kLLaMA3FP32Version = 3;
-} // namespace
-
-namespace llama3 {
+namespace qwen3 {
 
 std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
 
+    std::error_code file_size_error;
+    const auto actual_file_size = std::filesystem::file_size(filepath, file_size_error);
+    CHECK(!file_size_error) << "Failed to get file size for " << filepath << ": " << file_size_error.message();
+    CHECK_GE(actual_file_size, kQwen3HeaderBytes) << "Qwen3 LLMC file is shorter than its header: " << filepath;
+
     std::ifstream ifs(filepath, std::ios::binary);
-    const auto header = ReadSeveralBytesFromIfstream(256 * sizeof(int32_t), &ifs);
+    CHECK(ifs.is_open()) << "Failed to open Qwen3 LLMC file: " << filepath;
+    const auto header = ReadSeveralBytesFromIfstream(kQwen3HeaderBytes, &ifs);
+    CHECK(ifs.good()) << "Failed to read Qwen3 LLMC header: " << filepath;
 
     const auto magic = BytesToType<uint32_t>(header, 0);
-    CHECK_EQ(magic, kLLaMA3Magic);
+    CHECK_EQ(magic, kQwen3Magic);
     const auto version = BytesToType<uint32_t>(header, 4);
-    CHECK_EQ(version, kLLaMA3FP32Version);
+    CHECK_EQ(version, kQwen3FP32Version);
 
     const auto block_size = BytesToType<uint32_t>(header, 8);
     const auto vocab_size = BytesToType<uint32_t>(header, 12);
@@ -59,7 +60,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     const auto n_head = BytesToType<uint32_t>(header, 20);
     const auto n_kv_head = BytesToType<uint32_t>(header, 24);
     const auto n_embd = BytesToType<uint32_t>(header, 28);
-    const auto ffn_dim_multiplier = BytesToType<float>(header, 32);
+    const auto intermediate_size = BytesToType<uint32_t>(header, 32);
     const auto multiple_of = BytesToType<uint32_t>(header, 36);
     const auto norm_eps = BytesToType<float>(header, 40);
     const auto rope_theta = BytesToType<float>(header, 44);
@@ -68,23 +69,50 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     const auto version_major = BytesToType<int32_t>(header, 56);
     const auto version_minor = BytesToType<int32_t>(header, 60);
 
-    nn::TransformerConfig llama3_config = llama3::LLaMA3Config();
-    llama3_config.block_size = block_size;
-    llama3_config.vocab_size = vocab_size;
-    llama3_config.n_layer = n_layer;
-    llama3_config.n_head = n_head;
-    llama3_config.n_kv_head = n_kv_head;
-    llama3_config.n_embd = n_embd;
-    llama3_config.ffn_dim_multiplier = ffn_dim_multiplier;
-    llama3_config.multiple_of = multiple_of;
-    llama3_config.rope_theta = rope_theta;
-    llama3_config.use_scaled_rope = static_cast<bool>(use_scaled_rope);
-    llama3_config.norm_eps = norm_eps;
-    llama3_config.max_gen_batch_size = max_gen_bs;
-    llama3::SanitizeLLaMA3Config(llama3_config);
-    auto llama3 = std::make_shared<nn::TransformerModel>(llama3_config);
+    CHECK_GT(n_layer, 0);
+    CHECK_GT(n_head, 0);
+    CHECK_GT(n_kv_head, 0);
+    CHECK_GT(n_embd, 0);
+    CHECK_GT(intermediate_size, 0);
+    CHECK_EQ(n_embd % n_head, 0) << "n_embd must be divisible by n_head.";
+    CHECK_EQ(n_head % n_kv_head, 0) << "n_head must be divisible by n_kv_head.";
 
-    // ========== pp_size：num_stages; vpp_size: num_chunks_per_stage ==========
+    const uintmax_t header_head_dim = n_embd / n_head;
+    const uintmax_t embedding_elements = static_cast<uintmax_t>(vocab_size) * n_embd;
+    const uintmax_t norm_elements = static_cast<uintmax_t>(n_layer) * n_embd;
+    const uintmax_t qk_norm_elements = 2 * static_cast<uintmax_t>(n_layer) * header_head_dim;
+    const uintmax_t qkv_elements
+        = static_cast<uintmax_t>(n_layer) * (n_embd + 2 * static_cast<uintmax_t>(n_kv_head) * header_head_dim) * n_embd;
+    const uintmax_t attention_output_elements = static_cast<uintmax_t>(n_layer) * n_embd * n_embd;
+    const uintmax_t mlp_elements = 3 * static_cast<uintmax_t>(n_layer) * intermediate_size * n_embd;
+    const uintmax_t final_norm_elements = n_embd;
+    const uintmax_t expected_file_size
+        = kQwen3HeaderBytes
+        + sizeof(float)
+              * (2 * embedding_elements + 2 * norm_elements + qk_norm_elements + qkv_elements
+                 + attention_output_elements + mlp_elements + final_norm_elements);
+    CHECK_EQ(actual_file_size, expected_file_size) << "Qwen3 LLMC size mismatch for " << filepath << ": expected "
+                                                   << expected_file_size << " bytes, got " << actual_file_size;
+
+    nn::TransformerConfig qwen3_config = qwen3::Qwen3Config();
+    qwen3_config.block_size = block_size;
+    qwen3_config.vocab_size = vocab_size;
+    qwen3_config.n_layer = n_layer;
+    qwen3_config.n_head = n_head;
+    qwen3_config.n_kv_head = n_kv_head;
+    qwen3_config.n_embd = n_embd;
+    qwen3_config.ffn_expansion_ratio
+        = 3.0f * static_cast<float>(intermediate_size) / (2.0f * static_cast<float>(n_embd));
+    qwen3_config.multiple_of = multiple_of;
+    qwen3_config.rope_theta = rope_theta;
+    qwen3_config.use_scaled_rope = static_cast<bool>(use_scaled_rope);
+    qwen3_config.norm_eps = norm_eps;
+    qwen3_config.max_gen_batch_size = max_gen_bs;
+    qwen3_config.qk_layernorm = true;
+    qwen3::SanitizeQwen3Config(qwen3_config);
+    auto qwen3 = std::make_shared<nn::TransformerModel>(qwen3_config);
+
+    // ========== pp_size: num_stages; vpp_size: num_chunks_per_stage ==========
     int pp_size = nn::parallel::global::GetPipelineParallelSize();
     int vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
     auto pp_rank = nn::parallel::pp_rank;
@@ -103,6 +131,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     CHECK_EQ(n_head % tp_size, 0) << "n_head must be divisible by TP world size.";
     CHECK_EQ(n_kv_head % tp_size, 0) << "n_kv_head must be divisible by TP world size.";
     CHECK_EQ(vocab_size % tp_size, 0) << "vocab_size must be divisible by TP world size.";
+    CHECK_EQ(intermediate_size % tp_size, 0) << "intermediate_size must be divisible by TP world size.";
 
     if (tp_rank == 0) {
         LOG(INFO) << "Model Config:";
@@ -112,7 +141,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         LOG(INFO) << "  n_head             = " << n_head;
         LOG(INFO) << "  n_kv_head          = " << n_kv_head;
         LOG(INFO) << "  n_embd             = " << n_embd;
-        LOG(INFO) << "  ffn_dim_multiplier = " << ffn_dim_multiplier;
+        LOG(INFO) << "  intermediate_size  = " << intermediate_size;
         LOG(INFO) << "  multiple_of        = " << multiple_of;
         LOG(INFO) << "  norm_eps           = " << norm_eps;
         LOG(INFO) << "  rope_theta         = " << rope_theta;
@@ -130,16 +159,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
 
     const int64_t head_dim = static_cast<int64_t>(n_embd) / static_cast<int64_t>(n_head);
 
-    // nn::MLP hidden dim calculation in LLaMA-3
-    auto round_up_to = [](int64_t x, int64_t m) { return (x + m - 1) / m * m; };
-    int64_t hidden_dim = 4LL * static_cast<int64_t>(n_embd);
-    hidden_dim = (2LL * hidden_dim) / 3LL;
-    if (ffn_dim_multiplier > 0.0f) {
-        hidden_dim = static_cast<int64_t>(
-            std::llround(static_cast<double>(ffn_dim_multiplier) * static_cast<double>(hidden_dim)));
-    }
-
-    int64_t ffn_hidden = round_up_to(hidden_dim, static_cast<int64_t>(multiple_of));
+    const int64_t ffn_hidden = static_cast<int64_t>(intermediate_size);
 
     // ===== Per-rank sizes / offsets =====
     // vocab parallel
@@ -164,7 +184,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     const int64_t fc_pp = fc_out / tp_size;
     const int64_t in_fc_pp = ffn_hidden / tp_size;
 
-    auto state_dict = llama3->StateDict();
+    auto state_dict = qwen3->StateDict();
 
     // ========== Read Sharded Params ==========
     // transformer.wte.weight : (vocab_size, n_embd) -> local tp_rank: rows of [v_start : v_start+vpp)
@@ -195,8 +215,29 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         }
     }
 
+    local_layer_index = 0;
+    for (int i = 0; i < static_cast<int>(n_layer); ++i) {
+        if (owned_layers[i]) {
+            auto &q_norm_tensor = state_dict[std::format(
+                "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
+                std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
+                nn::CausalSelfAttention::kQNormLayerName, nn::RMSNorm::kParamWeightName)];
+            ReadVectorAllFloat(ifs, static_cast<float *>(q_norm_tensor->DataPtr()), head_dim);
+
+            auto &k_norm_tensor = state_dict[std::format(
+                "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
+                std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
+                nn::CausalSelfAttention::kKNormLayerName, nn::RMSNorm::kParamWeightName)];
+            ReadVectorAllFloat(ifs, static_cast<float *>(k_norm_tensor->DataPtr()), head_dim);
+            ++local_layer_index;
+        } else {
+            size_t qk_norm_bytes = 2 * head_dim * sizeof(float);
+            ifs.seekg(qk_norm_bytes, std::ios::cur);
+        }
+    }
+
     // transformer.h.{i}.attn.c_attn.weight : ColumnParallelLinear, but actually applies on "rows"
-    // W-qkv should be [Q(=n_embd) | K(=n_kv_head*head_dim) | V(=n_kv_head*head_dim)] × n_embd
+    // W-qkv should be [Q(=n_embd) | K(=n_kv_head*head_dim) | V(=n_kv_head*head_dim)] x n_embd
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
@@ -269,25 +310,6 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         }
     }
 
-    // transformer.h.{i}.mlp.c_fc.weight (up) -> local packed c_fc rows [fc_pp : 2*fc_pp)
-    local_layer_index = 0;
-    for (int i = 0; i < static_cast<int>(n_layer); ++i) {
-        if (owned_layers[i]) {
-            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
-                                                  nn::parallel::ColumnParallelLinear::kParamWeightName)];
-            float *dst = static_cast<float *>(tensor->DataPtr()) + fc_pp * n_embd;
-            ReadMatrixRowShardFloat(ifs, dst,
-                                    /*rows=*/fc_out, /*cols=*/n_embd,
-                                    /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
-            ++local_layer_index;
-        } else {
-            size_t fc_bytes = static_cast<size_t>(ffn_hidden) * n_embd * sizeof(float);
-            ifs.seekg(fc_bytes, std::ios::cur);
-        }
-    }
-
     // transformer.h.{i}.mlp.c_fc2.weight (gate) -> local packed c_fc rows [0 : fc_pp)
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
@@ -298,6 +320,24 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                     /*rows=*/fc_out, /*cols=*/n_embd,
+                                    /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
+            ++local_layer_index;
+        } else {
+            size_t fc_bytes = static_cast<size_t>(ffn_hidden) * n_embd * sizeof(float);
+            ifs.seekg(fc_bytes, std::ios::cur);
+        }
+    }
+
+    // transformer.h.{i}.mlp.c_fc.weight (up) -> local packed c_fc rows [fc_pp : 2*fc_pp)
+    local_layer_index = 0;
+    for (int i = 0; i < static_cast<int>(n_layer); ++i) {
+        if (owned_layers[i]) {
+            auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
+                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
+                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
+                                                  nn::parallel::ColumnParallelLinear::kParamWeightName)];
+            float *dst = static_cast<float *>(tensor->DataPtr()) + fc_pp * n_embd;
+            ReadMatrixRowShardFloat(ifs, dst, /*rows=*/fc_out, /*cols=*/n_embd,
                                     /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
             ++local_layer_index;
         } else {
@@ -344,6 +384,6 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         }
     }
 
-    return llama3;
+    return qwen3;
 }
-} // namespace llama3
+} // namespace qwen3

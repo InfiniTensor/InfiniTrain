@@ -88,7 +88,11 @@ TEST_P(TransformerModuleTest, SwiGLUMLP) {
 
     auto mlp = std::make_shared<nn::MLP>(config);
     mlp->To(GetDevice());
-    EXPECT_EQ(mlp->Parameters().size(), 3);
+    EXPECT_EQ(mlp->Parameters().size(), 2);
+    auto state = mlp->StateDict();
+    ASSERT_TRUE(state.contains("c_fc.weight"));
+    EXPECT_FALSE(state.contains("c_fc2.weight"));
+    EXPECT_EQ(state.at("c_fc.weight")->Dims(), (std::vector<int64_t>{512, config.n_embd}));
 
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 8, 64}, DataType::kFLOAT32, GetDevice());
     auto output = (*mlp)({input});
@@ -241,10 +245,9 @@ TEST_P(TransformerModuleTest, MoELayerTop2SwiGLU) {
 
     auto state = moe->StateDict();
     ASSERT_TRUE(state.contains("experts.expert_0.c_fc.weight"));
-    ASSERT_TRUE(state.contains("experts.expert_0.c_fc2.weight"));
+    EXPECT_FALSE(state.contains("experts.expert_0.c_fc2.weight"));
     ASSERT_TRUE(state.contains("experts.expert_0.c_proj.weight"));
-    EXPECT_EQ(state.at("experts.expert_0.c_fc.weight")->Dims(), (std::vector<int64_t>{48, config.n_embd}));
-    EXPECT_EQ(state.at("experts.expert_0.c_fc2.weight")->Dims(), (std::vector<int64_t>{48, config.n_embd}));
+    EXPECT_EQ(state.at("experts.expert_0.c_fc.weight")->Dims(), (std::vector<int64_t>{96, config.n_embd}));
     EXPECT_EQ(state.at("experts.expert_0.c_proj.weight")->Dims(), (std::vector<int64_t>{config.n_embd, 48}));
 }
 

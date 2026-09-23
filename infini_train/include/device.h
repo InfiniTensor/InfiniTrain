@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <ostream>
 #include <string>
+#include <string_view>
 
 #include "infini_train/include/nn/parallel/rank.h"
 
@@ -13,7 +15,8 @@ public:
     enum class DeviceType : int8_t {
         kCPU = 0,
         kCUDA = 1,
-        kCount = 2,
+        kPrivateUse1 = 2,
+        kCount = 3,
         kInvalid = -1,
     };
 
@@ -30,6 +33,9 @@ public:
 
     bool IsCPU() const;
     bool IsCUDA() const;
+    bool IsPrivateUse1() const;
+
+    static std::optional<DeviceType> ParseType(std::string_view name);
 
     std::string ToString() const;
 

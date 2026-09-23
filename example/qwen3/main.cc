@@ -1,11 +1,9 @@
-#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <memory>
 #include <optional>
 #include <thread>
-#include <unordered_map>
 #include <unordered_set>
 
 #include "gflags/gflags.h"
@@ -19,6 +17,7 @@
 
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/checkpoint/checkpoint.h"
+#include "infini_train/include/checkpoint/checkpoint_manager.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
@@ -32,23 +31,23 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
+#include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
-#include "infini_train/include/optimizer.h"
-#ifdef PROFILE_MODE
-#include "infini_train/include/profiler.h"
-#endif
-#include "infini_train/include/checkpoint/checkpoint_manager.h"
 #include "infini_train/include/nn/parallel/utils.h"
+#include "infini_train/include/optimizer.h"
 #include "infini_train/include/utils/global_module_hook_registry.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
+#ifdef PROFILE_MODE
+#include "infini_train/include/profiler.h"
+#endif
 
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
-#include "example/gpt2/checkpoint_loader.h"
-#include "example/gpt2/config.h"
+#include "example/qwen3/checkpoint_loader.h"
+#include "example/qwen3/config.h"
 
 // TODO(jym): Reorganize CLI flags into categories for better readability and maintainability.
 // I/O
@@ -56,9 +55,9 @@ DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_string(input_val_bin, "", "input .bin to eval validation loss on");
 DEFINE_string(tokenizer_bin, "", "input .bin to tokenizer");
 // model bin file is downloaded and processed using the script at
-// https://github.com/karpathy/llm.c/blob/master/train_gpt2.py
+// Converted from the official Hugging Face checkpoint into the shared LLMC v4 format.
 DEFINE_string(llmc_filepath, "", "llmc model file path to load from");
-DEFINE_string(model, "gpt2", "gpt2|gpt2-medium|gpt2-large|gpt2-xl|d12|d24|d36|d48");
+DEFINE_string(model, "qwen3", "Qwen/Qwen3-8B");
 // token layout for each step of the optimization
 DEFINE_uint32(batch_size, 4, "batch size, in units of #batch dimensions");
 DEFINE_uint32(sequence_length, 64, "sequence length");
@@ -68,7 +67,7 @@ DEFINE_uint32(num_iteration, 10, "number of iterations to run");
 DEFINE_uint32(freq_generate_txt, 10, "frequency of text generation");
 DEFINE_uint32(text_length, 64, "the length of the generated text");
 // optimization
-DEFINE_double(learning_rate, 1e-4, "Peak learning rate.");
+DEFINE_double(learning_rate, 1e-5, "Peak learning rate.");
 DEFINE_int32(zero_stage, 0, "ZeRO stage (0/1/2/3); 0 disables DistributedOptimizer");
 // lr scheduler
 DEFINE_double(min_lr, 0.0, "Minimum learning rate.");
@@ -93,23 +92,23 @@ DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
-
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 DEFINE_uint32(save_interval, 0, "save checkpoint every N steps; 0 disables saving");
 DEFINE_string(load, "", "checkpoint directory to resume from");
 DEFINE_string(save, "", "root directory used to store checkpoints");
 DEFINE_uint32(max_checkpoint_keep, 3, "max number of checkpoint steps to keep");
+DEFINE_bool(load_optimizer_state, true, "whether optimizer state is restored from checkpoints");
+DEFINE_bool(save_optimizer_state, true, "whether optimizer state is persisted in checkpoints");
+
 // precision check
 DEFINE_string(
     precision_check, "",
     "precision check config: level=N,format=simple|table,output_md5=true|false,output_path=PATH,baseline=PATH");
-
 // LoRA parameters
 DEFINE_int32(lora_rank, 0, "LoRA rank (0 = disabled)");
 DEFINE_double(lora_alpha, 16.0, "LoRA alpha scaling factor");
-DEFINE_string(lora_target_modules, "c_attn,c_proj",
-              "LoRA target modules (comma-separated: c_attn,c_proj,c_fc,c_fc2,mlp.c_proj)");
+DEFINE_string(lora_target_modules, "c_attn,c_proj,c_fc,c_fc2", "LoRA target modules (comma-separated)");
 DEFINE_string(lora_save_path, "", "Path to save LoRA weights after training");
 DEFINE_string(lora_load_path, "", "Path to load LoRA weights from");
 
@@ -117,21 +116,11 @@ using namespace infini_train;
 
 namespace {
 // validation
-const std::unordered_set<std::string> kSupportedModels
-    = {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl", "d12", "d24", "d36", "d48"};
+const std::unordered_set<std::string> kSupportedModels = {"qwen3"};
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles
     = {"none", "constant", "linear", "cosine", "inverse-square-root"};
-
-//
-const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
-    {"d12", {.block_size = 1024, .vocab_size = 50257, .n_layer = 12, .n_head = 12, .n_embd = 768}},
-    {"d24", {.block_size = 1024, .vocab_size = 50257, .n_layer = 24, .n_head = 16, .n_embd = 1024}},
-    {"d36", {.block_size = 1024, .vocab_size = 50257, .n_layer = 36, .n_head = 20, .n_embd = 1280}},
-    {"d48", {.block_size = 1024, .vocab_size = 50257, .n_layer = 48, .n_head = 25, .n_embd = 1600}},
-};
-
 } // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) { return kSupportedModels.contains(value); });
@@ -178,7 +167,6 @@ void Train(const nn::parallel::Rank &rank) {
     int pp_rank = 0;
 
     // Set thread-local global rank
-    // TODO(dcj): Use DeviceGuardImpl to get GlobalRank later.
     nn::parallel::global::thread_global_rank = rank.GlobalRank();
 
     const ProcessGroup *ddp_pg = nullptr;
@@ -219,31 +207,33 @@ void Train(const nn::parallel::Rank &rank) {
     const auto tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size;
     CHECK_EQ(FLAGS_total_batch_size % tokens_per_fwdbwd, 0);
     const auto grad_accum_steps = FLAGS_total_batch_size / tokens_per_fwdbwd;
-    LOG(INFO) << "total desired batch size: " << FLAGS_total_batch_size
-              << " => calculated gradient accumulation steps: " << grad_accum_steps;
+    if (rank.IsMainRank()) {
+        LOG(INFO) << "total desired batch size: " << FLAGS_total_batch_size
+                  << " => calculated gradient accumulation steps: " << grad_accum_steps;
+    }
 
     // rng / reproducibility
     // ManualSeed(42);
 
-    // init the model, either from scratch or from OpenAI pretrained checkpoint
-    nn::TransformerConfig model_config = gpt2::GPT2Config();
+    nn::TransformerConfig model_config = qwen3::Qwen3Config();
     std::shared_ptr<nn::Module> model = nullptr;
-
     if (!FLAGS_llmc_filepath.empty()) {
-        model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath);
-    } else if (kModelToConfigs.count(FLAGS_model)) {
-        model_config = kModelToConfigs.at(FLAGS_model);
-        gpt2::SanitizeGPT2Config(model_config);
+        model = qwen3::LoadFromLLMC(FLAGS_llmc_filepath);
+    } else {
+        qwen3::SanitizeQwen3Config(model_config);
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
 
     model->To(device);
 
-    utils::PrecisionChecker::BuildNameMap(model.get());
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS
+    // FIXME(cx): MACA requires model upload to finish before communication begins.
+    if (INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS && device.type() == Device::DeviceType::kPrivateUse1) {
+        core::GetDeviceGuardImpl(device.type())->SynchronizeDevice(device);
+    }
+#endif
 
-    // Get chunk size before wrapping with LoRA (needed for PipelineParallel)
-    auto gpt2_model = std::dynamic_pointer_cast<nn::TransformerModel>(model);
-    CHECK(gpt2_model) << "GPT2 example expects GPT2 model.";
+    utils::PrecisionChecker::BuildNameMap(model.get());
 
     // Apply LoRA using GetLoRAModel (in-place injection)
     bool lora_enabled = FLAGS_lora_rank > 0;
@@ -264,8 +254,8 @@ void Train(const nn::parallel::Rank &rank) {
         nn::lora::PrintLoRASummary(model, rank.GlobalRank());
     }
 
-    // select the data type
-    // TODO(lzm): change to solely rely on the weight file info for determining the dtype when autocast is supported
+    LOG(INFO) << "Rank " << rank.GlobalRank() << ": Model loaded to device.";
+
     DataType dtype;
     if (FLAGS_dtype == kDtypeFP32) {
         dtype = DataType::kFLOAT32;
@@ -276,16 +266,6 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
     auto num_micro_batches = FLAGS_total_batch_size / (FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size);
-
-    // Create optimizer - use GetLoRAParameters if LoRA is enabled
-    std::vector<std::shared_ptr<Tensor>> params_to_optimize;
-    if (lora_enabled) {
-        params_to_optimize = nn::lora::GetLoRAParameters(model);
-        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " LoRA parameters";
-    } else {
-        params_to_optimize = model->Parameters();
-        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " model parameters";
-    }
 
     if (pp_world_size > 1) {
         // NOTE(dcj): To ensure that the tensor shapes at the pipeline stage boundaries remain correct
@@ -306,8 +286,9 @@ void Train(const nn::parallel::Rank &rank) {
     } else if (ddp_world_size > 1) {
         // NOTE(dcj): Complete all device (.to(device)) and dtype (.to(dtype)) conversions
         // before wrapping the model with DistributedDataParallel (DDP).
-        // Otherwise, DDP’s gradient hooks may be lost because new parameter tensors
+        // Otherwise, DDP's gradient hooks may be lost because new parameter tensors
         // are created during the conversion.
+
         auto ddp_config = DistributedDataParallelConfig{.zero_stage = FLAGS_zero_stage};
         model = std::make_shared<DistributedDataParallel>(model, rank, ddp_config);
     }
@@ -326,16 +307,24 @@ void Train(const nn::parallel::Rank &rank) {
     //
     // main training loop
     //
-
     std::unique_ptr<Tokenizer> tokenizer = nullptr;
     if (!FLAGS_tokenizer_bin.empty()) {
         tokenizer = std::make_unique<Tokenizer>(FLAGS_tokenizer_bin);
     }
 
     // TODO(dcj): support more complex optimizer later
-    // auto optimizer = optimizers::SGD(model->Parameters(), FLAGS_learning_rate);
-    auto optimizer_creator = optimizers::SGD::CreateNamed(FLAGS_learning_rate);
+    // auto optimizer = optimizers::Adam(model->Parameters(), FLAGS_learning_rate);
+    auto optimizer_creator = optimizers::Adam::CreateNamed(FLAGS_learning_rate);
     std::shared_ptr<Optimizer> optimizer = nullptr;
+
+    std::vector<std::shared_ptr<Tensor>> params_to_optimize;
+    if (lora_enabled) {
+        params_to_optimize = nn::lora::GetLoRAParameters(model);
+        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " LoRA parameters";
+    } else {
+        params_to_optimize = model->Parameters();
+        LOG(INFO) << "Optimizing " << params_to_optimize.size() << " model parameters";
+    }
     std::unordered_set<const Tensor *> params_to_optimize_set;
     params_to_optimize_set.reserve(params_to_optimize.size());
     for (const auto &param : params_to_optimize) { params_to_optimize_set.insert(param.get()); }
@@ -370,8 +359,7 @@ void Train(const nn::parallel::Rank &rank) {
 
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
-        = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(
-              std::make_shared<VocabParallelCrossEntropyLoss>(model_config.original_vocab_size))
+        = (tp_world_size > 1) ? std::static_pointer_cast<nn::Module>(std::make_shared<VocabParallelCrossEntropyLoss>())
                               : std::static_pointer_cast<nn::Module>(std::make_shared<nn::CrossEntropyLoss>());
     loss_fn->To(device);
     LOG(INFO) << "Rank " << rank.GlobalRank() << ": start training";
@@ -383,10 +371,11 @@ void Train(const nn::parallel::Rank &rank) {
     const auto resume_result = ResumeFromCheckpoint({.resume_root = FLAGS_load,
                                                      .rank = rank,
                                                      .model = model,
-                                                     .optimizer = nullptr,
+                                                     .optimizer = FLAGS_load_optimizer_state ? optimizer : nullptr,
                                                      .model_config = model_config,
                                                      .state = state,
                                                      .lr_scheduler = scheduler});
+
     start_step = resume_result.global_step;
     size_t consumed_train_samples = resume_result.consumed_train_samples;
 
@@ -397,7 +386,7 @@ void Train(const nn::parallel::Rank &rank) {
         }
     };
 
-    // TODO(jym): Move resume position handling into a Sampler abstraction when available.
+    // TODO(jym): Replace with Sampler abstraction when available.
     if (consumed_train_samples > 0) {
         const size_t num_skips
             = DataLoaderBatchesToSkip(consumed_train_samples, train_loader_batch_size, ddp_world_size);
@@ -431,12 +420,10 @@ void Train(const nn::parallel::Rank &rank) {
             .max_checkpoint_keep = FLAGS_max_checkpoint_keep,
             .rank = rank,
             .model = *model,
-            .optimizer = nullptr,
+            .optimizer = FLAGS_save_optimizer_state ? optimizer.get() : nullptr,
             .lr_scheduler = scheduler.get(),
         });
     };
-
-    LOG(INFO) << "start training";
 
     for (int step = start_step; step < FLAGS_num_iteration + 1; ++step) {
         // Reset precision check counters at start of each iteration for file overwrite
@@ -471,8 +458,8 @@ void Train(const nn::parallel::Rank &rank) {
 
         const float current_lr = scheduler ? scheduler->learning_rate() : static_cast<float>(FLAGS_learning_rate);
         float lossf = 0.0f;
-        // model->Train();
         if (pp_world_size == 1) {
+            // model->Train();
             optimizer->ZeroGrad();
 
             // if we are trying to overfit a single batch, we reset the loader here
@@ -490,7 +477,6 @@ void Train(const nn::parallel::Rank &rank) {
                 y = std::make_shared<Tensor>(y->To(device));
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start forward";
-
                 // (bs, seq_len, vocab_size)
                 auto logits = (*model)({x, y})[0];
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish model forward, start loss forward";
@@ -551,8 +537,8 @@ void Train(const nn::parallel::Rank &rank) {
                                       pp_world_size);
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
+                // FIXME(jym): to support PP
                 if (tokenizer) {
-                    // FIXME(jym): to support PP
                     CHECK_EQ(pp_world_size, 1);
                     tokenizer->GenerateText(*model, FLAGS_batch_size, FLAGS_sequence_length, FLAGS_text_length, device);
                 }
@@ -578,8 +564,8 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
 #ifdef PROFILE_MODE
-    Profiler::Instance().Report("gpt2.report", Profiler::SortBy::DeviceTimePercentage);
-    Profiler::Instance().PrintRecords("gpt2.records.log");
+    Profiler::Instance().Report("qwen3.report", Profiler::SortBy::DeviceTimePercentage);
+    Profiler::Instance().PrintRecords("qwen3.records.log");
 #endif
 
 #ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS
