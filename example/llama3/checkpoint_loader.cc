@@ -68,6 +68,15 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     const auto version_major = BytesToType<int32_t>(header, 56);
     const auto version_minor = BytesToType<int32_t>(header, 60);
 
+    auto round_up_to = [](int64_t x, int64_t m) { return (x + m - 1) / m * m; };
+    int64_t hidden_dim = 4LL * static_cast<int64_t>(n_embd);
+    hidden_dim = (2LL * hidden_dim) / 3LL;
+    if (ffn_dim_multiplier > 0.0f) {
+        hidden_dim = static_cast<int64_t>(
+            std::llround(static_cast<double>(ffn_dim_multiplier) * static_cast<double>(hidden_dim)));
+    }
+    const int64_t ffn_hidden = round_up_to(hidden_dim, static_cast<int64_t>(multiple_of));
+
     nn::TransformerConfig llama3_config = llama3::LLaMA3Config();
     llama3_config.block_size = block_size;
     llama3_config.vocab_size = vocab_size;
@@ -75,8 +84,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     llama3_config.n_head = n_head;
     llama3_config.n_kv_head = n_kv_head;
     llama3_config.n_embd = n_embd;
-    llama3_config.ffn_dim_multiplier = ffn_dim_multiplier;
-    llama3_config.multiple_of = multiple_of;
+    llama3_config.ffn_hidden_size = ffn_hidden;
     llama3_config.rope_theta = rope_theta;
     llama3_config.use_scaled_rope = static_cast<bool>(use_scaled_rope);
     llama3_config.norm_eps = norm_eps;
@@ -129,17 +137,6 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     }
 
     const int64_t head_dim = static_cast<int64_t>(n_embd) / static_cast<int64_t>(n_head);
-
-    // nn::MLP hidden dim calculation in LLaMA-3
-    auto round_up_to = [](int64_t x, int64_t m) { return (x + m - 1) / m * m; };
-    int64_t hidden_dim = 4LL * static_cast<int64_t>(n_embd);
-    hidden_dim = (2LL * hidden_dim) / 3LL;
-    if (ffn_dim_multiplier > 0.0f) {
-        hidden_dim = static_cast<int64_t>(
-            std::llround(static_cast<double>(ffn_dim_multiplier) * static_cast<double>(hidden_dim)));
-    }
-
-    int64_t ffn_hidden = round_up_to(hidden_dim, static_cast<int64_t>(multiple_of));
 
     // ===== Per-rank sizes / offsets =====
     // vocab parallel
