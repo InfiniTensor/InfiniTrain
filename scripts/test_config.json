@@ -8,6 +8,7 @@
         "LLAMA3_LORA_WEIGHTS_DIR": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/llama3.2_1B_lora_weights_rank8_alpha16.bin",
         "QWEN3_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/qwen3/tinyshakespeare/tiny_shakespeare_train.bin",
         "QWEN3_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/qwen3/qwen3-8b-fp32.llmc",
+        "QWEN3_LORA_WEIGHTS_DIR": "/data1/shared/InfiniTrain-dev/data/llmc/qwen3/qwen3_8b_lora_weights_rank8_alpha16.bin",
         "GPT2_LORA_WEIGHTS_DIR": "/data1/shared/InfiniTrain-dev/data/llmc/gpt2/gpt2_124M_lora_weights_rank8_alpha16.bin",
         "PROFILE_LOG_DIR": "./profile_logs",
         "LOG_DIR": "./logs",
@@ -923,7 +924,36 @@
                         "tensor_parallel": 8,
                         "lora_rank": 8,
                         "lora_alpha": 16.0,
-                        "lora_target_modules": "c_attn,c_proj,c_fc,c_fc2"
+                        "lora_target_modules": "c_attn,c_proj,c_fc,c_fc2",
+                        "lora_load_path": "$QWEN3_LORA_WEIGHTS_DIR"
+                    }
+                },
+                {
+                    "id": "3d_ddp_tp2_pp2_fp32",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2
+                    }
+                },
+                {
+                    "id": "3d_ddp_tp2_pp2_bf16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2
                     }
                 }
             ]

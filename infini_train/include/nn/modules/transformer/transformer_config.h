@@ -81,9 +81,10 @@ struct TransformerConfig {
     std::optional<MoEConfig> moe_config = std::nullopt;
 
     // RoPE config
-    float rope_theta = 500000.0f;   // theta in RoPE
-    bool use_scaled_rope = false;   // scaled RoPE
-    bool rotary_interleaved = true; // Pair adjacent dimensions; false uses the Hugging Face half-split layout.
+    float rope_theta = 500000.0f;    // theta in RoPE
+    bool use_scaled_rope = false;    // scaled RoPE
+    bool rotary_interleaved = false; // True is rotate pairs of even and odd dimensions (RoFormer style), False is
+                                     // rotate pairs of first half and second half (LLaMa style).
 
     // Normalization
     float norm_eps = 1e-5f; // epsilon in RMSNorm
@@ -93,9 +94,7 @@ struct TransformerConfig {
     bool flash = false;             // flash attention
     int64_t max_gen_batch_size = 4; // max batch size during inference
 
-    // Q-K Norm (Qwen3)
-    bool use_qk_norm = false;
-    float qk_norm_eps = 1e-6f;
+    bool qk_layernorm = false; // Whether to apply `normalization` type of normalization to the query and key embeddings
 
     bool UseGQA() const;
     int GetChunkSize() const;
