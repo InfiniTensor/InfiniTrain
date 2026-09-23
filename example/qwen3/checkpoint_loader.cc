@@ -101,9 +101,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     qwen3_config.n_head = n_head;
     qwen3_config.n_kv_head = n_kv_head;
     qwen3_config.n_embd = n_embd;
-    qwen3_config.ffn_expansion_ratio
-        = 3.0f * static_cast<float>(intermediate_size) / (2.0f * static_cast<float>(n_embd));
-    qwen3_config.multiple_of = multiple_of;
+    qwen3_config.ffn_hidden_size = intermediate_size;
     qwen3_config.rope_theta = rope_theta;
     qwen3_config.use_scaled_rope = static_cast<bool>(use_scaled_rope);
     qwen3_config.norm_eps = norm_eps;

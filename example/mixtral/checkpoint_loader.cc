@@ -53,8 +53,7 @@ nn::TransformerConfig ConfigFromLLMC(const std::string &filepath) {
     config.n_head = infini_train::BytesToType<int32_t>(header, 5 * sizeof(int32_t));
     config.n_kv_head = infini_train::BytesToType<int32_t>(header, 6 * sizeof(int32_t));
     config.n_embd = infini_train::BytesToType<int32_t>(header, 7 * sizeof(int32_t));
-    config.ffn_expansion_ratio = infini_train::BytesToType<float>(header, 9 * sizeof(int32_t));
-    // Header slots 10 and 11 store dense-MLP helpers; MoE expert size is stored in moe_ffn_hidden_size.
+    // Header slots 9-11 store legacy dense-MLP helpers; MoE expert size is stored in moe_ffn_hidden_size.
     config.norm_eps = infini_train::BytesToType<float>(header, 12 * sizeof(int32_t));
     config.rope_theta = infini_train::BytesToType<float>(header, 13 * sizeof(int32_t));
     config.use_scaled_rope = infini_train::BytesToType<int32_t>(header, 14 * sizeof(int32_t)) != 0;
@@ -82,8 +81,6 @@ void CheckLLMCConfig(const std::string &filepath, const nn::TransformerConfig &e
     CompareCheckpointValue("n_head", checkpoint_config.n_head, expected_config.n_head);
     CompareCheckpointValue("n_kv_head", checkpoint_config.n_kv_head, expected_config.n_kv_head);
     CompareCheckpointValue("n_embd", checkpoint_config.n_embd, expected_config.n_embd);
-    CompareCheckpointValue("ffn_expansion_ratio", checkpoint_config.ffn_expansion_ratio,
-                           expected_config.ffn_expansion_ratio);
     CompareCheckpointValue("norm_eps", checkpoint_config.norm_eps, expected_config.norm_eps);
     CompareCheckpointValue("rope_theta", checkpoint_config.rope_theta, expected_config.rope_theta);
     CompareCheckpointValue("use_scaled_rope", checkpoint_config.use_scaled_rope, expected_config.use_scaled_rope);

@@ -23,6 +23,28 @@ namespace nn = infini_train::nn;
 
 class TransformerModuleTest : public infini_train::test::InfiniTrainTest {};
 
+TEST(TransformerConfigTest, MLPDefaultsFFNHiddenSizeToFourTimesHiddenSize) {
+    nn::TransformerConfig config;
+    config.n_embd = 64;
+    config.activation_type = nn::MLPType::kGELU;
+
+    auto state = nn::MLP(config).StateDict();
+    EXPECT_EQ(state.at("c_fc.weight")->Dims(), (std::vector<int64_t>{256, config.n_embd}));
+    EXPECT_EQ(state.at("c_proj.weight")->Dims(), (std::vector<int64_t>{config.n_embd, 256}));
+}
+
+TEST(TransformerConfigTest, MLPUsesConfiguredFFNHiddenSize) {
+    nn::TransformerConfig config;
+    config.n_embd = 64;
+    config.activation_type = nn::MLPType::kSwiGLU;
+    config.ffn_hidden_size = 96;
+    config.add_bias_linear = false;
+
+    auto state = nn::MLP(config).StateDict();
+    EXPECT_EQ(state.at("c_fc.weight")->Dims(), (std::vector<int64_t>{192, config.n_embd}));
+    EXPECT_EQ(state.at("c_proj.weight")->Dims(), (std::vector<int64_t>{config.n_embd, 96}));
+}
+
 TEST_P(TransformerModuleTest, Embedding) {
     SKIP_CPU();
     auto embedding = std::make_shared<nn::Embedding>(1000, 128, GetDevice());
@@ -64,12 +86,14 @@ TEST_P(TransformerModuleTest, GPT2MLP) {
     nn::TransformerConfig config;
     config.n_embd = 64;
     config.activation_type = nn::MLPType::kGELU;
-    config.ffn_expansion_ratio = 4.0f;
     config.add_bias_linear = true;
 
     auto mlp = std::make_shared<nn::MLP>(config);
     mlp->To(GetDevice());
     EXPECT_EQ(mlp->Parameters().size(), 4);
+    auto state = mlp->StateDict();
+    EXPECT_EQ(state.at("c_fc.weight")->Dims(), (std::vector<int64_t>{256, config.n_embd}));
+    EXPECT_EQ(state.at("c_proj.weight")->Dims(), (std::vector<int64_t>{config.n_embd, 256}));
 
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 8, 64}, DataType::kFLOAT32, GetDevice());
     auto output = (*mlp)({input});
@@ -81,10 +105,8 @@ TEST_P(TransformerModuleTest, SwiGLUMLP) {
     nn::TransformerConfig config;
     config.n_embd = 64;
     config.activation_type = nn::MLPType::kSwiGLU;
-    config.ffn_expansion_ratio = 4.0f;
     config.add_bias_linear = false;
-    config.ffn_dim_multiplier = 1.5f;
-    config.multiple_of = 256;
+    config.ffn_hidden_size = 256;
 
     auto mlp = std::make_shared<nn::MLP>(config);
     mlp->To(GetDevice());
