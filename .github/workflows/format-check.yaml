@@ -3,25 +3,38 @@ name: Format Check
 on:
   pull_request:
   push:
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: format-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   format-check:
     name: Check Code Format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Install clang-format 16
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format-16
 
-    - name: Install Python dependencies
-      run: |
-        python3 -m pip install --upgrade pip
-        pip install black
+      - name: Install Python dependencies
+        run: python3 -m pip install black
 
-    - name: Run format check
-      run: |
-        python3 scripts/format.py --path infini_train example --check
+      - name: Run clang-format check
+        run: python3 scripts/clang_format_diff.py --all --check --clang-format clang-format-16
 
+      - name: Run Black check
+        if: ${{ !cancelled() }}
+        run: python3 -m black --check scripts infini_train example
