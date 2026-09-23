@@ -13,11 +13,6 @@ struct ModelParallelConfig {
     bool tp_comm_overlap = false;
     bool tp_comm_bulk_wgrad = true;
     bool tp_comm_bulk_dgrad = true;
-    bool tp_comm_overlap_ag = true;
-    bool tp_comm_overlap_rs = true;
-    bool tp_comm_overlap_rs_dgrad = false;
-    bool tp_comm_overlap_disable_qkv = false;
-    bool tp_comm_overlap_disable_fc1 = false;
 };
 
 } // namespace infini_train::nn::parallel

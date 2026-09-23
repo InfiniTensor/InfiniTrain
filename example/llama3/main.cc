@@ -93,11 +93,6 @@ DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_bool(tp_comm_overlap, false, "Overlap tensor-parallel communication with Linear GEMMs");
 DEFINE_bool(tp_comm_bulk_wgrad, true, "Overlap backward activation AllGather with dgrad GEMM");
 DEFINE_bool(tp_comm_bulk_dgrad, true, "Overlap backward dgrad ReduceScatter with wgrad GEMM");
-DEFINE_bool(tp_comm_overlap_ag, true, "Pipeline tensor-parallel AllGather with Linear GEMMs");
-DEFINE_bool(tp_comm_overlap_rs, true, "Pipeline tensor-parallel ReduceScatter with Linear GEMMs");
-DEFINE_bool(tp_comm_overlap_rs_dgrad, false, "Pipeline dgrad GEMM splits with tensor-parallel ReduceScatter");
-DEFINE_bool(tp_comm_overlap_disable_qkv, false, "Disable pipelined AllGather/GEMM overlap for QKV");
-DEFINE_bool(tp_comm_overlap_disable_fc1, false, "Disable pipelined AllGather/GEMM overlap for MLP FC1");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 // precision
@@ -605,11 +600,6 @@ int main(int argc, char *argv[]) {
     model_parallel_config.tp_comm_overlap = FLAGS_tp_comm_overlap;
     model_parallel_config.tp_comm_bulk_wgrad = FLAGS_tp_comm_bulk_wgrad;
     model_parallel_config.tp_comm_bulk_dgrad = FLAGS_tp_comm_bulk_dgrad;
-    model_parallel_config.tp_comm_overlap_ag = FLAGS_tp_comm_overlap_ag;
-    model_parallel_config.tp_comm_overlap_rs = FLAGS_tp_comm_overlap_rs;
-    model_parallel_config.tp_comm_overlap_rs_dgrad = FLAGS_tp_comm_overlap_rs_dgrad;
-    model_parallel_config.tp_comm_overlap_disable_qkv = FLAGS_tp_comm_overlap_disable_qkv;
-    model_parallel_config.tp_comm_overlap_disable_fc1 = FLAGS_tp_comm_overlap_disable_fc1;
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, model_parallel_config);
     utils::PrecisionCheckEnv::Instance().Init(precision_config);
 

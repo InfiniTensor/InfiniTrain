@@ -7,12 +7,6 @@
 
 namespace infini_train::autograd {
 namespace linear {
-void ForwardOut(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
-                const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &bias) {
-    Dispatcher::Instance().Call<void>({input->GetDevice().type(), "LinearForwardOut"}, input, weight, output, true,
-                                      bias);
-}
-
 std::shared_ptr<Tensor> Forward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
                                 const std::shared_ptr<Tensor> &bias) {
     return Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({input->GetDevice().type(), "LinearForward"}, input,
@@ -24,12 +18,6 @@ std::shared_ptr<Tensor> BackwardInput(const std::shared_ptr<Tensor> &weight, con
     return Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
         {grad_output->GetDevice().type(), "LinearBackwardInput"}, weight, grad_output, true, weight->Dims()[1],
         weight->Dims()[0], input_dims);
-}
-
-void BackwardInputOut(const std::shared_ptr<Tensor> &weight, const std::shared_ptr<Tensor> &grad_output,
-                      const std::shared_ptr<Tensor> &grad_input) {
-    Dispatcher::Instance().Call<void>({grad_output->GetDevice().type(), "LinearBackwardInputOut"}, weight, grad_output,
-                                      grad_input, true, weight->Dims()[1], weight->Dims()[0]);
 }
 
 std::shared_ptr<Tensor> BackwardWeight(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &grad_output,

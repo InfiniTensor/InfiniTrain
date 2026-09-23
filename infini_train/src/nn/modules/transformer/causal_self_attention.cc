@@ -37,8 +37,7 @@ CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config) : Clon
         /*gather_output=*/false,
         /*input_is_parallel=*/false,
         /*skip_bias_add=*/false,
-        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled(),
-        /*tp_comm_buffer_role=*/nn::parallel::TPCommBufferRole::kQKV);
+        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 
     // proj: RowParallel (input is parallel and output is full)
     modules_[kCProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(
