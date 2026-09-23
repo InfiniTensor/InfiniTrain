@@ -265,7 +265,6 @@ add_executable(llama3
   example/llama3/checkpoint_loader.cc
 )
 link_infini_train_exe(llama3)
-endif()
 
 add_executable(qwen3
   example/qwen3/main.cc
@@ -275,6 +274,8 @@ add_executable(qwen3
   example/common/tokenizer.cc
 )
 link_infini_train_exe(qwen3)
+endif()
+
 # Tools
 if(PROJECT_IS_TOP_LEVEL)
 add_subdirectory(tools/infini_run)

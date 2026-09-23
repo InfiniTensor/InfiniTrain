@@ -11,9 +11,9 @@ class Module;
 class Tokenizer {
 public:
     enum class Version : uint32_t {
-        kV1 = 1,
-        kV2 = 2,
-        kV3 = 3,
+        kV1 = 1, // GPT2
+        kV2 = 2, // LLaMA-3
+        kV3 = 3, // Qwen-3
     };
 
     Tokenizer(const std::string &filepath);

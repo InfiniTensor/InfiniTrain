@@ -12,8 +12,6 @@
 
 #include "glog/logging.h"
 
-#include "example/common/utils.h"
-#include "example/qwen3/config.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
@@ -21,6 +19,9 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
+
+#include "example/common/utils.h"
+#include "example/qwen3/config.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
@@ -107,8 +108,8 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     qwen3_config.use_scaled_rope = static_cast<bool>(use_scaled_rope);
     qwen3_config.norm_eps = norm_eps;
     qwen3_config.max_gen_batch_size = max_gen_bs;
-    qwen3_config.use_qk_norm = true;
-    qwen3_config.qk_norm_eps = norm_eps;
+    qwen3_config.qk_layernorm = true;
+    qwen3::SanitizeQwen3Config(qwen3_config);
     auto qwen3 = std::make_shared<nn::TransformerModel>(qwen3_config);
 
     // ========== pp_size: num_stages; vpp_size: num_chunks_per_stage ==========
@@ -178,7 +179,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
 
     // RowParallel (proj)
     const int64_t in_pp = static_cast<int64_t>(n_embd) / tp_size;
-    // nn::MLP: c_fc/c_fc2(shard along row), c_proj(shard along col)
+    // nn::MLP: packed c_fc [gate | up] (shard each block along row), c_proj (shard along col)
     const int64_t fc_out = ffn_hidden;
     const int64_t fc_pp = fc_out / tp_size;
     const int64_t in_fc_pp = ffn_hidden / tp_size;
@@ -309,13 +310,13 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         }
     }
 
-    // gate_proj is loaded into c_fc2 because MLP applies SiLU to its second projection.
+    // transformer.h.{i}.mlp.c_fc2.weight (gate) -> local packed c_fc rows [0 : fc_pp)
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFc2LayerName,
+                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                     /*rows=*/fc_out, /*cols=*/n_embd,
@@ -327,7 +328,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         }
     }
 
-    // up_proj is loaded into c_fc, producing SiLU(gate_proj(x)) * up_proj(x).
+    // transformer.h.{i}.mlp.c_fc.weight (up) -> local packed c_fc rows [fc_pp : 2*fc_pp)
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
@@ -335,8 +336,8 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                                   nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
-            ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
-                                    /*rows=*/fc_out, /*cols=*/n_embd,
+            float *dst = static_cast<float *>(tensor->DataPtr()) + fc_pp * n_embd;
+            ReadMatrixRowShardFloat(ifs, dst, /*rows=*/fc_out, /*cols=*/n_embd,
                                     /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
             ++local_layer_index;
         } else {
