@@ -873,7 +873,7 @@
                     "args": {
                         "dtype": "float32",
                         "nthread_per_process": 8,
-                        "num_iteration": 2,
+                        "num_iteration": 10,
                         "batch_size": 1,
                         "total_batch_size": 64,
                         "tensor_parallel": 8
@@ -884,7 +884,7 @@
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 8,
-                        "num_iteration": 2,
+                        "num_iteration": 10,
                         "batch_size": 1,
                         "total_batch_size": 64,
                         "tensor_parallel": 8
@@ -895,7 +895,7 @@
                     "args": {
                         "dtype": "float32",
                         "nthread_per_process": 8,
-                        "num_iteration": 2,
+                        "num_iteration": 10,
                         "batch_size": 1,
                         "total_batch_size": 64,
                         "tensor_parallel": 8,
@@ -907,7 +907,7 @@
                     "args": {
                         "dtype": "float32",
                         "nthread_per_process": 8,
-                        "num_iteration": 2,
+                        "num_iteration": 10,
                         "batch_size": 1,
                         "total_batch_size": 64,
                         "pipeline_parallel": 8
@@ -918,7 +918,7 @@
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 8,
-                        "num_iteration": 2,
+                        "num_iteration": 10,
                         "batch_size": 1,
                         "total_batch_size": 64,
                         "tensor_parallel": 8,
@@ -934,7 +934,7 @@
                         "dtype": "float32",
                         "nthread_per_process": 8,
                         "num_iteration": 10,
-                        "batch_size": 40,
+                        "batch_size": 20,
                         "total_batch_size": 5120,
                         "tensor_parallel": 2,
                         "sequence_parallel": true,
@@ -948,7 +948,7 @@
                         "dtype": "bfloat16",
                         "nthread_per_process": 8,
                         "num_iteration": 10,
-                        "batch_size": 40,
+                        "batch_size": 20,
                         "total_batch_size": 5120,
                         "tensor_parallel": 2,
                         "sequence_parallel": true,
