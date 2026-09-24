@@ -78,6 +78,24 @@ TEST_P(OptimizerStateTest, AdamStateDictRoundTrip) {
     }
 }
 
+TEST_P(OptimizerStateTest, AdamStateDictUsesStableParameterNames) {
+    auto first = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice());
+    auto second = std::make_shared<Tensor>(std::vector<int64_t>{3}, DataType::kFLOAT32, GetDevice());
+    const NamedParameterList named_parameters{{"transformer.h.0.weight", first}, {"transformer.h.0.bias", second}};
+    auto adam = std::make_shared<optimizers::Adam>(named_parameters, 0.001);
+
+    const auto state = adam->StateDict();
+    EXPECT_TRUE(state.contains("adam.m.transformer.h.0.weight"));
+    EXPECT_TRUE(state.contains("adam.v.transformer.h.0.weight"));
+    EXPECT_TRUE(state.contains("adam.m.transformer.h.0.bias"));
+    EXPECT_TRUE(state.contains("adam.v.transformer.h.0.bias"));
+    EXPECT_TRUE(state.contains("adam.t"));
+
+    auto restored = std::make_shared<optimizers::Adam>(named_parameters, 0.001);
+    restored->LoadStateDict(state);
+    EXPECT_EQ(restored->StateDict().size(), state.size());
+}
+
 // ---------- SGD ----------
 TEST_P(OptimizerStateTest, SGDStateDictEmpty) {
     auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice());
