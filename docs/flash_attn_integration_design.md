@@ -24,10 +24,10 @@ functional API 只表达 Q/K/V 和 scale，mask、dropout、local window、KV ca
 当前调用链为：
 
 ```text
-GPT-2 / LLaMA3 CLI --attention_backend
+GPT-2 / LLaMA3 / Qwen3 CLI --attention_backend
   -> TransformerConfig::flash
   -> CausalSelfAttention::Forward
-       -> QKV projection / optional RoPE / MHA or GQA layout handling
+       -> QKV projection / optional QK RMSNorm / optional RoPE / MHA or GQA layout handling
        -> nn::function::ScaledDotProductAttention
   -> autograd::ScaledDotProductAttention
        -> Dispatcher availability check
@@ -92,8 +92,8 @@ DeviceGuard、当前 CUDA stream，以及 submodule 中的 FlashAttention/CUTLAS
 
 ### CMake 开关
 
-当前 `USE_FLASH_ATTENTION` 默认值为 `ON`，但只有同时启用 `USE_CUDA` 才会创建 CUDA
-backend：
+当前 `USE_FLASH_ATTENTION` 默认值为 `OFF`，需要显式开启，且同时启用 `USE_CUDA` 才会创建
+CUDA backend：
 
 ```bash
 cmake -S . -B build \
@@ -183,8 +183,9 @@ native kernels 支持 fp16 和 bf16。compute dtype 的选择顺序为：
 3. 其他情况 fail-fast。
 
 adapter 使用 `Tensor::To` 把 Q/K/V 和 backward 的 `grad_output` 转成 compute dtype，输出
-保持 compute dtype。GPT-2/LLaMA3 当前 CLI 只开放 `--dtype=bfloat16` 的 Flash 路径；
-fp16 是 framework/kernel 能力，但不是这两个 example 的已开放训练选项。
+保持 compute dtype。GPT-2/LLaMA3/Qwen3 当前 CLI 只开放 `--dtype=bfloat16` 的 Flash 路径；
+fp16 是 framework/kernel 能力，但不是这些 example 的已开放训练选项。训练后的
+`GenerateText` 同样在 autocast scope 内运行，使用全序列 forward，不使用 KV cache。
 
 BF16 backward 末尾当前会把 dQ/dK/dV 显式提升为 FP32。这是框架 autocast/autograd dtype
 语义尚未集中处理前的临时兼容逻辑：forward 的 raw `Tensor::To` 没有建立通用的
@@ -198,15 +199,15 @@ Flash 和 unfused backend 共用 `CausalSelfAttention::Forward`，不再区分
 
 - `kLearnedAbsolute`：模型前段添加 WPE；attention module 创建内部 causal-mask buffer，
   供 unfused fallback 使用；
-- `kRoPE`：`ApplyRotaryEmbedding` 在 attention backend 之前处理 Q/K；当前 transformer
-  调用者提供 runtime mask。
+- `kRoPE`：`ApplyRotaryEmbedding` 在 attention backend 之前处理 Q/K；transformer
+  调用者仅为 unfused 路径创建 runtime causal mask，Flash 路径使用 kernel 内建 causal mask。
 
 统一路径中的 QKV 处理为：
 
 1. ColumnParallelLinear 产生 packed QKV；
 2. MHA 的 Q/K/V 宽度相等，使用单个 `Split` autograd node；
 3. GQA 的 Q 和 K/V 宽度不同，使用三个 `Slice`；
-4. RoPE 模型在此后旋转 Q/K；
+4. 启用 `qk_layernorm` 时先对 Q/K 做 RMSNorm，然后按 `rotary_interleaved` 选择 RoPE 布局；
 5. unfused backend 对 K/V 执行 `RepeatKV`；
 6. Flash backend 保留原始 KV heads，由 native kernel 根据 `Hq/Hkv` 处理 GQA；
 7. Q/K/V 转换到 `(B, H, T, D)` 后进入相应 backend。
@@ -214,10 +215,16 @@ Flash 和 unfused backend 共用 `CausalSelfAttention::Forward`，不再区分
 `Split` fast path 不改变统一 Forward 的语义。它避免在普通 MHA 中创建三个独立 Slice
 autograd nodes；GQA 因为分段宽度不同，仍必须使用 Slice 路径。
 
+Qwen3 沿用以上路径，保留 Q/K RMSNorm、half-split RoPE 和原始 KV heads。
+`example/qwen3/main.cc` 在随机初始化与 LLMC 权重加载两种入口都传递 backend 选择；
+`qwen3::LoadFromLLMC(filepath, use_flash_attention)` 默认使用 unfused。该选项属于运行配置，
+不修改 LLMC 文件格式。Qwen3-8B 的 head dimension 为 128，复用已有 AOT 实例。
+
 ### mask 与 start_pos
 
-当前 Flash functional API 没有 mask/start_pos 参数。Transformer Forward 虽然已经解析
-这两个输入，但选择 Flash backend 后会忽略它们，并固定设置：
+当前 Flash functional API 没有 mask/start_pos 参数。Transformer Forward 在配置 Flash 时
+拒绝非空 `start_pos`；若传入显式 mask，则回退到 unfused（包含 GQA 的 `RepeatKV`）。
+未传 mask 的 Flash 路径固定设置：
 
 ```text
 is_causal        = true
@@ -226,10 +233,9 @@ window_size_right = 0
 seqlen_q         = seqlen_k
 ```
 
-因此当前 Flash 语义仅适用于从位置 0 开始的标准 causal self-attention。外部自定义 mask、
-padding mask、非零 start position、incremental decoding 和 cross-attention 均不受支持。
-在这些能力进入 functional API 之前，调用者不能假设传入 mask/start_pos 会影响 Flash
-结果。
+因此 native Flash 语义仅适用于从位置 0 开始的标准 causal self-attention。
+自定义 mask 由 unfused 路径处理；非零 start position、incremental decoding 和 cross-attention
+仍未实现。
 
 ## Native CUDA adapter
 
@@ -298,7 +304,7 @@ stream 顺序，不依赖额外 host synchronization。
 | Device | CUDA |
 | GPU architecture | sm80 AOT kernels |
 | Kernel dtype | fp16、bf16 |
-| GPT-2/LLaMA3 CLI dtype | bf16 |
+| GPT-2/LLaMA3/Qwen3 CLI dtype | bf16 |
 | Attention type | fixed-length causal self-attention |
 | Head dimension | 64、128 |
 | Head mapping | MHA、GQA、MQA，要求 `Hq % Hkv == 0` |
@@ -307,7 +313,7 @@ stream 顺序，不依赖额外 host synchronization。
 | Backward | non-deterministic |
 | Mask | 仅 kernel 内建 causal mask |
 | Position | `start_pos=0` 语义 |
-| Unsupported | varlen、padding/custom mask、cross-attention、KV cache、generation、local attention、ALiBi、softcap、split-KV |
+| Unsupported in native Flash | varlen、padding/custom mask、cross-attention、KV cache、incremental decoding、local attention、ALiBi、softcap、split-KV |
 
 ## 自动化测试与开发入口
 
@@ -331,11 +337,17 @@ ctest --test-dir build --output-on-failure -R '^test_transformer_cuda$'
 不同 batch/sequence shape 能完整执行 forward、backward 和 optimizer step。具体运行
 结果保存在独立测试日志或报告中。
 
+测试脚本默认以 `USE_FLASH_ATTENTION=OFF` 构建；选中的 tag 通过 `cmake_options` 声明
+构建需求。选择 `flash` tag 时开启该选项，全量运行会复用开启 Flash 的构建。
+`test_qwen3_architecture.cc` 另覆盖缩小版 Qwen3 的 BF16 Flash/unfused logits、loss、全部
+参数梯度和两步 Adam 更新，包含 Q/K RMSNorm、half-split RoPE、GQA 及 64/128 head dimension。
+未编译 Flash 时跳过该项测试。
+
 ## 已知技术债与扩展顺序
 
 建议按以下依赖关系扩展：
 
-1. 在 functional API 中明确 mask/start_pos contract，并对不支持的输入 fail-fast；
+1. 扩展 functional API 的 mask/start_pos contract；当前 module 已执行 fallback/fail-fast；
 2. 把 autocast cast-backward 和 mixed-dtype gradient 语义下沉到通用 autograd 基础设施，
    删除 adapter 的 BF16 特殊 upcast；
 3. 为 deterministic backward 增加接口、workspace 和 AOT 实例；
