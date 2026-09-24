@@ -25,6 +25,9 @@ std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output, const std
 std::shared_ptr<Work> ReduceScatter(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
                                     ReduceOpType reduce_op, const ProcessGroup *pg = nullptr, bool async_op = false);
 
+std::shared_ptr<Work> AlltoAll(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &input,
+                               const ProcessGroup *pg = nullptr, bool async_op = false);
+
 std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                                                           const std::vector<Device> &device_ids, int dim);
 
