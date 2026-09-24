@@ -108,6 +108,7 @@ DEFINE_string(device, "cuda",
               "device type (cpu/cuda/privateuse1/<registered privateuse1 "
               "backend name>), useless if using parallel "
               "training mode");
+DEFINE_string(attention_backend, "unfused", "attention backend: unfused|flash");
 // parallel
 DEFINE_int32(nthread_per_process, 1,
              "Number of threads to use for each process. "
@@ -163,6 +164,8 @@ namespace {
 const std::unordered_set<std::string> kSupportedModels = {"qwen3"};
 constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
+constexpr char kAttentionBackendUnfused[] = "unfused";
+constexpr char kAttentionBackendFlash[] = "flash";
 const std::unordered_set<std::string> kSupportedLRDecayStyles = {
     "none", "constant", "linear", "cosine", "inverse-square-root"};
 }  // namespace
@@ -172,6 +175,9 @@ DEFINE_validator(model, [](const char *, const std::string &value) {
 });
 DEFINE_validator(device, [](const char *, const std::string &value) {
   return Device::ParseType(value).has_value();
+});
+DEFINE_validator(attention_backend, [](const char *, const std::string &value) {
+  return value == kAttentionBackendUnfused || value == kAttentionBackendFlash;
 });
 DEFINE_validator(zero_stage, [](const char *, int32_t value) {
   return value >= 0 && value <= 3;
@@ -259,6 +265,17 @@ void Train(const nn::parallel::Rank &rank) {
     device = Device(device_type, 0);
   }
 
+  const bool use_flash_attention =
+      FLAGS_attention_backend == kAttentionBackendFlash;
+  if (use_flash_attention && device.type() != Device::DeviceType::kCUDA) {
+    LOG(FATAL) << "--attention_backend=flash requires --device=cuda";
+  }
+  if (use_flash_attention && FLAGS_dtype != kDtypeBF16) {
+    LOG(FATAL) << "--attention_backend=flash currently requires "
+                  "--dtype=bfloat16 because FlashAttention 2 "
+                  "supports fp16/bf16 kernels only";
+  }
+
   // calculate gradient accumulation from the desired total batch size and the
   // current run configuration
   const auto tokens_per_fwdbwd =
@@ -280,9 +297,11 @@ void Train(const nn::parallel::Rank &rank) {
       FLAGS_activation_recompute, FLAGS_recompute_granularity,
       FLAGS_recompute_method, static_cast<int64_t>(FLAGS_recompute_num_layers));
   if (!FLAGS_llmc_filepath.empty()) {
-    model = qwen3::LoadFromLLMC(FLAGS_llmc_filepath, recompute_options);
+    model = qwen3::LoadFromLLMC(FLAGS_llmc_filepath, recompute_options,
+                                use_flash_attention);
   } else {
     nn::ApplyActivationRecomputeOptions(&model_config, recompute_options);
+    model_config.flash = use_flash_attention;
     qwen3::SanitizeQwen3Config(model_config);
     model = std::make_shared<nn::TransformerModel>(model_config);
   }
@@ -655,6 +674,7 @@ void Train(const nn::parallel::Rank &rank) {
         // FIXME(jym): to support PP
         if (tokenizer) {
           CHECK_EQ(pp_world_size, 1);
+          infini_train::AutocastGuard autocast_guard(device.type(), dtype);
           tokenizer->GenerateText(*model, FLAGS_batch_size,
                                   FLAGS_sequence_length, FLAGS_text_length,
                                   device);
