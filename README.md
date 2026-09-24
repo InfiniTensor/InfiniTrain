@@ -141,8 +141,24 @@ The generated files can be passed directly to the corresponding executables:
 
 ```bash
 ./build/mnist \
+  --model cnn \
   --device cpu \
   --dataset data/mnist
+```
+
+`--model` selects the network, `cnn` (default) or `mlp`. Launching through
+`infini_run` distributes the training across processes with DDP; each process
+picks its GPU from `LOCAL_RANK` automatically:
+
+```bash
+./build/infini_run \
+  --nnodes=1 \
+  --nproc_per_node=2 \
+  ./build/mnist \
+    --model cnn \
+    --device cuda \
+    --dataset data/mnist \
+    --num_epoch 3
 ```
 
 ##### GPT-2 124M
