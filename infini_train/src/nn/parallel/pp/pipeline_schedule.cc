@@ -15,6 +15,7 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
 #include "infini_train/include/nn/parallel/pp/send_recv.h"
+#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
@@ -299,6 +300,7 @@ float PipelineSchedule::Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tens
 
     float lossf = StepMicroBatches(micro_batches, target_mbs, loss_fn, dtype);
 
+    FinalizeModelGrads(stage_->chunks());
     optimizer->Step();
 
     return lossf;

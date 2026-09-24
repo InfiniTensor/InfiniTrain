@@ -240,6 +240,12 @@ std::shared_ptr<Tensor> ParamAndGradBucketGroup::GetLocalGradShardBuffer(size_t 
     return grad_shard_buffer_list_[bucket_idx];
 }
 
+const std::vector<LocalGradShard> &ParamAndGradBucketGroup::local_grad_shards() const { return local_grad_shards_; }
+
+void ParamAndGradBucketGroup::set_local_grad_shards(std::vector<LocalGradShard> shards) {
+    local_grad_shards_ = std::move(shards);
+}
+
 void ParamAndGradBucketGroup::StartGradSync() {
     if (!collective_pg_) {
         LOG(FATAL) << "ParamAndGradBucketGroup: StartGradSync() called with null collective_pg_.";
