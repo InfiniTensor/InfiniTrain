@@ -26,6 +26,10 @@ CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config) : Clon
     if (config_.qk_layernorm) {
         modules_[kQNormLayerName] = std::make_shared<nn::RMSNorm>(head_dim_, config_.norm_eps);
         modules_[kKNormLayerName] = std::make_shared<nn::RMSNorm>(head_dim_, config_.norm_eps);
+        // NOTE(zbl): In Qwen3-8B, Q/K norm sees full sequences and TP-local heads.
+        //            So we only need to finalize its replicated weights across TP regardless of SP.
+        modules_[kQNormLayerName]->parameter(RMSNorm::kParamWeightName)->set_sequence_parallel(false);
+        modules_[kKNormLayerName]->parameter(RMSNorm::kParamWeightName)->set_sequence_parallel(false);
     }
 
     int64_t qkv_dim = (config.n_head + 2 * n_kv_head_) * head_dim_;
