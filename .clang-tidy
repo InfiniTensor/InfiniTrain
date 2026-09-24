@@ -1,0 +1,17 @@
+---
+Checks: >
+  -*,
+  infinitrain-no-member-definitions-in-headers,
+  readability-identifier-naming
+WarningsAsErrors: '*'
+HeaderFilterRegex: '(^|.*/)(infini_train|example|tests|tools)/'
+HeaderFileExtensions: [h, hh, hpp, hxx, cuh]
+FormatStyle: none
+CheckOptions:
+  # InfiniTrain custom checks.
+  infinitrain-no-member-definitions-in-headers.IgnoreEmptyBodies: true
+
+  # Enum constants: kFooBar
+  readability-identifier-naming.EnumConstantCase: CamelCase
+  readability-identifier-naming.EnumConstantPrefix: k
+...
