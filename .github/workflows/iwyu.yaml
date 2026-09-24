@@ -1,0 +1,86 @@
+name: IWYU
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iwyu-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  iwyu:
+    name: Run IWYU check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for relevant changes
+        id: changes
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ -z "$BASE_REF" || "$BASE_REF" =~ ^0+$ ]]; then
+            BASE_REF="$(git rev-parse HEAD^)"
+          fi
+
+          set +e
+          python3 scripts/iwyu.py \
+            --has-relevant-changes \
+            --ref "$BASE_REF"
+          status=$?
+          set -e
+
+          if [[ "$status" -eq 0 ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$status" -eq 1 ]]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            exit "$status"
+          fi
+
+      - name: Initialize submodules
+        if: steps.changes.outputs.run == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install IWYU
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-17 \
+            iwyu \
+            ninja-build
+
+      - name: Generate compile database
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          cmake -S . -B build/lint -G Ninja \
+            -DCMAKE_C_COMPILER=clang-17 \
+            -DCMAKE_CXX_COMPILER=clang++-17 \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
+            -DUSE_CUDA=OFF \
+            -DUSE_NCCL=OFF \
+            -DUSE_OMP=OFF \
+            -DBUILD_TEST=ON
+
+      - name: Check all translation units
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          python3 scripts/iwyu.py \
+            --all \
+            --build-dir build/lint
