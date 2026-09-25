@@ -10,6 +10,13 @@ class Tensor;
 
 namespace infini_train::nn::function {
 
+// FP32 NCHW cross-correlation, OIHW weights, scalar stride / zero padding,
+// dilation=groups=1. Bias is optional. CPU and CUDA support autograd.
+std::shared_ptr<Tensor> Conv2d(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                               const std::shared_ptr<Tensor> &bias = nullptr, int64_t stride = 1, int64_t padding = 0);
+// Out-of-place FP32 ReLU; the derivative at zero is zero.
+std::shared_ptr<Tensor> ReLU(const std::shared_ptr<Tensor> &input);
+
 // Returns the lower triangular part of a 2D tensor or a batch of matrices.
 //
 // The lower triangular part includes elements on and below the specified

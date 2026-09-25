@@ -110,6 +110,9 @@ MNISTDataset::MNISTDataset(const std::string &dataset, bool train)
         }
     }
     image_file_.tensor = std::move(transposed_tensor);
+    // Tensor views use byte offsets. Images now contain FP32 values, not the
+    // UINT8 values in the IDX file; advance by a full FP32 image per sample.
+    image_size_in_bytes_ = 28 * 28 * sizeof(float);
 }
 
 std::pair<std::shared_ptr<infini_train::Tensor>, std::shared_ptr<infini_train::Tensor>>

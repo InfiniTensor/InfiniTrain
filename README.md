@@ -139,10 +139,23 @@ The generated files can be passed directly to the corresponding executables:
 
 ##### MNIST
 
+The MNIST example uses a two-layer CNN:
+`Conv2d(1,16,3) → ReLU → Conv2d(16,32,3) → ReLU → Flatten → Linear(18432,10)`.
+It accepts flattened DataLoader batches or NCHW images and returns raw logits.
+See [MNIST CNN architecture and tests](docs/mnist_cnn.md) for details.
+The reproducible CPU/CUDA training configuration and measured results are in
+[MNIST end-to-end training](docs/mnist_training.md).
+For one-process-per-GPU NCCL training and real two-GPU integration tests, see
+[MNIST distributed training](docs/mnist_ddp.md).
+
 ```bash
 ./build/mnist \
   --device cpu \
-  --dataset data/mnist
+  --dataset data/mnist \
+  --bs 64 \
+  --num_epoch 3 \
+  --lr 0.05 \
+  --output_dir runs/mnist-cpu
 ```
 
 ##### GPT-2 124M

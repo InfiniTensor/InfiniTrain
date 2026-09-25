@@ -104,6 +104,11 @@ endif()
 
 if(USE_CUDA)
   add_compile_definitions(USE_CUDA=1)
+  set(CMAKE_CUDA_STANDARD 20)
+  set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES "75;80;90")
+  endif()
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
   include_directories(${CUDAToolkit_INCLUDE_DIRS})
@@ -115,7 +120,7 @@ if(USE_CUDA)
   file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
 
   add_library(infini_train_cuda_kernels STATIC ${CUDA_KERNELS})
-  set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "75;80;90")
+  set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}")
 
   target_link_libraries(infini_train_cuda_kernels
     PUBLIC
@@ -239,6 +244,12 @@ add_executable(mnist
   example/mnist/net.cc
 )
 link_infini_train_exe(mnist)
+
+add_executable(mnist_align
+  example/mnist/align.cc
+  example/mnist/net.cc
+)
+link_infini_train_exe(mnist_align)
 
 add_executable(gpt2
   example/gpt2/main.cc

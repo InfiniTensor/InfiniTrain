@@ -6,6 +6,30 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
+std::vector<std::shared_ptr<Tensor>> ReLU::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
+    CHECK_EQ(inputs.size(), 1);
+    CHECK(inputs[0]);
+    CHECK(inputs[0]->Dtype() == DataType::kFLOAT32) << "ReLU supports FP32 only";
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({inputs[0]->GetDevice().type(), "ReLUForward"},
+                                                                 inputs[0])};
+}
+
+void ReLU::SetupContext(const std::vector<std::shared_ptr<Tensor>> &inputs,
+                        const std::vector<std::shared_ptr<Tensor>> &) {
+    ctx_.SaveForBackward({inputs[0]});
+}
+
+std::vector<std::shared_ptr<Tensor>> ReLU::Backward(const std::vector<std::shared_ptr<Tensor>> &grads) {
+    CHECK_EQ(grads.size(), 1);
+    const auto input = ctx_.GetSavedTensors()[0];
+    CHECK(grads[0]);
+    CHECK(grads[0]->Dims() == input->Dims());
+    CHECK(grads[0]->Dtype() == input->Dtype());
+    CHECK(grads[0]->GetDevice() == input->GetDevice());
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({input->GetDevice().type(), "ReLUBackward"}, input,
+                                                                 grads[0])};
+}
+
 std::vector<std::shared_ptr<Tensor>> Sigmoid::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_EQ(input_tensors.size(), 1);
     const auto &input = input_tensors[0];
