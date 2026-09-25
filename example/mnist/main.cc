@@ -17,6 +17,9 @@
 #include "example/mnist/dataset.h"
 #include "example/mnist/net.h"
 
+#include "infini_train/include/dispatcher.h"
+#include "infini_train/include/device.h"
+
 DEFINE_string(dataset, "", "mnist dataset path");
 DEFINE_int32(bs, 64, "batch size");
 DEFINE_int32(num_epoch, 1, "num epochs");
@@ -36,6 +39,7 @@ constexpr char kDeviceCUDA[] = "cuda";
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
 
+
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
@@ -47,14 +51,15 @@ int main(int argc, char *argv[]) {
     auto test_dataset = std::make_shared<MNISTDataset>(FLAGS_dataset, false);
     DataLoader test_dataloader(test_dataset, FLAGS_bs);
 
-    auto network = MNIST();
+    auto network = std::make_shared<MNIST>();
     Device device = FLAGS_device == kDeviceCPU ? Device() : Device(Device::DeviceType::kCUDA, 0);
     Device cpu_device = Device();
-    network.To(device);
+    network->To(device);
+    network->To(cpu_device);
 
     auto loss_fn = nn::CrossEntropyLoss();
     loss_fn.To(device);
-    auto optimizer = optimizers::SGD(network.Parameters(), FLAGS_lr);
+    auto optimizer = optimizers::SGD(network->Parameters(), FLAGS_lr);
 
     for (int epoch = 0; epoch < FLAGS_num_epoch; ++epoch) {
         int train_idx = 0;
@@ -66,11 +71,32 @@ int main(int argc, char *argv[]) {
             auto new_image = std::make_shared<Tensor>(image->To(device));
             auto new_label = std::make_shared<Tensor>(label->To(device));
 
-            auto outputs = network.Forward({new_image});
+            auto outputs = network->Forward({new_image});
             optimizer.ZeroGrad();
 
             auto loss = loss_fn.Forward({outputs[0], new_label});
             loss[0]->Backward();
+
+            // 临时加：检查梯度
+            auto params = network->Parameters();
+            float total_grad = 0.0f;
+            for (auto &param : params) {
+                if (param->grad()) {
+                    float *grad_ptr = static_cast<float *>(param->grad()->DataPtr());
+                    for (int i = 0; i < param->grad()->NumElements(); ++i) {
+                        total_grad += std::abs(grad_ptr[i]);
+                    }
+                }
+            }
+            LOG(ERROR) << "total grad sum: " << total_grad;
+
+            // 临时加：检查参数更新前的值
+            float *first_param = static_cast<float *>(params[0]->DataPtr());
+            float before = first_param[0];
+
+            // 临时加：检查参数更新后的值
+            float after = first_param[0];
+            LOG(ERROR) << "param before: " << before << ", after: " << after;
 
             // Defer the loss D2H copy until after backward; reading it earlier would synchronize CUDA
             // between forward and backward.
@@ -104,7 +130,7 @@ int main(int argc, char *argv[]) {
         auto new_label = std::make_shared<Tensor>(label->To(device));
 
         auto label_cpu = label->To(cpu_device);
-        auto outputs = network.Forward({new_image});
+        auto outputs = network->Forward({new_image});
         auto output_cpu = outputs[0]->To(cpu_device);
         auto loss = loss_fn.Forward({outputs[0], new_label});
         auto loss_cpu = loss[0]->To(cpu_device);

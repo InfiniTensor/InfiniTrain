@@ -16,6 +16,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_compile_options(-Wunused -Wunused-function)
+add_compile_options(-D_USE_MATH_DEFINES)
 
 # ------------------------------------------------------------------------------
 # GoogleTest (submodule)
