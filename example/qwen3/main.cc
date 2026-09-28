@@ -90,6 +90,9 @@ DEFINE_int32(nthread_per_process, 1,
              "When set > 1, enables data parallelism on the specified accelerator devices.");
 DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
+DEFINE_bool(tp_comm_overlap, false, "Overlap tensor-parallel communication with Linear GEMMs");
+DEFINE_bool(tp_comm_bulk_wgrad, true, "Overlap backward activation AllGather with dgrad GEMM");
+DEFINE_bool(tp_comm_bulk_dgrad, true, "Overlap backward dgrad ReduceScatter with wgrad GEMM");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 // precision
@@ -586,8 +589,15 @@ int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
 
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
-    nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
-                                     FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
+    nn::parallel::ModelParallelConfig model_parallel_config;
+    model_parallel_config.tensor_model_parallel_size = FLAGS_tensor_parallel;
+    model_parallel_config.pipeline_model_parallel_size = FLAGS_pipeline_parallel;
+    model_parallel_config.virtual_pipeline_model_parallel_size = FLAGS_virtual_pipeline_parallel;
+    model_parallel_config.sequence_parallel = FLAGS_sequence_parallel;
+    model_parallel_config.tp_comm_overlap = FLAGS_tp_comm_overlap;
+    model_parallel_config.tp_comm_bulk_wgrad = FLAGS_tp_comm_bulk_wgrad;
+    model_parallel_config.tp_comm_bulk_dgrad = FLAGS_tp_comm_bulk_dgrad;
+    nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, model_parallel_config);
     utils::PrecisionCheckEnv::Instance().Init(precision_config);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
