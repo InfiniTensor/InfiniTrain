@@ -305,6 +305,9 @@ RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features, 
     if (bias) {
         parameters_[kParamBiasName]
             = std::make_shared<Tensor>(std::vector<int64_t>{out_features}, DataType::kFLOAT32, device_)->RequiresGrad();
+        if (sequence_parallel_) {
+            parameters_[kParamBiasName]->set_sequence_parallel(true);
+        }
     }
 
     LinearResetParameters(parameters_[kParamWeightName], bias ? parameters_[kParamBiasName] : nullptr);

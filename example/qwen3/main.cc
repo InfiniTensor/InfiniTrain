@@ -502,6 +502,7 @@ void Train(const nn::parallel::Rank &rank) {
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": finish backward";
             }
 
+            nn::parallel::FinalizeModelGrads({model});
             optimizer->Step();
             if (scheduler) {
                 scheduler->Step();
