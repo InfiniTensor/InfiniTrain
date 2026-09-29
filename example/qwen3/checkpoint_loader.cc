@@ -34,7 +34,8 @@ constexpr size_t kQwen3HeaderBytes = 256 * sizeof(int32_t);
 
 namespace qwen3 {
 
-std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) {
+std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
+                                                   const nn::ActivationRecomputeOptions &recompute_options) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -110,6 +111,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     qwen3_config.max_gen_batch_size = max_gen_bs;
     qwen3_config.qk_layernorm = true;
     qwen3::SanitizeQwen3Config(qwen3_config);
+    nn::ApplyActivationRecomputeOptions(&qwen3_config, recompute_options);
     auto qwen3 = std::make_shared<nn::TransformerModel>(qwen3_config);
 
     // ========== pp_size: num_stages; vpp_size: num_chunks_per_stage ==========
