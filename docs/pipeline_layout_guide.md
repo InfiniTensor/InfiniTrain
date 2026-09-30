@@ -118,11 +118,11 @@ auto balanced = nn::parallel::ComputePipelineLoadAnalysis(12, 2, {7, 5}, costs, 
 
 ### 离线对比演示
 
-`docs/pipeline_layout_demo.cc` 是可直接运行的纯CPU演示程序，用上面的`ComputePipelineLoadAnalysis` / `SuggestBalancedPartition` 打印“默认均匀布局 vs 自定义布局”的完整对比表：
+`tools/pipeline_layout_demo.cc` 是可直接运行的纯CPU演示程序，用上面的`ComputePipelineLoadAnalysis` / `SuggestBalancedPartition` 打印“默认均匀布局 vs 自定义布局”的完整对比表：
 
 ```bash
 g++ -std=c++20 -DGLOG_USE_GLOG_EXPORT -I. -Ithird_party/glog/src -Ibuild/third_party/glog \
-    docs/pipeline_layout_demo.cc infini_train/src/nn/parallel/pp/pipeline_layout.cc \
+    tools/pipeline_layout_demo.cc infini_train/src/nn/parallel/pp/pipeline_layout.cc \
     -Lbuild/third_party/glog -lglog -pthread -o build/pipeline_layout_demo
 LD_LIBRARY_PATH=build/third_party/glog ./build/pipeline_layout_demo
 ```
@@ -187,7 +187,7 @@ throughput speedup     |              - |          1.20x
 
 **补充实测：**
 
-`verify_pipeline_layout_correctness.sh` 的配置更小（batch=4, seq=64, total_batch=512, num_iteration=3），其输出的` Pipeline Timing Summary `中 7,5 布局 imbalance bubble 为 **fp32 20.1% / bf16 23.3%**（Stage 0/1 Total：fp32 220.5 / 131.8 ms，bf16 439.8 / 235.2 ms，Bottleneck 均为 Stage 0）。该配置与上表（`total_batch=2048`、10 步）不同，绝对时间与 bubble 比例不可直接逐项对比，但方向一致——7,5 的 Stage 0（7 层）显著重于 Stage 1（5 层），bubble 明显高于均匀布局，佐证 bubble 指标能正确反映负载变化。
+端到端实测采用更小的配置（batch=4, seq=64, total_batch=512, num_iteration=3），其输出的` Pipeline Timing Summary `中 7,5 布局 imbalance bubble 为 **fp32 20.1% / bf16 23.3%**（Stage 0/1 Total：fp32 220.5 / 131.8 ms，bf16 439.8 / 235.2 ms，Bottleneck 均为 Stage 0）。该配置与上表（`total_batch=2048`、10 步）不同，绝对时间与 bubble 比例不可直接逐项对比，但方向一致——7,5 的 Stage 0（7 层）显著重于 Stage 1（5 层），bubble 明显高于均匀布局，佐证 bubble 指标能正确反映负载变化。
 
 ## 输入输出示例
 
@@ -246,12 +246,11 @@ ctest --test-dir build -R 'test_pipeline_layout' --output-on-failure
 
 **端到端验证（2-Stage）方法**：
 
-用相同初始权重分别以单卡/默认布局与自定义布局跑若干训练迭代，比较前向结果、loss 与梯度在允许误差内一致，并确认训练过程无通信死锁。一键脚本 `scripts/verify_pipeline_layout_correctness.sh` 已封装该流程：用相同`--llmc_filepath` 权重与数据分别跑单卡（PP=1）与自定义 2-Stage（PP=2、`--pipeline_layer_partition 7,5`），再逐step对比 train loss（多step中loss 一致即说明前向、反向与梯度一致，任一环节偏差都会在后续step累积成loss发散）：
+用相同初始权重分别以单卡/默认布局与自定义布局跑若干训练迭代，比较前向结果、loss 与梯度在允许误差内一致，并确认训练过程无通信死锁。该流程已接入 `scripts/test_config.json`：`pp_custom_layout_gpt2`（`--pipeline_parallel 2 --pipeline_layer_partition 7,5`）与 `pp_custom_layout_llama3`（`--pipeline_parallel 2 --pipeline_layer_partition 9,7`）两组用例分别对 GPT-2（12 层）与 LLaMA3（16 层）跑自定义 2-Stage 布局，用相同`--llmc_filepath` 权重与数据，与单卡（PP=1）参考逐 step 对比 train loss（多 step 中 loss 一致即说明前向、反向与梯度一致，任一环节偏差都会在后续 step 累积成 loss 发散）：
 
 ```bash
-# scripts/verify_pipeline_layout_correctness.sh for convenience
-bash scripts/verify_pipeline_layout_correctness.sh
-DTYPE=bfloat16 bash scripts/verify_pipeline_layout_correctness.sh 
+# 仅跑自定义布局两组用例（其余测试组由 GPT2_TEST_GROUPS / LLAMA3_TEST_GROUPS 控制）
+bash scripts/run_models_and_profile.bash --only-run pp_custom_layout_gpt2,pp_custom_layout_llama3
 ```
 
 **实测结果**（2×RTX 4090，`batch=4, seq=64, total_batch=512, num_iteration=3`，`7,5` 切分）：

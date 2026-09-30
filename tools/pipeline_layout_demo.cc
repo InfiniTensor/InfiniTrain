@@ -10,7 +10,7 @@
 //
 // Build & run (from the repo root, inside WSL):
 //   g++ -std=c++20 -I. -Ithird_party/glog/src \
-//       docs/pipeline_layout_demo.cc infini_train/src/nn/parallel/pp/pipeline_layout.cc \
+//       tools/pipeline_layout_demo.cc infini_train/src/nn/parallel/pp/pipeline_layout.cc \
 //       -Lbuild/third_party/glog -lglog -pthread -o build/pipeline_layout_demo
 //   ./build/pipeline_layout_demo
 
