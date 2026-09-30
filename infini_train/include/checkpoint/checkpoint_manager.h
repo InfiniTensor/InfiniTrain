@@ -6,7 +6,6 @@
 #include <memory>
 
 #include "infini_train/include/checkpoint/checkpoint.h"
-#include "infini_train/include/dataloader.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/optimizer.h"
@@ -50,6 +49,7 @@ struct SaveCheckpointArgs {
     int tp_size = 1;
     int sp_size = 1;
     int pp_size = 1;
+    int vpp_size = 1;
     std::filesystem::path checkpoint_root_dir;
     size_t max_checkpoint_keep = 0;
     const nn::parallel::Rank &rank;
