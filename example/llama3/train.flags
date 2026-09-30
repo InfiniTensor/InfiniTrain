@@ -1,0 +1,15 @@
+# LLaMA3 training defaults. CLI options after --flagfile override these values.
+--model=llama3
+--optimizer=adam
+--learning_rate=0.00001
+--batch_size=4
+--sequence_length=64
+--total_batch_size=256
+--num_iteration=10
+--dtype=float32
+--zero_stage=0
+--lr_decay_style=constant
+--lora_target_modules=c_attn,c_proj,c_fc,c_fc2
+--load_optimizer_state=true
+--save_optimizer_state=true
+--profile_name=llama3

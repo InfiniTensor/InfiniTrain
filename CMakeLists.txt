@@ -72,6 +72,9 @@ endif()
 # Framework core sources (*.cc), excluding cpu kernels (they are built separately)
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
 list(FILTER SRC EXCLUDE REGEX ".*kernels/cpu/.*")
+# CLI flags are opt-in: linking the core must not register names such as
+# --device or --batch_size that applications may define themselves.
+list(FILTER SRC EXCLUDE REGEX ".*/training/arguments\\.cc$")
 
 # Exclude backend-specific runtime/ccl translation units when the corresponding
 # backend is disabled. This keeps each build self-contained and avoids pulling
@@ -229,6 +232,14 @@ add_library(InfiniTrain::infini_train_executable ALIAS infini_train_executable)
 unset(_infini_train_executable_archives)
 
 # ------------------------------------------------------------------------------
+# Training CLI (opt-in for applications)
+# ------------------------------------------------------------------------------
+
+add_library(infini_train_training_cli STATIC infini_train/src/training/arguments.cc)
+add_library(InfiniTrain::training_cli ALIAS infini_train_training_cli)
+target_link_libraries(infini_train_training_cli PUBLIC InfiniTrain::infini_train)
+
+# ------------------------------------------------------------------------------
 # Examples
 # ------------------------------------------------------------------------------
 
@@ -240,14 +251,42 @@ add_executable(mnist
 )
 link_infini_train_exe(mnist)
 
-add_executable(gpt2
-  example/gpt2/main.cc
+# Only GPT task/data/weight-format code belongs to the example executable.
+# The training runtime comes from infini_train; its CLI adapter is opt-in.
+set(INFINITRAIN_GPT_EXAMPLE_SOURCES
+  example/pretrain_gpt.cc
   example/common/tiny_shakespeare_dataset.cc
   example/common/utils.cc
   example/common/tokenizer.cc
+  # Provider TUs contain startup registration and must be linked into the
+  # executable directly (not discarded as unreferenced archive members).
+  example/gpt2/model_provider.cc
+  example/llama3/model_provider.cc
+  example/qwen3/model_provider.cc
   example/gpt2/checkpoint_loader.cc
+  example/llama3/checkpoint_loader.cc
+  example/qwen3/checkpoint_loader.cc
 )
-link_infini_train_exe(gpt2)
+
+foreach(model IN ITEMS pretrain_gpt gpt2 llama3 qwen3)
+  add_executable(${model} ${INFINITRAIN_GPT_EXAMPLE_SOURCES})
+  if(NOT model STREQUAL "pretrain_gpt")
+    target_compile_definitions(${model} PRIVATE
+      INFINITRAIN_GPT_DEFAULT_FLAGFILE="configs/${model}/train.flags")
+    # Keep runtime presets beside each executable, including multi-config builds.
+    # Copy on every requested build so editing a preset needs no C++ recompilation.
+    add_custom_target(${model}_training_config
+      COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${model}>/configs/${model}"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/example/${model}/train.flags"
+        "$<TARGET_FILE_DIR:${model}>/configs/${model}/train.flags"
+      VERBATIM
+    )
+    add_dependencies(${model} ${model}_training_config)
+  endif()
+  target_link_libraries(${model} PRIVATE InfiniTrain::training_cli)
+  link_infini_train_exe(${model})
+endforeach()
 
 add_executable(mixtral
   example/mixtral/main.cc
@@ -257,23 +296,6 @@ add_executable(mixtral
 )
 link_infini_train_exe(mixtral)
 
-add_executable(llama3
-  example/llama3/main.cc
-  example/common/tiny_shakespeare_dataset.cc
-  example/common/utils.cc
-  example/common/tokenizer.cc
-  example/llama3/checkpoint_loader.cc
-)
-link_infini_train_exe(llama3)
-
-add_executable(qwen3
-  example/qwen3/main.cc
-  example/common/tiny_shakespeare_dataset.cc
-  example/common/utils.cc
-  example/qwen3/checkpoint_loader.cc
-  example/common/tokenizer.cc
-)
-link_infini_train_exe(qwen3)
 endif()
 
 # Tools

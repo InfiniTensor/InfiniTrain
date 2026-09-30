@@ -140,6 +140,12 @@ HF_TOKEN=hf_xxx \
 
 #### Model Examples
 
+GPT-2, LLaMA3, and Qwen3 share the `pretrain_gpt` training program.
+Model presets are selected with `--flagfile=example/<model>/train.flags`;
+subsequent CLI options override preset values. The named executables load
+`configs/<model>/train.flags` beside the binary automatically.
+
+
 The generated files can be passed directly to the corresponding executables:
 
 ##### MNIST

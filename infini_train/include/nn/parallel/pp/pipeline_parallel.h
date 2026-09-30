@@ -9,6 +9,7 @@
 
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/shard_spec.h"
+#include "infini_train/include/training/training.h"
 
 namespace infini_train {
 class Tensor;
@@ -38,7 +39,7 @@ class PipelineParallel : public Module {
   PipelineParallel(const std::shared_ptr<nn::Module> module, int num_stages,
                    int num_micro_batches,
                    const std::vector<std::vector<int64_t>> &recv_shape,
-                   int rank, Device device, int vpp);
+                   int rank, Device device, int vpp, training::ForwardStepFunction forward_step = {});
 
   float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input,
                   const std::vector<std::shared_ptr<Tensor>> &target,
@@ -59,7 +60,7 @@ class PipelineParallel : public Module {
                           Device device,
                           std::vector<std::shared_ptr<Module>> &&chunks);
 
-  void SetupSchedule(int num_micro_batches);
+  void SetupSchedule(int num_micro_batches, training::ForwardStepFunction forward_step);
 
   int num_stages_ = -1;
   int rank_ = -1;

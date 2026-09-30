@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+#include "infini_train/include/training/training.h"
+
 namespace infini_train {
 class Tensor;
 class Optimizer;
@@ -23,8 +25,8 @@ class PipelineStage;
 class PipelineSchedule {
  public:
   PipelineSchedule(std::shared_ptr<PipelineStage> stage, int num_stages,
-                   int num_micro_batches)
-      : stage_(std::move(stage)), num_micro_batches_(num_micro_batches) {}
+                   int num_micro_batches, training::ForwardStepFunction forward_step = {})
+      : stage_(std::move(stage)), num_micro_batches_(num_micro_batches), forward_step_(std::move(forward_step)) {}
 
   virtual ~PipelineSchedule() = default;
 
@@ -44,6 +46,7 @@ class PipelineSchedule {
  protected:
   int num_micro_batches_ = -1;
   std::shared_ptr<PipelineStage> stage_ = nullptr;
+  training::ForwardStepFunction forward_step_;
 };
 
 class PipelineParallelScheduler {
