@@ -38,7 +38,7 @@ public:
     bool skip_bias_add() const;
     bool sequence_parallel() const;
 
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    checkpoint::ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
 
 protected:
     bool bias_ = true;
@@ -69,7 +69,7 @@ public:
     bool skip_bias_add() const;
     bool sequence_parallel() const;
 
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    checkpoint::ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
 
 protected:
     bool bias_ = true;
@@ -90,7 +90,7 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    checkpoint::ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
 
 private:
     bool reduce_scatter_embeddings_ = false; // whether to perform ReduceScatter after embedding lookup

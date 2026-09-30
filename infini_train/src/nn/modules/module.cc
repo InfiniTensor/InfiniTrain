@@ -178,29 +178,17 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() con
     return state;
 }
 
-checkpoint::ShardedStateDict Module::ShardedStateDict(const std::string &prefix) const {
+checkpoint::ShardedStateDict Module::BuildShardedStateDict(const std::string &prefix) const {
     checkpoint::ShardedStateDict sd;
 
     for (auto &[name, param] : parameters_) {
-        checkpoint::ShardedTensor info;
-        info.key = prefix.empty() ? name : prefix + "." + name;
-        info.dtype = param->Dtype();
-        info.global_shape = param->Dims();
-        info.local_shape = param->Dims();
-        info.global_offset.assign(param->Dims().size(), 0);
-        info.axis_fragmentations.assign(param->Dims().size(), 1);
-        sd.tensors[info.key] = std::move(info);
+        auto key = prefix.empty() ? name : prefix + "." + name;
+        sd.tensors.emplace(key, checkpoint::MakeShardedTensor(key, param->Dtype(), param->Dims()));
     }
 
     for (auto &[name, buffer] : buffers_) {
-        checkpoint::ShardedTensor info;
-        info.key = prefix.empty() ? name : prefix + "." + name;
-        info.dtype = buffer->Dtype();
-        info.global_shape = buffer->Dims();
-        info.local_shape = buffer->Dims();
-        info.global_offset.assign(buffer->Dims().size(), 0);
-        info.axis_fragmentations.assign(buffer->Dims().size(), 1);
-        sd.tensors[info.key] = std::move(info);
+        auto key = prefix.empty() ? name : prefix + "." + name;
+        sd.tensors.emplace(key, checkpoint::MakeShardedTensor(key, buffer->Dtype(), buffer->Dims()));
     }
 
     for (auto &[name, module] : modules_) {
@@ -209,7 +197,7 @@ checkpoint::ShardedStateDict Module::ShardedStateDict(const std::string &prefix)
         }
 
         auto child_prefix = prefix.empty() ? name : prefix + "." + name;
-        auto child_sd = module->ShardedStateDict(child_prefix);
+        auto child_sd = module->BuildShardedStateDict(child_prefix);
         sd.Merge(std::move(child_sd));
     }
 

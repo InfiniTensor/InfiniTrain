@@ -309,8 +309,14 @@ std::string RemapLayerKey(const std::string &key, const std::vector<int> &from, 
 
 } // namespace
 
-checkpoint::ShardedStateDict TransformerModel::ShardedStateDict(const std::string &prefix) const {
-    auto local_state = Module::ShardedStateDict(prefix);
+checkpoint::ShardedStateDict TransformerModel::BuildShardedStateDict(const std::string &prefix) const {
+    auto local_state = Module::BuildShardedStateDict(prefix);
+    if (stage_info_.is_last_stage) {
+        const auto lm_head_prefix = prefix.empty() ? TransformerLastStage::kLMHeadLayerName
+                                                   : prefix + "." + TransformerLastStage::kLMHeadLayerName;
+        const auto weight_key = lm_head_prefix + "." + parallel::ColumnParallelLinear::kParamWeightName;
+        local_state.tensors.at(weight_key).allow_shape_mismatch = true;
+    }
     const auto global_layers = GlobalLayerIndices(stage_info_);
     std::vector<int> local_layers(global_layers.size());
     std::iota(local_layers.begin(), local_layers.end(), 0);
@@ -335,7 +341,7 @@ TransformerModel::NamedParameters(const std::string &prefix, bool recurse, bool 
 
     // Select public aliases so optimizer state keys match ShardedStateDict keys.
     auto parameters = Module::NamedParameters(prefix, true, false);
-    const auto sharded_state = ShardedStateDict(prefix);
+    const auto sharded_state = BuildShardedStateDict(prefix);
     const auto global_layers = GlobalLayerIndices(stage_info_);
     std::vector<int> local_layers(global_layers.size());
     std::iota(local_layers.begin(), local_layers.end(), 0);

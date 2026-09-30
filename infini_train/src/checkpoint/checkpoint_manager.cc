@@ -6,7 +6,6 @@
 #include <format>
 #include <fstream>
 #include <limits>
-#include <thread>
 #include <vector>
 
 #include "glog/logging.h"
@@ -49,44 +48,6 @@ void SynchronizeCheckpointRanks(const nn::Module &model) {
     nn::parallel::function::AllReduce(token, nn::parallel::function::ReduceOpType::kSum, nullptr, true)->Synchronize();
 }
 
-void WaitForWriterManifests(const std::filesystem::path &staging_root, int tp_size, int pp_size,
-                            int64_t expected_iteration) {
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::minutes(10);
-    for (;;) {
-        bool ready = true;
-        for (int pp = 0; pp < pp_size && ready; ++pp) {
-            for (int tp = 0; tp < tp_size; ++tp) {
-                const int rank = nn::parallel::global::GetRankOf(0, tp, pp);
-                const auto manifest = staging_root / std::format("rank_{:06d}", rank) / "metadata.json";
-                if (!std::filesystem::exists(manifest)) {
-                    ready = false;
-                    break;
-                }
-                const auto rank_metadata = Checkpoint::LoadMetadata(manifest.parent_path());
-                if (!rank_metadata.has_metadata || rank_metadata.iteration != expected_iteration) {
-                    ready = false;
-                    break;
-                }
-            }
-        }
-        if (ready) {
-            return;
-        }
-        CHECK(std::chrono::steady_clock::now() < deadline)
-            << "Timed out waiting for checkpoint manifests in " << staging_root;
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-}
-
-void WaitForGlobalMetadata(const std::filesystem::path &metadata_path) {
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::minutes(10);
-    while (!std::filesystem::exists(metadata_path)) {
-        CHECK(std::chrono::steady_clock::now() < deadline)
-            << "Timed out waiting for global checkpoint metadata: " << metadata_path;
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-}
-
 } // namespace
 
 ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &args) {
@@ -111,10 +72,16 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
                                           args.lr_scheduler.get(), metadata);
 
     // Validate architecture invariants before restoring training progress.
-    CHECK_EQ(args.state.n_layer, args.model_config.n_layer);
-    CHECK_EQ(args.state.n_head, args.model_config.n_head);
-    CHECK_EQ(args.state.n_kv_head, args.model_config.n_kv_head);
-    CHECK_EQ(args.state.n_embd, args.model_config.n_embd);
+    CHECK_EQ(args.state.n_layer, args.model_config.n_layer)
+        << "n_layer mismatch: ckpt=" << args.state.n_layer << ", config=" << args.model_config.n_layer;
+    CHECK_EQ(args.state.n_head, args.model_config.n_head)
+        << "n_head mismatch: ckpt=" << args.state.n_head << ", config=" << args.model_config.n_head;
+    CHECK_EQ(args.state.n_kv_head, args.model_config.n_kv_head)
+        << "n_kv_head mismatch: ckpt=" << args.state.n_kv_head << ", config=" << args.model_config.n_kv_head;
+    CHECK_EQ(args.state.n_embd, args.model_config.n_embd)
+        << "n_embd mismatch: ckpt=" << args.state.n_embd << ", config=" << args.model_config.n_embd;
+    CHECK_EQ(args.state.vocab_size, args.model_config.vocab_size)
+        << "vocab_size mismatch: ckpt=" << args.state.vocab_size << ", config=" << args.model_config.vocab_size;
     CHECK_GE(args.state.vocab_size, args.model_config.original_vocab_size)
         << "Checkpoint vocabulary cannot represent the configured logical vocabulary";
     result.global_step = static_cast<int>(args.state.global_step);
@@ -158,32 +125,32 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
     int dp_rank = 0, tp_rank = 0, pp_rank = 0;
     nn::parallel::global::GetCoordOf(args.rank.GlobalRank(), dp_rank, tp_rank, pp_rank);
     // DP ranks hold replicas; only one DP replica writes each TP/PP shard.
-    if (dp_rank != 0) {
-        return;
+    if (dp_rank == 0) {
+        const auto rank_dir = iteration_dir / std::format("rank_{:06d}", args.rank.GlobalRank());
+        std::filesystem::create_directories(rank_dir);
+        // Describe logical shards, plan their physical layout, and write this rank shard.
+        auto sharded_state = args.model.BuildShardedStateDict();
+        std::unordered_map<std::string, std::shared_ptr<Tensor>> optimizer_state;
+        if (args.optimizer != nullptr) {
+            optimizer_state = args.optimizer->StateDict();
+            auto optimizer_sharded_state = checkpoint::BuildOptimizerShardedStateDict(sharded_state, optimizer_state);
+            sharded_state.Merge(std::move(optimizer_sharded_state));
+        }
+        auto write_items = checkpoint::SavePlanner::Plan(sharded_state, args.rank.GlobalRank());
+        Checkpoint::SaveSharded(rank_dir, sharded_state, write_items, args.model.StateDict(), optimizer_state, state,
+                                args.rank.GlobalRank());
+
+        const auto staging_rank_dir = staging_root / std::format("rank_{:06d}", args.rank.GlobalRank());
+        std::filesystem::create_directories(staging_rank_dir);
+        // Stage the local manifest until all writer ranks have completed their shards.
+        const auto local_manifest = staging_rank_dir / "metadata.json";
+        if (std::filesystem::exists(local_manifest)) {
+            std::filesystem::remove(local_manifest);
+        }
+        std::filesystem::rename(rank_dir / "metadata.json", local_manifest);
     }
 
-    const auto rank_dir = iteration_dir / std::format("rank_{:06d}", args.rank.GlobalRank());
-    std::filesystem::create_directories(rank_dir);
-    // Describe logical shards, plan their physical layout, and write this rank shard.
-    auto sharded_state = args.model.ShardedStateDict();
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> optimizer_state;
-    if (args.optimizer != nullptr) {
-        optimizer_state = args.optimizer->StateDict();
-        auto optimizer_sharded_state = checkpoint::BuildOptimizerShardedStateDict(sharded_state, optimizer_state);
-        sharded_state.Merge(std::move(optimizer_sharded_state));
-    }
-    auto write_items = checkpoint::SavePlanner::Plan(sharded_state, args.rank.GlobalRank());
-    Checkpoint::SaveSharded(rank_dir, sharded_state, write_items, args.model.StateDict(), optimizer_state, state,
-                            args.rank.GlobalRank());
-
-    const auto staging_rank_dir = staging_root / std::format("rank_{:06d}", args.rank.GlobalRank());
-    std::filesystem::create_directories(staging_rank_dir);
-    // Stage the local manifest until all writer ranks have completed their shards.
-    const auto local_manifest = staging_rank_dir / "metadata.json";
-    if (std::filesystem::exists(local_manifest)) {
-        std::filesystem::remove(local_manifest);
-    }
-    std::filesystem::rename(rank_dir / "metadata.json", local_manifest);
+    SynchronizeCheckpointRanks(args.model);
 
     if (args.rank.IsMainRank()) {
         Checkpoint::SaveTrainerStateFile(iteration_dir / "trainer_state.json", state);
@@ -191,7 +158,6 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
             Checkpoint::SaveLRSchedulerStateFile(iteration_dir / "lr_scheduler.ckpt", args.lr_scheduler->StateDict());
         }
         // Aggregate writer manifests and atomically publish the global metadata.
-        WaitForWriterManifests(staging_root, args.tp_size, args.pp_size, args.global_step);
         auto global_metadata = Checkpoint::LoadMetadata(staging_root);
         CHECK(global_metadata.has_metadata);
         const auto temporary_metadata = iteration_dir / "metadata.json.tmp";
@@ -205,9 +171,9 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
         }
         std::filesystem::rename(temporary_metadata, final_metadata);
         std::filesystem::remove_all(staging_root);
-    } else {
-        WaitForGlobalMetadata(iteration_dir / "metadata.json");
     }
+
+    SynchronizeCheckpointRanks(args.model);
 
     if (args.rank.IsMainRank() && !args.checkpoint_root_dir.empty()) {
         const auto latest = args.checkpoint_root_dir / "latest_checkpointed_iteration.txt";
@@ -230,6 +196,9 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
                 checkpoints.push_back(entry.path());
             }
         }
+        // FIXME(jym): Pruning relies on lexicographic sorting of checkpoint directory names.
+        // This is only correct while iteration directories use zero-padded names (e.g. iter_0000042).
+        // If the naming convention changes to unpadded names, parse the iteration and sort numerically instead.
         std::sort(checkpoints.begin(), checkpoints.end());
         while (checkpoints.size() > args.max_checkpoint_keep) {
             std::filesystem::remove_all(checkpoints.front());

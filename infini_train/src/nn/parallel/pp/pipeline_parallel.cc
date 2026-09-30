@@ -114,8 +114,8 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> PipelineParallel::State
     return modules_.at(kModuleName)->StateDict();
 }
 
-checkpoint::ShardedStateDict PipelineParallel::ShardedStateDict(const std::string &prefix) const {
-    return modules_.at(kModuleName)->ShardedStateDict(prefix);
+checkpoint::ShardedStateDict PipelineParallel::BuildShardedStateDict(const std::string &prefix) const {
+    return modules_.at(kModuleName)->BuildShardedStateDict(prefix);
 }
 
 void PipelineParallel::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {

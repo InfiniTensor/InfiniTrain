@@ -41,19 +41,22 @@ int FragmentedAxis(const std::vector<int> &axis_fragmentations) {
     return fragmented_axis;
 }
 
-bool IsVocabularyTensor(const std::string &key) {
-    std::string parameter_key = key;
-    if (parameter_key.starts_with("adam.m.")) {
-        parameter_key = parameter_key.substr(7);
-    } else if (parameter_key.starts_with("adam.v.")) {
-        parameter_key = parameter_key.substr(7);
+int ResolveShardDim(const std::string &key, const ShardedTensor &target, int saved_axis,
+                    const std::vector<int64_t> &saved_global_shape) {
+    const int target_axis = FragmentedAxis(target.axis_fragmentations);
+    int shard_dim = target_axis >= 0 ? target_axis : saved_axis;
+    if (shard_dim < 0 && saved_global_shape != target.global_shape) {
+        shard_dim = 0;
     }
-    return parameter_key == "transformer.wte.weight" || parameter_key == "lm_head.weight";
+    if (saved_axis >= 0 && target_axis >= 0) {
+        CHECK_EQ(saved_axis, target_axis) << "Shard dimension changed for tensor " << key;
+    }
+    return shard_dim;
 }
 
-bool IsPaddingCompatible(const std::string &key, const std::vector<int64_t> &source,
+bool IsPaddingCompatible(bool allow_shape_mismatch, const std::vector<int64_t> &source,
                          const std::vector<int64_t> &target) {
-    if (!IsVocabularyTensor(key) || source.size() != target.size() || source.empty()) {
+    if (!allow_shape_mismatch || source.size() != target.size() || source.empty()) {
         return false;
     }
     for (size_t dim = 1; dim < source.size(); ++dim) {
@@ -106,7 +109,7 @@ LoadPlan LoadPlanner::PlanReshard(const Checkpoint::CheckpointMetadata &metadata
             ValidateCoordinates(key, source->global_shape, source->local_shape, source->global_offset,
                                 source->axis_fragmentations);
             CHECK(source->global_shape == target.global_shape
-                  || IsPaddingCompatible(key, source->global_shape, target.global_shape))
+                  || IsPaddingCompatible(target.allow_shape_mismatch, source->global_shape, target.global_shape))
                 << "Global shape changed for tensor " << key;
             CHECK_EQ(FragmentedAxis(source->axis_fragmentations), saved_axis)
                 << "Inconsistent saved shard dimensions for tensor " << key;
@@ -165,15 +168,7 @@ LoadPlan LoadPlanner::PlanReshard(const Checkpoint::CheckpointMetadata &metadata
             continue;
         }
 
-        if (tensor_plan.shard_dim < 0) {
-            tensor_plan.shard_dim = saved_axis;
-        }
-        if (tensor_plan.shard_dim < 0 && candidates.front()->global_shape != target.global_shape) {
-            tensor_plan.shard_dim = 0;
-        }
-        if (saved_axis >= 0 && FragmentedAxis(target.axis_fragmentations) >= 0) {
-            CHECK_EQ(saved_axis, tensor_plan.shard_dim) << "Shard dimension changed for tensor " << key;
-        }
+        tensor_plan.shard_dim = ResolveShardDim(key, target, saved_axis, candidates.front()->global_shape);
 
         if (tensor_plan.shard_dim < 0) {
             const auto *source = candidates.front();
@@ -228,7 +223,7 @@ LoadPlan LoadPlanner::PlanReshard(const Checkpoint::CheckpointMetadata &metadata
             covered += read.length;
         }
         if (covered < target_length) {
-            CHECK(IsVocabularyTensor(key)) << "Incomplete target shard plan for " << key;
+            CHECK(target.allow_shape_mismatch) << "Incomplete target shard plan for " << key;
             CHECK_EQ(dim, 0) << "Vocabulary padding is only supported along dim 0";
             CHECK_EQ(target_start + covered, candidates.front()->global_shape[0])
                 << "Only trailing vocabulary padding is supported for " << key;

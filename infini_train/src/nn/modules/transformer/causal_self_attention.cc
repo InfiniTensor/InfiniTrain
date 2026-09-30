@@ -77,8 +77,8 @@ void CausalSelfAttention::SetupAttention(const TransformerConfig &config) {
     }
 }
 
-checkpoint::ShardedStateDict CausalSelfAttention::ShardedStateDict(const std::string &prefix) const {
-    auto state = Module::ShardedStateDict(prefix);
+checkpoint::ShardedStateDict CausalSelfAttention::BuildShardedStateDict(const std::string &prefix) const {
+    auto state = Module::BuildShardedStateDict(prefix);
     const int tp_size = parallel::global::GetTensorParallelSize();
     const int rank = parallel::tp_rank;
     const int64_t q_global = n_head_ * head_dim_;

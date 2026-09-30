@@ -159,7 +159,7 @@ TEST_P(TransformerModuleTest, LLaMA3Model) {
     auto model = std::make_shared<nn::TransformerModel>(config);
     model->To(GetDevice());
     EXPECT_FALSE(model->Parameters().empty());
-    const auto sharded_state = model->ShardedStateDict();
+    const auto sharded_state = model->BuildShardedStateDict();
     for (const auto &[name, parameter] : model->NamedParameters()) {
         EXPECT_TRUE(sharded_state.tensors.contains(name)) << "Missing shard metadata for named parameter: " << name;
     }

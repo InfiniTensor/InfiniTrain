@@ -67,7 +67,7 @@ public:
     virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
 
     // Return state-dict metadata with global shard coordinates.
-    virtual checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const;
+    virtual checkpoint::ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const;
 
     // Current behavior: missing keys / shape / dtype mismatches are FATAL errors; unexpected keys in state_dict are
     // WARNING-only and silently ignored.

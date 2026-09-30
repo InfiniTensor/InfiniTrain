@@ -88,7 +88,7 @@ TEST_P(LoRATest, ParallelLoRAShardedStateDictIncludesAdapterParameters) {
         4, 6, /*bias=*/false, /*gather_output=*/false, /*input_is_parallel=*/false, /*skip_bias_add=*/false,
         /*sequence_parallel=*/false);
     auto column = std::make_shared<LoRAColumnParallelLinear>(column_base, config, 4, 6);
-    const auto column_state = column->ShardedStateDict("column");
+    const auto column_state = column->BuildShardedStateDict("column");
     ASSERT_TRUE(column_state.tensors.contains("column.lora_A"));
     ASSERT_TRUE(column_state.tensors.contains("column.lora_B"));
     EXPECT_EQ(column_state.tensors.at("column.lora_A").axis_fragmentations, (std::vector<int>{1, 1}));
@@ -99,7 +99,7 @@ TEST_P(LoRATest, ParallelLoRAShardedStateDictIncludesAdapterParameters) {
         4, 6, /*bias=*/false, /*reduce_output=*/true, /*input_is_parallel=*/true, /*skip_bias_add=*/false,
         /*sequence_parallel=*/false);
     auto row = std::make_shared<LoRARowParallelLinear>(row_base, config, 4, 6);
-    const auto row_state = row->ShardedStateDict("row");
+    const auto row_state = row->BuildShardedStateDict("row");
     ASSERT_TRUE(row_state.tensors.contains("row.lora_A"));
     ASSERT_TRUE(row_state.tensors.contains("row.lora_B"));
     EXPECT_EQ(row_state.tensors.at("row.lora_A").axis_fragmentations,

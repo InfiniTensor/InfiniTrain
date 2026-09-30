@@ -284,7 +284,7 @@ bool ColumnParallelLinear::input_is_parallel() const { return input_is_parallel_
 bool ColumnParallelLinear::skip_bias_add() const { return skip_bias_add_; }
 bool ColumnParallelLinear::sequence_parallel() const { return sequence_parallel_; }
 
-checkpoint::ShardedStateDict ColumnParallelLinear::ShardedStateDict(const std::string &prefix) const {
+checkpoint::ShardedStateDict ColumnParallelLinear::BuildShardedStateDict(const std::string &prefix) const {
     checkpoint::ShardedStateDict sd;
     int tp_size = global::GetTensorParallelSize();
 
@@ -369,7 +369,7 @@ bool RowParallelLinear::input_is_parallel() const { return input_is_parallel_; }
 bool RowParallelLinear::skip_bias_add() const { return skip_bias_add_; }
 bool RowParallelLinear::sequence_parallel() const { return sequence_parallel_; }
 
-checkpoint::ShardedStateDict RowParallelLinear::ShardedStateDict(const std::string &prefix) const {
+checkpoint::ShardedStateDict RowParallelLinear::BuildShardedStateDict(const std::string &prefix) const {
     checkpoint::ShardedStateDict sd;
     int tp_size = global::GetTensorParallelSize();
 
@@ -386,13 +386,8 @@ checkpoint::ShardedStateDict RowParallelLinear::ShardedStateDict(const std::stri
     // Bias is NOT sharded in RowParallelLinear
     if (bias_) {
         auto &bias = parameter(kParamBiasName);
-        checkpoint::ShardedTensor b;
-        b.key = prefix.empty() ? kParamBiasName : prefix + "." + kParamBiasName;
-        b.dtype = bias->Dtype();
-        b.global_shape = bias->Dims();
-        b.local_shape = bias->Dims();
-        b.global_offset = {0};
-        b.axis_fragmentations = {1};
+        const auto key = prefix.empty() ? kParamBiasName : prefix + "." + kParamBiasName;
+        auto b = checkpoint::MakeShardedTensor(key, bias->Dtype(), bias->Dims());
         sd.tensors[b.key] = std::move(b);
     }
 
@@ -456,7 +451,7 @@ VocabParallelEmbedding::Forward(const std::vector<std::shared_ptr<Tensor>> &inpu
     return {output};
 }
 
-checkpoint::ShardedStateDict VocabParallelEmbedding::ShardedStateDict(const std::string &prefix) const {
+checkpoint::ShardedStateDict VocabParallelEmbedding::BuildShardedStateDict(const std::string &prefix) const {
     checkpoint::ShardedStateDict sd;
     int tp_size = global::GetTensorParallelSize();
 
@@ -468,6 +463,7 @@ checkpoint::ShardedStateDict VocabParallelEmbedding::ShardedStateDict(const std:
     w.local_shape = weight->Dims();
     w.global_offset = {vocab_start_index_, 0};
     w.axis_fragmentations = {tp_size, 1};
+    w.allow_shape_mismatch = true;
     sd.tensors[w.key] = std::move(w);
 
     return sd;

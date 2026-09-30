@@ -21,7 +21,7 @@ void LoadDistributedCheckpoint(const std::filesystem::path &checkpoint_dir, nn::
     CHECK(metadata.has_metadata);
     CHECK_EQ(metadata.version, 3) << "Unsupported distributed checkpoint version: " << metadata.version;
     // Build this rank's target shard layout and plan overlap reads from the saved source shards.
-    auto model_sharded_state = model.ShardedStateDict();
+    auto model_sharded_state = model.BuildShardedStateDict();
     auto plan = LoadPlanner::PlanReshard(metadata, model_sharded_state);
     // Execute the read plan, assemble target tensors, and load the reconstructed model state.
     IndexedRegionLoadStrategy strategy;
