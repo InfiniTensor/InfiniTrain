@@ -39,22 +39,22 @@ void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate, const s
         "CUDA AccumulateGrad");
 }
 
-template <typename T>
-__global__ void AdamAccumulateGradKernel(const T *grad_data, T *param_data, size_t num_elements, T *m_data, T *v_data,
-                                         float learning_rate, float beta1, float beta2, float eps,
+template <typename GradT, typename ParamT>
+__global__ void AdamAccumulateGradKernel(const GradT *grad_data, ParamT *param_data, size_t num_elements, float *m_data,
+                                         float *v_data, float learning_rate, float beta1, float beta2, float eps,
                                          const float bias_correction_m, const float bias_correction_v) {
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < num_elements) {
-        m_data[idx] = common::cuda::Fma(common::cuda::Cast<T>(beta1), m_data[idx],
-                                        common::cuda::Cast<T>(1 - beta1) * grad_data[idx]);
-        v_data[idx] = common::cuda::Fma(common::cuda::Cast<T>(beta2), v_data[idx],
-                                        common::cuda::Cast<T>(1 - beta2) * grad_data[idx] * grad_data[idx]);
+        const float grad = common::cuda::Cast<float>(grad_data[idx]);
+        m_data[idx] = fmaf(beta1, m_data[idx], (1.0f - beta1) * grad);
+        v_data[idx] = fmaf(beta2, v_data[idx], (1.0f - beta2) * grad * grad);
 
-        const float m_hat = common::cuda::Cast<float>(m_data[idx]) / bias_correction_m;
-        const float v_hat = common::cuda::Cast<float>(v_data[idx]) / bias_correction_v;
+        const float m_hat = m_data[idx] / bias_correction_m;
+        const float v_hat = v_data[idx] / bias_correction_v;
 
-        param_data[idx] = common::cuda::Sub(
-            param_data[idx], common::cuda::Cast<T>(learning_rate * m_hat * __frcp_rn(__fsqrt_rn(v_hat) + eps)));
+        const float param = common::cuda::Cast<float>(param_data[idx]);
+        param_data[idx]
+            = common::cuda::Cast<ParamT>(param - learning_rate * m_hat * __frcp_rn(__fsqrt_rn(v_hat) + eps));
     }
 }
 
@@ -70,19 +70,26 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
     int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
 
     auto device = grad->GetDevice();
+    CHECK_EQ(static_cast<int>(m->Dtype()), static_cast<int>(DataType::kFLOAT32));
+    CHECK_EQ(static_cast<int>(v->Dtype()), static_cast<int>(DataType::kFLOAT32));
     const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
                                   infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                   ->cuda_stream();
 
     core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         grad->Dtype(),
-        [=]<typename T>() {
-            AdamAccumulateGradKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
-                static_cast<const T *>(grad->DataPtr()), static_cast<T *>(param->DataPtr()), num_elements,
-                static_cast<T *>(m->DataPtr()), static_cast<T *>(v->DataPtr()), learning_rate, beta1, beta2, eps,
-                bias_correction_m, bias_correction_v);
+        [=]<typename GradT>() {
+            core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
+                param->Dtype(),
+                [=]<typename ParamT>() {
+                    AdamAccumulateGradKernel<<<num_blocks, threads_per_block, 0, cuda_stream>>>(
+                        static_cast<const GradT *>(grad->DataPtr()), static_cast<ParamT *>(param->DataPtr()),
+                        num_elements, static_cast<float *>(m->DataPtr()), static_cast<float *>(v->DataPtr()),
+                        learning_rate, beta1, beta2, eps, bias_correction_m, bias_correction_v);
+                },
+                "CUDA AdamAccumulateGrad parameter");
         },
-        "CUDA AdamAccumulateGrad");
+        "CUDA AdamAccumulateGrad gradient");
 }
 } // namespace infini_train::kernels::cuda
 
