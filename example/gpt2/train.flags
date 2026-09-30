@@ -1,0 +1,15 @@
+# GPT-2 training defaults. CLI options after --flagfile override these values.
+--model=gpt2
+--optimizer=sgd
+--learning_rate=0.0001
+--batch_size=4
+--sequence_length=64
+--total_batch_size=256
+--num_iteration=10
+--dtype=float32
+--zero_stage=0
+--lr_decay_style=constant
+--lora_target_modules=c_attn,c_proj
+--load_optimizer_state=false
+--save_optimizer_state=false
+--profile_name=gpt2

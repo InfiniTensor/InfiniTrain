@@ -91,8 +91,10 @@ Build Options:
 
 ## 🏋️ Training
 
-Each model in the `example/` directory is compiled into an independent executable.  
-For example, the `llama3` example produces a binary named `llama3`.
+GPT-2, LLaMA3, and Qwen3 use the shared `pretrain_gpt` training program.
+Select a model and its training preset with `--flagfile=example/<model>/train.flags`.
+The `gpt2`, `llama3`, and `qwen3` executables also run this program, loading their
+respective presets automatically.
 
 To view available runtime options:
 
@@ -135,7 +137,17 @@ HF_TOKEN=hf_xxx \
 
 #### Model Examples
 
-The generated files can be passed directly to the corresponding executables:
+Each model's `train.flags` file defines its model selection and training settings,
+including the optimizer, learning rate, batch size, and checkpoint options. Put
+`--flagfile` before any command-line overrides; later values take precedence.
+For example, append `--learning_rate=0.00002` to override the preset learning rate.
+
+The named executables (`gpt2`, `llama3`, and `qwen3`) load
+`configs/<model>/train.flags` relative to the executable. Building a named target
+copies its preset there. Include the adjacent `configs/` directory when moving
+these executables, or pass an explicit `--flagfile` path.
+
+The following commands use the prepared datasets and weights:
 
 ##### MNIST
 

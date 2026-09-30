@@ -87,6 +87,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     gpt2_config.original_vocab_size = vocab_size;
     gpt2_config.n_layer = n_layer;
     gpt2_config.n_head = n_head;
+    gpt2_config.n_kv_head = n_head;
     gpt2_config.n_embd = n_embd;
     gpt2::SanitizeGPT2Config(gpt2_config);
     auto local_gpt2 = std::make_shared<nn::TransformerModel>(gpt2_config);

@@ -22,8 +22,9 @@ void PipelineParallel::BuildPipelineStage(const std::vector<std::vector<int64_t>
     pipeline_stage_ = std::make_shared<PipelineStage>(rank_, num_stages_, recv_shape, device, std::move(chunks));
 }
 
-void PipelineParallel::SetupSchedule(int num_micro_batches) {
-    schedule_ = std::make_shared<PipelineSchedule>(pipeline_stage_, num_stages_, num_micro_batches);
+void PipelineParallel::SetupSchedule(int num_micro_batches, training::ForwardStepFunction forward_step) {
+    schedule_
+        = std::make_shared<PipelineSchedule>(pipeline_stage_, num_stages_, num_micro_batches, std::move(forward_step));
 }
 
 float PipelineParallel::TrainStep(const std::vector<std::shared_ptr<Tensor>> &input,
@@ -78,7 +79,7 @@ StageInfo PipelineParallel::GetStageInfo(int total_layers, int pp_size, int rank
 
 PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num_stages, int num_micro_batches,
                                    const std::vector<std::vector<int64_t>> &recv_shape, int pp_rank, Device device,
-                                   int chunk_size)
+                                   int chunk_size, training::ForwardStepFunction forward_step)
     : num_stages_(num_stages), rank_(pp_rank) {
     modules_[kModuleName] = std::move(module);
 
@@ -100,7 +101,7 @@ PipelineParallel::PipelineParallel(const std::shared_ptr<Module> module, int num
 
     BuildPipelineStage(recv_shape, device, std::move(chunks));
 
-    SetupSchedule(num_micro_batches);
+    SetupSchedule(num_micro_batches, std::move(forward_step));
 }
 
 std::vector<std::shared_ptr<Module>> *PipelineParallel::mutable_chunks() { return pipeline_stage_->mutable_chunks(); }

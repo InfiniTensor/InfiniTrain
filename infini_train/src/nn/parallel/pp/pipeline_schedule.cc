@@ -211,6 +211,7 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
 
     std::vector<std::vector<std::vector<std::shared_ptr<Tensor>>>> activations(
         vpp_size, std::vector<std::vector<std::shared_ptr<Tensor>>>(n));
+    std::vector<training::LossFunction> loss_functions(n);
 
     std::vector<std::unique_ptr<nn::NoSyncGuard>> no_sync_guards;
     no_sync_guards.reserve(stage_->chunks().size());
@@ -239,7 +240,17 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 }
             }
 
-            activations[task.local_chunk_idx][mb] = stage_->ForwardOneChunk(inputs, task.local_chunk_idx);
+            if (forward_step_) {
+                auto result = forward_step_(*stage_->chunks().at(task.local_chunk_idx), inputs,
+                                            task.is_last_chunk ? microbatch_targets[mb] : nullptr);
+                activations[task.local_chunk_idx][mb] = std::move(result.output);
+                if (task.is_last_chunk) {
+                    CHECK(result.loss_func) << "forward_step must return a loss callback on the last chunk";
+                    loss_functions[mb] = std::move(result.loss_func);
+                }
+            } else {
+                activations[task.local_chunk_idx][mb] = stage_->ForwardOneChunk(inputs, task.local_chunk_idx);
+            }
 
             if (!task.is_last_chunk) {
                 if (stage_->IsLastStage()) {
@@ -259,9 +270,14 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 {
                     infini_train::AutocastGuard autocast_guard(stage_->device().type(), dtype);
 
-                    auto target_on_device = target->To(activations[task.local_chunk_idx][mb][0]->GetDevice());
-                    loss = (*loss_fn)(
-                        {activations[task.local_chunk_idx][mb][0], std::make_shared<Tensor>(target_on_device)})[0];
+                    if (forward_step_) {
+                        loss = loss_functions[mb](activations[task.local_chunk_idx][mb]);
+                        loss_functions[mb] = {};
+                    } else {
+                        auto target_on_device = target->To(activations[task.local_chunk_idx][mb][0]->GetDevice());
+                        loss = (*loss_fn)(
+                            {activations[task.local_chunk_idx][mb][0], std::make_shared<Tensor>(target_on_device)})[0];
+                    }
                     loss = loss / n;
                 }
                 loss->Backward();

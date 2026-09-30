@@ -41,6 +41,9 @@ add_subdirectory(transformer)
 # Checkpoint tests
 add_subdirectory(checkpoint)
 
+# Pretraining provider contracts and model registry tests.
+add_subdirectory(pretrain)
+
 # Suite declaration above is device-independent. Instantiate the built-in
 # devices after every test subdirectory has registered its sources.
 _infini_train_instantiate_test_suites(

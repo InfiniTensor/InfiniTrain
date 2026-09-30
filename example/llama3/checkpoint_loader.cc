@@ -71,6 +71,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     nn::TransformerConfig llama3_config = llama3::LLaMA3Config();
     llama3_config.block_size = block_size;
     llama3_config.vocab_size = vocab_size;
+    llama3_config.original_vocab_size = vocab_size;
     llama3_config.n_layer = n_layer;
     llama3_config.n_head = n_head;
     llama3_config.n_kv_head = n_kv_head;
