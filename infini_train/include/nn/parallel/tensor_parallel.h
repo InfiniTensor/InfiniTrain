@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
@@ -26,7 +27,8 @@ public:
     static constexpr char kParamBiasName[] = "bias";
 
     ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool gather_output,
-                         bool input_is_parallel, bool skip_bias_add, bool sequence_parallel = false);
+                         bool input_is_parallel, bool skip_bias_add, bool sequence_parallel = false,
+                         const std::string &tp_comm_buffer_name = "");
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
@@ -36,13 +38,15 @@ public:
     bool input_is_parallel() const;
     bool skip_bias_add() const;
     bool sequence_parallel() const;
+    const std::string &tp_comm_buffer_name() const;
 
 protected:
     bool bias_ = true;
-    bool gather_output_ = false;     // whether to return full local output tensor after forward (need gather)
-    bool input_is_parallel_ = false; // will perform an autograd-aware copy when false
-    bool skip_bias_add_ = false;     // will return {out, bias} if true (for fusion purpose)
-    bool sequence_parallel_ = false; // whether to enable sequence parallel
+    bool gather_output_ = false;      // whether to return full local output tensor after forward (need gather)
+    bool input_is_parallel_ = false;  // will perform an autograd-aware copy when false
+    bool skip_bias_add_ = false;      // will return {out, bias} if true (for fusion purpose)
+    bool sequence_parallel_ = false;  // whether to enable sequence parallel
+    std::string tp_comm_buffer_name_; // "qkv" / "fc1" select per-projection overlap overrides
 
     int64_t output_size_per_partition_ = 0;
 };

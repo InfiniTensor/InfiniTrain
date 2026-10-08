@@ -131,7 +131,6 @@ std::shared_ptr<Tensor> LinearForward(const std::shared_ptr<Tensor> &input, cons
                 .output_dtype = dtype,
             });
     }
-
     return output;
 }
 
@@ -170,7 +169,6 @@ std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weigh
 
     // FIXME(cx): output dtype promotion is a temporary hack; revisit when autograd/autocast is fixed.
     auto output_dtype = (compute_dtype == DataType::kBFLOAT16) ? DataType::kFLOAT32 : compute_dtype;
-    // No Fill(0) needed: cuBLAS beta=0.0f fully overwrites output.
     auto grad_input = std::make_shared<Tensor>(input_dims, output_dtype, grad_output->GetDevice());
 
     // When bs==1 and fp32, use cublasSgemv (more efficient than GEMM for matrix-vector).
@@ -223,7 +221,6 @@ std::shared_ptr<Tensor> LinearBackwardInput(const std::shared_ptr<Tensor> &weigh
                 .output_dtype = output_dtype,
             });
     }
-
     return grad_input;
 }
 

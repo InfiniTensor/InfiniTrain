@@ -6,14 +6,39 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
+namespace linear {
+std::shared_ptr<Tensor> Forward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                                const std::shared_ptr<Tensor> &bias) {
+    return Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({input->GetDevice().type(), "LinearForward"}, input,
+                                                                weight, true, bias);
+}
+
+std::shared_ptr<Tensor> BackwardInput(const std::shared_ptr<Tensor> &weight, const std::shared_ptr<Tensor> &grad_output,
+                                      const std::vector<int64_t> &input_dims) {
+    return Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+        {grad_output->GetDevice().type(), "LinearBackwardInput"}, weight, grad_output, true, weight->Dims()[1],
+        weight->Dims()[0], input_dims);
+}
+
+std::shared_ptr<Tensor> BackwardWeight(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &grad_output,
+                                       int64_t in_features, int64_t out_features) {
+    return Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+        {grad_output->GetDevice().type(), "LinearBackwardWeight"}, input, grad_output, true, in_features, out_features);
+}
+
+std::shared_ptr<Tensor> BackwardBias(const std::shared_ptr<Tensor> &grad_output, int64_t out_features) {
+    return Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({grad_output->GetDevice().type(), "LinearBackwardBias"},
+                                                                grad_output, out_features);
+}
+} // namespace linear
+
 std::vector<std::shared_ptr<Tensor>> Linear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     CHECK_GE(input_tensors.size(), 2);
     const auto &input = input_tensors[0];
     const auto &weight = input_tensors[1];
     const auto &bias = input_tensors.size() == 3 ? input_tensors[2] : nullptr;
 
-    auto device = input->GetDevice().type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "LinearForward"}, input, weight, true, bias)};
+    return {linear::Forward(input, weight, bias)};
 }
 
 void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
@@ -26,7 +51,6 @@ void Linear::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tens
     // grad_input needs weight, grad_weight needs input
     ctx_.SaveForBackward({need_weight ? input : nullptr, need_input ? weight : nullptr});
 
-    transpose_ = true;
     bias_ = input_tensors.size() == 3;
     in_features_ = weight->Dims()[1];
     out_features_ = weight->Dims()[0];
@@ -46,23 +70,18 @@ std::vector<std::shared_ptr<Tensor>> Linear::Backward(const std::vector<std::sha
     bool need_grad_weight = ctx_.needs_input_grad().size() > 1 && ctx_.needs_input_grad()[1];
     bool need_grad_bias = bias_ && ctx_.needs_input_grad().size() > 2 && ctx_.needs_input_grad()[2];
 
-    auto device = grad_output->GetDevice().type();
-
     std::shared_ptr<Tensor> grad_input = nullptr;
     std::shared_ptr<Tensor> grad_weight = nullptr;
     std::shared_ptr<Tensor> grad_bias = nullptr;
 
     if (need_grad_input) {
-        grad_input = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
-            {device, "LinearBackwardInput"}, weight, grad_output, transpose_, in_features_, out_features_, input_dims_);
+        grad_input = linear::BackwardInput(weight, grad_output, input_dims_);
     }
     if (need_grad_weight) {
-        grad_weight = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
-            {device, "LinearBackwardWeight"}, input, grad_output, transpose_, in_features_, out_features_);
+        grad_weight = linear::BackwardWeight(input, grad_output, in_features_, out_features_);
     }
     if (need_grad_bias) {
-        grad_bias = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "LinearBackwardBias"}, grad_output,
-                                                                         out_features_);
+        grad_bias = linear::BackwardBias(grad_output, out_features_);
     }
 
     if (bias_) {

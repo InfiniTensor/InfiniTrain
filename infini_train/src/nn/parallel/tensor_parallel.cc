@@ -8,6 +8,7 @@
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/linear.h"
 #include "infini_train/include/autograd/sparse.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
@@ -15,6 +16,7 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/utils.h"
+#include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
@@ -203,7 +205,234 @@ void LinearResetParameters(std::shared_ptr<Tensor> weight, std::shared_ptr<Tenso
     }
 }
 
-} // anonymous namespace
+const ProcessGroup *GetTPGroup(const Device &device) {
+    return ProcessGroupFactory::Instance(device.type())
+        ->Get(GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
+}
+
+std::shared_ptr<Tensor> GatherSequenceMajor(const std::shared_ptr<Tensor> &local_sequence_major,
+                                            const ProcessGroup *tp_group) {
+    const int tp_size = global::GetTensorParallelSize();
+    auto gathered_dims = local_sequence_major->Dims();
+    gathered_dims[0] *= tp_size;
+    auto gathered
+        = std::make_shared<Tensor>(gathered_dims, local_sequence_major->Dtype(), local_sequence_major->GetDevice());
+    tp_group->AllGather(gathered, local_sequence_major, false);
+    return gathered;
+}
+
+// A contiguous sequence-major rank shard. Tensor's offset constructor shares storage.
+std::shared_ptr<Tensor> SequenceChunk(const std::shared_ptr<Tensor> &tensor, int rank, int tp_size) {
+    CHECK(tensor->IsContiguous());
+    CHECK_GT(tensor->Dims()[0], 0);
+    CHECK_EQ(tensor->Dims()[0] % tp_size, 0);
+    auto dims = tensor->Dims();
+    dims[0] /= tp_size;
+    return std::make_shared<Tensor>(*tensor, rank * (tensor->SizeInBytes() / tp_size), dims);
+}
+
+// Ring AG: send the current shard before its GEMM, wait only before consuming the next shard.
+// Both Column forward and Row dgrad use this schedule. Gathered data is also needed by Row wgrad.
+template <typename Gemm>
+std::shared_ptr<Tensor> AllGatherGemm(const std::shared_ptr<Tensor> &local, const ProcessGroup *group,
+                                      std::shared_ptr<Tensor> &gathered, Gemm gemm) {
+    const int size = global::GetTensorParallelSize();
+    const int rank = group->GetGroupRank(local->GetDevice().Rank().GlobalRank());
+    auto dims = local->Dims();
+    dims[0] *= size;
+    gathered = std::make_shared<Tensor>(dims, local->Dtype(), local->GetDevice());
+    SequenceChunk(gathered, rank, size)->CopyFrom(local);
+    std::shared_ptr<Tensor> output;
+    for (int step = 0; step < size; ++step) {
+        const int shard = (rank + size - step) % size;
+        auto input_chunk = SequenceChunk(gathered, shard, size);
+        std::shared_ptr<Work> work;
+        if (step + 1 < size) {
+            work = group->SendRecv(input_chunk, (rank + 1) % size,
+                                   SequenceChunk(gathered, (shard + size - 1) % size, size), (rank + size - 1) % size,
+                                   true);
+        }
+        auto chunk = gemm(input_chunk);
+        if (!output) {
+            auto output_dims = chunk->Dims();
+            output_dims[0] *= size;
+            output = std::make_shared<Tensor>(output_dims, chunk->Dtype(), chunk->GetDevice());
+        }
+        SequenceChunk(output, shard, size)->CopyFrom(chunk);
+        if (work) {
+            work->WaitNonBlocking();
+        }
+    }
+    return output;
+}
+
+// ReduceScatter expressed as one rooted Reduce per destination sequence shard.
+// GEMM(i+1) can run while Reduce(i) is in flight. Keep every partial alive until the
+// caller joins the last work on the compute stream; Work itself does not own tensors.
+template <typename Gemm>
+std::shared_ptr<Tensor> GemmReduceScatter(const std::shared_ptr<Tensor> &input, const ProcessGroup *group,
+                                          std::vector<std::shared_ptr<Tensor>> &partials,
+                                          std::vector<std::shared_ptr<Work>> &works, Gemm gemm) {
+    const int size = global::GetTensorParallelSize();
+    const int rank = group->GetGroupRank(input->GetDevice().Rank().GlobalRank());
+    for (int shard = 0; shard < size; ++shard) {
+        auto partial = gemm(SequenceChunk(input, shard, size));
+        partials.push_back(partial);
+        works.push_back(group->Reduce(partial, partial, shard, function::ReduceOpType::kSum, true));
+    }
+    return partials[rank];
+}
+
+// One SP Linear Function owns the collectives for both Column and Row projections.
+class LinearWithGradAccumulationAndAsyncCommunication : public autograd::Function {
+public:
+    static constexpr char kType[] = "LinearWithGradAccumulationAndAsyncCommunicationFunction";
+
+    LinearWithGradAccumulationAndAsyncCommunication(bool bias, bool column_parallel, bool disable_pipeline,
+                                                    const ProcessGroup *tp_group)
+        : autograd::Function(kType), bias_(bias), column_parallel_(column_parallel),
+          disable_pipeline_(disable_pipeline), tp_group_(tp_group) {
+        CHECK_NOTNULL(tp_group_);
+        CHECK(column_parallel_ || !bias_) << "Row bias must be added after ReduceScatter";
+    }
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) override {
+        CHECK_EQ(inputs.size(), bias_ ? 3 : 2);
+        input_sequence_major_ = inputs[0]->Transpose(0, 1);
+        const auto &weight = inputs[1];
+        const auto bias = bias_ ? inputs[2] : nullptr;
+        const auto &config = global::GetModelParallelConfig();
+        auto gemm
+            = [&](const std::shared_ptr<Tensor> &input) { return autograd::linear::Forward(input, weight, bias); };
+        std::shared_ptr<Tensor> output;
+        if (column_parallel_) {
+            std::shared_ptr<Tensor> gathered;
+            if (config.tp_comm_overlap && config.tp_comm_overlap_ag && !disable_pipeline_) {
+                output = AllGatherGemm(input_sequence_major_, tp_group_, gathered, gemm);
+            } else {
+                gathered = GatherSequenceMajor(input_sequence_major_, tp_group_);
+                output = gemm(gathered);
+            }
+        } else if (config.tp_comm_overlap && config.tp_comm_overlap_rs) {
+            std::vector<std::shared_ptr<Tensor>> partials;
+            std::vector<std::shared_ptr<Work>> works;
+            output = GemmReduceScatter(input_sequence_major_, tp_group_, partials, works, gemm);
+            works.back()->WaitNonBlocking();
+        } else {
+            output = ReduceScatterAlongFirstDim(gemm(input_sequence_major_));
+        }
+        return {output->Transpose(0, 1)};
+    }
+
+    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &inputs,
+                      const std::vector<std::shared_ptr<Tensor>> &) override {
+        const bool need_input = ctx_.needs_input_grad()[0];
+        const bool need_weight = ctx_.needs_input_grad()[1];
+        ctx_.SaveForBackward({need_weight ? input_sequence_major_ : nullptr, need_input ? inputs[1] : nullptr});
+        in_features_ = inputs[1]->Dims()[1];
+        out_features_ = inputs[1]->Dims()[0];
+        input_sequence_major_dims_ = input_sequence_major_->Dims();
+        input_sequence_major_.reset();
+    }
+
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
+        CHECK_EQ(grad_outputs.size(), 1);
+        auto grad_output_sequence_major = grad_outputs[0]->Transpose(0, 1);
+        const auto saved = ctx_.GetSavedTensors();
+        const auto &saved_input_sequence_major = saved[0];
+        const auto &weight = saved[1];
+        const bool need_input = ctx_.needs_input_grad()[0];
+        const bool need_weight = ctx_.needs_input_grad()[1];
+        const bool need_bias = bias_ && ctx_.needs_input_grad()[2];
+        const auto &config = global::GetModelParallelConfig();
+
+        auto dgrad = [&](const std::shared_ptr<Tensor> &grad_output) {
+            auto dims = grad_output->Dims();
+            dims.back() = in_features_;
+            return autograd::linear::BackwardInput(weight, grad_output, dims);
+        };
+
+        std::shared_ptr<Tensor> grad_input;
+        if (!column_parallel_) {
+            if (need_input && config.tp_comm_overlap && config.tp_comm_overlap_ag) {
+                std::shared_ptr<Tensor> gathered;
+                grad_input = AllGatherGemm(grad_output_sequence_major, tp_group_, gathered, dgrad);
+                grad_output_sequence_major = gathered;
+            } else if (need_input || need_weight) {
+                grad_output_sequence_major = GatherSequenceMajor(grad_output_sequence_major, tp_group_);
+                if (need_input) {
+                    grad_input = dgrad(grad_output_sequence_major);
+                }
+            }
+        }
+
+        std::shared_ptr<Tensor> input_sequence_major = saved_input_sequence_major;
+        std::shared_ptr<Work> input_gather_work;
+        if (need_weight && column_parallel_) {
+            if (config.tp_comm_overlap && config.tp_comm_bulk_wgrad) {
+                auto gathered_dims = saved_input_sequence_major->Dims();
+                gathered_dims[0] *= global::GetTensorParallelSize();
+                input_sequence_major = std::make_shared<Tensor>(gathered_dims, saved_input_sequence_major->Dtype(),
+                                                                saved_input_sequence_major->GetDevice());
+                input_gather_work = tp_group_->AllGather(input_sequence_major, saved_input_sequence_major, true);
+            } else {
+                input_sequence_major = GatherSequenceMajor(saved_input_sequence_major, tp_group_);
+            }
+        }
+
+        std::shared_ptr<Tensor> grad_input_full;
+        std::shared_ptr<Work> reduce_scatter_work;
+        std::vector<std::shared_ptr<Tensor>> partials;
+        std::vector<std::shared_ptr<Work>> works;
+        if (need_input && column_parallel_) {
+            const bool bulk_rs = config.tp_comm_overlap && config.tp_comm_bulk_dgrad && (need_weight || need_bias);
+            if (config.tp_comm_overlap && config.tp_comm_overlap_rs_dgrad && !disable_pipeline_) {
+                grad_input = GemmReduceScatter(grad_output_sequence_major, tp_group_, partials, works, dgrad);
+                reduce_scatter_work = works.back();
+                if (!bulk_rs) {
+                    reduce_scatter_work->WaitNonBlocking();
+                    reduce_scatter_work.reset();
+                }
+            } else {
+                grad_input_full = dgrad(grad_output_sequence_major);
+                grad_input = std::make_shared<Tensor>(input_sequence_major_dims_, grad_input_full->Dtype(),
+                                                      grad_input_full->GetDevice());
+                reduce_scatter_work
+                    = tp_group_->ReduceScatter(grad_input, grad_input_full, function::ReduceOpType::kSum, bulk_rs);
+            }
+        }
+
+        if (input_gather_work) {
+            input_gather_work->WaitNonBlocking();
+        }
+
+        auto grad_weight = need_weight ? autograd::linear::BackwardWeight(
+                               input_sequence_major, grad_output_sequence_major, in_features_, out_features_)
+                                       : nullptr;
+        auto grad_bias
+            = need_bias ? autograd::linear::BackwardBias(grad_output_sequence_major, out_features_) : nullptr;
+        if (reduce_scatter_work) {
+            reduce_scatter_work->WaitNonBlocking();
+        }
+        if (grad_input) {
+            grad_input = grad_input->Transpose(0, 1);
+        }
+        return bias_ ? std::vector<std::shared_ptr<Tensor>>{grad_input, grad_weight, grad_bias}
+                     : std::vector<std::shared_ptr<Tensor>>{grad_input, grad_weight};
+    }
+
+private:
+    bool bias_ = false;
+    bool column_parallel_;
+    bool disable_pipeline_;
+    const ProcessGroup *tp_group_ = nullptr;
+    int64_t in_features_ = 0;
+    int64_t out_features_ = 0;
+    std::vector<int64_t> input_sequence_major_dims_;
+    std::shared_ptr<Tensor> input_sequence_major_;
+};
+
+} // namespace
 
 // TP/SP Communication Helper Functions (defined in utils.h)
 std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(const std::shared_ptr<Tensor> &input) {
@@ -231,9 +460,10 @@ std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_pt
 }
 
 ColumnParallelLinear::ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool gather_output,
-                                           bool input_is_parallel, bool skip_bias_add, bool sequence_parallel)
+                                           bool input_is_parallel, bool skip_bias_add, bool sequence_parallel,
+                                           const std::string &tp_comm_buffer_name)
     : CloneableModule(kType), bias_(bias), gather_output_(gather_output), input_is_parallel_(input_is_parallel),
-      skip_bias_add_(skip_bias_add), sequence_parallel_(sequence_parallel) {
+      skip_bias_add_(skip_bias_add), sequence_parallel_(sequence_parallel), tp_comm_buffer_name_(tp_comm_buffer_name) {
     auto tp_size = global::GetTensorParallelSize();
     CHECK_GT(tp_size, 0) << "No available devices found";
     CHECK_EQ(out_features % tp_size, 0) << "out_features must be divisible by TP world size for ColumnParallel";
@@ -261,14 +491,26 @@ ColumnParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_
     auto input
         = (input_is_parallel_ || sequence_parallel_) ? input_tensors[0] : CopyToTPRegionFunc(input_tensors[0])[0];
 
-    if (sequence_parallel_) {
-        input = GatherFromSPRegionFunc(input)[0];
+    const auto bias = (bias_ && !skip_bias_add_) ? parameters_[kParamBiasName] : nullptr;
+    std::shared_ptr<Tensor> sharded_output;
+    if (sequence_parallel_ && global::GetTensorParallelSize() > 1) {
+        const auto &config = global::GetModelParallelConfig();
+        const auto *tp_group = GetTPGroup(input->GetDevice());
+        const bool disable_pipeline = (tp_comm_buffer_name_ == "qkv" && config.tp_comm_overlap_disable_qkv)
+                                   || (tp_comm_buffer_name_ == "fc1" && config.tp_comm_overlap_disable_fc1);
+        sharded_output
+            = std::make_shared<LinearWithGradAccumulationAndAsyncCommunication>(
+                  bias != nullptr, /*column_parallel=*/true, disable_pipeline, tp_group)
+                  ->Apply(bias ? std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName), bias}
+                               : std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
+    } else {
+        if (sequence_parallel_) {
+            input = GatherFromSPRegionFunc(input)[0];
+        }
+        sharded_output = std::make_shared<autograd::Linear>()->Apply(
+            bias ? std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName), bias}
+                 : std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
     }
-
-    auto sharded_output = std::make_shared<autograd::Linear>()->Apply(
-        (bias_ && !skip_bias_add_)
-            ? std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName), parameters_[kParamBiasName]}
-            : std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
 
     std::shared_ptr<Tensor> output = gather_output_ ? GatherFromTPRegionFunc(sharded_output)[0] : sharded_output;
 
@@ -283,6 +525,7 @@ bool ColumnParallelLinear::gather_output() const { return gather_output_; }
 bool ColumnParallelLinear::input_is_parallel() const { return input_is_parallel_; }
 bool ColumnParallelLinear::skip_bias_add() const { return skip_bias_add_; }
 bool ColumnParallelLinear::sequence_parallel() const { return sequence_parallel_; }
+const std::string &ColumnParallelLinear::tp_comm_buffer_name() const { return tp_comm_buffer_name_; }
 
 RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features, bool bias, bool reduce_output,
                                      bool input_is_parallel, bool skip_bias_add, bool sequence_parallel)
@@ -315,13 +558,19 @@ RowParallelLinear::Forward(const std::vector<std::shared_ptr<Tensor>> &input_ten
     CHECK_EQ(input_tensors.size(), 1) << "RowParallelLinear takes exactly one input";
 
     auto input = input_is_parallel_ ? input_tensors[0] : ScatterToTPRegionFunc(input_tensors[0])[0];
-
-    auto sharded_output = std::make_shared<autograd::Linear>()->Apply(
-        std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
-
-    auto output = reduce_output_ ? (sequence_parallel_ ? ReduceScatterToSPRegionFunc(sharded_output)[0]
-                                                       : ReduceFromTPRegionFunc(sharded_output)[0])
-                                 : sharded_output;
+    std::shared_ptr<Tensor> output;
+    if (sequence_parallel_ && reduce_output_ && global::GetTensorParallelSize() > 1) {
+        output
+            = std::make_shared<LinearWithGradAccumulationAndAsyncCommunication>(
+                  /*bias=*/false, /*column_parallel=*/false, /*disable_pipeline=*/false, GetTPGroup(input->GetDevice()))
+                  ->Apply({input, parameters_.at(kParamWeightName)})[0];
+    } else {
+        auto sharded_output = std::make_shared<autograd::Linear>()->Apply(
+            std::vector<std::shared_ptr<Tensor>>{input, parameters_.at(kParamWeightName)})[0];
+        output = reduce_output_ ? (sequence_parallel_ ? ReduceScatterToSPRegionFunc(sharded_output)[0]
+                                                      : ReduceFromTPRegionFunc(sharded_output)[0])
+                                : sharded_output;
+    }
 
     if (bias_ && !skip_bias_add_) {
         output = output->Add(parameters_[kParamBiasName]);
