@@ -64,6 +64,12 @@ class ProcessGroup {
       comm::ReduceOpType reduce_op = comm::ReduceOpType::kSum,
       bool async_op = false) const;
 
+  virtual std::shared_ptr<Work> Reduce(
+      const std::shared_ptr<Tensor> &output,
+      const std::shared_ptr<Tensor> &input, int root_rank_in_group,
+      comm::ReduceOpType reduce_op = comm::ReduceOpType::kSum,
+      bool async_op = false) const;
+
   virtual std::shared_ptr<Work> AllGather(const std::shared_ptr<Tensor> &output,
                                           const std::shared_ptr<Tensor> &input,
                                           bool async_op = false) const;

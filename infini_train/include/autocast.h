@@ -50,7 +50,8 @@ enum class CastPolicy : uint8_t {
 
 // Cast-policy maps and their associated operations. The op names should match
 // the ones defined in the op registry.
-inline constexpr std::array kLowerPrecisionOps = {"Matmul", "Linear"};
+inline constexpr std::array kLowerPrecisionOps = {
+    "Matmul", "Linear", "LinearWithGradAccumulationAndAsyncCommunication"};
 inline constexpr std::array kFP32Ops = {
     "Sin",        "Cos",          "Tan",
     "Asin",       "Acos",         "Atan",
@@ -68,6 +69,8 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
     {
         {"Matmul", CastPolicy::kLowerPrecision},
         {"Linear", CastPolicy::kLowerPrecision},
+        {"LinearWithGradAccumulationAndAsyncCommunication",
+         CastPolicy::kLowerPrecision},
         {"Sin", CastPolicy::kFP32},
         {"Cos", CastPolicy::kFP32},
         {"Tan", CastPolicy::kFP32},

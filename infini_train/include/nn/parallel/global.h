@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "infini_train/include/nn/parallel/model_parallel_config.h"
+
 namespace infini_train::nn::parallel::global {
 
 extern thread_local int thread_global_rank;
@@ -62,6 +64,9 @@ class GlobalEnv {
             int virtual_pipeline_parallel_size, int expert_parallel_size,
             std::optional<int> expert_tensor_parallel_size);
 
+  void Init(int threads_per_process, const ModelParallelConfig &config);
+  const ModelParallelConfig &model_parallel_config() const;
+
   int nnodes() const;
 
   int nproc_per_node() const;
@@ -113,16 +118,11 @@ class GlobalEnv {
   int global_proc_rank_ = 0;
   int local_proc_rank_ = 0;
 
-  int tensor_parallel_size_ = 1;
-  int expert_tensor_parallel_size_ = 1;
-  bool sequence_parallel_enabled_ = false;
+  ModelParallelConfig model_parallel_config_;
+  int expert_tensor_parallel_size_ = 1;  // Resolved ETP size (defaults to TP).
 
   int data_parallel_size_ = 1;
   int expert_data_parallel_size_ = 1;
-
-  int pipeline_parallel_size_ = 1;
-  int virtual_pipeline_parallel_size_ = 1;
-  int expert_parallel_size_ = 1;
 
   mutable std::mutex mutex_;
   bool initialized_ = false;
@@ -140,6 +140,13 @@ inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size,
                              sequence_parallel_enabled, pipeline_parallel_size,
                              virtual_pipeline_parallel, expert_parallel_size,
                              expert_tensor_parallel_size);
+}
+inline void InitAllEnv(int nthread_per_process,
+                       const ModelParallelConfig &config = {}) {
+  GlobalEnv::Instance().Init(nthread_per_process, config);
+}
+inline const ModelParallelConfig &GetModelParallelConfig() {
+  return GlobalEnv::Instance().model_parallel_config();
 }
 inline int GetNnodes() { return GlobalEnv::Instance().nnodes(); }
 inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }
