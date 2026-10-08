@@ -748,7 +748,8 @@ std::shared_ptr<Module> MergeAndUnload(std::shared_ptr<Module> model) {
       auto base = std::make_shared<parallel::ColumnParallelLinear>(
           lora->in_features(), lora->out_features(), lora->bias(),
           lora->gather_output(), lora->input_is_parallel(),
-          lora->skip_bias_add(), lora->sequence_parallel());
+          lora->skip_bias_add(), lora->sequence_parallel(),
+          lora->tp_comm_buffer_name());
       *base->mutable_parameter(
           parallel::ColumnParallelLinear::kParamWeightName) =
           lora->parameter(parallel::ColumnParallelLinear::kParamWeightName);
