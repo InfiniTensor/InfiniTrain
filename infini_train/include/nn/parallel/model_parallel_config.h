@@ -13,6 +13,15 @@ struct ModelParallelConfig {
     bool tp_comm_overlap = false;
     bool tp_comm_bulk_wgrad = true;
     bool tp_comm_bulk_dgrad = true;
+    // Pipeline AllGather with Column forward / Row backward GEMMs.
+    bool tp_comm_overlap_ag = true;
+    // Pipeline Row forward GEMM chunks with ReduceScatter.
+    bool tp_comm_overlap_rs = true;
+    // Pipeline Column dgrad GEMM chunks with ReduceScatter (takes precedence over bulk RS).
+    bool tp_comm_overlap_rs_dgrad = false;
+    // Disable forward AG and split dgrad RS for these projections; bulk options still apply.
+    bool tp_comm_overlap_disable_qkv = false;
+    bool tp_comm_overlap_disable_fc1 = false;
 };
 
 } // namespace infini_train::nn::parallel
