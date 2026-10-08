@@ -38,12 +38,16 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
             << "DistributedDataParallel " << kind << " must use the device assigned to this rank";
     };
 
-    for (auto &param : module->Parameters()) {
+    auto trainable_params = module->Parameters();
+    for (auto &param : trainable_params) {
         auto device = param->GetDevice();
         validate_device(device, "parameter");
-        if (!param->requires_grad()) {
-            continue;
-        }
+    }
+    std::erase_if(trainable_params, [](const auto &param) { return !param->requires_grad(); });
+    CHECK(!trainable_params.empty())
+        << "DistributedDataParallel is not needed when a module doesn't have any parameter that requires a gradient.";
+
+    for (auto &param : trainable_params) {
         if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
             const auto reduce_op
                 = ddp_config.average_in_collective ? function::ReduceOpType::kAvg : function::ReduceOpType::kSum;
@@ -56,30 +60,26 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
     modules_[kModuleName] = std::move(module);
 
     if (ddp_config.zero_stage >= 1) {
-        BuildParamAndGradBuffers();
-        RegisterBackwardHooks();
+        BuildParamAndGradBuffers(trainable_params);
+        RegisterBackwardHooks(trainable_params);
     } else if (ddp_config.gradient_bucketing_enabled) {
         // Bucket Assignment
-        auto params = modules_[kModuleName]->Parameters();
         const size_t first_cap_bytes = ddp_config.first_bucket_cap_mb * kBytesPerMB;
         const size_t normal_cap_bytes = ddp_config.normal_bucket_cap_mb * kBytesPerMB;
         std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
-        auto bucket_indices = ComputeBucketAssignmentBySize(params, bucket_size_limits);
+        auto bucket_indices = ComputeBucketAssignmentBySize(trainable_params, bucket_size_limits);
 
-        reducer_ = std::make_shared<Reducer>(params, bucket_indices, ddp_config);
+        reducer_ = std::make_shared<Reducer>(trainable_params, bucket_indices, ddp_config);
         reducer_->AttachHooksToParameters();
     }
 }
 
-void DistributedDataParallel::BuildParamAndGradBuffers() {
+void DistributedDataParallel::BuildParamAndGradBuffers(const std::vector<std::shared_ptr<Tensor>> &params) {
     // (param_dtype, grad_dtype)
     using DTypePair = std::pair<DataType, DataType>;
     std::map<DTypePair, std::vector<std::shared_ptr<Tensor>>> dtype_to_params;
 
-    for (auto param : modules_[kModuleName]->Parameters()) {
-        if (!param->requires_grad()) {
-            continue;
-        }
+    for (const auto &param : params) {
         auto param_dtype = param->Dtype();
         auto grad_dtype = param->grad() ? param->grad()->Dtype() : param_dtype;
         dtype_to_params[{param_dtype, grad_dtype}].push_back(param);
@@ -128,7 +128,7 @@ void DistributedDataParallel::BuildParamAndGradBuffers() {
               << ", bucket_groups=" << bucket_groups_.size();
 }
 
-void DistributedDataParallel::RegisterBackwardHooks() {
+void DistributedDataParallel::RegisterBackwardHooks(const std::vector<std::shared_ptr<Tensor>> &params) {
     if (ddp_config_.zero_stage >= 2) {
         // NOTE(zbl): ZeRO-2 bypasses Tensor::grad accumulation: stash grads in the bucket group's
         //            temporary full-grad buffer, then mark the bucket ready for reduce-scatter.
@@ -155,11 +155,7 @@ void DistributedDataParallel::RegisterBackwardHooks() {
             std::weak_ptr<ParamAndGradBucketGroup> group_;
         };
 
-        auto &module = modules_.at(kModuleName);
-        for (auto &param : module->Parameters()) {
-            if (!param->requires_grad()) {
-                continue;
-            }
+        for (const auto &param : params) {
             auto it = param_to_bucket_group_.find(param.get());
             CHECK(it != param_to_bucket_group_.end());
 
@@ -186,12 +182,7 @@ void DistributedDataParallel::RegisterBackwardHooks() {
         std::weak_ptr<Tensor> param_;
     };
 
-    auto &module = modules_.at(kModuleName);
-    for (auto &param : module->Parameters()) {
-        if (!param->requires_grad()) {
-            continue;
-        }
-
+    for (const auto &param : params) {
         auto hook = std::make_unique<DDPPostAccumulateHook>(this, param);
         param->RegisterPostAccumulateGradHook(std::move(hook));
     }

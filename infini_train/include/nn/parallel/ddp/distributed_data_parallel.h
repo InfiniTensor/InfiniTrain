@@ -43,8 +43,8 @@ public:
     const std::vector<std::shared_ptr<ParamAndGradBucketGroup>> &bucket_groups() const { return bucket_groups_; }
 
 private:
-    void BuildParamAndGradBuffers();
-    void RegisterBackwardHooks();
+    void BuildParamAndGradBuffers(const std::vector<std::shared_ptr<Tensor>> &params);
+    void RegisterBackwardHooks(const std::vector<std::shared_ptr<Tensor>> &params);
     void OnGradReady(const std::shared_ptr<Tensor> &param);
     void SetIsLastMicrobatch(bool is_last_microbatch);
 
