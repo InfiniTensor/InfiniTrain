@@ -99,7 +99,8 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
             const Ttarget *target_ptr = static_cast<const Ttarget *>(target->DataPtr());
             const Tinput *input_ptr = static_cast<const Tinput *>(input->DataPtr());
             Tinput *batched_loss_ptr = static_cast<Tinput *>(batched_output->DataPtr());
-            // FIXME(dcj): do reduce on GPU
+            // FIXME(dcj): Replace the host FP64 accumulation below with a GPU FP32 hierarchical reduction to remove
+            // the D2H/H2D transfers and host synchronization.
             CrossEntropyForwardKernel<threads_per_block, Ttarget, Tinput>
                 <<<num_blocks, threads_per_block, 0, cuda_stream>>>(input_ptr, target_ptr, batched_loss_ptr, bs,
                                                                     num_classes);
@@ -107,10 +108,12 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
             auto loss_cpu = batched_output->To(Device());
             auto loss = std::make_shared<Tensor>(std::vector<int64_t>{}, input->Dtype(), Device());
             auto loss_cpu_typed_ptr = static_cast<const Tinput *>(loss_cpu.DataPtr());
-            static_cast<Tinput *>(loss->DataPtr())[0]
-                = std::accumulate(loss_cpu_typed_ptr, loss_cpu_typed_ptr + bs, 0.0f,
-                                  [](float acc, const Tinput &val) { return acc + common::cuda::Cast<float>(val); })
-                / bs;
+            const double loss_sum
+                = std::accumulate(loss_cpu_typed_ptr, loss_cpu_typed_ptr + bs, 0.0, [](double acc, const Tinput &val) {
+                      return acc + static_cast<double>(common::cuda::Cast<float>(val));
+                  });
+            const float loss_mean = static_cast<float>(loss_sum / static_cast<double>(bs));
+            static_cast<Tinput *>(loss->DataPtr())[0] = loss_mean;
 
             return std::make_shared<Tensor>(loss->To(input->GetDevice()));
         },
