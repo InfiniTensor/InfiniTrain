@@ -267,6 +267,10 @@ TransformerModel::TransformerModel(const TransformerConfig config)
     // applied after loading weights so it won't be overwritten. Also fix GPT2::FromLLMC() loading logic to respect
     // weight tying (do not create/load a separate lm_head.weight tensor; load once into the tied weight) so
     // parameter counting matches PyTorch/PEFT.
+    // FIXME(jym): A checkpoint saved with PP > 1 contains independent wte.weight and lm_head.weight tensors. Loading
+    // it with PP == 1 aliases both keys to the same destination Tensor, so Module::LoadStateDict copies both values
+    // and the final result depends on unordered-map iteration order. Canonicalize tied checkpoint keys, or reject
+    // PP > 1 to PP == 1 resharding for tied models until cross-stage weight tying is supported.
     if (config_.tie_weights && nn::parallel::global::GetPipelineParallelSize() == 1) {
         // https://paperswithcode.com/method/weight-tying
         *mutable_module(kTransformerModelName)

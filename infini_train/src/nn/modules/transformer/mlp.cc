@@ -93,4 +93,39 @@ MLP::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
     return (*modules_[kCProjLayerName])(x2);
 }
 
+ShardedStateDict MLP::BuildShardedStateDict(const std::string &prefix) const {
+    auto state = Module::BuildShardedStateDict(prefix);
+    if (!modules_.contains(kSwiGLULayerName)) {
+        return state;
+    }
+
+    const auto c_fc_prefix = prefix.empty() ? kCFcLayerName : prefix + "." + kCFcLayerName;
+    const auto weight_key = c_fc_prefix + "." + parallel::ColumnParallelLinear::kParamWeightName;
+    const auto weight_it = state.tensors.find(weight_key);
+    CHECK(weight_it != state.tensors.end()) << "Missing packed SwiGLU weight metadata: " << weight_key;
+
+    const auto &weight = weight_it->second;
+    CHECK(!weight.global_shape.empty() && !weight.local_shape.empty());
+    CHECK_EQ(weight.global_shape[0] % 2, 0);
+    CHECK_EQ(weight.local_shape[0] % 2, 0);
+    const int64_t global_rows_per_projection = weight.global_shape[0] / 2;
+    const int64_t local_rows_per_projection = weight.local_shape[0] / 2;
+    const int rank = parallel::tp_rank;
+
+    for (auto &[key, tensor] : state.tensors) {
+        if (!key.starts_with(c_fc_prefix + ".") || tensor.global_shape.empty() || tensor.local_shape.empty()
+            || tensor.global_shape[0] != weight.global_shape[0] || tensor.local_shape[0] != weight.local_shape[0]) {
+            continue;
+        }
+        tensor.global_offset.assign(tensor.global_shape.size(), 0);
+        tensor.segments = {
+            {.global_offset = rank * local_rows_per_projection, .local_offset = 0, .length = local_rows_per_projection},
+            {.global_offset = global_rows_per_projection + rank * local_rows_per_projection,
+             .local_offset = local_rows_per_projection,
+             .length = local_rows_per_projection},
+        };
+    }
+    return state;
+}
+
 } // namespace infini_train::nn

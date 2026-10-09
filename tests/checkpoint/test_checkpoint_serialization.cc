@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -11,10 +12,11 @@
 #include "infini_train/include/checkpoint/load_planner.h"
 #include "infini_train/include/checkpoint/load_strategy.h"
 #include "infini_train/include/checkpoint/save_planner.h"
-#include "infini_train/include/shard_spec.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/modules/transformer/mlp.h"
 #include "infini_train/include/optimizer.h"
+#include "infini_train/include/shard_spec.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
@@ -72,6 +74,24 @@ TEST(ShardedStateDictTest, RejectsDuplicateKeysWhenMerging) {
     source.tensors["weight"] = {.key = "weight"};
 
     EXPECT_DEATH(destination.Merge(std::move(source)), "Duplicate sharded state-dict key: weight");
+}
+
+TEST(ShardedStateDictTest, PackedSwiGLUUsesGateAndUpSegments) {
+    nn::TransformerConfig config;
+    config.n_embd = 4;
+    config.activation_type = nn::MLPType::kSwiGLU;
+    config.ffn_expansion_ratio = 3.0f;
+    config.ffn_dim_multiplier = std::nullopt;
+    config.multiple_of = 1;
+
+    const auto state = nn::MLP(config).BuildShardedStateDict("mlp");
+    const auto &weight = state.tensors.at("mlp.c_fc.weight");
+    ASSERT_EQ(weight.segments.size(), 2);
+    EXPECT_EQ(weight.segments[0], (ShardSegment{.global_offset = 0, .local_offset = 0, .length = 8}));
+    EXPECT_EQ(weight.segments[1], (ShardSegment{.global_offset = 8, .local_offset = 8, .length = 8}));
+
+    const auto &bias = state.tensors.at("mlp.c_fc.bias");
+    EXPECT_EQ(bias.segments, weight.segments);
 }
 
 TEST_P(CheckpointSerializationTest, SaveAndLoadModelFP32) {
@@ -235,6 +255,29 @@ TEST(CheckpointLoadPlannerTest, PadsVocabularyTailWhenTargetTpUsesPaddedVocab) {
     std::filesystem::remove_all(dir);
 }
 
+TEST(CheckpointMetadataTest, RejectsMalformedIntegerArrays) {
+    const auto dir = std::filesystem::temp_directory_path() / "test_malformed_checkpoint_metadata";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    {
+        std::ofstream metadata_file(dir / checkpoint::kMetadataFilename);
+        metadata_file << R"({
+  "version": 3,
+  "format": "infinitrain_sharded",
+  "tensors": [
+    {
+      "key": "weight",
+      "dtype": "float32",
+      "global_shape": [8, invalid]
+    }
+  ]
+})";
+    }
+
+    EXPECT_DEATH(Checkpoint::LoadMetadata(dir), "Invalid integer in checkpoint metadata field global_shape");
+    std::filesystem::remove_all(dir);
+}
+
 TEST_P(CheckpointSerializationTest, GlobalMetadataRoundTrip) {
     auto dir = std::filesystem::temp_directory_path() / "test_global_metadata";
     std::filesystem::remove_all(dir);
@@ -255,8 +298,7 @@ TEST_P(CheckpointSerializationTest, GlobalMetadataRoundTrip) {
                                 .pp_rank = 0});
     Checkpoint::SaveMetadataFile(dir / checkpoint::kMetadataFilename, metadata);
     std::ifstream metadata_file(dir / checkpoint::kMetadataFilename);
-    const std::string metadata_json((std::istreambuf_iterator<char>(metadata_file)),
-                                    std::istreambuf_iterator<char>());
+    const std::string metadata_json((std::istreambuf_iterator<char>(metadata_file)), std::istreambuf_iterator<char>());
     EXPECT_EQ(metadata_json.find("\"iteration\""), std::string::npos);
     EXPECT_EQ(metadata_json.find("\"parallel_config\""), std::string::npos);
     EXPECT_EQ(metadata_json.find("\"model_config\""), std::string::npos);
@@ -268,8 +310,7 @@ TEST_P(CheckpointSerializationTest, GlobalMetadataRoundTrip) {
     EXPECT_EQ(loaded.tensors[0].global_offset, std::vector<int64_t>({0, 0}));
     EXPECT_EQ(loaded.tensors[0].axis_fragmentations, std::vector<int>({2, 1}));
     ASSERT_EQ(loaded.tensors[0].segments.size(), 1);
-    EXPECT_EQ(loaded.tensors[0].segments[0],
-              (ShardSegment{.global_offset = 0, .local_offset = 0, .length = 4}));
+    EXPECT_EQ(loaded.tensors[0].segments[0], (ShardSegment{.global_offset = 0, .local_offset = 0, .length = 4}));
     std::filesystem::remove_all(dir);
 }
 
@@ -296,6 +337,18 @@ ShardedStateDict MakeTarget(const std::string &key, int count, int index, int64_
                            .global_offset = {global_size / count * index, 0},
                            .axis_fragmentations = {count, 1}};
     return target;
+}
+
+std::shared_ptr<Tensor> MakeColumnTensor(const std::vector<float> &values) {
+    auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{static_cast<int64_t>(values.size()), 1},
+                                           DataType::kFLOAT32, Device());
+    std::copy(values.begin(), values.end(), static_cast<float *>(tensor->DataPtr()));
+    return tensor;
+}
+
+uint64_t SingleTensorDataOffset(const std::string &key, size_t dimensions) {
+    return sizeof(uint32_t) * 3 + sizeof(uint32_t) + key.size() + sizeof(int8_t) + sizeof(uint32_t)
+         + sizeof(int64_t) * dimensions + sizeof(uint64_t);
 }
 } // namespace
 
@@ -506,6 +559,106 @@ TEST(CheckpointLoadPlannerTest, QkvSegmentsPreserveTargetLocalLayoutAcrossTpChan
     }
 }
 
+TEST(CheckpointLoadPlannerTest, PackedSwiGLUExecutesTensorParallelTwoToOne) {
+    const auto dir = std::filesystem::temp_directory_path() / "test_swiglu_tp2_to_tp1";
+    std::filesystem::remove_all(dir);
+    const std::string key = "c_fc.weight";
+    const auto data_offset = SingleTensorDataOffset(key, 2);
+
+    Checkpoint::CheckpointMetadata metadata;
+    for (int rank = 0; rank < 2; ++rank) {
+        const auto rank_dir = dir / ("rank_" + std::to_string(rank));
+        std::filesystem::create_directories(rank_dir);
+        const std::vector<float> values = rank == 0 ? std::vector<float>{0, 1, 4, 5} : std::vector<float>{2, 3, 6, 7};
+        const auto tensor = MakeColumnTensor(values);
+        Checkpoint::SaveStateDictFile(rank_dir / checkpoint::kModelCheckpointFilename, {{key, tensor}});
+
+        metadata.tensors.push_back({
+            .key = key,
+            .dtype_str = "fp32",
+            .global_shape = {8, 1},
+            .local_shape = {4, 1},
+            .global_offset = {0, 0},
+            .axis_fragmentations = {2, 1},
+            .segments = {
+                {.global_offset = rank * 2, .local_offset = 0, .length = 2},
+                {.global_offset = 4 + rank * 2, .local_offset = 2, .length = 2},
+            },
+            .file = "rank_" + std::to_string(rank) + "/" + checkpoint::kModelCheckpointFilename,
+            .offset = data_offset,
+            .byte_size = tensor->SizeInBytes(),
+        });
+    }
+
+    ShardedStateDict target;
+    target.tensors[key] = {
+        .key = key,
+        .dtype = DataType::kFLOAT32,
+        .global_shape = {8, 1},
+        .local_shape = {8, 1},
+        .global_offset = {0, 0},
+        .axis_fragmentations = {1, 1},
+        .segments = {
+            {.global_offset = 0, .local_offset = 0, .length = 4},
+            {.global_offset = 4, .local_offset = 4, .length = 4},
+        },
+    };
+
+    const auto plan = checkpoint::LoadPlanner::PlanReshard(metadata, target);
+    const auto loaded = checkpoint::IndexedRegionLoadStrategy().Execute(dir, plan).at(key);
+    const auto *data = static_cast<const float *>(loaded->DataPtr());
+    for (int row = 0; row < 8; ++row) { EXPECT_FLOAT_EQ(data[row], static_cast<float>(row)); }
+    std::filesystem::remove_all(dir);
+}
+
+TEST(CheckpointLoadPlannerTest, PackedSwiGLUExecutesTensorParallelOneToTwo) {
+    const auto dir = std::filesystem::temp_directory_path() / "test_swiglu_tp1_to_tp2";
+    const auto rank_dir = dir / "rank_0";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(rank_dir);
+    const std::string key = "c_fc.weight";
+    const auto tensor = MakeColumnTensor({0, 1, 2, 3, 4, 5, 6, 7});
+    Checkpoint::SaveStateDictFile(rank_dir / checkpoint::kModelCheckpointFilename, {{key, tensor}});
+
+    Checkpoint::CheckpointMetadata metadata;
+    metadata.tensors.push_back({
+        .key = key,
+        .dtype_str = "fp32",
+        .global_shape = {8, 1},
+        .local_shape = {8, 1},
+        .global_offset = {0, 0},
+        .axis_fragmentations = {1, 1},
+        .segments = {
+            {.global_offset = 0, .local_offset = 0, .length = 4},
+            {.global_offset = 4, .local_offset = 4, .length = 4},
+        },
+        .file = "rank_0/" + std::string(checkpoint::kModelCheckpointFilename),
+        .offset = SingleTensorDataOffset(key, 2),
+        .byte_size = tensor->SizeInBytes(),
+    });
+
+    ShardedStateDict target;
+    target.tensors[key] = {
+        .key = key,
+        .dtype = DataType::kFLOAT32,
+        .global_shape = {8, 1},
+        .local_shape = {4, 1},
+        .global_offset = {0, 0},
+        .axis_fragmentations = {2, 1},
+        .segments = {
+            {.global_offset = 2, .local_offset = 0, .length = 2},
+            {.global_offset = 6, .local_offset = 2, .length = 2},
+        },
+    };
+
+    const auto plan = checkpoint::LoadPlanner::PlanReshard(metadata, target);
+    const auto loaded = checkpoint::IndexedRegionLoadStrategy().Execute(dir, plan).at(key);
+    const auto *data = static_cast<const float *>(loaded->DataPtr());
+    const std::vector<float> expected = {2, 3, 6, 7};
+    for (size_t row = 0; row < expected.size(); ++row) { EXPECT_FLOAT_EQ(data[row], expected[row]); }
+    std::filesystem::remove_all(dir);
+}
+
 TEST(CheckpointLoadPlannerTest, PipelineReshardPlansOnlyTargetStageKeys) {
     Checkpoint::CheckpointMetadata metadata;
     metadata.tensors = {MakeSavedShard("layer.0.weight", 1, 0, 8, "old_pp0/model.ckpt"),
@@ -515,4 +668,21 @@ TEST(CheckpointLoadPlannerTest, PipelineReshardPlansOnlyTargetStageKeys) {
     ASSERT_EQ(plan.tensors.size(), 1);
     ASSERT_EQ(plan.tensors.at("layer.1.weight").reads.size(), 1);
     EXPECT_EQ(plan.tensors.at("layer.1.weight").reads[0].filename, "old_pp1/model.ckpt");
+}
+
+TEST(CheckpointLoadPlannerTest, VirtualPipelineReshardUsesGlobalLayerKeys) {
+    Checkpoint::CheckpointMetadata metadata;
+    for (int layer = 0; layer < 4; ++layer) {
+        const auto key = "transformer.h." + std::to_string(layer) + ".weight";
+        metadata.tensors.push_back(
+            MakeSavedShard(key, 1, 0, 8, "saved_layer_" + std::to_string(layer) + "/model.ckpt"));
+    }
+
+    auto target = MakeTarget("transformer.h.0.weight", 1, 0, 8);
+    target.Merge(MakeTarget("transformer.h.2.weight", 1, 0, 8));
+    const auto plan = checkpoint::LoadPlanner::PlanReshard(metadata, target);
+
+    ASSERT_EQ(plan.tensors.size(), 2);
+    EXPECT_EQ(plan.tensors.at("transformer.h.0.weight").reads[0].filename, "saved_layer_0/model.ckpt");
+    EXPECT_EQ(plan.tensors.at("transformer.h.2.weight").reads[0].filename, "saved_layer_2/model.ckpt");
 }

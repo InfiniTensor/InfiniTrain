@@ -19,5 +19,7 @@ public:
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
 };
 } // namespace infini_train::nn
