@@ -1,11 +1,14 @@
 #include "infini_train/include/checkpoint/load_planner.h"
 
 #include <algorithm>
+#include <ostream>
 #include <set>
-#include <tuple>
+#include <stddef.h>
 #include <unordered_map>
+#include <utility>
 
 #include "glog/logging.h"
+#include "infini_train/include/shard_spec.h"
 
 namespace infini_train::checkpoint {
 namespace {

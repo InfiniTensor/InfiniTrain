@@ -1,15 +1,17 @@
 #include "infini_train/include/nn/modules/transformer/mlp.h"
 
-#include <stdint.h>
-
+#include <map>
 #include <memory>
 #include <optional>
+#include <ostream>
+#include <stdint.h>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
-
+#include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/modules/activations.h"
 #include "infini_train/include/nn/modules/transformer/moe/moe_utils.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"

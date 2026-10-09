@@ -7,7 +7,10 @@
 
 #include "infini_train/include/checkpoint/checkpoint.h"
 #include "infini_train/include/datatype.h"
-#include "infini_train/include/shard_spec.h"
+
+namespace infini_train {
+struct ShardedStateDict;
+} // namespace infini_train
 
 namespace infini_train::checkpoint {
 

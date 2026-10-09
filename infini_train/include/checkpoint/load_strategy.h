@@ -5,13 +5,12 @@
 #include <string>
 #include <unordered_map>
 
-#include "infini_train/include/checkpoint/load_planner.h"
-
 namespace infini_train {
 class Tensor;
 }
 
 namespace infini_train::checkpoint {
+struct LoadPlan;
 
 using LoadedStateDict = std::unordered_map<std::string, std::shared_ptr<Tensor>>;
 

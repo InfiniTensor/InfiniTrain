@@ -2,14 +2,15 @@
 
 #include <cmath>
 #include <limits>
+#include <map>
 #include <memory>
 #include <ostream>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
-
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/linear.h"
 #include "infini_train/include/autograd/sparse.h"

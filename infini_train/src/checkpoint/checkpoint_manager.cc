@@ -6,29 +6,17 @@
 #include <format>
 #include <fstream>
 #include <limits>
-<<<<<<< HEAD
 #include <memory>
-#include <ostream>
 #include <string>
-    =======
->>>>>>> f741142 (refactor: address checkpoint resharding review feedback)
 #include <vector>
 
 #include "glog/logging.h"
-
 #include "infini_train/include/checkpoint/checkpoint.h"
-    <<<<<<< HEAD
-#include "infini_train/include/nn/modules/transformer/transformer_config.h"
-#include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
-#include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/nn/parallel/rank.h"
-    =======
 #include "infini_train/include/checkpoint/constants.h"
-#include "infini_train/include/lr_scheduler.h"
-#include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
-    >>>>>>> f741142 (refactor: address checkpoint resharding review feedback)
+#include "infini_train/include/nn/parallel/rank.h"
+#include "infini_train/include/optimizer.h"
 
     using namespace infini_train;
 namespace nn = infini_train::nn;

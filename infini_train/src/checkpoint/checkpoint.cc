@@ -1,13 +1,17 @@
 #include "infini_train/include/checkpoint/checkpoint.h"
 
-#include <algorithm>
+#include <cctype>
+#include <charconv>
 #include <cstring>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <sstream>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -18,17 +22,18 @@
 #include "infini_train/include/checkpoint/load_planner.h"
 #include "infini_train/include/checkpoint/load_strategy.h"
 #include "infini_train/include/checkpoint/save_planner.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/lr_scheduler.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/comm.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
-enum class DataType : int8_t;
 
 namespace {
 constexpr uint32_t kCkptMagic = 0x54504B43;  // CKPT
@@ -292,12 +297,6 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir,
   CHECK_EQ(metadata.version, checkpoint::kDistributedCheckpointVersion)
       << "Unsupported distributed checkpoint version: " << metadata.version;
   state = LoadTrainerState(checkpoint_dir / checkpoint::kTrainerStateFilename);
-  // TODO(jym): Support VPP checkpoint resharding by describing virtual pipeline
-  // chunks in the target shard layout.
-  CHECK_EQ(state.vpp_size, 1)
-      << "Checkpoint resharding with saved VPP is not supported yet";
-  CHECK_EQ(nn::parallel::global::GetVirtualPipelineParallelSize(), 1)
-      << "Checkpoint resharding with runtime VPP is not supported yet";
 
   auto model_sharded_state = model.BuildShardedStateDict();
   checkpoint::IndexedRegionLoadStrategy strategy;
@@ -313,6 +312,7 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir,
   state.ddp_size = nn::parallel::global::GetDataParallelSize();
   state.sp_size =
       nn::parallel::global::GetSequenceParallelEnabled() ? current_tp : 1;
+  state.vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
 
   if (optimizer != nullptr) {
     auto optimizer_sharded_state = checkpoint::BuildOptimizerShardedStateDict(
@@ -482,11 +482,10 @@ Checkpoint::LoadStateDictFile(const std::filesystem::path &path) {
 }
 
 static std::string DataTypeToString(DataType dt) {
-  auto it = kDataTypeToDesc.find(dt);
-  if (it != kDataTypeToDesc.end()) {
-    return it->second;
-  }
-  return "fp32";
+  const auto it = kDataTypeToDesc.find(dt);
+  CHECK(it != kDataTypeToDesc.end())
+      << "Unsupported checkpoint tensor dtype: " << static_cast<int>(dt);
+  return it->second;
 }
 
 void Checkpoint::SaveLocalShard(
@@ -650,6 +649,65 @@ static std::string ExtractJsonString(const std::string &obj,
   return obj.substr(q1 + 1, q2 - q1 - 1);
 }
 
+static std::string_view TrimWhitespace(std::string_view value) {
+  while (!value.empty() &&
+         std::isspace(static_cast<unsigned char>(value.front()))) {
+    value.remove_prefix(1);
+  }
+  while (!value.empty() &&
+         std::isspace(static_cast<unsigned char>(value.back()))) {
+    value.remove_suffix(1);
+  }
+  return value;
+}
+
+template <typename T>
+std::vector<T> ExtractIntegerArray(const std::string &obj,
+                                   const char *field_name) {
+  const auto field = std::string("\"") + field_name + "\"";
+  const auto field_pos = obj.find(field);
+  if (field_pos == std::string::npos) {
+    return {};
+  }
+
+  const auto array_start = obj.find('[', field_pos + field.size());
+  const auto array_end = obj.find(']', array_start);
+  CHECK(array_start != std::string::npos && array_end != std::string::npos)
+      << "Invalid integer array in checkpoint metadata field " << field_name;
+
+  std::string_view contents(obj.data() + array_start + 1,
+                            array_end - array_start - 1);
+  contents = TrimWhitespace(contents);
+  if (contents.empty()) {
+    return {};
+  }
+
+  std::vector<T> values;
+  while (!contents.empty()) {
+    const auto delimiter = contents.find(',');
+    const auto token = TrimWhitespace(contents.substr(0, delimiter));
+    CHECK(!token.empty()) << "Empty integer in checkpoint metadata field "
+                          << field_name;
+
+    T value{};
+    const auto [end, error] =
+        std::from_chars(token.data(), token.data() + token.size(), value);
+    CHECK(error == std::errc{} && end == token.data() + token.size())
+        << "Invalid integer in checkpoint metadata field " << field_name << ": "
+        << token;
+    values.push_back(value);
+
+    if (delimiter == std::string_view::npos) {
+      break;
+    }
+    contents.remove_prefix(delimiter + 1);
+    contents = TrimWhitespace(contents);
+    CHECK(!contents.empty())
+        << "Trailing comma in checkpoint metadata field " << field_name;
+  }
+  return values;
+}
+
 static Checkpoint::CheckpointMetadata LoadSingleMetadata(
     const std::filesystem::path &checkpoint_dir) {
   Checkpoint::CheckpointMetadata meta;
@@ -722,92 +780,18 @@ static Checkpoint::CheckpointMetadata LoadSingleMetadata(
     entry.byte_size = ExtractNumberField<uint64_t>(obj, "byte_size", 0);
     entry.pp_rank = ExtractNumberField<int>(obj, "pp_rank", 0);
 
-    // global_shape: [x, y, z]
-    auto gs_pos = obj.find("\"global_shape\"");
-    if (gs_pos != std::string::npos) {
-      auto b1 = obj.find('[', gs_pos);
-      auto b2 = obj.find(']', b1);
-      if (b1 != std::string::npos && b2 != std::string::npos) {
-        std::string gs = obj.substr(b1 + 1, b2 - b1 - 1);
-        std::stringstream ss(gs);
-        std::string tok;
-        while (std::getline(ss, tok, ',')) {
-          try {
-            entry.global_shape.push_back(std::stoll(tok));
-          } catch (...) {
-          }
-        }
-      }
-    }
+    entry.global_shape = ExtractIntegerArray<int64_t>(obj, "global_shape");
+    entry.local_shape = ExtractIntegerArray<int64_t>(obj, "local_shape");
+    entry.global_offset = ExtractIntegerArray<int64_t>(obj, "global_offset");
+    entry.axis_fragmentations =
+        ExtractIntegerArray<int>(obj, "axis_fragmentations");
 
-    auto ls_pos = obj.find("\"local_shape\"");
-    if (ls_pos != std::string::npos) {
-      auto b1 = obj.find('[', ls_pos);
-      auto b2 = obj.find(']', b1);
-      std::stringstream ss(obj.substr(b1 + 1, b2 - b1 - 1));
-      std::string tok;
-      while (std::getline(ss, tok, ',')) {
-        try {
-          entry.local_shape.push_back(std::stoll(tok));
-        } catch (...) {
-        }
-      }
-    }
-
-    auto offset_pos = obj.find("\"global_offset\"");
-    if (offset_pos != std::string::npos) {
-      auto b1 = obj.find('[', offset_pos);
-      auto b2 = obj.find(']', b1);
-      std::stringstream ss(obj.substr(b1 + 1, b2 - b1 - 1));
-      std::string token;
-      while (std::getline(ss, token, ',')) {
-        try {
-          entry.global_offset.push_back(std::stoll(token));
-        } catch (...) {
-        }
-      }
-    }
-
-    auto fragments_pos = obj.find("\"axis_fragmentations\"");
-    if (fragments_pos != std::string::npos) {
-      auto b1 = obj.find('[', fragments_pos);
-      auto b2 = obj.find(']', b1);
-      std::stringstream ss(obj.substr(b1 + 1, b2 - b1 - 1));
-      std::string token;
-      while (std::getline(ss, token, ',')) {
-        try {
-          entry.axis_fragmentations.push_back(std::stoi(token));
-        } catch (...) {
-        }
-      }
-    }
-
-    auto extract_int64_array = [&](const char *name) {
-      std::vector<int64_t> values;
-      auto field_pos = obj.find(std::string("\"") + name + "\"");
-      if (field_pos == std::string::npos) {
-        return values;
-      }
-      auto b1 = obj.find('[', field_pos);
-      auto b2 = obj.find(']', b1);
-      if (b1 == std::string::npos || b2 == std::string::npos) {
-        return values;
-      }
-      std::stringstream ss(obj.substr(b1 + 1, b2 - b1 - 1));
-      std::string token;
-      while (std::getline(ss, token, ',')) {
-        try {
-          values.push_back(std::stoll(token));
-        } catch (...) {
-        }
-      }
-      return values;
-    };
     const auto segment_global_offsets =
-        extract_int64_array("segment_global_offsets");
+        ExtractIntegerArray<int64_t>(obj, "segment_global_offsets");
     const auto segment_local_offsets =
-        extract_int64_array("segment_local_offsets");
-    const auto segment_lengths = extract_int64_array("segment_lengths");
+        ExtractIntegerArray<int64_t>(obj, "segment_local_offsets");
+    const auto segment_lengths =
+        ExtractIntegerArray<int64_t>(obj, "segment_lengths");
     CHECK_EQ(segment_global_offsets.size(), segment_local_offsets.size());
     CHECK_EQ(segment_global_offsets.size(), segment_lengths.size());
     for (size_t i = 0; i < segment_lengths.size(); ++i) {
@@ -816,19 +800,7 @@ static Checkpoint::CheckpointMetadata LoadSingleMetadata(
                                 .length = segment_lengths[i]});
     }
 
-    auto ranks_pos = obj.find("\"stored_on_ranks\"");
-    if (ranks_pos != std::string::npos) {
-      auto b1 = obj.find('[', ranks_pos);
-      auto b2 = obj.find(']', b1);
-      std::stringstream ss(obj.substr(b1 + 1, b2 - b1 - 1));
-      std::string tok;
-      while (std::getline(ss, tok, ',')) {
-        try {
-          entry.stored_on_ranks.push_back(std::stoi(tok));
-        } catch (...) {
-        }
-      }
-    }
+    entry.stored_on_ranks = ExtractIntegerArray<int>(obj, "stored_on_ranks");
 
     meta.tensors.push_back(std::move(entry));
     obj_pos = obj_end + 1;

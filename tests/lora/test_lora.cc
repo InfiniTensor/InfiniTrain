@@ -1,15 +1,13 @@
-#include <stdint.h>
-
 #include <cmath>
+#include <map>
 #include <memory>
+#include <stdint.h>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "Eigen/Dense"
-#include "gtest/gtest.h"
-
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/lora/lora_config.h"
@@ -18,9 +16,12 @@
 #include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/tensor_parallel.h"
+#include "infini_train/include/shard_spec.h"
 #include "infini_train/include/tensor.h"
-
 #include "tests/common/test_utils.h"
+#include "gtest/gtest.h"
 
 using namespace infini_train;
 using namespace infini_train::nn::lora;

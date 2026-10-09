@@ -1,16 +1,14 @@
 #pragma once
 
-#include <stdint.h>
-
 #include <functional>
 #include <memory>
+#include <stdint.h>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/shard_spec.h"
 

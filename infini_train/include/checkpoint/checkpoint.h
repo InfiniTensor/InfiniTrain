@@ -7,9 +7,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include "infini_train/include/checkpoint/save_planner.h"
-#include "infini_train/include/lr_scheduler.h"
 #include "infini_train/include/shard_spec.h"
+
+namespace infini_train::checkpoint {
+struct WriteItem;
+} // namespace infini_train::checkpoint
 
 namespace infini_train {
 class Optimizer;

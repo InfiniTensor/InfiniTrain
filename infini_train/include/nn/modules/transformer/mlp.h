@@ -1,9 +1,11 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/shard_spec.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
@@ -18,9 +20,12 @@ class MLP : public infini_train::nn::CloneableModule<MLP> {
 
   static constexpr char kSwiGLULayerName[] = "swiglu";
 
-  explicit MLP(const TransformerConfig &config, bool is_expert = false);
+  explicit MLP(const TransformerConfig &config);
 
   std::vector<std::shared_ptr<infini_train::Tensor>> Forward(
       const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+  ShardedStateDict BuildShardedStateDict(
+      const std::string &prefix = "") const override;
 };
 }  // namespace infini_train::nn

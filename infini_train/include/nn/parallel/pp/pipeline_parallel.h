@@ -1,13 +1,15 @@
 // pipeline_parallel.h
 #pragma once
 
-#include <stdint.h>
-
 #include <memory>
+#include <stdint.h>
+#include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/shard_spec.h"
 
 namespace infini_train {
 class Tensor;
