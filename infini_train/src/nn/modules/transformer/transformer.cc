@@ -237,17 +237,19 @@ TransformerModel::TransformerModel(const TransformerConfig config)
             auto chunk = std::make_shared<TransformerChunk>(config_, start_layer, end_layer);
             start_layer_to_layer_size_and_chunk[start_layer] = std::make_pair(end_layer - start_layer, chunk);
         }
-        std::vector<std::shared_ptr<nn::Module>> h;
+        std::unordered_map<std::string, std::shared_ptr<nn::Module>> h;
         int chunk_idx = 0;
         for (auto &[start_layer, layer_size_and_chunk] : start_layer_to_layer_size_and_chunk) {
             auto [layer_size, chunk] = layer_size_and_chunk;
-            for (int idx = 0; idx < layer_size; ++idx) {
-                h.push_back(chunk->mutable_module(TransformerChunk::kHLayerName)->mutable_module(std::to_string(idx)));
+            for (int local_layer = 0; local_layer < layer_size; ++local_layer) {
+                const auto global_layer = start_layer + local_layer;
+                h[std::to_string(global_layer)]
+                    = chunk->mutable_module(TransformerChunk::kHLayerName)->mutable_module(std::to_string(local_layer));
             }
             modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)] = std::move(chunk);
             ++chunk_idx;
         }
-        transformer[TransformerChunk::kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
+        transformer[TransformerChunk::kHLayerName] = std::make_shared<nn::ModuleDict>(std::move(h));
     }
 
     if (stage_info_.is_last_stage) {
@@ -275,59 +277,15 @@ TransformerModel::TransformerModel(const TransformerConfig config)
     }
 }
 
-namespace {
-
-std::vector<int> GlobalLayerIndices(const parallel::StageInfo &stage_info) {
-    std::vector<int> indices;
-    for (const auto &[start, end] : stage_info.layer_ranges_per_chunk) {
-        for (int layer = start; layer < end; ++layer) { indices.push_back(layer); }
+ShardedStateDict TransformerModel::BuildShardedStateDict(const std::string &prefix) const {
+    auto state = Module::BuildShardedStateDict(prefix);
+    if (stage_info_.is_last_stage) {
+        const auto lm_head_prefix = prefix.empty() ? TransformerLastStage::kLMHeadLayerName
+                                                   : prefix + "." + TransformerLastStage::kLMHeadLayerName;
+        const auto weight_key = lm_head_prefix + "." + parallel::ColumnParallelLinear::kParamWeightName;
+        state.tensors.at(weight_key).allow_shape_mismatch = true;
     }
-    std::sort(indices.begin(), indices.end());
-    return indices;
-}
-
-std::string RemapLayerKey(const std::string &key, const std::vector<int> &from, const std::vector<int> &to) {
-    const std::string marker
-        = std::string(TransformerModel::kTransformerModelName) + "." + TransformerChunk::kHLayerName + ".";
-    const auto marker_pos = key.find(marker);
-    if (marker_pos == std::string::npos) {
-        return key;
-    }
-    const auto index_start = marker_pos + marker.size();
-    const auto index_end = key.find('.', index_start);
-    if (index_end == std::string::npos) {
-        return key;
-    }
-    int layer = -1;
-    try {
-        layer = std::stoi(key.substr(index_start, index_end - index_start));
-    } catch (...) { return key; }
-    const auto it = std::find(from.begin(), from.end(), layer);
-    if (it == from.end()) {
-        return key;
-    }
-    const auto mapped = to[static_cast<size_t>(std::distance(from.begin(), it))];
-    return key.substr(0, index_start) + std::to_string(mapped) + key.substr(index_end);
-}
-
-} // namespace
-
-checkpoint::ShardedStateDict TransformerModel::ShardedStateDict(const std::string &prefix) const {
-    auto local_state = Module::ShardedStateDict(prefix);
-    const auto global_layers = GlobalLayerIndices(stage_info_);
-    std::vector<int> local_layers(global_layers.size());
-    std::iota(local_layers.begin(), local_layers.end(), 0);
-
-    checkpoint::ShardedStateDict global_state;
-    for (auto &[local_key, tensor] : local_state.tensors) {
-        const auto global_key = RemapLayerKey(local_key, local_layers, global_layers);
-        if (global_key != local_key) {
-            tensor.local_key = local_key;
-            tensor.key = global_key;
-        }
-        global_state.tensors.emplace(global_key, std::move(tensor));
-    }
-    return global_state;
+    return state;
 }
 
 std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
@@ -338,36 +296,22 @@ TransformerModel::NamedParameters(const std::string &prefix, bool recurse, bool 
 
     // Select public aliases so optimizer state keys match ShardedStateDict keys.
     auto parameters = Module::NamedParameters(prefix, true, false);
-    const auto sharded_state = ShardedStateDict(prefix);
-    const auto global_layers = GlobalLayerIndices(stage_info_);
-    std::vector<int> local_layers(global_layers.size());
-    std::iota(local_layers.begin(), local_layers.end(), 0);
+    const auto sharded_state = BuildShardedStateDict(prefix);
 
     std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> result;
     std::unordered_set<const Tensor *> visited;
+    const auto private_pipeline_prefix = prefix.empty() ? "__pp" : prefix + ".__pp";
     for (auto &[name, parameter] : parameters) {
-        name = RemapLayerKey(name, local_layers, global_layers);
-        if (!sharded_state.tensors.contains(name)) {
+        if (name.starts_with(private_pipeline_prefix)) {
             continue;
         }
+        CHECK(sharded_state.tensors.contains(name)) << "Parameter is missing from sharded state dict: " << name;
         if (remove_duplicate && !visited.insert(parameter.get()).second) {
             continue;
         }
         result.emplace_back(std::move(name), std::move(parameter));
     }
     return result;
-}
-
-void TransformerModel::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
-    const auto global_layers = GlobalLayerIndices(stage_info_);
-    std::vector<int> local_layers(global_layers.size());
-    std::iota(local_layers.begin(), local_layers.end(), 0);
-
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> local_state;
-    for (const auto &[global_key, tensor] : state_dict) {
-        local_state.emplace(RemapLayerKey(global_key, global_layers, local_layers), tensor);
-    }
-    Module::LoadStateDict(local_state);
 }
 
 std::vector<std::shared_ptr<Tensor>> TransformerModel::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {

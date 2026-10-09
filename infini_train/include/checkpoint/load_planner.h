@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "infini_train/include/checkpoint/checkpoint.h"
-#include "infini_train/include/checkpoint/shard_spec.h"
 #include "infini_train/include/datatype.h"
+#include "infini_train/include/shard_spec.h"
 
 namespace infini_train::checkpoint {
 

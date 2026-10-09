@@ -4,9 +4,9 @@
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
-#include "infini_train/include/checkpoint/shard_spec.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/shard_spec.h"
 
 namespace infini_train {
 class Tensor;
@@ -38,7 +38,7 @@ public:
     bool skip_bias_add() const;
     bool sequence_parallel() const;
 
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
 
 protected:
     bool bias_ = true;
@@ -69,7 +69,7 @@ public:
     bool skip_bias_add() const;
     bool sequence_parallel() const;
 
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
 
 protected:
     bool bias_ = true;
@@ -90,7 +90,7 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
 
 private:
     bool reduce_scatter_embeddings_ = false; // whether to perform ReduceScatter after embedding lookup

@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -52,6 +53,11 @@ protected:
 };
 
 namespace optimizers {
+inline constexpr std::string_view kAdamOptimizerPrefix = "adam.";
+inline constexpr std::string_view kAdamFirstMomentPrefix = "adam.m.";
+inline constexpr std::string_view kAdamSecondMomentPrefix = "adam.v.";
+inline constexpr std::string_view kAdamStepKey = "adam.t";
+
 class SGD : public Optimizer {
 public:
     SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate);

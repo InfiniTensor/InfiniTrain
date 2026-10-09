@@ -34,7 +34,7 @@ public:
     std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
     NamedParameters(const std::string &prefix = "", bool recurse = true, bool remove_duplicate = true) const override;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
     void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
 
     std::unique_ptr<nn::NoSyncGuard> no_sync() override;

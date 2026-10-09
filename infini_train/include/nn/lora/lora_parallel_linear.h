@@ -34,7 +34,7 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
 
     void MergeWeights();
     void UnmergeWeights();
@@ -76,7 +76,7 @@ public:
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
 
     void MergeWeights();
     void UnmergeWeights();

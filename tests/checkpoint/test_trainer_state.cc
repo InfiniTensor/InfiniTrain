@@ -6,8 +6,10 @@
 
 #include "infini_train/include/checkpoint/checkpoint.h"
 #include "infini_train/include/checkpoint/checkpoint_manager.h"
+#include "infini_train/include/checkpoint/constants.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
@@ -26,7 +28,8 @@ TEST_P(TrainerStateTest, DefaultValues) {
     EXPECT_EQ(state.n_head, 0);
     EXPECT_EQ(state.n_kv_head, 0);
     EXPECT_EQ(state.n_embd, 0);
-    EXPECT_EQ(state.vocab_size, 0);
+    EXPECT_EQ(state.original_vocab_size, 0);
+    EXPECT_EQ(state.padded_vocab_size, 0);
     EXPECT_EQ(state.ddp_size, 1);
     EXPECT_EQ(state.tp_size, 1);
     EXPECT_EQ(state.sp_size, 1);
@@ -48,9 +51,9 @@ TEST_P(TrainerStateTest, TrainerStateFileCreated) {
 
     Checkpoint::Save(dir, *model, opt.get(), saved, nullptr);
 
-    EXPECT_TRUE(std::filesystem::exists(dir / "trainer_state.json"));
+    EXPECT_TRUE(std::filesystem::exists(dir / checkpoint::kTrainerStateFilename));
 
-    std::ifstream ifs(dir / "trainer_state.json");
+    std::ifstream ifs(dir / checkpoint::kTrainerStateFilename);
     std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     EXPECT_NE(content.find("\"global_step\""), std::string::npos);
     EXPECT_NE(content.find("\"consumed_train_samples\""), std::string::npos);
@@ -69,12 +72,13 @@ TEST_P(TrainerStateTest, RoundTrip) {
         .n_head = 16,
         .n_kv_head = 8,
         .n_embd = 1024,
-        .vocab_size = 128256,
+        .original_vocab_size = 128000,
+        .padded_vocab_size = 128256,
         .ddp_size = 2,
         .tp_size = 1,
         .sp_size = 1,
         .pp_size = 2,
-        .vpp_size = 4,
+        .vpp_size = 1,
     };
 
     auto model1 = std::make_shared<nn::Linear>(1, 3, true, GetDevice());
@@ -100,10 +104,14 @@ TEST_P(TrainerStateTest, RoundTrip) {
     EXPECT_EQ(loaded.n_head, 16);
     EXPECT_EQ(loaded.n_kv_head, 8);
     EXPECT_EQ(loaded.n_embd, 1024);
-    EXPECT_EQ(loaded.vocab_size, 128256);
-    EXPECT_EQ(loaded.ddp_size, 2);
-    EXPECT_EQ(loaded.pp_size, 2);
-    EXPECT_EQ(loaded.vpp_size, 4);
+    EXPECT_EQ(loaded.original_vocab_size, 128000);
+    EXPECT_EQ(loaded.padded_vocab_size, 128256);
+    EXPECT_EQ(loaded.ddp_size, nn::parallel::global::GetDataParallelSize());
+    EXPECT_EQ(loaded.tp_size, nn::parallel::global::GetTensorParallelSize());
+    EXPECT_EQ(loaded.pp_size, nn::parallel::global::GetPipelineParallelSize());
+    EXPECT_EQ(loaded.sp_size,
+              nn::parallel::global::GetSequenceParallelEnabled() ? nn::parallel::global::GetTensorParallelSize() : 1);
+    EXPECT_EQ(loaded.vpp_size, 1);
 
     std::filesystem::remove_all(dir);
 }
