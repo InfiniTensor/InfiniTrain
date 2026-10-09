@@ -40,7 +40,7 @@ constexpr int32_t kLLaMA3FP32Version = 3;
 
 namespace llama3 {
 
-std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) {
+std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath, bool use_flash_attention) {
     if (!std::filesystem::exists(filepath)) {
         LOG(FATAL) << "File not found: " << filepath;
     }
@@ -81,6 +81,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     llama3_config.use_scaled_rope = static_cast<bool>(use_scaled_rope);
     llama3_config.norm_eps = norm_eps;
     llama3_config.max_gen_batch_size = max_gen_bs;
+    llama3_config.flash = use_flash_attention;
     llama3::SanitizeLLaMA3Config(llama3_config);
     auto llama3 = std::make_shared<nn::TransformerModel>(llama3_config);
 
