@@ -20,10 +20,10 @@ TEST_P(AutogradReLUTest, ForwardAndBackward) {
     auto output = std::make_shared<autograd::ReLU>()->Apply({input})[0];
     test::ExpectTensorFloatEqual(output, std::vector<float>{0.0f, 0.0f, 1.5f, 3.0f});
 
-    auto grad_output = std::make_shared<Tensor>(output->Dims(), DataType::kFLOAT32, GetDevice());
-    grad_output->Fill(1.0f);
+    const std::vector<float> grad_values{2.0f, -3.0f, 4.0f, -5.0f};
+    auto grad_output = std::make_shared<Tensor>(grad_values.data(), output->Dims(), DataType::kFLOAT32, GetDevice());
     output->Backward(grad_output);
-    test::ExpectTensorFloatEqual(input->grad(), std::vector<float>{0.0f, 0.0f, 1.0f, 1.0f});
+    test::ExpectTensorFloatEqual(input->grad(), std::vector<float>{0.0f, 0.0f, 4.0f, -5.0f});
 }
 
 INFINI_TRAIN_REGISTER_TEST(AutogradReLUTest);

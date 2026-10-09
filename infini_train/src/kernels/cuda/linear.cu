@@ -303,8 +303,8 @@ std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_o
                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                                  ->cuda_stream();
 
-    // d_bias[j] = sum_i d_output[i, j]. The gradient is row-major [bs, out_features],
-    // so each block reduces one feature across all batch rows.
+    // d_bias = \sum_i(i=0, bs-1) d_output[i]
+    // TODO(dcj): use thrust::fill or reduce kernel do this
     constexpr int BLOCK_SIZE = 256;
     switch (compute_dtype) {
         DISPATCH_CASE(WRAP({
@@ -320,7 +320,6 @@ std::shared_ptr<Tensor> LinearBackwardBias(const std::shared_ptr<Tensor> &grad_o
                       }),
                       DataType::kBFLOAT16)
     }
-    CUDA_CHECK(cudaGetLastError());
 
     return grad_bias;
 }
