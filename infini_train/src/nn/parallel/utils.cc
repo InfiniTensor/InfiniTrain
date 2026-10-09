@@ -40,6 +40,26 @@ void FinalizeSequenceParallelGradients(const std::vector<LocalGradShard> &param_
         tp_group->AllReduce(grad, function::ReduceOpType::kSum, /*async_op=*/false);
     }
 }
+
+void FinalizeQKNormWeightGradients(const nn::Module &model_chunk, const std::vector<LocalGradShard> &param_grads) {
+    // CausalSelfAttention Q/K norm weights (e.g. in Qwen3) are shared across heads and replicated across TP ranks.
+    // Each rank computes gradients for TP-local heads, so sum them across TP regardless of SP.
+    // These weights have sequence_parallel=false and are not reduced by FinalizeSequenceParallelGradients.
+    std::unordered_set<const Tensor *> qk_norm_params;
+    for (const auto &[name, param] : model_chunk.NamedParameters()) {
+        if (name.ends_with("q_norm.weight") || name.ends_with("k_norm.weight")) {
+            qk_norm_params.insert(param.get());
+        }
+    }
+
+    for (const auto &[param, grad] : param_grads) {
+        if (param && param->requires_grad() && grad && qk_norm_params.contains(param.get())) {
+            const auto *tp_group = GetTensorParallelGroup(*param);
+            CHECK_NOTNULL(tp_group);
+            tp_group->AllReduce(grad, function::ReduceOpType::kSum, /*async_op=*/false);
+        }
+    }
+}
 } // namespace
 
 std::string GetDataParallelProcessGroupName(int global_rank) {
@@ -108,14 +128,6 @@ void FinalizeModelGrads(const std::vector<std::shared_ptr<nn::Module>> &model_ch
     }
 
     for (const auto &model_chunk : model_chunks) {
-        // Identify replicated Q/K norm weights whose gradients are split across TP-local heads.
-        std::unordered_set<const Tensor *> qk_norm_params;
-        for (const auto &[name, param] : model_chunk->NamedParameters()) {
-            if (name == "q_norm.weight" || name.ends_with(".q_norm.weight") || name == "k_norm.weight"
-                || name.ends_with(".k_norm.weight")) {
-                qk_norm_params.insert(param.get());
-            }
-        }
         // Pair original parameters with the gradient views consumed by the optimizer.
         std::vector<LocalGradShard> param_grads;
         auto ddp = std::dynamic_pointer_cast<DistributedDataParallel>(model_chunk);
@@ -132,14 +144,8 @@ void FinalizeModelGrads(const std::vector<std::shared_ptr<nn::Module>> &model_ch
         // TP SUM combines local-token gradients for SP norms, row bias, position embeddings and routers.
         FinalizeSequenceParallelGradients(param_grads);
 
-        // TP SUM combines Q/K norm head-shard gradients regardless of SP; their SP flag is false.
-        for (const auto &[param, grad] : param_grads) {
-            if (param && param->requires_grad() && grad && qk_norm_params.contains(param.get())) {
-                const auto *tp_group = GetTensorParallelGroup(*param);
-                CHECK_NOTNULL(tp_group);
-                tp_group->AllReduce(grad, function::ReduceOpType::kSum, /*async_op=*/false);
-            }
-        }
+        // TP SUM combines local-head gradients for replicated Q/K norm weights regardless of SP.
+        FinalizeQKNormWeightGradients(*model_chunk, param_grads);
     }
 
     // NOTE(zbl): Extend this entry for PP tied embeddings, MoE shared parameters and loss normalization.
