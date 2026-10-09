@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "infini_train/include/autograd/activations.h"
+#include "infini_train/include/autograd/convolution.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/softmax.h"
@@ -13,6 +14,17 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::function {
+std::shared_ptr<Tensor> Conv2d(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                               const std::shared_ptr<Tensor> &bias, int64_t stride, int64_t padding) {
+    auto fn = std::make_shared<autograd::Conv2d>(stride, padding);
+    return fn->Apply(bias ? std::vector<std::shared_ptr<Tensor>>{input, weight, bias}
+                          : std::vector<std::shared_ptr<Tensor>>{input, weight})[0];
+}
+
+std::shared_ptr<Tensor> ReLU(const std::shared_ptr<Tensor> &input) {
+    return std::make_shared<autograd::ReLU>()->Apply({input})[0];
+}
+
 std::shared_ptr<Tensor> Tril(const std::shared_ptr<Tensor> &input, int64_t diagonal) {
     return std::make_shared<autograd::Tril>(diagonal)->Apply({input})[0];
 }

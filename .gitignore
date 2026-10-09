@@ -1,4 +1,8 @@
 build/
+/build-cpu/
+/build-cuda/
+/build-ddp/
+/runs/
 .cache/
 .vscode/
 

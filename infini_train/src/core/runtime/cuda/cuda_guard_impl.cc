@@ -1,6 +1,7 @@
 #include "infini_train/src/core/runtime/cuda/cuda_guard_impl.h"
 
 #include <array>
+#include <format>
 #include <memory>
 #include <mutex>
 
@@ -83,7 +84,8 @@ void CudaGuardImpl::SetDevice(Device device) const {
 
 int CudaGuardImpl::DeviceCount() const {
     int device_count = 0;
-    CUDA_DRIVER_CHECK(cuDeviceGetCount(&device_count));
+    // Runtime API initializes the driver even when this is the first CUDA call.
+    CUDA_CHECK(cudaGetDeviceCount(&device_count));
     return device_count;
 }
 

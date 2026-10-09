@@ -10,6 +10,13 @@ class Tensor;
 }
 
 namespace infini_train::nn {
+class ReLU : public CloneableModule<ReLU> {
+public:
+    static constexpr char kType[] = "ReLU";
+    ReLU() : CloneableModule(kType) {}
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) override;
+};
+
 class Sigmoid : public CloneableModule<Sigmoid> {
 public:
     static constexpr char kType[] = "Sigmoid";
