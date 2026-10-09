@@ -1,12 +1,13 @@
 #pragma once
 
-#include <stdint.h>
-
 #include <memory>
+#include <stdint.h>
+#include <string>
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
+#include "infini_train/include/shard_spec.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {

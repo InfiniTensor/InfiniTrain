@@ -1,38 +1,37 @@
-<<<<<<< HEAD
-#include <stdint.h>
-
-#include <filesystem>
-#include <memory>
-=======
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iterator>
+#include <map>
+#include <memory>
+#include <optional>
+#include <stddef.h>
 #include <string>
->>>>>>> f741142 (refactor: address checkpoint resharding review feedback)
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
-#include "gtest/gtest.h"
-
 #include "infini_train/include/checkpoint/checkpoint.h"
-<<<<<<< HEAD
-#include "infini_train/include/datatype.h"
-#include "infini_train/include/nn/modules/linear.h"
-=======
 #include "infini_train/include/checkpoint/constants.h"
 #include "infini_train/include/checkpoint/load_planner.h"
 #include "infini_train/include/checkpoint/load_strategy.h"
 #include "infini_train/include/checkpoint/save_planner.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
+#include "infini_train/include/nn/lora/lora_config.h"
 #include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
->>>>>>> f741142 (refactor: address checkpoint resharding review feedback)
+#include "infini_train/include/nn/modules/transformer/transformer_config.h"
+#include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/shard_spec.h"
 #include "infini_train/include/tensor.h"
-
 #include "tests/common/test_utils.h"
+#include "gtest/gtest.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;

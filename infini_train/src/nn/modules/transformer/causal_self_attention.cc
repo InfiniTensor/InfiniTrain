@@ -2,16 +2,18 @@
 
 #include <cmath>
 #include <limits>
+#include <map>
 #include <memory>
 #include <ostream>
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
-
 #include "infini_train/include/nn/functional.h"
+#include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"

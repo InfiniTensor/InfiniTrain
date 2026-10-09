@@ -1,12 +1,13 @@
 #pragma once
 
-#include <stdint.h>
-
 #include <memory>
+#include <stdint.h>
+#include <string>
 #include <vector>
 
 #include "infini_train/include/nn/lora/lora_config.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
+#include "infini_train/include/shard_spec.h"
 
 namespace infini_train {
 class Tensor;

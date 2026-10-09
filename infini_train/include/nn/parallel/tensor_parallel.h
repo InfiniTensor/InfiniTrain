@@ -1,13 +1,12 @@
 #pragma once
 
-#include <stdint.h>
-
 #include <memory>
+#include <stdint.h>
+#include <string>
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/shard_spec.h"
 
 namespace infini_train {

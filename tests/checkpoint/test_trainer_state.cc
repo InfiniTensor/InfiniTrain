@@ -11,21 +11,16 @@
 
 #include "infini_train/include/checkpoint/checkpoint.h"
 #include "infini_train/include/checkpoint/checkpoint_manager.h"
-<<<<<<< HEAD
+#include "infini_train/include/checkpoint/constants.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/modules/linear.h"
-    =======
-#include "infini_train/include/checkpoint/constants.h"
-#include "infini_train/include/nn/modules/linear.h"
-#include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
-    >>>>>>> f741142 (refactor: address checkpoint resharding review feedback)
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
 
-    using namespace infini_train;
+using namespace infini_train;
 namespace nn = infini_train::nn;
 
 class TrainerStateTest : public test::InfiniTrainTest {};
@@ -90,7 +85,7 @@ TEST_P(TrainerStateTest, RoundTrip) {
       .tp_size = 1,
       .sp_size = 1,
       .pp_size = 2,
-      .vpp_size = 1,
+      .vpp_size = 2,
   };
 
   auto model1 = std::make_shared<nn::Linear>(1, 3, true, GetDevice());
@@ -126,7 +121,8 @@ TEST_P(TrainerStateTest, RoundTrip) {
   EXPECT_EQ(loaded.sp_size, nn::parallel::global::GetSequenceParallelEnabled()
                                 ? nn::parallel::global::GetTensorParallelSize()
                                 : 1);
-  EXPECT_EQ(loaded.vpp_size, 1);
+  EXPECT_EQ(loaded.vpp_size,
+            nn::parallel::global::GetVirtualPipelineParallelSize());
 
   std::filesystem::remove_all(dir);
 }

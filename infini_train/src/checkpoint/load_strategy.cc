@@ -1,10 +1,15 @@
 #include "infini_train/include/checkpoint/load_strategy.h"
 
 #include <fstream>
+#include <map>
+#include <stddef.h>
+#include <stdint.h>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
-
+#include "infini_train/include/checkpoint/load_planner.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/string_utils.h"
