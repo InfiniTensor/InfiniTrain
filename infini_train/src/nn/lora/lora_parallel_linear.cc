@@ -219,22 +219,17 @@ std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::LoRAParameters() 
     return {parameters_.at(kParamLoraAName), parameters_.at(kParamLoraBName)};
 }
 
-checkpoint::ShardedStateDict LoRAColumnParallelLinear::ShardedStateDict(const std::string &prefix) const {
-    auto state = parallel::ColumnParallelLinear::ShardedStateDict(prefix);
+ShardedStateDict LoRAColumnParallelLinear::BuildShardedStateDict(const std::string &prefix) const {
+    auto state = parallel::ColumnParallelLinear::BuildShardedStateDict(prefix);
     const int tp_size = parallel::global::GetTensorParallelSize();
 
     const auto &lora_a = parameter(kParamLoraAName);
-    checkpoint::ShardedTensor a;
-    a.key = prefix.empty() ? kParamLoraAName : prefix + "." + kParamLoraAName;
-    a.dtype = lora_a->Dtype();
-    a.global_shape = lora_a->Dims();
-    a.local_shape = lora_a->Dims();
-    a.global_offset = {0, 0};
-    a.axis_fragmentations = {1, 1};
+    const auto a_key = prefix.empty() ? kParamLoraAName : prefix + "." + kParamLoraAName;
+    auto a = MakeShardedTensor(a_key, lora_a->Dtype(), lora_a->Dims());
     state.tensors.emplace(a.key, std::move(a));
 
     const auto &lora_b = parameter(kParamLoraBName);
-    checkpoint::ShardedTensor b;
+    ShardedTensor b;
     b.key = prefix.empty() ? kParamLoraBName : prefix + "." + kParamLoraBName;
     b.dtype = lora_b->Dtype();
     b.global_shape = {lora_b->Dims()[0] * tp_size, lora_b->Dims()[1]};
@@ -455,12 +450,12 @@ std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::LoRAParameters() con
     return {parameters_.at(kParamLoraAName), parameters_.at(kParamLoraBName)};
 }
 
-checkpoint::ShardedStateDict LoRARowParallelLinear::ShardedStateDict(const std::string &prefix) const {
-    auto state = parallel::RowParallelLinear::ShardedStateDict(prefix);
+ShardedStateDict LoRARowParallelLinear::BuildShardedStateDict(const std::string &prefix) const {
+    auto state = parallel::RowParallelLinear::BuildShardedStateDict(prefix);
     const int tp_size = parallel::global::GetTensorParallelSize();
 
     const auto &lora_a = parameter(kParamLoraAName);
-    checkpoint::ShardedTensor a;
+    ShardedTensor a;
     a.key = prefix.empty() ? kParamLoraAName : prefix + "." + kParamLoraAName;
     a.dtype = lora_a->Dtype();
     a.global_shape = {lora_a->Dims()[0], lora_a->Dims()[1] * tp_size};
@@ -470,13 +465,8 @@ checkpoint::ShardedStateDict LoRARowParallelLinear::ShardedStateDict(const std::
     state.tensors.emplace(a.key, std::move(a));
 
     const auto &lora_b = parameter(kParamLoraBName);
-    checkpoint::ShardedTensor b;
-    b.key = prefix.empty() ? kParamLoraBName : prefix + "." + kParamLoraBName;
-    b.dtype = lora_b->Dtype();
-    b.global_shape = lora_b->Dims();
-    b.local_shape = lora_b->Dims();
-    b.global_offset = {0, 0};
-    b.axis_fragmentations = {1, 1};
+    const auto b_key = prefix.empty() ? kParamLoraBName : prefix + "." + kParamLoraBName;
+    auto b = MakeShardedTensor(b_key, lora_b->Dtype(), lora_b->Dims());
     state.tensors.emplace(b.key, std::move(b));
     return state;
 }

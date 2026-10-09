@@ -5,6 +5,7 @@
 #include "gtest/gtest.h"
 
 #include "infini_train/include/checkpoint/checkpoint.h"
+#include "infini_train/include/checkpoint/constants.h"
 #include "infini_train/include/lr_scheduler.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/optimizer.h"
@@ -61,7 +62,7 @@ TEST_P(LRSchedulerCheckpointTest, SaveAndLoadLRSchedulerState) {
 
     TrainerState saved{.global_step = 3, .consumed_train_samples = 12};
     Checkpoint::Save(dir, *model1, nullptr, saved, sched1.get());
-    EXPECT_TRUE(std::filesystem::exists(dir / "lr_scheduler.ckpt"));
+    EXPECT_TRUE(std::filesystem::exists(dir / checkpoint::kLRSchedulerFilename));
 
     auto model2 = MakeModel(GetDevice());
     auto opt2 = std::make_shared<optimizers::SGD>(model2->Parameters(), kBaseLR);
@@ -92,7 +93,7 @@ TEST_P(LRSchedulerCheckpointTest, SkipsLRSchedulerStateWhenSchedulerIsNull) {
 
     TrainerState saved{.global_step = 3};
     Checkpoint::Save(dir, *model1, nullptr, saved, nullptr);
-    EXPECT_FALSE(std::filesystem::exists(dir / "lr_scheduler.ckpt"));
+    EXPECT_FALSE(std::filesystem::exists(dir / checkpoint::kLRSchedulerFilename));
 
     std::filesystem::remove_all(dir);
 }
