@@ -10,7 +10,7 @@ class Tensor;
 class Optimizer;
 namespace nn {
 class Module;
-}
+} // namespace nn
 } // namespace infini_train
 
 namespace infini_train::nn::parallel {

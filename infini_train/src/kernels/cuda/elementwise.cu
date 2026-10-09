@@ -15,7 +15,8 @@
 namespace infini_train::kernels::cuda {
 namespace {
 using namespace infini_train::common::cuda;
-constexpr int kWarpSize = 32;
+constexpr int kLogicalWarpSize = 32;
+static_assert(kLogicalWarpSize == 32, "BinaryBackwardKernel assumes a 32-lane logical warp");
 
 // Aligned vector type for vectorized loads/stores (128-bit).
 template <typename T, int N> struct __align__(sizeof(T) * N) aligned_vector { T val[N]; };
@@ -191,20 +192,6 @@ __global__ void BinaryBackwardKernelNoBroadcastVectorized(T *__restrict__ outA, 
         outA[idx] = Mul<T>(grad_out[idx], fn_a(a, b));
         outB[idx] = Mul<T>(grad_out[idx], fn_b(a, b));
     }
-}
-
-// Helper to choose optimal block size based on tensor size
-inline size_t ChooseBlockSize(size_t num_elements) {
-    if (num_elements < 1024) {
-        return 64;
-    }
-    if (num_elements < 65536) {
-        return 128;
-    }
-    if (num_elements < 1048576) {
-        return 256;
-    }
-    return 512;
 }
 
 inline dim3 ChooseBlockDims(size_t num_elements) { return dim3(ChooseBlockSize(num_elements)); }
@@ -487,11 +474,11 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
                                      size_t num_elements, const T *grad_output, const T *input_a, const T *input_b) {
     extern __shared__ char shared_memory[];
     const int tid = threadIdx.x;
-    const int warp_id = tid / 32;
-    const int lane_id = tid % 32;
+    const int lane_id = tid % kLogicalWarpSize;
+    const int logical_warp_id = tid / kLogicalWarpSize;
 
-    using WarpReduce = cub::WarpReduce<float>;
-    WarpReduce::TempStorage *temp_storage = reinterpret_cast<WarpReduce::TempStorage *>(shared_memory);
+    using WarpReduce = cub::WarpReduce<float, kLogicalWarpSize>;
+    auto *temp_storage = reinterpret_cast<typename WarpReduce::TempStorage *>(shared_memory);
 
     size_t idx = blockIdx.x * blockDim.x + tid;
     bool in_bounds = (idx < num_elements);
@@ -509,21 +496,29 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
         grad_val = common::cuda::Cast<float>(Mul<T>(grad_output[idx], fn_b(a_val, b_val)));
     }
 
-    unsigned active_mask = __ballot_sync(0xFFFFFFFF, in_bounds);
-    if (!active_mask) {
+    using WarpMask = decltype(__ballot_sync(~uint64_t{0}, true));
+    const WarpMask full_mask = ~WarpMask{0};
+    const WarpMask physical_active_mask = __ballot_sync(full_mask, in_bounds);
+    const int physical_lane = tid % warpSize;
+    const int logical_base = (physical_lane / kLogicalWarpSize) * kLogicalWarpSize;
+    const WarpMask logical_lane_mask = static_cast<WarpMask>(uint64_t{0xffffffff} << logical_base);
+    const WarpMask active_mask = physical_active_mask & logical_lane_mask;
+    if (active_mask == 0) {
         return;
     }
 
-    int leader = __ffs(active_mask) - 1;
-    int64_t common_offset = __shfl_sync(active_mask, b_offset, leader);
+    const unsigned logical_active_mask = static_cast<unsigned>(static_cast<uint64_t>(active_mask) >> logical_base);
+    const int leader = __ffs(logical_active_mask) - 1;
+    // All lanes in a nonempty logical warp participate, including out-of-bounds lanes with zero gradients.
+    // Use the active mask only to select valid offsets so warp_uniform agrees across all lanes before Sum.
+    const int64_t common_offset = __shfl_sync(logical_lane_mask, b_offset, leader, kLogicalWarpSize);
 
-    // Check if all active threads share common b_offset
     bool warp_uniform = true;
-    for (int i = 0; i < 32; ++i) {
-        if (!(active_mask & (1 << i))) {
+    for (int i = 0; i < kLogicalWarpSize; ++i) {
+        if (!(logical_active_mask & (unsigned{1} << i))) {
             continue;
         }
-        int64_t offset_i = __shfl_sync(active_mask, b_offset, i);
+        const int64_t offset_i = __shfl_sync(logical_lane_mask, b_offset, i, kLogicalWarpSize);
         if (offset_i != common_offset) {
             warp_uniform = false;
             break;
@@ -531,7 +526,7 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
     }
 
     if (warp_uniform) {
-        float reduced = WarpReduce(temp_storage[warp_id]).Sum(grad_val);
+        const float reduced = WarpReduce(temp_storage[logical_warp_id]).Sum(grad_val);
         if (lane_id == leader) {
             // FIXME(lzm): atomicAdd is much slower for bf16 and half compared to float, needs further optimization
             atomicAdd(&output_b[common_offset], common::cuda::Cast<T>(reduced));
@@ -556,7 +551,7 @@ __global__ void BinaryBackwardKernel(T *output_a, T *output_b, FuncA fn_a, FuncB
     // Dynamic shared memory layout: split offsets and gradients into parallel arrays.
     extern __shared__ char shared_memory[];
     int64_t *s_offset = reinterpret_cast<int64_t *>(shared_memory);
-    float *s_grad = reinterpret_cast<float *>(s_offset + block_threads + block_threads / kWarpSize);
+    float *s_grad = reinterpret_cast<float *>(s_offset + block_threads + block_threads / kLogicalWarpSize);
 
     // Padding: insert one slot per 32 threads to avoid bank conflicts.
     const int padded_tid = tid + (tid >> 5);
@@ -691,8 +686,8 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
         LaunchKernel<T>(
             [=](dim3 grid, dim3 block, size_t /*offset*/, auto... ptrs) {
                 const int block_threads = static_cast<int>(block.x);
-                const int num_warps = CEIL_DIV(block_threads, kWarpSize);
-                const size_t smem_size = num_warps * sizeof(cub::WarpReduce<float>::TempStorage);
+                const int num_warps = CEIL_DIV(block_threads, kLogicalWarpSize);
+                const size_t smem_size = num_warps * sizeof(cub::WarpReduce<float, kLogicalWarpSize>::TempStorage);
                 BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(output_a_ptr, output_b_ptr, fun_a, fun_b, meta,
                                                                          num_elements, grad_output_ptr, ptrs...);
             },
@@ -740,7 +735,7 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
         LaunchKernel<T>(
             [=](dim3 grid, dim3 block, size_t /*offset*/, auto... ptrs) {
                 const int block_threads = static_cast<int>(block.x);
-                const int padded_block = block_threads + block_threads / kWarpSize;
+                const int padded_block = block_threads + block_threads / kLogicalWarpSize;
                 const size_t smem_size = static_cast<size_t>(padded_block) * (sizeof(int64_t) + sizeof(float));
                 BinaryBackwardKernel<<<grid, block, smem_size, stream>>>(
                     output_a_ptr, output_b_ptr, fun_a, fun_b, meta, num_elements, output_b->NumElements(),

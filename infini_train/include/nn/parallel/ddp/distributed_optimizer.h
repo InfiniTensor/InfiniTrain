@@ -37,9 +37,6 @@ public:
 
     void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
 
-    void StartGradSync();
-    void FinishGradSync();
-
     void StartParamSync(bool force_sync = false);
     void FinishParamSync(bool skip_next_bucket_dispatch = false);
 

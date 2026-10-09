@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "infini_train/include/datatype.h"
@@ -19,6 +20,9 @@ class Work;
 } // namespace infini_train
 
 namespace infini_train::nn::parallel {
+// Original parameter and its local gradient view, registered by DistributedOptimizer.
+using LocalGradShard = std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>;
+
 class ParamAndGradBucket {
 public:
     /**
@@ -97,6 +101,8 @@ public:
     // When all params in a bucket group are ready, will call StartGradSync()
     void RegisterGradReady(const std::shared_ptr<Tensor> &parameter);
 
+    void SetIsLastMicrobatch(bool is_last_microbatch);
+
     // Start grad reduce
     void StartGradSync();
 
@@ -121,6 +127,10 @@ public:
     // ZeRO-2: Get a bucket's local grad shard buffer
     std::shared_ptr<Tensor> GetLocalGradShardBuffer(size_t bucket_idx) const;
 
+    const std::vector<LocalGradShard> &local_grad_shards() const;
+
+    void set_local_grad_shards(std::vector<LocalGradShard> shards);
+
     const DistributedDataParallelConfig &config() const { return ddp_config_; }
 
 private:
@@ -144,12 +154,15 @@ private:
     // ZeRO-2: persistent grad shard buffers and temporary full grad buffers
     std::vector<std::shared_ptr<Tensor>> grad_shard_buffer_list_;
     std::vector<std::shared_ptr<Tensor>> temp_full_grad_buffer_list_;
+    // These views share optimizer grad storage and persist across iteration resets.
+    std::vector<LocalGradShard> local_grad_shards_;
 
     std::shared_ptr<ParamAndGradBucketGroup> next_param_gather_bucket_group_ = nullptr;
 
     std::vector<std::vector<std::shared_ptr<Tensor>>> param_buffer_shard_list_;
     std::vector<std::vector<std::shared_ptr<Tensor>>> grad_buffer_shard_list_;
 
+    // Whether to enable grad sync on last microbatch (DDP + ZeRO path)
     bool is_last_microbatch_ = true;
 
     bool grad_reduce_dispatched_ = false;

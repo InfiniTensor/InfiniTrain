@@ -96,7 +96,14 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
         core::ReadUniqueIdFile(unique_id.get(), name_);
     }
 
-    core::CclGroupGuard ccl_group_guard(backend_);
+    const auto local_rank_count = std::ranges::count_if(
+        ranks, [lower_rank, upper_rank](int rank) { return rank >= lower_rank && rank < upper_rank; });
+    std::unique_ptr<core::CclGroupGuard> ccl_group_guard;
+    // Grouped init is only required when this process initializes multiple communicators sequentially.
+    if (local_rank_count > 1) {
+        ccl_group_guard = std::make_unique<core::CclGroupGuard>(backend_);
+    }
+
     for (int i = 0; i < n_threads; ++i) {
         int global_thread_rank = lower_rank + i;
         auto it = std::ranges::find(ranks, global_thread_rank);
@@ -306,6 +313,33 @@ std::shared_ptr<Work> ProcessGroup::Scatter(const std::vector<std::shared_ptr<Te
     }
 }
 
+std::shared_ptr<Work> ProcessGroup::AlltoAll(const std::shared_ptr<Tensor> &output,
+                                             const std::shared_ptr<Tensor> &input, bool async_op) const {
+    auto device = input->GetDevice();
+    CHECK_EQ(device, output->GetDevice());
+    CHECK(input->Dtype() == output->Dtype());
+    CHECK_EQ(input->NumElements(), output->NumElements());
+    CHECK_EQ(input->NumElements() % world_size_, 0) << "AlltoAll input must be evenly divisible by world size";
+    core::DeviceGuard guard(device);
+    auto *compute_stream = runtime_impl_->GetStream(device);
+    auto *comm_stream = device_stream_map_.at(device.index());
+    auto comm = device_comm_map_.at(device.index());
+
+    auto work = std::make_shared<Work>(device, comm);
+    runtime_impl_->EventRecord(work->ready_event(), compute_stream);
+    runtime_impl_->StreamWaitEvent(comm_stream, work->ready_event(), 0);
+    ccl_impl_->AlltoAll(input->DataPtr(), output->DataPtr(), input->NumElements() / world_size_, input->Dtype(), comm,
+                        comm_stream);
+    runtime_impl_->EventRecord(work->done_event(), comm_stream);
+
+    if (async_op) {
+        return work;
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
+    }
+}
+
 std::shared_ptr<Work> ProcessGroup::Send(std::vector<std::shared_ptr<Tensor>> tensors, int dest_rank,
                                          bool async_op) const {
     CHECK_GT(tensors.size(), 0);
@@ -350,6 +384,46 @@ std::shared_ptr<Work> ProcessGroup::Recv(std::vector<std::shared_ptr<Tensor>> te
         CHECK_EQ(device, tensor->GetDevice());
         ccl_impl_->Recv(tensor->DataPtr(), tensor->NumElements(), tensor->Dtype(), src_rank, comm, comm_stream);
     }
+    runtime_impl_->EventRecord(work->done_event(), comm_stream);
+
+    if (async_op) {
+        return work;
+    } else {
+        work->WaitNonBlocking();
+        return nullptr;
+    }
+}
+
+std::shared_ptr<Work> ProcessGroup::BatchSendRecv(const std::vector<P2POp> &ops, bool async_op) const {
+    CHECK_GT(ops.size(), 0);
+    CHECK_NOTNULL(ops[0].tensor);
+    auto device = ops[0].tensor->GetDevice();
+    core::DeviceGuard guard(device);
+    auto *compute_stream = runtime_impl_->GetStream(device);
+    auto *comm_stream = device_stream_map_.at(device.index());
+    auto comm = device_comm_map_.at(device.index());
+
+    auto work = std::make_shared<Work>(device, comm);
+    runtime_impl_->EventRecord(work->ready_event(), compute_stream);
+    runtime_impl_->StreamWaitEvent(comm_stream, work->ready_event(), 0);
+
+    {
+        core::CclGroupGuard ccl_group_guard(backend_);
+        for (const auto &op : ops) {
+            CHECK_NOTNULL(op.tensor);
+            CHECK_EQ(device, op.tensor->GetDevice());
+            CHECK_GE(op.peer_rank, 0);
+            CHECK_LT(op.peer_rank, world_size_);
+            if (op.type == P2POpType::kSend) {
+                ccl_impl_->Send(op.tensor->DataPtr(), op.tensor->NumElements(), op.tensor->Dtype(), op.peer_rank, comm,
+                                comm_stream);
+            } else {
+                ccl_impl_->Recv(op.tensor->DataPtr(), op.tensor->NumElements(), op.tensor->Dtype(), op.peer_rank, comm,
+                                comm_stream);
+            }
+        }
+    }
+
     runtime_impl_->EventRecord(work->done_event(), comm_stream);
 
     if (async_op) {

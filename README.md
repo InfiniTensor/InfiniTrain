@@ -58,7 +58,7 @@ Build Options:
 | ------------------------- | ------------------------------- | ---------------------------------------------------- | -------------- |
 | Model Support             | GPT-2                           | Decoder-only Transformer language model              | ✔ Supported    |
 |                           | LLaMA 3                         | Modern LLaMA-family Transformer architecture         | ✔ Supported    |
-|                           | Qwen3-8B                        | Qwen3 8B language model                              | 🗓 Planned     |
+|                           | Qwen3-8B                        | Qwen3 8B language model with QK norm and GQA          | ✔ Supported    |
 |                           | DeepSeek-V3                     | Large-scale MoE-based language model                 | 🗓 Planned     |
 | Precision                 | Multiple Data Type              | FP32, BF16                                           | ✔ Supported    |
 |                           | Mixed Precision                 | Autocast-based BF16 compute with FP32 accumulation   | ✔ Supported    |
@@ -168,10 +168,25 @@ The generated files can be passed directly to the corresponding executables:
   --num_iteration 10
 ```
 
+##### Qwen3 8B
+
+```bash
+./build/qwen3 \
+  --device cuda \
+  --input_bin data/qwen3/tiny_shakespeare_train.bin \
+  --llmc_filepath data/qwen3/qwen3-8b-fp32.llmc \
+  --num_iteration 10
+```
+
+Qwen3-8B uses approximately 31 GB for FP32 model weights. Full-parameter training
+therefore requires tensor or pipeline parallelism (for example,
+`--tensor_parallel 8`) rather than a single 80 GB device when optimizer states
+are allocated. The input tokens and LLMC checkpoint must use the Qwen3 tokenizer.
+
 ### Launch Modes
 
-GPT-2 and LLaMA training support both thread-based and process-based launches.
-The examples below use LLaMA, but the same launch modes also apply to GPT-2.
+GPT-2, LLaMA, and Qwen3 training support both thread-based and process-based launches.
+The examples below use LLaMA, but the same launch modes also apply to the other models.
 
 #### Direct Launch
 

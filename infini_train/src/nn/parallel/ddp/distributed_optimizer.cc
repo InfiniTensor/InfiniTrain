@@ -68,6 +68,7 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads(const AddShardParam &add
     size_t num_shard_params = 0;
 
     for (const auto &group : bucket_groups_) {
+        std::vector<LocalGradShard> local_grad_shards;
         const bool use_grad_shard = group->config().zero_stage >= 2;
         const auto &buckets = group->buckets();
         for (size_t bucket_idx = 0; bucket_idx < buckets.size(); ++bucket_idx) {
@@ -107,6 +108,7 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads(const AddShardParam &add
 
                 auto param_piece = std::make_shared<Tensor>(*bucket_param, param_piece_offset_bytes,
                                                             std::vector<int64_t>{static_cast<int64_t>(piece_numel)});
+                param_piece->set_sequence_parallel(param->sequence_parallel());
 
                 auto grad_piece = std::make_shared<Tensor>(*bucket_grad, grad_piece_offset_bytes,
                                                            std::vector<int64_t>{static_cast<int64_t>(piece_numel)});
@@ -115,22 +117,16 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads(const AddShardParam &add
                 // NOTE(zbl): Do not call `param->set_grad(grad_piece);` under ZeRO-2.
                 //            The base optimizer updates param_piece views only; original param->grad()
                 //            would be a partial flattened shard and does not represent the full parameter grad.
+                local_grad_shards.emplace_back(param, grad_piece);
                 add_shard_param(param, param_piece);
                 ++num_shard_params;
             }
         }
+        group->set_local_grad_shards(std::move(local_grad_shards));
     }
 
     CHECK_GT(num_shard_params, 0) << "DistributedOptimizer: this DP rank owns no param pieces. "
                                   << "Check bucket padding/divisibility and param bucketing order.";
-}
-
-void DistributedOptimizer::StartGradSync() {
-    for (auto &group : bucket_groups_) { group->StartGradSync(); }
-}
-
-void DistributedOptimizer::FinishGradSync() {
-    for (auto &group : bucket_groups_) { group->FinishGradSync(); }
 }
 
 void DistributedOptimizer::StartParamSync(bool force_sync) {
@@ -171,14 +167,10 @@ float DistributedOptimizer::learning_rate() const {
 }
 
 void DistributedOptimizer::Step() {
-    // 1. Ensure grads are synced
-    FinishGradSync();
-
-    // 2. Base optimizer step on owned param pieces
     CHECK(base_optimizer_) << "DistributedOptimizer: base optimizer is null.";
     base_optimizer_->Step();
 
-    // 3. Gather updated param shards back to full params
+    // Gather updated param shards back to full params
     StartParamSync(/*force_sync=*/false);
     // TODO(zbl): Delay sync call until param is actually used in next step
     FinishParamSync(/*skip_next_bucket_dispatch=*/true);

@@ -10,7 +10,7 @@
 using namespace infini_train;
 
 // ============================================================================
-// Op tests — CPU + CUDA
+// Op tests - all configured test devices
 // ============================================================================
 
 class TensorOpTest : public infini_train::test::InfiniTrainTest {};

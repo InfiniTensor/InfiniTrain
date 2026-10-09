@@ -63,6 +63,8 @@ public:
     // Prepare bucket info for next step
     void PrepareForBackward();
 
+    void SetIsLastMicrobatch(bool is_last_microbatch);
+
     // For custom DDP hook to overwrite the default AllReduce.
     // This can be used for algorithms like Gradient Compression/GossipGrad.
     // Hook is registered using `Reducer::RegisterCommHook()`.
@@ -149,10 +151,12 @@ private:
     std::vector<uint8_t> ready_seen_this_iter_;
     // Whether to rebuild buckets on next train step
     bool need_rebuild_ = false;
-    // Whether to buckets have already been rebuilt on the second step
+    // Whether buckets have already been rebuilt on the second step
     bool has_rebuilt_bucket_ = false;
     // Whether all buckets are ready and backward can be finalized
     bool all_buckets_ready_this_iter_ = false;
+    // Whether to enable grad sync on last microbatch (DDP gradient bucketing path)
+    bool is_last_microbatch_ = true;
 };
 
 } // namespace infini_train::nn::parallel

@@ -54,6 +54,11 @@ void CclImpl::ReduceScatter(const void *sendbuff, void *recvbuff, size_t recv_co
     LOG(FATAL) << "CclImpl::ReduceScatter is not implemented.";
 }
 
+void CclImpl::AlltoAll(const void *sendbuff, void *recvbuff, size_t count, DataType dtype, const CclComm *comm,
+                       Stream *stream) const {
+    LOG(FATAL) << "CclImpl::AlltoAll is not implemented.";
+}
+
 void CclImpl::Send(const void *buff, size_t count, DataType dtype, int peer, const CclComm *comm,
                    Stream *stream) const {
     LOG(FATAL) << "CclImpl::Send is not implemented.";
@@ -84,6 +89,8 @@ void CclImplRegistry::Register(Device::DeviceType type, std::unique_ptr<CclImpl>
 
     impls_[type] = std::move(impl);
 }
+
+bool CclImplRegistry::Has(Device::DeviceType type) const { return impls_.contains(type); }
 
 CclImpl *CclImplRegistry::Get(Device::DeviceType type) const {
     auto it = impls_.find(type);

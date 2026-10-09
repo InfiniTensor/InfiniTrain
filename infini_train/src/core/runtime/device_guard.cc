@@ -11,6 +11,8 @@
 namespace infini_train::core {
 
 // DeviceGuardImpl (base fallback: FATAL only)
+void DeviceGuardImpl::Initialize() {}
+
 void DeviceGuardImpl::SetDevice(Device) const { LOG(FATAL) << "DeviceGuardImpl::SetDevice is not implemented."; }
 
 int DeviceGuardImpl::DeviceCount() const {
@@ -143,17 +145,10 @@ void DeviceGuardImplRegistry::Register(Device::DeviceType type, std::unique_ptr<
         LOG(FATAL) << std::format("DeviceGuardImpl for type {} already registered", static_cast<int>(type));
     }
 
-    if (!impls_.empty()) {
-        for (auto &kv : impls_) {
-            if (kv.first != Device::DeviceType::kCPU) {
-                LOG(FATAL) << std::format("Only CPU and one GPU backend allowed. Already have GPU={}, new={} rejected.",
-                                          static_cast<int>(kv.first), static_cast<int>(type));
-            }
-        }
-    }
-
     impls_[type] = std::move(impl);
 }
+
+bool DeviceGuardImplRegistry::Has(Device::DeviceType type) const { return impls_.contains(type); }
 
 DeviceGuardImpl *DeviceGuardImplRegistry::Get(Device::DeviceType type) const {
     auto it = impls_.find(type);
@@ -163,6 +158,10 @@ DeviceGuardImpl *DeviceGuardImplRegistry::Get(Device::DeviceType type) const {
     return it->second.get();
 }
 
-DeviceGuardImpl *GetDeviceGuardImpl(Device::DeviceType type) { return DeviceGuardImplRegistry::Instance().Get(type); }
+DeviceGuardImpl *GetDeviceGuardImpl(Device::DeviceType type) {
+    auto *impl = DeviceGuardImplRegistry::Instance().Get(type);
+    impl->Initialize();
+    return impl;
+}
 
 } // namespace infini_train::core

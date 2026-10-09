@@ -15,6 +15,7 @@
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
 #include "infini_train/include/nn/parallel/pp/send_recv.h"
+#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
@@ -199,7 +200,7 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
     int stage_idx = stage_->stage_index();
     int vpp_size = global::GetVirtualPipelineParallelSize();
 
-    auto schedule = PipelineParallelScheduler::GenerateGPipeSchedule(n, num_stages, vpp_size);
+    auto schedule = PipelineParallelScheduler::GenerateInterleaved1F1BSchedule(n, num_stages, vpp_size);
 
     static bool has_printed = false;
     if (!has_printed && stage_idx == 0) {
@@ -211,6 +212,11 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
 
     std::vector<std::vector<std::vector<std::shared_ptr<Tensor>>>> activations(
         vpp_size, std::vector<std::vector<std::shared_ptr<Tensor>>>(n));
+
+    std::vector<std::unique_ptr<nn::NoSyncGuard>> no_sync_guards;
+    no_sync_guards.reserve(stage_->chunks().size());
+    for (const auto &chunk : stage_->chunks()) { no_sync_guards.push_back(chunk->no_sync()); }
+    std::vector<int> backward_counts(vpp_size, 0);
 
     for (size_t i = 0; i < schedule.size(); ++i) {
         const auto &task = schedule[i];
@@ -244,6 +250,10 @@ float PipelineSchedule::StepMicroBatches(const std::vector<std::shared_ptr<Tenso
                 }
             }
         } else {
+            const bool is_last_microbatch = ++backward_counts[task.local_chunk_idx] == n;
+            if (is_last_microbatch) {
+                no_sync_guards[task.local_chunk_idx].reset();
+            }
             if (task.is_last_chunk) {
                 auto target = microbatch_targets[mb];
                 std::shared_ptr<Tensor> loss;
@@ -290,6 +300,7 @@ float PipelineSchedule::Step(std::shared_ptr<Tensor> input, std::shared_ptr<Tens
 
     float lossf = StepMicroBatches(micro_batches, target_mbs, loss_fn, dtype);
 
+    FinalizeModelGrads(stage_->chunks());
     optimizer->Step();
 
     return lossf;

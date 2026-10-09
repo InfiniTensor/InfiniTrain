@@ -1,9 +1,11 @@
 #pragma once
 
+#include <array>
 #include <string_view>
 #include <unordered_map>
 
 #include "infini_train/include/common/common.h"
+#include "infini_train/include/core/privateuse1_backend.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
@@ -70,11 +72,19 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
     {"Layernorm", CastPolicy::kFP32},
 };
 
-// Default autocast data types for each device type
-inline constexpr std::array<DataType, static_cast<size_t>(Device::DeviceType::kCount)> kDeviceDefaultDtype = {
-    DataType::kBFLOAT16, // CPU
-    DataType::kFLOAT16,  // CUDA.
-};
+inline DataType GetDefaultAutocastDtype(Device::DeviceType device_type) {
+    if (device_type == Device::DeviceType::kPrivateUse1) {
+        return core::GetPrivateUse1BackendDefaultAutocastDtype();
+    }
+
+    static constexpr std::array kDeviceDefaultDtype = {
+        DataType::kBFLOAT16, // CPU
+        DataType::kFLOAT16,  // CUDA
+    };
+    const auto index = static_cast<size_t>(device_type);
+    CHECK_LT(index, kDeviceDefaultDtype.size()) << "Invalid device type for autocast";
+    return kDeviceDefaultDtype[index];
+}
 
 // Thread-local context to track autocast state
 struct AutocastContext {
@@ -160,8 +170,7 @@ public:
         tls_autocast_context.autocast_dtype = autocast_dtype;
     }
 
-    AutocastGuard(Device::DeviceType device_type)
-        : AutocastGuard(device_type, kDeviceDefaultDtype[static_cast<size_t>(device_type)]) {}
+    AutocastGuard(Device::DeviceType device_type) : AutocastGuard(device_type, GetDefaultAutocastDtype(device_type)) {}
 
     // Disable autocast (restore previous state)
     ~AutocastGuard() { tls_autocast_context = saved_context_; }
