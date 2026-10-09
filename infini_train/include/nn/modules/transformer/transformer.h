@@ -81,10 +81,9 @@ class TransformerModel : public CloneableModule<TransformerModel> {
 
   const TransformerConfig &Config() const;
 
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
     std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
     NamedParameters(const std::string &prefix = "", bool recurse = true, bool remove_duplicate = true) const override;
-    void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
 
  private:
   const TransformerConfig config_;
