@@ -25,15 +25,12 @@
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
-#include "example/mnist/cnn_net.h"
 #include "example/mnist/dataset.h"
 #include "example/mnist/net.h"
 
 DEFINE_string(dataset, "", "mnist dataset path");
-DEFINE_string(model, "cnn", "model type (mlp/cnn)");
 DEFINE_int32(bs, 64, "batch size");
-// Defaults are tuned for the CNN demo (default --model=cnn) to reach ~97.8% test accuracy.
-// The MLP reaches ~92% at these defaults; pass more epochs (e.g. --num_epoch=20) to reach ~95%.
+// The defaults are tuned for the MNIST CNN demo to reach ~97.8% test accuracy.
 DEFINE_int32(num_epoch, 3, "num epochs");
 DEFINE_double(lr, 0.1, "learning rate");
 DEFINE_string(device, "cpu", "device type (cpu/cuda)");
@@ -46,14 +43,10 @@ constexpr int kNumClasses = 10;
 
 constexpr char kDeviceCPU[] = "cpu";
 constexpr char kDeviceCUDA[] = "cuda";
-constexpr char kModelMLP[] = "mlp";
-constexpr char kModelCNN[] = "cnn";
 }; // namespace
 
 DEFINE_validator(device,
                  [](const char *, const std::string &value) { return value == kDeviceCPU || value == kDeviceCUDA; });
-DEFINE_validator(model,
-                 [](const char *, const std::string &value) { return value == kModelMLP || value == kModelCNN; });
 
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -105,12 +98,7 @@ int main(int argc, char *argv[]) {
     auto test_dataset = std::make_shared<MNISTDataset>(FLAGS_dataset, false);
     DataLoader test_dataloader(test_dataset, FLAGS_bs);
 
-    std::shared_ptr<nn::Module> network;
-    if (FLAGS_model == kModelCNN) {
-        network = std::make_shared<MnistCnn>();
-    } else {
-        network = std::make_shared<MNIST>();
-    }
+    std::shared_ptr<nn::Module> network = std::make_shared<MNIST>();
     Device cpu_device = Device();
     network->To(device);
 
