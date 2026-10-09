@@ -25,6 +25,23 @@ TEST_P(OptimizerCreationTest, AdamCreation) {
     EXPECT_NE(optimizer, nullptr);
 }
 
+TEST_P(OptimizerCreationTest, AdamStateIsFP32ForBF16Parameters) {
+    auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kBFLOAT16, GetDevice());
+    auto optimizer = std::make_shared<optimizers::Adam>(std::vector<std::shared_ptr<Tensor>>{param}, 0.001);
+    const auto state = optimizer->StateDict();
+    EXPECT_EQ(state.at("adam.m.0")->Dtype(), DataType::kFLOAT32);
+    EXPECT_EQ(state.at("adam.v.0")->Dtype(), DataType::kFLOAT32);
+}
+
+TEST_P(OptimizerCreationTest, NamedAdamStateIsFP32ForBF16Parameters) {
+    auto param = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kBFLOAT16, GetDevice());
+    const NamedParameterList named_params{{"weight", param}};
+    auto optimizer = std::make_shared<optimizers::Adam>(named_params, 0.001);
+    const auto state = optimizer->StateDict();
+    EXPECT_EQ(state.at("adam.m.weight")->Dtype(), DataType::kFLOAT32);
+    EXPECT_EQ(state.at("adam.v.weight")->Dtype(), DataType::kFLOAT32);
+}
+
 TEST_P(OptimizerCreationTest, SGDMultiParams) {
     std::vector<std::shared_ptr<Tensor>> params;
     for (int i = 0; i < 3; ++i) {
