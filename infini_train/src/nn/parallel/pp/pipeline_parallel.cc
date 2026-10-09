@@ -134,9 +134,9 @@ PipelineParallel::StateDict() const {
   return modules_.at(kModuleName)->StateDict();
 }
 
-checkpoint::ShardedStateDict PipelineParallel::ShardedStateDict(
+ShardedStateDict PipelineParallel::BuildShardedStateDict(
     const std::string &prefix) const {
-  return modules_.at(kModuleName)->ShardedStateDict(prefix);
+  return modules_.at(kModuleName)->BuildShardedStateDict(prefix);
 }
 
 void PipelineParallel::LoadStateDict(

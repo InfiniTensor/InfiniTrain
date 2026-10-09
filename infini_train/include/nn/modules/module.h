@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "infini_train/include/checkpoint/shard_spec.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/shard_spec.h"
 
 namespace infini_train {
 class Tensor;
@@ -90,7 +90,7 @@ class Module : public std::enable_shared_from_this<Module> {
       const;
 
   // Return state-dict metadata with global shard coordinates.
-  virtual checkpoint::ShardedStateDict ShardedStateDict(
+  virtual ShardedStateDict BuildShardedStateDict(
       const std::string &prefix = "") const;
 
   // Current behavior: missing keys / shape / dtype mismatches are FATAL errors;

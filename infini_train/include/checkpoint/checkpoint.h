@@ -8,8 +8,8 @@
 #include <vector>
 
 #include "infini_train/include/checkpoint/save_planner.h"
-#include "infini_train/include/checkpoint/shard_spec.h"
 #include "infini_train/include/lr_scheduler.h"
+#include "infini_train/include/shard_spec.h"
 
 namespace infini_train {
 class Optimizer;
@@ -27,12 +27,13 @@ struct TrainerState {
   int64_t n_head = 0;
   int64_t n_kv_head = 0;
   int64_t n_embd = 0;
-  int64_t vocab_size = 0;
+  int64_t original_vocab_size = 0;
+  int64_t padded_vocab_size = 0;
   int ddp_size = 1;
   int tp_size = 1;
   int sp_size = 1;
   int pp_size = 1;
-    int vpp_size = 1;
+  int vpp_size = 1;
 };
 
 class Checkpoint {
@@ -45,16 +46,6 @@ class Checkpoint {
                    nn::Module &model, Optimizer *optimizer, TrainerState &state,
                    LRScheduler *lr_scheduler);
 
-  static void SaveSharded(
-      const std::filesystem::path &checkpoint_dir,
-      const checkpoint::ShardedStateDict &sharded_sd,
-      const std::vector<checkpoint::WriteItem> &write_items,
-      const std::unordered_map<std::string, std::shared_ptr<Tensor>>
-          &state_dict,
-      const std::unordered_map<std::string, std::shared_ptr<Tensor>>
-          &optimizer_state,
-      const TrainerState &state, int global_rank);
-
   static void SaveStateDictFile(
       const std::filesystem::path &path,
       const std::unordered_map<std::string, std::shared_ptr<Tensor>>
@@ -65,15 +56,6 @@ class Checkpoint {
 
   struct CheckpointMetadata {
     int version = 0;
-    int64_t iteration = 0;
-
-    struct ParallelConfig {
-      int tp_size = 1;
-      int pp_size = 1;
-      int dp_size = 1;
-      int sp_size = 1;
-            int vpp_size = 1;
-    } parallel_config;
 
     struct TensorEntry {
       std::string key;
@@ -82,7 +64,7 @@ class Checkpoint {
       std::vector<int64_t> local_shape;
       std::vector<int64_t> global_offset;
       std::vector<int> axis_fragmentations;
-      std::vector<checkpoint::ShardSegment> segments;
+      std::vector<ShardSegment> segments;
       std::string file;
       uint64_t offset = 0;
       uint64_t byte_size = 0;
@@ -99,17 +81,6 @@ class Checkpoint {
   static void SaveMetadataFile(const std::filesystem::path &path,
                                const CheckpointMetadata &metadata);
 
-  // Public LR-scheduler serialization helpers used by checkpoint_manager.
-  static void SaveLRSchedulerStateFile(const std::filesystem::path &path,
-                                       const LRSchedulerStateDict &state_dict);
-  static LRSchedulerStateDict LoadLRSchedulerStateFile(
-      const std::filesystem::path &path);
-
-  // Public trainer-state serialization helpers used by checkpoint_manager.
-  static void SaveTrainerStateFile(const std::filesystem::path &path,
-                                   const TrainerState &state);
-  static TrainerState LoadTrainerStateFile(const std::filesystem::path &path);
-
  private:
   struct SavedTensorLocation {
     uint64_t data_offset = 0;
@@ -125,6 +96,16 @@ class Checkpoint {
 
   static std::unordered_map<std::string, std::shared_ptr<Tensor>> LoadStateDict(
       const std::filesystem::path &path);
+
+  static void SaveLocalShard(
+      const std::filesystem::path &checkpoint_dir,
+      const ShardedStateDict &sharded_sd,
+      const std::vector<checkpoint::WriteItem> &write_items,
+      const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+          &state_dict,
+      const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+          &optimizer_state,
+      int global_rank);
 
   static void SaveTrainerState(const std::filesystem::path &path,
                                const TrainerState &state);

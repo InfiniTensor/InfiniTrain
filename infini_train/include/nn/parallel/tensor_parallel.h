@@ -6,8 +6,9 @@
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
-#include "infini_train/include/checkpoint/shard_spec.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/shard_spec.h"
 
 namespace infini_train {
 class Tensor;
@@ -58,7 +59,7 @@ class ColumnParallelLinear : public nn::CloneableModule<ColumnParallelLinear> {
   bool skip_bias_add() const;
   bool sequence_parallel() const;
 
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
 
  protected:
   bool bias_ = true;
@@ -94,7 +95,7 @@ class RowParallelLinear : public nn::CloneableModule<RowParallelLinear> {
   bool skip_bias_add() const;
   bool sequence_parallel() const;
 
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
 
  protected:
   bool bias_ = true;
@@ -121,7 +122,7 @@ class VocabParallelEmbedding
   std::vector<std::shared_ptr<Tensor>> Forward(
       const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
-    checkpoint::ShardedStateDict ShardedStateDict(const std::string &prefix = "") const override;
+    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
 
  private:
   bool reduce_scatter_embeddings_ =

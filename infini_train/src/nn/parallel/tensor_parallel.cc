@@ -355,13 +355,13 @@ bool ColumnParallelLinear::sequence_parallel() const {
   return sequence_parallel_;
 }
 
-checkpoint::ShardedStateDict ColumnParallelLinear::ShardedStateDict(
+ShardedStateDict ColumnParallelLinear::BuildShardedStateDict(
     const std::string &prefix) const {
-  checkpoint::ShardedStateDict sd;
+  ShardedStateDict sd;
   int tp_size = global::GetTensorParallelSize();
 
   auto &weight = parameter(kParamWeightName);
-  checkpoint::ShardedTensor w;
+  ShardedTensor w;
   w.key = prefix.empty() ? kParamWeightName : prefix + "." + kParamWeightName;
   w.dtype = weight->Dtype();
   w.global_shape = {output_size_per_partition_ * tp_size, weight->Dims()[1]};
@@ -373,7 +373,7 @@ checkpoint::ShardedStateDict ColumnParallelLinear::ShardedStateDict(
   // Bias is also split along dim=0
   if (bias_) {
     auto &bias = parameter(kParamBiasName);
-    checkpoint::ShardedTensor b;
+    ShardedTensor b;
     b.key = prefix.empty() ? kParamBiasName : prefix + "." + kParamBiasName;
     b.dtype = bias->Dtype();
     b.global_shape = {
@@ -465,13 +465,13 @@ bool RowParallelLinear::input_is_parallel() const { return input_is_parallel_; }
 bool RowParallelLinear::skip_bias_add() const { return skip_bias_add_; }
 bool RowParallelLinear::sequence_parallel() const { return sequence_parallel_; }
 
-checkpoint::ShardedStateDict RowParallelLinear::ShardedStateDict(
+ShardedStateDict RowParallelLinear::BuildShardedStateDict(
     const std::string &prefix) const {
-  checkpoint::ShardedStateDict sd;
+  ShardedStateDict sd;
   int tp_size = global::GetTensorParallelSize();
 
   auto &weight = parameter(kParamWeightName);
-  checkpoint::ShardedTensor w;
+  ShardedTensor w;
   w.key = prefix.empty() ? kParamWeightName : prefix + "." + kParamWeightName;
   w.dtype = weight->Dtype();
   w.global_shape = {weight->Dims()[0], input_size_per_partition_ * tp_size};
@@ -483,13 +483,9 @@ checkpoint::ShardedStateDict RowParallelLinear::ShardedStateDict(
   // Bias is NOT sharded in RowParallelLinear
   if (bias_) {
     auto &bias = parameter(kParamBiasName);
-    checkpoint::ShardedTensor b;
-    b.key = prefix.empty() ? kParamBiasName : prefix + "." + kParamBiasName;
-    b.dtype = bias->Dtype();
-    b.global_shape = bias->Dims();
-    b.local_shape = bias->Dims();
-    b.global_offset = {0};
-    b.axis_fragmentations = {1};
+    const auto key =
+        prefix.empty() ? kParamBiasName : prefix + "." + kParamBiasName;
+    auto b = MakeShardedTensor(key, bias->Dtype(), bias->Dims());
     sd.tensors[b.key] = std::move(b);
   }
 
@@ -499,14 +495,9 @@ checkpoint::ShardedStateDict RowParallelLinear::ShardedStateDict(
 VocabParallelEmbedding::VocabParallelEmbedding(int64_t num_embeddings,
                                                int64_t embedding_dim,
                                                bool reduce_scatter_embeddings)
-<<<<<<< HEAD
-    : CloneableModule(kType),
-      embedding_dim_(embedding_dim),
-=======
     : CloneableModule(kType),
       vocab_size_global_(num_embeddings),
       embedding_dim_(embedding_dim),
->>>>>>> 8ea672e (fix: update checkpoint tests for named optimizer API)
       reduce_scatter_embeddings_(reduce_scatter_embeddings) {
   auto tp_size = global::GetTensorParallelSize();
   CHECK_GT(tp_size, 0)
@@ -570,19 +561,20 @@ std::vector<std::shared_ptr<Tensor>> VocabParallelEmbedding::Forward(
   return {output};
 }
 
-checkpoint::ShardedStateDict VocabParallelEmbedding::ShardedStateDict(
+ShardedStateDict VocabParallelEmbedding::BuildShardedStateDict(
     const std::string &prefix) const {
-  checkpoint::ShardedStateDict sd;
+  ShardedStateDict sd;
   int tp_size = global::GetTensorParallelSize();
 
   auto &weight = parameter(kParamWeightName);
-  checkpoint::ShardedTensor w;
+  ShardedTensor w;
   w.key = prefix.empty() ? kParamWeightName : prefix + "." + kParamWeightName;
   w.dtype = weight->Dtype();
   w.global_shape = {vocab_size_global_, embedding_dim_};
   w.local_shape = weight->Dims();
   w.global_offset = {vocab_start_index_, 0};
   w.axis_fragmentations = {tp_size, 1};
+  w.allow_shape_mismatch = true;
   sd.tensors[w.key] = std::move(w);
 
   return sd;

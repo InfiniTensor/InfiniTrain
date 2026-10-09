@@ -104,9 +104,9 @@ void CausalSelfAttention::SetupAttention(const TransformerConfig &config) {
   }
 }
 
-checkpoint::ShardedStateDict CausalSelfAttention::ShardedStateDict(
+ShardedStateDict CausalSelfAttention::BuildShardedStateDict(
     const std::string &prefix) const {
-  auto state = Module::ShardedStateDict(prefix);
+  auto state = Module::BuildShardedStateDict(prefix);
   const int tp_size = parallel::global::GetTensorParallelSize();
   const int rank = parallel::tp_rank;
   const int64_t q_global = n_head_ * head_dim_;
@@ -114,6 +114,9 @@ checkpoint::ShardedStateDict CausalSelfAttention::ShardedStateDict(
   const int64_t q_local = q_global / tp_size;
   const int64_t kv_local = kv_global / tp_size;
 
+  // FIXME(jym): Transformer should not depend on LoRA just to identify lora_B.
+  // Move the packed-QKV segment layout into a dedicated sharding abstraction
+  // shared by the base attention weight and LoRA parameters.
   const auto c_attn_prefix =
       prefix.empty() ? kCAttnLayerName : prefix + "." + kCAttnLayerName;
   auto set_qkv_segments = [&](const std::string &parameter_name) {
@@ -139,7 +142,7 @@ checkpoint::ShardedStateDict CausalSelfAttention::ShardedStateDict(
   if (config_.add_bias_linear) {
     set_qkv_segments(parallel::ColumnParallelLinear::kParamBiasName);
   }
-    set_qkv_segments(lora::LoRAColumnParallelLinear::kParamLoraBName);
+  set_qkv_segments(lora::LoRAColumnParallelLinear::kParamLoraBName);
   return state;
 }
 
