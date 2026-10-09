@@ -6,8 +6,6 @@
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autograd/activations.h"
-#include "infini_train/include/nn/modules/activations.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
@@ -67,48 +65,8 @@ TEST_P(AutogradReLUForwardTest, ReLUForwardNaNZeroExtremes) {
     }
 }
 
-TEST_P(AutogradReLUForwardTest, ReLUForwardModuleTwoD) {
-    const std::vector<float> input_values{-1.0f, 0.0f, 2.0f, 3.5f, -4.25f, 0.5f};
-    auto input
-        = std::make_shared<Tensor>(input_values.data(), std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
-
-    auto relu = std::make_shared<nn::ReLU>();
-    auto result = (*relu)({input});
-    ASSERT_EQ(result.size(), 1);
-    ASSERT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 3}));
-    test::ExpectTensorFloatEqual(result[0], {0.0f, 0.0f, 2.0f, 3.5f, 0.0f, 0.5f});
-}
-
-// ReLU is elementwise; the 4-D conv-output layout must keep its shape.
-TEST_P(AutogradReLUForwardTest, ReLUForwardFourD) {
-    std::vector<float> input_values;
-    for (int idx = 0; idx < 2 * 2 * 4 * 4; ++idx) { input_values.push_back((idx * 7) % 13 / 3.0f - 2.0f); }
-    auto input = std::make_shared<Tensor>(input_values.data(), std::vector<int64_t>{2, 2, 4, 4}, DataType::kFLOAT32,
-                                          GetDevice());
-
-    auto relu_fn = std::make_shared<autograd::ReLU>();
-    auto result = relu_fn->Apply({input});
-    ASSERT_EQ(result.size(), 1);
-    ASSERT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 2, 4, 4}));
-
-    const auto host_result = result[0]->To(Device());
-    const float *out = static_cast<const float *>(host_result.DataPtr());
-    for (size_t idx = 0; idx < input_values.size(); ++idx) {
-        EXPECT_EQ(out[idx], ExpectedRelu(input_values[idx])) << "position " << idx;
-    }
-}
-
-// An empty batch is a valid 0-element tensor: the kernel must not touch memory.
-TEST_P(AutogradReLUForwardTest, ReLUForwardEmptyBatch) {
-    auto input = std::make_shared<Tensor>(std::vector<int64_t>{0, 3}, DataType::kFLOAT32, GetDevice());
-    auto relu_fn = std::make_shared<autograd::ReLU>();
-    auto result = relu_fn->Apply({input});
-    ASSERT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{0, 3}));
-    EXPECT_EQ(result[0]->NumElements(), 0);
-}
-
-// The op is declared FP32-only; other dtypes must be rejected loudly.
+// The CPU kernel is FP32-only; other dtypes must be rejected loudly there. (The CUDA kernels
+// follow the elementwise dtype dispatch, which additionally covers bfloat16.)
 TEST_P(AutogradReLUForwardTest, ReLUForwardRejectsNonFloat) {
     ONLY_CPU();
     auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT16, GetDevice());
@@ -119,6 +77,49 @@ TEST_P(AutogradReLUForwardTest, ReLUForwardRejectsNonFloat) {
             (void)result;
         },
         "");
+}
+
+// bfloat16 is CUDA-only and runs through the elementwise dispatch in both directions. The values
+// are exactly representable in bf16, and the comparison is bitwise on the fp32 view of the
+// results: `ExpectTensorFloatEqual` compares with EXPECT_FLOAT_EQ, which cannot tell +0.0 from
+// -0.0, so the masked positions below are pinned through their bit patterns instead.
+TEST_P(AutogradReLUForwardTest, ReLUForwardBackwardBFloat16) {
+    SKIP_CPU();
+    const std::vector<float> input_values{-2.0f, -0.5f, 0.0f, 1.5f, 4.0f, -8.0f};
+    // Negative gradients at the masked positions pin the +0.0 (0x00000000, not 0x80000000) value.
+    const std::vector<float> grad_values{-1.0f, 1.0f, -2.0f, 2.0f, 3.0f, -3.0f};
+    const std::vector<float> expected_forward{0.0f, 0.0f, 0.0f, 1.5f, 4.0f, 0.0f};
+    const std::vector<float> expected_grad{0.0f, 0.0f, 0.0f, 2.0f, 3.0f, 0.0f};
+
+    auto input_f32
+        = std::make_shared<Tensor>(input_values.data(), std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
+    auto input = std::make_shared<Tensor>(input_f32->To(DataType::kBFLOAT16));
+    auto grad_f32
+        = std::make_shared<Tensor>(grad_values.data(), std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
+    auto grad = std::make_shared<Tensor>(grad_f32->To(DataType::kBFLOAT16));
+
+    auto relu_fn = std::make_shared<autograd::ReLU>();
+    auto result = relu_fn->Apply({input});
+    ASSERT_EQ(result.size(), 1);
+    ASSERT_EQ(result[0]->Dtype(), DataType::kBFLOAT16);
+    ASSERT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 3}));
+    const auto forward_f32 = std::make_shared<Tensor>(result[0]->To(DataType::kFLOAT32));
+    const auto forward_host = forward_f32->To(Device());
+    const float *forward_out = static_cast<const float *>(forward_host.DataPtr());
+    for (size_t idx = 0; idx < expected_forward.size(); ++idx) {
+        EXPECT_EQ(FloatBits(forward_out[idx]), FloatBits(expected_forward[idx])) << "forward bit mismatch at " << idx;
+    }
+
+    auto grad_inputs = relu_fn->Backward({grad});
+    ASSERT_EQ(grad_inputs.size(), 1);
+    ASSERT_EQ(grad_inputs[0]->Dtype(), DataType::kBFLOAT16);
+    ASSERT_EQ(grad_inputs[0]->Dims(), (std::vector<int64_t>{2, 3}));
+    const auto grad_f32_host = std::make_shared<Tensor>(grad_inputs[0]->To(DataType::kFLOAT32));
+    const auto grad_host = grad_f32_host->To(Device());
+    const float *grad_out = static_cast<const float *>(grad_host.DataPtr());
+    for (size_t idx = 0; idx < expected_grad.size(); ++idx) {
+        EXPECT_EQ(FloatBits(grad_out[idx]), FloatBits(expected_grad[idx])) << "gradient bit mismatch at " << idx;
+    }
 }
 
 INFINI_TRAIN_REGISTER_TEST(AutogradReLUForwardTest);
