@@ -17,6 +17,14 @@ public:
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 };
 
+class ReLU : public CloneableModule<ReLU> {
+public:
+    static constexpr char kType[] = "ReLU";
+    ReLU() : CloneableModule(kType) {}
+
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+};
+
 class NewGELU : public CloneableModule<NewGELU> {
 public:
     static constexpr char kType[] = "NewGELU";
