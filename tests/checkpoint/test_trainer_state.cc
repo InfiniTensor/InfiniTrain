@@ -78,7 +78,7 @@ TEST_P(TrainerStateTest, RoundTrip) {
         .tp_size = 1,
         .sp_size = 1,
         .pp_size = 2,
-        .vpp_size = 1,
+        .vpp_size = 2,
     };
 
     auto model1 = std::make_shared<nn::Linear>(1, 3, true, GetDevice());
@@ -111,7 +111,7 @@ TEST_P(TrainerStateTest, RoundTrip) {
     EXPECT_EQ(loaded.pp_size, nn::parallel::global::GetPipelineParallelSize());
     EXPECT_EQ(loaded.sp_size,
               nn::parallel::global::GetSequenceParallelEnabled() ? nn::parallel::global::GetTensorParallelSize() : 1);
-    EXPECT_EQ(loaded.vpp_size, 1);
+    EXPECT_EQ(loaded.vpp_size, nn::parallel::global::GetVirtualPipelineParallelSize());
 
     std::filesystem::remove_all(dir);
 }
