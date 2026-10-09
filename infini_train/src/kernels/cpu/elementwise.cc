@@ -311,6 +311,31 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DivBackward(const st
         [](float x, float y) { return -x / (y * y); });
 }
 
+std::shared_ptr<Tensor> ReLUForward(const std::shared_ptr<Tensor> &input) {
+    CHECK(input->Dtype() == DataType::kFLOAT32) << "ReLU requires FP32 tensors";
+
+    // Strict '<' keeps NaN and -0.0 intact (both compare false), matching torch.relu.
+    return UnaryForward(input, [](float x) { return x < 0.0f ? 0.0f : x; });
+}
+
+std::shared_ptr<Tensor> ReLUBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &grad_output) {
+    CHECK(input->Dtype() == DataType::kFLOAT32) << "ReLU requires FP32 tensors";
+    CHECK(grad_output->Dtype() == DataType::kFLOAT32) << "ReLU requires FP32 tensors";
+
+    auto grad_input = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32);
+    const float *input_ptr = static_cast<const float *>(input->DataPtr());
+    const float *grad_output_ptr = static_cast<const float *>(grad_output->DataPtr());
+    float *grad_input_ptr = static_cast<float *>(grad_input->DataPtr());
+
+    // Select instead of scaling with a 0/1 mask: grad_output * 0 is -0.0 for negative gradients and
+    // NaN for NaN/+-inf gradients, while torch's ReLU backward always writes +0.0 at masked
+    // positions. '<=' also lets the gradient through at NaN inputs, as torch does.
+    for (int64_t idx = 0; idx < grad_input->NumElements(); ++idx) {
+        grad_input_ptr[idx] = input_ptr[idx] <= 0.0f ? 0.0f : grad_output_ptr[idx];
+    }
+    return grad_input;
+}
+
 } // namespace infini_train::kernels::cpu
 
 #define REGISTER_CPU_ELEMENTWISE_KERNEL(kernel_name)                                                                   \
@@ -358,5 +383,7 @@ REGISTER_CPU_ELEMENTWISE_KERNEL(MulScalarForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(MulScalarBackward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(DivForward)
 REGISTER_CPU_ELEMENTWISE_KERNEL(DivBackward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(ReLUForward)
+REGISTER_CPU_ELEMENTWISE_KERNEL(ReLUBackward)
 
 #undef REGISTER_CPU_ELEMENTWISE_KERNEL
