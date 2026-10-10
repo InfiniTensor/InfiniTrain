@@ -33,4 +33,9 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndKVAllGather(const std::shared_ptr<Tenso
 std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2A(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
                                                  const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask);
 
+std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2AKVP2P(const std::shared_ptr<Tensor> &q,
+                                                      const std::shared_ptr<Tensor> &k,
+                                                      const std::shared_ptr<Tensor> &v,
+                                                      const std::shared_ptr<Tensor> &mask);
+
 } // namespace infini_train::nn::parallel
