@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/parallel/global.h"
 
+#include <charconv>
 #include <cstdlib>
 #include <format>
 #include <sstream>
@@ -101,7 +102,8 @@ GlobalEnv &GlobalEnv::Instance() {
 
 void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
                      int context_parallel_size, const std::string &context_parallel_comm_type,
-                     int pipeline_parallel_size, int virtual_pipeline_parallel_size) {
+                     int pipeline_parallel_size, int virtual_pipeline_parallel_size,
+                     const std::string &hierarchical_context_parallel_sizes) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
@@ -127,6 +129,29 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     CHECK_GE(context_parallel_size, 1) << "Context Parallel size must be >= 1";
     context_parallel_size_ = context_parallel_size;
     context_parallel_comm_type_ = context_parallel_comm_type;
+    CHECK(context_parallel_comm_type == "p2p" || context_parallel_comm_type == "all_gather"
+          || context_parallel_comm_type == "a2a" || context_parallel_comm_type == "a2a+p2p")
+        << "Unsupported CP communication type: " << context_parallel_comm_type;
+    if (context_parallel_comm_type == "a2a+p2p") {
+        const auto separator = hierarchical_context_parallel_sizes.find(',');
+        CHECK(separator != std::string::npos) << "hierarchical_context_parallel_sizes must be A,P";
+        const auto *begin = hierarchical_context_parallel_sizes.data();
+        const auto *end = begin + hierarchical_context_parallel_sizes.size();
+        int a2a_size = 0, p2p_size = 0;
+        const auto a2a_result = std::from_chars(begin, begin + separator, a2a_size);
+        const auto p2p_result = std::from_chars(begin + separator + 1, end, p2p_size);
+        CHECK(a2a_result.ec == std::errc{} && a2a_result.ptr == begin + separator && p2p_result.ec == std::errc{}
+              && p2p_result.ptr == end)
+            << "hierarchical_context_parallel_sizes must contain exactly two integers: A,P";
+        CHECK_GT(a2a_size, 0);
+        CHECK_GT(p2p_size, 0);
+        CHECK_EQ(static_cast<int64_t>(a2a_size) * p2p_size, context_parallel_size)
+            << "A2A size * P2P size must equal context_parallel";
+        hierarchical_context_parallel_sizes_ = {a2a_size, p2p_size};
+    } else {
+        CHECK(hierarchical_context_parallel_sizes.empty())
+            << "hierarchical_context_parallel_sizes requires cp_comm_type=a2a+p2p";
+    }
     CHECK_GE(pipeline_parallel_size, 1) << "Pipeline Parallel size must be >= 1";
     pipeline_parallel_size_ = pipeline_parallel_size;
     virtual_pipeline_parallel_size_ = virtual_pipeline_parallel_size;
@@ -197,6 +222,11 @@ int GlobalEnv::context_parallel_size() const {
 const std::string &GlobalEnv::context_parallel_comm_type() const {
     CHECK(initialized_) << "GlobalEnv is not initialized!";
     return context_parallel_comm_type_;
+}
+
+const std::vector<int> &GlobalEnv::hierarchical_context_parallel_sizes() const {
+    CHECK(initialized_) << "GlobalEnv is not initialized!";
+    return hierarchical_context_parallel_sizes_;
 }
 
 int GlobalEnv::data_parallel_size() const {

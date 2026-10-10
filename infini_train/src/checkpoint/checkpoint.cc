@@ -238,7 +238,8 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &m
 
     LOG(ERROR) << "[CKPT] Load done: global_step=" << state.global_step
                << ", consumed_train_samples=" << state.consumed_train_samples << ", topology(ddp,tp,sp,cp,pp)=("
-               << state.ddp_size << "," << state.tp_size << "," << state.sp_size << "," << state.cp_size << "," << state.pp_size << ")";
+               << state.ddp_size << "," << state.tp_size << "," << state.sp_size << "," << state.cp_size << ","
+               << state.pp_size << ")";
 }
 
 void Checkpoint::SaveStateDict(const std::filesystem::path &path,

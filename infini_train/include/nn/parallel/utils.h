@@ -21,6 +21,9 @@ std::string GetTensorParallelProcessGroupName(int global_rank);
 
 std::string GetContextParallelProcessGroupName(int global_rank);
 
+// Level 0 exchanges heads/sequences; level 1 circulates KV across sequence blocks.
+std::string GetHierarchicalContextParallelProcessGroupName(int global_rank, int level);
+
 std::string GetPipelineParallelProcessGroupName(int global_rank);
 
 std::vector<int> GetDataParallelGroupRanks(int global_rank);
@@ -30,6 +33,8 @@ std::vector<int> GetDataParallelWithContextGroupRanks(int global_rank);
 std::vector<int> GetTensorParallelGroupRanks(int global_rank);
 
 std::vector<int> GetContextParallelGroupRanks(int global_rank);
+
+std::vector<int> GetHierarchicalContextParallelGroupRanks(int global_rank, int level);
 
 std::vector<int> GetPipelineParallelGroupRanks(int global_rank);
 

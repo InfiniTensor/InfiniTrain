@@ -94,7 +94,8 @@ DEFINE_int32(nthread_per_process, 1,
 DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_uint32(context_parallel, 1, "Context Parallel world size");
-DEFINE_string(cp_comm_type, "p2p", "Context Parallel communication type (all_gather|p2p|a2a)");
+DEFINE_string(cp_comm_type, "p2p", "Context Parallel communication type (all_gather|p2p|a2a|a2a+p2p)");
+DEFINE_string(hierarchical_context_parallel_sizes, "", "A2A,P2P subgroup sizes for a2a+p2p, e.g. 2,2");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 // precision
@@ -135,7 +136,7 @@ DEFINE_validator(zero_stage, [](const char *, int32_t value) { return value >= 0
 DEFINE_validator(lr_decay_style,
                  [](const char *, const std::string &value) { return kSupportedLRDecayStyles.contains(value); });
 DEFINE_validator(cp_comm_type, [](const char *, const std::string &value) {
-    return value == "all_gather" || value == "p2p" || value == "a2a";
+    return value == "all_gather" || value == "p2p" || value == "a2a" || value == "a2a+p2p";
 });
 
 void Train(const nn::parallel::Rank &rank) {
@@ -226,6 +227,12 @@ void Train(const nn::parallel::Rank &rank) {
                                             GetContextParallelGroupRanks(rank.GlobalRank()));
             cp_rank = cp_pg->GetGroupRank(rank.GlobalRank());
             nn::parallel::cp_rank = cp_rank;
+            if (global::GetContextParallelCommType() == "a2a+p2p") {
+                for (int level = 0; level < 2; ++level) {
+                    pg_factory->GetOrCreate(GetHierarchicalContextParallelProcessGroupName(rank.GlobalRank(), level),
+                                            GetHierarchicalContextParallelGroupRanks(rank.GlobalRank(), level));
+                }
+            }
         }
 
         if (pp_world_size > 1) {
@@ -531,7 +538,7 @@ void Train(const nn::parallel::Rank &rank) {
 
                 LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
                 std::unique_ptr<nn::NoSyncGuard> no_sync_guard;
-                if (ddp_world_size > 1 && micro_step != grad_accum_steps - 1) {
+                if (dp_cp_world_size > 1 && micro_step != grad_accum_steps - 1) {
                     no_sync_guard = model->no_sync();
                 }
                 loss->Backward();
@@ -578,9 +585,9 @@ void Train(const nn::parallel::Rank &rank) {
             LOG(ERROR) << std::format("step {:4d}/{} | train loss {:.6f} | lr {:.2e} | ({:.2f} ms | {:.0f} tok/s | "
                                       "peak used: {:5d} MB | peak reserved: {:5d} MB, DP={}, TP={}, SP={}, CP={}, "
                                       "PP={})",
-                                      step + 1, FLAGS_num_iteration, lossf, current_lr, duration_us / 1e3f,
-                                      tps, used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size,
-                                      cp_world_size, pp_world_size);
+                                      step + 1, FLAGS_num_iteration, lossf, current_lr, duration_us / 1e3f, tps,
+                                      used_mb, reserved_mb, ddp_world_size, tp_world_size, sp_world_size, cp_world_size,
+                                      pp_world_size);
 
             if ((step + 1) % FLAGS_freq_generate_txt == 0) {
                 // FIXME(jym): to support PP
@@ -634,7 +641,7 @@ int main(int argc, char *argv[]) {
     auto precision_config = utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
                                      FLAGS_context_parallel, FLAGS_cp_comm_type, FLAGS_pipeline_parallel,
-                                     FLAGS_virtual_pipeline_parallel);
+                                     FLAGS_virtual_pipeline_parallel, FLAGS_hierarchical_context_parallel_sizes);
     utils::PrecisionCheckEnv::Instance().Init(precision_config);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();

@@ -34,7 +34,7 @@ public:
 
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
               int context_parallel_size, const std::string &context_parallel_comm_type, int pipeline_parallel_size,
-              int virtual_pipeline_parallel_size);
+              int virtual_pipeline_parallel_size, const std::string &hierarchical_context_parallel_sizes = "");
 
     int nnodes() const;
 
@@ -57,6 +57,8 @@ public:
     int context_parallel_size() const;
 
     const std::string &context_parallel_comm_type() const;
+
+    const std::vector<int> &hierarchical_context_parallel_sizes() const;
 
     int data_parallel_size() const;
 
@@ -86,6 +88,7 @@ private:
     bool sequence_parallel_enabled_ = false;
     int context_parallel_size_ = 1;
     std::string context_parallel_comm_type_ = "p2p";
+    std::vector<int> hierarchical_context_parallel_sizes_;
 
     int data_parallel_size_ = 1;
 
@@ -106,10 +109,11 @@ inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool s
 }
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
                        int context_parallel_size, const std::string &context_parallel_comm_type,
-                       int pipeline_parallel_size, int virtual_pipeline_parallel) {
+                       int pipeline_parallel_size, int virtual_pipeline_parallel,
+                       const std::string &hierarchical_context_parallel_sizes = "") {
     GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
                                context_parallel_size, context_parallel_comm_type, pipeline_parallel_size,
-                               virtual_pipeline_parallel);
+                               virtual_pipeline_parallel, hierarchical_context_parallel_sizes);
 }
 inline int GetNnodes() { return GlobalEnv::Instance().nnodes(); }
 inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }
@@ -124,6 +128,9 @@ inline int GetSequenceParallelSize() { return GlobalEnv::Instance().sequence_par
 inline bool GetSequenceParallelEnabled() { return GlobalEnv::Instance().sequence_parallel_enabled(); }
 inline int GetContextParallelSize() { return GlobalEnv::Instance().context_parallel_size(); }
 inline const std::string &GetContextParallelCommType() { return GlobalEnv::Instance().context_parallel_comm_type(); }
+inline const std::vector<int> &GetHierarchicalContextParallelSizes() {
+    return GlobalEnv::Instance().hierarchical_context_parallel_sizes();
+}
 inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
 inline int GetPipelineParallelSize() { return GlobalEnv::Instance().pipeline_parallel_size(); }
 inline int GetVirtualPipelineParallelSize() { return GlobalEnv::Instance().virtual_pipeline_parallel_size(); }

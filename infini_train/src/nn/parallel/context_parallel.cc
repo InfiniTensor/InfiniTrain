@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/parallel/context_parallel.h"
 
+#include <array>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -35,14 +36,13 @@ const ProcessGroup *GetCPGroup(const std::shared_ptr<Tensor> &tensor) {
 }
 
 // Comm Kernel Call Functions
-std::shared_ptr<Tensor> GatherAlongFirstDim(const std::shared_ptr<Tensor> &tensor) {
-    const int cp_size = global::GetContextParallelSize();
+std::shared_ptr<Tensor> GatherAlongFirstDim(const std::shared_ptr<Tensor> &tensor, const ProcessGroup *cp_group) {
+    const int cp_size = cp_group->WorldSize();
     CHECK_GT(cp_size, 0) << "Context Parallel group not initialized";
     if (cp_size == 1) {
         return tensor;
     }
 
-    auto cp_group = GetCPGroup(tensor);
     auto output_shape = tensor->Dims();
     output_shape[0] *= cp_size;
     auto output = std::make_shared<Tensor>(output_shape, tensor->Dtype(), tensor->GetDevice());
@@ -66,16 +66,15 @@ std::shared_ptr<Tensor> ReduceScatterAlongFirstDim(const std::shared_ptr<Tensor>
     return output;
 }
 
-std::shared_ptr<Tensor> AllToAllAlongFirstDim(const std::shared_ptr<Tensor> &tensor) {
+std::shared_ptr<Tensor> AllToAllAlongFirstDim(const std::shared_ptr<Tensor> &tensor, const ProcessGroup *cp_group) {
     // Tensor P is split along first dim in [P0 | P1 | ... | Pn]
     // Each rank j sends Pj to every other rank and receive the rest of P from every other rank
-    const int cp_size = global::GetContextParallelSize();
+    const int cp_size = cp_group->WorldSize();
     CHECK_GT(cp_size, 0) << "Context Parallel group not initialized";
     if (cp_size == 1) {
         return tensor;
     }
 
-    auto cp_group = GetCPGroup(tensor);
     auto output_shape = tensor->Dims();
     CHECK_EQ(output_shape[0] % cp_size, 0) << "First dimension must be divisible by CP size";
     auto output = std::make_shared<Tensor>(output_shape, tensor->Dtype(), tensor->GetDevice());
@@ -83,12 +82,12 @@ std::shared_ptr<Tensor> AllToAllAlongFirstDim(const std::shared_ptr<Tensor> &ten
     return output;
 }
 
-std::shared_ptr<Tensor> AllToAllSeqToHead(const std::shared_ptr<Tensor> &input) {
-    if (global::GetContextParallelSize() == 1) {
+std::shared_ptr<Tensor> AllToAllSeqToHead(const std::shared_ptr<Tensor> &input, const ProcessGroup *cp_group) {
+    if (cp_group->WorldSize() == 1) {
         return input;
     }
 
-    const int cp_size = global::GetContextParallelSize();
+    const int cp_size = cp_group->WorldSize();
     const auto &shape = input->Dims();
     CHECK_EQ(shape.size(), 4);
     const int64_t B = shape[0], H = shape[1], T_l = shape[2], D = shape[3];
@@ -99,7 +98,7 @@ std::shared_ptr<Tensor> AllToAllSeqToHead(const std::shared_ptr<Tensor> &input) 
     // send_input: (H, B, T_l, D), split dim 0 into CP chunks of H_per_cp heads.
     auto send_input = input->Transpose(0, 1)->Contiguous();
     // exchanged: (H, B, T_l, D), dim 0 chunks are ordered by source sequence-owner rank.
-    auto exchanged = AllToAllAlongFirstDim(send_input);
+    auto exchanged = AllToAllAlongFirstDim(send_input, cp_group);
     // output: (B, H_per_cp, T_g, D)
     return exchanged->View({cp_size, H_per_cp, B, T_l, D})
         ->Transpose(0, 2)
@@ -107,12 +106,12 @@ std::shared_ptr<Tensor> AllToAllSeqToHead(const std::shared_ptr<Tensor> &input) 
         ->View({B, H_per_cp, static_cast<int64_t>(cp_size) * T_l, D});
 }
 
-std::shared_ptr<Tensor> AllToAllHeadToSeq(const std::shared_ptr<Tensor> &input) {
-    if (global::GetContextParallelSize() == 1) {
+std::shared_ptr<Tensor> AllToAllHeadToSeq(const std::shared_ptr<Tensor> &input, const ProcessGroup *cp_group) {
+    if (cp_group->WorldSize() == 1) {
         return input;
     }
 
-    const int cp_size = global::GetContextParallelSize();
+    const int cp_size = cp_group->WorldSize();
     const auto &shape = input->Dims();
     CHECK_EQ(shape.size(), 4);
     const int64_t B = shape[0], H_per_cp = shape[1], T_g = shape[2], D = shape[3];
@@ -126,7 +125,7 @@ std::shared_ptr<Tensor> AllToAllHeadToSeq(const std::shared_ptr<Tensor> &input) 
                           ->Contiguous()
                           ->View({static_cast<int64_t>(cp_size) * H_per_cp, B, T_l, D});
     // exchanged: (CP * H_per_cp, B, T_l, D), dim 0 chunks are ordered by source head-owner rank.
-    auto exchanged = AllToAllAlongFirstDim(send_input);
+    auto exchanged = AllToAllAlongFirstDim(send_input, cp_group);
     // output: (B, CP * H_per_cp, T_l, D)
     return exchanged->View({cp_size, H_per_cp, B, T_l, D})
         ->Transpose(1, 2)
@@ -256,7 +255,7 @@ public:
         auto input = input_tensors[0];
         // FIXME(zbl): Megatron keeps sequence as dim 0. We uses [B, H, S, D], so move only
         //              the sequence dimension to dim 0 before the CP gather.
-        return {GatherAlongFirstDim(input->Transpose(0, 2))->Transpose(0, 2)->Contiguous()};
+        return {GatherAlongFirstDim(input->Transpose(0, 2), GetCPGroup(input))->Transpose(0, 2)->Contiguous()};
     }
 
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
@@ -270,37 +269,43 @@ class AllToAllSeqToHeadCPRegion : public autograd::Function {
 public:
     static constexpr char kType[] = "AllToAllSeqToHeadCPRegionFunction";
 
-    explicit AllToAllSeqToHeadCPRegion() : autograd::Function(kType) {}
+    explicit AllToAllSeqToHeadCPRegion(const ProcessGroup *cp_group) : autograd::Function(kType), cp_group_(cp_group) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
-        return {AllToAllSeqToHead(input_tensors[0])};
+        return {AllToAllSeqToHead(input_tensors[0], cp_group_)};
     }
 
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
-        return {AllToAllHeadToSeq(grad_outputs[0])};
+        return {AllToAllHeadToSeq(grad_outputs[0], cp_group_)};
     }
+
+private:
+    const ProcessGroup *cp_group_;
 };
 
 class AllToAllHeadToSeqCPRegion : public autograd::Function {
 public:
     static constexpr char kType[] = "AllToAllHeadToSeqCPRegionFunction";
 
-    explicit AllToAllHeadToSeqCPRegion() : autograd::Function(kType) {}
+    explicit AllToAllHeadToSeqCPRegion(const ProcessGroup *cp_group) : autograd::Function(kType), cp_group_(cp_group) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
-        return {AllToAllHeadToSeq(input_tensors[0])};
+        return {AllToAllHeadToSeq(input_tensors[0], cp_group_)};
     }
 
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
-        return {AllToAllSeqToHead(grad_outputs[0])};
+        return {AllToAllSeqToHead(grad_outputs[0], cp_group_)};
     }
+
+private:
+    const ProcessGroup *cp_group_;
 };
 
 class AttnWithCPAndKVP2P : public autograd::Function {
 public:
     static constexpr char kType[] = "AttnWithCPAndKVP2PFunction";
 
-    AttnWithCPAndKVP2P() : autograd::Function(kType) {}
+    explicit AttnWithCPAndKVP2P(const ProcessGroup *cp_group) : autograd::Function(kType), cp_group_(cp_group) {}
 
     std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override {
         CHECK_EQ(input_tensors.size(), 4);
@@ -320,11 +325,11 @@ public:
         const auto &v_local = input_tensors[2];
         // mask: (1, 1, T_l, T_g), true values are invalid attention locations.
         const auto &mask = input_tensors[3];
-        const int cp_size = global::GetContextParallelSize();
+        const int cp_size = cp_group_->WorldSize();
         CHECK_GT(cp_size, 1);
         CHECK(mask) << "CP ring attention expects a causal mask.";
 
-        auto cp_group = GetCPGroup(q);
+        auto cp_group = cp_group_;
         CHECK_NOTNULL(cp_group);
         const int rank = cp_group->GetGroupRank(q->GetDevice().Rank().GlobalRank());
         const int send_to = (rank + 1) % cp_size;
@@ -363,6 +368,9 @@ public:
         std::shared_ptr<Tensor> next_k;
         std::shared_ptr<Tensor> next_v;
         std::vector<std::shared_ptr<Work>> p2p_works;
+        // Retain each stream's KV inputs until that stream is reused. TensorBuffer frees on the current
+        // stream, so replacing current_k/v on the other stream must not retire a still-running chunk's inputs.
+        std::array<std::shared_ptr<Tensor>, 4> kv_compute_inputs;
 
         // Perform `cp_size` rounds to circulate K/V chunks across all CP ranks.
         for (int step = 0; step < cp_size; ++step) {
@@ -375,6 +383,9 @@ public:
                 current_k = next_k;
                 current_v = next_v;
             }
+
+            kv_compute_inputs[2 * (step % 2)] = current_k;
+            kv_compute_inputs[2 * (step % 2) + 1] = current_v;
 
             // Only performs `cp_size - 1` times of ring P2P, no comm is needed for the final round
             if (step + 1 < cp_size) {
@@ -522,10 +533,10 @@ public:
             autocast_guard = std::make_unique<AutocastGuard>(forward_autocast_context);
         }
 
-        const int cp_size = global::GetContextParallelSize();
+        const int cp_size = cp_group_->WorldSize();
         CHECK_GT(cp_size, 1);
 
-        auto cp_group = GetCPGroup(q);
+        auto cp_group = cp_group_;
         CHECK_NOTNULL(cp_group);
         const int rank = cp_group->GetGroupRank(q->GetDevice().Rank().GlobalRank());
         const int send_to = (rank + 1) % cp_size;
@@ -571,6 +582,7 @@ public:
         std::shared_ptr<Tensor> next_v;
         std::vector<std::shared_ptr<Tensor>> grad_q_chunks;
         grad_q_chunks.reserve(cp_size);
+        std::array<std::shared_ptr<Tensor>, 4> kv_compute_inputs;
 
         for (int step = 0; step < cp_size; ++step) {
             auto *compute_stream = step % 2 == 0 ? main_compute_stream : cp_compute_stream;
@@ -582,6 +594,9 @@ public:
                 current_k = next_k;
                 current_v = next_v;
             }
+
+            kv_compute_inputs[2 * (step % 2)] = current_k;
+            kv_compute_inputs[2 * (step % 2) + 1] = current_v;
 
             const int owner = (rank - step + cp_size) % cp_size;
             const int64_t kv_start = static_cast<int64_t>(owner) * local_t;
@@ -696,14 +711,19 @@ public:
         // Input is {q, k, v, mask}
         return {grad_q, current_grad_k, current_grad_v, nullptr};
     }
+
+private:
+    const ProcessGroup *cp_group_;
 };
 
-std::shared_ptr<Tensor> AllToAllSeqToHeadCPRegionFunc(const std::shared_ptr<Tensor> &input) {
-    return std::make_shared<AllToAllSeqToHeadCPRegion>()->Apply({input})[0];
+std::shared_ptr<Tensor> AllToAllSeqToHeadCPRegionFunc(const std::shared_ptr<Tensor> &input,
+                                                      const ProcessGroup *cp_group) {
+    return std::make_shared<AllToAllSeqToHeadCPRegion>(cp_group)->Apply({input})[0];
 }
 
-std::shared_ptr<Tensor> AllToAllHeadToSeqCPRegionFunc(const std::shared_ptr<Tensor> &input) {
-    return std::make_shared<AllToAllHeadToSeqCPRegion>()->Apply({input})[0];
+std::shared_ptr<Tensor> AllToAllHeadToSeqCPRegionFunc(const std::shared_ptr<Tensor> &input,
+                                                      const ProcessGroup *cp_group) {
+    return std::make_shared<AllToAllHeadToSeqCPRegion>(cp_group)->Apply({input})[0];
 }
 
 } // namespace
@@ -736,13 +756,16 @@ std::shared_ptr<Tensor> SliceAlongCPRegionFunc(const std::shared_ptr<Tensor> &in
 }
 
 std::shared_ptr<Tensor> GatherFromCPRegionFunc(const std::shared_ptr<Tensor> &input) {
+    if (global::GetContextParallelSize() == 1) {
+        return input;
+    }
     return std::make_shared<GatherFromCPRegion>()->Apply({input})[0];
 }
 
 // CP Attention Backend Functions
 std::shared_ptr<Tensor> AttnFuncWithCPAndKVP2P(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
                                                const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask) {
-    return std::make_shared<AttnWithCPAndKVP2P>()->Apply({q, k, v, mask})[0];
+    return std::make_shared<AttnWithCPAndKVP2P>(GetCPGroup(q))->Apply({q, k, v, mask})[0];
 }
 
 std::shared_ptr<Tensor> AttnFuncWithCPAndKVAllGather(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
@@ -773,12 +796,18 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2A(const std::shared_ptr<Tensor> &
     CHECK_EQ(kv_heads % cp_size, 0) << "A2A CP requires local KV heads divisible by CP size";
     CHECK_EQ(q_heads % kv_heads, 0);
 
+    if (cp_size == 1) {
+        return ApplyCoreAttention(q, RepeatKVHeads(k, q_heads / kv_heads), RepeatKVHeads(v, q_heads / kv_heads), mask);
+    }
+
+    const auto *cp_group = GetCPGroup(q);
+
     // q_shard: (B, H_q/CP, T_g, D)
-    auto q_shard = AllToAllSeqToHeadCPRegionFunc(q);
+    auto q_shard = AllToAllSeqToHeadCPRegionFunc(q, cp_group);
     // k_shard: (B, H_kv/CP, T_g, D)
-    auto k_shard = AllToAllSeqToHeadCPRegionFunc(k);
+    auto k_shard = AllToAllSeqToHeadCPRegionFunc(k, cp_group);
     // v_shard: (B, H_kv/CP, T_g, D)
-    auto v_shard = AllToAllSeqToHeadCPRegionFunc(v);
+    auto v_shard = AllToAllSeqToHeadCPRegionFunc(v, cp_group);
     // full_mask: (1, 1, T_g, T_g)
     auto full_mask = mask ? GatherFromCPRegionFunc(mask) : nullptr;
 
@@ -791,7 +820,41 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2A(const std::shared_ptr<Tensor> &
     auto output_shard = ApplyCoreAttention(q_shard, k_for_attn, v_for_attn, full_mask);
 
     // output: (B, H_q, T_l, D)
-    return AllToAllHeadToSeqCPRegionFunc(output_shard);
+    return AllToAllHeadToSeqCPRegionFunc(output_shard, cp_group);
+}
+
+std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2AKVP2P(const std::shared_ptr<Tensor> &q,
+                                                      const std::shared_ptr<Tensor> &k,
+                                                      const std::shared_ptr<Tensor> &v,
+                                                      const std::shared_ptr<Tensor> &mask) {
+    const auto &sizes = global::GetHierarchicalContextParallelSizes();
+    CHECK_EQ(sizes.size(), 2);
+    if (sizes[0] == 1) {
+        return AttnFuncWithCPAndKVP2P(q, k, v, mask);
+    }
+    if (sizes[1] == 1) {
+        return AttnFuncWithCPAndQKVOA2A(q, k, v, mask);
+    }
+
+    CHECK(mask) << "Hierarchical CP ring attention expects a causal mask";
+    CHECK_EQ(q->Dims()[1] % sizes[0], 0) << "A2A size must divide local query heads after TP";
+    CHECK_EQ(k->Dims()[1] % sizes[0], 0) << "A2A size must divide local KV heads after TP";
+    CHECK_EQ(k->Dims()[1], v->Dims()[1]);
+    CHECK_EQ(q->Dims()[1] % k->Dims()[1], 0);
+    const auto device = q->GetDevice();
+    const auto *factory = ProcessGroupFactory::Instance(device.type());
+    const auto *a2a_group = factory->Get(GetHierarchicalContextParallelProcessGroupName(device.Rank().GlobalRank(), 0));
+    const auto *p2p_group = factory->Get(GetHierarchicalContextParallelProcessGroupName(device.Rank().GlobalRank(), 1));
+
+    // Adjacent CP ranks become one contiguous sequence block, with heads sharded across the A2A group.
+    // (B, H, S/CP, D) -> (B, H/A, S/P, D), where CP = A * P.
+    auto q_shard = AllToAllSeqToHeadCPRegionFunc(q, a2a_group);
+    auto k_shard = AllToAllSeqToHeadCPRegionFunc(k, a2a_group);
+    auto v_shard = AllToAllSeqToHeadCPRegionFunc(v, a2a_group);
+    // Gather query rows only inside the A2A group: (1, 1, S/CP, S) -> (1, 1, S/P, S).
+    auto ring_mask = GatherAlongFirstDim(mask->Transpose(0, 2), a2a_group)->Transpose(0, 2)->Contiguous();
+    auto output = std::make_shared<AttnWithCPAndKVP2P>(p2p_group)->Apply({q_shard, k_shard, v_shard, ring_mask})[0];
+    return AllToAllHeadToSeqCPRegionFunc(output, a2a_group);
 }
 
 std::shared_ptr<Tensor> AttnForwardFuncWithCP(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
@@ -804,6 +867,8 @@ std::shared_ptr<Tensor> AttnForwardFuncWithCP(const std::shared_ptr<Tensor> &q, 
         return AttnFuncWithCPAndQKVOA2A(q, k, v, mask);
     } else if (comm_type == "all_gather") {
         return AttnFuncWithCPAndKVAllGather(q, k, v, mask);
+    } else if (comm_type == "a2a+p2p") {
+        return AttnFuncWithCPAndQKVOA2AKVP2P(q, k, v, mask);
     } else {
         LOG(FATAL) << "AttnForwardFuncWithCP: Unsupported communication type " << comm_type << ".";
     }
