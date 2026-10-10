@@ -134,11 +134,9 @@ DEFINE_bool(tp_comm_overlap_disable_qkv, false,
 DEFINE_bool(tp_comm_overlap_disable_fc1, false,
             "Disable FC1 forward AG and split dgrad RS overlap");
 DEFINE_uint32(context_parallel, 1, "Context Parallel world size");
-DEFINE_string(cp_comm_type, "p2p",
-              "Context Parallel communication type (all_gather|p2p|a2a)");
-DEFINE_uint32(
-    pipeline_parallel, 1,
-    "Pipeline Parallel world size, specified the number of PP stages.");
+DEFINE_string(cp_comm_type, "p2p", "Context Parallel communication type (all_gather|p2p|a2a|a2a+p2p)");
+DEFINE_string(hierarchical_context_parallel_sizes, "", "A2A,P2P subgroup sizes for a2a+p2p, e.g. 2,2");
+DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 
 // activation recompute
@@ -202,7 +200,7 @@ DEFINE_validator(lr_decay_style, [](const char *, const std::string &value) {
   return kSupportedLRDecayStyles.contains(value);
 });
 DEFINE_validator(cp_comm_type, [](const char *, const std::string &value) {
-  return value == "all_gather" || value == "p2p" || value == "a2a";
+    return value == "all_gather" || value == "p2p" || value == "a2a" || value == "a2a+p2p";
 });
 
 void Train(const nn::parallel::Rank &rank) {
@@ -301,6 +299,12 @@ void Train(const nn::parallel::Rank &rank) {
           GetContextParallelGroupRanks(rank.GlobalRank()));
       cp_rank = cp_pg->GetGroupRank(rank.GlobalRank());
       nn::parallel::cp_rank = cp_rank;
+            if (global::GetContextParallelCommType() == "a2a+p2p") {
+                for (int level = 0; level < 2; ++level) {
+                    pg_factory->GetOrCreate(GetHierarchicalContextParallelProcessGroupName(rank.GlobalRank(), level),
+                                            GetHierarchicalContextParallelGroupRanks(rank.GlobalRank(), level));
+                }
+            }
     }
 
     if (pp_world_size > 1) {
@@ -663,7 +667,7 @@ void Train(const nn::parallel::Rank &rank) {
 
         LOG(INFO) << "Rank " << rank.GlobalRank() << ": start backward";
         std::unique_ptr<nn::NoSyncGuard> no_sync_guard;
-        if (ddp_world_size > 1 && micro_step != grad_accum_steps - 1) {
+                if (dp_cp_world_size > 1 && micro_step != grad_accum_steps - 1) {
           no_sync_guard = model->no_sync();
         }
         loss->Backward();
@@ -782,7 +786,7 @@ int main(int argc, char *argv[]) {
 
   auto precision_config =
       utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
-nn::parallel::ModelParallelConfig model_parallel_config;
+  nn::parallel::ModelParallelConfig model_parallel_config;
   model_parallel_config.tensor_model_parallel_size = FLAGS_tensor_parallel;
   model_parallel_config.pipeline_model_parallel_size = FLAGS_pipeline_parallel;
   model_parallel_config.virtual_pipeline_model_parallel_size =
@@ -801,6 +805,8 @@ nn::parallel::ModelParallelConfig model_parallel_config;
       FLAGS_tp_comm_overlap_disable_fc1;
   model_parallel_config.context_model_parallel_size = FLAGS_context_parallel;
   model_parallel_config.context_parallel_comm_type = FLAGS_cp_comm_type;
+  model_parallel_config.hierarchical_context_parallel_sizes =
+      FLAGS_hierarchical_context_parallel_sizes;
   model_parallel_config.expert_tensor_parallel_size = 1;
   nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process,
                                    model_parallel_config);
