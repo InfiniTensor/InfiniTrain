@@ -135,29 +135,30 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Adam::StateDict() const
     std::unordered_map<std::string, std::shared_ptr<Tensor>> state;
     for (size_t i = 0; i < m_.size(); ++i) {
         const auto suffix = parameter_names_.empty() ? std::to_string(i) : parameter_names_[i];
-        state.emplace("adam.m." + suffix, m_[i]);
-        state.emplace("adam.v." + suffix, v_[i]);
+        state.emplace(std::string(kAdamFirstMomentPrefix) + suffix, m_[i]);
+        state.emplace(std::string(kAdamSecondMomentPrefix) + suffix, v_[i]);
     }
 
     auto t_tensor = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kINT64, Device());
     *static_cast<int64_t *>(t_tensor->DataPtr()) = t_;
-    state.emplace("adam.t", t_tensor);
+    state.emplace(std::string(kAdamStepKey), t_tensor);
     return state;
 }
 
 void Adam::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
     for (size_t i = 0; i < m_.size(); ++i) {
         const auto suffix = parameter_names_.empty() ? std::to_string(i) : parameter_names_[i];
-        const auto m_key = "adam.m." + suffix;
-        const auto v_key = "adam.v." + suffix;
+        const auto m_key = std::string(kAdamFirstMomentPrefix) + suffix;
+        const auto v_key = std::string(kAdamSecondMomentPrefix) + suffix;
         CHECK(state_dict.contains(m_key)) << "Missing optimizer state: " << m_key;
         CHECK(state_dict.contains(v_key)) << "Missing optimizer state: " << v_key;
         m_[i]->CopyFrom(state_dict.at(m_key));
         v_[i]->CopyFrom(state_dict.at(v_key));
     }
 
-    CHECK(state_dict.contains("adam.t")) << "Missing optimizer state: adam.t";
-    const Tensor t_cpu = state_dict.at("adam.t")->To(Device());
+    const std::string step_key(kAdamStepKey);
+    CHECK(state_dict.contains(step_key)) << "Missing optimizer state: " << step_key;
+    const Tensor t_cpu = state_dict.at(step_key)->To(Device());
     t_ = *static_cast<const int64_t *>(t_cpu.DataPtr());
 }
 } // namespace optimizers

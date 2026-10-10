@@ -188,6 +188,32 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() con
     return state;
 }
 
+ShardedStateDict Module::BuildShardedStateDict(const std::string &prefix) const {
+    ShardedStateDict sd;
+
+    for (auto &[name, param] : parameters_) {
+        auto key = prefix.empty() ? name : prefix + "." + name;
+        sd.tensors.emplace(key, MakeShardedTensor(key, param->Dtype(), param->Dims()));
+    }
+
+    for (auto &[name, buffer] : buffers_) {
+        auto key = prefix.empty() ? name : prefix + "." + name;
+        sd.tensors.emplace(key, MakeShardedTensor(key, buffer->Dtype(), buffer->Dims()));
+    }
+
+    for (auto &[name, module] : modules_) {
+        if (name.starts_with("__pp")) {
+            continue;
+        }
+
+        auto child_prefix = prefix.empty() ? name : prefix + "." + name;
+        auto child_sd = module->BuildShardedStateDict(child_prefix);
+        sd.Merge(std::move(child_sd));
+    }
+
+    return sd;
+}
+
 void Module::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
     // Stage 1: Validate all keys, shapes, and dtypes without copying
     std::vector<std::string> error_msgs;

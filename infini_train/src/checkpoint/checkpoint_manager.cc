@@ -1,48 +1,55 @@
 #include "infini_train/include/checkpoint/checkpoint_manager.h"
 
-#include <cmath>
-#include <cstdlib>
+#include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <limits>
-#include <memory>
-#include <string>
 #include <vector>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/checkpoint/checkpoint.h"
+#include "infini_train/include/checkpoint/constants.h"
+#include "infini_train/include/lr_scheduler.h"
+#include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
-#include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/tensor.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 
 using namespace infini_train;
 namespace nn = infini_train::nn;
 
-// TODO(jym): ckpt is a new checkpoint format; bin is the legacy format. Keeping both as an interim solution; plan to
-// consolidate into one later.
+namespace {
+
+std::filesystem::path ResolveCheckpointDirectory(const std::filesystem::path &root) {
+    const auto latest_path = root / checkpoint::kLatestIterationFilename;
+    if (!std::filesystem::exists(latest_path)) {
+        return root;
+    }
+    std::ifstream latest(latest_path);
+    int64_t iteration = 0;
+    latest >> iteration;
+    const auto directory = root / std::format("iter_{:07d}", iteration);
+    CHECK(std::filesystem::exists(directory)) << "Latest checkpoint directory does not exist: " << directory;
+    return directory;
+}
+
+} // namespace
+
 ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &args) {
     ResumeFromCheckpointResult result;
     if (args.resume_root.empty()) {
         LOG(INFO) << "No checkpoint specified for resume. Starting training from scratch.";
         return result;
     }
+    CHECK(dynamic_cast<nn::parallel::DistributedOptimizer *>(args.optimizer.get()) == nullptr)
+        << "Checkpoint restore does not support DistributedOptimizer/ZeRO optimizer state; use zero_stage=0";
 
-    int ddp_world_size = nn::parallel::global::GetDataParallelSize();
-    int tp_world_size = nn::parallel::global::GetTensorParallelSize();
-    int sp_world_size = nn::parallel::global::GetSequenceParallelEnabled() ? tp_world_size : 1;
-    int pp_world_size = nn::parallel::global::GetPipelineParallelSize();
-
-    std::filesystem::path resume_dir = args.resume_root;
-    if (args.rank.IsParallel()) {
-        const auto rank_dir = resume_dir / std::format("rank_{:06d}", args.rank.GlobalRank());
-        if (std::filesystem::exists(rank_dir)) {
-            resume_dir = rank_dir;
-        }
-    }
-
-    Checkpoint::Load(resume_dir, *args.model, args.optimizer.get(), args.state, args.lr_scheduler.get());
-
-    result.global_step = static_cast<int>(args.state.global_step);
+    const auto checkpoint_dir = ResolveCheckpointDirectory(args.resume_root);
+    CHECK(std::filesystem::exists(checkpoint_dir / checkpoint::kMetadataFilename))
+        << "Checkpoint metadata.json not found: " << checkpoint_dir;
+    Checkpoint::Load(checkpoint_dir, *args.model, args.optimizer.get(), args.state, args.lr_scheduler.get());
 
     CHECK_EQ(args.state.n_layer, args.model_config.n_layer)
         << "n_layer mismatch: ckpt=" << args.state.n_layer << ", config=" << args.model_config.n_layer;
@@ -52,72 +59,85 @@ ResumeFromCheckpointResult ResumeFromCheckpoint(const ResumeFromCheckpointArgs &
         << "n_kv_head mismatch: ckpt=" << args.state.n_kv_head << ", config=" << args.model_config.n_kv_head;
     CHECK_EQ(args.state.n_embd, args.model_config.n_embd)
         << "n_embd mismatch: ckpt=" << args.state.n_embd << ", config=" << args.model_config.n_embd;
-    CHECK_EQ(args.state.vocab_size, args.model_config.vocab_size)
-        << "vocab_size mismatch: ckpt=" << args.state.vocab_size << ", config=" << args.model_config.vocab_size;
-
-    CHECK_EQ(args.state.ddp_size, ddp_world_size) << "DDP size mismatch: checkpoint has DDP=" << args.state.ddp_size
-                                                  << ", but current run has DDP=" << ddp_world_size;
-    CHECK_EQ(args.state.tp_size, tp_world_size)
-        << "TP size mismatch: checkpoint has TP=" << args.state.tp_size << ", but current run has TP=" << tp_world_size;
-    CHECK_EQ(args.state.sp_size, sp_world_size)
-        << "SP size mismatch: checkpoint has SP=" << args.state.sp_size << ", but current run has SP=" << sp_world_size;
-    CHECK_EQ(args.state.pp_size, pp_world_size)
-        << "PP size mismatch: checkpoint has PP=" << args.state.pp_size << ", but current run has PP=" << pp_world_size;
-
+    if (args.state.original_vocab_size > 0) {
+        CHECK_EQ(args.state.original_vocab_size, args.model_config.original_vocab_size)
+            << "original_vocab_size mismatch: ckpt=" << args.state.original_vocab_size
+            << ", config=" << args.model_config.original_vocab_size;
+        CHECK_GE(args.state.padded_vocab_size, args.state.original_vocab_size)
+            << "Checkpoint padded vocabulary cannot represent its logical vocabulary";
+    } else {
+        // Legacy trainer_state.json only stored the padded vocab size.
+        CHECK_GE(args.state.padded_vocab_size, args.model_config.original_vocab_size)
+            << "Legacy checkpoint vocabulary cannot represent the configured logical vocabulary";
+    }
+    result.global_step = static_cast<int>(args.state.global_step);
     result.consumed_train_samples = static_cast<size_t>(std::max<int64_t>(args.state.consumed_train_samples, 0));
     if (args.rank.IsMainRank()) {
         LOG(INFO) << std::format("Resume training from step {}, consumed_train_samples {}", args.state.global_step,
                                  args.state.consumed_train_samples);
     }
-
     return result;
 }
 
 void SaveCheckpoint(const SaveCheckpointArgs &args) {
-    const auto ckpt_start = std::chrono::high_resolution_clock::now();
+    CHECK(dynamic_cast<const nn::parallel::DistributedOptimizer *>(args.optimizer) == nullptr)
+        << "Checkpoint save does not support DistributedOptimizer/ZeRO optimizer state; use zero_stage=0";
+    CHECK_GT(args.original_vocab_size, 0);
+    CHECK_GE(args.padded_vocab_size, args.original_vocab_size);
+    const auto checkpoint_start = std::chrono::high_resolution_clock::now();
+    // Snapshot training progress and the topology that produced this checkpoint.
+    TrainerState state{.global_step = args.global_step,
+                       .consumed_train_samples = static_cast<int64_t>(args.consumed_train_samples),
+                       .n_layer = args.n_layer,
+                       .n_head = args.n_head,
+                       .n_kv_head = args.n_kv_head,
+                       .n_embd = args.n_embd,
+                       .original_vocab_size = args.original_vocab_size,
+                       .padded_vocab_size = args.padded_vocab_size,
+                       .ddp_size = args.ddp_size,
+                       .tp_size = args.tp_size,
+                       .sp_size = args.sp_size,
+                       .pp_size = args.pp_size,
+                       .vpp_size = args.vpp_size};
+    const auto iteration_dir = args.checkpoint_root_dir.empty()
+                                 ? args.save_dir
+                                 : args.checkpoint_root_dir / std::format("iter_{:07d}", args.global_step);
+    Checkpoint::Save(iteration_dir, args.model, args.optimizer, state, args.lr_scheduler);
 
-    TrainerState state;
-    state.global_step = args.global_step;
-    state.consumed_train_samples = static_cast<int64_t>(args.consumed_train_samples);
-    state.n_layer = args.n_layer;
-    state.n_head = args.n_head;
-    state.n_kv_head = args.n_kv_head;
-    state.n_embd = args.n_embd;
-    state.vocab_size = args.vocab_size;
-    state.ddp_size = args.ddp_size;
-    state.tp_size = args.tp_size;
-    state.sp_size = args.sp_size;
-    state.pp_size = args.pp_size;
-
-    Checkpoint::Save(args.save_dir, args.model, args.optimizer, state, args.lr_scheduler);
-
-    const auto ckpt_end = std::chrono::high_resolution_clock::now();
-    const double ckpt_ms = std::chrono::duration<double, std::milli>(ckpt_end - ckpt_start).count();
-
-    if (!args.rank.IsMainRank()) {
-        return;
+    if (args.rank.IsMainRank() && !args.checkpoint_root_dir.empty()) {
+        const auto latest = args.checkpoint_root_dir / checkpoint::kLatestIterationFilename;
+        const auto temporary_latest = args.checkpoint_root_dir / checkpoint::kTemporaryLatestIterationFilename;
+        {
+            std::ofstream output(temporary_latest);
+            CHECK(output.is_open());
+            output << args.global_step;
+        }
+        if (std::filesystem::exists(latest)) {
+            std::filesystem::remove(latest);
+        }
+        std::filesystem::rename(temporary_latest, latest);
     }
 
-    LOG(INFO) << std::format("Checkpoint saved at: {} ({:.2f} ms)", args.save_dir.string(), ckpt_ms);
-
-    // FIXME(jym): Pruning currently relies on lexicographic sorting of directory names.
-    // This only works when step directories use zero-padded names (e.g. checkpoint_step_000042).
-    // If a future change introduces unpadded names, the prune order will be incorrect.
-    // Consider extracting the step number from the directory name and sorting numerically
-    // instead, once the checkpoint naming convention is finalized.
-    if (args.max_checkpoint_keep > 0 && std::filesystem::exists(args.checkpoint_root_dir)) {
-        std::vector<std::filesystem::path> ckpts;
+    if (args.rank.IsMainRank() && args.max_checkpoint_keep > 0 && std::filesystem::exists(args.checkpoint_root_dir)) {
+        std::vector<std::filesystem::path> checkpoints;
         for (const auto &entry : std::filesystem::directory_iterator(args.checkpoint_root_dir)) {
-            if (entry.is_directory() && entry.path().filename().string().starts_with("checkpoint_step_")) {
-                ckpts.push_back(entry.path());
+            if (entry.is_directory() && entry.path().filename().string().starts_with("iter_")) {
+                checkpoints.push_back(entry.path());
             }
         }
-        std::sort(ckpts.begin(), ckpts.end());
-        while (ckpts.size() > args.max_checkpoint_keep) {
-            std::filesystem::remove_all(ckpts.front());
-            ckpts.erase(ckpts.begin());
+        // FIXME(jym): Pruning relies on lexicographic sorting of checkpoint directory names.
+        // This is only correct while iteration directories use zero-padded names (e.g. iter_0000042).
+        // If the naming convention changes to unpadded names, parse the iteration and sort numerically instead.
+        std::sort(checkpoints.begin(), checkpoints.end());
+        while (checkpoints.size() > args.max_checkpoint_keep) {
+            std::filesystem::remove_all(checkpoints.front());
+            checkpoints.erase(checkpoints.begin());
         }
     }
+
+    const auto checkpoint_end = std::chrono::high_resolution_clock::now();
+    const double elapsed_ms = std::chrono::duration<double, std::milli>(checkpoint_end - checkpoint_start).count();
+    LOG(INFO) << std::format("Checkpoint saved at: {} ({:.2f} ms)", iteration_dir.string(), elapsed_ms);
 }
 
 size_t DataLoaderBatchesToSkip(size_t consumed_train_samples, size_t local_batch_size, size_t ddp_world_size) {

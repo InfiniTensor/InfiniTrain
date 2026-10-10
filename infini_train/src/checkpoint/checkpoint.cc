@@ -1,7 +1,11 @@
 #include "infini_train/include/checkpoint/checkpoint.h"
 
+#include <algorithm>
+#include <cctype>
+#include <charconv>
 #include <cstring>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -11,8 +15,15 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/checkpoint/constants.h"
+#include "infini_train/include/checkpoint/load_planner.h"
+#include "infini_train/include/checkpoint/load_strategy.h"
+#include "infini_train/include/checkpoint/save_planner.h"
 #include "infini_train/include/lr_scheduler.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/parallel_functional.h"
+#include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
@@ -179,75 +190,108 @@ template <typename T> T ExtractNumberField(const std::string &content, const std
     }
     return value;
 }
+
+void SynchronizeCheckpointRanks(const nn::Module &model) {
+    if (nn::parallel::global::GetWorldSize() == 1) {
+        return;
+    }
+    const auto parameters = model.Parameters();
+    CHECK(!parameters.empty()) << "Cannot synchronize checkpoint save for a model without parameters";
+    auto token = std::make_shared<Tensor>(std::vector<int64_t>{1}, DataType::kFLOAT32, parameters.front()->GetDevice());
+    token->Fill(1.0f);
+    nn::parallel::function::AllReduce(token, nn::parallel::function::ReduceOpType::kSum, nullptr, true)->Synchronize();
+}
 } // namespace
 
 void Checkpoint::Save(const std::filesystem::path &checkpoint_dir, const nn::Module &model, const Optimizer *optimizer,
                       const TrainerState &state, const LRScheduler *lr_scheduler) {
     std::filesystem::create_directories(checkpoint_dir);
-    LOG(INFO) << "[CKPT] Save begin: dir=" << checkpoint_dir << ", global_step=" << state.global_step;
+    const int global_rank = nn::parallel::global::thread_global_rank;
+    const auto staging_root = checkpoint_dir / ".metadata_tmp";
+    if (global_rank == 0) {
+        std::filesystem::remove_all(staging_root);
+    }
+    SynchronizeCheckpointRanks(model);
 
-    const auto model_path = checkpoint_dir / ("model.ckpt");
-
-    SaveStateDict(model_path, model.StateDict());
-
-    if (optimizer != nullptr) {
-        auto opt_state = optimizer->StateDict();
-        if (!opt_state.empty()) {
-            const auto opt_path = checkpoint_dir / "optimizer.ckpt";
-            SaveStateDict(opt_path, opt_state);
+    int dp_rank = 0, tp_rank = 0, pp_rank = 0;
+    nn::parallel::global::GetCoordOf(global_rank, dp_rank, tp_rank, pp_rank);
+    // TODO(jym): Select checkpoint writers from each shard's replica_id instead of hard-coding DP rank 0.
+    if (dp_rank == 0) {
+        const auto rank_dir = checkpoint_dir / std::format("rank_{:06d}", global_rank);
+        auto sharded_state = model.BuildShardedStateDict();
+        std::unordered_map<std::string, std::shared_ptr<Tensor>> optimizer_state;
+        if (optimizer != nullptr) {
+            optimizer_state = optimizer->StateDict();
+            sharded_state.Merge(checkpoint::BuildOptimizerShardedStateDict(sharded_state, optimizer_state));
         }
+        const auto write_items = checkpoint::SavePlanner::Plan(sharded_state, global_rank);
+        SaveLocalShard(rank_dir, sharded_state, write_items, model.StateDict(), optimizer_state, global_rank);
+
+        const auto staging_rank_dir = staging_root / std::format("rank_{:06d}", global_rank);
+        std::filesystem::create_directories(staging_rank_dir);
+        std::filesystem::rename(rank_dir / checkpoint::kMetadataFilename,
+                                staging_rank_dir / checkpoint::kMetadataFilename);
     }
 
-    if (lr_scheduler != nullptr) {
-        SaveLRSchedulerState(checkpoint_dir / "lr_scheduler.ckpt", lr_scheduler->StateDict());
+    SynchronizeCheckpointRanks(model);
+    if (global_rank == 0) {
+        SaveTrainerState(checkpoint_dir / checkpoint::kTrainerStateFilename, state);
+        if (lr_scheduler != nullptr) {
+            SaveLRSchedulerState(checkpoint_dir / checkpoint::kLRSchedulerFilename, lr_scheduler->StateDict());
+        }
+        auto metadata = LoadMetadata(staging_root);
+        CHECK(metadata.has_metadata);
+        SaveMetadataFile(checkpoint_dir / checkpoint::kTemporaryMetadataFilename, metadata);
+        if (std::filesystem::exists(checkpoint_dir / checkpoint::kMetadataFilename)) {
+            std::filesystem::remove(checkpoint_dir / checkpoint::kMetadataFilename);
+        }
+        std::filesystem::rename(checkpoint_dir / checkpoint::kTemporaryMetadataFilename,
+                                checkpoint_dir / checkpoint::kMetadataFilename);
+        std::filesystem::remove_all(staging_root);
     }
-
-    SaveTrainerState(checkpoint_dir / "trainer_state.json", state);
-    LOG(ERROR) << "[CKPT] Save done: dir=" << checkpoint_dir;
+    SynchronizeCheckpointRanks(model);
 }
 
 void Checkpoint::Load(const std::filesystem::path &checkpoint_dir, nn::Module &model, Optimizer *optimizer,
                       TrainerState &state, LRScheduler *lr_scheduler) {
-    const auto model_path = checkpoint_dir / "model.ckpt";
-    LOG(INFO) << "[CKPT] Loading model: " << model_path;
+    const auto metadata = LoadMetadata(checkpoint_dir);
+    CHECK(metadata.has_metadata);
+    CHECK_EQ(metadata.version, 3) << "Unsupported distributed checkpoint version: " << metadata.version;
+    state = LoadTrainerState(checkpoint_dir / checkpoint::kTrainerStateFilename);
 
-    model.LoadStateDict(LoadStateDict(model_path));
+    auto model_sharded_state = model.BuildShardedStateDict();
+    checkpoint::IndexedRegionLoadStrategy strategy;
+    auto result = strategy.Execute(checkpoint_dir, checkpoint::LoadPlanner::PlanReshard(metadata, model_sharded_state));
+    model.LoadStateDict(result);
+
+    const int current_tp = nn::parallel::global::GetTensorParallelSize();
+    const int current_pp = nn::parallel::global::GetPipelineParallelSize();
+    state.tp_size = current_tp;
+    state.pp_size = current_pp;
+    state.ddp_size = nn::parallel::global::GetDataParallelSize();
+    state.sp_size = nn::parallel::global::GetSequenceParallelEnabled() ? current_tp : 1;
+    state.vpp_size = nn::parallel::global::GetVirtualPipelineParallelSize();
 
     if (optimizer != nullptr) {
-        const auto opt_path = checkpoint_dir / "optimizer.ckpt";
-        if (std::filesystem::exists(opt_path)) {
-            LOG(INFO) << "[CKPT] Loading optimizer: " << opt_path;
-            optimizer->LoadStateDict(LoadStateDict(opt_path));
-        } else {
-            LOG(FATAL) << "Optimizer checkpoint not found at: " << opt_path;
-        }
+        auto optimizer_sharded_state
+            = checkpoint::BuildOptimizerShardedStateDict(model_sharded_state, optimizer->StateDict());
+        auto optimizer_plan = checkpoint::LoadPlanner::PlanReshard(metadata, optimizer_sharded_state);
+        optimizer->LoadStateDict(strategy.Execute(checkpoint_dir, optimizer_plan));
     }
-
-    state = LoadTrainerState(checkpoint_dir / "trainer_state.json");
-
-    if (lr_scheduler != nullptr) {
-        const auto lr_scheduler_path = checkpoint_dir / "lr_scheduler.ckpt";
-        if (std::filesystem::exists(lr_scheduler_path)) {
-            LOG(INFO) << "[CKPT] Loading LR scheduler: " << lr_scheduler_path;
-            lr_scheduler->LoadStateDict(LoadLRSchedulerState(lr_scheduler_path));
-        } else {
-            LOG(WARNING) << "[CKPT] LR scheduler checkpoint not found at: " << lr_scheduler_path
-                         << ". Keeping the initialized scheduler state.";
-        }
+    if (lr_scheduler != nullptr && std::filesystem::exists(checkpoint_dir / checkpoint::kLRSchedulerFilename)) {
+        lr_scheduler->LoadStateDict(LoadLRSchedulerState(checkpoint_dir / checkpoint::kLRSchedulerFilename));
     }
-
-    LOG(ERROR) << "[CKPT] Load done: global_step=" << state.global_step
-               << ", consumed_train_samples=" << state.consumed_train_samples << ", topology(ddp,tp,sp,pp)=("
-               << state.ddp_size << "," << state.tp_size << "," << state.sp_size << "," << state.pp_size << ")";
 }
 
-void Checkpoint::SaveStateDict(const std::filesystem::path &path,
-                               const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
+Checkpoint::SavedTensorLocations
+Checkpoint::SaveStateDict(const std::filesystem::path &path,
+                          const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
     std::ofstream ofs(path, std::ios::binary);
     CHECK(ofs.is_open()) << "Failed to open checkpoint file: " << path;
 
     uint32_t magic = kCkptMagic;
     uint32_t version = kCkptVersion;
+    SavedTensorLocations locations;
     uint32_t count = static_cast<uint32_t>(state_dict.size());
     ofs.write(reinterpret_cast<const char *>(&magic), sizeof(magic));
     ofs.write(reinterpret_cast<const char *>(&version), sizeof(version));
@@ -267,8 +311,14 @@ void Checkpoint::SaveStateDict(const std::filesystem::path &path,
         Tensor cpu_tensor = tensor->To(Device());
         uint64_t bytes = static_cast<uint64_t>(cpu_tensor.SizeInBytes());
         ofs.write(reinterpret_cast<const char *>(&bytes), sizeof(bytes));
+        const auto data_offset = ofs.tellp();
+        CHECK(data_offset != std::streampos(-1)) << "Failed to record tensor offset for " << name;
+        locations.emplace(
+            name, SavedTensorLocation{.data_offset = static_cast<uint64_t>(static_cast<std::streamoff>(data_offset)),
+                                      .byte_size = bytes});
         ofs.write(reinterpret_cast<const char *>(cpu_tensor.DataPtr()), static_cast<std::streamsize>(bytes));
     }
+    return locations;
 }
 
 std::unordered_map<std::string, std::shared_ptr<Tensor>> Checkpoint::LoadStateDict(const std::filesystem::path &path) {
@@ -318,13 +368,15 @@ void Checkpoint::SaveTrainerState(const std::filesystem::path &path, const Train
     ofs << "  \"n_head\": " << state.n_head << ",\n";
     ofs << "  \"n_kv_head\": " << state.n_kv_head << ",\n";
     ofs << "  \"n_embd\": " << state.n_embd << ",\n";
-    ofs << "  \"vocab_size\": " << state.vocab_size << ",\n";
+    ofs << "  \"original_vocab_size\": " << state.original_vocab_size << ",\n";
+    ofs << "  \"padded_vocab_size\": " << state.padded_vocab_size << ",\n";
     ofs << "  \"global_step\": " << state.global_step << ",\n";
     ofs << "  \"consumed_train_samples\": " << state.consumed_train_samples << ",\n";
     ofs << "  \"ddp_size\": " << state.ddp_size << ",\n";
     ofs << "  \"tp_size\": " << state.tp_size << ",\n";
     ofs << "  \"sp_size\": " << state.sp_size << ",\n";
-    ofs << "  \"pp_size\": " << state.pp_size << "\n";
+    ofs << "  \"pp_size\": " << state.pp_size << ",\n";
+    ofs << "  \"vpp_size\": " << state.vpp_size << "\n";
     ofs << "}\n";
 }
 
@@ -339,13 +391,394 @@ TrainerState Checkpoint::LoadTrainerState(const std::filesystem::path &path) {
     state.n_head = ExtractNumberField<int64_t>(content, "n_head", 0);
     state.n_kv_head = ExtractNumberField<int64_t>(content, "n_kv_head", 0);
     state.n_embd = ExtractNumberField<int64_t>(content, "n_embd", 0);
-    state.vocab_size = ExtractNumberField<int64_t>(content, "vocab_size", 0);
+    const auto legacy_vocab_size = ExtractNumberField<int64_t>(content, "vocab_size", 0);
+    state.original_vocab_size = ExtractNumberField<int64_t>(content, "original_vocab_size", 0);
+    state.padded_vocab_size = ExtractNumberField<int64_t>(content, "padded_vocab_size", legacy_vocab_size);
     state.global_step = ExtractNumberField<int64_t>(content, "global_step", 0);
     state.consumed_train_samples = ExtractNumberField<int64_t>(content, "consumed_train_samples", 0);
     state.ddp_size = ExtractNumberField<int>(content, "ddp_size", 1);
     state.tp_size = ExtractNumberField<int>(content, "tp_size", 1);
     state.sp_size = ExtractNumberField<int>(content, "sp_size", 1);
     state.pp_size = ExtractNumberField<int>(content, "pp_size", 1);
+    state.vpp_size = ExtractNumberField<int>(content, "vpp_size", 1);
     return state;
+}
+
+void Checkpoint::SaveStateDictFile(const std::filesystem::path &path,
+                                   const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
+    SaveStateDict(path, state_dict);
+}
+
+std::unordered_map<std::string, std::shared_ptr<Tensor>>
+Checkpoint::LoadStateDictFile(const std::filesystem::path &path) {
+    return LoadStateDict(path);
+}
+
+static std::string DataTypeToString(DataType dt) {
+    const auto it = kDataTypeToDesc.find(dt);
+    CHECK(it != kDataTypeToDesc.end()) << "Unsupported checkpoint tensor dtype: " << static_cast<int>(dt);
+    return it->second;
+}
+
+void Checkpoint::SaveLocalShard(const std::filesystem::path &checkpoint_dir, const ShardedStateDict &sharded_sd,
+                                const std::vector<checkpoint::WriteItem> &write_items,
+                                const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict,
+                                const std::unordered_map<std::string, std::shared_ptr<Tensor>> &optimizer_state,
+                                int global_rank) {
+    std::filesystem::create_directories(checkpoint_dir);
+    LOG(INFO) << "[CKPT] SaveLocalShard begin: dir=" << checkpoint_dir << ", rank=" << global_rank;
+
+    SavedTensorLocations model_file_index;
+    SavedTensorLocations optimizer_file_index;
+
+    // Save model tensors separately from optimizer tensors.
+    {
+        std::unordered_map<std::string, std::shared_ptr<Tensor>> filtered_sd;
+        for (const auto &[key, info] : sharded_sd.tensors) {
+            // Optimizer tensors are serialized separately.
+            if (key.starts_with(optimizers::kAdamOptimizerPrefix)) {
+                continue;
+            }
+            // Match metadata keys to the local tensor payloads.
+            const auto &local_key = info.local_key.empty() ? key : info.local_key;
+            auto it = state_dict.find(local_key);
+            if (it != state_dict.end()) {
+                filtered_sd.emplace(key, it->second);
+            }
+        }
+        if (!filtered_sd.empty()) {
+            model_file_index = SaveStateDict(checkpoint_dir / checkpoint::kModelCheckpointFilename, filtered_sd);
+        }
+    }
+
+    // Save the rank-local optimizer state.
+    if (!optimizer_state.empty()) {
+        optimizer_file_index
+            = SaveStateDict(checkpoint_dir / checkpoint::kOptimizerCheckpointFilename, optimizer_state);
+    }
+
+    // Write the temporary rank manifest.
+    {
+        std::ofstream ofs(checkpoint_dir / checkpoint::kMetadataFilename);
+        CHECK(ofs.is_open()) << "Failed to open metadata.json: " << checkpoint_dir / checkpoint::kMetadataFilename;
+
+        ofs << "{\n";
+        ofs << "  \"version\": 3,\n";
+        ofs << "  \"format\": \"infinitrain_sharded\",\n";
+
+        ofs << "  \"tensors\": [\n";
+
+        std::vector<const checkpoint::WriteItem *> emitted_items;
+        for (const auto &item : write_items) {
+            if (sharded_sd.tensors.contains(item.key)) {
+                emitted_items.push_back(&item);
+            }
+        }
+        int dp_rank = 0, tp_rank = 0, pp_rank = 0;
+        nn::parallel::global::GetCoordOf(global_rank, dp_rank, tp_rank, pp_rank);
+        for (size_t i = 0; i < emitted_items.size(); ++i) {
+            const auto &item = *emitted_items[i];
+            const auto it = sharded_sd.tensors.find(item.key);
+            const auto &file_index
+                = item.filename == checkpoint::kOptimizerCheckpointFilename ? optimizer_file_index : model_file_index;
+            const auto storage_it = file_index.find(item.key);
+            CHECK(storage_it != file_index.end()) << "Missing stored tensor metadata for " << item.key;
+            const auto &storage = storage_it->second;
+            CHECK_EQ(storage.byte_size, item.byte_size);
+
+            ofs << "    {\n";
+            ofs << "      \"key\": \"" << item.key << "\",\n";
+            ofs << "      \"dtype\": \"" << DataTypeToString(item.dtype) << "\",\n";
+
+            // global_shape
+            ofs << "      \"global_shape\": [";
+            const auto &gs = it->second.global_shape;
+            for (size_t j = 0; j < gs.size(); ++j) { ofs << gs[j] << (j + 1 < gs.size() ? ", " : ""); }
+            ofs << "],\n";
+
+            ofs << "      \"local_shape\": [";
+            const auto &ls = it->second.local_shape;
+            for (size_t j = 0; j < ls.size(); ++j) { ofs << ls[j] << (j + 1 < ls.size() ? ", " : ""); }
+            ofs << "],\n";
+
+            ofs << "      \"global_offset\": [";
+            for (size_t j = 0; j < it->second.global_offset.size(); ++j) {
+                ofs << it->second.global_offset[j] << (j + 1 < it->second.global_offset.size() ? ", " : "");
+            }
+            ofs << "],\n";
+            ofs << "      \"axis_fragmentations\": [";
+            for (size_t j = 0; j < it->second.axis_fragmentations.size(); ++j) {
+                ofs << it->second.axis_fragmentations[j] << (j + 1 < it->second.axis_fragmentations.size() ? ", " : "");
+            }
+            ofs << "],\n";
+            auto write_segments = [&](const char *name, auto member) {
+                ofs << "      \"" << name << "\": [";
+                for (size_t j = 0; j < it->second.segments.size(); ++j) {
+                    ofs << it->second.segments[j].*member << (j + 1 < it->second.segments.size() ? ", " : "");
+                }
+                ofs << "],\n";
+            };
+            write_segments("segment_global_offsets", &ShardSegment::global_offset);
+            write_segments("segment_local_offsets", &ShardSegment::local_offset);
+            write_segments("segment_lengths", &ShardSegment::length);
+
+            ofs << "      \"file\": \"" << item.filename << "\",\n";
+            ofs << "      \"offset\": " << storage.data_offset << ",\n";
+            ofs << "      \"byte_size\": " << item.byte_size << ",\n";
+            ofs << "      \"pp_rank\": " << pp_rank << ",\n";
+            ofs << "      \"stored_on_ranks\": [" << global_rank << "]\n";
+            ofs << "    }";
+            if (i + 1 < emitted_items.size()) {
+                ofs << ",";
+            }
+            ofs << "\n";
+        }
+
+        ofs << "  ]\n";
+        ofs << "}\n";
+
+        LOG(INFO) << "[CKPT] metadata.json written";
+    }
+
+    LOG(ERROR) << "[CKPT] SaveLocalShard done: dir=" << checkpoint_dir;
+}
+
+// Load one manifest or aggregate writer manifests while finalizing a checkpoint.
+static std::string ExtractJsonString(const std::string &obj, const std::string &key) {
+    auto token = std::string("\"") + key + "\"";
+    auto pos = obj.find(token);
+    if (pos == std::string::npos) {
+        return "";
+    }
+    auto q1 = obj.find('"', pos + token.size());
+    if (q1 == std::string::npos) {
+        return "";
+    }
+    auto q2 = obj.find('"', q1 + 1);
+    if (q2 == std::string::npos) {
+        return "";
+    }
+    return obj.substr(q1 + 1, q2 - q1 - 1);
+}
+
+static std::string_view TrimWhitespace(std::string_view value) {
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) { value.remove_prefix(1); }
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) { value.remove_suffix(1); }
+    return value;
+}
+
+template <typename T> std::vector<T> ExtractIntegerArray(const std::string &obj, const char *field_name) {
+    const auto field = std::string("\"") + field_name + "\"";
+    const auto field_pos = obj.find(field);
+    if (field_pos == std::string::npos) {
+        return {};
+    }
+
+    const auto array_start = obj.find('[', field_pos + field.size());
+    const auto array_end = obj.find(']', array_start);
+    CHECK(array_start != std::string::npos && array_end != std::string::npos)
+        << "Invalid integer array in checkpoint metadata field " << field_name;
+
+    std::string_view contents(obj.data() + array_start + 1, array_end - array_start - 1);
+    contents = TrimWhitespace(contents);
+    if (contents.empty()) {
+        return {};
+    }
+
+    std::vector<T> values;
+    while (!contents.empty()) {
+        const auto delimiter = contents.find(',');
+        const auto token = TrimWhitespace(contents.substr(0, delimiter));
+        CHECK(!token.empty()) << "Empty integer in checkpoint metadata field " << field_name;
+
+        T value{};
+        const auto [end, error] = std::from_chars(token.data(), token.data() + token.size(), value);
+        CHECK(error == std::errc{} && end == token.data() + token.size())
+            << "Invalid integer in checkpoint metadata field " << field_name << ": " << token;
+        values.push_back(value);
+
+        if (delimiter == std::string_view::npos) {
+            break;
+        }
+        contents.remove_prefix(delimiter + 1);
+        contents = TrimWhitespace(contents);
+        CHECK(!contents.empty()) << "Trailing comma in checkpoint metadata field " << field_name;
+    }
+    return values;
+}
+
+static Checkpoint::CheckpointMetadata LoadSingleMetadata(const std::filesystem::path &checkpoint_dir) {
+    Checkpoint::CheckpointMetadata meta;
+    auto metadata_path = checkpoint_dir / checkpoint::kMetadataFilename;
+    if (!std::filesystem::exists(metadata_path)) {
+        meta.has_metadata = false;
+        return meta;
+    }
+
+    std::ifstream ifs(metadata_path);
+    CHECK(ifs.is_open()) << "Failed to open metadata.json: " << metadata_path;
+    const std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+
+    meta.has_metadata = true;
+    meta.version = ExtractNumberField<int>(content, "version", 0);
+
+    // Locate the tensors array.
+    auto tensors_key = content.find("\"tensors\"");
+    if (tensors_key == std::string::npos) {
+        return meta;
+    }
+
+    auto array_start = content.find('[', tensors_key);
+    if (array_start == std::string::npos) {
+        return meta;
+    }
+
+    int depth = 1;
+    size_t pos = array_start + 1;
+    while (pos < content.size() && depth > 0) {
+        if (content[pos] == '[') {
+            ++depth;
+        } else if (content[pos] == ']') {
+            --depth;
+        }
+        ++pos;
+    }
+    std::string tensor_block = content.substr(array_start + 1, pos - array_start - 2);
+
+    // Parse each tensor object.
+    size_t obj_pos = 0;
+    while ((obj_pos = tensor_block.find('{', obj_pos)) != std::string::npos) {
+        int object_depth = 1;
+        size_t obj_end = obj_pos + 1;
+        while (obj_end < tensor_block.size() && object_depth > 0) {
+            if (tensor_block[obj_end] == '{') {
+                ++object_depth;
+            }
+            if (tensor_block[obj_end] == '}') {
+                --object_depth;
+            }
+            ++obj_end;
+        }
+        if (obj_end > 0) {
+            --obj_end;
+        }
+        if (obj_end == std::string::npos) {
+            break;
+        }
+
+        std::string obj = tensor_block.substr(obj_pos, obj_end - obj_pos + 1);
+
+        Checkpoint::CheckpointMetadata::TensorEntry entry;
+        entry.key = ExtractJsonString(obj, "key");
+        entry.file = ExtractJsonString(obj, "file");
+        entry.dtype_str = ExtractJsonString(obj, "dtype");
+        entry.offset = ExtractNumberField<uint64_t>(obj, "offset", 0);
+        entry.byte_size = ExtractNumberField<uint64_t>(obj, "byte_size", 0);
+        entry.pp_rank = ExtractNumberField<int>(obj, "pp_rank", 0);
+
+        entry.global_shape = ExtractIntegerArray<int64_t>(obj, "global_shape");
+        entry.local_shape = ExtractIntegerArray<int64_t>(obj, "local_shape");
+        entry.global_offset = ExtractIntegerArray<int64_t>(obj, "global_offset");
+        entry.axis_fragmentations = ExtractIntegerArray<int>(obj, "axis_fragmentations");
+
+        const auto segment_global_offsets = ExtractIntegerArray<int64_t>(obj, "segment_global_offsets");
+        const auto segment_local_offsets = ExtractIntegerArray<int64_t>(obj, "segment_local_offsets");
+        const auto segment_lengths = ExtractIntegerArray<int64_t>(obj, "segment_lengths");
+        CHECK_EQ(segment_global_offsets.size(), segment_local_offsets.size());
+        CHECK_EQ(segment_global_offsets.size(), segment_lengths.size());
+        for (size_t i = 0; i < segment_lengths.size(); ++i) {
+            entry.segments.push_back({.global_offset = segment_global_offsets[i],
+                                      .local_offset = segment_local_offsets[i],
+                                      .length = segment_lengths[i]});
+        }
+
+        entry.stored_on_ranks = ExtractIntegerArray<int>(obj, "stored_on_ranks");
+
+        meta.tensors.push_back(std::move(entry));
+        obj_pos = obj_end + 1;
+    }
+
+    LOG(INFO) << "[CKPT] Loaded metadata.json: " << meta.tensors.size() << " tensor shards";
+    return meta;
+}
+
+Checkpoint::CheckpointMetadata Checkpoint::LoadMetadata(const std::filesystem::path &checkpoint_dir) {
+    if (std::filesystem::exists(checkpoint_dir / checkpoint::kMetadataFilename)) {
+        return LoadSingleMetadata(checkpoint_dir);
+    }
+
+    CheckpointMetadata merged;
+    for (const auto &entry : std::filesystem::directory_iterator(checkpoint_dir)) {
+        if (!entry.is_directory() || !entry.path().filename().string().starts_with("rank_")
+            || !std::filesystem::exists(entry.path() / checkpoint::kMetadataFilename)) {
+            continue;
+        }
+        auto rank_metadata = LoadSingleMetadata(entry.path());
+        if (!rank_metadata.has_metadata) {
+            continue;
+        }
+        if (!merged.has_metadata) {
+            merged = rank_metadata;
+            merged.tensors.clear();
+        }
+        for (auto &tensor : rank_metadata.tensors) {
+            tensor.file = (entry.path().filename() / tensor.file).generic_string();
+            merged.tensors.push_back(std::move(tensor));
+        }
+    }
+    LOG(INFO) << "[CKPT] Aggregated " << merged.tensors.size() << " tensor shards from rank manifests";
+    return merged;
+}
+
+void Checkpoint::SaveMetadataFile(const std::filesystem::path &path, const CheckpointMetadata &metadata) {
+    std::ofstream ofs(path);
+    CHECK(ofs.is_open()) << "Failed to write checkpoint metadata: " << path;
+    ofs << "{\n";
+    ofs << "  \"version\": 3,\n";
+    ofs << "  \"format\": \"infinitrain_sharded\",\n";
+
+    ofs << "  \"tensors\": [\n";
+    for (size_t i = 0; i < metadata.tensors.size(); ++i) {
+        const auto &tensor = metadata.tensors[i];
+        ofs << "    {\n";
+        ofs << "      \"key\": \"" << tensor.key << "\",\n";
+        ofs << "      \"dtype\": \"" << tensor.dtype_str << "\",\n";
+        auto write_shape = [&](const char *name, const std::vector<int64_t> &shape) {
+            ofs << "      \"" << name << "\": [";
+            for (size_t d = 0; d < shape.size(); ++d) { ofs << shape[d] << (d + 1 < shape.size() ? ", " : ""); }
+            ofs << "],\n";
+        };
+        write_shape("global_shape", tensor.global_shape);
+        write_shape("local_shape", tensor.local_shape);
+        write_shape("global_offset", tensor.global_offset);
+        ofs << "      \"axis_fragmentations\": [";
+        for (size_t d = 0; d < tensor.axis_fragmentations.size(); ++d) {
+            ofs << tensor.axis_fragmentations[d] << (d + 1 < tensor.axis_fragmentations.size() ? ", " : "");
+        }
+        ofs << "],\n";
+        auto write_segments = [&](const char *name, auto member) {
+            ofs << "      \"" << name << "\": [";
+            for (size_t d = 0; d < tensor.segments.size(); ++d) {
+                ofs << tensor.segments[d].*member << (d + 1 < tensor.segments.size() ? ", " : "");
+            }
+            ofs << "],\n";
+        };
+        write_segments("segment_global_offsets", &ShardSegment::global_offset);
+        write_segments("segment_local_offsets", &ShardSegment::local_offset);
+        write_segments("segment_lengths", &ShardSegment::length);
+        ofs << "      \"file\": \"" << tensor.file << "\",\n";
+        ofs << "      \"offset\": " << tensor.offset << ",\n";
+        ofs << "      \"byte_size\": " << tensor.byte_size << ",\n";
+        ofs << "      \"pp_rank\": " << tensor.pp_rank << ",\n";
+        ofs << "      \"stored_on_ranks\": [";
+        for (size_t r = 0; r < tensor.stored_on_ranks.size(); ++r) {
+            ofs << tensor.stored_on_ranks[r] << (r + 1 < tensor.stored_on_ranks.size() ? ", " : "");
+        }
+        ofs << "]\n";
+        ofs << "    }" << (i + 1 < metadata.tensors.size() ? "," : "") << "\n";
+    }
+    ofs << "  ]\n";
+    ofs << "}\n";
+    CHECK(ofs.good()) << "Failed while writing checkpoint metadata: " << path;
 }
 } // namespace infini_train
