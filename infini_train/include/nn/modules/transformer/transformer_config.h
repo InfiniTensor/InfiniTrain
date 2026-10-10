@@ -75,9 +75,7 @@ struct TransformerConfig {
     bool tie_weights = true;       // Tie embedding and lm_head weights
 
     // FFN config
-    float ffn_expansion_ratio = 4.0f;               // MLP output: n_embd * ffn_expansion_ratio
-    std::optional<float> ffn_dim_multiplier = 1.5f; // FFN dim multiplier
-    int64_t multiple_of = 256;                      // FFN dims must be multiple of this number
+    std::optional<int64_t> ffn_hidden_size = std::nullopt; // Defaults to 4 * n_embd
     std::optional<MoEConfig> moe_config = std::nullopt;
 
     // RoPE config
