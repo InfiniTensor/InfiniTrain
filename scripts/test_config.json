@@ -569,7 +569,7 @@
                         "dtype": "float32",
                         "lora_rank": 8,
                         "lora_alpha": 16.0,
-                        "lora_target_modules": "c_attn,attn.c_proj",
+                        "lora_target_modules": "c_attn,attn.c_proj,c_fc",
                         "lora_load_path": "$LORA_WEIGHTS_DIR"
                     }
                 },
@@ -579,7 +579,7 @@
                         "dtype": "bfloat16",
                         "lora_rank": 8,
                         "lora_alpha": 16.0,
-                        "lora_target_modules": "c_attn,attn.c_proj",
+                        "lora_target_modules": "c_attn,attn.c_proj,c_fc",
                         "lora_load_path": "$LORA_WEIGHTS_DIR"
                     }
                 },
@@ -592,7 +592,7 @@
                         "total_batch_size": 5120,
                         "lora_rank": 8,
                         "lora_alpha": 16.0,
-                        "lora_target_modules": "c_attn,attn.c_proj",
+                        "lora_target_modules": "c_attn,attn.c_proj,c_fc",
                         "lora_load_path": "$LORA_WEIGHTS_DIR"
                     }
                 },
@@ -605,7 +605,7 @@
                         "total_batch_size": 5120,
                         "lora_rank": 8,
                         "lora_alpha": 16.0,
-                        "lora_target_modules": "c_attn,attn.c_proj",
+                        "lora_target_modules": "c_attn,attn.c_proj,c_fc",
                         "lora_load_path": "$LORA_WEIGHTS_DIR"
                     }
                 },
@@ -619,7 +619,7 @@
                         "total_batch_size": 5120,
                         "lora_rank": 8,
                         "lora_alpha": 16.0,
-                        "lora_target_modules": "c_attn,attn.c_proj",
+                        "lora_target_modules": "c_attn,attn.c_proj,c_fc",
                         "lora_load_path": "$LORA_WEIGHTS_DIR"
                     }
                 },
@@ -633,7 +633,7 @@
                         "total_batch_size": 5120,
                         "lora_rank": 8,
                         "lora_alpha": 16.0,
-                        "lora_target_modules": "c_attn,attn.c_proj",
+                        "lora_target_modules": "c_attn,attn.c_proj,c_fc",
                         "lora_load_path": "$LORA_WEIGHTS_DIR"
                     }
                 },
