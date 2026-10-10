@@ -66,8 +66,26 @@ std::string GetDataParallelProcessGroupName(int global_rank) {
     return "DP" + std::to_string(global::GetGroupId(global::DP, global_rank));
 }
 
+std::string GetDataParallelWithContextProcessGroupName(int global_rank) {
+    if (global::GetContextParallelSize() == 1) {
+        return GetDataParallelProcessGroupName(global_rank);
+    }
+    int dp, tp, cp, pp;
+    global::GetCoordOf(global_rank, dp, tp, cp, pp);
+    return "DP_CP" + std::to_string(tp * global::GetPipelineParallelSize() + pp);
+}
+
 std::string GetTensorParallelProcessGroupName(int global_rank) {
     return "TP" + std::to_string(global::GetGroupId(global::TP, global_rank));
+}
+
+std::string GetContextParallelProcessGroupName(int global_rank) {
+    return "CP" + std::to_string(global::GetGroupId(global::CP, global_rank));
+}
+
+std::string GetHierarchicalContextParallelProcessGroupName(int global_rank, int level) {
+    const auto ranks = GetHierarchicalContextParallelGroupRanks(global_rank, level);
+    return "CP_H" + std::to_string(level) + "_" + std::to_string(ranks.front());
 }
 
 std::string GetPipelineParallelProcessGroupName(int global_rank) {
@@ -76,7 +94,41 @@ std::string GetPipelineParallelProcessGroupName(int global_rank) {
 
 std::vector<int> GetDataParallelGroupRanks(int global_rank) { return global::GetGroupRanks(global::DP, global_rank); }
 
+std::vector<int> GetDataParallelWithContextGroupRanks(int global_rank) {
+    int dp, tp, cp, pp;
+    global::GetCoordOf(global_rank, dp, tp, cp, pp);
+    std::vector<int> ranks;
+    ranks.reserve(global::GetDataParallelSize() * global::GetContextParallelSize());
+    for (int dp_idx = 0; dp_idx < global::GetDataParallelSize(); ++dp_idx) {
+        for (int cp_idx = 0; cp_idx < global::GetContextParallelSize(); ++cp_idx) {
+            ranks.push_back(global::GetRankOf(dp_idx, tp, cp_idx, pp));
+        }
+    }
+    return ranks;
+}
+
 std::vector<int> GetTensorParallelGroupRanks(int global_rank) { return global::GetGroupRanks(global::TP, global_rank); }
+
+std::vector<int> GetContextParallelGroupRanks(int global_rank) {
+    return global::GetGroupRanks(global::CP, global_rank);
+}
+
+std::vector<int> GetHierarchicalContextParallelGroupRanks(int global_rank, int level) {
+    const auto &sizes = global::GetHierarchicalContextParallelSizes();
+    CHECK_EQ(sizes.size(), 2);
+    CHECK_GE(level, 0);
+    CHECK_LT(level, 2);
+    int dp, tp, cp, pp;
+    global::GetCoordOf(global_rank, dp, tp, cp, pp);
+    // cp = p * A + a. A2A varies a; P2P varies p while retaining the same head shard.
+    const auto cp_ranks = GetContextParallelGroupRanks(global_rank);
+    const int start = level == 0 ? cp / sizes[0] * sizes[0] : cp % sizes[0];
+    const int stride = level == 0 ? 1 : sizes[0];
+    std::vector<int> ranks;
+    ranks.reserve(sizes[level]);
+    for (int i = 0; i < sizes[level]; ++i) { ranks.push_back(cp_ranks[start + i * stride]); }
+    return ranks;
+}
 
 std::vector<int> GetPipelineParallelGroupRanks(int global_rank) {
     return global::GetGroupRanks(global::PP, global_rank);

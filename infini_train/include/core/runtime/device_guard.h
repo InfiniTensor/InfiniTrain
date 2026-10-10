@@ -86,6 +86,8 @@ public:
 
     virtual Stream *GetStream(Device) const;
 
+    virtual Stream *ExchangeStream(Device, Stream *stream) const;
+
     virtual Stream *CreateStream(Device) const;
 
     virtual Stream *CreateStreamWithPriority(Device, int priority) const;
