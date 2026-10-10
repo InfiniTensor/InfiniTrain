@@ -68,6 +68,11 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     const auto version_major = BytesToType<int32_t>(header, 56);
     const auto version_minor = BytesToType<int32_t>(header, 60);
 
+    // Compatibility logic for the legacy LLMC checkpoint format exported by
+    // karpathy/llm.c train_llama3.py, where ffn_dim_multiplier and multiple_of
+    // are used to derive the final FFN dimension.
+    // TODO(jym): Move this model-specific dimension derivation into the checkpoint
+    // format adapter once native checkpoint conversion support is stable.
     auto round_up_to = [](int64_t x, int64_t m) { return (x + m - 1) / m * m; };
     int64_t hidden_dim = 4LL * static_cast<int64_t>(n_embd);
     hidden_dim = (2LL * hidden_dim) / 3LL;
