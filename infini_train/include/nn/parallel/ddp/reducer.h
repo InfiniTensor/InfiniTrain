@@ -18,6 +18,7 @@ namespace autograd {
 class PostAccumulateGradHook;
 } // namespace autograd
 namespace nn::parallel {
+class ProcessGroup;
 class Work;
 } // namespace nn::parallel
 } // namespace infini_train
@@ -57,7 +58,7 @@ public:
      * @param ddp_config DDP related options, see definition of DistributedDataParallelConfig
      */
     explicit Reducer(std::vector<std::shared_ptr<Tensor>> parameters, std::vector<std::vector<size_t>> bucket_indices,
-                     const DistributedDataParallelConfig ddp_config);
+                     const DistributedDataParallelConfig ddp_config, const ProcessGroup *process_group);
 
     // Attach PostAllReduceHooks to params
     void AttachHooksToParameters();
@@ -90,7 +91,6 @@ private:
         // Gradients of the bucket flattened into a 1-dimensional tensor
         std::shared_ptr<Tensor> contents;
         DataType dtype;
-        int device_rank = 0;
 
         // Variables whose gradients are held in this bucket
         std::vector<std::shared_ptr<Tensor>> variables;
@@ -143,6 +143,7 @@ private:
     std::atomic<size_t> buckets_finished_{0};
     std::shared_ptr<autograd::PostAccumulateGradHook> comm_hook_ = nullptr;
     DistributedDataParallelConfig ddp_config_;
+    const ProcessGroup *process_group_ = nullptr;
 
     // Next bucket to be reduced
     // This is to make sure that all-reduce of buckets be launched in the order we expect

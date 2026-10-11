@@ -26,6 +26,9 @@ add_subdirectory(optimizer)
 # Autograd operator tests
 add_subdirectory(autograd)
 
+# Parallel layout tests
+add_subdirectory(parallel)
+
 # LoRA tests
 add_subdirectory(lora)
 
