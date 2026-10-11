@@ -70,6 +70,8 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads(const AddShardParam &add
     for (const auto &group : bucket_groups_) {
         std::vector<LocalGradShard> local_grad_shards;
         const bool use_grad_shard = group->config().zero_stage >= 2;
+        const size_t process_group_size = group->process_group_size();
+        const size_t rank_in_process_group = group->rank_in_process_group();
         const auto &buckets = group->buckets();
         for (size_t bucket_idx = 0; bucket_idx < buckets.size(); ++bucket_idx) {
             const auto &bucket = buckets[bucket_idx];
@@ -80,9 +82,9 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads(const AddShardParam &add
             CHECK(bucket_param) << "DistributedOptimizer requires param buffer.";
             CHECK(bucket_grad) << "DistributedOptimizer requires grad buffer.";
 
-            CHECK_EQ(bucket_param->NumElements() % ddp_world_size_, 0);
-            const size_t bucket_shard_numel = bucket_param->NumElements() / ddp_world_size_;
-            const size_t bucket_shard_start = ddp_rank_ * bucket_shard_numel;
+            CHECK_EQ(bucket_param->NumElements() % process_group_size, 0);
+            const size_t bucket_shard_numel = bucket_param->NumElements() / process_group_size;
+            const size_t bucket_shard_start = rank_in_process_group * bucket_shard_numel;
             const size_t bucket_shard_end = bucket_shard_start + bucket_shard_numel;
 
             // Iterate param in bucket, build each param(or param_shard) seperately
