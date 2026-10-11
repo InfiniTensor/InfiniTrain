@@ -23,16 +23,24 @@ class ProcessGroup;
 
 namespace infini_train::nn::parallel {
 std::string GetDataParallelProcessGroupName(int global_rank);
+std::string GetExpertDataParallelProcessGroupName(int global_rank);
 
 std::string GetTensorParallelProcessGroupName(int global_rank);
+std::string GetExpertTensorParallelProcessGroupName(int global_rank);
 
 std::string GetPipelineParallelProcessGroupName(int global_rank);
+std::string GetExpertParallelProcessGroupName(int global_rank);
+std::string GetExpertTensorAndExpertParallelProcessGroupName(int global_rank);
 
 std::vector<int> GetDataParallelGroupRanks(int global_rank);
+std::vector<int> GetExpertDataParallelGroupRanks(int global_rank);
 
 std::vector<int> GetTensorParallelGroupRanks(int global_rank);
+std::vector<int> GetExpertTensorParallelGroupRanks(int global_rank);
 
 std::vector<int> GetPipelineParallelGroupRanks(int global_rank);
+std::vector<int> GetExpertParallelGroupRanks(int global_rank);
+std::vector<int> GetExpertTensorAndExpertParallelGroupRanks(int global_rank);
 
 // Gather rank-local shards and concatenate them along dim.
 std::shared_ptr<Tensor> AllGatherAlongDim(const std::shared_ptr<Tensor> &tensor, int64_t dim, const ProcessGroup *pg);

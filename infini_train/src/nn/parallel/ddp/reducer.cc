@@ -146,8 +146,9 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
 }
 
 Reducer::Reducer(std::vector<std::shared_ptr<Tensor>> parameters, std::vector<std::vector<size_t>> bucket_indices,
-                 const DistributedDataParallelConfig ddp_config)
-    : params_(std::move(parameters)), ddp_config_(ddp_config) {
+                 const DistributedDataParallelConfig ddp_config, const ProcessGroup *process_group)
+    : params_(std::move(parameters)), ddp_config_(ddp_config), process_group_(process_group) {
+    CHECK_NOTNULL(process_group_);
     BuildBuckets(bucket_indices);
     ready_seen_this_iter_.assign(params_.size(), 0);
 }
@@ -186,7 +187,6 @@ void Reducer::BuildBuckets(const std::vector<std::vector<size_t>> &bucket_indice
         CHECK(!bucket_indices[bucket_idx].empty());
         const auto &first_param = params_[bucket_indices[bucket_idx][0]];
         bucket.dtype = first_param->Dtype();
-        bucket.device_rank = first_param->GetDevice().Rank().GlobalRank();
 
         size_t total_elems = 0;
 
@@ -408,7 +408,6 @@ void Reducer::MarkBucketReady(size_t bucket_index) {
 void Reducer::FinalizeBucketDense(size_t bucket_index) {
     // NOTE(zbl): Assume mutex is on when entering this function
     auto &bucket = buckets_.at(bucket_index);
-    auto ddp_pg = ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(bucket.device_rank));
 
     if (comm_hook_) {
         std::vector<std::shared_ptr<Tensor>> bucket_view{bucket.contents};
@@ -418,7 +417,7 @@ void Reducer::FinalizeBucketDense(size_t bucket_index) {
         LOG(FATAL) << "Custom hook is not supported now";
     } else {
         const auto reduce_op = ddp_config_.average_in_collective ? comm::ReduceOpType::kAvg : comm::ReduceOpType::kSum;
-        bucket.work = ddp_pg->AllReduce(bucket.contents, reduce_op, true);
+        bucket.work = process_group_->AllReduce(bucket.contents, reduce_op, true);
     }
 }
 

@@ -76,7 +76,7 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
         auto bucket_indices = ComputeBucketAssignmentBySize(trainable_params, bucket_size_limits);
 
-        reducer_ = std::make_shared<Reducer>(trainable_params, bucket_indices, ddp_config);
+        reducer_ = std::make_shared<Reducer>(trainable_params, bucket_indices, ddp_config, ddp_pg_);
         reducer_->AttachHooksToParameters();
     }
 }
