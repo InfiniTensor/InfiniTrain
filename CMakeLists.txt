@@ -299,12 +299,25 @@ link_infini_train_exe(llama3)
 
 add_executable(fm9gv
   example/fm9gv/main.cc
+  example/fm9gv/model.cc
   example/common/tiny_shakespeare_dataset.cc
   example/common/utils.cc
   example/common/tokenizer.cc
   example/fm9gv/checkpoint_loader.cc
 )
 link_infini_train_exe(fm9gv)
+
+add_executable(fm9gv_multimodal_alignment
+  example/fm9gv/multimodal_alignment.cc
+  example/fm9gv/model.cc
+  example/fm9gv/multimodal_model.cc
+  example/fm9gv/resampler.cc
+  example/fm9gv/resampler_ops.cc
+  example/fm9gv/vision_encoder.cc
+  example/common/utils.cc
+  example/fm9gv/checkpoint_loader.cc
+)
+link_infini_train_exe(fm9gv_multimodal_alignment)
 
 # Tools
 add_subdirectory(tools/infini_run)
