@@ -17,7 +17,14 @@ extern thread_local int thread_global_rank;
 // TP and DP are view-local axes. In the expert rank generator they represent
 // expert tensor parallelism (ETP) and expert data parallelism (EDP), matching
 // Megatron-LM's RankGenerator semantics.
-enum Axis : uint8_t { kDp = 0, kTp = 1, kPp = 2, kEp = 3, kCp = 4, kAxisCount = 5 };
+enum Axis : uint8_t {
+  kDp = 0,
+  kTp = 1,
+  kPp = 2,
+  kEp = 3,
+  kCp = 4,
+  kAxisCount = 5
+};
 
 class RankGenerator {
  public:
@@ -26,7 +33,8 @@ class RankGenerator {
   explicit RankGenerator(int tensor_parallel_size, int expert_parallel_size,
                          int data_parallel_size, int pipeline_parallel_size,
                          int context_parallel_size = 1,
-                         std::array<Axis, kAxisCount> order = {kTp, kCp, kEp, kDp, kPp});
+                         std::array<Axis, kAxisCount> order = {kTp, kCp, kEp,
+                                                               kDp, kPp});
 
   int AxisSize(Axis axis) const;
   int WorldSize() const;
@@ -58,11 +66,6 @@ class RankGenerator {
 class GlobalEnv {
  public:
   static GlobalEnv &Instance();
-
-  void Init(int threads_per_process, int tensor_parallel_size,
-            bool sequence_parallel_enabled, int pipeline_parallel_size,
-            int virtual_pipeline_parallel_size, int expert_parallel_size,
-            std::optional<int> expert_tensor_parallel_size);
 
   void Init(int threads_per_process, const ModelParallelConfig &config);
   const ModelParallelConfig &model_parallel_config() const;
@@ -138,16 +141,6 @@ class GlobalEnv {
   RankGenerator expert_rank_generator_{1, 1, 1, 1, 1};
 };
 
-inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size,
-                       bool sequence_parallel_enabled,
-                       int pipeline_parallel_size,
-                       int virtual_pipeline_parallel, int expert_parallel_size,
-                       std::optional<int> expert_tensor_parallel_size) {
-  GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size,
-                             sequence_parallel_enabled, pipeline_parallel_size,
-                             virtual_pipeline_parallel, expert_parallel_size,
-                             expert_tensor_parallel_size);
-}
 inline void InitAllEnv(int nthread_per_process,
                        const ModelParallelConfig &config = {}) {
   GlobalEnv::Instance().Init(nthread_per_process, config);

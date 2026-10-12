@@ -261,7 +261,8 @@ void Checkpoint::Save(const std::filesystem::path &checkpoint_dir,
   SynchronizeCheckpointRanks(model);
 
   int dp_rank = 0, tp_rank = 0, cp_rank = 0, pp_rank = 0;
-  nn::parallel::global::GetCoordOf(global_rank, dp_rank, tp_rank, cp_rank, pp_rank);
+  nn::parallel::global::GetCoordOf(global_rank, dp_rank, tp_rank, cp_rank,
+                                   pp_rank);
   // TODO(jym): Select checkpoint writers from each shard's replica_id instead
   // of hard-coding DP rank 0.
   if (dp_rank == 0 && cp_rank == 0) {
@@ -599,7 +600,8 @@ void Checkpoint::SaveLocalShard(
       }
     }
     int dp_rank = 0, tp_rank = 0, cp_rank = 0, pp_rank = 0;
-    nn::parallel::global::GetCoordOf(global_rank, dp_rank, tp_rank, cp_rank, pp_rank);
+    nn::parallel::global::GetCoordOf(global_rank, dp_rank, tp_rank, cp_rank,
+                                     pp_rank);
     for (size_t i = 0; i < emitted_items.size(); ++i) {
       const auto &item = *emitted_items[i];
       const auto it = sharded_sd.tensors.find(item.key);
