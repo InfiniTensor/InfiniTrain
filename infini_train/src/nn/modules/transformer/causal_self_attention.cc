@@ -191,7 +191,9 @@ std::vector<std::shared_ptr<infini_train::Tensor>> CausalSelfAttention::Forward(
   // NOTE(zbl): Acquire full T after AllGather is performed in
   // ColumnParallelLinear
   const auto T = qkv->Dims()[1];
-  if (!mask) {
+  const bool use_context_parallel =
+      parallel::global::GetContextParallelSize() > 1;
+  if (use_context_parallel && !mask) {
     const auto q_start = parallel::GetContextParallelSequenceStart(T);
     const auto T_kv = T * parallel::global::GetContextParallelSize();
     mask =
@@ -232,8 +234,6 @@ std::vector<std::shared_ptr<infini_train::Tensor>> CausalSelfAttention::Forward(
   // TODO(zbl): use kv cache during inference
   // if (use_kv_) { ... }
 
-  const bool use_context_parallel =
-      parallel::global::GetContextParallelSize() > 1;
   if (!use_context_parallel) {
     // align n_head in GQA
     // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
@@ -264,6 +264,11 @@ std::vector<std::shared_ptr<infini_train::Tensor>> CausalSelfAttention::Forward(
     if (mask) {
       // mask: (1, 1, T, T)
       att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+    } else {
+      auto causal_mask = buffers_[kParamBiasName]->Slice(
+          {0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
+      att = att->MaskedFill(causal_mask == 0,
+                            -std::numeric_limits<float>::infinity());
     }
     // (B, H_local, T, T)
     att = nn::function::Softmax(att, -1);
