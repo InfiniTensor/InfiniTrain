@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace infini_train::nn::parallel::function {
+namespace infini_train::nn::parallel::comm {
 enum class ReduceOpType : int8_t {
     kSum,
     kProd,
@@ -11,4 +11,4 @@ enum class ReduceOpType : int8_t {
     kAvg,
 };
 
-} // namespace infini_train::nn::parallel::function
+} // namespace infini_train::nn::parallel::comm

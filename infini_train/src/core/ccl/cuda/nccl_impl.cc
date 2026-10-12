@@ -8,6 +8,7 @@
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 
 #include "infini_train/src/core/ccl/cuda/nccl_common.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
@@ -22,10 +23,10 @@ inline const std::unordered_map<DataType, ncclDataType_t> kNcclDtypeMap = {
     {DataType::kFLOAT64, ncclFloat64},
 };
 
-inline const std::unordered_map<nn::parallel::function::ReduceOpType, ncclRedOp_t> kNcclReduceOpMap = {
-    {nn::parallel::function::ReduceOpType::kSum, ncclSum}, {nn::parallel::function::ReduceOpType::kProd, ncclProd},
-    {nn::parallel::function::ReduceOpType::kMin, ncclMin}, {nn::parallel::function::ReduceOpType::kMax, ncclMax},
-    {nn::parallel::function::ReduceOpType::kAvg, ncclAvg},
+inline const std::unordered_map<nn::parallel::comm::ReduceOpType, ncclRedOp_t> kNcclReduceOpMap = {
+    {nn::parallel::comm::ReduceOpType::kSum, ncclSum}, {nn::parallel::comm::ReduceOpType::kProd, ncclProd},
+    {nn::parallel::comm::ReduceOpType::kMin, ncclMin}, {nn::parallel::comm::ReduceOpType::kMax, ncclMax},
+    {nn::parallel::comm::ReduceOpType::kAvg, ncclAvg},
 };
 
 inline ncclComm_t GetNcclComm(const CclComm *comm) {
@@ -115,7 +116,7 @@ void NcclImpl::CommDestroy(CclComm *comm) const {
 }
 
 void NcclImpl::AllReduce(const void *sendbuff, void *recvbuff, size_t count, DataType dtype,
-                         nn::parallel::function::ReduceOpType reduce_op, const CclComm *comm, Stream *stream) const {
+                         nn::parallel::comm::ReduceOpType reduce_op, const CclComm *comm, Stream *stream) const {
     NCCL_CHECK(ncclAllReduce(sendbuff, recvbuff, count, kNcclDtypeMap.at(dtype), kNcclReduceOpMap.at(reduce_op),
                              GetNcclComm(comm), GetCudaStream(stream)));
 }
@@ -127,8 +128,7 @@ void NcclImpl::Broadcast(const void *sendbuff, void *recvbuff, size_t count, Dat
 }
 
 void NcclImpl::Reduce(const void *sendbuff, void *recvbuff, size_t count, DataType dtype,
-                      nn::parallel::function::ReduceOpType reduce_op, int root, const CclComm *comm,
-                      Stream *stream) const {
+                      nn::parallel::comm::ReduceOpType reduce_op, int root, const CclComm *comm, Stream *stream) const {
     NCCL_CHECK(ncclReduce(sendbuff, recvbuff, count, kNcclDtypeMap.at(dtype), kNcclReduceOpMap.at(reduce_op), root,
                           GetNcclComm(comm), GetCudaStream(stream)));
 }
@@ -140,8 +140,7 @@ void NcclImpl::AllGather(const void *sendbuff, void *recvbuff, size_t count, Dat
 }
 
 void NcclImpl::ReduceScatter(const void *sendbuff, void *recvbuff, size_t recv_count, DataType dtype,
-                             nn::parallel::function::ReduceOpType reduce_op, const CclComm *comm,
-                             Stream *stream) const {
+                             nn::parallel::comm::ReduceOpType reduce_op, const CclComm *comm, Stream *stream) const {
     NCCL_CHECK(ncclReduceScatter(sendbuff, recvbuff, recv_count, kNcclDtypeMap.at(dtype),
                                  kNcclReduceOpMap.at(reduce_op), GetNcclComm(comm), GetCudaStream(stream)));
 }

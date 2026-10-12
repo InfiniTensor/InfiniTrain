@@ -11,9 +11,9 @@
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
@@ -46,7 +46,7 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         }
         if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
             const auto reduce_op
-                = ddp_config.average_in_collective ? function::ReduceOpType::kAvg : function::ReduceOpType::kSum;
+                = ddp_config.average_in_collective ? comm::ReduceOpType::kAvg : comm::ReduceOpType::kSum;
             auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(reduce_op, ddp_pg_,
                                                                                               is_last_microbatch_);
             param->RegisterPostAccumulateGradHook(std::move(hook));

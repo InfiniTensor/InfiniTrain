@@ -7,7 +7,6 @@
 
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
-#include "infini_train/include/nn/parallel/parallel_functional.h"
 
 namespace infini_train {
 class Tensor;
