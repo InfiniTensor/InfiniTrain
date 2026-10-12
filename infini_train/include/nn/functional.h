@@ -192,8 +192,7 @@ std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &input
 //          must have the same shape for the autograd-enabled tensor overload.
 //   src: source tensor.
 //
-std::shared_ptr<Tensor> Scatter(const std::shared_ptr<Tensor> &input, int64_t dim,
-                                const std::shared_ptr<Tensor> &index,
+std::shared_ptr<Tensor> Scatter(const std::shared_ptr<Tensor> &input, int64_t dim, const std::shared_ptr<Tensor> &index,
                                 const std::shared_ptr<Tensor> &src);
 
 } // namespace infini_train::nn::function

@@ -19,7 +19,9 @@ int64_t CountValidTargets(const std::shared_ptr<Tensor> &target, int64_t ignore_
         } else {
             LOG(FATAL) << "Unsupported target data type: " << static_cast<int>(target_cpu.Dtype());
         }
-        if (value == ignore_index) { continue; }
+        if (value == ignore_index) {
+            continue;
+        }
         CHECK_GE(value, 0);
         CHECK_LT(value, num_classes);
         ++valid_count;
@@ -35,8 +37,8 @@ std::vector<std::shared_ptr<Tensor>> CrossEntropy::Forward(const std::vector<std
 
     valid_count_ = CountValidTargets(target, ignore_index_, input->Dims().back());
     auto device = input->GetDevice().type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
-        {device, "CrossEntropyForward"}, input, target, ignore_index_, valid_count_)};
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "CrossEntropyForward"}, input, target,
+                                                                 ignore_index_, valid_count_)};
 }
 
 void CrossEntropy::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,

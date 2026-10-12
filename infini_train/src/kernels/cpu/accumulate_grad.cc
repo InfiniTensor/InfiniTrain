@@ -18,9 +18,7 @@ void L2NormAccumulate(const std::shared_ptr<Tensor> &gradient, const std::shared
     const auto *gradient_data = static_cast<const float *>(gradient->DataPtr());
     float sum = 0.0f;
 #pragma omp parallel for reduction(+ : sum)
-    for (int64_t idx = 0; idx < gradient->NumElements(); ++idx) {
-        sum += gradient_data[idx] * gradient_data[idx];
-    }
+    for (int64_t idx = 0; idx < gradient->NumElements(); ++idx) { sum += gradient_data[idx] * gradient_data[idx]; }
     *static_cast<float *>(total_square->DataPtr()) += sum;
 }
 
@@ -49,8 +47,8 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
 
 void AdamWFP32MasterStep(const std::shared_ptr<Tensor> &grad, const std::shared_ptr<Tensor> &param,
                          const std::shared_ptr<Tensor> &master, const std::shared_ptr<Tensor> &m,
-                         const std::shared_ptr<Tensor> &v, float learning_rate, float beta1, float beta2,
-                         float eps, int64_t t, float gradient_scale, float weight_decay) {
+                         const std::shared_ptr<Tensor> &v, float learning_rate, float beta1, float beta2, float eps,
+                         int64_t t, float gradient_scale, float weight_decay) {
     CHECK(grad->Dtype() == DataType::kFLOAT32 && param->Dtype() == DataType::kFLOAT32);
     const auto *g = static_cast<const float *>(grad->DataPtr());
     auto *p = static_cast<float *>(param->DataPtr());
@@ -70,8 +68,7 @@ void AdamWFP32MasterStep(const std::shared_ptr<Tensor> &grad, const std::shared_
         const float next_v = beta2 * v_data[idx] + (1.0f - beta2) * scaled_grad * scaled_grad;
         m_data[idx] = next_m;
         v_data[idx] = next_v;
-        value -= learning_rate * (next_m / bias_correction_m) /
-                 (std::sqrt(next_v / bias_correction_v) + eps);
+        value -= learning_rate * (next_m / bias_correction_m) / (std::sqrt(next_v / bias_correction_v) + eps);
         master_data[idx] = value;
         p[idx] = value;
     }

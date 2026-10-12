@@ -95,10 +95,9 @@ struct VpmInput {
 
 class FP32MasterAdamW final : public Optimizer {
 public:
-    FP32MasterAdamW(const NamedParameterList &named_params, float learning_rate, float beta1, float beta2,
-                    float eps, float weight_decay)
-        : Optimizer(named_params, learning_rate), weight_decay_(weight_decay), beta1_(beta1), beta2_(beta2),
-          eps_(eps) {
+    FP32MasterAdamW(const NamedParameterList &named_params, float learning_rate, float beta1, float beta2, float eps,
+                    float weight_decay)
+        : Optimizer(named_params, learning_rate), weight_decay_(weight_decay), beta1_(beta1), beta2_(beta2), eps_(eps) {
         master_params_.reserve(named_params.size());
         m_.reserve(named_params.size());
         v_.reserve(named_params.size());
@@ -129,7 +128,9 @@ public:
         const auto &kernel = Dispatcher::Instance().GetKernel({device.type(), "AdamWFP32MasterStep"});
         for (size_t i = 0; i < params_.size(); ++i) {
             const auto &grad = params_[i]->grad();
-            if (!grad) { continue; }
+            if (!grad) {
+                continue;
+            }
             CHECK(params_[i]->GetDevice() == device);
             kernel.Call<void>(grad, params_[i], master_params_[i], m_[i], v_[i], learning_rate_, beta1_, beta2_, eps_,
                               t_, gradient_scale_, apply_weight_decay_[i] ? weight_decay_ : 0.0f);
@@ -169,15 +170,19 @@ double GlobalGradNorm(const NamedParameterList &named_params) {
         }
     }
     auto total_cpu = total_square->To(Device());
-    core::GetDeviceGuardImpl(device.type())->SynchronizeStream(
-        core::GetDeviceGuardImpl(device.type())->GetStream(device));
+    core::GetDeviceGuardImpl(device.type())
+        ->SynchronizeStream(core::GetDeviceGuardImpl(device.type())->GetStream(device));
     return std::sqrt(static_cast<const float *>(total_cpu.DataPtr())[0]);
 }
 
 void ScaleGradients(const NamedParameterList &named_params, float scale) {
-    if (scale == 1.0f) { return; }
+    if (scale == 1.0f) {
+        return;
+    }
     for (const auto &[name, parameter] : named_params) {
-        if (parameter->grad()) { parameter->set_grad(parameter->grad()->Mul(scale)); }
+        if (parameter->grad()) {
+            parameter->set_grad(parameter->grad()->Mul(scale));
+        }
     }
 }
 
@@ -198,11 +203,10 @@ Sample LoadSample(const std::string &path) {
     CHECK_GT(header.hidden, 0);
 
     Sample sample;
-    sample.input_ids = std::make_shared<Tensor>(std::vector<int64_t>{header.batch, header.sequence},
-                                                DataType::kINT64);
+    sample.input_ids = std::make_shared<Tensor>(std::vector<int64_t>{header.batch, header.sequence}, DataType::kINT64);
     sample.labels = std::make_shared<Tensor>(std::vector<int64_t>{header.batch, header.sequence}, DataType::kINT64);
-    sample.image_indices = std::make_shared<Tensor>(
-        std::vector<int64_t>{header.batch, header.visual_tokens}, DataType::kINT64);
+    sample.image_indices
+        = std::make_shared<Tensor>(std::vector<int64_t>{header.batch, header.visual_tokens}, DataType::kINT64);
     sample.vision_embeddings = std::make_shared<Tensor>(
         std::vector<int64_t>{header.batch, header.visual_tokens, header.hidden}, DataType::kFLOAT32);
     ReadExact(stream, sample.input_ids->DataPtr(), sample.input_ids->SizeInBytes(), "input_ids");
@@ -223,8 +227,7 @@ VpmSample LoadVpmSample(const std::string &path) {
     CHECK_EQ(std::memcmp(magic, kVpmMagic, sizeof(kVpmMagic)), 0);
     ReadExact(stream, dims, sizeof(dims), "VPM dimensions");
     VpmSample sample;
-    sample.features
-        = std::make_shared<Tensor>(std::vector<int64_t>{dims[0], dims[1], dims[4]}, DataType::kFLOAT32);
+    sample.features = std::make_shared<Tensor>(std::vector<int64_t>{dims[0], dims[1], dims[4]}, DataType::kFLOAT32);
     ReadExact(stream, sample.features->DataPtr(), sample.features->SizeInBytes(), "VPM features");
     sample.patch_sizes = std::make_shared<Tensor>(std::vector<int64_t>{dims[0], 2}, DataType::kINT64);
     auto *patch_sizes = static_cast<int64_t *>(sample.patch_sizes->DataPtr());
@@ -245,8 +248,8 @@ VpmInput LoadVpmInput(const std::string &path) {
     CHECK_EQ(std::memcmp(magic, kVpmInputMagic, sizeof(kVpmInputMagic)), 0);
     ReadExact(stream, dims, sizeof(dims), "VPM input dimensions");
     VpmInput input;
-    input.pixels = std::make_shared<Tensor>(
-        std::vector<int64_t>{dims[0], dims[1], dims[2], dims[3]}, DataType::kFLOAT32);
+    input.pixels
+        = std::make_shared<Tensor>(std::vector<int64_t>{dims[0], dims[1], dims[2], dims[3]}, DataType::kFLOAT32);
     ReadExact(stream, input.pixels->DataPtr(), input.pixels->SizeInBytes(), "VPM pixel values");
     input.patch_sizes = std::make_shared<Tensor>(std::vector<int64_t>{dims[0], 2}, DataType::kINT64);
     auto *sizes = static_cast<int64_t *>(input.patch_sizes->DataPtr());
@@ -259,22 +262,33 @@ VpmInput LoadVpmInput(const std::string &path) {
 }
 
 Device ParseDevice() {
-    if (FLAGS_device == "cpu") { return Device(); }
-    if (FLAGS_device == "cuda") { return Device(Device::DeviceType::kCUDA, 0); }
-    if (FLAGS_device == "dcu") { return Device(Device::DeviceType::kDCU, 0); }
+    if (FLAGS_device == "cpu") {
+        return Device();
+    }
+    if (FLAGS_device == "cuda") {
+        return Device(Device::DeviceType::kCUDA, 0);
+    }
+    if (FLAGS_device == "dcu") {
+        return Device(Device::DeviceType::kDCU, 0);
+    }
     LOG(FATAL) << "Unsupported device: " << FLAGS_device;
 }
 
 DataType ParseDtype() {
-    if (FLAGS_dtype == "float32") { return DataType::kFLOAT32; }
-    if (FLAGS_dtype == "bfloat16") { return DataType::kBFLOAT16; }
+    if (FLAGS_dtype == "float32") {
+        return DataType::kFLOAT32;
+    }
+    if (FLAGS_dtype == "bfloat16") {
+        return DataType::kBFLOAT16;
+    }
     LOG(FATAL) << "Unsupported dtype: " << FLAGS_dtype;
 }
 
 void WriteTensorFP32(const std::string &path, const std::shared_ptr<Tensor> &tensor) {
-    auto fp32 = tensor->Dtype() == DataType::kFLOAT32 ? tensor : std::make_shared<Tensor>(tensor->To(DataType::kFLOAT32));
-    auto cpu = fp32->GetDevice().type() == Device::DeviceType::kCPU ? fp32
-                                                                   : std::make_shared<Tensor>(fp32->To(Device()));
+    auto fp32
+        = tensor->Dtype() == DataType::kFLOAT32 ? tensor : std::make_shared<Tensor>(tensor->To(DataType::kFLOAT32));
+    auto cpu
+        = fp32->GetDevice().type() == Device::DeviceType::kCPU ? fp32 : std::make_shared<Tensor>(fp32->To(Device()));
     std::ofstream stream(path, std::ios::binary);
     CHECK(stream) << "Failed to open output: " << path;
     stream.write(static_cast<const char *>(cpu->DataPtr()), static_cast<std::streamsize>(cpu->SizeInBytes()));
@@ -354,7 +368,9 @@ int main(int argc, char **argv) {
     NamedParameterList trainable_parameters;
     if (FLAGS_backward && multimodal_model != nullptr) {
         for (const auto &[name, parameter] : multimodal_model->NamedParameters()) {
-            if (parameter->requires_grad()) { trainable_parameters.emplace_back(name, parameter); }
+            if (parameter->requires_grad()) {
+                trainable_parameters.emplace_back(name, parameter);
+            }
         }
     }
     uint64_t trainable_numel = 0;
@@ -370,9 +386,9 @@ int main(int argc, char **argv) {
                 static_cast<float>(FLAGS_adam_beta2), 1e-8f, static_cast<float>(FLAGS_weight_decay));
             optimizer = fp32_master_optimizer;
         } else {
-            optimizer = std::make_shared<optimizers::Adam>(
-                trainable_parameters, static_cast<float>(FLAGS_learning_rate), 0.9f,
-                static_cast<float>(FLAGS_adam_beta2), 1e-8f);
+            optimizer
+                = std::make_shared<optimizers::Adam>(trainable_parameters, static_cast<float>(FLAGS_learning_rate),
+                                                     0.9f, static_cast<float>(FLAGS_adam_beta2), 1e-8f);
         }
         LOG(INFO) << "Optimizing " << trainable_parameters.size() << " multimodal parameters"
                   << " (" << trainable_numel << " elements)"
@@ -416,20 +432,26 @@ int main(int argc, char **argv) {
         } else {
             for (const auto &[name, parameter] : trainable_parameters) { parameter->ZeroGrad(); }
         }
-        if (pixel_values) { pixel_values->ZeroGrad(); }
-        if (vpm_features) { vpm_features->ZeroGrad(); }
+        if (pixel_values) {
+            pixel_values->ZeroGrad();
+        }
+        if (vpm_features) {
+            vpm_features->ZeroGrad();
+        }
         sample.vision_embeddings->ZeroGrad();
         impl->SynchronizeDevice(device);
         impl->ResetMemPoolHighWatermarks(device);
         const auto started = std::chrono::steady_clock::now();
         AutocastGuard autocast(device.type(), dtype);
-        if (!FLAGS_autocast) { autocast.Disable(); }
+        if (!FLAGS_autocast) {
+            autocast.Disable();
+        }
         if (multimodal_model && !capture_intermediate) {
             logits = (*multimodal_model)({sample.input_ids, pixel_values, patch_sizes, sample.image_indices})[0];
         } else if (multimodal_model) {
             vision_embeddings = multimodal_model->EncodeVision(pixel_values, patch_sizes);
-            logits = multimodal_model
-                         ->ForwardWithVisionHiddenStates(sample.input_ids, vision_embeddings, sample.image_indices)[0];
+            logits = multimodal_model->ForwardWithVisionHiddenStates(sample.input_ids, vision_embeddings,
+                                                                     sample.image_indices)[0];
         } else {
             vision_embeddings = resampler ? (*resampler)({vpm_features, patch_sizes})[0] : sample.vision_embeddings;
             logits = (*model)({sample.input_ids, vision_embeddings, sample.image_indices})[0];
@@ -439,7 +461,9 @@ int main(int argc, char **argv) {
         auto flat_logits = logits->View({static_cast<int64_t>(logits->NumElements()) / vocab_size, vocab_size});
         auto flat_labels = sample.labels->View({static_cast<int64_t>(sample.labels->NumElements())});
         loss = std::make_shared<nn::CrossEntropyLoss>(-100)->Forward({flat_logits, flat_labels})[0];
-        if (FLAGS_backward) { loss->Backward(); }
+        if (FLAGS_backward) {
+            loss->Backward();
+        }
         if (step == FLAGS_num_iterations - 1 && !FLAGS_parameter_grad_output_bin.empty()) {
             CHECK(multimodal_model != nullptr);
             for (const auto &[name, parameter] : multimodal_model->NamedParameters()) {
@@ -449,16 +473,14 @@ int main(int argc, char **argv) {
                     break;
                 }
             }
-            CHECK(selected_parameter_grad != nullptr)
-                << "Unknown parameter: " << FLAGS_parameter_grad_output_name;
+            CHECK(selected_parameter_grad != nullptr) << "Unknown parameter: " << FLAGS_parameter_grad_output_name;
         }
         double grad_norm = 0.0;
         float clip_scale = 1.0f;
         if (optimizer) {
             grad_norm = GlobalGradNorm(trainable_parameters);
             if (FLAGS_max_grad_norm > 0.0) {
-                clip_scale = std::min(
-                    1.0f, static_cast<float>(FLAGS_max_grad_norm / (grad_norm + 1e-6)));
+                clip_scale = std::min(1.0f, static_cast<float>(FLAGS_max_grad_norm / (grad_norm + 1e-6)));
             }
             const float step_gradient_scale = clip_scale * static_cast<float>(FLAGS_gradient_scale);
             if (fp32_master_optimizer) {
@@ -482,11 +504,9 @@ int main(int argc, char **argv) {
         step_clip_scales.push_back(clip_scale);
         step_peak_used_mb.push_back(peak_used_mb);
         step_peak_reserved_mb.push_back(peak_reserved_mb);
-        LOG(ERROR) << "step " << step + 1 << "/" << FLAGS_num_iterations
-                   << " | phase " << (step < FLAGS_warmup_iterations ? "warmup" : "measure")
-                   << " | multimodal loss "
-                   << loss_value << " | grad norm " << grad_norm << " | clip scale " << clip_scale
-                   << " | " << elapsed_ms
+        LOG(ERROR) << "step " << step + 1 << "/" << FLAGS_num_iterations << " | phase "
+                   << (step < FLAGS_warmup_iterations ? "warmup" : "measure") << " | multimodal loss " << loss_value
+                   << " | grad norm " << grad_norm << " | clip scale " << clip_scale << " | " << elapsed_ms
                    << " ms | peak used " << peak_used_mb << " MB | peak reserved " << peak_reserved_mb << " MB";
     }
     const auto measured_begin = step_elapsed_ms.begin() + FLAGS_warmup_iterations;
@@ -496,9 +516,8 @@ int main(int argc, char **argv) {
     const auto reserved_begin = step_peak_reserved_mb.begin() + FLAGS_warmup_iterations;
     const size_t measured_peak_used = *std::max_element(peak_begin, step_peak_used_mb.end());
     const size_t measured_peak_reserved = *std::max_element(reserved_begin, step_peak_reserved_mb.end());
-    LOG(ERROR) << "benchmark summary | measured iterations "
-               << FLAGS_num_iterations - FLAGS_warmup_iterations << " | mean " << measured_mean
-               << " ms | peak used " << measured_peak_used << " MB | peak reserved "
+    LOG(ERROR) << "benchmark summary | measured iterations " << FLAGS_num_iterations - FLAGS_warmup_iterations
+               << " | mean " << measured_mean << " ms | peak used " << measured_peak_used << " MB | peak reserved "
                << measured_peak_reserved << " MB";
     if (!FLAGS_metrics_json.empty()) {
         std::ofstream metrics(FLAGS_metrics_json);
@@ -522,7 +541,9 @@ int main(int argc, char **argv) {
         const auto write_array = [&](const char *name, const auto &values, bool last) {
             metrics << "  \"" << name << "\": [";
             for (size_t index = 0; index < values.size(); ++index) {
-                if (index > 0) { metrics << ", "; }
+                if (index > 0) {
+                    metrics << ", ";
+                }
                 metrics << values[index];
             }
             metrics << "]" << (last ? "\n" : ",\n");
@@ -536,7 +557,9 @@ int main(int argc, char **argv) {
         metrics << "}\n";
         CHECK(metrics);
     }
-    if (!FLAGS_vision_output_bin.empty()) { WriteTensorFP32(FLAGS_vision_output_bin, vision_embeddings); }
+    if (!FLAGS_vision_output_bin.empty()) {
+        WriteTensorFP32(FLAGS_vision_output_bin, vision_embeddings);
+    }
     if (FLAGS_backward && !FLAGS_vision_grad_bin.empty()) {
         CHECK(vision_embeddings->grad() != nullptr);
         WriteTensorFP32(FLAGS_vision_grad_bin, vision_embeddings->grad());

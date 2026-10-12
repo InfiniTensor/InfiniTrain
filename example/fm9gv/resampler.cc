@@ -44,12 +44,11 @@ std::shared_ptr<Tensor> ToNhwc(const std::shared_ptr<Tensor> &input) {
 
 std::shared_ptr<Tensor> InterpolateNhwc(const std::shared_ptr<Tensor> &input, int64_t output_height,
                                         int64_t output_width) {
-    return ToNhwc(Interpolate(ToNchw(input), std::vector<int64_t>{output_height, output_width},
-                              std::nullopt, "bilinear", false));
+    return ToNhwc(
+        Interpolate(ToNchw(input), std::vector<int64_t>{output_height, output_width}, std::nullopt, "bilinear", false));
 }
 
-std::shared_ptr<Tensor> PoolRegularGrid(const std::shared_ptr<Tensor> &input, int64_t grid_size,
-                                        int64_t pooled_size) {
+std::shared_ptr<Tensor> PoolRegularGrid(const std::shared_ptr<Tensor> &input, int64_t grid_size, int64_t pooled_size) {
     const int64_t batch = input->Dims()[0];
     const int64_t height = input->Dims()[1];
     const int64_t width = input->Dims()[2];
@@ -72,9 +71,7 @@ std::shared_ptr<Tensor> PoolRegularGrid(const std::shared_ptr<Tensor> &input, in
     }
     boxes = std::make_shared<Tensor>(boxes->To(input->GetDevice()));
     auto pooled = RoiAlign(ToNchw(input), boxes, {pooled_size, pooled_size});
-    return pooled->View({batch * regions, input->Dims()[3], pooled_size * pooled_size})
-        ->Transpose(1, 2)
-        ->Contiguous();
+    return pooled->View({batch * regions, input->Dims()[3], pooled_size * pooled_size})->Transpose(1, 2)->Contiguous();
 }
 } // namespace
 
@@ -84,14 +81,14 @@ Resampler::Resampler(int64_t num_queries, int64_t embed_dim, int64_t num_heads, 
     CHECK_EQ(grid_size_ * grid_size_, num_queries_);
     CHECK_EQ(kv_dim_ % num_heads_, 0);
 
-    parameters_["pos_embed"] = std::make_shared<Tensor>(std::vector<int64_t>{num_queries_, kv_dim_}, DataType::kFLOAT32)
-                                   ->RequiresGrad();
+    parameters_["pos_embed"]
+        = std::make_shared<Tensor>(std::vector<int64_t>{num_queries_, kv_dim_}, DataType::kFLOAT32)->RequiresGrad();
     parameters_["feature_1x_embedding"]
         = std::make_shared<Tensor>(std::vector<int64_t>{1, 1, kv_dim_}, DataType::kFLOAT32)->RequiresGrad();
     parameters_["feature_4x_embedding"]
         = std::make_shared<Tensor>(std::vector<int64_t>{1, 1, kv_dim_}, DataType::kFLOAT32)->RequiresGrad();
-    parameters_["query"] = std::make_shared<Tensor>(std::vector<int64_t>{num_queries_, kv_dim_}, DataType::kFLOAT32)
-                               ->RequiresGrad();
+    parameters_["query"]
+        = std::make_shared<Tensor>(std::vector<int64_t>{num_queries_, kv_dim_}, DataType::kFLOAT32)->RequiresGrad();
     modules_["features_1x_projector"] = std::make_shared<nn::Linear>(kv_dim_, kv_dim_);
     modules_["features_4x_projector"] = std::make_shared<nn::Linear>(kv_dim_, kv_dim_);
     modules_["q_proj"] = std::make_shared<nn::Linear>(kv_dim_, kv_dim_);
@@ -112,8 +109,8 @@ std::vector<std::shared_ptr<Tensor>> Resampler::Forward(const std::vector<std::s
     CHECK_EQ(inputs.size(), 2) << "Resampler expects {features, patch_sizes}";
     const auto &features = inputs[0];
     auto patch_sizes_cpu = inputs[1]->GetDevice().type() == infini_train::Device::DeviceType::kCPU
-                               ? inputs[1]
-                               : std::make_shared<Tensor>(inputs[1]->To(infini_train::Device()));
+                             ? inputs[1]
+                             : std::make_shared<Tensor>(inputs[1]->To(infini_train::Device()));
     CHECK(patch_sizes_cpu->Dtype() == DataType::kINT64);
     const int64_t batch = features->Dims()[0];
     CHECK_EQ(patch_sizes_cpu->NumElements(), batch * 2);
@@ -140,10 +137,10 @@ std::vector<std::shared_ptr<Tensor>> Resampler::Forward(const std::vector<std::s
 
     auto value_1x = (*modules_["features_1x_projector"])({feature_1x})[0];
     auto value_4x = (*modules_["features_4x_projector"])({feature_4x})[0];
-    value_1x = (*modules_["ln_kv"])({value_1x->View({batch, height * width, kv_dim_})})[0]
-                   ->View({batch, height, width, kv_dim_});
-    value_4x = (*modules_["ln_kv"])({value_4x->View({batch, height * width * 16, kv_dim_})})[0]
-                   ->View({batch, height * 4, width * 4, kv_dim_});
+    value_1x = (*modules_["ln_kv"])({value_1x->View({batch, height * width, kv_dim_})})[0]->View(
+        {batch, height, width, kv_dim_});
+    value_4x = (*modules_["ln_kv"])({value_4x->View({batch, height * width * 16, kv_dim_})})[0]->View(
+        {batch, height * 4, width * 4, kv_dim_});
 
     auto pos = parameters_["pos_embed"]->View({1, grid_size_, grid_size_, kv_dim_});
     auto pos_1x = InterpolateNhwc(pos, height, width);
@@ -159,7 +156,7 @@ std::vector<std::shared_ptr<Tensor>> Resampler::Forward(const std::vector<std::s
     auto values = nn::function::Concat({value_1x, value_4x}, 1);
 
     auto query = (*modules_["ln_q"])({parameters_["query"]->View({1, num_queries_, kv_dim_})})[0]
-                 + parameters_["pos_embed"]->View({1, num_queries_, kv_dim_});
+               + parameters_["pos_embed"]->View({1, num_queries_, kv_dim_});
     query = query->View({num_queries_, 1, kv_dim_});
     query = (*modules_["q_proj"])({query})[0];
     keys = (*modules_["k_proj"])({keys})[0];
@@ -201,16 +198,19 @@ void Resampler::LoadFromBin(const std::string &path) {
     const std::vector<std::string> linear_names{
         "features_1x_projector", "features_4x_projector", "q_proj", "k_proj", "v_proj", "attn_out_proj"};
     for (const auto &name : linear_names) {
-        ReadTensor(stream, *modules_[name]->mutable_parameter(nn::Linear::kParamWeightName), (name + ".weight").c_str());
+        ReadTensor(stream, *modules_[name]->mutable_parameter(nn::Linear::kParamWeightName),
+                   (name + ".weight").c_str());
         ReadTensor(stream, *modules_[name]->mutable_parameter(nn::Linear::kParamBiasName), (name + ".bias").c_str());
     }
     const std::vector<std::string> norm_names{"ln_q", "ln_kv", "ln_proj", "ln_post"};
     for (const auto &name : norm_names) {
-        ReadTensor(stream, *modules_[name]->mutable_parameter(nn::LayerNorm::kParamWeightName), (name + ".weight").c_str());
+        ReadTensor(stream, *modules_[name]->mutable_parameter(nn::LayerNorm::kParamWeightName),
+                   (name + ".weight").c_str());
         ReadTensor(stream, *modules_[name]->mutable_parameter(nn::LayerNorm::kParamBiasName), (name + ".bias").c_str());
     }
     for (const auto &name : std::vector<std::string>{"out_mlp_fc1", "out_mlp_fc2"}) {
-        ReadTensor(stream, *modules_[name]->mutable_parameter(nn::Linear::kParamWeightName), (name + ".weight").c_str());
+        ReadTensor(stream, *modules_[name]->mutable_parameter(nn::Linear::kParamWeightName),
+                   (name + ".weight").c_str());
         ReadTensor(stream, *modules_[name]->mutable_parameter(nn::Linear::kParamBiasName), (name + ".bias").c_str());
     }
     ReadTensor(stream, *modules_["proj"]->mutable_parameter(nn::Linear::kParamWeightName), "proj.weight");

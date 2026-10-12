@@ -14,9 +14,8 @@ namespace {
 constexpr float kNegativeInfinity = -std::numeric_limits<float>::infinity();
 }
 
-std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input,
-                                            const std::shared_ptr<Tensor> &target, int64_t ignore_index,
-                                            int64_t valid_count) {
+std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &target,
+                                            int64_t ignore_index, int64_t valid_count) {
     const auto &input_dims = input->Dims();
     CHECK_GE(input_dims.size(), 2);
     const int64_t bs = std::accumulate(input_dims.rbegin() + 1, input_dims.rend(), 1, std::multiplies<int64_t>{});
@@ -33,7 +32,9 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
         } else {
             LOG(FATAL) << "Unsupported target data type: " << static_cast<int>(target->Dtype());
         }
-        if (target_idx == ignore_index) { continue; }
+        if (target_idx == ignore_index) {
+            continue;
+        }
 
         float max_logit = kNegativeInfinity;
         for (int64_t j = 0; j < num_classes; ++j) {
@@ -43,13 +44,12 @@ std::shared_ptr<Tensor> CrossEntropyForward(const std::shared_ptr<Tensor> &input
         for (int64_t j = 0; j < num_classes; ++j) {
             sum_exp += exp(static_cast<const float *>(input->DataPtr())[i * num_classes + j] - max_logit);
         }
-        static_cast<float *>(output->DataPtr())[0]
-            -= log(exp(static_cast<const float *>(input->DataPtr())[i * num_classes + target_idx] - max_logit)
-                   / sum_exp);
+        static_cast<float *>(output->DataPtr())[0] -= log(
+            exp(static_cast<const float *>(input->DataPtr())[i * num_classes + target_idx] - max_logit) / sum_exp);
     }
-    static_cast<float *>(output->DataPtr())[0]
-        = valid_count == 0 ? std::numeric_limits<float>::quiet_NaN()
-                           : static_cast<float *>(output->DataPtr())[0] / valid_count;
+    static_cast<float *>(output->DataPtr())[0] = valid_count == 0
+                                                   ? std::numeric_limits<float>::quiet_NaN()
+                                                   : static_cast<float *>(output->DataPtr())[0] / valid_count;
     return {output};
 }
 

@@ -6,8 +6,8 @@
 
 #include "infini_train/include/autograd/activations.h"
 #include "infini_train/include/autograd/elementwise.h"
-#include "infini_train/include/autograd/scatter_src.h"
 #include "infini_train/include/autograd/reduction.h"
+#include "infini_train/include/autograd/scatter_src.h"
 #include "infini_train/include/autograd/softmax.h"
 #include "infini_train/include/autograd/transform.h"
 #include "infini_train/include/nn/init.h"
@@ -72,8 +72,7 @@ std::shared_ptr<Tensor> Concat(const std::vector<std::shared_ptr<Tensor>> &input
     return std::make_shared<autograd::Concat>(dim)->Apply(inputs)[0];
 }
 
-std::shared_ptr<Tensor> Scatter(const std::shared_ptr<Tensor> &input, int64_t dim,
-                                const std::shared_ptr<Tensor> &index,
+std::shared_ptr<Tensor> Scatter(const std::shared_ptr<Tensor> &input, int64_t dim, const std::shared_ptr<Tensor> &index,
                                 const std::shared_ptr<Tensor> &src) {
     CHECK_EQ(input->Dims().size(), src->Dims().size());
     CHECK_EQ(index->Dims().size(), src->Dims().size());
@@ -82,13 +81,17 @@ std::shared_ptr<Tensor> Scatter(const std::shared_ptr<Tensor> &input, int64_t di
     CHECK(input->GetDevice() == src->GetDevice());
     CHECK(input->GetDevice() == index->GetDevice());
     const int64_t rank = static_cast<int64_t>(input->Dims().size());
-    if (dim < 0) { dim += rank; }
+    if (dim < 0) {
+        dim += rank;
+    }
     CHECK_GE(dim, 0);
     CHECK_LT(dim, rank);
     for (int64_t axis = 0; axis < rank; ++axis) {
         CHECK_EQ(index->Dims()[axis], src->Dims()[axis])
             << "Scatter backward follows PyTorch and requires index.shape == src.shape";
-        if (axis != dim) { CHECK_LE(index->Dims()[axis], input->Dims()[axis]); }
+        if (axis != dim) {
+            CHECK_LE(index->Dims()[axis], input->Dims()[axis]);
+        }
     }
 
     return std::make_shared<autograd::ScatterSrc>(dim)->Apply({input, index, src})[0];

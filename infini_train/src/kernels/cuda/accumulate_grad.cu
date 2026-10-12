@@ -63,8 +63,7 @@ __global__ void L2NormAccumulateKernel(const T *__restrict__ gradient, size_t nu
     }
 }
 
-void L2NormAccumulate(const std::shared_ptr<Tensor> &gradient,
-                      const std::shared_ptr<Tensor> &total_square) {
+void L2NormAccumulate(const std::shared_ptr<Tensor> &gradient, const std::shared_ptr<Tensor> &total_square) {
     CHECK(total_square->Dtype() == DataType::kFLOAT32);
     CHECK_EQ(total_square->NumElements(), 1);
     CHECK(gradient->GetDevice() == total_square->GetDevice());
@@ -77,9 +76,9 @@ void L2NormAccumulate(const std::shared_ptr<Tensor> &gradient,
     core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
         gradient->Dtype(),
         [=]<typename T>() {
-            L2NormAccumulateKernel<<<blocks, threads, 0, stream>>>(
-                static_cast<const T *>(gradient->DataPtr()), gradient->NumElements(),
-                static_cast<float *>(total_square->DataPtr()));
+            L2NormAccumulateKernel<<<blocks, threads, 0, stream>>>(static_cast<const T *>(gradient->DataPtr()),
+                                                                   gradient->NumElements(),
+                                                                   static_cast<float *>(total_square->DataPtr()));
         },
         "CUDA L2NormAccumulate");
 }
@@ -132,10 +131,10 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad, const std::shared_p
 
 template <typename TGrad, typename TParam>
 __global__ void AdamWFP32MasterStepKernel(const TGrad *__restrict__ grad, TParam *__restrict__ param,
-                                          float *__restrict__ master, float *__restrict__ m,
-                                          float *__restrict__ v, size_t num_elements, float learning_rate,
-                                          float beta1, float beta2, float eps, float bias_correction_m,
-                                          float bias_correction_v, float gradient_scale, float weight_decay) {
+                                          float *__restrict__ master, float *__restrict__ m, float *__restrict__ v,
+                                          size_t num_elements, float learning_rate, float beta1, float beta2, float eps,
+                                          float bias_correction_m, float bias_correction_v, float gradient_scale,
+                                          float weight_decay) {
     const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= num_elements) {
         return;
@@ -159,8 +158,8 @@ __global__ void AdamWFP32MasterStepKernel(const TGrad *__restrict__ grad, TParam
 
 void AdamWFP32MasterStep(const std::shared_ptr<Tensor> &grad, const std::shared_ptr<Tensor> &param,
                          const std::shared_ptr<Tensor> &master, const std::shared_ptr<Tensor> &m,
-                         const std::shared_ptr<Tensor> &v, float learning_rate, float beta1, float beta2,
-                         float eps, int64_t t, float gradient_scale, float weight_decay) {
+                         const std::shared_ptr<Tensor> &v, float learning_rate, float beta1, float beta2, float eps,
+                         int64_t t, float gradient_scale, float weight_decay) {
     CHECK(master->Dtype() == DataType::kFLOAT32 && m->Dtype() == DataType::kFLOAT32
           && v->Dtype() == DataType::kFLOAT32);
     const size_t num_elements = grad->NumElements();
@@ -174,15 +173,14 @@ void AdamWFP32MasterStep(const std::shared_ptr<Tensor> &grad, const std::shared_
     const auto stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
                             infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                             ->cuda_stream();
-    core::cuda::DispatchCudaFunc<DataTypeList<INFINI_ALL_FLOATING_TYPES>,
-                                 DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
+    core::cuda::DispatchCudaFunc<DataTypeList<INFINI_ALL_FLOATING_TYPES>, DataTypeList<INFINI_ALL_FLOATING_TYPES>>(
         {grad->Dtype(), param->Dtype()},
         [=]<typename TGrad, typename TParam>() {
             AdamWFP32MasterStepKernel<<<blocks, threads, 0, stream>>>(
                 static_cast<const TGrad *>(grad->DataPtr()), static_cast<TParam *>(param->DataPtr()),
                 static_cast<float *>(master->DataPtr()), static_cast<float *>(m->DataPtr()),
-                static_cast<float *>(v->DataPtr()), num_elements, learning_rate, beta1, beta2, eps,
-                bias_correction_m, bias_correction_v, gradient_scale, weight_decay);
+                static_cast<float *>(v->DataPtr()), num_elements, learning_rate, beta1, beta2, eps, bias_correction_m,
+                bias_correction_v, gradient_scale, weight_decay);
         },
         "CUDA AdamWFP32MasterStep");
 }

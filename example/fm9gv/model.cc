@@ -18,7 +18,9 @@ Model::Model(const nn::TransformerConfig &config) : nn::TransformerModel(config)
 std::vector<std::shared_ptr<Tensor>> Model::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
     CHECK(inputs.size() == 1 || inputs.size() == 3)
         << "FM9GV forward expects input_ids or {input_ids, vision_hidden_states, image_indices}";
-    if (inputs.size() == 1) { return nn::TransformerModel::Forward(inputs); }
+    if (inputs.size() == 1) {
+        return nn::TransformerModel::Forward(inputs);
+    }
 
     CHECK_EQ(nn::parallel::global::GetPipelineParallelSize(), 1)
         << "FM9GV multimodal embedding replacement currently requires PP=1";

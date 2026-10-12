@@ -44,27 +44,26 @@ MultimodalModel::ForwardWithVisionHiddenStates(const std::shared_ptr<Tensor> &in
     return (*modules_[kLLMName])({input_ids, vision_hidden_states, image_indices});
 }
 
-std::vector<std::shared_ptr<Tensor>>
-MultimodalModel::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
+std::vector<std::shared_ptr<Tensor>> MultimodalModel::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
     CHECK(inputs.size() == 1 || inputs.size() == 3 || inputs.size() == 4)
         << "FM9GV multimodal forward expects {input_ids}, "
            "{input_ids, vision_hidden_states, image_indices}, or "
            "{input_ids, pixel_values, target_sizes, image_indices}";
-    if (inputs.size() == 1) { return (*modules_[kLLMName])({inputs[0]}); }
-    if (inputs.size() == 3) { return ForwardWithVisionHiddenStates(inputs[0], inputs[1], inputs[2]); }
+    if (inputs.size() == 1) {
+        return (*modules_[kLLMName])({inputs[0]});
+    }
+    if (inputs.size() == 3) {
+        return ForwardWithVisionHiddenStates(inputs[0], inputs[1], inputs[2]);
+    }
     return ForwardWithVisionHiddenStates(inputs[0], EncodeVision(inputs[1], inputs[2]), inputs[3]);
 }
 
 void MultimodalModel::SetVisionRequiresGrad(bool requires_grad) {
-    for (const auto &parameter : modules_[kVPMName]->Parameters()) {
-        parameter->set_requires_grad(requires_grad);
-    }
+    for (const auto &parameter : modules_[kVPMName]->Parameters()) { parameter->set_requires_grad(requires_grad); }
 }
 
 void MultimodalModel::SetLLMRequiresGrad(bool requires_grad) {
-    for (const auto &parameter : modules_[kLLMName]->Parameters()) {
-        parameter->set_requires_grad(requires_grad);
-    }
+    for (const auto &parameter : modules_[kLLMName]->Parameters()) { parameter->set_requires_grad(requires_grad); }
 }
 
 } // namespace fm9gv

@@ -30,10 +30,7 @@ enum class NormType {
     kRMSNorm    // RMSNorm
 };
 
-enum class AttentionVariant {
-    kPackedQKV,
-    kFM9G
-};
+enum class AttentionVariant { kPackedQKV, kFM9G };
 
 struct MoEConfig {
     enum class RouterScoreFunction {

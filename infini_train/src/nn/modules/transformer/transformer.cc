@@ -116,8 +116,8 @@ std::vector<std::shared_ptr<Tensor>> TransformerLayer::Forward(const std::vector
 
     auto attn_out = (*modules_[kAttnLayerName])(attn_input)[0];
     const float residual_scale = config_.attention_variant == AttentionVariant::kFM9G
-                                     ? config_.scale_depth / std::sqrt(static_cast<float>(config_.n_layer))
-                                     : 1.0f;
+                                   ? config_.scale_depth / std::sqrt(static_cast<float>(config_.n_layer))
+                                   : 1.0f;
     auto x1 = x[0] + attn_out * residual_scale;
 
     // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd) -> MLP -> (bs, seq_len, n_embd) -> Add -> (bs,
@@ -148,14 +148,12 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector
 
         // Init freqs_cis on device only once
         if (buffers_[kFreqsCisName] == nullptr) {
-            int64_t rope_dim = config_.attention_variant == AttentionVariant::kFM9G
-                                   ? config_.qk_rope_head_dim
-                                   : config_.n_embd / config_.n_head;
-            buffers_[kFreqsCisName] = PrecomputeFreqsCis(rope_dim, config_.block_size * 2, config_.rope_theta,
-                                                         config_.use_scaled_rope, device,
-                                                         config_.attention_variant == AttentionVariant::kFM9G
-                                                             ? config_.rope_short_factors
-                                                             : std::vector<float>{});
+            int64_t rope_dim = config_.attention_variant == AttentionVariant::kFM9G ? config_.qk_rope_head_dim
+                                                                                    : config_.n_embd / config_.n_head;
+            buffers_[kFreqsCisName] = PrecomputeFreqsCis(
+                rope_dim, config_.block_size * 2, config_.rope_theta, config_.use_scaled_rope, device,
+                config_.attention_variant == AttentionVariant::kFM9G ? config_.rope_short_factors
+                                                                     : std::vector<float>{});
         }
 
         const auto t = x1->Dims()[1] * nn::parallel::global::GetSequenceParallelSize(); // full_seq_len

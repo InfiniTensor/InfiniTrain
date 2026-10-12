@@ -28,18 +28,18 @@ MLP::MLP(const TransformerConfig &config) : CloneableModule(kType) {
         // Base dimension: n_embd * ffn_expansion_ratio
         ffn_hidden = static_cast<int64_t>(config.n_embd * config.ffn_expansion_ratio);
 
-    // Apply SwiGLU adjustment
+        // Apply SwiGLU adjustment
         if (config.activation_type == MLPType::kSwiGLU) {
             ffn_hidden = int(2 * ffn_hidden) / 3; // SwiGLU intermediate
         }
 
-    // Apply multiplier
+        // Apply multiplier
         if (config.ffn_dim_multiplier.has_value()) {
             ffn_hidden = static_cast<int64_t>(
                 std::llround(static_cast<double>(ffn_hidden) * config.ffn_dim_multiplier.value()));
         }
 
-    // Round up to multiple_of
+        // Round up to multiple_of
         ffn_hidden = (ffn_hidden + config.multiple_of - 1) / config.multiple_of * config.multiple_of;
     }
 

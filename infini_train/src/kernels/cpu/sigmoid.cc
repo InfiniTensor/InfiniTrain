@@ -46,8 +46,7 @@ std::shared_ptr<Tensor> GELUForward(const std::shared_ptr<Tensor> &input) {
     return output;
 }
 
-std::shared_ptr<Tensor> GELUBackward(const std::shared_ptr<Tensor> &input,
-                                     const std::shared_ptr<Tensor> &grad_output) {
+std::shared_ptr<Tensor> GELUBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &grad_output) {
     auto grad_input = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32);
     const float *input_ptr = static_cast<const float *>(input->DataPtr());
     const float *grad_output_ptr = static_cast<const float *>(grad_output->DataPtr());
@@ -58,8 +57,7 @@ std::shared_ptr<Tensor> GELUBackward(const std::shared_ptr<Tensor> &input,
         const float x = input_ptr[idx];
         const float x2 = x * x;
         const float t = std::tanh(kAlpha * (x + kBeta * x * x2));
-        const float derivative
-            = 0.5f * (1.0f + t) + 0.5f * x * (1.0f - t * t) * kAlpha * (1.0f + 3.0f * kBeta * x2);
+        const float derivative = 0.5f * (1.0f + t) + 0.5f * x * (1.0f - t * t) * kAlpha * (1.0f + 3.0f * kBeta * x2);
         grad_input_ptr[idx] = grad_output_ptr[idx] * derivative;
     }
     return grad_input;
@@ -76,8 +74,7 @@ std::shared_ptr<Tensor> SiLUForward(const std::shared_ptr<Tensor> &input) {
     return output;
 }
 
-std::shared_ptr<Tensor> SiLUBackward(const std::shared_ptr<Tensor> &input,
-                                     const std::shared_ptr<Tensor> &grad_output) {
+std::shared_ptr<Tensor> SiLUBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &grad_output) {
     auto grad_input = std::make_shared<Tensor>(input->Dims(), DataType::kFLOAT32);
     const float *input_ptr = static_cast<const float *>(input->DataPtr());
     const float *grad_output_ptr = static_cast<const float *>(grad_output->DataPtr());

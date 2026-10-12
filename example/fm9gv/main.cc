@@ -212,8 +212,7 @@ void Train(const nn::parallel::Rank &rank) {
     // rng / reproducibility
     // ManualSeed(42);
 
-    nn::TransformerConfig model_config
-        = FLAGS_fm9gv_tiny ? fm9gv::FM9GVTinyTextConfig() : fm9gv::FM9GVTextConfig();
+    nn::TransformerConfig model_config = FLAGS_fm9gv_tiny ? fm9gv::FM9GVTinyTextConfig() : fm9gv::FM9GVTextConfig();
     std::shared_ptr<nn::Module> model = nullptr;
     if (!FLAGS_fm9gv_filepath.empty()) {
         model = fm9gv::LoadFromFM9GBin(FLAGS_fm9gv_filepath);
@@ -355,7 +354,9 @@ void Train(const nn::parallel::Rank &rank) {
     sched_config.lr_warmup_iters = FLAGS_lr_warmup_iters;
     sched_config.lr_warmup_init = static_cast<float>(FLAGS_lr_warmup_init);
     std::shared_ptr<LRScheduler> scheduler = nullptr;
-    if (!FLAGS_forward_only) { scheduler = CreateLRScheduler(optimizer, sched_config); }
+    if (!FLAGS_forward_only) {
+        scheduler = CreateLRScheduler(optimizer, sched_config);
+    }
 
     auto train_iter = train_loader.begin();
     std::shared_ptr<nn::Module> loss_fn
@@ -445,7 +446,9 @@ void Train(const nn::parallel::Rank &rank) {
         float lossf = 0.0f;
         if (pp_world_size == 1) {
             // model->Train();
-            if (!FLAGS_forward_only) { optimizer->ZeroGrad(); }
+            if (!FLAGS_forward_only) {
+                optimizer->ZeroGrad();
+            }
 
             // if we are trying to overfit a single batch, we reset the loader here
             if (FLAGS_overfit_single_batch) {
@@ -490,7 +493,9 @@ void Train(const nn::parallel::Rank &rank) {
 
             if (!FLAGS_forward_only) {
                 optimizer->Step();
-                if (scheduler) { scheduler->Step(); }
+                if (scheduler) {
+                    scheduler->Step();
+                }
             }
         } else {
             auto [x, y] = *train_iter;

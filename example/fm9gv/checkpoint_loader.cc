@@ -111,77 +111,79 @@ std::shared_ptr<Model> LoadFromFM9GBin(const std::string &filepath) {
                                             nn::TransformerChunk::kHLayerName, local_layer_index);
 
             ReadVectorAllFloat(ifs,
-                               static_cast<float *>(state_dict[std::format("{}.{}.{}", layer_prefix,
-                                                                            nn::TransformerLayer::kLn1LayerName,
-                                                                            nn::RMSNorm::kParamWeightName)]
-                                                        ->DataPtr()),
+                               static_cast<float *>(
+                                   state_dict[std::format("{}.{}.{}", layer_prefix, nn::TransformerLayer::kLn1LayerName,
+                                                          nn::RMSNorm::kParamWeightName)]
+                                       ->DataPtr()),
                                config.n_embd);
-            ReadMatrixAllFloat(ifs,
-                               static_cast<float *>(state_dict[std::format("{}.{}.{}.{}", layer_prefix,
-                                                                            nn::TransformerLayer::kAttnLayerName,
-                                                                            nn::CausalSelfAttention::kQAProjLayerName,
-                                                                            nn::Linear::kParamWeightName)]
-                                                        ->DataPtr()),
-                               config.q_lora_rank, config.n_embd);
+            ReadMatrixAllFloat(
+                ifs,
+                static_cast<float *>(
+                    state_dict[std::format("{}.{}.{}.{}", layer_prefix, nn::TransformerLayer::kAttnLayerName,
+                                           nn::CausalSelfAttention::kQAProjLayerName, nn::Linear::kParamWeightName)]
+                        ->DataPtr()),
+                config.q_lora_rank, config.n_embd);
             ReadVectorAllFloat(
                 ifs,
-                static_cast<float *>(state_dict[std::format("{}.{}.{}.{}", layer_prefix,
-                                                            nn::TransformerLayer::kAttnLayerName,
-                                                            nn::CausalSelfAttention::kQALayerNormLayerName,
-                                                            nn::RMSNorm::kParamWeightName)]
-                                         ->DataPtr()),
+                static_cast<float *>(
+                    state_dict[std::format("{}.{}.{}.{}", layer_prefix, nn::TransformerLayer::kAttnLayerName,
+                                           nn::CausalSelfAttention::kQALayerNormLayerName,
+                                           nn::RMSNorm::kParamWeightName)]
+                        ->DataPtr()),
                 config.q_lora_rank);
             ReadMatrixRowShardFloat(
                 ifs,
-                static_cast<float *>(state_dict[std::format("{}.{}.{}.{}", layer_prefix,
-                                                            nn::TransformerLayer::kAttnLayerName,
-                                                            nn::CausalSelfAttention::kQBProjLayerName,
-                                                            nn::parallel::ColumnParallelLinear::kParamWeightName)]
-                                         ->DataPtr()),
+                static_cast<float *>(
+                    state_dict[std::format("{}.{}.{}.{}", layer_prefix, nn::TransformerLayer::kAttnLayerName,
+                                           nn::CausalSelfAttention::kQBProjLayerName,
+                                           nn::parallel::ColumnParallelLinear::kParamWeightName)]
+                        ->DataPtr()),
                 q_b_rows, config.q_lora_rank, tp_rank * q_b_rows_local, q_b_rows_local);
-            ReadMatrixAllFloat(ifs,
-                               static_cast<float *>(state_dict[std::format("{}.{}.{}.{}", layer_prefix,
-                                                                            nn::TransformerLayer::kAttnLayerName,
-                                                                            nn::CausalSelfAttention::kKVAProjWithMQALayerName,
-                                                                            nn::Linear::kParamWeightName)]
-                                                        ->DataPtr()),
-                               config.kv_lora_rank + config.qk_rope_head_dim, config.n_embd);
+            ReadMatrixAllFloat(
+                ifs,
+                static_cast<float *>(
+                    state_dict[std::format("{}.{}.{}.{}", layer_prefix, nn::TransformerLayer::kAttnLayerName,
+                                           nn::CausalSelfAttention::kKVAProjWithMQALayerName,
+                                           nn::Linear::kParamWeightName)]
+                        ->DataPtr()),
+                config.kv_lora_rank + config.qk_rope_head_dim, config.n_embd);
             ReadVectorAllFloat(
                 ifs,
-                static_cast<float *>(state_dict[std::format("{}.{}.{}.{}", layer_prefix,
-                                                            nn::TransformerLayer::kAttnLayerName,
-                                                            nn::CausalSelfAttention::kKVALayerNormLayerName,
-                                                            nn::RMSNorm::kParamWeightName)]
-                                         ->DataPtr()),
+                static_cast<float *>(
+                    state_dict[std::format("{}.{}.{}.{}", layer_prefix, nn::TransformerLayer::kAttnLayerName,
+                                           nn::CausalSelfAttention::kKVALayerNormLayerName,
+                                           nn::RMSNorm::kParamWeightName)]
+                        ->DataPtr()),
                 config.kv_lora_rank);
             ReadMatrixRowShardFloat(
                 ifs,
-                static_cast<float *>(state_dict[std::format("{}.{}.{}.{}", layer_prefix,
-                                                            nn::TransformerLayer::kAttnLayerName,
-                                                            nn::CausalSelfAttention::kKVBProjLayerName,
-                                                            nn::parallel::ColumnParallelLinear::kParamWeightName)]
-                                         ->DataPtr()),
+                static_cast<float *>(
+                    state_dict[std::format("{}.{}.{}.{}", layer_prefix, nn::TransformerLayer::kAttnLayerName,
+                                           nn::CausalSelfAttention::kKVBProjLayerName,
+                                           nn::parallel::ColumnParallelLinear::kParamWeightName)]
+                        ->DataPtr()),
                 kv_b_rows, config.kv_lora_rank, tp_rank * kv_b_rows_local, kv_b_rows_local);
             ReadMatrixColShardFloat(
                 ifs,
-                static_cast<float *>(state_dict[std::format("{}.{}.{}.{}", layer_prefix,
-                                                            nn::TransformerLayer::kAttnLayerName,
-                                                            nn::CausalSelfAttention::kOProjLayerName,
-                                                            nn::parallel::RowParallelLinear::kParamWeightName)]
-                                         ->DataPtr()),
+                static_cast<float *>(
+                    state_dict[std::format("{}.{}.{}.{}", layer_prefix, nn::TransformerLayer::kAttnLayerName,
+                                           nn::CausalSelfAttention::kOProjLayerName,
+                                           nn::parallel::RowParallelLinear::kParamWeightName)]
+                        ->DataPtr()),
                 config.n_embd, o_proj_cols, tp_rank * o_proj_cols_local, o_proj_cols_local);
             ReadVectorAllFloat(ifs,
-                               static_cast<float *>(state_dict[std::format("{}.{}.{}", layer_prefix,
-                                                                            nn::TransformerLayer::kLn2LayerName,
-                                                                            nn::RMSNorm::kParamWeightName)]
-                                                        ->DataPtr()),
+                               static_cast<float *>(
+                                   state_dict[std::format("{}.{}.{}", layer_prefix, nn::TransformerLayer::kLn2LayerName,
+                                                          nn::RMSNorm::kParamWeightName)]
+                                       ->DataPtr()),
                                config.n_embd);
             ReadMatrixRowShardFloat(
                 ifs,
-                static_cast<float *>(state_dict[std::format("{}.{}.{}.{}", layer_prefix,
-                                                            nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFc2LayerName,
-                                                            nn::parallel::ColumnParallelLinear::kParamWeightName)]
-                                         ->DataPtr()),
+                static_cast<float *>(
+                    state_dict[std::format("{}.{}.{}.{}", layer_prefix, nn::TransformerLayer::kMlpLayerName,
+                                           nn::MLP::kCFc2LayerName,
+                                           nn::parallel::ColumnParallelLinear::kParamWeightName)]
+                        ->DataPtr()),
                 config.ffn_hidden_size, config.n_embd, tp_rank * ffn_rows_local, ffn_rows_local);
             ReadMatrixRowShardFloat(
                 ifs,
@@ -192,25 +194,22 @@ std::shared_ptr<Model> LoadFromFM9GBin(const std::string &filepath) {
                 config.ffn_hidden_size, config.n_embd, tp_rank * ffn_rows_local, ffn_rows_local);
             ReadMatrixColShardFloat(
                 ifs,
-                static_cast<float *>(state_dict[std::format("{}.{}.{}.{}", layer_prefix,
-                                                            nn::TransformerLayer::kMlpLayerName,
-                                                            nn::MLP::kCProjLayerName,
-                                                            nn::parallel::RowParallelLinear::kParamWeightName)]
-                                         ->DataPtr()),
+                static_cast<float *>(
+                    state_dict[std::format("{}.{}.{}.{}", layer_prefix, nn::TransformerLayer::kMlpLayerName,
+                                           nn::MLP::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)]
+                        ->DataPtr()),
                 config.n_embd, config.ffn_hidden_size, tp_rank * ffn_rows_local, ffn_rows_local);
             ++local_layer_index;
         } else {
             const size_t layer_bytes
                 = (static_cast<size_t>(config.n_embd) + static_cast<size_t>(config.q_lora_rank) * config.n_embd
-                   + static_cast<size_t>(config.q_lora_rank)
-                   + static_cast<size_t>(q_b_rows) * config.q_lora_rank
+                   + static_cast<size_t>(config.q_lora_rank) + static_cast<size_t>(q_b_rows) * config.q_lora_rank
                    + static_cast<size_t>(config.kv_lora_rank + config.qk_rope_head_dim) * config.n_embd
-                   + static_cast<size_t>(config.kv_lora_rank)
-                   + static_cast<size_t>(kv_b_rows) * config.kv_lora_rank
+                   + static_cast<size_t>(config.kv_lora_rank) + static_cast<size_t>(kv_b_rows) * config.kv_lora_rank
                    + static_cast<size_t>(config.n_embd) * o_proj_cols + static_cast<size_t>(config.n_embd)
                    + 2 * static_cast<size_t>(config.ffn_hidden_size) * config.n_embd
                    + static_cast<size_t>(config.n_embd) * config.ffn_hidden_size)
-                  * sizeof(float);
+                * sizeof(float);
             ifs.seekg(layer_bytes, std::ios::cur);
         }
     }

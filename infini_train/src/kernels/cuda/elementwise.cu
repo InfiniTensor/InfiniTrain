@@ -1216,46 +1216,45 @@ std::shared_ptr<Tensor> SigmoidBackward(const std::shared_ptr<Tensor> &output,
 
 std::shared_ptr<Tensor> GELUForward(const std::shared_ptr<Tensor> &input) {
     DISPATCH(input->Dtype(),
-             return UnaryForward(input, [] __device__(auto x) {
-                 using T = decltype(x);
-                 const float xf = Cast<float>(x);
-                 constexpr float kAlpha = 0.7978845608028654f;
-                 constexpr float kBeta = 0.044715f;
-                 return Cast<T>(0.5f * xf * (1.0f + tanhf(kAlpha * (xf + kBeta * xf * xf * xf))));
-             });
+             return UnaryForward(input,
+                                 [] __device__(auto x) {
+                                     using T = decltype(x);
+                                     const float xf = Cast<float>(x);
+                                     constexpr float kAlpha = 0.7978845608028654f;
+                                     constexpr float kBeta = 0.044715f;
+                                     return Cast<T>(0.5f * xf * (1.0f + tanhf(kAlpha * (xf + kBeta * xf * xf * xf))));
+                                 });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
-std::shared_ptr<Tensor> GELUBackward(const std::shared_ptr<Tensor> &input,
-                                     const std::shared_ptr<Tensor> &grad_output) {
-    DISPATCH(grad_output->Dtype(),
-             return UnaryBackward(grad_output, input, [] __device__(auto x) {
-                 using T = decltype(x);
-                 const float xf = Cast<float>(x);
-                 const float x2 = xf * xf;
-                 constexpr float kAlpha = 0.7978845608028654f;
-                 constexpr float kBeta = 0.044715f;
-                 const float t = tanhf(kAlpha * (xf + kBeta * xf * x2));
-                 return Cast<T>(0.5f * (1.0f + t)
-                                + 0.5f * xf * (1.0f - t * t) * kAlpha * (1.0f + 3.0f * kBeta * x2));
-             });
+std::shared_ptr<Tensor> GELUBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &grad_output) {
+    DISPATCH(grad_output->Dtype(), return UnaryBackward(grad_output, input,
+                                                        [] __device__(auto x) {
+                                                            using T = decltype(x);
+                                                            const float xf = Cast<float>(x);
+                                                            const float x2 = xf * xf;
+                                                            constexpr float kAlpha = 0.7978845608028654f;
+                                                            constexpr float kBeta = 0.044715f;
+                                                            const float t = tanhf(kAlpha * (xf + kBeta * xf * x2));
+                                                            return Cast<T>(0.5f * (1.0f + t)
+                                                                           + 0.5f * xf * (1.0f - t * t) * kAlpha
+                                                                                 * (1.0f + 3.0f * kBeta * x2));
+                                                        });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
 std::shared_ptr<Tensor> SiLUForward(const std::shared_ptr<Tensor> &input) {
-    DISPATCH(input->Dtype(),
-             return UnaryForward(input, [] __device__(auto x) { return Mul(x, Sigmoid(x)); });
+    DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return Mul(x, Sigmoid(x)); });
              , INFINI_ALL_FLOATING_TYPES)
 }
 
-std::shared_ptr<Tensor> SiLUBackward(const std::shared_ptr<Tensor> &input,
-                                     const std::shared_ptr<Tensor> &grad_output) {
-    DISPATCH(grad_output->Dtype(),
-             return UnaryBackward(grad_output, input, [] __device__(auto x) {
-                 using T = decltype(x);
-                 const T sigmoid = Sigmoid(x);
-                 return Mul(sigmoid, Add(T{1}, Mul(x, Sub(T{1}, sigmoid))));
-             });
+std::shared_ptr<Tensor> SiLUBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &grad_output) {
+    DISPATCH(grad_output->Dtype(), return UnaryBackward(grad_output, input,
+                                                        [] __device__(auto x) {
+                                                            using T = decltype(x);
+                                                            const T sigmoid = Sigmoid(x);
+                                                            return Mul(sigmoid, Add(T{1}, Mul(x, Sub(T{1}, sigmoid))));
+                                                        });
              , INFINI_ALL_FLOATING_TYPES)
 }
 } // namespace infini_train::kernels::cuda

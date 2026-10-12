@@ -13,8 +13,7 @@ class Resampler : public infini_train::nn::CloneableModule<Resampler> {
 public:
     static constexpr char kType[] = "FM9GVResampler";
 
-    Resampler(int64_t num_queries = 64, int64_t embed_dim = 2560, int64_t num_heads = 16,
-              int64_t kv_dim = 1152);
+    Resampler(int64_t num_queries = 64, int64_t embed_dim = 2560, int64_t num_heads = 16, int64_t kv_dim = 1152);
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &inputs) override;

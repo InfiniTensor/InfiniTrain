@@ -48,8 +48,7 @@ VisionEmbeddings::VisionEmbeddings(const VisionConfig &config) : CloneableModule
         = std::make_shared<nn::Embedding>(positions_per_side * positions_per_side, config.hidden_size);
 }
 
-std::vector<std::shared_ptr<Tensor>>
-VisionEmbeddings::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
+std::vector<std::shared_ptr<Tensor>> VisionEmbeddings::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
     CHECK_EQ(inputs.size(), 2);
     const auto &pixels = inputs[0];
     const auto &target_sizes = inputs[1];
@@ -64,21 +63,18 @@ VisionEmbeddings::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
     CHECK_EQ(height * config_.patch_size, pixels->Dims()[2]);
     CHECK_EQ(width * config_.patch_size, pixels->Dims()[3]);
 
-    auto patches = pixels->View(
-        {batch, config_.num_channels, height, config_.patch_size, width, config_.patch_size});
+    auto patches = pixels->View({batch, config_.num_channels, height, config_.patch_size, width, config_.patch_size});
     patches = patches->Transpose(1, 2)->Transpose(2, 4)->Transpose(3, 4)->Contiguous();
-    patches = patches->View(
-        {batch, height * width, config_.num_channels * config_.patch_size * config_.patch_size});
+    patches = patches->View({batch, height * width, config_.num_channels * config_.patch_size * config_.patch_size});
     auto embeddings = (*modules_["patch_embedding"])({patches})[0];
 
     auto sizes_cpu = target_sizes->GetDevice().type() == Device::DeviceType::kCPU
-                         ? target_sizes
-                         : std::make_shared<Tensor>(target_sizes->To(Device()));
+                       ? target_sizes
+                       : std::make_shared<Tensor>(target_sizes->To(Device()));
     const auto *sizes = static_cast<const int64_t *>(sizes_cpu->DataPtr());
     const std::vector<int64_t> target_size_values(sizes, sizes + target_sizes->NumElements());
     const std::vector<int64_t> position_shape{batch, height * width};
-    if (!cached_position_ids_ || cached_target_sizes_ != target_size_values
-        || cached_position_shape_ != position_shape
+    if (!cached_position_ids_ || cached_target_sizes_ != target_size_values || cached_position_shape_ != position_shape
         || cached_position_ids_->GetDevice() != pixels->GetDevice()) {
         auto position_ids = std::make_shared<Tensor>(position_shape, DataType::kINT64);
         auto *ids = static_cast<int64_t *>(position_ids->DataPtr());
@@ -93,8 +89,7 @@ VisionEmbeddings::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
                 const int64_t bucket_row = row * positions_per_side / target_height;
                 for (int64_t col = 0; col < target_width; ++col) {
                     const int64_t bucket_col = col * positions_per_side / target_width;
-                    ids[b * height * width + row * target_width + col]
-                        = bucket_row * positions_per_side + bucket_col;
+                    ids[b * height * width + row * target_width + col] = bucket_row * positions_per_side + bucket_col;
                 }
             }
         }
@@ -113,8 +108,7 @@ VisionAttention::VisionAttention(const VisionConfig &config) : CloneableModule(k
     modules_["out_proj"] = std::make_shared<nn::Linear>(config.hidden_size, config.hidden_size);
 }
 
-std::vector<std::shared_ptr<Tensor>>
-VisionAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
+std::vector<std::shared_ptr<Tensor>> VisionAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
     CHECK(inputs.size() == 1 || inputs.size() == 2);
     const int64_t batch = inputs[0]->Dims()[0];
     const int64_t sequence = inputs[0]->Dims()[1];
@@ -129,7 +123,9 @@ VisionAttention::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
                      ->View({batch, sequence, config_.num_attention_heads, head_dim})
                      ->Transpose(1, 2);
     auto attention = query->Matmul(key->Transpose(-2, -1)) * (1.0f / std::sqrt(static_cast<float>(head_dim)));
-    if (inputs.size() == 2) { attention = attention + inputs[1]; }
+    if (inputs.size() == 2) {
+        attention = attention + inputs[1];
+    }
     attention = nn::function::Softmax(attention, -1);
     auto output = attention->Matmul(value)->Transpose(1, 2)->Contiguous()->View({batch, sequence, config_.hidden_size});
     return (*modules_["out_proj"])({output});
@@ -149,19 +145,20 @@ std::vector<std::shared_ptr<Tensor>> VisionMLP::Forward(const std::vector<std::s
 
 VisionEncoderLayer::VisionEncoderLayer(const VisionConfig &config) : CloneableModule(kType) {
     modules_["self_attn"] = std::make_shared<VisionAttention>(config);
-    modules_["layer_norm1"] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.hidden_size}, config.layer_norm_eps);
+    modules_["layer_norm1"]
+        = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.hidden_size}, config.layer_norm_eps);
     modules_["mlp"] = std::make_shared<VisionMLP>(config);
-    modules_["layer_norm2"] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.hidden_size}, config.layer_norm_eps);
+    modules_["layer_norm2"]
+        = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.hidden_size}, config.layer_norm_eps);
 }
 
-std::vector<std::shared_ptr<Tensor>>
-VisionEncoderLayer::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
+std::vector<std::shared_ptr<Tensor>> VisionEncoderLayer::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
     CHECK(inputs.size() == 1 || inputs.size() == 2);
     auto hidden = inputs[0];
     auto normalized = (*modules_["layer_norm1"])({hidden})[0];
-    hidden = hidden + (*modules_["self_attn"])(inputs.size() == 2
-                                                    ? std::vector<std::shared_ptr<Tensor>>{normalized, inputs[1]}
-                                                    : std::vector<std::shared_ptr<Tensor>>{normalized})[0];
+    hidden = hidden
+           + (*modules_["self_attn"])(inputs.size() == 2 ? std::vector<std::shared_ptr<Tensor>>{normalized, inputs[1]}
+                                                         : std::vector<std::shared_ptr<Tensor>>{normalized})[0];
     normalized = (*modules_["layer_norm2"])({hidden})[0];
     return {hidden + (*modules_["mlp"])({normalized})[0]};
 }
@@ -179,24 +176,21 @@ VisionTransformer::VisionTransformer(const VisionConfig &config) : CloneableModu
         = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.hidden_size}, config.layer_norm_eps);
 }
 
-std::vector<std::shared_ptr<Tensor>>
-VisionTransformer::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
+std::vector<std::shared_ptr<Tensor>> VisionTransformer::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
     CHECK_EQ(inputs.size(), 2) << "VisionTransformer expects {pixel_values, target_sizes}";
     auto hidden = (*modules_["embeddings"])(inputs)[0];
     const int64_t batch = hidden->Dims()[0];
     const int64_t sequence = hidden->Dims()[1];
     auto sizes_cpu = inputs[1]->GetDevice().type() == Device::DeviceType::kCPU
-                         ? inputs[1]
-                         : std::make_shared<Tensor>(inputs[1]->To(Device()));
+                       ? inputs[1]
+                       : std::make_shared<Tensor>(inputs[1]->To(Device()));
     const auto *sizes = static_cast<const int64_t *>(sizes_cpu->DataPtr());
     bool has_padding = false;
-    for (int64_t b = 0; b < batch; ++b) {
-        has_padding |= sizes[2 * b] * sizes[2 * b + 1] < sequence;
-    }
+    for (int64_t b = 0; b < batch; ++b) { has_padding |= sizes[2 * b] * sizes[2 * b + 1] < sequence; }
     std::shared_ptr<Tensor> attention_mask;
     if (has_padding) {
-        attention_mask = std::make_shared<Tensor>(
-            std::vector<int64_t>{batch, 1, sequence, sequence}, DataType::kFLOAT32);
+        attention_mask
+            = std::make_shared<Tensor>(std::vector<int64_t>{batch, 1, sequence, sequence}, DataType::kFLOAT32);
         auto *mask = static_cast<float *>(attention_mask->DataPtr());
         for (int64_t b = 0; b < batch; ++b) {
             const int64_t valid = sizes[2 * b] * sizes[2 * b + 1];
