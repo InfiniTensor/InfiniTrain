@@ -2,12 +2,12 @@
 
 #include <utility>
 
-#include "infini_train/include/nn/parallel/parallel_functional.h"
+#include "infini_train/include/nn/parallel/comm.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
-AllReducePostAccumulateHook::AllReducePostAccumulateHook(infini_train::nn::parallel::function::ReduceOpType reduce_op,
+AllReducePostAccumulateHook::AllReducePostAccumulateHook(infini_train::nn::parallel::comm::ReduceOpType reduce_op,
                                                          const infini_train::nn::parallel::ProcessGroup *pg,
                                                          std::shared_ptr<const std::atomic_bool> enabled)
     : reduce_op_(reduce_op),
@@ -18,6 +18,6 @@ void AllReducePostAccumulateHook::operator()(const std::shared_ptr<Tensor> &tens
     if (enabled_ && !enabled_->load(std::memory_order_relaxed)) {
         return;
     }
-    infini_train::nn::parallel::function::AllReduce(tensor, reduce_op_, pg_);
+    infini_train::nn::parallel::comm::AllReduce(tensor, reduce_op_, pg_);
 }
 } // namespace infini_train::autograd

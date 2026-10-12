@@ -9,6 +9,7 @@
 
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
@@ -410,8 +411,7 @@ void Reducer::FinalizeBucketDense(size_t bucket_index) {
         // FIXME(zbl): support custom hook later
         LOG(FATAL) << "Custom hook is not supported now";
     } else {
-        const auto reduce_op
-            = ddp_config_.average_in_collective ? function::ReduceOpType::kAvg : function::ReduceOpType::kSum;
+        const auto reduce_op = ddp_config_.average_in_collective ? comm::ReduceOpType::kAvg : comm::ReduceOpType::kSum;
         bucket.work = ddp_pg->AllReduce(bucket.contents, reduce_op, true);
     }
 }

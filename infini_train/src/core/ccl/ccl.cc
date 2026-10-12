@@ -6,6 +6,8 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
+
 namespace infini_train::core {
 
 void CclImpl::GroupStart() const { LOG(FATAL) << "CclImpl::GroupStart is not implemented."; }
@@ -29,7 +31,7 @@ void CclImpl::CommInitRank(CclComm **comm, int nranks, const CclUniqueId &unique
 void CclImpl::CommDestroy(CclComm *comm) const { LOG(FATAL) << "CclImpl::CommDestroy is not implemented."; }
 
 void CclImpl::AllReduce(const void *sendbuff, void *recvbuff, size_t count, DataType dtype,
-                        nn::parallel::function::ReduceOpType reduce_op, const CclComm *comm, Stream *stream) const {
+                        nn::parallel::comm::ReduceOpType reduce_op, const CclComm *comm, Stream *stream) const {
     LOG(FATAL) << "CclImpl::AllReduce is not implemented.";
 }
 
@@ -39,8 +41,7 @@ void CclImpl::Broadcast(const void *sendbuff, void *recvbuff, size_t count, Data
 }
 
 void CclImpl::Reduce(const void *sendbuff, void *recvbuff, size_t count, DataType dtype,
-                     nn::parallel::function::ReduceOpType reduce_op, int root, const CclComm *comm,
-                     Stream *stream) const {
+                     nn::parallel::comm::ReduceOpType reduce_op, int root, const CclComm *comm, Stream *stream) const {
     LOG(FATAL) << "CclImpl::Reduce is not implemented.";
 }
 
@@ -50,7 +51,7 @@ void CclImpl::AllGather(const void *sendbuff, void *recvbuff, size_t count, Data
 }
 
 void CclImpl::ReduceScatter(const void *sendbuff, void *recvbuff, size_t recv_count, DataType dtype,
-                            nn::parallel::function::ReduceOpType reduce_op, const CclComm *comm, Stream *stream) const {
+                            nn::parallel::comm::ReduceOpType reduce_op, const CclComm *comm, Stream *stream) const {
     LOG(FATAL) << "CclImpl::ReduceScatter is not implemented.";
 }
 
