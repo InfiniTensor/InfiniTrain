@@ -18,13 +18,9 @@ struct Layout {
     int strides[AXIS_COUNT]{1, 1, 1, 1};
 
     void InitStrides();
-    int RankOf(int dp, int tp, int pp) const;
     int RankOf(int dp, int tp, int cp, int pp) const;
-    void CoordOf(int rank, int &dp, int &tp, int &pp) const;
     void CoordOf(int rank, int &dp, int &tp, int &cp, int &pp) const;
-    int GroupId(Axis target, int dp, int tp, int pp) const;
     int GroupId(Axis target, int dp, int tp, int cp, int pp) const;
-    std::vector<int> GroupRanks(Axis target, int fixed_dp, int fixed_tp, int fixed_pp) const;
     std::vector<int> GroupRanks(Axis target, int fixed_dp, int fixed_tp, int fixed_cp, int fixed_pp) const;
 };
 
@@ -102,12 +98,6 @@ private:
 };
 
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                       int pipeline_parallel_size, int virtual_pipeline_parallel) {
-    GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
-                               /*context_parallel_size=*/1, /*context_parallel_comm_type=*/"p2p",
-                               pipeline_parallel_size, virtual_pipeline_parallel);
-}
-inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
                        int context_parallel_size, const std::string &context_parallel_comm_type,
                        int pipeline_parallel_size, int virtual_pipeline_parallel,
                        const std::string &hierarchical_context_parallel_sizes = "") {
@@ -140,29 +130,16 @@ inline int GetVirtualPipelineParallelSize() { return GlobalEnv::Instance().virtu
 // =========================
 
 /**
- * @brief Get the global rank corresponding to the given (dp, tp, pp) coordinate.
+ * @brief Get the global rank corresponding to the given (dp, tp, cp, pp) coordinate.
  */
-inline int GetRankOf(int dp, int tp, int pp) { return GlobalEnv::Instance().layout().RankOf(dp, tp, pp); }
 inline int GetRankOf(int dp, int tp, int cp, int pp) { return GlobalEnv::Instance().layout().RankOf(dp, tp, cp, pp); }
 /**
- * @brief Get the (dp, tp, pp) coordinate corresponding to the given global rank.
+ * @brief Get the (dp, tp, cp, pp) coordinate corresponding to the given global rank.
  */
-inline void GetCoordOf(int rank, int &dp, int &tp, int &pp) {
-    return GlobalEnv::Instance().layout().CoordOf(rank, dp, tp, pp);
-}
 inline void GetCoordOf(int rank, int &dp, int &tp, int &cp, int &pp) {
     return GlobalEnv::Instance().layout().CoordOf(rank, dp, tp, cp, pp);
 }
 
-/**
- * @brief Get the group ID that the (dp, tp, pp) coordinate belongs to along a given parallel axis.
- */
-inline int GetGroupId(Axis target, int dp, int tp, int pp) {
-    return GlobalEnv::Instance().layout().GroupId(target, dp, tp, pp);
-}
-inline int GetGroupId(Axis target, int dp, int tp, int cp, int pp) {
-    return GlobalEnv::Instance().layout().GroupId(target, dp, tp, cp, pp);
-}
 /**
  * @brief Get the group ID that a given rank belongs to along a specific parallel axis.
  */
@@ -170,17 +147,6 @@ inline int GetGroupId(Axis target, int rank) {
     int dp, tp, cp, pp;
     GetCoordOf(rank, dp, tp, cp, pp);
     return GlobalEnv::Instance().layout().GroupId(target, dp, tp, cp, pp);
-}
-
-/**
- * @brief Get all ranks that belong to the same group as the given (dp, tp, pp) coordinate
- *        along a specified parallel axis (e.g., all ranks in the same TP group).
- */
-inline std::vector<int> GetGroupRanks(Axis target, int dp, int tp, int pp) {
-    return GlobalEnv::Instance().layout().GroupRanks(target, dp, tp, pp);
-}
-inline std::vector<int> GetGroupRanks(Axis target, int dp, int tp, int cp, int pp) {
-    return GlobalEnv::Instance().layout().GroupRanks(target, dp, tp, cp, pp);
 }
 
 /**

@@ -31,8 +31,6 @@ void Layout::InitStrides() {
     }
 }
 
-int Layout::RankOf(int dp, int tp, int pp) const { return RankOf(dp, tp, /*cp=*/0, pp); }
-
 int Layout::RankOf(int dp, int tp, int cp, int pp) const {
     const int coord[AXIS_COUNT] = {dp, tp, cp, pp};
     int r = 0;
@@ -43,19 +41,12 @@ int Layout::RankOf(int dp, int tp, int cp, int pp) const {
     return r;
 }
 
-void Layout::CoordOf(int rank, int &dp, int &tp, int &pp) const {
-    int cp = 0;
-    CoordOf(rank, dp, tp, cp, pp);
-}
-
 void Layout::CoordOf(int rank, int &dp, int &tp, int &cp, int &pp) const {
     dp = (rank / strides[DP]) % sizes[DP];
     tp = (rank / strides[TP]) % sizes[TP];
     cp = (rank / strides[CP]) % sizes[CP];
     pp = (rank / strides[PP]) % sizes[PP];
 }
-
-int Layout::GroupId(Axis target, int dp, int tp, int pp) const { return GroupId(target, dp, tp, /*cp=*/0, pp); }
 
 int Layout::GroupId(Axis target, int dp, int tp, int cp, int pp) const {
     int id = 0;
@@ -70,10 +61,6 @@ int Layout::GroupId(Axis target, int dp, int tp, int cp, int pp) const {
         mult *= sizes[ax];
     }
     return id;
-}
-
-std::vector<int> Layout::GroupRanks(Axis target, int fixed_dp, int fixed_tp, int fixed_pp) const {
-    return GroupRanks(target, fixed_dp, fixed_tp, /*fixed_cp=*/0, fixed_pp);
 }
 
 std::vector<int> Layout::GroupRanks(Axis target, int fixed_dp, int fixed_tp, int fixed_cp, int fixed_pp) const {

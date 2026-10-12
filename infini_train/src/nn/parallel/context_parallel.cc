@@ -13,6 +13,7 @@
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/core/runtime/stream_guard.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/parallel/global.h"
@@ -149,20 +150,6 @@ core::Stream *GetCPComputeStream(Device device) {
     }
     return it->second.get();
 }
-
-class RuntimeStreamGuard {
-public:
-    RuntimeStreamGuard(Device device, core::Stream *stream)
-        : device_(device), impl_(core::GetDeviceGuardImpl(device.type())),
-          previous_stream_(impl_->ExchangeStream(device, stream)) {}
-
-    ~RuntimeStreamGuard() { impl_->ExchangeStream(device_, previous_stream_); }
-
-private:
-    Device device_;
-    core::DeviceGuardImpl *impl_;
-    core::Stream *previous_stream_;
-};
 
 std::vector<std::shared_ptr<Work>> P2PCommunicate(int rank, const std::vector<std::shared_ptr<Tensor>> &send_tensors,
                                                   int send_dst,
@@ -375,7 +362,7 @@ public:
         // Perform `cp_size` rounds to circulate K/V chunks across all CP ranks.
         for (int step = 0; step < cp_size; ++step) {
             auto *compute_stream = step % 2 == 0 ? main_compute_stream : cp_compute_stream;
-            RuntimeStreamGuard stream_guard(q->GetDevice(), compute_stream);
+            core::StreamGuard stream_guard(q->GetDevice(), compute_stream);
 
             if (!p2p_works.empty()) {
                 for (const auto &work : p2p_works) { work->WaitNonBlocking(); }
@@ -586,7 +573,7 @@ public:
 
         for (int step = 0; step < cp_size; ++step) {
             auto *compute_stream = step % 2 == 0 ? main_compute_stream : cp_compute_stream;
-            RuntimeStreamGuard stream_guard(q->GetDevice(), compute_stream);
+            core::StreamGuard stream_guard(q->GetDevice(), compute_stream);
 
             if (!kv_p2p_works.empty()) {
                 for (const auto &work : kv_p2p_works) { work->WaitNonBlocking(); }
@@ -755,6 +742,8 @@ std::shared_ptr<Tensor> SliceAlongCPRegionFunc(const std::shared_ptr<Tensor> &in
     return input->Slice(normalized_dim, start, start + local_size, 1)->Contiguous();
 }
 
+namespace {
+
 std::shared_ptr<Tensor> GatherFromCPRegionFunc(const std::shared_ptr<Tensor> &input) {
     if (global::GetContextParallelSize() == 1) {
         return input;
@@ -856,6 +845,8 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2AKVP2P(const std::shared_ptr<Tens
     auto output = std::make_shared<AttnWithCPAndKVP2P>(p2p_group)->Apply({q_shard, k_shard, v_shard, ring_mask})[0];
     return AllToAllHeadToSeqCPRegionFunc(output, a2a_group);
 }
+
+} // namespace
 
 std::shared_ptr<Tensor> AttnForwardFuncWithCP(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
                                               const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask) {
