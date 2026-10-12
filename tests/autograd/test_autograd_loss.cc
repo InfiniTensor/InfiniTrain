@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -44,6 +45,33 @@ TEST_P(AutogradLossTest, CrossEntropyForwardAndBackwardValues) {
             const float probability = std::exp(logits_values[row * 3 + col]) / sum;
             expected_grad[row * 3 + col] = 0.5f * (probability - (col == 0 ? 1.0f : 0.0f));
         }
+    }
+    test::ExpectTensorNear(grad_inputs[0], expected_grad, 1e-5f);
+}
+
+TEST_P(AutogradLossTest, CrossEntropyIgnoresMaskedTargets) {
+    std::vector<float> logits_values{1.0f, 2.0f, 3.0f, 2.0f, 1.0f, 0.0f};
+    auto logits
+        = std::make_shared<Tensor>(logits_values.data(), std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
+    std::vector<int64_t> target_values{0, -100};
+    auto target_cpu = std::make_shared<Tensor>(std::vector<int64_t>{2}, DataType::kINT64);
+    std::copy(target_values.begin(), target_values.end(), static_cast<int64_t *>(target_cpu->DataPtr()));
+    auto target = std::make_shared<Tensor>(target_cpu->To(GetDevice()));
+
+    auto cross_entropy = std::make_shared<autograd::CrossEntropy>(-100);
+    auto result = cross_entropy->Apply({logits, target});
+
+    const float row0_sum = std::exp(1.0f) + std::exp(2.0f) + std::exp(3.0f);
+    test::ExpectTensorNear(result[0], std::log(row0_sum) - 1.0f, 1e-5f);
+
+    auto grad_output = std::make_shared<Tensor>(std::vector<int64_t>{}, DataType::kFLOAT32, GetDevice());
+    grad_output->Fill(1.0f);
+    auto grad_inputs = cross_entropy->Backward({grad_output});
+
+    std::vector<float> expected_grad(logits_values.size(), 0.0f);
+    for (int col = 0; col < 3; ++col) {
+        const float probability = std::exp(logits_values[col]) / row0_sum;
+        expected_grad[col] = probability - (col == 0 ? 1.0f : 0.0f);
     }
     test::ExpectTensorNear(grad_inputs[0], expected_grad, 1e-5f);
 }

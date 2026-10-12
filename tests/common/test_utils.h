@@ -117,6 +117,10 @@ protected:
 #define INFINI_TRAIN_REGISTER_TEST(TestName)                                                                           \
     INSTANTIATE_TEST_SUITE_P(CPU, TestName, ::testing::Values(infini_train::Device::DeviceType::kCPU));                \
     INSTANTIATE_TEST_SUITE_P(CUDA, TestName, ::testing::Values(infini_train::Device::DeviceType::kCUDA))
+#elif defined(USE_DCU)
+#define INFINI_TRAIN_REGISTER_TEST(TestName)                                                                           \
+    INSTANTIATE_TEST_SUITE_P(CPU, TestName, ::testing::Values(infini_train::Device::DeviceType::kCPU));                \
+    INSTANTIATE_TEST_SUITE_P(DCU, TestName, ::testing::Values(infini_train::Device::DeviceType::kDCU))
 #else
 #define INFINI_TRAIN_REGISTER_TEST(TestName)                                                                           \
     INSTANTIATE_TEST_SUITE_P(CPU, TestName, ::testing::Values(infini_train::Device::DeviceType::kCPU))
