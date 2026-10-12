@@ -27,6 +27,8 @@ class CpuGuardImpl final : public DeviceGuardImpl {
   // Stream management (explicitly unsupported for now)
   Stream *GetStream(Device device) const override;
 
+  Stream *ExchangeStream(Device device, Stream *stream) const override;
+
   Stream *CreateStream(Device device) const override;
 
   Stream *CreateStreamWithPriority(Device device, int priority) const override;
