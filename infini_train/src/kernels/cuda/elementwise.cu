@@ -283,6 +283,36 @@ __global__ void UnaryBackwardKernel(T *output, Func fn, size_t num_elements, siz
     }
 }
 
+// ReLU backward is a select rather than a mask multiply: grad_output * 0 is -0.0 for negative
+// gradients and NaN for NaN/+-inf gradients, while torch always writes +0.0 at masked positions.
+// '<=' also lets the gradient through at NaN inputs, as torch does.
+template <typename T>
+__global__ void ReLUBackwardKernel(T *grad_input, const T *input, const T *grad_output, size_t num_elements,
+                                   size_t offset) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x + offset;
+
+    if (idx < num_elements) {
+        grad_input[idx] = input[idx] <= T(0) ? T(0) : grad_output[idx];
+    }
+}
+
+template <typename T>
+void LaunchReLUBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &grad_output,
+                        const std::shared_ptr<Tensor> &grad_input) {
+    auto device = grad_input->GetDevice();
+    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                                  ->cuda_stream();
+    T *grad_input_ptr = static_cast<T *>(grad_input->DataPtr());
+
+    LaunchKernel<T>(
+        [&](dim3 grid, dim3 block, size_t offset, const T *input_ptr, const T *grad_output_ptr) {
+            ReLUBackwardKernel<<<grid, block, 0, cuda_stream>>>(grad_input_ptr, input_ptr, grad_output_ptr,
+                                                                grad_input->NumElements(), offset);
+        },
+        grad_input, input, grad_output);
+}
+
 enum class BF16Path { NoBroadcast, TwoPassHist, BlockReduce };
 
 // Lightweight and stable selector for bf16/half execution paths.
@@ -1208,6 +1238,26 @@ std::shared_ptr<Tensor> SigmoidBackward(const std::shared_ptr<Tensor> &output,
         return UnaryBackward(grad_output, output, [] __device__(auto x) { return Mul(x, Sub(decltype(x){1}, x)); });
         , INFINI_ALL_FLOATING_TYPES)
 }
+
+std::shared_ptr<Tensor> ReLUForward(const std::shared_ptr<Tensor> &input) {
+    // Strict '<' keeps NaN and -0.0 intact (both compare false), matching torch.relu.
+    DISPATCH(input->Dtype(),
+             return UnaryForward(input, [] __device__(auto x) { return x < decltype(x){0} ? decltype(x){0} : x; });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> ReLUBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &grad_output) {
+    CHECK(input->Dtype() == grad_output->Dtype()) << "ReLU backward requires matching dtypes";
+
+    auto grad_input = std::make_shared<Tensor>(input->Dims(), input->Dtype(), input->GetDevice());
+    switch (grad_output->Dtype()) {
+        DISPATCH_CASE(WRAP(LaunchReLUBackward<float>(input, grad_output, grad_input);), DataType::kFLOAT32)
+        DISPATCH_CASE(WRAP(LaunchReLUBackward<nv_bfloat16>(input, grad_output, grad_input);), DataType::kBFLOAT16)
+    default:
+        LOG_LOC(FATAL, "CUDA ReLU backward: 'Unsupported data type'");
+    }
+    return grad_input;
+}
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_ELEMENTWISE_KERNEL(kernel_name)                                                                  \
@@ -1257,5 +1307,7 @@ REGISTER_CUDA_ELEMENTWISE_KERNEL(DivForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(DivBackward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(SigmoidForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(SigmoidBackward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(ReLUForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(ReLUBackward)
 
 #undef REGISTER_CUDA_ELEMENTWISE_KERNEL
