@@ -30,4 +30,48 @@ std::vector<std::shared_ptr<Tensor>> Sigmoid::Backward(const std::vector<std::sh
     auto device = output->GetDevice().type();
     return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SigmoidBackward"}, output, grad_output)};
 }
+
+std::vector<std::shared_ptr<Tensor>> GELU::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1);
+    const auto &input = input_tensors[0];
+    auto device = input->GetDevice().type();
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "GELUForward"}, input)};
+}
+
+void GELU::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                        const std::vector<std::shared_ptr<Tensor>> &) {
+    ctx_.SaveForBackward({input_tensors[0]});
+}
+
+std::vector<std::shared_ptr<Tensor>> GELU::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 1);
+    CHECK_EQ(grad_outputs.size(), 1);
+    const auto &input = saved_tensors[0];
+    const auto &grad_output = grad_outputs[0];
+    auto device = input->GetDevice().type();
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "GELUBackward"}, input, grad_output)};
+}
+
+std::vector<std::shared_ptr<Tensor>> SiLU::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+    CHECK_EQ(input_tensors.size(), 1);
+    const auto &input = input_tensors[0];
+    auto device = input->GetDevice().type();
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SiLUForward"}, input)};
+}
+
+void SiLU::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                        const std::vector<std::shared_ptr<Tensor>> &) {
+    ctx_.SaveForBackward({input_tensors[0]});
+}
+
+std::vector<std::shared_ptr<Tensor>> SiLU::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+    auto saved_tensors = ctx_.GetSavedTensors();
+    CHECK_EQ(saved_tensors.size(), 1);
+    CHECK_EQ(grad_outputs.size(), 1);
+    const auto &input = saved_tensors[0];
+    const auto &grad_output = grad_outputs[0];
+    auto device = input->GetDevice().type();
+    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SiLUBackward"}, input, grad_output)};
+}
 } // namespace infini_train::autograd

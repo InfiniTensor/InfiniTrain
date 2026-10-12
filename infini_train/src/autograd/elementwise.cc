@@ -397,15 +397,26 @@ std::vector<std::shared_ptr<Tensor>> Add::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
+    CHECK_EQ(ctx_.needs_input_grad().size(), 2);
+    const bool need_grad_a = ctx_.needs_input_grad()[0];
+    const bool need_grad_b = ctx_.needs_input_grad()[1];
+    if (!need_grad_a && !need_grad_b) {
+        return {nullptr, nullptr};
+    }
+    // BinaryForward currently uses a as the output shape, so grad_a is always
+    // the incoming gradient. Avoid launching a reduction kernel when b is frozen.
+    if (need_grad_a && !need_grad_b) {
+        return {grad_output, nullptr};
+    }
     // Fast path: no broadcast — grad_a and grad_b are both just grad_output
     if (a_dims_ == b_dims_) {
-        return {grad_output, grad_output};
+        return {need_grad_a ? grad_output : nullptr, need_grad_b ? grad_output : nullptr};
     }
 
     auto device = grad_output->GetDevice().type();
     auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
         {device, "AddBackward"}, grad_output, a_dims_, b_dims_);
-    return {grad_a, grad_b};
+    return {need_grad_a ? grad_a : nullptr, need_grad_b ? grad_b : nullptr};
 }
 
 std::vector<std::shared_ptr<Tensor>> AddScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -443,10 +454,19 @@ std::vector<std::shared_ptr<Tensor>> Sub::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
+    CHECK_EQ(ctx_.needs_input_grad().size(), 2);
+    const bool need_grad_a = ctx_.needs_input_grad()[0];
+    const bool need_grad_b = ctx_.needs_input_grad()[1];
+    if (!need_grad_a && !need_grad_b) {
+        return {nullptr, nullptr};
+    }
+    if (need_grad_a && !need_grad_b) {
+        return {grad_output, nullptr};
+    }
     auto device = grad_output->GetDevice().type();
     auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
         {device, "SubBackward"}, grad_output, a_dims_, b_dims_);
-    return {grad_a, grad_b};
+    return {need_grad_a ? grad_a : nullptr, need_grad_b ? grad_b : nullptr};
 }
 
 std::vector<std::shared_ptr<Tensor>> Mul::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
@@ -462,7 +482,11 @@ void Mul::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors
                        const std::vector<std::shared_ptr<Tensor>> &) {
     const auto &a = input_tensors[0];
     const auto &b = input_tensors[1];
-    ctx_.SaveForBackward({a, b});
+    CHECK_EQ(ctx_.needs_input_grad().size(), 2);
+    const bool need_grad_a = ctx_.needs_input_grad()[0];
+    const bool need_grad_b = ctx_.needs_input_grad()[1];
+    // grad_a needs b; grad_b needs a. Do not retain frozen-side activations.
+    ctx_.SaveForBackward({need_grad_b ? a : nullptr, need_grad_a ? b : nullptr});
 }
 
 std::vector<std::shared_ptr<Tensor>> Mul::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
@@ -473,10 +497,24 @@ std::vector<std::shared_ptr<Tensor>> Mul::Backward(const std::vector<std::shared
     CHECK_EQ(grad_outputs.size(), 1);
     const auto &grad_output = grad_outputs[0];
 
+    CHECK_EQ(ctx_.needs_input_grad().size(), 2);
+    const bool need_grad_a = ctx_.needs_input_grad()[0];
+    const bool need_grad_b = ctx_.needs_input_grad()[1];
+    if (!need_grad_a && !need_grad_b) {
+        return {nullptr, nullptr};
+    }
     auto device = grad_output->GetDevice().type();
+    if (need_grad_a && !need_grad_b) {
+        CHECK(b);
+        auto grad_a = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MulForward"}, grad_output, b);
+        return {grad_a, nullptr};
+    }
+
+    CHECK(a);
+    CHECK(b);
     auto [grad_a, grad_b] = Dispatcher::Instance().Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
         {device, "MulBackward"}, grad_output, a, b);
-    return {grad_a, grad_b};
+    return {need_grad_a ? grad_a : nullptr, need_grad_b ? grad_b : nullptr};
 }
 
 std::vector<std::shared_ptr<Tensor>> MulScalar::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {

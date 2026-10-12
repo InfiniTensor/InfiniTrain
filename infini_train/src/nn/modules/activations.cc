@@ -13,12 +13,10 @@ std::vector<std::shared_ptr<Tensor>> Sigmoid::Forward(const std::vector<std::sha
 }
 
 std::vector<std::shared_ptr<Tensor>> NewGELU::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    auto &input = x[0];
-    return {0.5 * input
-            * (1.0 + function::Tanh(std::sqrt(2.0 / M_PI) * (input + 0.044715 * function::Pow(input, 3.0))))};
+    return std::make_shared<autograd::GELU>()->Apply(x);
 }
 
 std::vector<std::shared_ptr<Tensor>> SwiGLU::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    return {x[0] * function::Sigmoid(x[0])};
+    return std::make_shared<autograd::SiLU>()->Apply(x);
 }
 } // namespace infini_train::nn

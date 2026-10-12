@@ -1213,6 +1213,51 @@ std::shared_ptr<Tensor> SigmoidBackward(const std::shared_ptr<Tensor> &output,
         return UnaryBackward(grad_output, output, [] __device__(auto x) { return Mul(x, Sub(decltype(x){1}, x)); });
         , INFINI_ALL_FLOATING_TYPES)
 }
+
+std::shared_ptr<Tensor> GELUForward(const std::shared_ptr<Tensor> &input) {
+    DISPATCH(input->Dtype(),
+             return UnaryForward(input, [] __device__(auto x) {
+                 using T = decltype(x);
+                 const float xf = Cast<float>(x);
+                 constexpr float kAlpha = 0.7978845608028654f;
+                 constexpr float kBeta = 0.044715f;
+                 return Cast<T>(0.5f * xf * (1.0f + tanhf(kAlpha * (xf + kBeta * xf * xf * xf))));
+             });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> GELUBackward(const std::shared_ptr<Tensor> &input,
+                                     const std::shared_ptr<Tensor> &grad_output) {
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, input, [] __device__(auto x) {
+                 using T = decltype(x);
+                 const float xf = Cast<float>(x);
+                 const float x2 = xf * xf;
+                 constexpr float kAlpha = 0.7978845608028654f;
+                 constexpr float kBeta = 0.044715f;
+                 const float t = tanhf(kAlpha * (xf + kBeta * xf * x2));
+                 return Cast<T>(0.5f * (1.0f + t)
+                                + 0.5f * xf * (1.0f - t * t) * kAlpha * (1.0f + 3.0f * kBeta * x2));
+             });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> SiLUForward(const std::shared_ptr<Tensor> &input) {
+    DISPATCH(input->Dtype(),
+             return UnaryForward(input, [] __device__(auto x) { return Mul(x, Sigmoid(x)); });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> SiLUBackward(const std::shared_ptr<Tensor> &input,
+                                     const std::shared_ptr<Tensor> &grad_output) {
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, input, [] __device__(auto x) {
+                 using T = decltype(x);
+                 const T sigmoid = Sigmoid(x);
+                 return Mul(sigmoid, Add(T{1}, Mul(x, Sub(T{1}, sigmoid))));
+             });
+             , INFINI_ALL_FLOATING_TYPES)
+}
 } // namespace infini_train::kernels::cuda
 
 #define REGISTER_CUDA_ELEMENTWISE_KERNEL(kernel_name)                                                                  \
@@ -1262,5 +1307,9 @@ REGISTER_CUDA_ELEMENTWISE_KERNEL(DivForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(DivBackward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(SigmoidForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(SigmoidBackward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(GELUForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(GELUBackward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(SiLUForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(SiLUBackward)
 
 #undef REGISTER_CUDA_ELEMENTWISE_KERNEL

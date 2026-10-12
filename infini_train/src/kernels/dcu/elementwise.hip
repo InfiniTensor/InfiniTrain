@@ -471,10 +471,10 @@ void BinaryBackwardBhistLaunch(FuncA fn_a, FuncB fn_b, T *outA, T *outB, const T
         CastFloatToTBhist<T><<<cgrid, RED_THREADS, 0, stream>>>(outB_accum, outB, K);
         HIP_CHECK(hipGetLastError());
 
-        HIP_CHECK(hipFree(outB_accum));
+        HIP_CHECK(hipFreeAsync(outB_accum, stream));
     }
 
-    HIP_CHECK(hipFree(work));
+    HIP_CHECK(hipFreeAsync(work, stream));
 }
 
 // Backward kernel for binary operators
@@ -753,7 +753,7 @@ void LaunchBackward(FuncA fun_a, FuncB fun_b, const std::shared_ptr<Tensor> &out
         CastFloatToTBhist<T><<<cast_grid, kCastThreads, 0, stream>>>(
             grad_b_accum, output_b_ptr, static_cast<int>(b_num_elements));
         HIP_CHECK(hipGetLastError());
-        HIP_CHECK(hipFree(grad_b_accum));
+        HIP_CHECK(hipFreeAsync(grad_b_accum, stream));
     }
 }
 
@@ -872,7 +872,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
     switch (promoted_type) {
         DISPATCH_CASE(WRAP({
                           if (needs_broadcast) {
-                              grad_a->Fill(0.0f);
+                              // grad_a is written element-for-element; only the
+                              // broadcasted grad_b uses global atomic adds.
                               grad_b->Fill(0.0f);
                           }
                           LaunchBackward<256, float>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims, grad_output_promoted,
@@ -880,10 +881,8 @@ BinaryBackward(const std::shared_ptr<Tensor> &grad_output, const std::shared_ptr
                       }),
                       DataType::kFLOAT32)
         DISPATCH_CASE(WRAP({
-                          if (needs_broadcast) {
-                              grad_a->Fill(0.0f);
-                              grad_b->Fill(0.0f);
-                          }
+                          // All low-precision paths overwrite grad_a directly
+                          // and materialize grad_b through an FP32 workspace.
                           LaunchBackward<256, hip_bfloat16>(fn_a, fn_b, grad_a, grad_b, a_dims, b_dims,
                                                            grad_output_promoted, a_promoted, b_promoted);
                       }),
@@ -1221,6 +1220,51 @@ std::shared_ptr<Tensor> SigmoidBackward(const std::shared_ptr<Tensor> &output,
         return UnaryBackward(grad_output, output, [] __device__(auto x) { return Mul(x, Sub(decltype(x){1}, x)); });
         , INFINI_ALL_FLOATING_TYPES)
 }
+
+std::shared_ptr<Tensor> GELUForward(const std::shared_ptr<Tensor> &input) {
+    DISPATCH(input->Dtype(),
+             return UnaryForward(input, [] __device__(auto x) {
+                 using T = decltype(x);
+                 const float xf = Cast<float>(x);
+                 constexpr float kAlpha = 0.7978845608028654f;
+                 constexpr float kBeta = 0.044715f;
+                 return Cast<T>(0.5f * xf * (1.0f + tanhf(kAlpha * (xf + kBeta * xf * xf * xf))));
+             });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> GELUBackward(const std::shared_ptr<Tensor> &input,
+                                     const std::shared_ptr<Tensor> &grad_output) {
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, input, [] __device__(auto x) {
+                 using T = decltype(x);
+                 const float xf = Cast<float>(x);
+                 const float x2 = xf * xf;
+                 constexpr float kAlpha = 0.7978845608028654f;
+                 constexpr float kBeta = 0.044715f;
+                 const float t = tanhf(kAlpha * (xf + kBeta * xf * x2));
+                 return Cast<T>(0.5f * (1.0f + t)
+                                + 0.5f * xf * (1.0f - t * t) * kAlpha * (1.0f + 3.0f * kBeta * x2));
+             });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> SiLUForward(const std::shared_ptr<Tensor> &input) {
+    DISPATCH(input->Dtype(),
+             return UnaryForward(input, [] __device__(auto x) { return Mul(x, Sigmoid(x)); });
+             , INFINI_ALL_FLOATING_TYPES)
+}
+
+std::shared_ptr<Tensor> SiLUBackward(const std::shared_ptr<Tensor> &input,
+                                     const std::shared_ptr<Tensor> &grad_output) {
+    DISPATCH(grad_output->Dtype(),
+             return UnaryBackward(grad_output, input, [] __device__(auto x) {
+                 using T = decltype(x);
+                 const T sigmoid = Sigmoid(x);
+                 return Mul(sigmoid, Add(T{1}, Mul(x, Sub(T{1}, sigmoid))));
+             });
+             , INFINI_ALL_FLOATING_TYPES)
+}
 } // namespace infini_train::kernels::dcu
 
 #define REGISTER_HIP_ELEMENTWISE_KERNEL(kernel_name)                                                                  \
@@ -1270,5 +1314,9 @@ REGISTER_HIP_ELEMENTWISE_KERNEL(DivForward)
 REGISTER_HIP_ELEMENTWISE_KERNEL(DivBackward)
 REGISTER_HIP_ELEMENTWISE_KERNEL(SigmoidForward)
 REGISTER_HIP_ELEMENTWISE_KERNEL(SigmoidBackward)
+REGISTER_HIP_ELEMENTWISE_KERNEL(GELUForward)
+REGISTER_HIP_ELEMENTWISE_KERNEL(GELUBackward)
+REGISTER_HIP_ELEMENTWISE_KERNEL(SiLUForward)
+REGISTER_HIP_ELEMENTWISE_KERNEL(SiLUBackward)
 
 #undef REGISTER_HIP_ELEMENTWISE_KERNEL
