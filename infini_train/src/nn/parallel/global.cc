@@ -3,11 +3,11 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
-#include <system_error>
 #include <cstdlib>
 #include <format>
 #include <sstream>
 #include <string>
+#include <system_error>
 
 #include "glog/logging.h"
 
@@ -57,7 +57,8 @@ std::string OrderString(const RankGenerator &rank_generator, bool expert_view) {
   bool is_first_axis = true;
   for (int index = 0; index < kAxisCount; ++index) {
     const Axis axis = rank_generator.order()[index];
-    if ((!expert_view && axis == kEp) || (axis == kCp && rank_generator.AxisSize(kCp) == 1)) {
+    if ((!expert_view && axis == kEp) ||
+        (axis == kCp && rank_generator.AxisSize(kCp) == 1)) {
       continue;
     }
     if (!is_first_axis) {
@@ -114,9 +115,10 @@ void AppendDenseRankView(std::ostringstream &oss,
   CHECK_EQ(rank_generator.AxisSize(kEp), 1)
       << "The dense rank view must not contain an expert-parallel axis";
   oss << std::format(
-      "[Dense Rank View] shape={{TP={}, DP={}, PP={}}}, order={{ {} }}\n",
-      rank_generator.AxisSize(kTp), rank_generator.AxisSize(kDp),
-      rank_generator.AxisSize(kPp),
+      "[Dense Rank View] shape={{TP={}, CP={}, DP={}, PP={}}}, order={{ {} "
+      "}}\n",
+      rank_generator.AxisSize(kTp), rank_generator.AxisSize(kCp),
+      rank_generator.AxisSize(kDp), rank_generator.AxisSize(kPp),
       OrderString(rank_generator, /*expert_view=*/false));
   AppendGroups(oss, "DP", rank_generator, {kDp}, skip_trivial_axes);
   AppendGroups(oss, "TP", rank_generator, {kTp}, skip_trivial_axes);
@@ -195,8 +197,8 @@ int RankGenerator::RankOf(int dp, int tp, int pp, int ep, int cp) const {
   return r;
 }
 
-void RankGenerator::CoordOf(int rank, int &dp, int &tp, int &pp,
-                            int &ep, int &cp) const {
+void RankGenerator::CoordOf(int rank, int &dp, int &tp, int &pp, int &ep,
+                            int &cp) const {
   dp = (rank / strides_[kDp]) % sizes_[kDp];
   tp = (rank / strides_[kTp]) % sizes_[kTp];
   pp = (rank / strides_[kPp]) % sizes_[kPp];
@@ -300,21 +302,6 @@ GlobalEnv &GlobalEnv::Instance() {
   return instance;
 }
 
-void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size,
-                     bool sequence_parallel_enabled, int pipeline_parallel_size,
-                     int virtual_pipeline_parallel_size,
-                     int expert_parallel_size,
-                    std::optional<int> expert_tensor_parallel_size) {
-  ModelParallelConfig config;
-  config.tensor_model_parallel_size = tensor_parallel_size;
-  config.sequence_parallel = sequence_parallel_enabled;
-  config.pipeline_model_parallel_size = pipeline_parallel_size;
-  config.virtual_pipeline_model_parallel_size = virtual_pipeline_parallel_size;
-  config.expert_model_parallel_size = expert_parallel_size;
-  config.expert_tensor_parallel_size = expert_tensor_parallel_size;
-  Init(nthread_per_process, config);
-}
-
 void GlobalEnv::Init(int nthread_per_process,
                      const ModelParallelConfig &config) {
   const int tensor_parallel_size = config.tensor_model_parallel_size;
@@ -403,7 +390,8 @@ void GlobalEnv::Init(int nthread_per_process,
       model_parallel_config_.pipeline_model_parallel_size *
       context_parallel_size;
   CHECK_EQ(world_size_ % dense_model_parallel_size, 0)
-      << "World size must be divisible by tensor_parallel_size * context_parallel_size * "
+      << "World size must be divisible by tensor_parallel_size * "
+         "context_parallel_size * "
          "pipeline_parallel_size";
   data_parallel_size_ = world_size_ / dense_model_parallel_size;
 
@@ -500,18 +488,18 @@ bool GlobalEnv::sequence_parallel_enabled() const {
 }
 
 int GlobalEnv::context_parallel_size() const {
-    CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return context_parallel_size_;
+  CHECK(initialized_) << "GlobalEnv is not initialized!";
+  return context_parallel_size_;
 }
 
 const std::string &GlobalEnv::context_parallel_comm_type() const {
-    CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return context_parallel_comm_type_;
+  CHECK(initialized_) << "GlobalEnv is not initialized!";
+  return context_parallel_comm_type_;
 }
 
 const std::vector<int> &GlobalEnv::hierarchical_context_parallel_sizes() const {
-    CHECK(initialized_) << "GlobalEnv is not initialized!";
-    return hierarchical_context_parallel_sizes_;
+  CHECK(initialized_) << "GlobalEnv is not initialized!";
+  return hierarchical_context_parallel_sizes_;
 }
 
 int GlobalEnv::data_parallel_size() const {
@@ -554,9 +542,10 @@ std::string ProcessGroupOverview(const RankGenerator &dense_rank_generator,
   std::ostringstream oss;
   oss << std::format(
       "\n=== Parallel Communication Groups ===\n"
-      "world_size = {}, config: {{DP={}, TP={}, PP={}}}\n",
+      "world_size = {}, config: {{DP={}, TP={}, CP={}, PP={}}}\n",
       dense_rank_generator.WorldSize(), dense_rank_generator.AxisSize(kDp),
-      dense_rank_generator.AxisSize(kTp), dense_rank_generator.AxisSize(kPp));
+      dense_rank_generator.AxisSize(kTp), dense_rank_generator.AxisSize(kCp),
+      dense_rank_generator.AxisSize(kPp));
   AppendDenseRankView(oss, dense_rank_generator, skip_trivial_axes);
   oss << "\n";
   return oss.str();
@@ -571,12 +560,12 @@ std::string ProcessGroupOverview(const RankGenerator &dense_rank_generator,
   std::ostringstream oss;
   oss << std::format(
       "\n=== Parallel Communication Groups ===\n"
-      "world_size = {}, config: {{DP={}, EDP={}, TP={}, ETP={}, PP={}, "
+      "world_size = {}, config: {{DP={}, EDP={}, TP={}, ETP={}, CP={}, PP={}, "
       "EP={}}}\n",
       dense_rank_generator.WorldSize(), dense_rank_generator.AxisSize(kDp),
       expert_rank_generator.AxisSize(kDp), dense_rank_generator.AxisSize(kTp),
-      expert_rank_generator.AxisSize(kTp), dense_rank_generator.AxisSize(kPp),
-      expert_rank_generator.AxisSize(kEp));
+      expert_rank_generator.AxisSize(kTp), dense_rank_generator.AxisSize(kCp),
+      dense_rank_generator.AxisSize(kPp), expert_rank_generator.AxisSize(kEp));
 
   AppendDenseRankView(oss, dense_rank_generator, skip_trivial_axes);
   oss << "\n";
