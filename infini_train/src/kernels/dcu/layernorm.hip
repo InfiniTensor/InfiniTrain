@@ -101,11 +101,9 @@ LayerNormForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Ten
 }
 
 template <int BLOCK_SIZE, typename T>
-__global__ void LayerNormBackwardKernel(const T *__restrict__ input, const T *__restrict__ grad_output,
-                                        const float *__restrict__ mean, const float *__restrict__ rstd,
-                                        const T *__restrict__ weight, T *__restrict__ grad_input,
-                                        T *__restrict__ grad_weight, T *__restrict__ grad_bias, int embed_dim,
-                                        size_t weight_num_elements, size_t bias_num_elements) {
+__global__ void LayerNormGradInputKernel(const T *__restrict__ input, const T *__restrict__ grad_output,
+                                         const float *__restrict__ mean, const float *__restrict__ rstd,
+                                         const T *__restrict__ weight, T *__restrict__ grad_input, int embed_dim) {
     using BlockReduce = hipcub::BlockReduce<float, BLOCK_SIZE>;
     __shared__ typename BlockReduce::TempStorage temp_storage_mean;
     __shared__ typename BlockReduce::TempStorage temp_storage_norm;
@@ -136,7 +134,10 @@ __global__ void LayerNormBackwardKernel(const T *__restrict__ input, const T *__
 
     if (tid == 0) {
         float mean_d = dnorm_mean / embed_dim;
-        float norm_d = (dnorm_norm_mean / embed_dim) * rstd_val - mean_d * mean_val * rstd_val;
+        // dnorm_norm_mean is accumulated against (x - mean), so multiplying by
+        // rstd already produces mean(dnorm * x_hat). Subtracting the mean term
+        // again would double-center the input and corrupt grad_input.
+        float norm_d = (dnorm_norm_mean / embed_dim) * rstd_val;
         shared_mean = mean_d;
         shared_norm = norm_d;
     }
@@ -149,9 +150,40 @@ __global__ void LayerNormBackwardKernel(const T *__restrict__ input, const T *__
         grad_input_ptr[i] = common::dcu::Cast<T>(
             (common::dcu::Cast<float>(weight[i]) * grad_output_val - shared_mean - norm * shared_norm) * rstd_val);
 
-        common::dcu::fastAtomicAdd<T, size_t>(grad_weight, i, weight_num_elements,
-                                               common::dcu::Cast<T>(grad_output_val * norm), true);
-        common::dcu::fastAtomicAdd<T, size_t>(grad_bias, i, bias_num_elements, grad_output_ptr[i], true);
+    }
+}
+
+template <int BLOCK_SIZE, typename T>
+__global__ void LayerNormParamGradKernel(const T *__restrict__ input, const T *__restrict__ grad_output,
+                                         const float *__restrict__ mean, const float *__restrict__ rstd,
+                                         T *__restrict__ grad_weight, T *__restrict__ grad_bias, int num_tokens,
+                                         int embed_dim, size_t weight_num_elements, size_t bias_num_elements) {
+    using BlockReduce = hipcub::BlockReduce<float, BLOCK_SIZE>;
+    __shared__ typename BlockReduce::TempStorage temp_storage_weight;
+    __shared__ typename BlockReduce::TempStorage temp_storage_bias;
+
+    const int feature_idx = blockIdx.x;
+    float grad_weight_sum = 0.0f;
+    float grad_bias_sum = 0.0f;
+    if (feature_idx < embed_dim) {
+        for (int token_idx = threadIdx.x; token_idx < num_tokens; token_idx += BLOCK_SIZE) {
+            const int64_t offset = static_cast<int64_t>(token_idx) * embed_dim + feature_idx;
+            const float grad_output_val = common::dcu::Cast<float>(grad_output[offset]);
+            const float norm = (common::dcu::Cast<float>(input[offset]) - mean[token_idx]) * rstd[token_idx];
+            grad_weight_sum += grad_output_val * norm;
+            grad_bias_sum += grad_output_val;
+        }
+    }
+
+    grad_weight_sum = BlockReduce(temp_storage_weight).Sum(grad_weight_sum);
+    grad_bias_sum = BlockReduce(temp_storage_bias).Sum(grad_bias_sum);
+    if (threadIdx.x == 0) {
+        if (static_cast<size_t>(feature_idx) < weight_num_elements) {
+            grad_weight[feature_idx] = common::dcu::Cast<T>(grad_weight_sum);
+        }
+        if (static_cast<size_t>(feature_idx) < bias_num_elements) {
+            grad_bias[feature_idx] = common::dcu::Cast<T>(grad_bias_sum);
+        }
     }
 }
 
@@ -173,7 +205,8 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
 
     constexpr int BLOCK_SIZE = 256;
     int threads_per_block = BLOCK_SIZE;
-    int num_blocks = batch_size * max_seqlen;
+    int num_tokens = batch_size * max_seqlen;
+    int param_blocks = std::max(weight->NumElements(), bias->NumElements());
 
     auto device = input->GetDevice();
     const auto &hip_stream = dynamic_cast<infini_train::core::dcu::DcuStream *>(
@@ -182,15 +215,15 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Te
     core::dcu::DispatchDcuFunc<INFINI_ALL_FLOATING_TYPES>(
         dtype,
         [=]<typename T>() {
-            // Each token block writes its complete grad_input slice.
-            grad_weight->Fill(0.0);
-            grad_bias->Fill(0.0);
-            LayerNormBackwardKernel<BLOCK_SIZE><<<num_blocks, threads_per_block, 0, hip_stream>>>(
+            LayerNormGradInputKernel<BLOCK_SIZE><<<num_tokens, threads_per_block, 0, hip_stream>>>(
                 static_cast<const T *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
                 static_cast<const float *>(mean->DataPtr()), static_cast<const float *>(rstd->DataPtr()),
-                static_cast<const T *>(weight->DataPtr()), static_cast<T *>(grad_input->DataPtr()),
-                static_cast<T *>(grad_weight->DataPtr()), static_cast<T *>(grad_bias->DataPtr()), embed_dim,
-                grad_weight->NumElements(), grad_bias->NumElements());
+                static_cast<const T *>(weight->DataPtr()), static_cast<T *>(grad_input->DataPtr()), embed_dim);
+            LayerNormParamGradKernel<BLOCK_SIZE><<<param_blocks, threads_per_block, 0, hip_stream>>>(
+                static_cast<const T *>(input->DataPtr()), static_cast<const T *>(grad_output->DataPtr()),
+                static_cast<const float *>(mean->DataPtr()), static_cast<const float *>(rstd->DataPtr()),
+                static_cast<T *>(grad_weight->DataPtr()), static_cast<T *>(grad_bias->DataPtr()), num_tokens,
+                embed_dim, grad_weight->NumElements(), grad_bias->NumElements());
         },
         "HIP LayerNormBackward");
 

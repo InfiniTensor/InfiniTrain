@@ -155,7 +155,7 @@ std::shared_ptr<Tensor> LaunchSplitBackward(const std::vector<int64_t> &input_di
                                                                       static_cast<T *>(grad_input->DataPtr()), N, H_in,
                                                                       W, split_size, num_splits, device_H_outs);
 
-    HIP_CHECK(hipFree(device_ptr));
+    HIP_CHECK(hipFreeAsync(device_ptr, stream));
 
     return grad_input;
 }

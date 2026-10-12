@@ -1,4 +1,5 @@
 #include <memory>
+#include <type_traits>
 
 #include "infini_train/include/common/common.h"
 #include "infini_train/include/common/dcu/kernel_helper.cuh"
@@ -21,6 +22,31 @@ __global__ void CastKernel(Tdst *dst, const Tsrc *src, size_t num_elements, size
         dst[idx] = common::dcu::Cast<Tdst>(src[idx]);
     }
 }
+template <typename T, int N> struct alignas(sizeof(T) * N) CastVector {
+    T values[N];
+};
+
+template <typename Tdst, typename Tsrc, int N>
+__global__ void CastVectorizedKernel(Tdst *__restrict__ dst, const Tsrc *__restrict__ src,
+                                     size_t num_elements) {
+    const size_t begin
+        = (static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x) * N;
+    if (begin >= num_elements) return;
+    if (begin + N <= num_elements) {
+        const auto input = *reinterpret_cast<const CastVector<Tsrc, N> *>(src + begin);
+        CastVector<Tdst, N> output;
+#pragma unroll
+        for (int i = 0; i < N; ++i) {
+            output.values[i] = common::dcu::Cast<Tdst>(input.values[i]);
+        }
+        *reinterpret_cast<CastVector<Tdst, N> *>(dst + begin) = output;
+    } else {
+        for (size_t idx = begin; idx < num_elements; ++idx) {
+            dst[idx] = common::dcu::Cast<Tdst>(src[idx]);
+        }
+    }
+}
+
 
 std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
     auto dst_tensor = std::make_shared<Tensor>(input->Dims(), dtype, input->GetDevice());
@@ -31,8 +57,6 @@ std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
 
     const size_t num_elements = input->NumElements();
     dim3 block_dims(256);
-    dim3 grid_dims(CEIL_DIV(num_elements, block_dims.x));
-    const size_t step = grid_dims.x * block_dims.x;
 
     core::dcu::DispatchDcuFunc<DataTypeList<INFINI_ALL_TYPES>, DataTypeList<INFINI_ALL_TYPES>>(
         {dtype, input->Dtype()},
@@ -40,8 +64,16 @@ std::shared_ptr<Tensor> Cast(std::shared_ptr<Tensor> input, DataType dtype) {
             auto dst = static_cast<Tdst *>(dst_tensor->DataPtr());
             auto src = static_cast<const Tsrc *>(input->DataPtr());
 
-            for (size_t offset = 0; offset < num_elements; offset += step) {
-                CastKernel<<<grid_dims, block_dims, 0, hip_stream>>>(dst, src, num_elements, offset);
+            if constexpr ((sizeof(Tsrc) == 2 && sizeof(Tdst) == 4)
+                          || (sizeof(Tsrc) == 4 && sizeof(Tdst) == 2)) {
+                constexpr int elements_per_thread = 4;
+                const dim3 grid_dims(
+                    CEIL_DIV(num_elements, block_dims.x * elements_per_thread));
+                CastVectorizedKernel<Tdst, Tsrc, elements_per_thread>
+                    <<<grid_dims, block_dims, 0, hip_stream>>>(dst, src, num_elements);
+            } else {
+                const dim3 grid_dims(CEIL_DIV(num_elements, block_dims.x));
+                CastKernel<<<grid_dims, block_dims, 0, hip_stream>>>(dst, src, num_elements, 0);
             }
         },
         "HIP Cast");

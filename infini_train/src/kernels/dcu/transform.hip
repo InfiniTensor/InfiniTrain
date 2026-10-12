@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <numeric>
@@ -93,7 +94,6 @@ std::shared_ptr<Tensor> TrilBackward(const std::shared_ptr<Tensor> &grad_output,
     core::dcu::DispatchDcuFunc<INFINI_ALL_TYPES>(
         dtype,
         [=]<typename T>() {
-            grad_input->Fill(0.0);
             TrilBackwardKernel<<<num_blocks, threads_per_block, 0, hip_stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), rows, cols,
                 diagonal);
@@ -180,7 +180,6 @@ std::shared_ptr<Tensor> TriuBackward(const std::shared_ptr<Tensor> &grad_output,
     core::dcu::DispatchDcuFunc<INFINI_ALL_TYPES>(
         dtype,
         [=]<typename T>() {
-            grad_input->Fill(0.0);
             TriuBackwardKernel<<<num_blocks, threads_per_block, 0, hip_stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), rows, cols,
                 diagonal);
@@ -190,10 +189,16 @@ std::shared_ptr<Tensor> TriuBackward(const std::shared_ptr<Tensor> &grad_output,
     return grad_input;
 }
 
+struct TransposeMeta {
+    int64_t in_strides[8];
+    int64_t out_strides[8];
+    int32_t ndim;
+    int32_t dim0;
+    int32_t dim1;
+};
+
 template <typename T>
-__global__ void TransposeForwardKernel(const T *input, T *output, const int64_t *in_dims, const int64_t *in_strides,
-                                       const int64_t *out_strides, int64_t ndim, int64_t dim0, int64_t dim1,
-                                       int64_t num_elements) {
+__global__ void TransposeForwardKernel(const T *input, T *output, TransposeMeta meta, int64_t num_elements) {
     int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= num_elements) {
         return;
@@ -204,21 +209,51 @@ __global__ void TransposeForwardKernel(const T *input, T *output, const int64_t 
     int64_t coords[8];
 
     // 1. decode coord from output index
-    for (int i = 0; i < ndim; ++i) {
-        coords[i] = remaining / out_strides[i];
-        remaining %= out_strides[i];
+    for (int i = 0; i < meta.ndim; ++i) {
+        coords[i] = remaining / meta.out_strides[i];
+        remaining %= meta.out_strides[i];
     }
 
     // 2. swap the coordinates
-    int64_t tmp = coords[dim0];
-    coords[dim0] = coords[dim1];
-    coords[dim1] = tmp;
+    int64_t tmp = coords[meta.dim0];
+    coords[meta.dim0] = coords[meta.dim1];
+    coords[meta.dim1] = tmp;
 
     // 3. compute input flat index
     int64_t in_flat_idx = 0;
-    for (int i = 0; i < ndim; ++i) { in_flat_idx += coords[i] * in_strides[i]; }
+    for (int i = 0; i < meta.ndim; ++i) { in_flat_idx += coords[i] * meta.in_strides[i]; }
 
     output[idx] = input[in_flat_idx];
+}
+
+// Coalesced 32x32 tiled transpose for the other dominant attention operation:
+// [*, rows, cols] -> [*, cols, rows].
+template <typename T>
+__global__ void TransposeLastTwoDimsKernel(const T *__restrict__ input,
+                                           T *__restrict__ output,
+                                           int64_t rows, int64_t cols) {
+    __shared__ T tile[32][33];
+    const int64_t matrix = blockIdx.z;
+    const int64_t input_base = matrix * rows * cols;
+    const int input_col = static_cast<int>(blockIdx.x) * 32 + threadIdx.x;
+    const int input_row_base = static_cast<int>(blockIdx.y) * 32 + threadIdx.y;
+    for (int offset = 0; offset < 32; offset += 8) {
+        const int input_row = input_row_base + offset;
+        if (input_row < rows && input_col < cols) {
+            tile[threadIdx.y + offset][threadIdx.x]
+                = input[input_base + static_cast<int64_t>(input_row) * cols + input_col];
+        }
+    }
+    __syncthreads();
+    const int output_col = static_cast<int>(blockIdx.y) * 32 + threadIdx.x;
+    const int output_row_base = static_cast<int>(blockIdx.x) * 32 + threadIdx.y;
+    for (int offset = 0; offset < 32; offset += 8) {
+        const int output_row = output_row_base + offset;
+        if (output_row < cols && output_col < rows) {
+            output[input_base + static_cast<int64_t>(output_row) * rows + output_col]
+                = tile[threadIdx.x][threadIdx.y + offset];
+        }
+    }
 }
 
 std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, int64_t dim0, int64_t dim1) {
@@ -231,6 +266,9 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
     auto in_dims = input->Dims();
     std::vector<int64_t> out_dims = in_dims;
     std::swap(out_dims[dim0], out_dims[dim1]);
+    if (dim0 > dim1) {
+        std::swap(dim0, dim1);
+    }
 
     auto dtype = input->Dtype();
     auto output = std::make_shared<Tensor>(out_dims, dtype, input->GetDevice());
@@ -250,36 +288,38 @@ std::shared_ptr<Tensor> TransposeForward(const std::shared_ptr<Tensor> &input, i
                              infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                              ->hip_stream();
 
-    // Allocate device memory for dims and strides
-    // TODO(zbl): avoid using hipMalloc?
-    int64_t *device_buffer;
-    hipMallocAsync(&device_buffer, 3 * ndim * sizeof(int64_t), stream);
-
-    int64_t *in_dims_dev = device_buffer;
-    int64_t *in_strides_dev = device_buffer + ndim;
-    int64_t *out_strides_dev = device_buffer + 2 * ndim;
-
-    std::vector<int64_t> host_buffer;
-    host_buffer.insert(host_buffer.end(), in_dims.begin(), in_dims.end());
-    host_buffer.insert(host_buffer.end(), in_strides.begin(), in_strides.end());
-    host_buffer.insert(host_buffer.end(), out_strides.begin(), out_strides.end());
-
-    hipMemcpyAsync(device_buffer, host_buffer.data(), 3 * ndim * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-
-    int threads_per_block = 256;
-    int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
+    TransposeMeta meta{};
+    meta.ndim = static_cast<int32_t>(ndim);
+    meta.dim0 = static_cast<int32_t>(dim0);
+    meta.dim1 = static_cast<int32_t>(dim1);
+    for (int i = 0; i < ndim; ++i) {
+        meta.in_strides[i] = in_strides[i];
+        meta.out_strides[i] = out_strides[i];
+    }
 
     core::dcu::DispatchDcuFunc<INFINI_ALL_TYPES>(
         dtype,
         [=]<typename T>() {
-            output->Fill(0.0);
+            if (dim0 == ndim - 2 && dim1 == ndim - 1) {
+                const int64_t rows = in_dims[dim0];
+                const int64_t cols = in_dims[dim1];
+                int64_t outer = 1;
+                for (int i = 0; i < dim0; ++i) { outer *= in_dims[i]; }
+                CHECK_LE(outer, 65535);
+                const dim3 block(32, 8);
+                const dim3 grid((cols + 31) / 32, (rows + 31) / 32,
+                                static_cast<unsigned int>(outer));
+                TransposeLastTwoDimsKernel<<<grid, block, 0, stream>>>(
+                    static_cast<const T *>(input->DataPtr()),
+                    static_cast<T *>(output->DataPtr()), rows, cols);
+                return;
+            }
+            constexpr int threads_per_block = 256;
+            const int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
             TransposeForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
-                static_cast<const T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), in_dims_dev,
-                in_strides_dev, out_strides_dev, ndim, dim0, dim1, num_elements);
+                static_cast<const T *>(input->DataPtr()), static_cast<T *>(output->DataPtr()), meta, num_elements);
         },
         "HIP TransposeForward");
-
-    HIP_CHECK(hipFree(device_buffer));
 
     return output;
 }
@@ -438,7 +478,6 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
         core::dcu::DispatchDcuFunc<INFINI_ALL_TYPES>(
             dtype,
             [=]<typename T>() {
-                grad_input->Fill(0.0);
                 MaskLeadsBackwardKernel<T><<<num_blocks, threads_per_block, 0, hip_stream>>>(
                     static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask_casted->DataPtr()),
                     static_cast<T *>(grad_input->DataPtr()), rows, inner);
@@ -452,7 +491,6 @@ std::shared_ptr<Tensor> MaskBackward(const std::shared_ptr<Tensor> &grad_output,
         core::dcu::DispatchDcuFunc<INFINI_ALL_TYPES>(
             dtype,
             [=]<typename T>() {
-                grad_input->Fill(0.0);
                 MaskBackwardKernel<T><<<num_blocks, threads_per_block, 0, hip_stream>>>(
                     static_cast<const T *>(grad_output->DataPtr()), static_cast<const T *>(mask_casted->DataPtr()),
                     static_cast<T *>(grad_input->DataPtr()), static_cast<int>(batch_size), static_cast<int>(mask_size));
@@ -565,7 +603,6 @@ std::shared_ptr<Tensor> RepeatInterleaveBackward(const std::shared_ptr<Tensor> &
     core::dcu::DispatchDcuFunc<INFINI_ALL_TYPES>(
         grad_output->Dtype(),
         [=]<typename T>() {
-            grad_input->Fill(0.0);
             RepeatInterleaveBackwardKernel<<<num_blocks, threads_per_block, 0, hip_stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), outer,
                 dim_size, inner, repeat);

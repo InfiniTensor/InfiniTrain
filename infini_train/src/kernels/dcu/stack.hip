@@ -75,7 +75,7 @@ std::shared_ptr<Tensor> StackForward(const std::vector<std::shared_ptr<Tensor>> 
             StackForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
                 device_input_ptrs, static_cast<T *>(output->DataPtr()), N, D, num_inputs);
 
-            HIP_CHECK(hipFree(device_input_ptrs));
+            HIP_CHECK(hipFreeAsync(device_input_ptrs, stream));
         },
         "HIP StackForward");
 
@@ -142,7 +142,7 @@ std::vector<std::shared_ptr<Tensor>> StackBackward(const std::vector<int64_t> &i
             StackBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
                 static_cast<const T *>(grad_output->DataPtr()), device_ptrs, N, D, num_inputs);
 
-            HIP_CHECK(hipFree(device_ptrs));
+            HIP_CHECK(hipFreeAsync(device_ptrs, stream));
         },
         "HIP StackBackward");
 

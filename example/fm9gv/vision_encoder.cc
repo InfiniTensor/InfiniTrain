@@ -75,26 +75,34 @@ VisionEmbeddings::Forward(const std::vector<std::shared_ptr<Tensor>> &inputs) {
                          ? target_sizes
                          : std::make_shared<Tensor>(target_sizes->To(Device()));
     const auto *sizes = static_cast<const int64_t *>(sizes_cpu->DataPtr());
-    auto position_ids = std::make_shared<Tensor>(std::vector<int64_t>{batch, height * width}, DataType::kINT64);
-    auto *ids = static_cast<int64_t *>(position_ids->DataPtr());
-    std::fill(ids, ids + position_ids->NumElements(), int64_t{0});
-    const int64_t positions_per_side = config_.image_size / config_.patch_size;
-    for (int64_t b = 0; b < batch; ++b) {
-        const int64_t target_height = sizes[2 * b];
-        const int64_t target_width = sizes[2 * b + 1];
-        CHECK_LE(target_height * target_width, height * width)
-            << "Target patch layout exceeds the padded patch sequence";
-        for (int64_t row = 0; row < target_height; ++row) {
-            const int64_t bucket_row = row * positions_per_side / target_height;
-            for (int64_t col = 0; col < target_width; ++col) {
-                const int64_t bucket_col = col * positions_per_side / target_width;
-                ids[b * height * width + row * target_width + col]
-                    = bucket_row * positions_per_side + bucket_col;
+    const std::vector<int64_t> target_size_values(sizes, sizes + target_sizes->NumElements());
+    const std::vector<int64_t> position_shape{batch, height * width};
+    if (!cached_position_ids_ || cached_target_sizes_ != target_size_values
+        || cached_position_shape_ != position_shape
+        || cached_position_ids_->GetDevice() != pixels->GetDevice()) {
+        auto position_ids = std::make_shared<Tensor>(position_shape, DataType::kINT64);
+        auto *ids = static_cast<int64_t *>(position_ids->DataPtr());
+        std::fill(ids, ids + position_ids->NumElements(), int64_t{0});
+        const int64_t positions_per_side = config_.image_size / config_.patch_size;
+        for (int64_t b = 0; b < batch; ++b) {
+            const int64_t target_height = sizes[2 * b];
+            const int64_t target_width = sizes[2 * b + 1];
+            CHECK_LE(target_height * target_width, height * width)
+                << "Target patch layout exceeds the padded patch sequence";
+            for (int64_t row = 0; row < target_height; ++row) {
+                const int64_t bucket_row = row * positions_per_side / target_height;
+                for (int64_t col = 0; col < target_width; ++col) {
+                    const int64_t bucket_col = col * positions_per_side / target_width;
+                    ids[b * height * width + row * target_width + col]
+                        = bucket_row * positions_per_side + bucket_col;
+                }
             }
         }
+        cached_target_sizes_ = target_size_values;
+        cached_position_shape_ = position_shape;
+        cached_position_ids_ = std::make_shared<Tensor>(position_ids->To(pixels->GetDevice()));
     }
-    position_ids = std::make_shared<Tensor>(position_ids->To(pixels->GetDevice()));
-    auto positions = (*modules_["position_embedding"])({position_ids})[0];
+    auto positions = (*modules_["position_embedding"])({cached_position_ids_})[0];
     return {embeddings + positions};
 }
 

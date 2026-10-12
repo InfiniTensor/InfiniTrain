@@ -53,6 +53,29 @@ __global__ void ConcatForwardKernel(const T **inputs, T *output, const int64_t *
     output[idx] = input[n * (Ki * D) + k_local * D + d];
 }
 
+template <typename T>
+struct SmallConcatForwardMeta {
+    const T *inputs[8];
+    int64_t offsets[9];
+};
+
+template <typename T>
+__global__ void SmallConcatForwardKernel(SmallConcatForwardMeta<T> meta, T *output, int64_t N, int64_t D,
+                                         int64_t num_inputs, int64_t K_total) {
+    int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int64_t total = N * K_total * D;
+    if (idx >= total) { return; }
+
+    int64_t d = idx % D;
+    int64_t k = (idx / D) % K_total;
+    int64_t n = idx / (D * K_total);
+    int64_t s = UpperBoundI64(meta.offsets, num_inputs + 1, k);
+    int64_t k_local = k - meta.offsets[s];
+    int64_t Ki = meta.offsets[s + 1] - meta.offsets[s];
+    const T *input = meta.inputs[s];
+    output[idx] = input[n * (Ki * D) + k_local * D + d];
+}
+
 std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>> &inputs, int64_t dim) {
     CHECK(!inputs.empty());
 
@@ -106,26 +129,34 @@ std::shared_ptr<Tensor> ConcatForward(const std::vector<std::shared_ptr<Tensor>>
     core::dcu::DispatchDcuFunc<INFINI_ALL_TYPES>(
         dtype,
         [=, &inputs, &host_offsets]<typename T>() {
-            std::vector<const T *> host_input_ptrs;
-            host_input_ptrs.reserve(inputs.size());
-            for (const auto &t : inputs) { host_input_ptrs.push_back(static_cast<const T *>(t->DataPtr())); }
-
-            const T **device_input_ptrs = nullptr;
-            int64_t *device_offsets = nullptr;
-
-            HIP_CHECK(hipMallocAsync(&device_input_ptrs, sizeof(T *) * num_inputs, stream));
-            HIP_CHECK(hipMemcpyAsync(device_input_ptrs, host_input_ptrs.data(), sizeof(T *) * num_inputs,
-                                       hipMemcpyHostToDevice, stream));
-
-            HIP_CHECK(hipMallocAsync(&device_offsets, sizeof(int64_t) * (num_inputs + 1), stream));
-            HIP_CHECK(hipMemcpyAsync(device_offsets, host_offsets.data(), sizeof(int64_t) * (num_inputs + 1),
-                                       hipMemcpyHostToDevice, stream));
-
-            ConcatForwardKernel<T><<<num_blocks, threads_per_block, 0, stream>>>(
-                device_input_ptrs, static_cast<T *>(output->DataPtr()), device_offsets, N, D, num_inputs, K_total);
-
-            HIP_CHECK(hipFree(device_input_ptrs));
-            HIP_CHECK(hipFree(device_offsets));
+            if (num_inputs <= 8) {
+                SmallConcatForwardMeta<T> meta{};
+                for (int64_t i = 0; i < num_inputs; ++i) {
+                    meta.inputs[i] = static_cast<const T *>(inputs[i]->DataPtr());
+                    meta.offsets[i] = host_offsets[i];
+                }
+                meta.offsets[num_inputs] = host_offsets[num_inputs];
+                SmallConcatForwardKernel<T><<<num_blocks, threads_per_block, 0, stream>>>(
+                    meta, static_cast<T *>(output->DataPtr()), N, D, num_inputs, K_total);
+            } else {
+                std::vector<const T *> host_input_ptrs;
+                host_input_ptrs.reserve(inputs.size());
+                for (const auto &t : inputs) {
+                    host_input_ptrs.push_back(static_cast<const T *>(t->DataPtr()));
+                }
+                const T **device_input_ptrs = nullptr;
+                int64_t *device_offsets = nullptr;
+                HIP_CHECK(hipMallocAsync(&device_input_ptrs, sizeof(T *) * num_inputs, stream));
+                HIP_CHECK(hipMemcpyAsync(device_input_ptrs, host_input_ptrs.data(), sizeof(T *) * num_inputs,
+                                         hipMemcpyHostToDevice, stream));
+                HIP_CHECK(hipMallocAsync(&device_offsets, sizeof(int64_t) * (num_inputs + 1), stream));
+                HIP_CHECK(hipMemcpyAsync(device_offsets, host_offsets.data(), sizeof(int64_t) * (num_inputs + 1),
+                                         hipMemcpyHostToDevice, stream));
+                ConcatForwardKernel<T><<<num_blocks, threads_per_block, 0, stream>>>(
+                    device_input_ptrs, static_cast<T *>(output->DataPtr()), device_offsets, N, D, num_inputs, K_total);
+                HIP_CHECK(hipFreeAsync(device_input_ptrs, stream));
+                HIP_CHECK(hipFreeAsync(device_offsets, stream));
+            }
         },
         "HIP ConcatForward");
 
@@ -151,6 +182,29 @@ __global__ void ConcatBackwardKernel(const T *grad_output, T **grad_inputs, cons
 
     T *gi = grad_inputs[s];
     gi[n * (Ki * D) + k_local * D + d] = grad_output[idx];
+}
+
+template <typename T>
+struct SmallConcatBackwardMeta {
+    T *grad_inputs[8];
+    int64_t offsets[9];
+};
+
+template <typename T>
+__global__ void SmallConcatBackwardKernel(const T *grad_output, SmallConcatBackwardMeta<T> meta, int64_t N,
+                                          int64_t D, int64_t num_inputs, int64_t K_total) {
+    int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int64_t total = N * K_total * D;
+    if (idx >= total) { return; }
+
+    int64_t d = idx % D;
+    int64_t k = (idx / D) % K_total;
+    int64_t n = idx / (D * K_total);
+    int64_t s = UpperBoundI64(meta.offsets, num_inputs + 1, k);
+    int64_t k_local = k - meta.offsets[s];
+    int64_t Ki = meta.offsets[s + 1] - meta.offsets[s];
+    T *grad_input = meta.grad_inputs[s];
+    grad_input[n * (Ki * D) + k_local * D + d] = grad_output[idx];
 }
 
 std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor> &grad_output,
@@ -211,26 +265,33 @@ std::vector<std::shared_ptr<Tensor>> ConcatBackward(const std::shared_ptr<Tensor
     core::dcu::DispatchDcuFunc<INFINI_ALL_TYPES>(
         dtype,
         [=, &grads, &host_offsets]<typename T>() {
-            std::vector<T *> host_ptrs;
-            host_ptrs.reserve(grads.size());
-            for (auto &t : grads) { host_ptrs.push_back(static_cast<T *>(t->DataPtr())); }
-
-            T **device_ptrs = nullptr;
-            int64_t *device_offsets = nullptr;
-
-            HIP_CHECK(hipMallocAsync(&device_ptrs, sizeof(T *) * num_inputs, stream));
-            HIP_CHECK(hipMemcpyAsync(device_ptrs, host_ptrs.data(), sizeof(T *) * num_inputs, hipMemcpyHostToDevice,
-                                       stream));
-
-            HIP_CHECK(hipMallocAsync(&device_offsets, sizeof(int64_t) * (num_inputs + 1), stream));
-            HIP_CHECK(hipMemcpyAsync(device_offsets, host_offsets.data(), sizeof(int64_t) * (num_inputs + 1),
-                                       hipMemcpyHostToDevice, stream));
-
-            ConcatBackwardKernel<T><<<num_blocks, threads_per_block, 0, stream>>>(
-                static_cast<const T *>(grad_output->DataPtr()), device_ptrs, device_offsets, N, D, num_inputs, K_total);
-
-            HIP_CHECK(hipFree(device_ptrs));
-            HIP_CHECK(hipFree(device_offsets));
+            if (num_inputs <= 8) {
+                SmallConcatBackwardMeta<T> meta{};
+                for (int64_t i = 0; i < num_inputs; ++i) {
+                    meta.grad_inputs[i] = static_cast<T *>(grads[i]->DataPtr());
+                    meta.offsets[i] = host_offsets[i];
+                }
+                meta.offsets[num_inputs] = host_offsets[num_inputs];
+                SmallConcatBackwardKernel<T><<<num_blocks, threads_per_block, 0, stream>>>(
+                    static_cast<const T *>(grad_output->DataPtr()), meta, N, D, num_inputs, K_total);
+            } else {
+                std::vector<T *> host_ptrs;
+                host_ptrs.reserve(grads.size());
+                for (auto &t : grads) { host_ptrs.push_back(static_cast<T *>(t->DataPtr())); }
+                T **device_ptrs = nullptr;
+                int64_t *device_offsets = nullptr;
+                HIP_CHECK(hipMallocAsync(&device_ptrs, sizeof(T *) * num_inputs, stream));
+                HIP_CHECK(hipMemcpyAsync(device_ptrs, host_ptrs.data(), sizeof(T *) * num_inputs,
+                                         hipMemcpyHostToDevice, stream));
+                HIP_CHECK(hipMallocAsync(&device_offsets, sizeof(int64_t) * (num_inputs + 1), stream));
+                HIP_CHECK(hipMemcpyAsync(device_offsets, host_offsets.data(), sizeof(int64_t) * (num_inputs + 1),
+                                         hipMemcpyHostToDevice, stream));
+                ConcatBackwardKernel<T><<<num_blocks, threads_per_block, 0, stream>>>(
+                    static_cast<const T *>(grad_output->DataPtr()), device_ptrs, device_offsets, N, D, num_inputs,
+                    K_total);
+                HIP_CHECK(hipFreeAsync(device_ptrs, stream));
+                HIP_CHECK(hipFreeAsync(device_offsets, stream));
+            }
         },
         "HIP ConcatBackward");
 

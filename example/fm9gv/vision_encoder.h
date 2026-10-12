@@ -33,6 +33,9 @@ public:
 
 private:
     VisionConfig config_;
+    std::vector<int64_t> cached_target_sizes_;
+    std::vector<int64_t> cached_position_shape_;
+    std::shared_ptr<infini_train::Tensor> cached_position_ids_;
 };
 
 class VisionAttention : public infini_train::nn::CloneableModule<VisionAttention> {

@@ -12,20 +12,27 @@
 #include "infini_train/src/core/runtime/dcu/dcu_runtime_common.h"
 
 namespace infini_train::kernels::dcu {
+struct SliceMeta {
+    int64_t new_dims[8];
+    int64_t starts[8];
+    int64_t steps[8];
+    int64_t in_strides[8];
+    int64_t out_strides[8];
+    int32_t num_dims;
+};
+
 
 template <typename T>
-__global__ void SliceForwardKernel(const T *input, T *output, const int64_t *new_dims, const int64_t *starts,
-                                   const int64_t *steps, const int64_t *in_strides, const int64_t *out_strides,
-                                   int num_dims, int64_t total_elements) {
+__global__ void SliceForwardKernel(const T *input, T *output, SliceMeta meta, int64_t total_elements) {
     int64_t out_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (out_idx >= total_elements) {
         return;
     }
 
     int64_t in_index = 0;
-    for (int i = 0; i < num_dims; ++i) {
-        int64_t idx = (out_idx / out_strides[i]) % new_dims[i];
-        in_index += (starts[i] + idx * steps[i]) * in_strides[i];
+    for (int i = 0; i < meta.num_dims; ++i) {
+        int64_t idx = (out_idx / meta.out_strides[i]) % meta.new_dims[i];
+        in_index += (meta.starts[i] + idx * meta.steps[i]) * meta.in_strides[i];
     }
 
     output[out_idx] = input[in_index];
@@ -38,6 +45,7 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
     auto &dims = input->Dims();
     CHECK_EQ(starts.size(), dims.size());
     const int64_t num_dims = dims.size();
+    CHECK_LE(num_dims, 8);
 
     std::vector<int64_t> new_dims;
     for (int i = 0; i < starts.size(); ++i) {
@@ -65,28 +73,20 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
 
     int64_t total_elements = stride;
 
-    int64_t *new_dims_dev, *starts_dev, *steps_dev, *input_strides_dev, *output_strides_dev;
-
     auto device = input->GetDevice();
     const auto &stream = dynamic_cast<infini_train::core::dcu::DcuStream *>(
                              infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                              ->hip_stream();
 
-    hipMallocAsync(&new_dims_dev,
-                    (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
-                    stream);
-    starts_dev = new_dims_dev + ends.size();
-    steps_dev = starts_dev + starts.size();
-    input_strides_dev = steps_dev + steps.size();
-    output_strides_dev = input_strides_dev + dims.size();
-
-    hipMemcpyAsync(new_dims_dev, new_dims.data(), ends.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    hipMemcpyAsync(starts_dev, starts.data(), starts.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    hipMemcpyAsync(steps_dev, steps.data(), steps.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    hipMemcpyAsync(input_strides_dev, src_strides.data(), dims.size() * sizeof(int64_t), hipMemcpyHostToDevice,
-                    stream);
-    hipMemcpyAsync(output_strides_dev, dst_strides.data(), new_dims.size() * sizeof(int64_t), hipMemcpyHostToDevice,
-                    stream);
+    SliceMeta meta{};
+    meta.num_dims = static_cast<int32_t>(num_dims);
+    for (int i = 0; i < num_dims; ++i) {
+        meta.new_dims[i] = new_dims[i];
+        meta.starts[i] = starts[i];
+        meta.steps[i] = steps[i];
+        meta.in_strides[i] = src_strides[i];
+        meta.out_strides[i] = dst_strides[i];
+    }
 
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
@@ -95,29 +95,26 @@ std::shared_ptr<Tensor> SliceForward(const std::shared_ptr<Tensor> &input, const
         dtype,
         [=]<typename T>() {
             SliceForwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
-                static_cast<const T *>(input->DataPtr()), static_cast<T *>(new_tensor->DataPtr()), new_dims_dev,
-                starts_dev, steps_dev, input_strides_dev, output_strides_dev, num_dims, total_elements);
+                static_cast<const T *>(input->DataPtr()), static_cast<T *>(new_tensor->DataPtr()), meta,
+                total_elements);
         },
         "HIP SliceForward");
-
-    HIP_CHECK(hipFree(new_dims_dev));
 
     return new_tensor;
 }
 
 template <typename T>
-__global__ void SliceBackwardKernel(const T *grad_output, T *grad_input, const int64_t *new_dims, const int64_t *starts,
-                                    const int64_t *steps, const int64_t *in_strides, const int64_t *out_strides,
-                                    int num_dims, int64_t total_elements) {
+__global__ void SliceBackwardKernel(const T *grad_output, T *grad_input, SliceMeta meta,
+                                    int64_t total_elements) {
     int64_t out_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (out_idx >= total_elements) {
         return;
     }
 
     int64_t in_index = 0;
-    for (int i = 0; i < num_dims; ++i) {
-        int64_t idx = (out_idx / out_strides[i]) % new_dims[i];
-        in_index += (starts[i] + idx * steps[i]) * in_strides[i];
+    for (int i = 0; i < meta.num_dims; ++i) {
+        int64_t idx = (out_idx / meta.out_strides[i]) % meta.new_dims[i];
+        in_index += (meta.starts[i] + idx * meta.steps[i]) * meta.in_strides[i];
     }
     grad_input[in_index] = grad_output[out_idx];
 }
@@ -130,6 +127,7 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
     auto &dims = input->Dims();
     CHECK_EQ(starts.size(), dims.size());
     const int64_t num_dims = dims.size();
+    CHECK_LE(num_dims, 8);
 
     std::vector<int64_t> new_dims;
     for (int i = 0; i < starts.size(); ++i) {
@@ -158,28 +156,19 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
 
     int64_t total_elements = stride;
 
-    int dims_size = dims.size();
-    int64_t *new_dims_dev, *starts_dev, *steps_dev, *input_strides_dev, *output_strides_dev;
-
     auto device = input->GetDevice();
     const auto &stream = dynamic_cast<infini_train::core::dcu::DcuStream *>(
                              infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
                              ->hip_stream();
-    hipMallocAsync(&new_dims_dev,
-                    (ends.size() + starts.size() + steps.size() + dims.size() + new_dims.size()) * sizeof(int64_t),
-                    stream);
-    starts_dev = new_dims_dev + ends.size();
-    steps_dev = starts_dev + starts.size();
-    input_strides_dev = steps_dev + steps.size();
-    output_strides_dev = input_strides_dev + dims.size();
-
-    hipMemcpyAsync(new_dims_dev, new_dims.data(), ends.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    hipMemcpyAsync(starts_dev, starts.data(), starts.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    hipMemcpyAsync(steps_dev, steps.data(), steps.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    hipMemcpyAsync(input_strides_dev, src_strides.data(), dims.size() * sizeof(int64_t), hipMemcpyHostToDevice,
-                    stream);
-    hipMemcpyAsync(output_strides_dev, dst_strides.data(), new_dims.size() * sizeof(int64_t), hipMemcpyHostToDevice,
-                    stream);
+    SliceMeta meta{};
+    meta.num_dims = static_cast<int32_t>(num_dims);
+    for (int i = 0; i < num_dims; ++i) {
+        meta.new_dims[i] = new_dims[i];
+        meta.starts[i] = starts[i];
+        meta.steps[i] = steps[i];
+        meta.in_strides[i] = src_strides[i];
+        meta.out_strides[i] = dst_strides[i];
+    }
 
     int threads_per_block = 256;
     int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
@@ -188,12 +177,10 @@ std::shared_ptr<Tensor> SliceBackward(const std::shared_ptr<Tensor> &grad_output
         grad_output_dtype,
         [=]<typename T>() {
             SliceBackwardKernel<<<num_blocks, threads_per_block, 0, stream>>>(
-                static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), new_dims_dev,
-                starts_dev, steps_dev, input_strides_dev, output_strides_dev, num_dims, total_elements);
+                static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()), meta,
+                total_elements);
         },
         "HIP SliceBackward");
-
-    HIP_CHECK(hipFree(new_dims_dev));
 
     return grad_input;
 }

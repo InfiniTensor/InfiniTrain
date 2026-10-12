@@ -110,7 +110,7 @@ std::shared_ptr<Tensor> IndexGatherForward(const std::shared_ptr<Tensor> &input,
         },
         "HIP IndexGatherForward");
 
-    HIP_CHECK(hipFree(dev_buf));
+    HIP_CHECK(hipFreeAsync(dev_buf, stream));
     return out;
 }
 
@@ -217,7 +217,7 @@ std::shared_ptr<Tensor> IndexGatherBackward(const std::shared_ptr<Tensor> &grad_
         },
         "HIP IndexGatherBackward");
 
-    HIP_CHECK(hipFree(dev_buf));
+    HIP_CHECK(hipFreeAsync(dev_buf, stream));
     return grad_input;
 }
 

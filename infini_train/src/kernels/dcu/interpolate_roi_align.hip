@@ -81,6 +81,72 @@ __global__ void InterpolateBilinearBackwardKernel(const T *__restrict__ grad_out
     common::dcu::AtomicAdd(&grad_input[base + y1 * input_width + x1], common::dcu::Cast<T>(ly * lx * grad));
 }
 
+template <typename T>
+__global__ void InterpolateBilinearBackwardGatherKernel(const T *__restrict__ grad_output,
+                                                        T *__restrict__ grad_input, int64_t channels,
+                                                        int64_t input_height, int64_t input_width,
+                                                        int64_t output_height, int64_t output_width,
+                                                        int64_t total) {
+    const int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= total) { return; }
+    const int64_t ix = idx % input_width;
+    const int64_t iy = (idx / input_width) % input_height;
+    const int64_t c = (idx / input_width / input_height) % channels;
+    const int64_t b = idx / input_width / input_height / channels;
+
+    const float output_per_input_y = static_cast<float>(output_height) / input_height;
+    const float output_per_input_x = static_cast<float>(output_width) / input_width;
+    const int64_t oy_begin = max(
+        int64_t{0}, static_cast<int64_t>(floorf((static_cast<float>(iy) - 0.5f) * output_per_input_y - 0.5f)) - 1);
+    const int64_t oy_end = min(
+        output_height,
+        static_cast<int64_t>(ceilf((static_cast<float>(iy) + 1.5f) * output_per_input_y - 0.5f)) + 1);
+    const int64_t ox_begin = max(
+        int64_t{0}, static_cast<int64_t>(floorf((static_cast<float>(ix) - 0.5f) * output_per_input_x - 0.5f)) - 1);
+    const int64_t ox_end = min(
+        output_width,
+        static_cast<int64_t>(ceilf((static_cast<float>(ix) + 1.5f) * output_per_input_x - 0.5f)) + 1);
+
+    const int64_t output_base = (b * channels + c) * output_height * output_width;
+    float sum = 0.0f;
+    for (int64_t oy = oy_begin; oy < oy_end; ++oy) {
+        float source_y = (static_cast<float>(oy) + 0.5f) * input_height / output_height - 0.5f;
+        source_y = fmaxf(source_y, 0.0f);
+        const int64_t y0 = min(static_cast<int64_t>(source_y), input_height - 1);
+        const int64_t y1 = min(y0 + 1, input_height - 1);
+        const float ly = source_y - y0;
+        float wy = 0.0f;
+        if (y0 == iy && y1 == iy) {
+            wy = 1.0f;
+        } else if (y0 == iy) {
+            wy = 1.0f - ly;
+        } else if (y1 == iy) {
+            wy = ly;
+        } else {
+            continue;
+        }
+        for (int64_t ox = ox_begin; ox < ox_end; ++ox) {
+            float source_x = (static_cast<float>(ox) + 0.5f) * input_width / output_width - 0.5f;
+            source_x = fmaxf(source_x, 0.0f);
+            const int64_t x0 = min(static_cast<int64_t>(source_x), input_width - 1);
+            const int64_t x1 = min(x0 + 1, input_width - 1);
+            const float lx = source_x - x0;
+            float wx = 0.0f;
+            if (x0 == ix && x1 == ix) {
+                wx = 1.0f;
+            } else if (x0 == ix) {
+                wx = 1.0f - lx;
+            } else if (x1 == ix) {
+                wx = lx;
+            } else {
+                continue;
+            }
+            sum += wy * wx * common::dcu::Cast<float>(grad_output[output_base + oy * output_width + ox]);
+        }
+    }
+    grad_input[idx] = common::dcu::Cast<T>(sum);
+}
+
 __device__ bool RoiBilinear(float y, float x, int64_t height, int64_t width, int64_t &y0,
                             int64_t &x0, int64_t &y1, int64_t &x1, float &w00, float &w01,
                             float &w10, float &w11) {
@@ -215,10 +281,9 @@ std::shared_ptr<Tensor> InterpolateBackward(const std::shared_ptr<Tensor> &grad_
     CHECK(!antialias);
     auto grad_input = std::make_shared<Tensor>(input_dims, grad_output->Dtype(), grad_output->GetDevice());
     const auto stream = GetStream(grad_output->GetDevice());
-    HIP_CHECK(hipMemsetAsync(grad_input->DataPtr(), 0, grad_input->SizeInBytes(), stream));
-    const int64_t total = grad_output->NumElements();
+    const int64_t total = grad_input->NumElements();
     core::dcu::DispatchDcuFunc<INFINI_ALL_FLOATING_TYPES>(grad_output->Dtype(), [=]<typename T>() {
-        InterpolateBilinearBackwardKernel<T><<<(total + 255) / 256, 256, 0, stream>>>(
+        InterpolateBilinearBackwardGatherKernel<T><<<(total + 255) / 256, 256, 0, stream>>>(
             static_cast<const T *>(grad_output->DataPtr()), static_cast<T *>(grad_input->DataPtr()),
             input_dims[1], input_dims[2], input_dims[3], grad_output->Dims()[2], grad_output->Dims()[3], total);
     }, "HIP InterpolateBackward");
