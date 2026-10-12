@@ -176,16 +176,18 @@ LoRATensorSharding GetLoRATensorSharding(const std::unordered_map<std::string, L
 bool IsPrimarySaveTPGroupRank() {
     int dp = 0;
     int tp = 0;
+    int cp = 0;
     int pp = 0;
-    parallel::global::GetCoordOf(parallel::global::thread_global_rank, dp, tp, pp);
+    parallel::global::GetCoordOf(parallel::global::thread_global_rank, dp, tp, cp, pp);
     return dp == 0 && pp == 0;
 }
 
 bool IsSaveWriterRank() {
     int dp = 0;
     int tp = 0;
+    int cp = 0;
     int pp = 0;
-    parallel::global::GetCoordOf(parallel::global::thread_global_rank, dp, tp, pp);
+    parallel::global::GetCoordOf(parallel::global::thread_global_rank, dp, tp, cp, pp);
     return dp == 0 && tp == 0 && pp == 0;
 }
 

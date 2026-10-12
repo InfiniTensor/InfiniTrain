@@ -86,6 +86,11 @@ public:
 
     virtual Stream *GetStream(Device) const;
 
+    // Set the thread-local current stream for device and return its previous stream.
+    // Does not change the current device or synchronize. Stream ownership is unchanged.
+    // The caller must provide a stream belonging to device and keep it alive while selected.
+    virtual Stream *ExchangeStream(Device device, Stream *stream) const;
+
     virtual Stream *CreateStream(Device) const;
 
     virtual Stream *CreateStreamWithPriority(Device, int priority) const;

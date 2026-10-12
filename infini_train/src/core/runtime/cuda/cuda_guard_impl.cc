@@ -16,6 +16,7 @@ constexpr int kMaxGpus = 8;
 constexpr size_t kBytesPerMB = 1024ULL * 1024ULL;
 
 static std::array<std::unique_ptr<CudaStream>, kMaxGpus> cuda_streams;
+static thread_local std::array<Stream *, kMaxGpus> current_streams = {};
 static std::array<std::unique_ptr<CudaBlasHandle>, kMaxGpus> cuda_blas_handles;
 
 static std::array<std::once_flag, kMaxGpus> device_stream_flags;
@@ -49,6 +50,7 @@ void CudaGuardImpl::InitSingleStream(Device device) {
     CUDA_CHECK(cudaSetDevice(device.index()));
 
     cuda_streams[device.index()] = std::make_unique<CudaStream>();
+    current_streams[device.index()] = cuda_streams[device.index()].get();
 
     CUDA_CHECK(cudaSetDevice(current_device));
 }
@@ -96,7 +98,22 @@ Stream *CudaGuardImpl::GetStream(Device device) const {
     // This can be problematic if the CUDA backend is initialized multiple
     // times within the same process (e.g. in unit tests).
     std::call_once(device_stream_flags.at(device.index()), InitSingleStream, device);
-    return cuda_streams.at(device.index()).get();
+    if (current_streams.at(device.index()) == nullptr) {
+        current_streams.at(device.index()) = cuda_streams.at(device.index()).get();
+    }
+    return current_streams.at(device.index());
+}
+
+Stream *CudaGuardImpl::ExchangeStream(Device device, Stream *stream) const {
+    CheckCudaDevice(device);
+    std::call_once(device_stream_flags.at(device.index()), InitSingleStream, device);
+    CHECK_NOTNULL(stream);
+    if (current_streams.at(device.index()) == nullptr) {
+        current_streams.at(device.index()) = cuda_streams.at(device.index()).get();
+    }
+    auto *previous_stream = current_streams.at(device.index());
+    current_streams[device.index()] = stream;
+    return previous_stream;
 }
 
 Stream *CudaGuardImpl::CreateStream(Device device) const {
@@ -213,7 +230,9 @@ void CudaGuardImpl::SynchronizeStream(Stream *stream) const {
 BlasHandle *CudaGuardImpl::GetBlasHandle(Device device) const {
     CheckCudaDevice(device);
     std::call_once(device_handle_flags.at(device.index()), InitSingleHandle, device);
-    return cuda_blas_handles.at(device.index()).get();
+    auto *handle = cuda_blas_handles.at(device.index()).get();
+    CUBLAS_CHECK(cublasSetStream(handle->cublas_handle(), GetCudaStream(GetStream(device))));
+    return handle;
 }
 
 // memory

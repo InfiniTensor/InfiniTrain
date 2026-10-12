@@ -79,6 +79,8 @@ int main(int argc, char *argv[]) {
         /*nthread_per_process=*/1,
         /*tensor_parallel_size=*/1,
         /*sequence_parallel_enabled=*/false,
+        /*context_parallel_size=*/1,
+        /*context_parallel_comm_type=*/"p2p",
         /*pipeline_parallel_size=*/1,
         /*virtual_pipeline_parallel_size=*/1);
 
