@@ -188,6 +188,10 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     std::vector<std::shared_ptr<Tensor>> output_tensors;
     {
         autograd::NoGradGuard no_grad;
+        // Nested Functions inside Forward/SetupContext must not record context,
+        // including during checkpoint recomputation. Restore the caller mode
+        // before saving this Function's tensors and propagating output metadata.
+        autograd::PropagateRequiresGradGuard no_propagate(false);
         // no_grad in autograd.Function.Forward()
         output_tensors = Forward(compute_inputs);
         SetupContext(compute_inputs, output_tensors);
@@ -206,27 +210,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         }
     }
 
-    if (!grad_enabled) {
-        // with no_grad: block graph building operations. Non-reentrant
-        // checkpoint recomputation still needs requires_grad to flow through
-        // outputs so later SetupContext calls save the same tensors as the
-        // original forward.
-        if (autograd::GradMode::PropagateRequiresGrad()) {
-            bool output_requires_grad = false;
-            for (const auto &input_tensor : input_tensors) {
-                output_requires_grad |= input_tensor && input_tensor->requires_grad();
-            }
-            for (int output_idx = 0; output_idx < output_tensors.size(); ++output_idx) {
-                auto &output_tensor = output_tensors[output_idx];
-                if (!output_tensor) {
-                    continue;
-                }
-                output_tensor->set_requires_grad(output_requires_grad);
-                output_tensor->set_grad_fn(nullptr);
-                output_tensor->set_is_leaf(true);
-                output_tensor->set_output_idx(output_idx);
-            }
-        }
+    if (!record_context) {
         return output_tensors;
     }
 
@@ -235,47 +219,58 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
         output_requires_grad |= input_tensor && input_tensor->requires_grad();
     }
 
-    grad_outputs_reached_ = 0;
-    grad_outputs_.resize(output_tensors.size(), nullptr);
     std::vector<bool> differentiable_outputs(output_tensors.size(), false);
     bool has_differentiable_output = false;
     for (int output_idx = 0; output_idx < output_tensors.size(); ++output_idx) {
-        differentiable_outputs[output_idx]
-            = output_requires_grad && !ctx_.IsNonDifferentiable(output_tensors[output_idx]);
+        differentiable_outputs[output_idx] = output_tensors[output_idx] && output_requires_grad
+                                          && !ctx_.IsNonDifferentiable(output_tensors[output_idx]);
         has_differentiable_output |= differentiable_outputs[output_idx];
-        if (!differentiable_outputs[output_idx]) {
-            ++grad_outputs_reached_;
-        }
     }
 
-    if (!has_differentiable_output) {
-        next_functions_.clear();
-        return output_tensors;
-    }
-
-    for (int idx = 0; idx < input_tensors.size(); ++idx) {
-        const auto &input_tensor = input_tensors[idx];
-        if (!input_tensor) {
-            next_functions_.emplace_back(nullptr, 0);
-            continue;
+    // Metadata-only recomputation must not change graph dependency counters.
+    if (grad_enabled) {
+        grad_outputs_reached_ = 0;
+        grad_outputs_.resize(output_tensors.size(), nullptr);
+        for (bool differentiable : differentiable_outputs) {
+            if (!differentiable) {
+                ++grad_outputs_reached_;
+            }
         }
-        if (input_tensor->requires_grad() && input_tensor->is_leaf()) {
-            next_functions_.emplace_back(input_tensor->grad_accumulator(), input_tensor->output_idx());
-            input_tensor->grad_accumulator()->IncreaseDependenciesNumber();
+
+        if (!has_differentiable_output) {
+            next_functions_.clear();
         } else {
-            next_functions_.emplace_back(input_tensor->grad_fn(), input_tensor->output_idx());
-            if (input_tensor->grad_fn()) {
-                input_tensor->grad_fn()->IncreaseDependenciesNumber();
+            for (int idx = 0; idx < input_tensors.size(); ++idx) {
+                const auto &input_tensor = input_tensors[idx];
+                if (!input_tensor) {
+                    next_functions_.emplace_back(nullptr, 0);
+                    continue;
+                }
+                if (input_tensor->requires_grad() && input_tensor->is_leaf()) {
+                    next_functions_.emplace_back(input_tensor->grad_accumulator(), input_tensor->output_idx());
+                    input_tensor->grad_accumulator()->IncreaseDependenciesNumber();
+                } else {
+                    next_functions_.emplace_back(input_tensor->grad_fn(), input_tensor->output_idx());
+                    if (input_tensor->grad_fn()) {
+                        input_tensor->grad_fn()->IncreaseDependenciesNumber();
+                    }
+                }
             }
         }
     }
 
+    // Both modes take MarkNonDifferentiable into consideration.
+    // Set output metadata only after wiring input edges, since a custom Function may return an input tensor.
     for (int output_idx = 0; output_idx < output_tensors.size(); ++output_idx) {
         auto &output_tensor = output_tensors[output_idx];
+        if (!output_tensor) {
+            continue;
+        }
         const bool differentiable_output = differentiable_outputs[output_idx];
+        const bool attach_grad_fn = grad_enabled && differentiable_output;
         output_tensor->set_requires_grad(differentiable_output);
-        output_tensor->set_grad_fn(differentiable_output ? shared_from_this() : nullptr);
-        output_tensor->set_is_leaf(!differentiable_output);
+        output_tensor->set_grad_fn(attach_grad_fn ? shared_from_this() : nullptr);
+        output_tensor->set_is_leaf(!attach_grad_fn);
         output_tensor->set_output_idx(output_idx);
     }
 

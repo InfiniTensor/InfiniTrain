@@ -40,16 +40,17 @@ private:
 // RAII: Propagate requires_grad metadata while graph construction is disabled.
 // Used by non-reentrant checkpoint recomputation so downstream SetupContext
 // calls see the same needs_input_grad_ pattern as the original forward,
-// without wiring the recompute graph into the engine.
+// without wiring the recompute graph into the engine. Together with grad mode,
+// this gives three behaviors: build a graph, propagate metadata only, or neither.
 class PropagateRequiresGradGuard {
 public:
-    PropagateRequiresGradGuard() : prev_(GradMode::PropagateRequiresGrad()) {
-        GradMode::SetPropagateRequiresGrad(true);
+    explicit PropagateRequiresGradGuard(bool enabled = true) : prev_(GradMode::PropagateRequiresGrad()) {
+        GradMode::SetPropagateRequiresGrad(enabled);
     }
     ~PropagateRequiresGradGuard() { GradMode::SetPropagateRequiresGrad(prev_); }
 
 private:
-    bool prev_;
+    bool prev_ = false;
 };
 
 } // namespace infini_train::autograd

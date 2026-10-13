@@ -126,9 +126,6 @@ protected:
     std::vector<ModulePreHook> backward_pre_hooks_;
     std::vector<ModulePostHook> backward_post_hooks_;
 
-    // Full module call protocol: hooks followed by Forward.
-    std::vector<std::shared_ptr<Tensor>> Call(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
-
 private:
     friend std::vector<std::shared_ptr<Module>> parallel::function::Replicate(const std::shared_ptr<Module> &network,
                                                                               const std::vector<Device> &devices);

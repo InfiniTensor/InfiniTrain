@@ -55,40 +55,24 @@ bool TransformerConfig::RecomputeEnabled() const {
     return recompute_granularity != ActivationRecomputeGranularity::kNone;
 }
 
-void SetActivationRecomputeConfig(TransformerConfig *config, bool enabled, std::string_view granularity,
-                                  std::string_view method, int64_t num_layers) {
-    CHECK(config);
+ActivationRecomputeOptions ParseActivationRecomputeOptions(bool enabled, std::string_view granularity,
+                                                           std::string_view method, int64_t num_layers) {
+    ActivationRecomputeOptions options;
     if (!enabled) {
-        config->recompute_granularity = ActivationRecomputeGranularity::kNone;
-        config->recompute_method = ActivationRecomputeMethod::kNone;
-        config->recompute_num_layers = 0;
-        return;
+        return options;
     }
-
-    config->recompute_granularity = ParseActivationRecomputeGranularity(granularity);
-    if (config->recompute_granularity == ActivationRecomputeGranularity::kNone
-        || config->recompute_granularity == ActivationRecomputeGranularity::kSelective) {
-        config->recompute_method = ActivationRecomputeMethod::kNone;
-        config->recompute_num_layers = 0;
-        return;
+    options.granularity = ParseActivationRecomputeGranularity(granularity);
+    if (options.granularity == ActivationRecomputeGranularity::kNone
+        || options.granularity == ActivationRecomputeGranularity::kSelective) {
+        return options;
     }
-
-    config->recompute_method = ParseActivationRecomputeMethod(method);
-    if (config->recompute_method == ActivationRecomputeMethod::kNone) {
-        config->recompute_num_layers = 0;
-        return;
+    options.method = ParseActivationRecomputeMethod(method);
+    if (options.method == ActivationRecomputeMethod::kNone) {
+        return options;
     }
-
     CHECK_GE(num_layers, 1) << "recompute_num_layers must be >= 1 when recompute_method is uniform or block.";
-    config->recompute_num_layers = num_layers;
-}
-
-ActivationRecomputeOptions GetActivationRecomputeOptions(const TransformerConfig &config) {
-    return ActivationRecomputeOptions{
-        .granularity = config.recompute_granularity,
-        .method = config.recompute_method,
-        .num_layers = config.recompute_num_layers,
-    };
+    options.num_layers = num_layers;
+    return options;
 }
 
 void ApplyActivationRecomputeOptions(TransformerConfig *config, const ActivationRecomputeOptions &options) {

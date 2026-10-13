@@ -123,8 +123,7 @@ struct TransformerConfig {
     bool RecomputeEnabled() const;
 };
 
-void SetActivationRecomputeConfig(TransformerConfig *config, bool enabled, std::string_view granularity,
-                                  std::string_view method, int64_t num_layers);
-ActivationRecomputeOptions GetActivationRecomputeOptions(const TransformerConfig &config);
+ActivationRecomputeOptions ParseActivationRecomputeOptions(bool enabled, std::string_view granularity,
+                                                           std::string_view method, int64_t num_layers);
 void ApplyActivationRecomputeOptions(TransformerConfig *config, const ActivationRecomputeOptions &options);
 } // namespace infini_train::nn

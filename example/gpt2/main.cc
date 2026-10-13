@@ -236,16 +236,16 @@ void Train(const nn::parallel::Rank &rank) {
     nn::TransformerConfig model_config = gpt2::GPT2Config();
     std::shared_ptr<nn::Module> model = nullptr;
 
-    if (FLAGS_llmc_filepath.empty() && kModelToConfigs.count(FLAGS_model)) {
-        model_config = kModelToConfigs.at(FLAGS_model);
-        gpt2::SanitizeGPT2Config(model_config);
-    }
-    nn::SetActivationRecomputeConfig(&model_config, FLAGS_activation_recompute, FLAGS_recompute_granularity,
-                                     FLAGS_recompute_method, static_cast<int64_t>(FLAGS_recompute_num_layers));
+    const auto recompute_options
+        = nn::ParseActivationRecomputeOptions(FLAGS_activation_recompute, FLAGS_recompute_granularity,
+                                              FLAGS_recompute_method, static_cast<int64_t>(FLAGS_recompute_num_layers));
 
     if (!FLAGS_llmc_filepath.empty()) {
-        model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath, nn::GetActivationRecomputeOptions(model_config));
-    } else {
+        model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath, recompute_options);
+    } else if (kModelToConfigs.count(FLAGS_model)) {
+        model_config = kModelToConfigs.at(FLAGS_model);
+        gpt2::SanitizeGPT2Config(model_config);
+        nn::ApplyActivationRecomputeOptions(&model_config, recompute_options);
         model = std::make_shared<nn::TransformerModel>(model_config);
     }
 
