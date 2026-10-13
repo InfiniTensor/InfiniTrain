@@ -19,28 +19,24 @@
 
 namespace infini_train::kernels::cuda {
 namespace {
-    // OH = (H + 2*padding - kH) / stride + 1
-    inline int64_t ConvOutputSize(int64_t size, int64_t kernel, int64_t stride, int padding) {
-        return (size + 2 * padding - kernel) / stride + 1;
-    }
-
-    // grid->block->thread, 让block固定为256个线程
-    inline dim3 CalcGrid(int64_t numel) {
-        const int64_t block = 256;
-        return dim3(static_cast<unsigned int>((numel + block - 1) / block));
-    }
-
+// OH = (H + 2*padding - kH) / stride + 1
+inline int64_t ConvOutputSize(int64_t size, int64_t kernel, int64_t stride, int padding) {
+    return (size + 2 * padding - kernel) / stride + 1;
 }
+
+// grid->block->thread, 让block固定为256个线程
+inline dim3 CalcGrid(int64_t numel) {
+    const int64_t block = 256;
+    return dim3(static_cast<unsigned int>((numel + block - 1) / block));
+}
+
+} // namespace
 
 // 前向
 // __global__: 在GPU执行，在CPU启动; 每个线程算出张量的一个元素 out[ni, oi, oy, ox]
-__global__ void Conv2dForwardKernel(const float *__restrict__ input,
-                                    const float *__restrict__ weight,
-                                    const float *__restrict__ bias,
-                                    float *__restrict__ output,
-                                    int64_t n, int64_t c, int64_t h, int64_t w,
-                                    int64_t o, int64_t kh, int64_t kw,
-                                    int64_t oh, int64_t ow,
+__global__ void Conv2dForwardKernel(const float *__restrict__ input, const float *__restrict__ weight,
+                                    const float *__restrict__ bias, float *__restrict__ output, int64_t n, int64_t c,
+                                    int64_t h, int64_t w, int64_t o, int64_t kh, int64_t kw, int64_t oh, int64_t ow,
                                     int64_t stride, int64_t padding) {
     // blockIdx.x当前线程所在的block的编号
     // blockDim.x 每个block的线程数（256）
@@ -74,7 +70,7 @@ __global__ void Conv2dForwardKernel(const float *__restrict__ input,
                     continue;
                 }
 
-                acc += input[((ni*c + ci) * h + iy) * w + ix] * weight[((oi*c + ci) * kh + ky) * kw + kx];
+                acc += input[((ni * c + ci) * h + iy) * w + ix] * weight[((oi * c + ci) * kh + ky) * kw + kx];
             }
         }
     }
@@ -83,10 +79,8 @@ __global__ void Conv2dForwardKernel(const float *__restrict__ input,
 }
 
 // CPU端
-std::shared_ptr<Tensor> Conv2dForward(const std::shared_ptr<Tensor> &input,
-                                    const std::shared_ptr<Tensor> &weight,
-                                    const std::shared_ptr<Tensor> &bias,
-                                    int64_t stride, int64_t padding) {
+std::shared_ptr<Tensor> Conv2dForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                                      const std::shared_ptr<Tensor> &bias, int64_t stride, int64_t padding) {
     const auto &input_dims = input->Dims();
     const auto &weight_dims = weight->Dims();
     CHECK_EQ(input_dims.size(), 4);
@@ -104,38 +98,34 @@ std::shared_ptr<Tensor> Conv2dForward(const std::shared_ptr<Tensor> &input,
     auto output = std::make_shared<Tensor>(std::vector<int64_t>{n, o, oh, ow}, DataType::kFLOAT32, input->GetDevice());
     output->Fill(0.0f);
 
-    const int64_t numel = n*o*oh*ow;
+    const int64_t numel = n * o * oh * ow;
     // 并行计算启动
     Conv2dForwardKernel<<<CalcGrid(numel), 256>>>(
-        static_cast<const float *>(input->DataPtr()),// DataPtr()返回GPU显存指针
-        static_cast<const float *>(weight->DataPtr()),
-        bias ? static_cast<const float *>(bias->DataPtr()) : nullptr,
+        static_cast<const float *>(input->DataPtr()), // DataPtr()返回GPU显存指针
+        static_cast<const float *>(weight->DataPtr()), bias ? static_cast<const float *>(bias->DataPtr()) : nullptr,
         static_cast<float *>(output->DataPtr()), n, c, h, w, o, kh, kw, oh, ow, stride, padding);
-    
+
     // GPU kernel异步启动，所以同步要等待算完
     cudaDeviceSynchronize();
     return output;
 }
 
-
 // 反向1：输入的梯度
-__global__ void Conv2dBackwardInputKernel(const float *__restrict__ weight,
-                                        const float *__restrict__ grad_output,
-                                        float *__restrict__ grad_input,
-                                        int64_t n, int64_t c, int64_t h, int64_t w,
-                                        int64_t o, int64_t kh, int64_t kw, int64_t oh, int64_t ow,
-                                        int64_t stride, int64_t padding) {
+__global__ void Conv2dBackwardInputKernel(const float *__restrict__ weight, const float *__restrict__ grad_output,
+                                          float *__restrict__ grad_input, int64_t n, int64_t c, int64_t h, int64_t w,
+                                          int64_t o, int64_t kh, int64_t kw, int64_t oh, int64_t ow, int64_t stride,
+                                          int64_t padding) {
     const int64_t idx = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-    if (idx >= n*c*h*w) {
+    if (idx >= n * c * h * w) {
         return;
     }
 
     const int64_t ix = idx % w;
-    const int64_t iy = (idx / w) % h; 
+    const int64_t iy = (idx / w) % h;
     const int64_t ci = (idx / (w * h)) % c;
     const int64_t ni = idx / (w * h * c);
 
-    float acc = 0.0f; 
+    float acc = 0.0f;
     for (int64_t oi = 0; oi < o; ++oi) {
         for (int64_t ky = 0; ky < kh; ++ky) {
             const int64_t rem_y = iy + padding - ky;
@@ -160,7 +150,7 @@ __global__ void Conv2dBackwardInputKernel(const float *__restrict__ weight,
                     continue;
                 }
 
-                acc += grad_output[((ni*o + oi) * oh + oy) * ow + ox] * weight[((oi * c + ci) * kh + ky) * kw + kx];
+                acc += grad_output[((ni * o + oi) * oh + oy) * ow + ox] * weight[((oi * c + ci) * kh + ky) * kw + kx];
             }
         }
     }
@@ -169,42 +159,35 @@ __global__ void Conv2dBackwardInputKernel(const float *__restrict__ weight,
 
 std::shared_ptr<Tensor> Conv2dBackwardInput(const std::shared_ptr<Tensor> &weight,
                                             const std::shared_ptr<Tensor> &grad_output,
-                                            const std::vector<int64_t> &input_dims,
-                                            int64_t stride, int64_t padding) {
+                                            const std::vector<int64_t> &input_dims, int64_t stride, int64_t padding) {
     const auto &grad_dims = grad_output->Dims();
     const int64_t n = input_dims[0], c = input_dims[1], h = input_dims[2], w = input_dims[3];
     const int64_t o = weight->Dims()[0], kh = weight->Dims()[2], kw = weight->Dims()[3];
     const int64_t oh = grad_dims[2], ow = grad_dims[3];
 
-
     auto grad_input = std::make_shared<Tensor>(input_dims, DataType::kFLOAT32, grad_output->GetDevice());
     grad_input->Fill(0.0f);
 
-    const int64_t numel = n*c*h*w;
+    const int64_t numel = n * c * h * w;
     Conv2dBackwardInputKernel<<<CalcGrid(numel), 256>>>(
-        static_cast<const float *>(weight->DataPtr()), 
-        static_cast<const float *>(grad_output->DataPtr()),
-        static_cast<float *>(grad_input->DataPtr()), n, c, h, w, o, kh, kw, oh, ow, stride, padding
-    );
+        static_cast<const float *>(weight->DataPtr()), static_cast<const float *>(grad_output->DataPtr()),
+        static_cast<float *>(grad_input->DataPtr()), n, c, h, w, o, kh, kw, oh, ow, stride, padding);
 
     cudaDeviceSynchronize();
     return grad_input;
 }
 
 // 反向2： 权重的梯度
-__global__ void Conv2dBackwardWeightKernel(const float *__restrict__ input,
-                                        const float *__restrict__ grad_output,
-                                        float *__restrict__ grad_weight,
-                                        int64_t n, int64_t c, int64_t h, int64_t w,
-                                        int64_t o, int64_t kh, int64_t kw,
-                                        int64_t oh, int64_t ow,
-                                        int64_t stride, int64_t padding){
+__global__ void Conv2dBackwardWeightKernel(const float *__restrict__ input, const float *__restrict__ grad_output,
+                                           float *__restrict__ grad_weight, int64_t n, int64_t c, int64_t h, int64_t w,
+                                           int64_t o, int64_t kh, int64_t kw, int64_t oh, int64_t ow, int64_t stride,
+                                           int64_t padding) {
     const int64_t idx = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-    if (idx >= o*c*kh*kw) {
+    if (idx >= o * c * kh * kw) {
         return;
     }
 
-    const int64_t kx = idx % kw; 
+    const int64_t kx = idx % kw;
     const int64_t ky = (idx / kw) % kh;
     const int64_t ci = (idx / (kw * kh)) % c;
     const int64_t oi = idx / (kw * kh * c);
@@ -223,18 +206,16 @@ __global__ void Conv2dBackwardWeightKernel(const float *__restrict__ input,
                     continue;
                 }
 
-                acc += input[((ni*c + ci) * h + iy) * w + ix] * grad_output[((ni * o + oi) * oh + oy) * ow + ox];
+                acc += input[((ni * c + ci) * h + iy) * w + ix] * grad_output[((ni * o + oi) * oh + oy) * ow + ox];
             }
         }
     }
     grad_weight[idx] = acc;
 }
 
-
 std::shared_ptr<Tensor> Conv2dBackwardWeight(const std::shared_ptr<Tensor> &input,
-                                            const std::shared_ptr<Tensor> &grad_output,
-                                            const std::vector<int64_t> &weight_dims,
-                                            int64_t stride, int64_t padding) {
+                                             const std::shared_ptr<Tensor> &grad_output,
+                                             const std::vector<int64_t> &weight_dims, int64_t stride, int64_t padding) {
     const auto &input_dims = input->Dims();
     const auto &grad_dims = grad_output->Dims();
     const int64_t n = input_dims[0], c = input_dims[1], h = input_dims[2], w = input_dims[3];
@@ -244,22 +225,18 @@ std::shared_ptr<Tensor> Conv2dBackwardWeight(const std::shared_ptr<Tensor> &inpu
     auto grad_weight = std::make_shared<Tensor>(weight_dims, DataType::kFLOAT32, grad_output->GetDevice());
     grad_weight->Fill(0.0f);
 
-    const int64_t numel = o*c*kh*kw;
+    const int64_t numel = o * c * kh * kw;
     Conv2dBackwardWeightKernel<<<CalcGrid(numel), 256>>>(
-        static_cast<const float *>(input->DataPtr()),
-        static_cast<const float *>(grad_output->DataPtr()),
-        static_cast<float *>(grad_weight->DataPtr()), n, c, h, w, o, kh, kw, oh, ow, stride, padding
-    );
+        static_cast<const float *>(input->DataPtr()), static_cast<const float *>(grad_output->DataPtr()),
+        static_cast<float *>(grad_weight->DataPtr()), n, c, h, w, o, kh, kw, oh, ow, stride, padding);
 
     cudaDeviceSynchronize();
     return grad_weight;
 }
 
-
 // 反向3：偏置的梯度
-__global__ void Conv2dBackwardBiasKernel(const float *__restrict__ grad_output,
-                                        float *__restrict__ grad_bias,
-                                        int64_t n, int64_t o, int64_t oh, int64_t ow) {
+__global__ void Conv2dBackwardBiasKernel(const float *__restrict__ grad_output, float *__restrict__ grad_bias,
+                                         int64_t n, int64_t o, int64_t oh, int64_t ow) {
     const int64_t oi = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
     if (oi >= o) {
         return;
@@ -268,36 +245,31 @@ __global__ void Conv2dBackwardBiasKernel(const float *__restrict__ grad_output,
     float acc = 0.0f;
     for (int64_t ni = 0; ni < n; ++ni) {
         for (int64_t oy = 0; oy < oh; ++oy) {
-            for (int64_t ox = 0; ox < ow; ++ox) {
-                acc += grad_output[((ni*o + oi) * oh + oy) * ow + ox];
-            }
+            for (int64_t ox = 0; ox < ow; ++ox) { acc += grad_output[((ni * o + oi) * oh + oy) * ow + ox]; }
         }
     }
     grad_bias[oi] = acc;
 }
 
-std::shared_ptr<Tensor> Conv2dBackwardBias(const std::shared_ptr<Tensor> &grad_output,
-                                        int64_t out_channels) {
+std::shared_ptr<Tensor> Conv2dBackwardBias(const std::shared_ptr<Tensor> &grad_output, int64_t out_channels) {
     const auto &grad_dims = grad_output->Dims();
     const int64_t n = grad_dims[0], oh = grad_dims[2], ow = grad_dims[3];
 
-    auto grad_bias = std::make_shared<Tensor>(std::vector<int64_t>{out_channels}, DataType::kFLOAT32, grad_output->GetDevice());
+    auto grad_bias
+        = std::make_shared<Tensor>(std::vector<int64_t>{out_channels}, DataType::kFLOAT32, grad_output->GetDevice());
     grad_bias->Fill(0.0f);
 
-    Conv2dBackwardBiasKernel<<<CalcGrid(out_channels), 256>>>(
-        static_cast<const float *>(grad_output->DataPtr()),
-        static_cast<float *>(grad_bias->DataPtr()), n, out_channels, oh, ow
-    );
+    Conv2dBackwardBiasKernel<<<CalcGrid(out_channels), 256>>>(static_cast<const float *>(grad_output->DataPtr()),
+                                                              static_cast<float *>(grad_bias->DataPtr()), n,
+                                                              out_channels, oh, ow);
     cudaDeviceSynchronize();
     return grad_bias;
-
 }
 
-
-}
+} // namespace infini_train::kernels::cuda
 
 // 注册dispatcher
-#define REGISTER_CUDA_CONV2D_KERNEL(kernel_name) \
+#define REGISTER_CUDA_CONV2D_KERNEL(kernel_name)                                                                       \
     REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_CONV2D_KERNEL(Conv2dForward)

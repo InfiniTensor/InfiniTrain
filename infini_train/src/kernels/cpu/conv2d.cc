@@ -13,11 +13,11 @@
 
 namespace infini_train::kernels::cpu {
 namespace {
-    // 公式与PyTorch一致: OH = (H + 2*padding - KH) / stride + 1
-    inline int64_t ConvOutputSize(int64_t size, int64_t kernel, int64_t stride, int64_t padding) {
-        return (size + 2 * padding - kernel) / stride + 1;
-    }
+// 公式与PyTorch一致: OH = (H + 2*padding - KH) / stride + 1
+inline int64_t ConvOutputSize(int64_t size, int64_t kernel, int64_t stride, int64_t padding) {
+    return (size + 2 * padding - kernel) / stride + 1;
 }
+} // namespace
 
 // namespace
 
@@ -27,10 +27,8 @@ namespace {
 // Conv2dBackwardBias 反向
 
 // 前向
-std::shared_ptr<Tensor> Conv2dForward(const std::shared_ptr<Tensor> &input, 
-                                    const std::shared_ptr<Tensor> &weight, 
-                                    const std::shared_ptr<Tensor> &bias,
-                                    int64_t stride, int64_t padding) {                         
+std::shared_ptr<Tensor> Conv2dForward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &weight,
+                                      const std::shared_ptr<Tensor> &bias, int64_t stride, int64_t padding) {
     const auto &input_dims = input->Dims();
     const auto &weight_dims = weight->Dims();
     CHECK_EQ(input_dims.size(), 4) << "Conv2d input must be 4-D (NCHW)";
@@ -44,7 +42,6 @@ std::shared_ptr<Tensor> Conv2dForward(const std::shared_ptr<Tensor> &input,
     const int64_t ow = ConvOutputSize(w, kw, stride, padding);
     CHECK_GT(oh, 0) << "Conv2d output height must be positive, check kernel/stride/padding";
     CHECK_GT(ow, 0) << "Conv2d output width must be positive, check kernel/stride/padding";
-
 
     auto output = std::make_shared<Tensor>(std::vector<int64_t>{n, o, oh, ow}, DataType::kFLOAT32);
     output->Fill(0.0f);
@@ -79,27 +76,25 @@ std::shared_ptr<Tensor> Conv2dForward(const std::shared_ptr<Tensor> &input,
                                     continue;
                                 }
                                 // input[ni, ci, iy, ix] * weight[oi, ci, ky, kx]
-                                acc += input_ptr[( (ni*c + ci) * h + iy) * w + ix] * weight_ptr[( (oi*c + ci) * kh + ky) * kw + kx];
+                                acc += input_ptr[((ni * c + ci) * h + iy) * w + ix]
+                                     * weight_ptr[((oi * c + ci) * kh + ky) * kw + kx];
                             }
                         }
                     }
 
-                    output_ptr[( (ni*o + oi) * oh + oy) * ow + ox] = acc;
-
+                    output_ptr[((ni * o + oi) * oh + oy) * ow + ox] = acc;
                 }
             }
         }
     }
 
-    return output;                              
-                                
+    return output;
 }
 
 // 反向1： 输入的梯度
 std::shared_ptr<Tensor> Conv2dBackwardInput(const std::shared_ptr<Tensor> &weight,
                                             const std::shared_ptr<Tensor> &grad_output,
-                                            const std::vector<int64_t> &input_dims,
-                                            int64_t stride, int64_t padding) {
+                                            const std::vector<int64_t> &input_dims, int64_t stride, int64_t padding) {
     const auto &grad_dims = grad_output->Dims();
     const int64_t n = input_dims[0], c = input_dims[1], h = input_dims[2], w = input_dims[3];
     const int64_t o = weight->Dims()[0], kh = weight->Dims()[2], kw = weight->Dims()[3];
@@ -111,7 +106,6 @@ std::shared_ptr<Tensor> Conv2dBackwardInput(const std::shared_ptr<Tensor> &weigh
     const float *weight_ptr = static_cast<const float *>(weight->DataPtr());
     const float *grad_output_ptr = static_cast<const float *>(grad_output->DataPtr());
     float *grad_input_ptr = static_cast<float *>(grad_input->DataPtr());
-
 
     for (int64_t ni = 0; ni < n; ++ni) {
         for (int64_t ci = 0; ci < c; ++ci) {
@@ -134,20 +128,20 @@ std::shared_ptr<Tensor> Conv2dBackwardInput(const std::shared_ptr<Tensor> &weigh
 
                             for (int64_t kx = 0; kx < kw; ++kx) {
                                 const int64_t rem_x = ix + padding - kx;
-                                if (rem_x < 0 || rem_x % stride != 0){
+                                if (rem_x < 0 || rem_x % stride != 0) {
                                     continue;
                                 }
                                 const int64_t ox = rem_x / stride;
                                 if (ox >= ow) {
                                     continue;
                                 }
-                                acc += grad_output_ptr[( (ni*o + oi) * oh + oy) * ow + ox] * weight_ptr[( (oi*c + ci) * kh + ky) * kw + kx];
+                                acc += grad_output_ptr[((ni * o + oi) * oh + oy) * ow + ox]
+                                     * weight_ptr[((oi * c + ci) * kh + ky) * kw + kx];
                             }
-
                         }
                     }
 
-                    grad_input_ptr[( (ni*c + ci) * h + iy) * w + ix] = acc;
+                    grad_input_ptr[((ni * c + ci) * h + iy) * w + ix] = acc;
                 }
             }
         }
@@ -155,18 +149,15 @@ std::shared_ptr<Tensor> Conv2dBackwardInput(const std::shared_ptr<Tensor> &weigh
     return grad_input;
 }
 
-
 // 反向2： 权重的梯度
 std::shared_ptr<Tensor> Conv2dBackwardWeight(const std::shared_ptr<Tensor> &input,
-                                            const std::shared_ptr<Tensor> &grad_output,
-                                            const std::vector<int64_t> &weight_dims,
-                                            int64_t stride, int64_t padding) {
+                                             const std::shared_ptr<Tensor> &grad_output,
+                                             const std::vector<int64_t> &weight_dims, int64_t stride, int64_t padding) {
     const auto &input_dims = input->Dims();
     const auto &grad_dims = grad_output->Dims();
     const int64_t n = input_dims[0], c = input_dims[1], h = input_dims[2], w = input_dims[3];
     const int64_t o = weight_dims[0], kh = weight_dims[2], kw = weight_dims[3];
     const int64_t oh = grad_dims[2], ow = grad_dims[3];
-
 
     auto grad_weight = std::make_shared<Tensor>(weight_dims, DataType::kFLOAT32);
     grad_weight->Fill(0.0f);
@@ -192,13 +183,13 @@ std::shared_ptr<Tensor> Conv2dBackwardWeight(const std::shared_ptr<Tensor> &inpu
                                 if (ix < 0 || ix >= w) {
                                     continue;
                                 }
-                                acc += input_ptr[( (ni*c + ci) * h + iy) * w + ix] * grad_output_ptr[( (ni*o + oi) * oh + oy) * ow + ox];
-
+                                acc += input_ptr[((ni * c + ci) * h + iy) * w + ix]
+                                     * grad_output_ptr[((ni * o + oi) * oh + oy) * ow + ox];
                             }
                         }
                     }
 
-                    grad_weight_ptr[( (oi*c + ci) * kh + ky) * kw + kx] = acc;
+                    grad_weight_ptr[((oi * c + ci) * kh + ky) * kw + kx] = acc;
                 }
             }
         }
@@ -206,16 +197,13 @@ std::shared_ptr<Tensor> Conv2dBackwardWeight(const std::shared_ptr<Tensor> &inpu
     return grad_weight;
 }
 
-
 // 反向3： 偏置的梯度
-std::shared_ptr<Tensor> Conv2dBackwardBias(const std::shared_ptr<Tensor> &grad_output,
-                                        int64_t out_channels) {
+std::shared_ptr<Tensor> Conv2dBackwardBias(const std::shared_ptr<Tensor> &grad_output, int64_t out_channels) {
     const auto &grad_dims = grad_output->Dims();
     const int64_t n = grad_dims[0], oh = grad_dims[2], ow = grad_dims[3];
 
     auto grad_bias = std::make_shared<Tensor>(std::vector<int64_t>{out_channels}, DataType::kFLOAT32);
     grad_bias->Fill(0.0f);
-
 
     const float *grad_output_ptr = static_cast<const float *>(grad_output->DataPtr());
     float *grad_bias_ptr = static_cast<float *>(grad_bias->DataPtr());
@@ -225,8 +213,7 @@ std::shared_ptr<Tensor> Conv2dBackwardBias(const std::shared_ptr<Tensor> &grad_o
         for (int64_t ni = 0; ni < n; ++ni) {
             for (int64_t oy = 0; oy < oh; ++oy) {
                 for (int64_t ox = 0; ox < ow; ++ox) {
-                    acc += grad_output_ptr[( (ni * out_channels + oi) * oh + oy) * ow + ox];
-
+                    acc += grad_output_ptr[((ni * out_channels + oi) * oh + oy) * ow + ox];
                 }
             }
         }
@@ -235,12 +222,10 @@ std::shared_ptr<Tensor> Conv2dBackwardBias(const std::shared_ptr<Tensor> &grad_o
     return grad_bias;
 }
 
-
-
-}
+} // namespace infini_train::kernels::cpu
 // 注册表dispatcher
 // CPU版本跟CUDA版本名字相同, device不同，Dispatcher按照device分发
-#define REGISTER_CPU_CONV2D_KERNEL(kernel_name) \
+#define REGISTER_CPU_CONV2D_KERNEL(kernel_name)                                                                        \
     REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_CONV2D_KERNEL(Conv2dForward)

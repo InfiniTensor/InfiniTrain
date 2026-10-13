@@ -120,11 +120,9 @@ MNISTDataset::operator[](size_t idx) const {
     // 不能用原始 uint8 文件的 784。
     const size_t image_sample_bytes = image_file_.tensor.SizeInBytes() / image_file_.dims[0];
 
-    // return {std::make_shared<infini_train::Tensor>(image_file_.tensor, idx * image_size_in_bytes_, image_dims_),
-    //         std::make_shared<infini_train::Tensor>(label_file_.tensor, idx * label_size_in_bytes_, label_dims_)};
+    
     return {std::make_shared<infini_train::Tensor>(image_file_.tensor, idx * image_sample_bytes, image_dims_),
             std::make_shared<infini_train::Tensor>(label_file_.tensor, idx * label_size_in_bytes_, label_dims_)};
-
 }
 
 size_t MNISTDataset::Size() const { return image_file_.dims[0]; }

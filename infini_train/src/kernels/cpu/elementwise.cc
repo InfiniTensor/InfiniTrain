@@ -316,15 +316,11 @@ std::shared_ptr<Tensor> ReluForward(const std::shared_ptr<Tensor> &input) {
     return UnaryForward(input, [](float x) { return x > 0.0f ? x : 0.0f; });
 }
 
-
 // ReLU反向：grad_input = grad_output * (y > 0 ? 1 : 0)
-std::shared_ptr<Tensor> ReluBackward(const std::shared_ptr<Tensor> &output, const std::shared_ptr<Tensor> &grad_output) {
+std::shared_ptr<Tensor> ReluBackward(const std::shared_ptr<Tensor> &output,
+                                     const std::shared_ptr<Tensor> &grad_output) {
     return UnaryBackward(grad_output, output, [](float y) { return y > 0.0f ? 1.0f : 0.0f; });
 }
-
-
-
-
 
 } // namespace infini_train::kernels::cpu
 

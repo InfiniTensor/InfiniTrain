@@ -14,7 +14,6 @@
 
 #include "infini_train/include/nn/modules/conv2d.h"
 
-
 namespace nn = infini_train::nn;
 
 MNIST::MNIST() {
@@ -35,15 +34,14 @@ MNIST::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
 
 // CNN手写数字识别网络
 MNISTCNN::MNISTCNN() {
-    modules_["conv1"] = std::make_shared<nn::Conv2d>(1, 16, 3); //in_channels=1, out_channels=16, kernel_size=3
+    modules_["conv1"] = std::make_shared<nn::Conv2d>(1, 16, 3); // in_channels=1, out_channels=16, kernel_size=3
     modules_["relu1"] = std::make_shared<nn::Relu>();
     modules_["conv2"] = std::make_shared<nn::Conv2d>(16, 32, 3); // in_channels=16, out_channels=32, kernel_size=3
     modules_["relu2"] = std::make_shared<nn::Relu>();
 
     // 变成10个class
-    modules_["fc"]= std::make_shared<nn::Linear>(32 * 24 * 24, 10);
+    modules_["fc"] = std::make_shared<nn::Linear>(32 * 24 * 24, 10);
 }
-
 
 std::vector<std::shared_ptr<infini_train::Tensor>>
 MNISTCNN::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {

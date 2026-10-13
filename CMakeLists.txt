@@ -12,14 +12,14 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Generate compile_commands.json
+#Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_compile_options(-Wunused -Wunused-function)
 
-# ------------------------------------------------------------------------------
-# GoogleTest (submodule)
-# ------------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+#GoogleTest(submodule)
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 if(BUILD_TEST)
   if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/googletest/CMakeLists.txt)
     message(FATAL_ERROR "googletest submodule not found at third_party/googletest. "
@@ -30,15 +30,15 @@ if(BUILD_TEST)
   enable_testing()
 endif()
 
-# ------------------------------------------------------------------------------
-# Third-party deps
-# ------------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+#Third - party deps
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
-# gflags
+#gflags
 add_subdirectory(third_party/gflags)
 include_directories(${gflags_SOURCE_DIR}/include)
 
-# glog
+#glog
 set(WITH_GFLAGS OFF CACHE BOOL "Disable glog finding system gflags" FORCE)
 set(WITH_GTEST OFF CACHE BOOL "Disable glog finding system gtest" FORCE)
 get_property(_infinitrain_build_testing_was_cached CACHE BUILD_TESTING PROPERTY TYPE SET)
@@ -52,7 +52,7 @@ endif()
 unset(_infinitrain_build_testing_was_cached)
 include_directories(${glog_SOURCE_DIR}/src)
 
-# eigen
+#eigen
 if(USE_OMP)
   find_package(OpenMP REQUIRED)
 endif()
@@ -65,11 +65,11 @@ if(PROFILE_MODE)
   add_compile_definitions(PROFILE_MODE=1)
 endif()
 
-# ------------------------------------------------------------------------------
-# Sources
-# ------------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+#Sources
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
-# Framework core sources (*.cc), excluding cpu kernels (they are built separately)
+#Framework core sources(*.cc), excluding cpu kernels(they are built separately)
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
 list(FILTER SRC EXCLUDE REGEX ".*kernels/cpu/.*")
 
@@ -83,7 +83,7 @@ elseif(NOT USE_NCCL)
   list(FILTER SRC EXCLUDE REGEX ".*/ccl/cuda/.*")
 endif()
 
-# CPU kernels (*.cc)
+#CPU kernels(*.cc)
 file(GLOB_RECURSE CPU_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/kernels/cpu/*.cc)
 
 # ------------------------------------------------------------------------------
