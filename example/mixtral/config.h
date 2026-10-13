@@ -24,10 +24,10 @@ inline nn::TransformerConfig TinyMixtralConfig() {
     config.add_bias_linear = false;
     config.add_bias_lm_head = false;
     config.tie_weights = false;
-    config.ffn_expansion_ratio = 3.5f;
     config.norm_eps = 1e-5f;
     config.rope_theta = 1000000.0f;
     config.use_scaled_rope = false;
+    config.rotary_interleaved = true;
 
     nn::MoEConfig moe_config;
     moe_config.num_experts = 8;

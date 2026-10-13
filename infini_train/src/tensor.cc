@@ -57,6 +57,7 @@ Tensor::Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &
     : buffer_(tensor.buffer_), offset_(tensor.offset_ + offset), dims_(dims),
       num_elements_(std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>())), dtype_(tensor.dtype_) {
     CHECK_LE(offset_ + kDataTypeToSize.at(dtype_) * num_elements_, buffer_->Size());
+    sequence_parallel_ = tensor.sequence_parallel_;
 }
 
 Tensor::Tensor(const float *data, const std::vector<int64_t> &dims, DataType dtype, Device device)
@@ -104,6 +105,10 @@ size_t Tensor::NumElements() const { return num_elements_; }
 
 DataType Tensor::Dtype() const { return dtype_; }
 
+void Tensor::set_sequence_parallel(bool enabled) { sequence_parallel_ = enabled; }
+
+bool Tensor::sequence_parallel() const { return sequence_parallel_; }
+
 std::shared_ptr<Tensor> Tensor::Detach() const { return std::make_shared<Tensor>(*this, 0, dims_); }
 
 void Tensor::Fill(Scalar value) {
@@ -128,9 +133,11 @@ Eigen::Map<Eigen::Matrix<float, 1, Eigen::Dynamic, Eigen::RowMajor>> Tensor::Eig
 Tensor Tensor::To(Device device) {
     const auto buffer_device = buffer_->GetDevice();
     if (device == buffer_device) {
-        auto new_tensor = Tensor(*this, offset_, dims_);
+        auto new_tensor = Tensor(*this, 0, dims_);
+        new_tensor.requires_grad_ = requires_grad_;
+        new_tensor.sequence_parallel_ = sequence_parallel_;
         if (grad_) {
-            new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), grad_->offset_, grad_->dims_);
+            new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), 0, grad_->dims_);
         }
         return new_tensor;
     }
@@ -170,15 +177,18 @@ Tensor Tensor::To(Device device) {
     }
 
     new_tensor.requires_grad_ = requires_grad_;
+    new_tensor.sequence_parallel_ = sequence_parallel_;
 
     return new_tensor;
 }
 
 Tensor Tensor::To(DataType dtype) {
     if (dtype == dtype_) {
-        auto new_tensor = Tensor(*this, offset_, dims_);
+        auto new_tensor = Tensor(*this, 0, dims_);
+        new_tensor.requires_grad_ = requires_grad_;
+        new_tensor.sequence_parallel_ = sequence_parallel_;
         if (grad_) {
-            new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), grad_->offset_, grad_->dims_);
+            new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), 0, grad_->dims_);
         }
         return new_tensor;
     }
@@ -194,6 +204,7 @@ Tensor Tensor::To(DataType dtype) {
     }
 
     new_tensor.requires_grad_ = requires_grad_;
+    new_tensor.sequence_parallel_ = sequence_parallel_;
 
     return new_tensor;
 }

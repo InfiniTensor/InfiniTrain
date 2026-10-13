@@ -68,6 +68,20 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     const auto version_major = BytesToType<int32_t>(header, 56);
     const auto version_minor = BytesToType<int32_t>(header, 60);
 
+    // Compatibility logic for the legacy LLMC checkpoint format exported by
+    // karpathy/llm.c train_llama3.py, where ffn_dim_multiplier and multiple_of
+    // are used to derive the final FFN dimension.
+    // TODO(jym): Move this model-specific dimension derivation into the checkpoint
+    // format adapter once native checkpoint conversion support is stable.
+    auto round_up_to = [](int64_t x, int64_t m) { return (x + m - 1) / m * m; };
+    int64_t hidden_dim = 4LL * static_cast<int64_t>(n_embd);
+    hidden_dim = (2LL * hidden_dim) / 3LL;
+    if (ffn_dim_multiplier > 0.0f) {
+        hidden_dim = static_cast<int64_t>(
+            std::llround(static_cast<double>(ffn_dim_multiplier) * static_cast<double>(hidden_dim)));
+    }
+    const int64_t ffn_hidden = round_up_to(hidden_dim, static_cast<int64_t>(multiple_of));
+
     nn::TransformerConfig llama3_config = llama3::LLaMA3Config();
     llama3_config.block_size = block_size;
     llama3_config.vocab_size = vocab_size;
@@ -75,8 +89,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
     llama3_config.n_head = n_head;
     llama3_config.n_kv_head = n_kv_head;
     llama3_config.n_embd = n_embd;
-    llama3_config.ffn_dim_multiplier = ffn_dim_multiplier;
-    llama3_config.multiple_of = multiple_of;
+    llama3_config.ffn_hidden_size = ffn_hidden;
     llama3_config.rope_theta = rope_theta;
     llama3_config.use_scaled_rope = static_cast<bool>(use_scaled_rope);
     llama3_config.norm_eps = norm_eps;
@@ -130,17 +143,6 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
 
     const int64_t head_dim = static_cast<int64_t>(n_embd) / static_cast<int64_t>(n_head);
 
-    // nn::MLP hidden dim calculation in LLaMA-3
-    auto round_up_to = [](int64_t x, int64_t m) { return (x + m - 1) / m * m; };
-    int64_t hidden_dim = 4LL * static_cast<int64_t>(n_embd);
-    hidden_dim = (2LL * hidden_dim) / 3LL;
-    if (ffn_dim_multiplier > 0.0f) {
-        hidden_dim = static_cast<int64_t>(
-            std::llround(static_cast<double>(ffn_dim_multiplier) * static_cast<double>(hidden_dim)));
-    }
-
-    int64_t ffn_hidden = round_up_to(hidden_dim, static_cast<int64_t>(multiple_of));
-
     // ===== Per-rank sizes / offsets =====
     // vocab parallel
     const int64_t vpp = static_cast<int64_t>(vocab_size) / tp_size;
@@ -159,7 +161,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
 
     // RowParallel (proj)
     const int64_t in_pp = static_cast<int64_t>(n_embd) / tp_size;
-    // nn::MLP: c_fc/c_fc2（shard along row），c_proj（shard along col）
+    // nn::MLP: packed c_fc [gate | up] (shard each block along row), c_proj (shard along col)
     const int64_t fc_out = ffn_hidden;
     const int64_t fc_pp = fc_out / tp_size;
     const int64_t in_fc_pp = ffn_hidden / tp_size;
@@ -269,7 +271,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         }
     }
 
-    // transformer.h.{i}.mlp.c_fc.weight : ColumnParallelLinear, but actually applies on "rows"
+    // transformer.h.{i}.mlp.c_fc.weight (up) -> local packed c_fc rows [fc_pp : 2*fc_pp)
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
@@ -277,7 +279,8 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
                                                   nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
-            ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
+            float *dst = static_cast<float *>(tensor->DataPtr()) + fc_pp * n_embd;
+            ReadMatrixRowShardFloat(ifs, dst,
                                     /*rows=*/fc_out, /*cols=*/n_embd,
                                     /*row_start=*/tp_rank * fc_pp, /*row_cnt=*/fc_pp);
             ++local_layer_index;
@@ -287,13 +290,13 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath) 
         }
     }
 
-    // transformer.h.{i}.mlp.c_fc2.weight : ColumnParallelLinear, but actually applies on "rows"
+    // transformer.h.{i}.mlp.c_fc2.weight (gate) -> local packed c_fc rows [0 : fc_pp)
     local_layer_index = 0;
     for (int i = 0; i < static_cast<int>(n_layer); ++i) {
         if (owned_layers[i]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
                                                   nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFc2LayerName,
+                                                  nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()),
                                     /*rows=*/fc_out, /*cols=*/n_embd,

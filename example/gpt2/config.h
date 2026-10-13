@@ -20,9 +20,7 @@ inline nn::TransformerConfig GPT2Config() {
             .add_bias_linear = true,
             .add_bias_lm_head = false,
             .tie_weights = true,
-            .ffn_expansion_ratio = 4.0f,
-            .ffn_dim_multiplier = std::nullopt,
-            .multiple_of = 1};
+            .rotary_interleaved = true};
 }
 
 inline void SanitizeGPT2Config(const nn::TransformerConfig &c) {

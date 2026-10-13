@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
 namespace infini_train::nn {
@@ -13,6 +14,9 @@ public:
     static constexpr char kType[] = "CausalSelfAttention";
     static constexpr char kCAttnLayerName[] = "c_attn";
     static constexpr char kCProjLayerName[] = "c_proj";
+
+    static constexpr char kQNormLayerName[] = "q_norm";
+    static constexpr char kKNormLayerName[] = "k_norm";
 
     static constexpr char kParamBiasName[] = "bias";
 

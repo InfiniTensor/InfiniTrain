@@ -7,6 +7,9 @@
 
 namespace infini_train {
 class Tensor;
+namespace nn {
+class Module;
+}
 } // namespace infini_train
 
 namespace infini_train::nn::parallel {
@@ -31,4 +34,6 @@ std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(const std::shared_pt
 std::vector<std::shared_ptr<Tensor>> ScatterToTPRegionFunc(const std::shared_ptr<Tensor> &input);
 std::vector<std::shared_ptr<Tensor>> ReduceFromTPRegionFunc(const std::shared_ptr<Tensor> &input);
 std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(const std::shared_ptr<Tensor> &input);
+
+void FinalizeModelGrads(const std::vector<std::shared_ptr<nn::Module>> &model_chunks);
 } // namespace infini_train::nn::parallel

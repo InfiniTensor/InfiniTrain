@@ -22,6 +22,7 @@
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 #ifdef PROFILE_MODE
@@ -150,6 +151,7 @@ int main(int argc, char *argv[]) {
             auto loss_cpu = loss->To(Device());
             lossf += static_cast<const float *>(loss_cpu.DataPtr())[0];
         }
+        infini_train::nn::parallel::FinalizeModelGrads({model});
         optimizer->Step();
 
         device_impl->SynchronizeDevice(train_device);

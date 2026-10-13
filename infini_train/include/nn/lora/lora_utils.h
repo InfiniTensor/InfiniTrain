@@ -28,6 +28,14 @@ std::shared_ptr<Tensor> SlicePackedQKVRowsForTensorParallel(const std::shared_pt
 std::shared_ptr<Tensor> RestorePackedQKVRowsFromTensorParallel(const std::shared_ptr<Tensor> &gathered_tensor,
                                                                int64_t q_rows, int tp_size);
 
+// Internal helper for packed SwiGLU tensors stored as [gate | up] along dim 0.
+std::shared_ptr<Tensor> SlicePackedSwiGLURowsForTensorParallel(const std::shared_ptr<Tensor> &full_tensor, int tp_rank,
+                                                               int tp_size);
+
+// Internal helper for TP-gathered packed SwiGLU shards stored rank-major as [gate_i | up_i].
+std::shared_ptr<Tensor> RestorePackedSwiGLURowsFromTensorParallel(const std::shared_ptr<Tensor> &gathered_tensor,
+                                                                  int tp_size);
+
 } // namespace detail
 
 /**
@@ -121,8 +129,8 @@ void LoadLoRAStateDict(std::shared_ptr<Module> model,
 void SaveLoRAWeights(const std::shared_ptr<Module> &model, const std::string &filepath);
 
 /**
- * Load LoRA parameters from file. Packed QKV LoRA-B tensors are split as
- * [Qi | Ki | Vi] for the current TP rank.
+ * Load LoRA parameters from file. Packed QKV and SwiGLU LoRA-B tensors are
+ * reordered into their rank-local packed layouts.
  */
 void LoadLoRAWeights(std::shared_ptr<Module> model, const std::string &filepath);
 

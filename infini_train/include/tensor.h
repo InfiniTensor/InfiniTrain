@@ -80,6 +80,9 @@ public:
     size_t NumElements() const;
     DataType Dtype() const;
 
+    void set_sequence_parallel(bool enabled);
+    bool sequence_parallel() const;
+
     std::shared_ptr<Tensor> Detach() const;
 
     void Fill(Scalar value);
@@ -242,6 +245,7 @@ public:
 private:
     std::shared_ptr<Tensor> grad_ = nullptr;
     bool requires_grad_ = false;
+    bool sequence_parallel_ = false;
     bool is_leaf_ = true;
     std::shared_ptr<autograd::Function> grad_fn_ = nullptr;
     int output_idx_ = 0;

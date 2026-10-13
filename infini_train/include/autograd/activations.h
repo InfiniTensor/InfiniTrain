@@ -22,7 +22,6 @@ public:
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 };
 
-
 class Relu : public Function {
 public:
     static constexpr char kType[] = "ReluFunction";
@@ -35,7 +34,15 @@ public:
     std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 };
 
+class SwiGLU : public Function {
+public:
+    static constexpr char kType[] = "SwiGLUFunction";
 
+    SwiGLU() : Function(kType) {}
 
-
+    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+                      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
+    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+};
 } // namespace infini_train::autograd
