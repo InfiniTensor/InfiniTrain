@@ -338,17 +338,9 @@ std::vector<std::shared_ptr<Tensor>> Checkpoint(const CheckpointForwardFn &forwa
             LOG(FATAL) << "Checkpoint: unpack called more than once for index " << holder->index << ".";
         }
         auto recomputed = holder->tensor;
-        const auto &meta = frame->forward_metas[holder->index];
-        if (recomputed && meta.dims.empty() && meta.dtype == DataType::kFLOAT32
-            && meta.device_type == Device::DeviceType::kCPU) {
-            LOG(FATAL) << "Checkpoint: recomputed non-null tensor for saved null entry.";
-        }
-        if (!recomputed
-            && !(meta.dims.empty() && meta.dtype == DataType::kFLOAT32
-                 && meta.device_type == Device::DeviceType::kCPU)) {
-            LOG(FATAL) << "Checkpoint: recomputed null tensor for saved non-null entry.";
-        }
-        // TODO(zbl): Determinism check (shape/dtype/device) vs forward_metas.
+        // SaveVariables bypasses hooks for nullptr entries. Every holder here
+        // represents a real tensor, including zero-dimensional CPU FP32 tensors.
+        CHECK(recomputed) << "Checkpoint: recomputed null tensor for saved non-null entry.";
         // Release recomputed tensor as soon as it's unpacked to reduce peak memory.
         holder->tensor.reset();
         it->second = false;

@@ -223,11 +223,13 @@ void Train(const nn::parallel::Rank &rank) {
 
     nn::TransformerConfig model_config = qwen3::Qwen3Config();
     std::shared_ptr<nn::Module> model = nullptr;
-    nn::SetActivationRecomputeConfig(&model_config, FLAGS_activation_recompute, FLAGS_recompute_granularity,
-                                     FLAGS_recompute_method, static_cast<int64_t>(FLAGS_recompute_num_layers));
+    const auto recompute_options
+        = nn::ParseActivationRecomputeOptions(FLAGS_activation_recompute, FLAGS_recompute_granularity,
+                                              FLAGS_recompute_method, static_cast<int64_t>(FLAGS_recompute_num_layers));
     if (!FLAGS_llmc_filepath.empty()) {
-        model = qwen3::LoadFromLLMC(FLAGS_llmc_filepath, nn::GetActivationRecomputeOptions(model_config));
+        model = qwen3::LoadFromLLMC(FLAGS_llmc_filepath, recompute_options);
     } else {
+        nn::ApplyActivationRecomputeOptions(&model_config, recompute_options);
         qwen3::SanitizeQwen3Config(model_config);
         model = std::make_shared<nn::TransformerModel>(model_config);
     }

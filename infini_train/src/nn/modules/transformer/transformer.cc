@@ -47,6 +47,8 @@ std::vector<std::shared_ptr<Tensor>> CheckpointTransformerLayers(const std::shar
         return RunTransformerLayers(layers, start, end, checkpoint_inputs);
     };
     constexpr bool kUseReentrant = false;
+    // FIXME(zbl): RNG state preservation is not implemented. Checkpointed layers
+    //             must not use Dropout or other random ops that need identical replay.
     constexpr bool kPreserveRngState = false;
     return utils::checkpoint::Checkpoint(forward_fn, inputs, kUseReentrant, kPreserveRngState);
 }
