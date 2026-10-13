@@ -6,7 +6,6 @@ from pathlib import Path
 
 import torch
 
-
 MAGIC = b"FM9RS001"
 
 
@@ -15,12 +14,16 @@ def write_tensor(handle, tensor):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert official FM9G4B-V Resampler weights for InfiniTrain")
+    parser = argparse.ArgumentParser(
+        description="Convert official FM9G4B-V Resampler weights for InfiniTrain"
+    )
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
-    state = torch.load(args.checkpoint, map_location="cpu", weights_only=True, mmap=True)
+    state = torch.load(
+        args.checkpoint, map_location="cpu", weights_only=True, mmap=True
+    )
     prefix = "resampler."
     get = lambda name: state[prefix + name]
     in_proj_weight = get("attn.in_proj_weight")

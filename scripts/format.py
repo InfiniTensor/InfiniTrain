@@ -56,18 +56,12 @@ def format_file(file: Path, check: bool, formatter) -> bool:
             cmd = [formatter, file]
             if check:
                 cmd.insert(1, "--check")
-                process = subprocess.run(
+                subprocess.run(
                     cmd,
                     capture_output=True,
                     text=True,
                     check=True,
                 )
-                if process.stderr:
-                    print(f"{Fore.YELLOW}{file} is not formatted.{Style.RESET_ALL}")
-                    print(
-                        f"Use {Fore.CYAN}{formatter} {file}{Style.RESET_ALL} to format it."
-                    )
-                    return False
             else:
                 subprocess.run(
                     cmd,
@@ -82,6 +76,7 @@ def format_file(file: Path, check: bool, formatter) -> bool:
         )
     except subprocess.CalledProcessError as e:
         print(f"{Fore.RED}Formatter {formatter} failed: {e}{Style.RESET_ALL}")
+        return False
 
     return True
 

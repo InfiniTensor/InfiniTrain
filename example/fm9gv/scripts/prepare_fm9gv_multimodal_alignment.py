@@ -13,7 +13,6 @@ import torch.nn.functional as F
 from torchvision import transforms
 from transformers import AutoConfig, AutoModel, AutoTokenizer
 
-
 MAGIC = b"FM9MM001"
 VPM_MAGIC = b"FM9VP001"
 VPM_INPUT_MAGIC = b"FM9VI001"
@@ -23,10 +22,19 @@ class FP32MasterAdamW:
     def __init__(self, named_parameters, learning_rate, beta2, weight_decay):
         self.model_parameters = [parameter for _name, parameter in named_parameters]
         self.master_parameters = [
-            parameter.detach().float().clone().requires_grad_(True) for parameter in self.model_parameters
+            parameter.detach().float().clone().requires_grad_(True)
+            for parameter in self.model_parameters
         ]
-        decay = [master for master, model in zip(self.master_parameters, self.model_parameters) if model.ndim > 1]
-        no_decay = [master for master, model in zip(self.master_parameters, self.model_parameters) if model.ndim <= 1]
+        decay = [
+            master
+            for master, model in zip(self.master_parameters, self.model_parameters)
+            if model.ndim > 1
+        ]
+        no_decay = [
+            master
+            for master, model in zip(self.master_parameters, self.model_parameters)
+            if model.ndim <= 1
+        ]
         self.optimizer = torch.optim.AdamW(
             [
                 {"params": decay, "weight_decay": weight_decay},
@@ -51,11 +59,15 @@ class FP32MasterAdamW:
             model.copy_(master.to(dtype=model.dtype))
 
 
-def build_adamw(named_parameters, learning_rate, beta2, weight_decay, fp32_master_weights):
+def build_adamw(
+    named_parameters, learning_rate, beta2, weight_decay, fp32_master_weights
+):
     if fp32_master_weights:
         return FP32MasterAdamW(named_parameters, learning_rate, beta2, weight_decay)
     decay = [parameter for _name, parameter in named_parameters if parameter.ndim > 1]
-    no_decay = [parameter for _name, parameter in named_parameters if parameter.ndim <= 1]
+    no_decay = [
+        parameter for _name, parameter in named_parameters if parameter.ndim <= 1
+    ]
     return torch.optim.AdamW(
         [
             {"params": decay, "weight_decay": weight_decay},
@@ -92,13 +104,17 @@ def write_sample(path, input_ids, labels, image_indices, vision_embeddings):
     input_ids = input_ids.detach().cpu().to(torch.int64).contiguous().numpy()
     labels = labels.detach().cpu().to(torch.int64).contiguous().numpy()
     image_indices = image_indices.detach().cpu().to(torch.int64).contiguous().numpy()
-    vision_embeddings = vision_embeddings.detach().cpu().to(torch.float32).contiguous().numpy()
+    vision_embeddings = (
+        vision_embeddings.detach().cpu().to(torch.float32).contiguous().numpy()
+    )
     batch, sequence = input_ids.shape
     visual_tokens, hidden = vision_embeddings.shape
     vision_embeddings = vision_embeddings.reshape(batch, visual_tokens, hidden)
     image_indices = image_indices.reshape(batch, visual_tokens)
     with path.open("wb") as handle:
-        handle.write(struct.pack("<8sqqqq", MAGIC, batch, sequence, visual_tokens, hidden))
+        handle.write(
+            struct.pack("<8sqqqq", MAGIC, batch, sequence, visual_tokens, hidden)
+        )
         handle.write(input_ids.tobytes(order="C"))
         handle.write(labels.tobytes(order="C"))
         handle.write(image_indices.tobytes(order="C"))
@@ -110,40 +126,56 @@ def write_vpm_sample(path, features, target_size):
     batch, tokens, hidden = features.shape
     height, width = (int(target_size[0]), int(target_size[1]))
     if tokens < height * width:
-        raise RuntimeError(f"VPM output has {tokens} tokens but target size requires {height * width}")
+        raise RuntimeError(
+            f"VPM output has {tokens} tokens but target size requires {height * width}"
+        )
     with path.open("wb") as handle:
-        handle.write(struct.pack("<8sqqqqq", VPM_MAGIC, batch, tokens, height, width, hidden))
+        handle.write(
+            struct.pack("<8sqqqqq", VPM_MAGIC, batch, tokens, height, width, hidden)
+        )
         handle.write(features.tobytes(order="C"))
 
 
 def write_vpm_input(path, pixel_values_list, target_sizes):
     all_pixel_values = []
     for pixel_values in pixel_values_list:
-        all_pixel_values.extend([item.flatten(end_dim=1).permute(1, 0) for item in pixel_values])
+        all_pixel_values.extend(
+            [item.flatten(end_dim=1).permute(1, 0) for item in pixel_values]
+        )
     if not all_pixel_values:
         raise RuntimeError("the selected sample has no VPM pixel input")
-    pixels = torch.nn.utils.rnn.pad_sequence(all_pixel_values, batch_first=True, padding_value=0.0)
+    pixels = torch.nn.utils.rnn.pad_sequence(
+        all_pixel_values, batch_first=True, padding_value=0.0
+    )
     batch, width, channels_times_height = pixels.shape
     if channels_times_height % 3 != 0:
         raise RuntimeError("VPM pixel input does not have three channels")
-    pixels = pixels.permute(0, 2, 1).reshape(batch, 3, channels_times_height // 3, width)
-    sizes = [item for item in target_sizes if isinstance(item, torch.Tensor)] if isinstance(target_sizes, list) else target_sizes
+    pixels = pixels.permute(0, 2, 1).reshape(
+        batch, 3, channels_times_height // 3, width
+    )
+    sizes = (
+        [item for item in target_sizes if isinstance(item, torch.Tensor)]
+        if isinstance(target_sizes, list)
+        else target_sizes
+    )
     sizes = torch.vstack(sizes) if isinstance(sizes, list) else sizes
     if sizes.shape[0] != batch or not torch.all(sizes == sizes[0]):
         raise RuntimeError("VPM input export currently requires a uniform target size")
     pixels = pixels.detach().cpu().float().contiguous().numpy()
     height_patches, width_patches = (int(sizes[0, 0]), int(sizes[0, 1]))
     with path.open("wb") as handle:
-        handle.write(struct.pack(
-            "<8sqqqqqq",
-            VPM_INPUT_MAGIC,
-            batch,
-            pixels.shape[1],
-            pixels.shape[2],
-            pixels.shape[3],
-            height_patches,
-            width_patches,
-        ))
+        handle.write(
+            struct.pack(
+                "<8sqqqqqq",
+                VPM_INPUT_MAGIC,
+                batch,
+                pixels.shape[1],
+                pixels.shape[2],
+                pixels.shape[3],
+                height_patches,
+                width_patches,
+            )
+        )
         handle.write(pixels.tobytes(order="C"))
 
 
@@ -162,7 +194,9 @@ def main():
     parser.add_argument("--vpm-input-only", action="store_true")
     parser.add_argument("--vpm-reference-grad-bin", type=Path)
     parser.add_argument("--dtype", choices=("float32", "bfloat16"), default="bfloat16")
-    parser.add_argument("--attention", choices=("eager", "flash_attention_2"), default="eager")
+    parser.add_argument(
+        "--attention", choices=("eager", "flash_attention_2"), default="eager"
+    )
     parser.add_argument("--max-length", type=int, default=2048)
     parser.add_argument("--max-slice-nums", type=int, default=1)
     parser.add_argument("--parameter-grad-name")
@@ -177,9 +211,15 @@ def main():
     parser.add_argument("--adam-beta2", type=float, default=0.95)
     parser.add_argument("--weight-decay", type=float, default=0.1)
     parser.add_argument("--max-grad-norm", type=float, default=1.0)
-    parser.add_argument("--fp32-master-weights", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--tune-vision", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--tune-llm", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--fp32-master-weights", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument(
+        "--tune-vision", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument(
+        "--tune-llm", action=argparse.BooleanOptionalAction, default=False
+    )
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
     if args.iterations <= 0 or not 0 <= args.warmup_iterations < args.iterations:
@@ -187,11 +227,19 @@ def main():
     if args.learning_rate < 0 or args.max_grad_norm < 0:
         parser.error("learning-rate and max-grad-norm must be non-negative")
     if bool(args.parameter_grad_name) != bool(args.parameter_grad_bin):
-        parser.error("--parameter-grad-name and --parameter-grad-bin must be used together")
+        parser.error(
+            "--parameter-grad-name and --parameter-grad-bin must be used together"
+        )
     if bool(args.parameter_output_name) != bool(args.parameter_output_bin):
-        parser.error("--parameter-output-name and --parameter-output-bin must be used together")
-    if bool(args.parameter_initial_output_name) != bool(args.parameter_initial_output_bin):
-        parser.error("--parameter-initial-output-name and --parameter-initial-output-bin must be used together")
+        parser.error(
+            "--parameter-output-name and --parameter-output-bin must be used together"
+        )
+    if bool(args.parameter_initial_output_name) != bool(
+        args.parameter_initial_output_bin
+    ):
+        parser.error(
+            "--parameter-initial-output-name and --parameter-initial-output-bin must be used together"
+        )
 
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
@@ -215,7 +263,11 @@ def main():
             item["image"] = str((args.data_json.parent / image).resolve())
         elif isinstance(image, dict):
             item["image"] = {
-                key: str((args.data_json.parent / value).resolve()) if not Path(value).is_absolute() else value
+                key: (
+                    str((args.data_json.parent / value).resolve())
+                    if not Path(value).is_absolute()
+                    else value
+                )
                 for key, value in image.items()
             }
     dataset = SupervisedDataset(
@@ -253,7 +305,11 @@ def main():
     labels = batch.pop("labels").to("cuda", dtype=torch.int64)
     batch = move_to_device(batch, "cuda")
 
-    named_trainable = [(name, parameter) for name, parameter in model.named_parameters() if parameter.requires_grad]
+    named_trainable = [
+        (name, parameter)
+        for name, parameter in model.named_parameters()
+        if parameter.requires_grad
+    ]
     if not named_trainable:
         raise RuntimeError("no trainable parameters selected")
     optimizer = None
@@ -266,11 +322,17 @@ def main():
             args.fp32_master_weights and dtype != torch.float32,
         )
     if args.parameter_initial_output_name:
-        parameter = dict(model.named_parameters()).get(args.parameter_initial_output_name)
+        parameter = dict(model.named_parameters()).get(
+            args.parameter_initial_output_name
+        )
         if parameter is None:
-            raise RuntimeError(f"unknown initial parameter: {args.parameter_initial_output_name}")
+            raise RuntimeError(
+                f"unknown initial parameter: {args.parameter_initial_output_name}"
+            )
         args.parameter_initial_output_bin.parent.mkdir(parents=True, exist_ok=True)
-        parameter.detach().cpu().float().contiguous().numpy().tofile(args.parameter_initial_output_bin)
+        parameter.detach().cpu().float().contiguous().numpy().tofile(
+            args.parameter_initial_output_bin
+        )
 
     captured_vpm = {}
 
@@ -279,7 +341,11 @@ def main():
         hidden_state.retain_grad()
         captured_vpm["hidden_state"] = hidden_state
 
-    hook = model.vpm.register_forward_hook(capture_vpm_output) if args.vpm_output_bin else None
+    hook = (
+        model.vpm.register_forward_hook(capture_vpm_output)
+        if args.vpm_output_bin
+        else None
+    )
     losses = []
     elapsed_ms_per_step = []
     grad_norms = []
@@ -302,7 +368,11 @@ def main():
             raise RuntimeError("the selected sample has no visual embeddings")
         vision.retain_grad()
         image_indices = torch.cat(
-            [torch.arange(int(start), int(end), device="cuda") for start, end in batch["image_bound"][0]], dim=0
+            [
+                torch.arange(int(start), int(end), device="cuda")
+                for start, end in batch["image_bound"][0]
+            ],
+            dim=0,
         )
         flat_vision = vision.reshape(-1, vision.shape[-1])
         if image_indices.numel() != flat_vision.shape[0]:
@@ -323,15 +393,24 @@ def main():
         if step == args.iterations - 1 and args.parameter_grad_name:
             parameter = dict(model.named_parameters()).get(args.parameter_grad_name)
             if parameter is None or parameter.grad is None:
-                raise RuntimeError(f"parameter has no gradient: {args.parameter_grad_name}")
+                raise RuntimeError(
+                    f"parameter has no gradient: {args.parameter_grad_name}"
+                )
             parameter_grad = parameter.grad.detach().cpu().float().contiguous().numpy()
 
         grad_norm = 0.0
         clip_scale = 1.0
         if optimizer is not None:
             parameters = [parameter for _name, parameter in named_trainable]
-            clip_threshold = args.max_grad_norm if args.max_grad_norm > 0 else float("inf")
-            grad_norm = float(torch.nn.utils.clip_grad_norm_(parameters, clip_threshold).detach().float().cpu())
+            clip_threshold = (
+                args.max_grad_norm if args.max_grad_norm > 0 else float("inf")
+            )
+            grad_norm = float(
+                torch.nn.utils.clip_grad_norm_(parameters, clip_threshold)
+                .detach()
+                .float()
+                .cpu()
+            )
             if args.max_grad_norm > 0:
                 clip_scale = min(1.0, args.max_grad_norm / (grad_norm + 1e-6))
             optimizer.step()
@@ -358,8 +437,17 @@ def main():
         hook.remove()
 
     args.output_bin.parent.mkdir(parents=True, exist_ok=True)
-    write_sample(args.output_bin, batch["input_ids"], labels, image_indices, flat_vision)
-    grad = vision.grad.reshape(-1, vision.shape[-1]).detach().cpu().to(torch.float32).contiguous().numpy()
+    write_sample(
+        args.output_bin, batch["input_ids"], labels, image_indices, flat_vision
+    )
+    grad = (
+        vision.grad.reshape(-1, vision.shape[-1])
+        .detach()
+        .cpu()
+        .to(torch.float32)
+        .contiguous()
+        .numpy()
+    )
     args.reference_grad_bin.parent.mkdir(parents=True, exist_ok=True)
     grad.tofile(args.reference_grad_bin)
     if parameter_grad is not None:
@@ -370,7 +458,9 @@ def main():
         if parameter is None:
             raise RuntimeError(f"unknown parameter: {args.parameter_output_name}")
         args.parameter_output_bin.parent.mkdir(parents=True, exist_ok=True)
-        parameter.detach().cpu().float().contiguous().numpy().tofile(args.parameter_output_bin)
+        parameter.detach().cpu().float().contiguous().numpy().tofile(
+            args.parameter_output_bin
+        )
     if args.vpm_output_bin:
         if "hidden_state" not in captured_vpm:
             raise RuntimeError("VPM forward hook did not capture last_hidden_state")
@@ -379,17 +469,25 @@ def main():
             raise RuntimeError("VPM output gradient was not retained")
         target_sizes = batch["tgt_sizes"]
         if isinstance(target_sizes, list):
-            target_sizes = [item for item in target_sizes if isinstance(item, torch.Tensor)]
+            target_sizes = [
+                item for item in target_sizes if isinstance(item, torch.Tensor)
+            ]
             target_sizes = torch.vstack(target_sizes)
         if target_sizes.shape[0] != vpm_hidden.shape[0]:
-            raise RuntimeError("only one target size per VPM feature batch is supported")
+            raise RuntimeError(
+                "only one target size per VPM feature batch is supported"
+            )
         if not torch.all(target_sizes == target_sizes[0]):
-            raise RuntimeError("VPM alignment export currently requires a uniform target size")
+            raise RuntimeError(
+                "VPM alignment export currently requires a uniform target size"
+            )
         args.vpm_output_bin.parent.mkdir(parents=True, exist_ok=True)
         write_vpm_sample(args.vpm_output_bin, vpm_hidden, target_sizes[0])
         if args.vpm_reference_grad_bin:
             args.vpm_reference_grad_bin.parent.mkdir(parents=True, exist_ok=True)
-            vpm_hidden.grad.detach().cpu().float().contiguous().numpy().tofile(args.vpm_reference_grad_bin)
+            vpm_hidden.grad.detach().cpu().float().contiguous().numpy().tofile(
+                args.vpm_reference_grad_bin
+            )
     measured = slice(args.warmup_iterations, None)
     stats = {
         "dtype": args.dtype,
@@ -409,7 +507,9 @@ def main():
         "visual_tokens": int(flat_vision.shape[0]),
         "hidden_size": int(flat_vision.shape[1]),
         "valid_labels": int((labels != -100).sum().item()),
-        "vision_grad_l2": float(torch.linalg.vector_norm(torch.from_numpy(grad)).item()),
+        "vision_grad_l2": float(
+            torch.linalg.vector_norm(torch.from_numpy(grad)).item()
+        ),
         "vision_grad_max_abs": float(np.abs(grad).max()),
         "elapsed_ms": elapsed_ms_per_step[-1],
         "elapsed_ms_per_step": elapsed_ms_per_step,
@@ -420,8 +520,12 @@ def main():
         "peak_reserved_mb": float(max(peak_reserved_mb_per_step[measured])),
         "peak_allocated_mb_per_step": peak_allocated_mb_per_step,
         "peak_reserved_mb_per_step": peak_reserved_mb_per_step,
-        "trainable_parameters": int(sum(parameter.numel() for _name, parameter in named_trainable)),
-        "fp32_master_weights": bool(args.fp32_master_weights and dtype != torch.float32),
+        "trainable_parameters": int(
+            sum(parameter.numel() for _name, parameter in named_trainable)
+        ),
+        "fp32_master_weights": bool(
+            args.fp32_master_weights and dtype != torch.float32
+        ),
     }
     if parameter_grad is not None:
         stats["parameter_grad_name"] = args.parameter_grad_name

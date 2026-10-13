@@ -18,19 +18,25 @@ def cosine(left, right):
 
 def relative_error(actual, reference):
     denominator = np.linalg.norm(reference)
-    return float(np.linalg.norm(actual - reference) / denominator) if denominator else 0.0
+    return (
+        float(np.linalg.norm(actual - reference) / denominator) if denominator else 0.0
+    )
 
 
 def paired_paths(parser, args, left_name, right_name):
     left = getattr(args, left_name)
     right = getattr(args, right_name)
     if bool(left) != bool(right):
-        parser.error(f"--{left_name.replace('_', '-')} and --{right_name.replace('_', '-')} must be used together")
+        parser.error(
+            f"--{left_name.replace('_', '-')} and --{right_name.replace('_', '-')} must be used together"
+        )
     return left, right
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Compare matched FM9G4B-V multi-step training runs.")
+    parser = argparse.ArgumentParser(
+        description="Compare matched FM9G4B-V multi-step training runs."
+    )
     parser.add_argument("--infinitrain-json", type=Path, required=True)
     parser.add_argument("--pytorch-json", type=Path, required=True)
     parser.add_argument("--infinitrain-initial", type=Path)
@@ -52,7 +58,9 @@ def main():
     infini_losses = np.asarray(infini["losses"], dtype=np.float64)
     torch_losses = np.asarray(torch["losses"], dtype=np.float64)
     if infini_losses.shape != torch_losses.shape:
-        raise RuntimeError(f"loss shape mismatch: {infini_losses.shape} vs {torch_losses.shape}")
+        raise RuntimeError(
+            f"loss shape mismatch: {infini_losses.shape} vs {torch_losses.shape}"
+        )
     loss_error = np.abs(infini_losses - torch_losses)
     result = {
         "steps": int(infini_losses.size),
@@ -66,28 +74,41 @@ def main():
         "performance": {
             "infinitrain_mean_ms": float(infini["mean_elapsed_ms"]),
             "pytorch_mean_ms": float(torch["mean_elapsed_ms"]),
-            "infinitrain_over_pytorch": float(infini["mean_elapsed_ms"] / torch["mean_elapsed_ms"]),
+            "infinitrain_over_pytorch": float(
+                infini["mean_elapsed_ms"] / torch["mean_elapsed_ms"]
+            ),
         },
         "memory": {
             "infinitrain_peak_used_mb": float(infini["peak_used_mb"]),
             "pytorch_peak_allocated_mb": float(torch["peak_allocated_mb"]),
-            "used_over_allocated": float(infini["peak_used_mb"] / torch["peak_allocated_mb"]),
+            "used_over_allocated": float(
+                infini["peak_used_mb"] / torch["peak_allocated_mb"]
+            ),
             "infinitrain_peak_reserved_mb": float(infini["peak_reserved_mb"]),
             "pytorch_peak_reserved_mb": float(torch["peak_reserved_mb"]),
-            "reserved_ratio": float(infini["peak_reserved_mb"] / torch["peak_reserved_mb"]),
+            "reserved_ratio": float(
+                infini["peak_reserved_mb"] / torch["peak_reserved_mb"]
+            ),
         },
     }
 
     if initial_paths[0]:
         infini_initial, torch_initial = map(load_array, initial_paths)
         infini_final, torch_final = map(load_array, final_paths)
-        if not (infini_initial.shape == torch_initial.shape == infini_final.shape == torch_final.shape):
+        if not (
+            infini_initial.shape
+            == torch_initial.shape
+            == infini_final.shape
+            == torch_final.shape
+        ):
             raise RuntimeError("parameter snapshot shape mismatch")
         infini_delta = infini_final - infini_initial
         torch_delta = torch_final - torch_initial
         result["parameter_update"] = {
             "elements": int(infini_delta.size),
-            "initial_max_absolute_error": float(np.max(np.abs(infini_initial - torch_initial))),
+            "initial_max_absolute_error": float(
+                np.max(np.abs(infini_initial - torch_initial))
+            ),
             "infinitrain_l2": float(np.linalg.norm(infini_delta)),
             "pytorch_l2": float(np.linalg.norm(torch_delta)),
             "cosine_similarity": cosine(infini_delta, torch_delta),
@@ -104,7 +125,9 @@ def main():
             "pytorch_l2": float(np.linalg.norm(torch_grad)),
             "cosine_similarity": cosine(infini_grad, torch_grad),
             "relative_error": relative_error(infini_grad, torch_grad),
-            "sign_agreement": float(np.mean(np.signbit(infini_grad) == np.signbit(torch_grad))),
+            "sign_agreement": float(
+                np.mean(np.signbit(infini_grad) == np.signbit(torch_grad))
+            ),
         }
 
     rendered = json.dumps(result, indent=2) + "\n"

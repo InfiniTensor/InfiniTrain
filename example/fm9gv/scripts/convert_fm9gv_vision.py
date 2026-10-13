@@ -5,7 +5,6 @@ import json
 import struct
 from pathlib import Path
 
-
 MAGIC = b"FM9VE001"
 
 
@@ -21,7 +20,9 @@ def write_tensor_f32(handle, tensor):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert the FM9G4B-V SigLIP VPM to an InfiniTrain FP32 binary.")
+    parser = argparse.ArgumentParser(
+        description="Convert the FM9G4B-V SigLIP VPM to an InfiniTrain FP32 binary."
+    )
     parser.add_argument("--model-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -31,7 +32,11 @@ def main():
     config = json.loads((args.model_dir / "config.json").read_text(encoding="utf-8"))
     vision = config["vision_config"]
     state = torch.load(args.model_dir / "pytorch_model.bin", map_location="cpu")
-    if isinstance(state, dict) and "state_dict" in state and isinstance(state["state_dict"], dict):
+    if (
+        isinstance(state, dict)
+        and "state_dict" in state
+        and isinstance(state["state_dict"], dict)
+    ):
         state = state["state_dict"]
 
     hidden_size = int(vision["hidden_size"])
@@ -45,26 +50,36 @@ def main():
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("wb") as handle:
-        handle.write(struct.pack(
-            "<8s7qf",
-            MAGIC,
-            hidden_size,
-            intermediate_size,
-            num_layers,
-            num_heads,
-            num_channels,
-            image_size,
-            patch_size,
-            layer_norm_eps,
-        ))
-        write_tensor_f32(handle, require(state, "vpm.embeddings.patch_embedding.weight"))
+        handle.write(
+            struct.pack(
+                "<8s7qf",
+                MAGIC,
+                hidden_size,
+                intermediate_size,
+                num_layers,
+                num_heads,
+                num_channels,
+                image_size,
+                patch_size,
+                layer_norm_eps,
+            )
+        )
+        write_tensor_f32(
+            handle, require(state, "vpm.embeddings.patch_embedding.weight")
+        )
         write_tensor_f32(handle, require(state, "vpm.embeddings.patch_embedding.bias"))
-        write_tensor_f32(handle, require(state, "vpm.embeddings.position_embedding.weight"))
+        write_tensor_f32(
+            handle, require(state, "vpm.embeddings.position_embedding.weight")
+        )
         for layer in range(num_layers):
             prefix = f"vpm.encoder.layers.{layer}."
             for projection in ("k_proj", "v_proj", "q_proj", "out_proj"):
-                write_tensor_f32(handle, require(state, prefix + f"self_attn.{projection}.weight"))
-                write_tensor_f32(handle, require(state, prefix + f"self_attn.{projection}.bias"))
+                write_tensor_f32(
+                    handle, require(state, prefix + f"self_attn.{projection}.weight")
+                )
+                write_tensor_f32(
+                    handle, require(state, prefix + f"self_attn.{projection}.bias")
+                )
             write_tensor_f32(handle, require(state, prefix + "layer_norm1.weight"))
             write_tensor_f32(handle, require(state, prefix + "layer_norm1.bias"))
             write_tensor_f32(handle, require(state, prefix + "mlp.fc1.weight"))
@@ -77,7 +92,9 @@ def main():
         write_tensor_f32(handle, require(state, "vpm.post_layernorm.bias"))
 
     print(f"converted: {args.output}")
-    print(f"layers: {num_layers}, hidden_size: {hidden_size}, intermediate_size: {intermediate_size}")
+    print(
+        f"layers: {num_layers}, hidden_size: {hidden_size}, intermediate_size: {intermediate_size}"
+    )
 
 
 if __name__ == "__main__":

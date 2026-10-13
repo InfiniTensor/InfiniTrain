@@ -48,7 +48,9 @@ def require(sd, key):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert FM9G4B-V HF checkpoint to InfiniTrain text-only FP32 bin.")
+    parser = argparse.ArgumentParser(
+        description="Convert FM9G4B-V HF checkpoint to InfiniTrain text-only FP32 bin."
+    )
     parser.add_argument("--model-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -66,7 +68,11 @@ def main():
         config = json.load(f)
 
     sd = torch.load(str(checkpoint), map_location="cpu")
-    if isinstance(sd, dict) and "state_dict" in sd and isinstance(sd["state_dict"], dict):
+    if (
+        isinstance(sd, dict)
+        and "state_dict" in sd
+        and isinstance(sd["state_dict"], dict)
+    ):
         sd = sd["state_dict"]
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
