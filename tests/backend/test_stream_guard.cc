@@ -160,6 +160,91 @@ TEST_F(StreamGuardTest, CurrentStreamSelectionIsThreadLocal) {
   EXPECT_EQ(impl_->GetStream(device0_), stream.get());
 }
 
+TEST_F(StreamGuardTest, BlasHandleBindingIsThreadLocal) {
+  std::unique_ptr<core::Stream> first(impl_->CreateStream(device0_));
+  std::unique_ptr<core::Stream> second(impl_->CreateStream(device0_));
+  core::StreamGuard guard(device0_, first.get());
+  auto *handle = dynamic_cast<core::cuda::CudaBlasHandle *>(
+      impl_->GetBlasHandle(device0_));
+  ASSERT_NE(handle, nullptr);
+
+  cublasHandle_t worker_handle = nullptr;
+  std::thread worker([&] {
+    core::StreamGuard worker_guard(device0_, second.get());
+    auto *worker_blas = dynamic_cast<core::cuda::CudaBlasHandle *>(
+        impl_->GetBlasHandle(device0_));
+    ASSERT_NE(worker_blas, nullptr);
+    worker_handle = worker_blas->cublas_handle();
+    EXPECT_EQ(impl_->GetBlasHandle(device0_), worker_blas);
+    cudaStream_t stream = nullptr;
+    ASSERT_EQ(cublasGetStream(worker_handle, &stream), CUBLAS_STATUS_SUCCESS);
+    EXPECT_EQ(
+        stream,
+        dynamic_cast<core::cuda::CudaStream *>(second.get())->cuda_stream());
+  });
+  worker.join();
+
+  EXPECT_NE(handle->cublas_handle(), worker_handle);
+  // Do not refresh the main thread's handle: another thread must not change its
+  // binding.
+  cudaStream_t stream = nullptr;
+  ASSERT_EQ(cublasGetStream(handle->cublas_handle(), &stream),
+            CUBLAS_STATUS_SUCCESS);
+  EXPECT_EQ(stream,
+            dynamic_cast<core::cuda::CudaStream *>(first.get())->cuda_stream());
+}
+
+TEST_F(StreamGuardTest, BlasHandleIsReusedAfterThreadExit) {
+  std::unique_ptr<core::Stream> first(impl_->CreateStream(device0_));
+  std::unique_ptr<core::Stream> second(impl_->CreateStream(device0_));
+  auto get_handle = [&](core::Stream *selected_stream, cublasHandle_t &result) {
+    core::StreamGuard guard(device0_, selected_stream);
+    auto *handle = dynamic_cast<core::cuda::CudaBlasHandle *>(
+        impl_->GetBlasHandle(device0_));
+    ASSERT_NE(handle, nullptr);
+    result = handle->cublas_handle();
+    cudaStream_t stream = nullptr;
+    ASSERT_EQ(cublasGetStream(result, &stream), CUBLAS_STATUS_SUCCESS);
+    EXPECT_EQ(
+        stream,
+        dynamic_cast<core::cuda::CudaStream *>(selected_stream)->cuda_stream());
+  };
+  cublasHandle_t first_handle = nullptr;
+  std::thread first_worker([&] { get_handle(first.get(), first_handle); });
+  first_worker.join();
+  cublasHandle_t second_handle = nullptr;
+  std::thread second_worker([&] { get_handle(second.get(), second_handle); });
+  second_worker.join();
+  ASSERT_NE(first_handle, nullptr);
+  EXPECT_EQ(first_handle, second_handle);
+}
+
+TEST_F(StreamGuardTest, BlasHandleFollowsNestedStreamGuards) {
+  std::unique_ptr<core::Stream> first(impl_->CreateStream(device0_));
+  std::unique_ptr<core::Stream> second(impl_->CreateStream(device0_));
+  auto expect_blas_stream = [&](core::Stream *expected_stream) {
+    auto *handle = dynamic_cast<core::cuda::CudaBlasHandle *>(
+        impl_->GetBlasHandle(device0_));
+    ASSERT_NE(handle, nullptr);
+    cudaStream_t stream = nullptr;
+    ASSERT_EQ(cublasGetStream(handle->cublas_handle(), &stream),
+              CUBLAS_STATUS_SUCCESS);
+    EXPECT_EQ(
+        stream,
+        dynamic_cast<core::cuda::CudaStream *>(expected_stream)->cuda_stream());
+  };
+  {
+    core::StreamGuard outer(device0_, first.get());
+    expect_blas_stream(first.get());
+    {
+      core::StreamGuard inner(device0_, second.get());
+      expect_blas_stream(second.get());
+    }
+    expect_blas_stream(first.get());
+  }
+  expect_blas_stream(original_stream0_);
+}
+
 TEST_F(StreamGuardTest, AllocationAndGemmFollowGuardedStream) {
   if (device_count_ < 2) {
     GTEST_SKIP() << "Requires two GPUs";
