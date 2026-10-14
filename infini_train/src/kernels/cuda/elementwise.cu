@@ -1196,6 +1196,20 @@ std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DivBackward(const st
                           INFINI_ALL_FLOATING_TYPES)
 }
 
+std::shared_ptr<Tensor> ReLUForward(const std::shared_ptr<Tensor> &input) {
+    CHECK(input->Dtype() == DataType::kFLOAT32);
+    return UnaryForward(input, [] __device__(auto x) { return x > decltype(x)(0) ? x : decltype(x)(0); });
+}
+
+std::shared_ptr<Tensor> ReLUBackward(const std::shared_ptr<Tensor> &input, const std::shared_ptr<Tensor> &grad_output) {
+    CHECK(input->Dtype() == DataType::kFLOAT32);
+    CHECK(grad_output->Dtype() == DataType::kFLOAT32);
+    CHECK(input->GetDevice() == grad_output->GetDevice());
+    CHECK(input->Dims() == grad_output->Dims());
+    return BinaryForward(input, grad_output,
+                         [] __device__(auto x, auto grad) { return x > decltype(x)(0) ? grad : decltype(grad)(0); });
+}
+
 std::shared_ptr<Tensor> SigmoidForward(const std::shared_ptr<Tensor> &input) {
     DISPATCH(input->Dtype(), return UnaryForward(input, [] __device__(auto x) { return Sigmoid(x); });
              , INFINI_ALL_FLOATING_TYPES)
@@ -1255,6 +1269,8 @@ REGISTER_CUDA_ELEMENTWISE_KERNEL(MulScalarForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(MulScalarBackward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(DivForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(DivBackward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(ReLUForward)
+REGISTER_CUDA_ELEMENTWISE_KERNEL(ReLUBackward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(SigmoidForward)
 REGISTER_CUDA_ELEMENTWISE_KERNEL(SigmoidBackward)
 
