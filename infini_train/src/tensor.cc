@@ -24,6 +24,7 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/init.h"
+#include <iomanip>
 
 namespace infini_train {
 TensorBuffer::TensorBuffer(Device device, size_t size) : device_(device), size_(size) {

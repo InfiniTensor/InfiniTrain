@@ -62,7 +62,11 @@ void PrecisionCheckEnv::Init(const PrecisionCheckConfig &config) {
         auto now = std::chrono::system_clock::now();
         auto time_t = std::chrono::system_clock::to_time_t(now);
         std::tm tm;
-        localtime_r(&time_t, &tm);
+        #ifdef _WIN32
+            localtime_s(&tm, &time_t);
+        #else
+            localtime_r(&time_t, &tm);
+        #endif
         char buf[32];
         std::strftime(buf, sizeof(buf), "%Y%m%d_%H%M%S", &tm);
 

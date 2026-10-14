@@ -54,15 +54,18 @@ SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate
 SGD::SGD(const NamedParameterList &named_params, float learning_rate) : Optimizer(named_params, learning_rate) {}
 
 void SGD::Step() {
+    LOG(ERROR) << "SGD Step: params_.size() = " << params_.size();
     for (auto param : params_) {
         if (!param->grad()) {
-            LOG(INFO) << "Skipping param with null grad.";
+            LOG(ERROR) << "SGD Step: param has null grad, skipping";
             continue;
         }
         auto device = param->GetDevice();
         core::DeviceGuard guard(device);
         auto kernel = Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
+        LOG(ERROR) << "SGD Step: calling kernel, device type = " << static_cast<int>(device.type());
         kernel.Call<void>(param->grad(), -learning_rate_, param);
+        LOG(ERROR) << "SGD Step: kernel call done";
     }
 }
 
