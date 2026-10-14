@@ -21,6 +21,7 @@
 #define CAT_(a, b) a##b
 
 #define CEIL_DIV(x, y) (((x) + (y)-1) / (y))
+#define ROUND_UP(x, y) (CEIL_DIV((x), (y)) * (y))
 #define LOG_LOC(LEVEL, MSG) LOG(LEVEL) << MSG << " at " << __FILE__ << ":" << __LINE__
 
 inline std::vector<int64_t> ComputeStrides(const std::vector<int64_t> &dims) {
