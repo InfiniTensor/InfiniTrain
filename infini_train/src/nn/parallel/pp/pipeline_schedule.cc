@@ -56,11 +56,12 @@ std::vector<std::shared_ptr<Tensor>> PipelineSchedule::ReceiveFromPrev(
     int peer_rank) {
   std::vector<std::shared_ptr<Tensor>> recv_tensors;
   auto &shapes = stage_->recv_shape();
+  auto output_dtypes =
+      ReceiveDtypes(shapes.size(), stage_->device(), peer_rank);
+  CHECK_EQ(shapes.size(), output_dtypes.size());
   for (size_t i = 0; i < shapes.size(); ++i) {
-    // FIXME(jym): The data type between stages is not float32, which will cause
-    // a crash
-    auto tensor = std::make_shared<Tensor>(shapes[i], DataType::kFLOAT32,
-                                           stage_->device());
+    auto tensor =
+        std::make_shared<Tensor>(shapes[i], output_dtypes[i], stage_->device());
     tensor->set_requires_grad(true);
 
     // Mark as non-leaf to prevent the autograd engine from creating an
