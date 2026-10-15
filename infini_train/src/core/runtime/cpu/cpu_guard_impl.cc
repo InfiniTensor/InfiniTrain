@@ -33,6 +33,13 @@ Stream *CpuGuardImpl::GetStream(Device device) const {
     return nullptr;
 }
 
+Stream *CpuGuardImpl::ExchangeStream(Device device, Stream *stream) const {
+    CHECK(device.type() == Device::DeviceType::kCPU);
+    VLOG(3) << "CpuGuardImpl::ExchangeStream is not supported. "
+               "Return nullptr.";
+    return nullptr;
+}
+
 Stream *CpuGuardImpl::CreateStream(Device device) const {
     CHECK(device.type() == Device::DeviceType::kCPU);
     VLOG(3) << "CpuGuardImpl::CreateStream is not supported. "
