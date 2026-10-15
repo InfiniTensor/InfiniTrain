@@ -11,6 +11,7 @@
 
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/generator.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/optimizer.h"
 
@@ -39,6 +40,7 @@ DEFINE_validator(device,
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
+    infini_train::ManualSeed(42);
 
     auto train_dataset = std::make_shared<MNISTDataset>(FLAGS_dataset, true);
     DataLoader train_dataloader(train_dataset, FLAGS_bs);

@@ -83,7 +83,12 @@ void CudaGuardImpl::SetDevice(Device device) const {
 
 int CudaGuardImpl::DeviceCount() const {
     int device_count = 0;
-    CUDA_DRIVER_CHECK(cuDeviceGetCount(&device_count));
+    const cudaError_t cuda_status = cudaGetDeviceCount(&device_count);
+    if (cuda_status == cudaErrorNoDevice) {
+        cudaGetLastError();
+        return 0;
+    }
+    CUDA_CHECK(cuda_status);
     return device_count;
 }
 

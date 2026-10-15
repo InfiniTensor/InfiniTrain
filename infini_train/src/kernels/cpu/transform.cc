@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
+#include <numeric>
 
 #include "glog/logging.h"
 

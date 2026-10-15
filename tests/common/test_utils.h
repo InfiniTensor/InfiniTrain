@@ -1,7 +1,12 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <vector>
+
+#if defined(USE_CUDA)
+#include <cuda_runtime_api.h>
+#endif
 
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
@@ -90,6 +95,16 @@ inline void ExpectTensorNear(const std::shared_ptr<Tensor> &val1, float val2, fl
             GTEST_SKIP() << "CPU-only test";                                                                           \
         }                                                                                                              \
     } while (0)
+
+// Returns tensor bytes on the host for exact comparisons.
+// Synchronizes the source device before reading the copied data.
+inline std::vector<std::uint8_t> TensorBytes(const std::shared_ptr<Tensor> &tensor) {
+    const Tensor host = tensor->To(Device());
+    const Device source_device = tensor->GetDevice();
+    core::GetDeviceGuardImpl(source_device.type())->SynchronizeDevice(source_device);
+    const auto *data = static_cast<const std::uint8_t *>(host.DataPtr());
+    return {data, data + host.SizeInBytes()};
+}
 
 class InfiniTrainTest : public ::testing::TestWithParam<Device::DeviceType> {
 protected:

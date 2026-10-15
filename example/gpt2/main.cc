@@ -22,6 +22,7 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/generator.h"
 #include "infini_train/include/lr_scheduler.h"
 #include "infini_train/include/nn/lora/lora_utils.h"
 #include "infini_train/include/nn/modules/loss.h"
@@ -37,6 +38,7 @@
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/optimizer.h"
+#include "infini_train/include/rng_tracker.h"
 #ifdef PROFILE_MODE
 #include "infini_train/include/profiler.h"
 #endif
@@ -222,15 +224,18 @@ void Train(const nn::parallel::Rank &rank) {
         device = Device(device_type, 0);
     }
 
+    RngTracker rng_tracker(42);
+    if (tp_world_size > 1) {
+        rng_tracker.Add(kTensorParallelInitRngName, 42 + 2718 + tp_rank);
+    }
+    RngScope rng_scope(rng_tracker);
+
     // calculate gradient accumulation from the desired total batch size and the current run configuration
     const auto tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size;
     CHECK_EQ(FLAGS_total_batch_size % tokens_per_fwdbwd, 0);
     const auto grad_accum_steps = FLAGS_total_batch_size / tokens_per_fwdbwd;
     LOG(INFO) << "total desired batch size: " << FLAGS_total_batch_size
               << " => calculated gradient accumulation steps: " << grad_accum_steps;
-
-    // rng / reproducibility
-    // ManualSeed(42);
 
     // init the model, either from scratch or from OpenAI pretrained checkpoint
     nn::TransformerConfig model_config = gpt2::GPT2Config();
@@ -613,6 +618,7 @@ int main(int argc, char *argv[]) {
     nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process, FLAGS_tensor_parallel, FLAGS_sequence_parallel,
                                      FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel);
     utils::PrecisionCheckEnv::Instance().Init(precision_config);
+    infini_train::ManualSeed(42);
 
     LOG(INFO) << nn::parallel::global::ProcessGroupOverview();
 
