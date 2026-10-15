@@ -48,9 +48,17 @@ Generator CreateGenerator(const Device &device, uint64_t seed) {
 }
 
 const Generator &GetDefaultGenerator(const Device &device) {
-    return GeneratorBackendRegistry::Instance().Get(device.type()).GetDefault(device);
+    auto &backend = GeneratorBackendRegistry::Instance().Get(device.type());
+    if (const auto *generator = detail::TryGetScopedGenerator(device)) {
+        return *generator;
+    }
+    return backend.GetDefault(device);
 }
 
-void ManualSeed(uint64_t seed) { GeneratorBackendRegistry::Instance().ManualSeedAll(seed); }
+void ManualSeed(uint64_t seed) {
+    if (!detail::TryManualSeedScopedRng(seed)) {
+        GeneratorBackendRegistry::Instance().ManualSeedAll(seed);
+    }
+}
 
 } // namespace infini_train

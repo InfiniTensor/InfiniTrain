@@ -4,6 +4,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <unordered_map>
@@ -15,6 +16,7 @@
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/linear.h"
 #include "infini_train/include/autograd/sparse.h"
+#include "infini_train/include/core/runtime/generator_backend.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
@@ -27,6 +29,7 @@
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/nn/parallel/work.h"
+#include "infini_train/include/rng_tracker.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
@@ -238,8 +241,17 @@ class GatherFromSPRegion : public autograd::Function {
 };
 
 void LinearResetParameters(std::shared_ptr<Tensor> weight,
-                           std::shared_ptr<Tensor> bias = nullptr) {
+                           std::shared_ptr<Tensor> bias, bool sharded_bias) {
+  std::optional<RngScope> rng_scope;
+  auto *tracker = detail::GetCurrentRngTracker();
+  if (global::GetTensorParallelSize() > 1 && tracker &&
+      tracker->Contains(kTensorParallelInitRngName)) {
+    rng_scope.emplace(*tracker, kTensorParallelInitRngName);
+  }
   init::KaimingUniform(weight, sqrt(5.0f));
+  if (!sharded_bias) {
+    rng_scope.reset();
+  }
   if (bias) {
     const auto [fan_in, _] = init::CalculateFanInAndFanOut(weight);
     const float bound = fan_in > 0 ? 1.0 / sqrt(fan_in) : 0.0;
@@ -606,7 +618,8 @@ ColumnParallelLinear::ColumnParallelLinear(
   }
 
   LinearResetParameters(parameters_[kParamWeightName],
-                        bias ? parameters_[kParamBiasName] : nullptr);
+                        bias ? parameters_[kParamBiasName] : nullptr,
+                        /*sharded_bias=*/true);
 }
 
 std::vector<std::shared_ptr<Tensor>> ColumnParallelLinear::Forward(
@@ -747,7 +760,8 @@ RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features,
   }
 
   LinearResetParameters(parameters_[kParamWeightName],
-                        bias ? parameters_[kParamBiasName] : nullptr);
+                        bias ? parameters_[kParamBiasName] : nullptr,
+                        /*sharded_bias=*/false);
 }
 
 std::vector<std::shared_ptr<Tensor>> RowParallelLinear::Forward(

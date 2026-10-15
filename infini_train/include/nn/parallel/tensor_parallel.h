@@ -15,6 +15,8 @@ class Tensor;
 
 namespace infini_train::nn::parallel {
 
+inline constexpr char kTensorParallelInitRngName[] = "tensor-parallel-init";
+
 // NOTE(zbl): Reserved for VocabParallelEmbedding, since rank is needed in its
 // constructor before any Device exists
 //            On other occasions, should use Device::Rank()
