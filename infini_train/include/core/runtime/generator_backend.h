@@ -12,6 +12,14 @@
 
 namespace infini_train {
 
+class RngTracker;
+
+namespace detail {
+const Generator *TryGetScopedGenerator(const Device &device);
+bool TryManualSeedScopedRng(uint64_t seed);
+RngTracker *GetCurrentRngTracker();
+} // namespace detail
+
 class GeneratorBackend {
 public:
     virtual ~GeneratorBackend() = default;
@@ -44,7 +52,7 @@ private:
 
 // CAT expands __COUNTER__ before token pasting so each registration has a unique name.
 #define INFINI_TRAIN_REGISTER_GENERATOR_BACKEND(device_type, class_impl)                                               \
-    [[maybe_unused]] static const bool CAT(kInfiniTrainGeneratorBackendRegistered, __COUNTER__) = []() {           \
+    [[maybe_unused]] static const bool CAT(kInfiniTrainGeneratorBackendRegistered, __COUNTER__) = []() {               \
         infini_train::GeneratorBackendRegistry::Instance().Register(device_type, std::make_unique<class_impl>());      \
         return true;                                                                                                   \
     }();

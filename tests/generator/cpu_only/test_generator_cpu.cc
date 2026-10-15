@@ -1,5 +1,9 @@
 #include <cstdint>
 #include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 #include "gtest/gtest.h"
 
@@ -7,6 +11,8 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/generator.h"
 #include "infini_train/include/nn/functional.h"
+#include "infini_train/include/rng_tracker.h"
+#include "infini_train/src/core/runtime/cpu/cpu_generator_impl.h"
 
 #include "tests/common/test_utils.h"
 
@@ -14,6 +20,31 @@ using namespace infini_train;
 using infini_train::test::TensorBytes;
 
 class GeneratorCpuTest : public ::testing::Test {};
+
+TEST_F(GeneratorCpuTest, ScopedPublicAndBackendGettersSelectTheSameGenerator) {
+    const Device cpu;
+    const Generator original = core::cpu::GetDefaultCpuGenerator();
+    {
+        RngScope scope(9050);
+        EXPECT_EQ(GetDefaultGenerator(cpu), core::cpu::GetDefaultCpuGenerator());
+        EXPECT_NE(original, core::cpu::GetDefaultCpuGenerator());
+        EXPECT_EQ(core::cpu::GetDefaultCpuGenerator().current_seed(), 9050U);
+    }
+    EXPECT_EQ(original, core::cpu::GetDefaultCpuGenerator());
+}
+
+#ifndef USE_CUDA
+TEST_F(GeneratorCpuTest, MissingCudaBackendThrowsInsideAndOutsideScopes) {
+    const Device explicit_cuda(Device::DeviceType::kCUDA, 0);
+    const Device current_cuda(Device::DeviceType::kCUDA, -1);
+    EXPECT_THROW(GetDefaultGenerator(explicit_cuda), std::invalid_argument);
+    EXPECT_THROW(GetDefaultGenerator(current_cuda), std::invalid_argument);
+    RngScope scope(9056);
+    EXPECT_THROW(GetDefaultGenerator(explicit_cuda), std::invalid_argument);
+    EXPECT_THROW(GetDefaultGenerator(current_cuda), std::invalid_argument);
+    EXPECT_EQ(GetDefaultGenerator(Device()).current_seed(), 9056U);
+}
+#endif
 
 TEST_F(GeneratorCpuTest, HighBitsOfCpuSeedAffectTheSequence) {
     const Device cpu;

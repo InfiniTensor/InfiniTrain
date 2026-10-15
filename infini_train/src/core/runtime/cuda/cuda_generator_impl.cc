@@ -122,6 +122,9 @@ CudaGeneratorImpl *CudaGeneratorImpl::CloneImpl() const {
 
 const Generator &GetDefaultCudaGenerator(int8_t device_index) {
     const int index = ResolveDeviceIndex(device_index);
+    if (const auto *generator = detail::TryGetScopedGenerator(Device(Device::DeviceType::kCUDA, index))) {
+        return *generator;
+    }
     std::call_once(default_generator_init_flags[index], [index] {
         default_generators[index].emplace(
             CreateCudaGenerator(static_cast<int8_t>(index), GenerateNonDeterministicSeed()));

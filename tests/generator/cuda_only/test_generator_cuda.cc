@@ -1,18 +1,24 @@
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <cuda_runtime_api.h>
+#include <driver_types.h>
 
 #include "gtest/gtest.h"
 
+#include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/generator.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
+#include "infini_train/include/rng_tracker.h"
 #include "infini_train/include/tensor.h"
+#include "infini_train/src/core/runtime/cuda/cuda_generator_impl.h"
 
 #include "tests/common/test_utils.h"
 
@@ -25,6 +31,71 @@ protected:
 
     const Device cuda0_{Device::DeviceType::kCUDA, 0};
 };
+
+TEST_F(GeneratorCudaTest, ScopedCurrentDeviceAndBackendGettersSelectTheSameGenerator) {
+    core::DeviceGuard guard(cuda0_);
+    const Generator original = core::cuda::GetDefaultCudaGenerator(0);
+    {
+        RngScope scope(9051);
+        const Generator selected = GetDefaultGenerator(cuda0_);
+        EXPECT_NE(original, selected);
+        EXPECT_EQ(selected, GetDefaultGenerator(Device(Device::DeviceType::kCUDA, -1)));
+        EXPECT_EQ(selected, core::cuda::GetDefaultCudaGenerator(-1));
+        EXPECT_EQ(selected, core::cuda::GetDefaultCudaGenerator(0));
+    }
+    EXPECT_EQ(original, core::cuda::GetDefaultCudaGenerator(-1));
+}
+
+TEST_F(GeneratorCudaTest, ScopedSeedAndSnapshotIncludeDevicesCreatedLater) {
+    const Device cpu;
+    RngTracker tracker(9052);
+    RngScope scope(tracker);
+    nn::function::Rand({19}, DataType::kFLOAT32, cpu);
+    ManualSeed(9053);
+    const auto snapshot = tracker.GetState();
+    EXPECT_EQ(GetDefaultGenerator(cpu).current_seed(), 9053U);
+    EXPECT_EQ(GetDefaultGenerator(cuda0_).current_seed(), 9053U);
+    const auto expected = TensorBytes(nn::function::Rand({19}, DataType::kFLOAT32, cuda0_));
+    EXPECT_EQ(expected,
+              TensorBytes(nn::function::Rand({19}, DataType::kFLOAT32, cuda0_, CreateGenerator(cuda0_, 9053))));
+    ManualSeed(9054);
+    nn::function::Rand({19}, DataType::kFLOAT32, cuda0_);
+    tracker.SetState(*snapshot);
+    EXPECT_EQ(expected, TensorBytes(nn::function::Rand({19}, DataType::kFLOAT32, cuda0_)));
+}
+
+TEST_F(GeneratorCudaTest, TrackerRejectsCudaStateWithoutChangingLiveGenerators) {
+    RngTracker tracker(9033);
+    RngScope scope(tracker);
+    nn::function::Rand({19}, DataType::kFLOAT32, cuda0_);
+    const Generator selected = GetDefaultGenerator(cuda0_);
+    const auto before = TensorBytes(selected.get_state());
+    const auto snapshot = tracker.GetState();
+    const auto bytes = TensorBytes(snapshot);
+    auto reference = selected.Clone();
+    const auto cuda_state = snapshot->To(cuda0_);
+
+    EXPECT_THROW(tracker.SetState(cuda_state), std::invalid_argument);
+    EXPECT_EQ(selected, GetDefaultGenerator(cuda0_));
+    EXPECT_EQ(before, TensorBytes(selected.get_state()));
+    EXPECT_EQ(bytes, TensorBytes(tracker.GetState()));
+    EXPECT_EQ(TensorBytes(nn::function::Rand({19}, DataType::kFLOAT32, cuda0_, reference)),
+              TensorBytes(nn::function::Rand({19}, DataType::kFLOAT32, cuda0_)));
+}
+
+TEST_F(GeneratorCudaTest, ScopedGeneratorsRemainIndependentAcrossDevices) {
+    REQUIRE_MIN_DEVICES(2);
+    const Device cuda1(Device::DeviceType::kCUDA, 1);
+    RngScope scope(9055);
+    const auto untouched = TensorBytes(GetDefaultGenerator(cuda1).get_state());
+    nn::function::Rand({19}, DataType::kFLOAT32, cuda0_);
+    EXPECT_EQ(untouched, TensorBytes(GetDefaultGenerator(cuda1).get_state()));
+    {
+        core::DeviceGuard guard(cuda1);
+        EXPECT_EQ(GetDefaultGenerator(cuda1), GetDefaultGenerator(Device(Device::DeviceType::kCUDA, -1)));
+        EXPECT_EQ(GetDefaultGenerator(cuda1), core::cuda::GetDefaultCudaGenerator(-1));
+    }
+}
 
 TEST_F(GeneratorCudaTest, StateRejectsCudaAndForeignInput) {
     ::testing::GTEST_FLAG(death_test_style) = "threadsafe";

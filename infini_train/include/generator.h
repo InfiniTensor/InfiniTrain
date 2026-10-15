@@ -44,10 +44,11 @@ private:
 
 Generator CreateGenerator(const Device &device, uint64_t seed = Generator::kDefaultSeed);
 
-// Returns the lazily initialized default generator for the requested device.
+// Returns the current RNG stream's generator, or the process default when no scope is active.
+// Scoped references expire when the tracker is destroyed or restored; copy the handle to retain it.
 const Generator &GetDefaultGenerator(const Device &device);
 
-// Initializes or resets the default generators for all enabled devices with the given seed.
+// Resets the current RNG stream, or all enabled process defaults when no scope is active.
 void ManualSeed(uint64_t seed);
 
 } // namespace infini_train

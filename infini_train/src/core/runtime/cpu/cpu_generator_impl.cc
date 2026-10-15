@@ -215,6 +215,9 @@ DefaultCpuGeneratorState &GetDefaultCpuGeneratorState() {
 } // namespace
 
 const Generator &GetDefaultCpuGenerator() {
+    if (const auto *generator = detail::TryGetScopedGenerator(Device())) {
+        return *generator;
+    }
     auto &state = GetDefaultCpuGeneratorState();
     std::call_once(state.init_once,
                    [&state] { state.generator.emplace(CreateCpuGenerator(GenerateNonDeterministicSeed())); });

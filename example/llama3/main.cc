@@ -38,6 +38,7 @@
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/optimizer.h"
+#include "infini_train/include/rng_tracker.h"
 #include "infini_train/include/utils/global_module_hook_registry.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
@@ -210,6 +211,12 @@ void Train(const nn::parallel::Rank &rank) {
     } else {
         device = Device(device_type, 0);
     }
+
+    RngTracker rng_tracker(42);
+    if (tp_world_size > 1) {
+        rng_tracker.Add(kTensorParallelInitRngName, 42 + 2718 + tp_rank);
+    }
+    RngScope rng_scope(rng_tracker);
 
     // calculate gradient accumulation from the desired total batch size and the current run configuration
     const auto tokens_per_fwdbwd = FLAGS_batch_size * FLAGS_sequence_length * ddp_world_size;

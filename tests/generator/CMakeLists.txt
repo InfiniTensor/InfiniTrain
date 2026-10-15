@@ -1,5 +1,7 @@
 # Shared CPU/CUDA tests.
 # TODO: Add backend-independent DDP coverage when the test harness supports multi-node execution.
+add_subdirectory(tensor_parallel)
+
 file(GLOB GENERATOR_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/test_*.cc)
 
 infini_train_add_test_suite(test_generator
