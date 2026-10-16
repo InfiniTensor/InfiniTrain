@@ -1,9 +1,14 @@
 #include "infini_train/include/nn/modules/sparse.h"
 
+#include <stdint.h>
+
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "infini_train/include/autograd/sparse.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/tensor.h"

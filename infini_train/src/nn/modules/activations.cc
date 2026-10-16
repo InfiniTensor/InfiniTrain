@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/modules/activations.h"
 
+#include <cmath>
 #include <memory>
 #include <vector>
 

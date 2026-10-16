@@ -1,5 +1,7 @@
 #include "infini_train/include/utils/string_utils.h"
 
+#include <stddef.h>
+
 #include <sstream>
 
 namespace infini_train::utils {

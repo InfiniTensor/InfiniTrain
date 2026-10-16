@@ -2,9 +2,8 @@
 
 #include <string>
 
-#include "infini_train/include/core/ccl/ccl_common.h"
-
 namespace infini_train::core {
+class CclUniqueId;
 
 void WriteUniqueIdFile(const CclUniqueId &unique_id, const std::string &pg_name);
 

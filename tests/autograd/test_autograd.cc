@@ -1,4 +1,7 @@
-#include <cmath>
+#include <stdint.h>
+
+#include <memory>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -15,6 +18,8 @@
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/softmax.h"
 #include "infini_train/include/autograd/transform.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"

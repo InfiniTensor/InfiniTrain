@@ -1,7 +1,9 @@
 #include "infini_train/include/nn/modules/transformer/moe/experts.h"
 
 #include <memory>
+#include <ostream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "glog/logging.h"

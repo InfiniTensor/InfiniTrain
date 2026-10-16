@@ -1,16 +1,21 @@
+#include <stdint.h>
+
 #include <memory>
 #include <vector>
 
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autograd/elementwise.h"
-#include "infini_train/include/autograd/function.h"
-#include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/common/hook.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
+
+namespace infini_train::autograd {
+class Function;
+}  // namespace infini_train::autograd
 
 using namespace infini_train;
 

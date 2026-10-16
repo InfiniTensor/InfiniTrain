@@ -1,13 +1,30 @@
+#include <stdint.h>
+
+#include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <functional>
 #include <memory>
 #include <optional>
+#include <ostream>
+#include <ratio>
+#include <string>
 #include <thread>
+#include <tuple>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
+
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/nn/lora/lora_config.h"
+#include "infini_train/include/nn/modules/transformer/transformer_config.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
+#include "infini_train/include/tensor.h"
 
 // Out-of-tree builds inject the selected provider's declaration without adding
 // a vendor dependency to the upstream example.
@@ -37,7 +54,6 @@
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/optimizer.h"
-#include "infini_train/include/utils/global_module_hook_registry.h"
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
 #ifdef PROFILE_MODE

@@ -1,12 +1,12 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
-#include "infini_train/include/nn/lora/lora_config.h"
 
 namespace infini_train {
 class Tensor;
@@ -17,6 +17,7 @@ class Module;
 }
 
 namespace infini_train::nn::lora {
+struct LoRAConfig;
 
 namespace detail {
 

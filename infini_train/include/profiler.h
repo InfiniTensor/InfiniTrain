@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <chrono>
 #include <functional>
 #include <iostream>
@@ -7,8 +9,6 @@
 #include <mutex>
 #include <string>
 #include <vector>
-
-#include "glog/logging.h"
 
 #include "infini_train/include/device.h"
 

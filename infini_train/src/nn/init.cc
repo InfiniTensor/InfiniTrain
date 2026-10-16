@@ -1,11 +1,15 @@
 #include "infini_train/include/nn/init.h"
 
-#include <cstring>
+#include <algorithm>
+#include <cmath>
 #include <functional>
 #include <memory>
+#include <numeric>
 #include <optional>
+#include <ostream>
 #include <random>
 #include <unordered_set>
+#include <vector>
 
 #ifdef USE_OMP
 #include <omp.h>
@@ -14,8 +18,13 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
+
+namespace infini_train::core {
+class Stream;
+} // namespace infini_train::core
 
 namespace infini_train::nn::init {
 namespace {

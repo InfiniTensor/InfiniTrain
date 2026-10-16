@@ -8,7 +8,6 @@
 
 namespace infini_train {
 class Tensor;
-class Device;
 } // namespace infini_train
 
 namespace infini_train::nn {

@@ -10,6 +10,8 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/core/ccl/ccl_common.h"
+
 namespace infini_train::core {
 namespace {
 std::string UniqueIdFileName(const std::string &pg_name) {

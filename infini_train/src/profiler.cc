@@ -1,9 +1,13 @@
 #include "infini_train/include/profiler.h"
 
 #include <algorithm>
+#include <ctime>
+#include <format>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
+#include <utility>
 
 #include "glog/logging.h"
 

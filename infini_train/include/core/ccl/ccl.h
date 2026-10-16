@@ -3,18 +3,25 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <string>
 #include <unordered_map>
 
 #include "infini_train/include/common/common.h"
-#include "infini_train/include/core/ccl/ccl_common.h"
-#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/parallel/reduce_op_type.h"
+
+namespace infini_train::nn::parallel::comm {
+enum class ReduceOpType : int8_t;
+} // namespace infini_train::nn::parallel::comm
+
+namespace infini_train {
+enum class DataType : int8_t;
+} // namespace infini_train
 
 namespace infini_train::core {
 
 class Stream;
+class CclComm;
+class CclUniqueId;
+enum class CclStatus : int32_t;
 
 class CclImpl {
 public:

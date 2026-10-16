@@ -1,14 +1,20 @@
 // pipeline_parallel.cc
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 
-#include <cstdint>
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_schedule.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
+
+namespace infini_train {
+enum class DataType : int8_t;
+} // namespace infini_train
 
 namespace infini_train::nn::parallel {
 namespace {

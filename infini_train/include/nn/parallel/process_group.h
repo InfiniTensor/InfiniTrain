@@ -1,26 +1,30 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
+#include "infini_train/include/core/ccl/ccl_common.h"
+#include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 
 namespace infini_train {
 class Tensor;
+
 namespace core {
-class CclComm;
 class CclImpl;
 class DeviceGuardImpl;
-class Stream;
 } // namespace core
 namespace nn {
-class Module;
+
 namespace parallel {
 class Work;
 } // namespace parallel

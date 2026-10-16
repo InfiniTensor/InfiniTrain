@@ -1,3 +1,4 @@
+#include <memory>
 #include <type_traits>
 
 #include "gtest/gtest.h"
@@ -6,6 +7,7 @@
 #include "infini_train/include/dtype_dispatch.h"
 
 #include "infini_train/src/core/runtime/cpu/cpu_dispatch.h"
+
 #include "tests/common/test_utils.h"
 
 using namespace infini_train;
@@ -15,6 +17,7 @@ using namespace infini_train;
 // ============================================================================
 
 template <DataType DType> struct LowPrecisionAbsentTypeMap;
+
 template <> struct LowPrecisionAbsentTypeMap<DataType::kFLOAT32> {
     using type = float;
 };

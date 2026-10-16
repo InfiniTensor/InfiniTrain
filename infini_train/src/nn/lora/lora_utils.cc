@@ -1,18 +1,24 @@
 #include "infini_train/include/nn/lora/lora_utils.h"
 
+#include <stddef.h>
+
 #include <algorithm>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
+#include "infini_train/include/nn/lora/lora_config.h"
 #include "infini_train/include/nn/lora/lora_linear.h"
 #include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/modules/activations.h"
@@ -23,7 +29,6 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
-#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::lora {

@@ -1,10 +1,13 @@
 #include "infini_train/include/nn/modules/transformer/moe/token_dispatcher.h"
 
+#include <stddef.h>
+
 #include <memory>
 #include <vector>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::moe {

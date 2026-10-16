@@ -4,7 +4,10 @@
 
 #include "infini_train/include/nn/parallel/comm.h"
 #include "infini_train/include/nn/parallel/process_group.h"
-#include "infini_train/include/tensor.h"
+
+namespace infini_train::nn::parallel::comm {
+enum class ReduceOpType : int8_t;
+} // namespace infini_train::nn::parallel::comm
 
 namespace infini_train::autograd {
 AllReducePostAccumulateHook::AllReducePostAccumulateHook(infini_train::nn::parallel::comm::ReduceOpType reduce_op,

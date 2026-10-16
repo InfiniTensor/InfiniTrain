@@ -3,11 +3,13 @@
 #include <algorithm>
 #include <array>
 #include <mutex>
+#include <ostream>
 #include <string_view>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 
 namespace infini_train::core {

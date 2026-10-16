@@ -1,18 +1,25 @@
 #include "example/common/tokenizer.h"
 
-#include <cctype>
+#include <stddef.h>
+
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "glog/logging.h"
 
-#include "example/common/utils.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
+
+#include "example/common/utils.h"
 
 namespace infini_train {
 

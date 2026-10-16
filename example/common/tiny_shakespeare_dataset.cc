@@ -1,15 +1,14 @@
 #include "example/common/tiny_shakespeare_dataset.h"
 
 #include <cstddef>
-#include <cstdint>
-#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -17,6 +16,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/tensor.h"
 
 namespace {

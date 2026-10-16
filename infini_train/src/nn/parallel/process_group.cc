@@ -1,8 +1,13 @@
 #include "infini_train/include/nn/parallel/process_group.h"
 
+#include <stddef.h>
+
 #include <algorithm>
+#include <functional>
+#include <iterator>
 #include <memory>
 #include <numeric>
+#include <ostream>
 #include <ranges>
 #include <vector>
 
@@ -14,6 +19,7 @@
 #include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
 

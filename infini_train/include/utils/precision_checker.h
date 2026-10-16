@@ -4,11 +4,12 @@
 #include <string>
 #include <vector>
 
-#include "infini_train/include/utils/precision_check_config.h"
+namespace infini_train::utils {
+struct PrecisionCheckConfig;
+} // namespace infini_train::utils
 
 namespace infini_train {
 class Tensor;
-class HookHandle;
 
 namespace autograd {
 class Function;

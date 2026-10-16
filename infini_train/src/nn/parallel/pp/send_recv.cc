@@ -1,13 +1,14 @@
 #include "infini_train/include/nn/parallel/pp/send_recv.h"
 
+#include <algorithm>
 #include <memory>
 #include <vector>
 
-#include "glog/logging.h"
-
 #include "infini_train/include/autograd/function.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 

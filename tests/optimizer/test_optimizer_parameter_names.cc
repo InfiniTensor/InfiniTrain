@@ -1,8 +1,14 @@
+#include <stdint.h>
+
+#include <functional>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "gtest/gtest.h"
 
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 

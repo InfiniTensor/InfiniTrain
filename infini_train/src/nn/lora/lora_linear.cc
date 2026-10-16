@@ -1,14 +1,19 @@
 #include "infini_train/include/nn/lora/lora_linear.h"
 
-#include <cmath>
 #include <memory>
-#include <stdexcept>
+#include <ostream>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
+#include "glog/logging.h"
+
 #include "infini_train/include/autograd/linear.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/linear.h"
+#include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::lora {

@@ -1,10 +1,12 @@
 #include "infini_train/include/nn/modules/container.h"
 
 #include <memory>
+#include <ostream>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "infini_train/include/tensor.h"
+#include "glog/logging.h"
 
 namespace infini_train::nn {
 Sequential::Sequential(std::vector<std::shared_ptr<Module>> &&layers) : CloneableModule(kType) {

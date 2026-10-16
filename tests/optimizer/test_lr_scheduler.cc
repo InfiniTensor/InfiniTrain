@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -9,9 +10,12 @@
 
 #include "infini_train/include/lr_scheduler.h"
 #include "infini_train/include/optimizer.h"
-#include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
+
+namespace infini_train {
+class Tensor;
+}  // namespace infini_train
 
 using namespace infini_train;
 using namespace infini_train::lr_schedulers;

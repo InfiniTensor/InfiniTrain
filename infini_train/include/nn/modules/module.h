@@ -1,20 +1,23 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <functional>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
-#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train {
 class Tensor;
-class Device;
 class Optimizer;
 class HookHandle;
 template <typename HookType> class HookHandleImpl;
+enum class DataType : int8_t;
 } // namespace infini_train
 
 namespace infini_train::nn {

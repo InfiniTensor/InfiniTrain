@@ -3,7 +3,7 @@
 #include <memory>
 #include <string>
 
-#include "infini_train/include/nn/modules/transformer/transformer_config.h"
+#include "infini_train/include/nn/modules/transformer/transformer_config.h" // IWYU pragma: keep
 
 namespace infini_train::nn {
 class TransformerModel;

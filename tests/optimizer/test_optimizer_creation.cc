@@ -1,7 +1,11 @@
+#include <stdint.h>
+
+#include <memory>
 #include <vector>
 
 #include "gtest/gtest.h"
 
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
