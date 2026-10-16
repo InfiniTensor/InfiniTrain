@@ -635,7 +635,9 @@ const ProcessGroup *ProcessGroupFactory::GetOrCreate(const std::string &name, co
 
 const ProcessGroup *ProcessGroupFactory::Get(const std::string &name) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    return name_to_group_.at(name).get();
+    const auto it = name_to_group_.find(name);
+    CHECK(it != name_to_group_.end()) << "Process group '" << name << "' is not initialized; call GetOrCreate() first";
+    return it->second.get();
 }
 
 const ProcessGroup *ProcessGroupFactory::GetDefaultProcessGroup() const {

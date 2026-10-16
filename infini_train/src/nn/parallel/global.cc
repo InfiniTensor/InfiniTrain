@@ -180,11 +180,12 @@ int RankGenerator::GroupId(std::initializer_list<Axis> varying_axes, int global_
     CoordOf(global_rank, dp, tp, pp, ep);
     const std::array<int, AXIS_COUNT> coordinates{dp, tp, pp, ep};
 
-    // The first unmasked axis in rank order varies fastest in the group
-    // ordinal, matching generate_masked_orthogonal_rank_groups in Megatron-LM.
+    // Preserve the legacy Layout::GroupId numbering used in process-group
+    // names: fixed axes later in rank order vary faster in the group ordinal.
     int group_id = 0;
     int group_stride = 1;
-    for (const Axis axis : order_) {
+    for (int index = AXIS_COUNT - 1; index >= 0; --index) {
+        const Axis axis = order_[index];
         if (varying_axis_mask[axis]) {
             continue;
         }
