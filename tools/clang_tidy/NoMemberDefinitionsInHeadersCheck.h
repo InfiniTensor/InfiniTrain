@@ -1,6 +1,7 @@
 #pragma once
 
 #include "clang-tidy/ClangTidyCheck.h"
+#include "clang-tidy/FileExtensionsSet.h"
 
 namespace clang::tidy::infinitrain {
 
@@ -15,6 +16,7 @@ class NoMemberDefinitionsInHeadersCheck : public ClangTidyCheck {
 
  private:
   const bool ignore_empty_bodies_;
+  const FileExtensionsSet header_file_extensions_;
 };
 
 }  // namespace clang::tidy::infinitrain

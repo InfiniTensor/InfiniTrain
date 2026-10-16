@@ -1,5 +1,6 @@
 #include "NoMemberDefinitionsInHeadersCheck.h"
 
+#include "clang-tidy/utils/FileExtensionsUtils.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/Stmt.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
@@ -30,7 +31,8 @@ bool isTemplated(const CXXMethodDecl &method) {
 NoMemberDefinitionsInHeadersCheck::NoMemberDefinitionsInHeadersCheck(
     StringRef name, ClangTidyContext *context)
     : ClangTidyCheck(name, context),
-      ignore_empty_bodies_(Options.get("IgnoreEmptyBodies", true)) {}
+      ignore_empty_bodies_(Options.get("IgnoreEmptyBodies", true)),
+      header_file_extensions_(context->getHeaderFileExtensions()) {}
 
 bool NoMemberDefinitionsInHeadersCheck::isLanguageVersionSupported(
     const LangOptions &lang_opts) const {
@@ -72,10 +74,11 @@ void NoMemberDefinitionsInHeadersCheck::check(
     return;
   }
 
-  const SourceManager &source_manager = *result.SourceManager;
+  SourceManager &source_manager = *result.SourceManager;
   location = source_manager.getSpellingLoc(location);
   if (source_manager.isInSystemHeader(location) ||
-      source_manager.isWrittenInMainFile(location)) {
+      !utils::isSpellingLocInHeaderFile(location, source_manager,
+                                        header_file_extensions_)) {
     return;
   }
 
