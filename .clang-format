@@ -1,31 +1,21 @@
 ---
-BasedOnStyle: LLVM
-IndentWidth: 4
-AccessModifierOffset: -4
-AlignOperands: AlignAfterOperator
-BreakBeforeBinaryOperators: All
-ColumnLimit: 120
-AllowShortBlocksOnASingleLine: Always 
-AllowShortLoopsOnASingleLine: true
-InsertBraces: true
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterCaseLabel: false
-  AfterClass: false
-  AfterControlStatement: Never
-  AfterEnum: false
-  AfterFunction: false
-  AfterNamespace: false
-  AfterObjCDeclaration: false
-  AfterStruct: false
-  AfterUnion: false
-  AfterExternBlock: false
-  BeforeCatch: false
-  BeforeElse: false
-  BeforeLambdaBody: false
-  BeforeWhile: false
-  IndentBraces: false
-  SplitEmptyFunction: true
-  SplitEmptyRecord: true
-  SplitEmptyNamespace: true
-  
+BasedOnStyle: Google
+IncludeCategories:
+  # C and POSIX system headers.
+  - Regex: '^<((arpa|netinet|sys)/.*|(assert|complex|ctype|dlfcn|errno|fcntl|fenv|float|inttypes|iso646|limits|locale|math|pthread|setjmp|signal|stdalign|stdarg|stdatomic|stdbool|stddef|stdint|stdio|stdlib|stdnoreturn|string|tgmath|threads|time|uchar|unistd|wchar|wctype)\.h)>'
+    Priority: 1
+  # C++ standard library headers.
+  - Regex: '^<(algorithm|any|array|atomic|barrier|bit|bitset|cassert|ccomplex|cctype|cerrno|cfenv|cfloat|charconv|chrono|cinttypes|ciso646|climits|clocale|cmath|codecvt|compare|complex|concepts|condition_variable|coroutine|csetjmp|csignal|cstdalign|cstdarg|cstdbool|cstddef|cstdint|cstdio|cstdlib|cstring|ctgmath|ctime|cuchar|cwchar|cwctype|deque|exception|execution|expected|filesystem|format|forward_list|fstream|functional|future|initializer_list|iomanip|ios|iosfwd|iostream|istream|iterator|latch|limits|list|map|memory|memory_resource|mutex|new|numbers|numeric|optional|ostream|print|queue|random|ranges|ratio|regex|scoped_allocator|semaphore|set|shared_mutex|source_location|span|spanstream|sstream|stack|stacktrace|stdexcept|stdfloat|stop_token|streambuf|string|string_view|strstream|syncstream|system_error|thread|tuple|type_traits|typeindex|typeinfo|unordered_map|unordered_set|utility|valarray|variant|vector|version)>'
+    Priority: 2
+  # CUDA, cuBLAS, CUB, NCCL, and OpenMP headers.
+  - Regex: '^[<"]((cuda|cuda_bf16|cuda_fp16|cuda_runtime|cuda_runtime_api|cublas_v2|nccl|omp)\.h[>"]|cub/)'
+    Priority: 3
+  # Third-party headers.
+  - Regex: '^"(third_party/|Eigen/|unsupported/Eigen/|glog/|gflags/|gtest/|gmock/)'
+    Priority: 4
+  # Public InfiniTrain API.
+  - Regex: '^"infini_train/include/'
+    Priority: 5
+  # Internal InfiniTrain implementation.
+  - Regex: '^"(infini_train/src|example|tests|tools)/'
+    Priority: 6
