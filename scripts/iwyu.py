@@ -24,6 +24,9 @@ RELEVANT_FILES = {
     Path("scripts/iwyu.py"),
 }
 INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
+CORRECT_RESULT_RE = re.compile(
+    r"^\(.+ has correct #includes/fwd-decls\)$"
+)
 
 
 def capture(command: list[str]) -> str:
@@ -33,6 +36,33 @@ def capture(command: list[str]) -> str:
     if process.returncode != 0:
         raise RuntimeError(process.stderr.strip() or "command failed")
     return process.stdout
+
+
+def run_check(command: list[str]) -> int:
+    """Run IWYU while suppressing non-actionable success messages."""
+    process = subprocess.Popen(
+        command,
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    assert process.stdout is not None
+    pending_blank = False
+    emitted_output = False
+    for line in process.stdout:
+        if CORRECT_RESULT_RE.fullmatch(line.strip()):
+            continue
+        if not line.strip():
+            pending_blank = True
+            continue
+        if pending_blank and emitted_output:
+            print()
+        print(line, end="", flush=True)
+        pending_blank = False
+        emitted_output = True
+    return process.wait()
 
 
 def merge_base(ref: str) -> str:
@@ -246,7 +276,7 @@ def main() -> int:
     ]
     print("+", " ".join(display_command), flush=True)
     if not (args.fix or args.fix_dry_run):
-        return subprocess.run(command, cwd=ROOT, check=False).returncode
+        return run_check(command)
 
     analysis = subprocess.run(
         command,

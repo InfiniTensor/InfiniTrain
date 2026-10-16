@@ -127,9 +127,11 @@ mapping 用于告诉 IWYU 应使用对应的公共头文件，而不是直接建
 
 ## 检查结果
 
-IWYU 会输出建议增加或删除的 include、前置声明，以及建议保留的完整 include 列表。
-脚本会将 IWYU 的完整结果直接输出到控制台，便于在 CI 日志中逐项查看具体建议。为避免命令本身
-占用大量日志，启动信息只显示 translation unit 数量，不展开全部源码路径。
+IWYU 会输出建议增加或删除的 include、前置声明，以及建议保留的完整 include 列表。普通检查模式会将这些建议、
+编译 warning 和 error 直接输出到控制台，便于在 CI 日志中逐项查看。成功文件产生的
+`has correct #includes/fwd-decls` 提示不包含可操作信息，因此会被过滤。为避免命令本身占用大量日志，
+启动信息只显示 translation unit 数量，不展开全部源码路径。
+自动修复模式需要把原始结果完整传给官方修复器，因此不执行这项输出过滤。
 
 `scripts/iwyu.py` 向 IWYU 传入：
 
