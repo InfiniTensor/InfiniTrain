@@ -1,7 +1,10 @@
-#include "glog/logging.h"
+#include <algorithm>
+#include <memory>
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/dtype_dispatch.h"
+#include "infini_train/include/scalar.h"
 #include "infini_train/include/tensor.h"
 
 #include "infini_train/src/core/runtime/cpu/cpu_dispatch.h"

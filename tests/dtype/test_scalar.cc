@@ -1,9 +1,10 @@
-#include <cmath>
 #include <cstdint>
 #include <limits>
+#include <memory>
 
 #include "gtest/gtest.h"
 
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/scalar.h"
 
 #include "tests/common/test_utils.h"

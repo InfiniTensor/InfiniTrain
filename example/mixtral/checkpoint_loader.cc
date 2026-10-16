@@ -3,7 +3,9 @@
 #include <cstdint>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "glog/logging.h"

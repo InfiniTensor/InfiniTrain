@@ -1,6 +1,10 @@
+#include <memory>
+#include <optional>
+
 #include "gtest/gtest.h"
 
 #include "infini_train/include/core/privateuse1_backend.h"
+#include "infini_train/include/datatype.h"
 
 namespace infini_train::test {
 namespace {

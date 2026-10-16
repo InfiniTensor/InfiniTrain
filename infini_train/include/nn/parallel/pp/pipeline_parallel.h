@@ -1,7 +1,10 @@
 // pipeline_parallel.h
 #pragma once
 
+#include <stdint.h>
+
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
@@ -10,6 +13,7 @@ namespace infini_train {
 class Tensor;
 class Device;
 class Optimizer;
+enum class DataType : int8_t;
 } // namespace infini_train
 
 namespace infini_train::nn::parallel {

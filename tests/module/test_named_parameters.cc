@@ -2,15 +2,22 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
 
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/linear.h"
-#include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
+
+namespace infini_train {
+class Tensor;
+}  // namespace infini_train
+namespace infini_train::nn {
+class Module;
+}  // namespace infini_train::nn
 
 using namespace infini_train;
 

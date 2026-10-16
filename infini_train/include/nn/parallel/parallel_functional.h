@@ -1,15 +1,21 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <memory>
 #include <vector>
 
-#include "infini_train/include/device.h"
-#include "infini_train/include/nn/parallel/reduce_op_type.h"
+namespace infini_train::nn::parallel::comm {
+enum class ReduceOpType : int8_t;
+} // namespace infini_train::nn::parallel::comm
 
 namespace infini_train {
 class Tensor;
+class Device;
+
 namespace nn {
 class Module;
+
 namespace parallel {
 class ProcessGroup;
 } // namespace parallel

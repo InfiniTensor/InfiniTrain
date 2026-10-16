@@ -1,7 +1,14 @@
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
+// std::pair structured bindings are provided by <utility>.
+// IWYU pragma: no_include <tuple>
+
+#include <stddef.h>
+
 #include <array>
+#include <ostream>
 #include <utility>
+#include <vector>
 
 #include "glog/logging.h"
 

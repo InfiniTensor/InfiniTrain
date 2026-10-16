@@ -3,15 +3,16 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <ostream>
+#include <string>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/nn/functional.h"
-#include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/normalization.h"
-#include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/nn/parallel/global.h"

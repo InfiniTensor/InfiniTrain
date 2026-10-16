@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "infini_train/include/autograd/loss.h"
-#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
 std::vector<std::shared_ptr<Tensor>>

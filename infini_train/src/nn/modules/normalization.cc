@@ -1,9 +1,12 @@
 #include "infini_train/include/nn/modules/normalization.h"
 
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "infini_train/include/autograd/normalization.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"

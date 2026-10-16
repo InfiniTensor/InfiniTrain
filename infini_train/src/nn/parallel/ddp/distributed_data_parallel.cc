@@ -1,15 +1,22 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 
-#include <functional>
+#include <stddef.h>
+
 #include <map>
 #include <memory>
+#include <ostream>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/function_hook.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h"
+#include "infini_train/include/nn/parallel/ddp/reducer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"

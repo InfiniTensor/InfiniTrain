@@ -1,11 +1,18 @@
+#include <stdint.h>
+#include <string.h>
+
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <numeric>
+#include <ostream>
 #include <utility>
 #include <vector>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 

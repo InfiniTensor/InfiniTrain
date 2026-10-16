@@ -1,4 +1,9 @@
+#include <stddef.h>
+#include <stdint.h>
+
 #include <cmath>
+#include <initializer_list>
+#include <memory>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -6,7 +11,8 @@
 #include "infini_train/include/autograd/activations.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/core/runtime/device_guard.h"
-#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"

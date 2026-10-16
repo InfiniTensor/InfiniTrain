@@ -1,12 +1,13 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <memory>
 #include <vector>
 
-#include "infini_train/include/device.h"
-
 namespace infini_train {
 class Tensor;
+class Device;
 } // namespace infini_train
 
 namespace infini_train::nn::parallel {

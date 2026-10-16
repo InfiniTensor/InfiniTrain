@@ -1,16 +1,19 @@
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+
 #include <atomic>
 #include <memory>
 #include <mutex>
 #include <vector>
 
-#include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
 
 namespace infini_train {
 class Tensor;
-class Device;
+enum class DataType : int8_t;
+
 namespace autograd {
 class PostAccumulateGradHook;
 } // namespace autograd

@@ -1,15 +1,22 @@
 #include "infini_train/include/utils/checkpoint.h"
 
+#include <stddef.h>
+#include <stdint.h>
+
 #include <algorithm>
 #include <atomic>
 #include <exception>
+#include <ostream>
 #include <unordered_map>
+#include <utility>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/grad_mode.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::utils::checkpoint {

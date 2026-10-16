@@ -4,12 +4,12 @@
 #include <memory>
 #include <utility>
 
-#include "infini_train/include/dataset.h"
-
 namespace infini_train {
 class Tensor;
 }
 namespace infini_train {
+class Dataset;
+
 class DataLoaderIterator {
 public:
     std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> operator*() const;

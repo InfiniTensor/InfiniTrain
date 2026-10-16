@@ -1,8 +1,12 @@
 // pipeline_schedule.cc
 #include "infini_train/include/nn/parallel/pp/pipeline_schedule.h"
 
+#include <algorithm>
 #include <cstddef>
+#include <format>
 #include <memory>
+#include <ostream>
+#include <string>
 #include <vector>
 
 #include "glog/logging.h"
@@ -10,7 +14,6 @@
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"

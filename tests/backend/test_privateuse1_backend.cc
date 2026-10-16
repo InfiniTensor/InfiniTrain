@@ -1,15 +1,23 @@
+#include <stdint.h>
+
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <utility>
 #include <vector>
 
+#include "glog/logging.h"
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/core/privateuse1_backend.h"
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/core/runtime/runtime_common.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
+#include "infini_train/include/scalar.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::test {

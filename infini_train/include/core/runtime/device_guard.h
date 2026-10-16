@@ -1,17 +1,17 @@
 #pragma once
 
+#include <stddef.h>
+
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 
 #include "infini_train/include/common/common.h"
 #include "infini_train/include/core/runtime/runtime_common.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train::core {
-
-class Stream;
-class BlasHandle;
 
 // Note(dcj): In the CPU backend, kD2D corresponds to a regular memcpy.
 enum class MemcpyKind : int8_t {

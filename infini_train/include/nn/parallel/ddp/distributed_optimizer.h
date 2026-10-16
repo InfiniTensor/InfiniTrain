@@ -1,15 +1,19 @@
 #pragma once
 
-#include <cstdint>
+#include <stddef.h>
+
 #include <functional>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "infini_train/include/optimizer.h"
+#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
 class Module;
+
 namespace parallel {
 class ParamAndGradBuffer;
 class ParamAndGradBucketGroup;

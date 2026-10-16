@@ -1,11 +1,20 @@
+#include <stddef.h>
+#include <stdint.h>
+
 #include <memory>
+#include <vector>
 
 #include "infini_train/include/common/cpu/common_cpu.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/dtype_dispatch.h"
 #include "infini_train/include/tensor.h"
 
 #include "infini_train/src/core/runtime/cpu/cpu_dispatch.h"
+
+namespace infini_train {
+enum class DataType : int8_t;
+} // namespace infini_train
 
 namespace infini_train::kernels::cpu {
 

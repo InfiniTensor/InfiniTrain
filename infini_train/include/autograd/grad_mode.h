@@ -1,5 +1,4 @@
 #pragma once
-#include <atomic>
 
 namespace infini_train::autograd {
 

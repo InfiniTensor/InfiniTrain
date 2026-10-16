@@ -2,21 +2,25 @@
 
 #include <atomic>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h"
-#include "infini_train/include/nn/parallel/ddp/reducer.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
 
 namespace infini_train {
 class Tensor;
-class Device;
+
 namespace nn::parallel {
-class DistributedDataParallelConfig;
 class Rank;
 } // namespace nn::parallel
 } // namespace infini_train
 
 namespace infini_train::nn::parallel {
+class ParamAndGradBucketGroup;
+class ParamAndGradBuffer;
+class ProcessGroup;
+class Reducer;
 
 namespace {
 constexpr char kModuleName[] = "module";

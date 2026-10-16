@@ -6,8 +6,11 @@
 #include <format>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <system_error>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
@@ -16,7 +19,9 @@
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
+#include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 

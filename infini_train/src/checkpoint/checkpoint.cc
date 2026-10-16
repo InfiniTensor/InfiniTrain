@@ -3,6 +3,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -11,12 +12,15 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/lr_scheduler.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {
+enum class DataType : int8_t;
+
 namespace {
 constexpr uint32_t kCkptMagic = 0x54504B43; // CKPT
 constexpr uint32_t kCkptVersion = 1;

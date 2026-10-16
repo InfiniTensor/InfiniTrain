@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <memory>
 #include <vector>
 
@@ -7,8 +9,7 @@
 
 namespace infini_train {
 class Tensor;
-class Device;
-class Optimizer;
+
 namespace nn {
 class Module;
 }

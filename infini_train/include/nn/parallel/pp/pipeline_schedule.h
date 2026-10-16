@@ -1,13 +1,16 @@
 #pragma once
 
-#include <memory>
-#include <vector>
+#include <stdint.h>
 
-#include "infini_train/include/datatype.h"
+#include <memory>
+#include <utility>
+#include <vector>
 
 namespace infini_train {
 class Tensor;
 class Optimizer;
+enum class DataType : int8_t;
+
 namespace nn {
 class Module;
 } // namespace nn

@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -11,6 +10,7 @@ namespace infini_train {
 class Optimizer;
 class LRScheduler;
 class Tensor;
+
 namespace nn {
 class Module;
 }

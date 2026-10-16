@@ -1,8 +1,13 @@
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+
 #include <utility>
 
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/core/runtime/runtime_common.h"
+#include "infini_train/include/device.h"
 
 namespace infini_train::core::cpu {
 

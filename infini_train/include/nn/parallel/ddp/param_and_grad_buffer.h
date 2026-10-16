@@ -1,18 +1,21 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <cstddef>
 #include <memory>
-#include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
 
 namespace infini_train {
 class Tensor;
+enum class DataType : int8_t;
+
 namespace nn::parallel {
 class ProcessGroup;
 class Work;

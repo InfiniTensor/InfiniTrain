@@ -1,14 +1,21 @@
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 
+#include <stdint.h>
+
 #include <algorithm>
-#include <cmath>
 #include <cstdio>
 #include <map>
+#include <ostream>
+#include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/grad_mode.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/container.h"
@@ -21,6 +28,7 @@
 #include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"

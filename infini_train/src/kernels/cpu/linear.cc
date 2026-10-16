@@ -1,10 +1,12 @@
 #include <cstdint>
 #include <memory>
-#include <numeric>
-#include <tuple>
+#include <vector>
 
+#include "Eigen/Dense"
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 

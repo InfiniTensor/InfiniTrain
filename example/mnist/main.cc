@@ -1,9 +1,13 @@
+#include <stdint.h>
+
+#include <algorithm>
 #include <chrono>
-#include <cstdlib>
 #include <format>
 #include <iostream>
 #include <memory>
 #include <numeric>
+#include <ratio>
+#include <string>
 #include <vector>
 
 #include "gflags/gflags.h"
@@ -12,7 +16,9 @@
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
+#include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/optimizer.h"
+#include "infini_train/include/tensor.h"
 
 #include "example/mnist/dataset.h"
 #include "example/mnist/net.h"

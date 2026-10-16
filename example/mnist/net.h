@@ -1,10 +1,7 @@
 #pragma once
 
-#include <cstdlib>
 #include <memory>
 #include <vector>
-
-#include "glog/logging.h"
 
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/tensor.h"

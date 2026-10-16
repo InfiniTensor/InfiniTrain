@@ -1,13 +1,18 @@
+#include <stdint.h>
+
 #include <filesystem>
 #include <fstream>
+#include <iterator>
+#include <memory>
 #include <string>
+#include <vector>
 
 #include "gtest/gtest.h"
 
 #include "infini_train/include/checkpoint/checkpoint.h"
 #include "infini_train/include/checkpoint/checkpoint_manager.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/modules/linear.h"
-#include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 

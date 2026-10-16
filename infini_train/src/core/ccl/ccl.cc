@@ -2,13 +2,24 @@
 
 #include <format>
 #include <memory>
+#include <ostream>
+#include <string>
 #include <utility>
 
 #include "glog/logging.h"
 
-#include "infini_train/include/nn/parallel/reduce_op_type.h"
+namespace infini_train::nn::parallel::comm {
+enum class ReduceOpType : int8_t;
+} // namespace infini_train::nn::parallel::comm
+
+namespace infini_train {
+enum class DataType : int8_t;
+} // namespace infini_train
 
 namespace infini_train::core {
+class CclComm;
+class CclUniqueId;
+enum class CclStatus : int32_t;
 
 void CclImpl::GroupStart() const { LOG(FATAL) << "CclImpl::GroupStart is not implemented."; }
 

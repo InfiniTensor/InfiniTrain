@@ -1,8 +1,13 @@
+#include <stdint.h>
+
 #include <cmath>
 #include <memory>
+#include <vector>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 

@@ -1,7 +1,10 @@
 #include "infini_train/include/nn/modules/module.h"
 
 #include <algorithm>
+#include <compare>
+#include <format>
 #include <memory>
+#include <ostream>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -9,7 +12,7 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/function.h"
-#include "infini_train/include/common/hook.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/global_module_hook_registry.h"

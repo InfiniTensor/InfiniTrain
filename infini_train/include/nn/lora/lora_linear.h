@@ -1,10 +1,16 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <memory>
 #include <vector>
 
 #include "infini_train/include/nn/lora/lora_config.h"
 #include "infini_train/include/nn/modules/linear.h"
+
+namespace infini_train::nn {
+class Module;
+} // namespace infini_train::nn
 
 // Forward declarations for test functions (required for friend declarations)
 void test_lora_linear_init();

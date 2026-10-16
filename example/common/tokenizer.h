@@ -1,10 +1,10 @@
-#include <cctype>
 #include <cstdint>
+#include <string>
 #include <vector>
 
-#include "infini_train/include/device.h"
-
 namespace infini_train {
+class Device;
+
 namespace nn {
 class Module;
 }

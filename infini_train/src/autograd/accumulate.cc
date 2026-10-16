@@ -1,9 +1,15 @@
 #include "infini_train/include/autograd/accumulate.h"
 
+#include <ostream>
+#include <string>
+#include <unordered_map>
+
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 

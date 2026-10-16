@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <format>
+#include <ostream>
+#include <string>
 #include <utility>
 
 #include "glog/logging.h"

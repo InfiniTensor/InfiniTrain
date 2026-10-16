@@ -1,5 +1,7 @@
 #include "infini_train/include/nn/lora/lora_config.h"
 
+#include <stddef.h>
+
 namespace infini_train::nn::lora {
 
 float LoRAConfig::Scaling() const { return alpha / static_cast<float>(rank); }
