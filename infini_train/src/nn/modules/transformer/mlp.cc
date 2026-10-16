@@ -18,7 +18,7 @@
 
 namespace infini_train::nn {
 
-MLP::MLP(const TransformerConfig &config) : CloneableModule(kType) {
+MLP::MLP(const TransformerConfig &config, bool is_expert) : CloneableModule(kType) {
     int64_t ffn_hidden = config.ffn_hidden_size.value_or(4 * config.n_embd);
 
     if (config.ffn_type == FFNType::kMoE) {
@@ -54,6 +54,19 @@ MLP::MLP(const TransformerConfig &config) : CloneableModule(kType) {
         /*input_is_parallel=*/true,
         /*skip_bias_add=*/false,
         /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+
+    const bool use_expert_process_groups
+        = is_expert
+       && (parallel::global::GetExpertParallelSize() > 1
+           || parallel::global::GetExpertTensorParallelSize() != parallel::global::GetTensorParallelSize());
+    if (use_expert_process_groups) {
+        // MLP is not yet owned by a shared_ptr while its constructor runs, so
+        // traverse the already-constructed child modules instead of calling
+        // Module::Parameters() on this object.
+        for (const auto &[_, module] : modules_) {
+            for (const auto &parameter : module->Parameters()) { parameter->set_is_expert_parallel(true); }
+        }
+    }
 }
 
 std::vector<std::shared_ptr<infini_train::Tensor>>

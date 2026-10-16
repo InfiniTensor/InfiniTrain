@@ -9,8 +9,10 @@
 
 #include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/utils.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/work.h"
 #include "infini_train/include/tensor.h"
 
@@ -140,9 +142,11 @@ std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector
 }
 
 Reducer::Reducer(std::vector<std::shared_ptr<Tensor>> parameters, std::vector<std::vector<size_t>> bucket_indices,
-                 const DistributedDataParallelConfig ddp_config, const ProcessGroup *process_group)
-    : params_(std::move(parameters)), ddp_config_(ddp_config), process_group_(process_group) {
-    CHECK_NOTNULL(process_group_);
+                 const DistributedDataParallelConfig ddp_config, const ProcessGroup *process_group,
+                 float gradient_scaling_factor)
+    : params_(std::move(parameters)), ddp_config_(ddp_config), process_group_(process_group),
+      gradient_scaling_factor_(gradient_scaling_factor) {
+    CHECK(process_group_) << "Reducer requires a non-trivial parameter synchronization process group.";
     BuildBuckets(bucket_indices);
     ready_seen_this_iter_.assign(params_.size(), 0);
 }
@@ -402,7 +406,10 @@ void Reducer::MarkBucketReady(size_t bucket_index) {
 void Reducer::FinalizeBucketDense(size_t bucket_index) {
     // NOTE(zbl): Assume mutex is on when entering this function
     auto &bucket = buckets_.at(bucket_index);
-
+    if (gradient_scaling_factor_ != 1.f) {
+        auto kernel = Dispatcher::Instance().GetKernel({bucket.contents->GetDevice().type(), "AccumulateGrad"});
+        kernel.Call<void>(bucket.contents, gradient_scaling_factor_ - 1.f, bucket.contents);
+    }
     if (comm_hook_) {
         std::vector<std::shared_ptr<Tensor>> bucket_view{bucket.contents};
         // NOTE(zbl): Custom hook should do in-place operations
@@ -410,7 +417,8 @@ void Reducer::FinalizeBucketDense(size_t bucket_index) {
         // FIXME(zbl): support custom hook later
         LOG(FATAL) << "Custom hook is not supported now";
     } else {
-        const auto reduce_op = ddp_config_.average_in_collective ? comm::ReduceOpType::kAvg : comm::ReduceOpType::kSum;
+        const auto reduce_op
+            = ddp_config_.average_in_collective ? comm::ReduceOpType::kAvg : comm::ReduceOpType::kSum;
         bucket.work = process_group_->AllReduce(bucket.contents, reduce_op, true);
     }
 }

@@ -23,6 +23,8 @@
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/process_group.h"
@@ -42,6 +44,7 @@
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
 DEFINE_string(llmc_filepath, "", "llmc model file path to load from");
+DEFINE_string(model_config, std::string(mixtral::kTinyModelPreset), "Model preset (tiny/mixtral-8x7b)");
 // token layout for each step of the optimization
 DEFINE_uint32(micro_batch_size, 4, "batch size, in units of #batch dimensions");
 DEFINE_uint32(global_batch_size, 4, "total desired batch size, in units of #batch dimensions");
@@ -50,6 +53,7 @@ DEFINE_uint32(sequence_length, 64, "sequence length");
 DEFINE_uint32(num_iteration, 10, "number of iterations to run");
 // optimization
 DEFINE_double(learning_rate, 1e-4, "Peak learning rate.");
+DEFINE_int32(zero_stage, 0, "ZeRO stage (0/1/2); 0 disables DistributedOptimizer");
 // memory management
 DEFINE_string(device, "cpu", "Training device.");
 // parallel
@@ -60,7 +64,7 @@ DEFINE_uint32(tensor_parallel, 1, "Tensor Parallel world size");
 DEFINE_uint32(pipeline_parallel, 1, "Pipeline Parallel world size, specified the number of PP stages.");
 DEFINE_uint32(virtual_pipeline_parallel, 1, "Number of chunks in PP stage.");
 DEFINE_uint32(expert_parallel, 1, "Expert Parallel world size");
-DEFINE_uint32(expert_tensor_parallel, 1, "Expert Tensor Parallel world size");
+DEFINE_uint32(expert_tensor_parallel, 1, "Expert Tensor Parallel world size (currently must be 1)");
 // precision
 DEFINE_string(dtype, "float32", "precision used in training (float32/bfloat16)");
 // logging
@@ -75,7 +79,7 @@ constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 
 void ValidateRuntimeFlags(const nn::TransformerConfig &config) {
-    CHECK(!FLAGS_input_bin.empty()) << "tiny Mixtral training requires --input_bin";
+    CHECK(!FLAGS_input_bin.empty()) << "Mixtral training requires --input_bin";
     CHECK_GT(FLAGS_micro_batch_size, 0);
     CHECK_GT(FLAGS_global_batch_size, 0);
     CHECK_GT(FLAGS_sequence_length, 0);
@@ -83,6 +87,11 @@ void ValidateRuntimeFlags(const nn::TransformerConfig &config) {
     CHECK(config.moe_config.has_value());
     CHECK_EQ(config.moe_config->num_experts % FLAGS_expert_parallel, 0)
         << "The number of Mixtral experts must be divisible by expert_parallel";
+    if (FLAGS_expert_parallel > 1 && nn::parallel::global::GetExpertDataParallelSize() > 1) {
+        CHECK_EQ(FLAGS_zero_stage, 1)
+            << "The initial EP+EDP training path requires --zero_stage=1 so every expert replica participates "
+               "in gradient synchronization, including replicas with no routed tokens";
+    }
 
     const uint64_t batch_per_micro_step
         = static_cast<uint64_t>(FLAGS_micro_batch_size) * nn::parallel::global::GetDataParallelSize();
@@ -93,6 +102,10 @@ void ValidateRuntimeFlags(const nn::TransformerConfig &config) {
 } // namespace
 
 DEFINE_validator(device, [](const char *, const std::string &value) { return Device::ParseType(value).has_value(); });
+DEFINE_validator(zero_stage, [](const char *, int32_t value) { return value >= 0 && value <= 2; });
+DEFINE_validator(model_config, [](const char *, const std::string &value) {
+    return value == mixtral::kTinyModelPreset || value == mixtral::kMixtral8x7BModelPreset;
+});
 
 void Train(const nn::parallel::Rank &rank) {
     using namespace nn::parallel;
@@ -127,8 +140,8 @@ void Train(const nn::parallel::Rank &rank) {
         device = Device(device_type, 0);
     }
 
-    nn::TransformerConfig model_config = mixtral::TinyMixtralConfig();
-    mixtral::SanitizeTinyMixtralConfig(model_config);
+    nn::TransformerConfig model_config = mixtral::ConfigForPreset(FLAGS_model_config);
+    mixtral::SanitizeMixtralConfig(model_config);
     ValidateRuntimeFlags(model_config);
 
     std::shared_ptr<nn::Module> model;
@@ -144,10 +157,6 @@ void Train(const nn::parallel::Rank &rank) {
     if (rank.IsMainRank()) {
         LOG(INFO) << "global batch size: " << FLAGS_global_batch_size << ", data parallel size: " << ddp_world_size
                   << ", gradient accumulation steps: " << grad_accum_steps;
-        if (ddp_world_size > 1) {
-            LOG(WARNING) << "Expert-aware DDP is not wired yet; this launcher currently leaves optimizer "
-                            "updates rank-local";
-        }
     }
 
     const uint32_t loader_batch_size
@@ -172,15 +181,41 @@ void Train(const nn::parallel::Rank &rank) {
             {FLAGS_micro_batch_size, FLAGS_sequence_length, model_config.n_embd}};
         model = std::make_shared<PipelineParallel>(model, pp_world_size, grad_accum_steps, recv_shapes, pp_rank, device,
                                                    model_config.GetChunkSize());
+        if (ddp_world_size > 1) {
+            auto ddp_config = DistributedDataParallelConfig{};
+            ddp_config.overlap_grad_reduce = false;
+            ddp_config.zero_stage = FLAGS_zero_stage;
+            auto *mutable_chunks = dynamic_cast<PipelineParallel *>(model.get())->mutable_chunks();
+            for (size_t chunk_id = 0; chunk_id < mutable_chunks->size(); ++chunk_id) {
+                mutable_chunks->at(chunk_id)
+                    = std::make_shared<DistributedDataParallel>(mutable_chunks->at(chunk_id), rank, ddp_config);
+            }
+        }
+    } else if (ddp_world_size > 1) {
+        auto ddp_config = DistributedDataParallelConfig{};
+        ddp_config.overlap_grad_reduce = false;
+        ddp_config.zero_stage = FLAGS_zero_stage;
+        model = std::make_shared<DistributedDataParallel>(model, rank, ddp_config);
     }
 
-    auto optimizer = optimizers::Adam::CreateNamed(static_cast<float>(FLAGS_learning_rate))(model->NamedParameters());
+    auto optimizer_creator = optimizers::Adam::CreateNamed(static_cast<float>(FLAGS_learning_rate));
+    const auto params_to_optimize = model->NamedParameters();
+    std::shared_ptr<Optimizer> optimizer;
+    if (FLAGS_zero_stage >= 1) {
+        auto model_chunks = pp_world_size > 1 ? *dynamic_cast<PipelineParallel *>(model.get())->mutable_chunks()
+                                              : std::vector<std::shared_ptr<nn::Module>>{model};
+        optimizer = std::make_shared<DistributedOptimizer>(optimizer_creator, params_to_optimize, model_chunks,
+                                                           ddp_world_size, ddp_rank);
+    } else {
+        optimizer = optimizer_creator(params_to_optimize);
+    }
     auto device_impl = core::GetDeviceGuardImpl(device.type());
     std::vector<double> step_duration_ms;
     step_duration_ms.reserve(FLAGS_num_iteration);
     const double tokens_per_step = static_cast<double>(FLAGS_global_batch_size) * FLAGS_sequence_length;
 
-    LOG(INFO) << "Rank " << rank.GlobalRank() << ": start tiny Mixtral training on " << device.ToString();
+    LOG(INFO) << "Rank " << rank.GlobalRank() << ": start " << FLAGS_model_config << " training on "
+              << device.ToString();
     for (uint32_t step = 0; step < FLAGS_num_iteration; ++step) {
 #ifdef PROFILE_MODE
         Profiler::Instance().SetTag("Step_" + std::to_string(step));
@@ -271,9 +306,9 @@ int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
 
     CHECK_GT(FLAGS_nthread_per_process, 0);
-    CHECK_EQ(FLAGS_tensor_parallel, 1) << "The tiny Mixtral EP launcher currently requires --tensor_parallel=1";
+    CHECK_EQ(FLAGS_tensor_parallel, 1) << "The Mixtral EP launcher currently requires --tensor_parallel=1";
     CHECK_EQ(FLAGS_expert_tensor_parallel, 1)
-        << "The tiny Mixtral EP launcher currently requires --expert_tensor_parallel=1";
+        << "The Mixtral EP launcher currently requires --expert_tensor_parallel=1";
     CHECK_GT(FLAGS_pipeline_parallel, 0);
     CHECK_GT(FLAGS_virtual_pipeline_parallel, 0);
     CHECK_GT(FLAGS_expert_parallel, 0);

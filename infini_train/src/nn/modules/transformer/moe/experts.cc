@@ -22,7 +22,8 @@ SequentialMLP::SequentialMLP(int64_t num_local_experts, const TransformerConfig 
     CHECK_GT(num_local_experts_, 0);
 
     for (int64_t expert_idx = 0; expert_idx < num_local_experts_; ++expert_idx) {
-        modules_[std::string(kExpertNamePrefix) + std::to_string(expert_idx)] = std::make_shared<MLP>(config);
+        modules_[std::string(kExpertNamePrefix) + std::to_string(expert_idx)]
+            = std::make_shared<MLP>(config, /*is_expert=*/true);
     }
 }
 

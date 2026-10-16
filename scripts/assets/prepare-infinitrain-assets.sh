@@ -6,6 +6,7 @@ set -euo pipefail
 # Usage:
 #   ./scripts/assets/prepare-infinitrain-assets.sh gpt2
 #   ./scripts/assets/prepare-infinitrain-assets.sh llama3
+#   ./scripts/assets/prepare-infinitrain-assets.sh mixtral
 #   ./scripts/assets/prepare-infinitrain-assets.sh mnist
 #   ./scripts/assets/prepare-infinitrain-assets.sh all
 #
@@ -15,6 +16,12 @@ set -euo pipefail
 #   HF_TOKEN=hf_xxx
 #   FORCE=1
 #   SKIP_LLAMA3_WEIGHTS=1
+#   MIXTRAL_MODEL_ID=mistralai/Mixtral-8x7B-v0.1
+#   MIXTRAL_REVISION=main
+#   HF_LOCAL_FILES_ONLY=1
+#
+# `all` intentionally excludes Mixtral because its FP32 LLMC file is about
+# 174 GiB. Prepare it explicitly with the `mixtral` target.
 #
 # Output layout:
 #   data/
@@ -27,6 +34,8 @@ set -euo pipefail
 #   │   ├── llama3.2_1B_fp32.bin
 #   │   ├── tiny_shakespeare_train.bin
 #   │   └── tiny_shakespeare_val.bin
+#   ├── mixtral/
+#   │   └── mixtral_8x7b_v0.1_fp32.bin
 #   └── mnist/
 #       ├── train-images-idx3-ubyte
 #       ├── train-labels-idx1-ubyte
@@ -43,19 +52,20 @@ SKIP_LLAMA3_WEIGHTS="${SKIP_LLAMA3_WEIGHTS:-0}"
 
 GPT2_DIR="${DATA_DIR}/gpt2"
 LLAMA3_DIR="${DATA_DIR}/llama3"
+MIXTRAL_DIR="${DATA_DIR}/mixtral"
 MNIST_DIR="${DATA_DIR}/mnist"
 
 TARGET="${1:-all}"
 
 case "${TARGET}" in
-  gpt2|llama3|mnist|all) ;;
+  gpt2|llama3|mixtral|mnist|all) ;;
   *)
-    echo "Usage: $0 {gpt2|llama3|mnist|all}"
+    echo "Usage: $0 {gpt2|llama3|mixtral|mnist|all}"
     exit 2
     ;;
 esac
 
-mkdir -p "${CACHE_DIR}" "${GPT2_DIR}" "${LLAMA3_DIR}" "${MNIST_DIR}"
+mkdir -p "${CACHE_DIR}" "${GPT2_DIR}" "${LLAMA3_DIR}" "${MIXTRAL_DIR}" "${MNIST_DIR}"
 
 log() {
   printf '\n[%s] %s\n' "$(date '+%H:%M:%S')" "$*"
@@ -176,6 +186,56 @@ prepare_llama3() {
   echo "  val:     ${LLAMA3_DIR}/tiny_shakespeare_val.bin"
 }
 
+ensure_mixtral_python() {
+  need_cmd "${PYTHON}"
+
+  local venv="${CACHE_DIR}/mixtral-venv"
+  MIXTRAL_PY="${venv}/bin/python"
+  local py="${MIXTRAL_PY}"
+
+  if [[ ! -x "${py}" ]]; then
+    log "Creating local Python environment for Mixtral preparation"
+    "${PYTHON}" -m venv "${venv}"
+  fi
+
+  if ! "${py}" - <<'PY' >/dev/null 2>&1
+import accelerate
+import huggingface_hub
+import safetensors
+import socksio
+import torch
+import transformers
+PY
+  then
+    log "Installing Mixtral preparation dependencies into ${venv}"
+    "${py}" -m pip install --upgrade pip
+    "${py}" -m pip install \
+      "torch>=2.2" \
+      "transformers>=4.43" \
+      "accelerate>=0.29" \
+      "safetensors>=0.4" \
+      "huggingface_hub>=0.24" \
+      "socksio>=1.0"
+  fi
+}
+
+prepare_mixtral() {
+  log "Preparing Mixtral 8x7B weights"
+
+  local MIXTRAL_PY=""
+  ensure_mixtral_python
+  local py="${MIXTRAL_PY}"
+
+  MIXTRAL_OUTPUT_DIR="${MIXTRAL_DIR}" \
+  MIXTRAL_CACHE_DIR="${CACHE_DIR}/mixtral-hf" \
+  FORCE="${FORCE}" \
+  "${py}" "${SCRIPT_DIR}/prepare_mixtral_assets.py"
+
+  echo
+  echo "Mixtral ready:"
+  echo "  weights: ${MIXTRAL_DIR}/mixtral_8x7b_v0.1_fp32.bin"
+}
+
 prepare_mnist() {
   log "Preparing MNIST IDX dataset"
 
@@ -218,6 +278,9 @@ case "${TARGET}" in
     ;;
   llama3)
     prepare_llama3
+    ;;
+  mixtral)
+    prepare_mixtral
     ;;
   mnist)
     prepare_mnist

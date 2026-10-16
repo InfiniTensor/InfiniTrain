@@ -1,15 +1,17 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 
-#include <functional>
 #include <map>
 #include <memory>
+#include <tuple>
 #include <utility>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/function_hook.h"
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/parallel/comm.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
@@ -18,22 +20,65 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
+namespace {
+
+class ParameterGradSyncHook final : public autograd::PostAccumulateGradHook {
+public:
+    ParameterGradSyncHook(const ProcessGroup *process_group, comm::ReduceOpType reduce_op, float scaling_factor,
+                          std::shared_ptr<std::atomic_bool> enabled)
+        : process_group_(process_group), reduce_op_(reduce_op), scaling_factor_(scaling_factor),
+          enabled_(std::move(enabled)) {}
+
+    void operator()(const std::shared_ptr<Tensor> &grad) override {
+        CHECK(grad);
+        if (!enabled_->load(std::memory_order_relaxed)) {
+            return;
+        }
+        if (scaling_factor_ != 1.f) {
+            auto kernel = Dispatcher::Instance().GetKernel({grad->GetDevice().type(), "AccumulateGrad"});
+            kernel.Call<void>(grad, scaling_factor_ - 1.f, grad);
+        }
+        if (process_group_) {
+            comm::AllReduce(grad, reduce_op_, process_group_);
+        }
+    }
+
+private:
+    const ProcessGroup *process_group_;
+    comm::ReduceOpType reduce_op_;
+    float scaling_factor_;
+    std::shared_ptr<std::atomic_bool> enabled_;
+};
+
+} // namespace
 
 DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> module, const Rank &rank,
                                                  const DistributedDataParallelConfig ddp_config)
-    : ddp_config_(ddp_config),
-      ddp_pg_(ProcessGroupFactory::Instance()->Get(GetDataParallelProcessGroupName(rank.GlobalRank()))) {
+    : ddp_config_(ddp_config) {
     CHECK(ddp_config_.zero_stage >= 0 && ddp_config_.zero_stage <= 3)
         << "DistributedDataParallel: zero_stage must be in 0/1/2/3.";
     if (ddp_config_.zero_stage == 3) {
         LOG(FATAL) << "DistributedDataParallel: ZeRO-3 is not implemented yet.";
     }
-    CHECK_NOTNULL(ddp_pg_);
-    const auto expected_backend = ddp_pg_->backend();
+    auto *process_group_factory = ProcessGroupFactory::Instance();
+    const auto dense_dp_ranks = GetDataParallelGroupRanks(rank.GlobalRank());
+    if (dense_dp_ranks.size() > 1) {
+        dense_dp_pg_ = process_group_factory->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()),
+                                                          dense_dp_ranks);
+    }
+    const auto expert_dp_ranks = GetExpertDataParallelGroupRanks(rank.GlobalRank());
+    if (expert_dp_ranks.size() > 1) {
+        expert_dp_pg_ = process_group_factory->GetOrCreate(GetExpertDataParallelProcessGroupName(rank.GlobalRank()),
+                                                           expert_dp_ranks);
+    }
+
+    const ProcessGroup *validation_pg = dense_dp_pg_ ? dense_dp_pg_ : expert_dp_pg_;
     const int expected_device_index = global::GetDeviceIndex(rank.thread_rank());
-    const auto validate_device = [expected_backend, expected_device_index](Device device, const char *kind) {
-        CHECK_EQ(static_cast<int>(device.type()), static_cast<int>(expected_backend))
-            << "DistributedDataParallel " << kind << " backend must match the process group backend";
+    const auto validate_device = [validation_pg, expected_device_index](Device device, const char *kind) {
+        if (validation_pg) {
+            CHECK_EQ(static_cast<int>(device.type()), static_cast<int>(validation_pg->backend()))
+                << "DistributedDataParallel " << kind << " backend must match the process group backend";
+        }
         CHECK_EQ(device.index(), expected_device_index)
             << "DistributedDataParallel " << kind << " must use the device assigned to this rank";
     };
@@ -49,10 +94,12 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
 
     for (auto &param : trainable_params) {
         if (!ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
+            const bool is_expert_parallel = param->is_expert_parallel();
             const auto reduce_op
-                = ddp_config.average_in_collective ? comm::ReduceOpType::kAvg : comm::ReduceOpType::kSum;
-            auto hook = std::make_unique<infini_train::autograd::AllReducePostAccumulateHook>(reduce_op, ddp_pg_,
-                                                                                              is_last_microbatch_);
+                = ddp_config_.average_in_collective ? comm::ReduceOpType::kAvg : comm::ReduceOpType::kSum;
+            auto hook = std::make_unique<ParameterGradSyncHook>(ProcessGroupForParameter(is_expert_parallel), reduce_op,
+                                                                GradientScalingFactorForParameter(is_expert_parallel),
+                                                                is_last_microbatch_);
             param->RegisterPostAccumulateGradHook(std::move(hook));
         }
     }
@@ -67,36 +114,72 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
         const size_t first_cap_bytes = ddp_config.first_bucket_cap_mb * kBytesPerMB;
         const size_t normal_cap_bytes = ddp_config.normal_bucket_cap_mb * kBytesPerMB;
         std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
-        auto bucket_indices = ComputeBucketAssignmentBySize(trainable_params, bucket_size_limits);
-
-        reducer_ = std::make_shared<Reducer>(trainable_params, bucket_indices, ddp_config, ddp_pg_);
-        reducer_->AttachHooksToParameters();
+        std::map<bool, std::vector<std::shared_ptr<Tensor>>> domain_to_params;
+        for (const auto &param : trainable_params) {
+            domain_to_params[param->is_expert_parallel()].push_back(param);
+        }
+        for (auto &[is_expert_parallel, params] : domain_to_params) {
+            const auto *process_group = ProcessGroupForParameter(is_expert_parallel);
+            const float scaling_factor = GradientScalingFactorForParameter(is_expert_parallel);
+            if (process_group) {
+                auto bucket_indices = ComputeBucketAssignmentBySize(params, bucket_size_limits);
+                auto reducer
+                    = std::make_shared<Reducer>(params, bucket_indices, ddp_config, process_group, scaling_factor);
+                reducer->AttachHooksToParameters();
+                reducers_.push_back(std::move(reducer));
+            } else if (scaling_factor != 1.f) {
+                const auto reduce_op
+                    = ddp_config_.average_in_collective ? comm::ReduceOpType::kAvg : comm::ReduceOpType::kSum;
+                for (const auto &param : params) {
+                    param->RegisterPostAccumulateGradHook(std::make_unique<ParameterGradSyncHook>(
+                        nullptr, reduce_op, scaling_factor, is_last_microbatch_));
+                }
+            }
+        }
     }
 }
 
+const ProcessGroup *DistributedDataParallel::ProcessGroupForParameter(bool is_expert_parallel) const {
+    return is_expert_parallel ? expert_dp_pg_ : dense_dp_pg_;
+}
+
+float DistributedDataParallel::GradientScalingFactorForParameter(bool is_expert_parallel) const {
+    const float dense_dp_size = static_cast<float>(global::GetDataParallelSize());
+    CHECK_GT(dense_dp_size, 0.f);
+    if (!ddp_config_.average_in_collective) {
+        return 1.f / dense_dp_size;
+    }
+    if (is_expert_parallel) {
+        return static_cast<float>(global::GetExpertDataParallelSize()) / dense_dp_size;
+    }
+    return 1.f;
+}
+
 void DistributedDataParallel::BuildParamAndGradBuffers(const std::vector<std::shared_ptr<Tensor>> &params) {
-    // (param_dtype, grad_dtype)
-    using DTypePair = std::pair<DataType, DataType>;
-    std::map<DTypePair, std::vector<std::shared_ptr<Tensor>>> dtype_to_params;
+    // (is_expert_parallel, param_dtype, grad_dtype)
+    using BufferKey = std::tuple<bool, DataType, DataType>;
+    std::map<BufferKey, std::vector<std::shared_ptr<Tensor>>> buffer_key_to_params;
 
     for (const auto &param : params) {
         auto param_dtype = param->Dtype();
         auto grad_dtype = param->grad() ? param->grad()->Dtype() : param_dtype;
-        dtype_to_params[{param_dtype, grad_dtype}].push_back(param);
+        buffer_key_to_params[{param->is_expert_parallel(), param_dtype, grad_dtype}].push_back(param);
     }
 
     param_grad_buffers_.clear();
-    param_grad_buffers_.reserve(dtype_to_params.size());
+    param_grad_buffers_.reserve(buffer_key_to_params.size());
 
-    for (auto &kv : dtype_to_params) {
-        auto [param_dtype, grad_dtype] = kv.first;
+    for (auto &kv : buffer_key_to_params) {
+        auto [is_expert_parallel, param_dtype, grad_dtype] = kv.first;
         auto param_list = kv.second;
 
         if (param_list.empty()) {
             continue;
         }
 
-        auto buffer = std::make_shared<ParamAndGradBuffer>(param_list, param_dtype, grad_dtype, ddp_pg_, ddp_config_);
+        auto buffer = std::make_shared<ParamAndGradBuffer>(
+            param_list, param_dtype, grad_dtype, ProcessGroupForParameter(is_expert_parallel),
+            GradientScalingFactorForParameter(is_expert_parallel), ddp_config_);
 
         param_grad_buffers_.push_back(buffer);
     }
@@ -105,9 +188,14 @@ void DistributedDataParallel::BuildParamAndGradBuffers(const std::vector<std::sh
     bucket_groups_ = PartitionBuckets(param_grad_buffers_, /*force_single_bucket_group=*/false);
 
     if (ddp_config_.zero_stage >= 1 && ddp_config_.overlap_param_gather) {
-        auto num_bucket_groups = bucket_groups_.size();
-        for (auto i = num_bucket_groups - 1; i > 0; --i) {
-            bucket_groups_[i]->SetNextParamGatherBucketGroup(bucket_groups_[i - 1]);
+        std::map<const ProcessGroup *, std::shared_ptr<ParamAndGradBucketGroup>> next_group_by_process_group;
+        for (auto it = bucket_groups_.rbegin(); it != bucket_groups_.rend(); ++it) {
+            const auto &group = *it;
+            const auto next_it = next_group_by_process_group.find(group->process_group());
+            if (next_it != next_group_by_process_group.end()) {
+                next_it->second->SetNextParamGatherBucketGroup(group);
+            }
+            next_group_by_process_group[group->process_group()] = group;
         }
     }
 
@@ -124,8 +212,8 @@ void DistributedDataParallel::BuildParamAndGradBuffers(const std::vector<std::sh
     }
 
     LOG(INFO) << "DDP BuildParamAndGradBuffers: "
-              << "dtype_groups=" << dtype_to_params.size() << ", param_grad_buffers=" << param_grad_buffers_.size()
-              << ", bucket_groups=" << bucket_groups_.size();
+              << "sync_dtype_groups=" << buffer_key_to_params.size()
+              << ", param_grad_buffers=" << param_grad_buffers_.size() << ", bucket_groups=" << bucket_groups_.size();
 }
 
 void DistributedDataParallel::RegisterBackwardHooks(const std::vector<std::shared_ptr<Tensor>> &params) {
@@ -205,9 +293,7 @@ void DistributedDataParallel::OnGradReady(const std::shared_ptr<Tensor> &param) 
 std::vector<std::shared_ptr<Tensor>>
 DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
     auto outputs = (*modules_[kModuleName])(input_tensors);
-    if (reducer_) {
-        reducer_->PrepareForBackward();
-    }
+    for (auto &reducer : reducers_) { reducer->PrepareForBackward(); }
     if (ddp_config_.zero_stage >= 1) {
         for (auto buffer : param_grad_buffers_) { buffer->RebindGradViews(); }
     }
@@ -228,9 +314,7 @@ void DistributedDataParallel::FinishGradSync() {
 
 void DistributedDataParallel::SetIsLastMicrobatch(bool is_last_microbatch) {
     is_last_microbatch_->store(is_last_microbatch, std::memory_order_relaxed);
-    if (reducer_) {
-        reducer_->SetIsLastMicrobatch(is_last_microbatch);
-    }
+    for (auto &reducer : reducers_) { reducer->SetIsLastMicrobatch(is_last_microbatch); }
     for (auto &group : bucket_groups_) { group->SetIsLastMicrobatch(is_last_microbatch); }
 }
 } // namespace infini_train::nn::parallel

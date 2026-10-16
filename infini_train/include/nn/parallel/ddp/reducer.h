@@ -55,7 +55,8 @@ public:
      * @param ddp_config DDP related options, see definition of DistributedDataParallelConfig
      */
     explicit Reducer(std::vector<std::shared_ptr<Tensor>> parameters, std::vector<std::vector<size_t>> bucket_indices,
-                     const DistributedDataParallelConfig ddp_config, const ProcessGroup *process_group);
+                     const DistributedDataParallelConfig ddp_config, const ProcessGroup *process_group,
+                     float gradient_scaling_factor);
 
     // Attach PostAllReduceHooks to params
     void AttachHooksToParameters();
@@ -141,6 +142,7 @@ private:
     std::shared_ptr<autograd::PostAccumulateGradHook> comm_hook_ = nullptr;
     DistributedDataParallelConfig ddp_config_;
     const ProcessGroup *process_group_ = nullptr;
+    float gradient_scaling_factor_ = 1.f;
 
     // Next bucket to be reduced
     // This is to make sure that all-reduce of buckets be launched in the order we expect
