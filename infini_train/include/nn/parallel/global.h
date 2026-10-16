@@ -54,8 +54,8 @@ public:
     static GlobalEnv &Instance();
 
     void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-              int pipeline_parallel_size, int virtual_pipeline_parallel_size, int expert_parallel_size = 1,
-              std::optional<int> expert_tensor_parallel_size = std::nullopt);
+              int pipeline_parallel_size, int virtual_pipeline_parallel_size, int expert_parallel_size,
+              std::optional<int> expert_tensor_parallel_size);
 
     int nnodes() const;
 
@@ -127,8 +127,8 @@ private:
 };
 
 inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                       int pipeline_parallel_size, int virtual_pipeline_parallel, int expert_parallel_size = 1,
-                       std::optional<int> expert_tensor_parallel_size = std::nullopt) {
+                       int pipeline_parallel_size, int virtual_pipeline_parallel, int expert_parallel_size,
+                       std::optional<int> expert_tensor_parallel_size) {
     GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
                                pipeline_parallel_size, virtual_pipeline_parallel, expert_parallel_size,
                                expert_tensor_parallel_size);
@@ -162,28 +162,7 @@ inline void GetCoordOf(int rank, int &dp, int &tp, int &pp) {
     GetDenseRankGenerator().CoordOf(rank, dp, tp, pp, ep);
 }
 
-inline int GetGroupId(Axis target, int rank) {
-    const auto &rank_generator = GetDenseRankGenerator();
-    int dp = 0;
-    int tp = 0;
-    int pp = 0;
-    int ep = 0;
-    rank_generator.CoordOf(rank, dp, tp, pp, ep);
-    const std::array<int, AXIS_COUNT> coordinates{dp, tp, pp, ep};
-
-    // Preserve the legacy dense group numbering used in process-group names.
-    int group_id = 0;
-    int group_stride = 1;
-    for (int index = AXIS_COUNT - 1; index >= 0; --index) {
-        const Axis axis = rank_generator.order()[index];
-        if (axis == target || axis == EP) {
-            continue;
-        }
-        group_id += coordinates[axis] * group_stride;
-        group_stride *= rank_generator.AxisSize(axis);
-    }
-    return group_id;
-}
+inline int GetGroupId(Axis target, int rank) { return GetDenseRankGenerator().GroupId(target, rank); }
 
 inline int GetGroupId(Axis target, int dp, int tp, int pp) { return GetGroupId(target, GetRankOf(dp, tp, pp)); }
 
