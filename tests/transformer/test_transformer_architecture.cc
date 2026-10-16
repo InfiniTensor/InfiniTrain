@@ -1,10 +1,16 @@
-#include <cmath>
+#include <stdint.h>
+
 #include <memory>
+#include <optional>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autograd/topk.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"

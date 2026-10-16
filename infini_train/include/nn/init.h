@@ -1,16 +1,17 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <memory>
 #include <optional>
 #include <random>
 #include <utility>
 
-#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train {
 class Tensor;
-class Device;
+enum class DataType : int8_t;
 } // namespace infini_train
 
 namespace infini_train::nn::init {

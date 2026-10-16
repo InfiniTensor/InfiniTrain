@@ -1,11 +1,17 @@
+#include <stddef.h>
+#include <stdint.h>
+
+#include <initializer_list>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/grad_mode.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/checkpoint.h"
 

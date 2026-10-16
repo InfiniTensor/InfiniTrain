@@ -1,6 +1,9 @@
 #include "infini_train/include/nn/modules/transformer/moe/moe_layer.h"
 
 #include <memory>
+#include <ostream>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "glog/logging.h"
@@ -8,7 +11,6 @@
 #include "infini_train/include/nn/modules/transformer/moe/experts.h"
 #include "infini_train/include/nn/modules/transformer/moe/moe_utils.h"
 #include "infini_train/include/nn/modules/transformer/moe/router.h"
-#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::moe {
 

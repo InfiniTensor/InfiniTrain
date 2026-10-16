@@ -1,11 +1,18 @@
+#include <stdint.h>
+
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "gtest/gtest.h"
 
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
+#include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/tensor.h"
 

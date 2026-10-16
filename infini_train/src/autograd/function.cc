@@ -1,12 +1,13 @@
 #include "infini_train/include/autograd/function.h"
 
+#include <ostream>
+
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/autograd/accumulate.h"
-#include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/autograd/grad_mode.h"
-#include "infini_train/include/common/hook.h"
+#include "infini_train/include/common/hook.h" // IWYU pragma: keep
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"

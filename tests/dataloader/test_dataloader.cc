@@ -1,3 +1,5 @@
+#include <stddef.h>
+
 #include <cstdint>
 #include <memory>
 #include <type_traits>
@@ -8,6 +10,7 @@
 
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/dataset.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/tensor.h"
 
 using namespace infini_train;

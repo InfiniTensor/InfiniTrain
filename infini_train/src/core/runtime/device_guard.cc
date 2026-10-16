@@ -2,6 +2,8 @@
 
 #include <format>
 #include <memory>
+#include <ostream>
+#include <string>
 #include <utility>
 
 #include "glog/logging.h"

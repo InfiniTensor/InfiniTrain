@@ -1,12 +1,13 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
 
 #include <memory>
+#include <ostream>
+#include <utility>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/process_group.h"
 
 namespace infini_train::nn::parallel {
 

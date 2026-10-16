@@ -2,9 +2,12 @@
 
 #include <cmath>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "infini_train/include/autograd/linear.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/tensor.h"

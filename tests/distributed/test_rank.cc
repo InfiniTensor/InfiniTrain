@@ -1,3 +1,5 @@
+#include <memory>
+
 #include "gtest/gtest.h"
 
 #include "infini_train/include/nn/parallel/global.h"

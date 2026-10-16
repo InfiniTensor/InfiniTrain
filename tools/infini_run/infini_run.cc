@@ -1,13 +1,16 @@
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <ostream>
 #include <string>
-#include <sys/wait.h>
 #include <system_error>
-#include <unistd.h>
 #include <unordered_set>
 #include <vector>
 

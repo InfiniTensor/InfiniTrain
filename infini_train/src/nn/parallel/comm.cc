@@ -1,9 +1,11 @@
 #include "infini_train/include/nn/parallel/comm.h"
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel::comm {
+enum class ReduceOpType : int8_t;
 
 std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op, const ProcessGroup *pg,
                                 bool async_op) {

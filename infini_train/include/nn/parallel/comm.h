@@ -1,8 +1,8 @@
 #pragma once
 
-#include <memory>
+#include <stdint.h>
 
-#include "infini_train/include/nn/parallel/reduce_op_type.h"
+#include <memory>
 
 namespace infini_train {
 class Tensor;
@@ -14,6 +14,7 @@ class Work;
 } // namespace infini_train::nn::parallel
 
 namespace infini_train::nn::parallel::comm {
+enum class ReduceOpType : int8_t;
 
 std::shared_ptr<Work> AllReduce(const std::shared_ptr<Tensor> &tensor, ReduceOpType reduce_op,
                                 const ProcessGroup *pg = nullptr, bool async_op = false);

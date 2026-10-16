@@ -1,13 +1,23 @@
+#include <stddef.h>
+
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <format>
+#include <functional>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <string>
 #include <tuple>
 #include <vector>
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
+
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
 // Out-of-tree builds inject the selected provider's declaration without adding
 // a vendor dependency to the upstream example.

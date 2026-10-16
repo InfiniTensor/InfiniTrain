@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stddef.h>
+
 #include <functional>
 #include <memory>
 #include <optional>

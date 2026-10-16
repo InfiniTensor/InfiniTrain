@@ -1,11 +1,15 @@
 #include "infini_train/include/dataloader.h"
 
+#include <stdint.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <functional>
 #include <numeric>
+#include <ostream>
 #include <utility>
+#include <vector>
 
 #include "glog/logging.h"
 

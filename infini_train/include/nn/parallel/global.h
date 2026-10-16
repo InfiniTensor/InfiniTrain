@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <mutex>
 #include <string>
 #include <vector>

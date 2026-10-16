@@ -1,8 +1,12 @@
 #include "infini_train/include/nn/parallel/global.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <format>
+#include <sstream>
 #include <string>
+#include <tuple>
+#include <utility>
 
 #include "glog/logging.h"
 

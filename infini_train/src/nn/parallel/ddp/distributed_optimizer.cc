@@ -1,8 +1,16 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 
+#include <algorithm>
+#include <cstdint>
+#include <ostream>
+#include <utility>
+
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
+#include "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {

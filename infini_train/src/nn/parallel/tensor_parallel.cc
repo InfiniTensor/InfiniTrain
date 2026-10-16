@@ -1,6 +1,11 @@
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 
+#include <cmath>
+#include <limits>
 #include <memory>
+#include <ostream>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "glog/logging.h"
@@ -8,12 +13,14 @@
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/linear.h"
 #include "infini_train/include/autograd/sparse.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
-#include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"

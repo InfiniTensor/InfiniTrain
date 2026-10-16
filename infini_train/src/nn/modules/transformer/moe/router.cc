@@ -1,14 +1,16 @@
 #include "infini_train/include/nn/modules/transformer/moe/router.h"
 
+#include <stdint.h>
+
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/autograd/linear.h"
-#include "infini_train/include/autograd/scatter.h"
-#include "infini_train/include/autograd/topk.h"
-#include "infini_train/include/nn/functional.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/transformer/moe/moe_utils.h"
 #include "infini_train/include/nn/parallel/global.h"

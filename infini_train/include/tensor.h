@@ -1,14 +1,16 @@
 #pragma once
 
+#include <stddef.h>
+
 #include <cstdint>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <random>
+#include <string>
 #include <vector>
 
 #include "Eigen/Dense"
-#include "glog/logging.h"
 
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"

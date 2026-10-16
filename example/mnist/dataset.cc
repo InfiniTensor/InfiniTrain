@@ -1,12 +1,10 @@
 #include "example/mnist/dataset.h"
 
 #include <cstddef>
-#include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <numeric>
 #include <string>
@@ -16,6 +14,7 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/tensor.h"
 
 namespace {

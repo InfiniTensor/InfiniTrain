@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"

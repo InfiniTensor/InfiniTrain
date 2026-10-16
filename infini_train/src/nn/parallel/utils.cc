@@ -1,15 +1,20 @@
 #include "infini_train/include/nn/parallel/utils.h"
 
 #include <unordered_set>
+#include <utility>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
+#include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
+#include "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/parallel_functional.h"
 #include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/tensor.h"
 

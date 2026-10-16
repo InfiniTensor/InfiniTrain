@@ -1,5 +1,6 @@
 #include "infini_train/include/utils/precision_checker.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -11,11 +12,15 @@
 #include <limits>
 #include <mutex>
 #include <sstream>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
 
 #include "infini_train/include/autograd/function.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 #include "infini_train/include/utils/global_module_hook_registry.h"
 #include "infini_train/include/utils/precision_check_config.h"

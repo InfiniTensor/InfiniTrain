@@ -5,11 +5,16 @@
 #include <filesystem>
 #include <memory>
 
-#include "infini_train/include/checkpoint/checkpoint.h"
-#include "infini_train/include/dataloader.h"
-#include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/parallel/rank.h"
-#include "infini_train/include/optimizer.h"
+namespace infini_train {
+class Optimizer;
+struct TrainerState;
+} // namespace infini_train
+namespace infini_train::nn {
+class Module;
+} // namespace infini_train::nn
+namespace infini_train::nn::parallel {
+class Rank;
+} // namespace infini_train::nn::parallel
 
 using namespace infini_train;
 namespace nn = infini_train::nn;

@@ -1,7 +1,9 @@
 #include "example/mnist/net.h"
 
-#include <cstdlib>
 #include <memory>
+#include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
@@ -10,7 +12,6 @@
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/tensor.h"
 
 namespace nn = infini_train::nn;
 

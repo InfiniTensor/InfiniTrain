@@ -1,11 +1,17 @@
+#include <stdint.h>
+
 #include <cstddef>
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <ostream>
+#include <unordered_map>
 #include <vector>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 

@@ -9,6 +9,7 @@
 #include "infini_train/include/autograd/reduction.h"
 #include "infini_train/include/autograd/softmax.h"
 #include "infini_train/include/autograd/transform.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/tensor.h"
 

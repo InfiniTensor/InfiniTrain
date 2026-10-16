@@ -4,6 +4,7 @@
 #include <memory>
 #include <tuple>
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train {

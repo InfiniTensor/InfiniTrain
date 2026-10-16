@@ -1,10 +1,13 @@
+#include <stdint.h>
+
 #include <cmath>
+#include <memory>
 #include <vector>
 
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autograd/loss.h"
-#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"

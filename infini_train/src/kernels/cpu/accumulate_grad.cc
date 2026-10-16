@@ -1,6 +1,10 @@
+#include <stdint.h>
+
+#include <cmath>
 #include <cstddef>
 #include <memory>
 
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
 

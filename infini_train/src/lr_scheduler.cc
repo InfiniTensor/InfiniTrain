@@ -1,8 +1,11 @@
 #include "infini_train/include/lr_scheduler.h"
 
+#include <stddef.h>
+
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <ostream>
 #include <string>
 #include <utility>
 

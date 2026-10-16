@@ -1,11 +1,14 @@
 #include "infini_train/include/nn/modules/transformer/utils.h"
 
 #include <memory>
+#include <ostream>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 

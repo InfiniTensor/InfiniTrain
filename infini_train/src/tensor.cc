@@ -1,11 +1,17 @@
 #include "infini_train/include/tensor.h"
 
-#include <cstring>
+#include <ctype.h>
+
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <functional>
 #include <iomanip>
+#include <limits>
 #include <memory>
 #include <numeric>
+#include <sstream>
+#include <unordered_map>
 
 #include "Eigen/Dense"
 #include "glog/logging.h"
@@ -13,7 +19,6 @@
 #include "infini_train/include/autograd/accumulate.h"
 #include "infini_train/include/autograd/elementwise.h"
 #include "infini_train/include/autograd/function.h"
-#include "infini_train/include/autograd/function_hook.h"
 #include "infini_train/include/autograd/gather.h"
 #include "infini_train/include/autograd/matmul.h"
 #include "infini_train/include/autograd/no_op.h"

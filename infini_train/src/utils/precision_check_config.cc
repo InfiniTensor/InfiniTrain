@@ -1,6 +1,7 @@
 #include "infini_train/include/utils/precision_check_config.h"
 
 #include <chrono>
+#include <ctime>
 #include <filesystem>
 #include <iostream>
 #include <sstream>

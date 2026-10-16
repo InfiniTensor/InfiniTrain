@@ -1,11 +1,13 @@
 #include "infini_train/include/autograd/comm.h"
 
 #include <memory>
+#include <ostream>
 #include <vector>
 
 #include "glog/logging.h"
 
 #include "infini_train/include/nn/parallel/process_group.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd::comm {

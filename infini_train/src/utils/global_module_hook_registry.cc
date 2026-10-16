@@ -1,5 +1,7 @@
 #include "infini_train/include/utils/global_module_hook_registry.h"
 
+#include <utility>
+
 namespace infini_train::utils {
 
 GlobalModuleHookRegistry &GlobalModuleHookRegistry::Instance() {

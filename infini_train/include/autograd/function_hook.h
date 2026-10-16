@@ -1,9 +1,13 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <atomic>
 #include <memory>
 
-#include "infini_train/include/nn/parallel/reduce_op_type.h"
+namespace infini_train::nn::parallel::comm {
+enum class ReduceOpType : int8_t;
+} // namespace infini_train::nn::parallel::comm
 
 namespace infini_train {
 class Tensor;
