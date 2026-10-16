@@ -418,11 +418,11 @@ void ParamAndGradBucketGroup::SetNextParamGatherBucketGroup(std::shared_ptr<Para
 }
 
 ParamAndGradBuffer::ParamAndGradBuffer(const std::vector<std::shared_ptr<Tensor>> &params, DataType &param_dtype,
-                                       DataType &grad_dtype, const ProcessGroup *process_group,
+                                       DataType &grad_dtype, const ProcessGroup *ddp_pg,
                                        DistributedDataParallelConfig ddp_config)
-    : params_(std::move(params)), process_group_(process_group), ddp_config_(ddp_config) {
-    CHECK_NOTNULL(process_group_);
-    process_group_size_ = static_cast<size_t>(process_group_->GetGroupSize());
+    : params_(std::move(params)), ddp_pg_(ddp_pg), ddp_config_(ddp_config) {
+    CHECK_NOTNULL(ddp_pg_);
+    ddp_world_size_ = static_cast<size_t>(ddp_pg_->GetGroupSize());
 
     grads_.clear();
     grads_.resize(params_.size());
@@ -448,7 +448,7 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
         if (ddp_config_.zero_stage >= 1) {
             // According to Megatron-LM, ensure that all buckets start at a memory address that is 256B
             // aligned(128 values since params and grads use >= 16-bit precision)
-            size_t lcm_val = std::lcm(process_group_size_, kBucketEndAlignElements);
+            size_t lcm_val = std::lcm(ddp_world_size_, kBucketEndAlignElements);
             if (ddp_config_.pad_buckets_for_high_nccl_busbw) {
                 // According to Megatron-LM, when the bucket size is divisible by a large power of 2 (2^16),
                 // NCCL collectives can have high bus bandwidth at large DP counts
@@ -519,7 +519,7 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
     CHECK(numel_unpadded_ <= numel_);
     if (ddp_config_.zero_stage >= 1) {
         // numel must be multiple of ddp size (so that reduce-scatter could easily shard the buffer among ranks)
-        CHECK_EQ(numel_ % process_group_size_, 0);
+        CHECK_EQ(numel_ % ddp_world_size_, 0);
     } else {
         CHECK_EQ(numel_, numel_unpadded_);
     }
@@ -550,8 +550,8 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
         = [&](const std::vector<std::shared_ptr<Tensor>> &bucket_params, size_t start_index, size_t end_index,
               size_t num_elements_unpadded, size_t bucket_id) -> std::shared_ptr<ParamAndGradBucket> {
         if (ddp_config_.zero_stage >= 1) {
-            CHECK_EQ(start_index % process_group_size_, 0);
-            CHECK_EQ(end_index % process_group_size_, 0);
+            CHECK_EQ(start_index % ddp_world_size_, 0);
+            CHECK_EQ(end_index % ddp_world_size_, 0);
             CHECK_EQ(bucket_indices_.at(bucket_id).first, start_index);
             CHECK_EQ(bucket_indices_.at(bucket_id).second, end_index);
         }
@@ -691,20 +691,19 @@ PartitionBuckets(const std::vector<std::shared_ptr<ParamAndGradBuffer>> &buffers
     if (force_single_bucket_group) {
         std::vector<std::shared_ptr<ParamAndGradBucket>> all_buckets;
         auto ddp_config = buffers.front()->ddp_config();
-        auto process_group = buffers.front()->process_group();
-        auto process_group_size = buffers.front()->process_group_size();
+        auto ddp_pg = buffers.front()->ddp_pg();
+        auto ddp_world_size = buffers.front()->ddp_world_size();
 
         for (const auto &buffer : buffers) {
-            CHECK(buffer->process_group() == process_group)
-                << "PartitionBuckets: buffers have different process groups.";
-            CHECK(buffer->process_group_size() == process_group_size)
-                << "PartitionBuckets: buffers have different process group sizes.";
+            CHECK(buffer->ddp_pg() == ddp_pg) << "PartitionBuckets: buffers have different ddp_pg.";
+            CHECK(buffer->ddp_world_size() == ddp_world_size)
+                << "PartitionBuckets: buffers have different ddp_world_size.";
 
             all_buckets.insert(all_buckets.end(), buffer->buckets().begin(), buffer->buckets().end());
         }
 
         bucket_groups.push_back(
-            std::make_shared<ParamAndGradBucketGroup>(all_buckets, process_group, process_group_size, ddp_config));
+            std::make_shared<ParamAndGradBucketGroup>(all_buckets, ddp_pg, ddp_world_size, ddp_config));
         return bucket_groups;
     }
 
@@ -715,7 +714,7 @@ PartitionBuckets(const std::vector<std::shared_ptr<ParamAndGradBuffer>> &buffers
             std::vector<std::shared_ptr<ParamAndGradBucket>> single_bucket_list;
             single_bucket_list.push_back(bucket);
             bucket_groups.push_back(std::make_shared<ParamAndGradBucketGroup>(
-                single_bucket_list, buffer->process_group(), buffer->process_group_size(), buffer->ddp_config()));
+                single_bucket_list, buffer->ddp_pg(), buffer->ddp_world_size(), buffer->ddp_config()));
         }
     }
 

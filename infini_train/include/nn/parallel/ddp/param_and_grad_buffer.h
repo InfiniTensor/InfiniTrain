@@ -183,11 +183,11 @@ public:
      * @param params      Parameters with the same parameter/gradient dtype pair.
      * @param param_dtype Flat parameter-buffer dtype.
      * @param grad_dtype  Gradient storage dtype.
-     * @param process_group Parameter synchronization group used by derived bucket groups.
-     * @param ddp_config      DDP/DistributedOptimizer bucketing and padding config.
+     * @param ddp_pg      Data-parallel process group used by derived bucket groups.
+     * @param ddp_config  DDP/DistributedOptimizer bucketing and padding config.
      */
     ParamAndGradBuffer(const std::vector<std::shared_ptr<Tensor>> &params, DataType &param_dtype, DataType &grad_dtype,
-                       const ProcessGroup *process_group, DistributedDataParallelConfig ddp_config);
+                       const ProcessGroup *ddp_pg, DistributedDataParallelConfig ddp_config);
 
     DistributedDataParallelConfig ddp_config() const { return ddp_config_; }
 
@@ -195,9 +195,9 @@ public:
 
     std::shared_ptr<Tensor> grad_buffer() const { return grad_buffer_; }
 
-    const ProcessGroup *process_group() const { return process_group_; }
+    const ProcessGroup *ddp_pg() const { return ddp_pg_; }
 
-    size_t process_group_size() const { return process_group_size_; }
+    size_t ddp_world_size() const { return ddp_world_size_; }
 
     std::vector<std::shared_ptr<ParamAndGradBucket>> buckets() const { return buckets_; }
 
@@ -220,8 +220,8 @@ private:
     size_t numel_ = 0;
     size_t numel_unpadded_ = 0;
 
-    const ProcessGroup *process_group_ = nullptr;
-    size_t process_group_size_ = 1;
+    const ProcessGroup *ddp_pg_ = nullptr;
+    size_t ddp_world_size_ = 1;
     std::vector<std::shared_ptr<ParamAndGradBucket>> buckets_;
 
     bool need_rebind_grad_views_ = true;
