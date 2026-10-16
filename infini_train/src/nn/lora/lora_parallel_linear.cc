@@ -219,6 +219,27 @@ std::vector<std::shared_ptr<Tensor>> LoRAColumnParallelLinear::LoRAParameters() 
     return {parameters_.at(kParamLoraAName), parameters_.at(kParamLoraBName)};
 }
 
+ShardedStateDict LoRAColumnParallelLinear::BuildShardedStateDict(const std::string &prefix) const {
+    auto state = parallel::ColumnParallelLinear::BuildShardedStateDict(prefix);
+    const int tp_size = parallel::global::GetTensorParallelSize();
+
+    const auto &lora_a = parameter(kParamLoraAName);
+    const auto a_key = prefix.empty() ? kParamLoraAName : prefix + "." + kParamLoraAName;
+    auto a = MakeShardedTensor(a_key, lora_a->Dtype(), lora_a->Dims());
+    state.tensors.emplace(a.key, std::move(a));
+
+    const auto &lora_b = parameter(kParamLoraBName);
+    ShardedTensor b;
+    b.key = prefix.empty() ? kParamLoraBName : prefix + "." + kParamLoraBName;
+    b.dtype = lora_b->Dtype();
+    b.global_shape = {lora_b->Dims()[0] * tp_size, lora_b->Dims()[1]};
+    b.local_shape = lora_b->Dims();
+    b.global_offset = {lora_b->Dims()[0] * parallel::tp_rank, 0};
+    b.axis_fragmentations = {tp_size, 1};
+    state.tensors.emplace(b.key, std::move(b));
+    return state;
+}
+
 bool LoRAColumnParallelLinear::IsMerged() const { return merged_; }
 
 int64_t LoRAColumnParallelLinear::in_features() const { return in_features_; }
@@ -427,6 +448,27 @@ void LoRARowParallelLinear::UnmergeWeights() {
 
 std::vector<std::shared_ptr<Tensor>> LoRARowParallelLinear::LoRAParameters() const {
     return {parameters_.at(kParamLoraAName), parameters_.at(kParamLoraBName)};
+}
+
+ShardedStateDict LoRARowParallelLinear::BuildShardedStateDict(const std::string &prefix) const {
+    auto state = parallel::RowParallelLinear::BuildShardedStateDict(prefix);
+    const int tp_size = parallel::global::GetTensorParallelSize();
+
+    const auto &lora_a = parameter(kParamLoraAName);
+    ShardedTensor a;
+    a.key = prefix.empty() ? kParamLoraAName : prefix + "." + kParamLoraAName;
+    a.dtype = lora_a->Dtype();
+    a.global_shape = {lora_a->Dims()[0], lora_a->Dims()[1] * tp_size};
+    a.local_shape = lora_a->Dims();
+    a.global_offset = {0, lora_a->Dims()[1] * parallel::tp_rank};
+    a.axis_fragmentations = {1, tp_size};
+    state.tensors.emplace(a.key, std::move(a));
+
+    const auto &lora_b = parameter(kParamLoraBName);
+    const auto b_key = prefix.empty() ? kParamLoraBName : prefix + "." + kParamLoraBName;
+    auto b = MakeShardedTensor(b_key, lora_b->Dtype(), lora_b->Dims());
+    state.tensors.emplace(b.key, std::move(b));
+    return state;
 }
 
 bool LoRARowParallelLinear::IsMerged() const { return merged_; }

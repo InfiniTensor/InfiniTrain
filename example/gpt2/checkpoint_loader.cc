@@ -165,15 +165,12 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     }
 
     // transformer.h.{i}.ln_1.weight
-    int local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
-            auto &tensor
-                = state_dict[std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                         nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                         nn::TransformerLayer::kLn1LayerName, nn::LayerNorm::kParamWeightName)];
+            auto &tensor = state_dict[std::format(
+                "{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
+                std::to_string(idx), nn::TransformerLayer::kLn1LayerName, nn::LayerNorm::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
-            ++local_layer_index;
         } else {
             size_t ln_1_w_bytes = n_embd * sizeof(float);
             ifs.seekg(ln_1_w_bytes, std::ios::cur);
@@ -181,14 +178,12 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     }
 
     // transformer.h.{i}.ln_1.bias
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
+                                                  nn::TransformerChunk::kHLayerName, std::to_string(idx),
                                                   nn::TransformerLayer::kLn1LayerName, nn::LayerNorm::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
-            ++local_layer_index;
         } else {
             size_t ln_1_b_bytes = n_embd * sizeof(float);
             ifs.seekg(ln_1_b_bytes, std::ios::cur);
@@ -196,13 +191,12 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     }
 
     // transformer.h.{i}.attn.c_attn.weight (ColumnParallelLinear, but actually applies on "rows")
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format(
                 "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
-                std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
-                nn::CausalSelfAttention::kCAttnLayerName, nn::parallel::ColumnParallelLinear::kParamWeightName)];
+                std::to_string(idx), nn::TransformerLayer::kAttnLayerName, nn::CausalSelfAttention::kCAttnLayerName,
+                nn::parallel::ColumnParallelLinear::kParamWeightName)];
             // NOTE(zbl): In the .bin model file, Q/K/V is concated along last dim,
             //            i.e. [Q|K|V].T = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn].T
             //            However, each tp_rank needs to get [q_i|k_i|v_i].T, so we need to jump and read them
@@ -231,7 +225,6 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
                                     /*rows=*/rows_all, /*cols=*/cols_all,
                                     /*row_start=*/2 * n_embd + tp_rank * local_C, /*row_cnt=*/local_C);
 
-            ++local_layer_index;
         } else {
             size_t c_attn_w_bytes = qkv_out * n_embd * sizeof(float);
             ifs.seekg(c_attn_w_bytes, std::ios::cur);
@@ -239,13 +232,12 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     }
 
     // transformer.h.{i}.attn.c_attn.bias (ColumnParallelLinear)
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format(
                 "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
-                std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
-                nn::CausalSelfAttention::kCAttnLayerName, nn::parallel::ColumnParallelLinear::kParamBiasName)];
+                std::to_string(idx), nn::TransformerLayer::kAttnLayerName, nn::CausalSelfAttention::kCAttnLayerName,
+                nn::parallel::ColumnParallelLinear::kParamBiasName)];
             // NOTE(zbl): Same as c_attn.weight, the bias for Q/K/V is concated
             //            i.e. [Q|K|V] = [q1|q2|...|qn|k1|k2|...|kn|v1|v2|...|vn]
             //            However, each tp_rank needs to get [q_i|k_i|v_i], so we need to jump and read them
@@ -273,7 +265,6 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
                                  /*len=*/len_all,
                                  /*start=*/2 * n_embd + tp_rank * local_C, /*cnt=*/local_C);
 
-            ++local_layer_index;
         } else {
             size_t c_attn_b_bytes = qkv_out * sizeof(float);
             ifs.seekg(c_attn_b_bytes, std::ios::cur);
@@ -281,16 +272,14 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     }
 
     // transformer.h.{i}.attn.c_proj.weight (RowParallelLinear, but actually applies on "columns")
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format(
                 "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
-                std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
-                nn::CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamWeightName)];
+                std::to_string(idx), nn::TransformerLayer::kAttnLayerName, nn::CausalSelfAttention::kCProjLayerName,
+                nn::parallel::RowParallelLinear::kParamWeightName)];
             ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, n_embd, tp_rank * in_pp,
                                     in_pp);
-            ++local_layer_index;
         } else {
             size_t c_proj_w_bytes = n_embd * n_embd * sizeof(float);
             ifs.seekg(c_proj_w_bytes, std::ios::cur);
@@ -298,15 +287,13 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     }
 
     // transformer.h.{i}.attn.c_proj.bias (RowParallelLinear, no shard on bias)
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format(
                 "{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
-                std::to_string(local_layer_index), nn::TransformerLayer::kAttnLayerName,
-                nn::CausalSelfAttention::kCProjLayerName, nn::parallel::RowParallelLinear::kParamBiasName)];
+                std::to_string(idx), nn::TransformerLayer::kAttnLayerName, nn::CausalSelfAttention::kCProjLayerName,
+                nn::parallel::RowParallelLinear::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
-            ++local_layer_index;
         } else {
             size_t c_proj_b_bytes = n_embd * sizeof(float);
             ifs.seekg(c_proj_b_bytes, std::ios::cur);
@@ -314,15 +301,12 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     }
 
     // transformer.h.{i}.ln_2.weight
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
-            auto &tensor
-                = state_dict[std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                         nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
-                                         nn::TransformerLayer::kLn2LayerName, nn::LayerNorm::kParamWeightName)];
+            auto &tensor = state_dict[std::format(
+                "{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName, nn::TransformerChunk::kHLayerName,
+                std::to_string(idx), nn::TransformerLayer::kLn2LayerName, nn::LayerNorm::kParamWeightName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
-            ++local_layer_index;
         } else {
             size_t ln_2_w_bytes = n_embd * sizeof(float);
             ifs.seekg(ln_2_w_bytes, std::ios::cur);
@@ -330,14 +314,12 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     }
 
     // transformer.h.{i}.ln_2.bias
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
+                                                  nn::TransformerChunk::kHLayerName, std::to_string(idx),
                                                   nn::TransformerLayer::kLn2LayerName, nn::LayerNorm::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
-            ++local_layer_index;
         } else {
             size_t ln_2_b_bytes = n_embd * sizeof(float);
             ifs.seekg(ln_2_b_bytes, std::ios::cur);
@@ -345,15 +327,13 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     }
 
     // transformer.h.{i}.mlp.c_fc.weight (ColumnParallelLinear, but actually applies on "rows")
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
+                                                  nn::TransformerChunk::kHLayerName, std::to_string(idx),
                                                   nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamWeightName)];
             ReadMatrixRowShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, n_embd, fc_start, fc_pp);
-            ++local_layer_index;
         } else {
             size_t c_fc_w_bytes = fc_out * n_embd * sizeof(float);
             ifs.seekg(c_fc_w_bytes, std::ios::cur);
@@ -361,15 +341,13 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     }
 
     // transformer.h.{i}.mlp.c_fc.bias (ColumnParallelLinear)
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
+                                                  nn::TransformerChunk::kHLayerName, std::to_string(idx),
                                                   nn::TransformerLayer::kMlpLayerName, nn::MLP::kCFcLayerName,
                                                   nn::parallel::ColumnParallelLinear::kParamBiasName)];
             ReadVectorShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), fc_out, fc_start, fc_pp);
-            ++local_layer_index;
         } else {
             size_t c_fc_b_bytes = fc_out * sizeof(float);
             ifs.seekg(c_fc_b_bytes, std::ios::cur);
@@ -377,16 +355,14 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     }
 
     // transformer.h.{i}.mlp.c_proj.weight (RowParallelLinear, but actually applies on "columns")
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
+                                                  nn::TransformerChunk::kHLayerName, std::to_string(idx),
                                                   nn::TransformerLayer::kMlpLayerName, nn::MLP::kCProjLayerName,
                                                   nn::parallel::RowParallelLinear::kParamWeightName)];
             ReadMatrixColShardFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd, fc_out, tp_rank * in4_pp,
                                     in4_pp);
-            ++local_layer_index;
         } else {
             size_t c_proj_w_bytes = fc_out * n_embd * sizeof(float);
             ifs.seekg(c_proj_w_bytes, std::ios::cur);
@@ -394,15 +370,13 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     }
 
     // transformer.h.{i}.mlp.c_proj.bias (RowParallelLinear, no shard on bias)
-    local_layer_index = 0;
     for (int idx = 0; idx < n_layer; ++idx) {
         if (owned_layers[idx]) {
             auto &tensor = state_dict[std::format("{}.{}.{}.{}.{}.{}", nn::TransformerModel::kTransformerModelName,
-                                                  nn::TransformerChunk::kHLayerName, std::to_string(local_layer_index),
+                                                  nn::TransformerChunk::kHLayerName, std::to_string(idx),
                                                   nn::TransformerLayer::kMlpLayerName, nn::MLP::kCProjLayerName,
                                                   nn::parallel::RowParallelLinear::kParamBiasName)];
             ReadVectorAllFloat(ifs, static_cast<float *>(tensor->DataPtr()), n_embd);
-            ++local_layer_index;
         } else {
             size_t c_proj_b_bytes = n_embd * sizeof(float);
             ifs.seekg(c_proj_b_bytes, std::ios::cur);

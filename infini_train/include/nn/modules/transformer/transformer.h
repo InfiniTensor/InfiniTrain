@@ -78,6 +78,10 @@ public:
 
     const TransformerConfig &Config() const { return config_; }
 
+    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
+    NamedParameters(const std::string &prefix = "", bool recurse = true, bool remove_duplicate = true) const override;
+
 private:
     const TransformerConfig config_;
     const infini_train::nn::parallel::StageInfo stage_info_;
