@@ -9,6 +9,7 @@
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
+#include "infini_train/include/nn/modules/transformer/moe/experts.h"
 #include "infini_train/include/nn/modules/transformer/moe/moe_layer.h"
 #include "infini_train/include/nn/modules/transformer/moe/router.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
@@ -241,6 +242,51 @@ TEST_P(TransformerModuleTest, MoELayerTop1) {
     ASSERT_EQ(output.size(), 1);
     EXPECT_EQ(output[0]->Dims(), input->Dims());
     EXPECT_FALSE(moe->Parameters().empty());
+}
+
+TEST_P(TransformerModuleTest, MoEParametersStayDenseWhenExpertTopologyMatchesDenseTopology) {
+    ONLY_CPU();
+    nn::TransformerConfig config;
+    config.n_embd = 8;
+    config.add_bias_linear = false;
+    config.ffn_type = nn::FFNType::kMoE;
+    config.moe_config = nn::MoEConfig{};
+    config.moe_config->num_experts = 2;
+    config.moe_config->moe_ffn_hidden_size = 16;
+
+    auto moe = std::make_shared<nn::moe::MoELayer>(config);
+    const auto &router = moe->module(nn::moe::MoELayer::kRouterLayerName);
+    const auto router_parameters = router.Parameters();
+    ASSERT_FALSE(router_parameters.empty());
+    for (const auto &parameter : router_parameters) { EXPECT_FALSE(parameter->is_expert_parallel()); }
+
+    const auto &experts = moe->module(nn::moe::MoELayer::kExpertsLayerName);
+    const auto expert_parameters = experts.Parameters();
+    ASSERT_FALSE(expert_parameters.empty());
+    for (const auto &parameter : expert_parameters) { EXPECT_FALSE(parameter->is_expert_parallel()); }
+}
+
+TEST_P(TransformerModuleTest, SequentialMLPAppliesPermutedProbabilities) {
+    ONLY_CPU();
+    nn::TransformerConfig config;
+    config.n_embd = 8;
+    config.ffn_type = nn::FFNType::kMoE;
+    config.moe_config = nn::MoEConfig{};
+    config.moe_config->num_experts = 1;
+    config.moe_config->moe_ffn_hidden_size = 16;
+
+    auto experts = std::make_shared<nn::moe::SequentialMLP>(1, config);
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, config.n_embd}, DataType::kFLOAT32, Device());
+    input->Uniform();
+    auto tokens_per_expert = std::make_shared<Tensor>(std::vector<int64_t>{1}, DataType::kINT64, Device());
+    *static_cast<int64_t *>(tokens_per_expert->DataPtr()) = 2;
+    auto permuted_probs = std::make_shared<Tensor>(std::vector<int64_t>{2}, DataType::kFLOAT32, Device());
+    permuted_probs->Fill(0.0f);
+
+    auto output = (*experts)({input, tokens_per_expert, permuted_probs})[0];
+    ASSERT_EQ(output->Dims(), input->Dims());
+    const auto *output_ptr = static_cast<const float *>(output->DataPtr());
+    for (size_t idx = 0; idx < output->NumElements(); ++idx) { EXPECT_FLOAT_EQ(output_ptr[idx], 0.0f); }
 }
 
 TEST_P(TransformerModuleTest, MoELayerTop2SwiGLU) {

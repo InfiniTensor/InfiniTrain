@@ -79,13 +79,9 @@ bool ParamAndGradBucket::GetTensorLocInBucket(const std::shared_ptr<Tensor> &par
 }
 
 void ParamAndGradBucket::ScaleGradients(float scaling_factor) {
-    if (!grad_data_ || scaling_factor == 1.f) {
-        return;
-    }
-
-    // FIXME(zbl): should perform in-place multiply
-    // grad_data_ *= scaling_factor;
-    LOG(FATAL) << "ParamAndGradBucket::ScaleGradients(): Inplace multiply not implemented yet.";
+    if (!grad_data_ || scaling_factor == 1.f) { return; }
+    auto kernel = Dispatcher::Instance().GetKernel({grad_data_->GetDevice().type(), "AccumulateGrad"});
+    kernel.Call<void>(grad_data_, scaling_factor - 1.f, grad_data_);
 }
 
 ParamAndGradBucketGroup::ParamAndGradBucketGroup(const std::vector<std::shared_ptr<ParamAndGradBucket>> &buckets,
@@ -96,6 +92,8 @@ ParamAndGradBucketGroup::ParamAndGradBucketGroup(const std::vector<std::shared_p
     // TODO(zbl): support hierarchical gradient sync in distopt
     CHECK(ddp_config.num_distributed_optimizer_instances == 1)
         << "ParamAndGradBucketGroup: Multi-instance DistributedOptimizer is not supported yet.";
+    CHECK(collective_pg_ || collective_pg_size_ == 1)
+        << "ParamAndGradBucketGroup: a non-trivial synchronization domain requires a process group.";
 
     for (size_t bucket_idx = 0; bucket_idx < buckets_.size(); ++bucket_idx) {
         const auto &bucket = buckets_[bucket_idx];
@@ -104,9 +102,11 @@ ParamAndGradBucketGroup::ParamAndGradBucketGroup(const std::vector<std::shared_p
             param_to_bucket_[param.get()] = {bucket, bucket_idx};
         }
     }
-    if (rank_in_collective_pg_ == -1) {
+    if (collective_pg_) {
         auto param = *params_.begin();
-        rank_in_collective_pg_ = collective_pg_->GetGroupRank(param->GetDevice().Rank().GlobalRank());
+        const int group_rank = collective_pg_->GetGroupRank(param->GetDevice().Rank().GlobalRank());
+        CHECK_GE(group_rank, 0) << "Parameter rank is not a member of its synchronization process group.";
+        rank_in_collective_pg_ = static_cast<size_t>(group_rank);
     }
 
     param_buffer_shard_list_.resize(buckets_.size());
@@ -246,11 +246,6 @@ void ParamAndGradBucketGroup::set_local_grad_shards(std::vector<LocalGradShard> 
 }
 
 void ParamAndGradBucketGroup::StartGradSync() {
-    if (!collective_pg_) {
-        LOG(FATAL) << "ParamAndGradBucketGroup: StartGradSync() called with null collective_pg_.";
-        return;
-    }
-
     if (grad_reduce_dispatched_) {
         return;
     }
@@ -273,15 +268,20 @@ void ParamAndGradBucketGroup::StartGradSync() {
                 continue;
             }
             if (bucket->gradient_scaling_factor() != 1.f) {
-                // FIXME(zbl): should perform in-place multiply
-                // full_grad_buffer *= bucket->gradient_scaling_factor();
-                LOG(FATAL) << "ParamAndGradBucketGroup::StartGradSync(): Inplace multiply not implemented yet.";
+                auto kernel
+                    = Dispatcher::Instance().GetKernel({full_grad_buffer->GetDevice().type(), "AccumulateGrad"});
+                kernel.Call<void>(full_grad_buffer, bucket->gradient_scaling_factor() - 1.f, full_grad_buffer);
             }
             CHECK(grad_shard_buffer_list_[i]) << "ParamAndGradBucketGroup: grad shard buffer missing.";
             auto local_data_view = grad_shard_buffer_list_[i];
-            grad_reduce_work_list_.push_back(
-                collective_pg_->ReduceScatter(local_data_view, full_grad_buffer, reduce_op, async_op));
-            grad_reduce_bucket_indices_.push_back(i);
+            if (collective_pg_size_ == 1) {
+                local_data_view->CopyFrom(*full_grad_buffer);
+                temp_full_grad_buffer_list_[i].reset();
+            } else {
+                grad_reduce_work_list_.push_back(
+                    collective_pg_->ReduceScatter(local_data_view, full_grad_buffer, reduce_op, async_op));
+                grad_reduce_bucket_indices_.push_back(i);
+            }
             continue;
         }
 
@@ -295,6 +295,9 @@ void ParamAndGradBucketGroup::StartGradSync() {
         }
 
         if (ddp_config_.zero_stage >= 1) {
+            if (collective_pg_size_ == 1) {
+                continue;
+            }
             if (grad_buffer_shard_list_[i].empty()) {
                 grad_buffer_shard_list_[i] = ShardBuffer(grad_buffer, collective_pg_size_);
             }
@@ -353,10 +356,11 @@ void ParamAndGradBucketGroup::FinishGradSync() {
 void ParamAndGradBucketGroup::StartParamSync(bool force_sync) {
     CHECK(ddp_config_.zero_stage >= 1);
 
-    if (!collective_pg_) {
-        LOG(ERROR) << "ParamAndGradBucketGroup: StartParamSync called with null collective_pg_.";
+    if (collective_pg_size_ == 1) {
+        param_gather_dispatched_ = !force_sync;
         return;
     }
+    CHECK(collective_pg_) << "ParamAndGradBucketGroup: StartParamSync called with null collective_pg_.";
 
     if (force_sync) {
         // force synchronous collective regardless of other settings
@@ -395,6 +399,14 @@ void ParamAndGradBucketGroup::FinishParamSync(bool skip_next_bucket_dispatch) {
         StartParamSync();
     }
 
+    if (collective_pg_size_ == 1) {
+        param_gather_dispatched_ = false;
+        if (next_param_gather_bucket_group_ && !skip_next_bucket_dispatch) {
+            next_param_gather_bucket_group_->StartParamSync();
+        }
+        return;
+    }
+
     if (!param_gather_work_list_.empty()) {
         for (auto work : param_gather_work_list_) { work->WaitNonBlocking(); }
         param_gather_work_list_.clear();
@@ -419,10 +431,12 @@ void ParamAndGradBucketGroup::SetNextParamGatherBucketGroup(std::shared_ptr<Para
 
 ParamAndGradBuffer::ParamAndGradBuffer(const std::vector<std::shared_ptr<Tensor>> &params, DataType &param_dtype,
                                        DataType &grad_dtype, const ProcessGroup *ddp_pg,
-                                       DistributedDataParallelConfig ddp_config)
-    : params_(std::move(params)), ddp_pg_(ddp_pg), ddp_config_(ddp_config) {
-    CHECK_NOTNULL(ddp_pg_);
-    ddp_world_size_ = static_cast<size_t>(ddp_pg_->GetGroupSize());
+                                       float gradient_scaling_factor, DistributedDataParallelConfig ddp_config)
+    : params_(std::move(params)), ddp_pg_(ddp_pg),
+      gradient_scaling_factor_(gradient_scaling_factor), ddp_config_(ddp_config) {
+    if (ddp_pg_) {
+        ddp_world_size_ = static_cast<size_t>(ddp_pg_->GetGroupSize());
+    }
 
     grads_.clear();
     grads_.resize(params_.size());
@@ -567,11 +581,9 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype)
                                              std::vector<int64_t>{static_cast<int64_t>(end_index - start_index)});
         }
 
-        // FIXME(zbl): Use default for now
-        float gradient_scaling_factor = 1.0f;
         auto bucket = std::make_shared<ParamAndGradBucket>(bucket_params, bucket_param_view, param_dtype,
                                                            bucket_grad_view, grad_dtype, start_index,
-                                                           num_elements_unpadded, gradient_scaling_factor, bucket_id);
+                                                           num_elements_unpadded, gradient_scaling_factor_, bucket_id);
 
         for (auto param : bucket_params) {
             CHECK(param_bucket_map_.find(param.get()) == param_bucket_map_.end())
@@ -646,9 +658,9 @@ void ParamAndGradBuffer::Reset(bool need_rebind) {
     if (!grad_buffer_) {
         return;
     }
-    if (!need_rebind) {
-        grad_buffer_->Fill(0.f);
-    }
+    // Unused MoE experts do not run autograd hooks, so their slices must already
+    // contain the zero contribution before DistributedOptimizer starts reduction.
+    grad_buffer_->Fill(0.f);
     // NOTE(zbl): Under ZeRO-2, param->grad() is the shard of grad, not the full grad.
     //            It is constantly pointed to the shard of grad, so no need to rebind.
     need_rebind_grad_views_ = need_rebind && (ddp_config_.zero_stage < 2);

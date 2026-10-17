@@ -2,6 +2,8 @@
 
 #include <atomic>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h"
@@ -43,18 +45,21 @@ public:
     const std::vector<std::shared_ptr<ParamAndGradBucketGroup>> &bucket_groups() const { return bucket_groups_; }
 
 private:
+    const ProcessGroup *ProcessGroupForParameter(bool is_expert_parallel) const;
+    float GradientScalingFactorForParameter(bool is_expert_parallel) const;
     void BuildParamAndGradBuffers(const std::vector<std::shared_ptr<Tensor>> &params);
     void RegisterBackwardHooks(const std::vector<std::shared_ptr<Tensor>> &params);
     void OnGradReady(const std::shared_ptr<Tensor> &param);
     void SetIsLastMicrobatch(bool is_last_microbatch);
 
 private:
-    std::shared_ptr<Reducer> reducer_ = nullptr;
     // Whether to enable grad sync on last microbatch (DDP naive path)
     std::shared_ptr<std::atomic_bool> is_last_microbatch_ = std::make_shared<std::atomic_bool>(true);
+    std::vector<std::shared_ptr<Reducer>> reducers_;
 
     DistributedDataParallelConfig ddp_config_;
-    const ProcessGroup *ddp_pg_ = nullptr;
+    const ProcessGroup *dense_dp_pg_ = nullptr;
+    const ProcessGroup *expert_dp_pg_ = nullptr;
 
     std::vector<std::shared_ptr<ParamAndGradBuffer>> param_grad_buffers_;
     std::vector<std::shared_ptr<ParamAndGradBucketGroup>> bucket_groups_;
