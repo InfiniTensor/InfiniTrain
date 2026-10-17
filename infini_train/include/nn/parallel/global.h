@@ -8,14 +8,14 @@ namespace infini_train::nn::parallel::global {
 
 extern thread_local int thread_global_rank;
 
-enum Axis : uint8_t { DP = 0, TP = 1, PP = 2, AXIS_COUNT = 3 };
+enum Axis : uint8_t { kDp = 0, kTp = 1, kPp = 2, kAxisCount = 3 };
 
 struct Layout {
-    int sizes[AXIS_COUNT]{1, 1, 1};
+    int sizes[kAxisCount]{1, 1, 1};
     // Default order according to Megatron-LM is TP-DP-PP. Ref:
     // https://github.com/NVIDIA/Megatron-LM/blob/e07c4a4450b6faa187a1ef4ec082a35ad7d2f085/megatron/core/parallel_state.py#L618
-    Axis order[AXIS_COUNT]{TP, DP, PP};
-    int strides[AXIS_COUNT]{1, 1, 1};
+    Axis order[kAxisCount]{kTp, kDp, kPp};
+    int strides[kAxisCount]{1, 1, 1};
 
     void InitStrides();
     int RankOf(int dp, int tp, int pp) const;

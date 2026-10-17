@@ -575,7 +575,7 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
 #ifdef PROFILE_MODE
-    Profiler::Instance().Report("qwen3.report", Profiler::SortBy::DeviceTimePercentage);
+    Profiler::Instance().Report("qwen3.report", Profiler::SortBy::kDeviceTimePercentage);
     Profiler::Instance().PrintRecords("qwen3.records.log");
 #endif
 

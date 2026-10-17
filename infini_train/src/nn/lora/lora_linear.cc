@@ -152,6 +152,8 @@ void LoRALinear::UnmergeWeights() {
     merged_ = false;
 }
 
+bool LoRALinear::IsMerged() const { return merged_; }
+
 std::vector<std::shared_ptr<Tensor>> LoRALinear::LoRAParameters() const {
     return {parameters_.at(kParamLoraAName), parameters_.at(kParamLoraBName)};
 }

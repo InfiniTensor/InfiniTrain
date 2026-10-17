@@ -23,7 +23,7 @@ public:
     void GenerateText(infini_train::nn::Module &model, uint32_t batch_size, uint32_t sequence_length,
                       uint32_t text_length, Device device) const;
 
-    uint32_t GetEndToken() const { return eot_token_; };
+    uint32_t GetEndToken() const;
 
 private:
     uint32_t magic_number_ = 0;

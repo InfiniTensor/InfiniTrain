@@ -36,11 +36,11 @@ public:
 
     void FinishGradSync();
 
-    DistributedDataParallelConfig ddp_config() const { return ddp_config_; }
+    DistributedDataParallelConfig ddp_config() const;
 
-    const std::vector<std::shared_ptr<ParamAndGradBuffer>> &param_grad_buffers() const { return param_grad_buffers_; }
+    const std::vector<std::shared_ptr<ParamAndGradBuffer>> &param_grad_buffers() const;
 
-    const std::vector<std::shared_ptr<ParamAndGradBucketGroup>> &bucket_groups() const { return bucket_groups_; }
+    const std::vector<std::shared_ptr<ParamAndGradBucketGroup>> &bucket_groups() const;
 
 private:
     void BuildParamAndGradBuffers(const std::vector<std::shared_ptr<Tensor>> &params);

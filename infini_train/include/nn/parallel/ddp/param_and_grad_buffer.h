@@ -42,23 +42,23 @@ public:
                        DataType param_dtype, const std::shared_ptr<Tensor> &grad_data, DataType grad_dtype,
                        size_t offset, size_t num_elements_unpadded, float gradient_scaling_factor, size_t bucket_id);
 
-    size_t bucket_id() const { return bucket_id_; }
+    size_t bucket_id() const;
 
-    const std::vector<std::shared_ptr<Tensor>> &params() const { return params_; }
+    const std::vector<std::shared_ptr<Tensor>> &params() const;
 
-    const std::shared_ptr<Tensor> &param_data() const { return param_data_; }
+    const std::shared_ptr<Tensor> &param_data() const;
 
-    const std::shared_ptr<Tensor> &grad_data() const { return grad_data_; }
+    const std::shared_ptr<Tensor> &grad_data() const;
 
-    DataType param_dtype() const { return param_dtype_; }
+    DataType param_dtype() const;
 
-    DataType grad_dtype() const { return grad_dtype_; }
+    DataType grad_dtype() const;
 
-    size_t offset() const { return offset_; }
+    size_t offset() const;
 
-    size_t num_elements_unpadded() const { return num_elements_unpadded_; }
+    size_t num_elements_unpadded() const;
 
-    float gradient_scaling_factor() const { return gradient_scaling_factor_; }
+    float gradient_scaling_factor() const;
 
     bool GetTensorLocInBucket(const std::shared_ptr<Tensor> &parameter, size_t &start_in_bucket,
                               size_t &end_in_bucket) const;
@@ -122,7 +122,7 @@ public:
     // TODO(zbl): For PP, set the next bucket group used for parameter all-gather.
     void SetNextParamGatherBucketGroup(std::shared_ptr<ParamAndGradBucketGroup> next_group);
 
-    const std::vector<std::shared_ptr<ParamAndGradBucket>> &buckets() const { return buckets_; }
+    const std::vector<std::shared_ptr<ParamAndGradBucket>> &buckets() const;
 
     // ZeRO-2: Get a bucket's local grad shard buffer
     std::shared_ptr<Tensor> GetLocalGradShardBuffer(size_t bucket_idx) const;
@@ -131,7 +131,7 @@ public:
 
     void set_local_grad_shards(std::vector<LocalGradShard> shards);
 
-    const DistributedDataParallelConfig &config() const { return ddp_config_; }
+    const DistributedDataParallelConfig &config() const;
 
 private:
     std::vector<std::shared_ptr<ParamAndGradBucket>> buckets_;
@@ -183,17 +183,17 @@ public:
     ParamAndGradBuffer(const std::vector<std::shared_ptr<Tensor>> &params, DataType &param_dtype, DataType &grad_dtype,
                        const ProcessGroup *ddp_pg, DistributedDataParallelConfig ddp_config);
 
-    DistributedDataParallelConfig ddp_config() const { return ddp_config_; }
+    DistributedDataParallelConfig ddp_config() const;
 
-    std::shared_ptr<Tensor> param_buffer() const { return param_buffer_; }
+    std::shared_ptr<Tensor> param_buffer() const;
 
-    std::shared_ptr<Tensor> grad_buffer() const { return grad_buffer_; }
+    std::shared_ptr<Tensor> grad_buffer() const;
 
-    const ProcessGroup *ddp_pg() const { return ddp_pg_; }
+    const ProcessGroup *ddp_pg() const;
 
-    size_t ddp_world_size() const { return ddp_world_size_; }
+    size_t ddp_world_size() const;
 
-    std::vector<std::shared_ptr<ParamAndGradBucket>> buckets() const { return buckets_; }
+    std::vector<std::shared_ptr<ParamAndGradBucket>> buckets() const;
 
     void ScaleGradients(float scaling_factor);
 

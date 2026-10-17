@@ -158,29 +158,22 @@ inline AutocastContext GetCurrentAutocastContext() { return tls_autocast_context
 // RAII guard to enable/disable autocast in a scope
 class AutocastGuard {
 public:
-    explicit AutocastGuard(const AutocastContext &context) {
-        saved_context_ = tls_autocast_context;
-        tls_autocast_context = context;
-    }
+    explicit AutocastGuard(const AutocastContext &context);
 
-    AutocastGuard(Device::DeviceType device_type, DataType autocast_dtype) {
-        saved_context_ = tls_autocast_context;
-        tls_autocast_context.enabled = true;
-        tls_autocast_context.device_type = device_type;
-        tls_autocast_context.autocast_dtype = autocast_dtype;
-    }
+    AutocastGuard(Device::DeviceType device_type, DataType autocast_dtype);
 
-    AutocastGuard(Device::DeviceType device_type) : AutocastGuard(device_type, GetDefaultAutocastDtype(device_type)) {}
+    explicit AutocastGuard(Device::DeviceType device_type)
+        : AutocastGuard(device_type, GetDefaultAutocastDtype(device_type)) {}
 
     // Disable autocast (restore previous state)
-    ~AutocastGuard() { tls_autocast_context = saved_context_; }
+    ~AutocastGuard();
 
     AutocastGuard(const AutocastGuard &) = delete;
     AutocastGuard &operator=(const AutocastGuard &) = delete;
 
-    void Enable() const { tls_autocast_context.enabled = true; }
-    void Disable() const { tls_autocast_context.enabled = false; }
-    bool IsEnabled() const { return tls_autocast_context.enabled; }
+    void Enable() const;
+    void Disable() const;
+    bool IsEnabled() const;
 
 private:
     AutocastContext saved_context_;

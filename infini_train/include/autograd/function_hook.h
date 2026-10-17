@@ -20,9 +20,7 @@ public:
     virtual void operator()(const std::shared_ptr<Tensor> &grad_output) = 0;
 
     // Return true if this hook has handled the current gradient accumulation.
-    virtual bool TryBypassAccumulate(const std::shared_ptr<Tensor> &, const std::shared_ptr<Tensor> &, bool, float) {
-        return false;
-    }
+    virtual bool TryBypassAccumulate(const std::shared_ptr<Tensor> &, const std::shared_ptr<Tensor> &, bool, float);
 
     virtual ~PreAccumulateGradHook() = default;
 };

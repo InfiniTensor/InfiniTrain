@@ -29,10 +29,7 @@ public:
         bool abort_on_error = false;
     };
 
-    static const Config &DefaultConfig() {
-        static Config default_config;
-        return default_config;
-    }
+    static const Config &DefaultConfig();
 
     // Initialize global module-level precision checking
     // Called automatically by PrecisionCheckEnv::Init when level >= MODULE

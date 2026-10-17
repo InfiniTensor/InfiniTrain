@@ -22,7 +22,7 @@ thread_local int thread_global_rank = 0;
 void Layout::InitStrides() {
     // Calculate strides
     int stride = 1;
-    for (int i = 0; i < AXIS_COUNT; ++i) {
+    for (int i = 0; i < kAxisCount; ++i) {
         const Axis ax = order[i];
         strides[ax] = stride;
         stride *= sizes[ax];
@@ -31,9 +31,9 @@ void Layout::InitStrides() {
 
 int Layout::RankOf(int dp, int tp, int pp) const {
     // Return the thread rank given layout coords
-    const int coord[AXIS_COUNT] = {dp, tp, pp};
+    const int coord[kAxisCount] = {dp, tp, pp};
     int r = 0;
-    for (int i = 0; i < AXIS_COUNT; ++i) {
+    for (int i = 0; i < kAxisCount; ++i) {
         const Axis ax = static_cast<Axis>(i);
         r += coord[ax] * strides[ax];
     }
@@ -42,21 +42,21 @@ int Layout::RankOf(int dp, int tp, int pp) const {
 
 void Layout::CoordOf(int rank, int &dp, int &tp, int &pp) const {
     // Return the layout coords given thread rank
-    dp = (rank / strides[DP]) % sizes[DP];
-    tp = (rank / strides[TP]) % sizes[TP];
-    pp = (rank / strides[PP]) % sizes[PP];
+    dp = (rank / strides[kDp]) % sizes[kDp];
+    tp = (rank / strides[kTp]) % sizes[kTp];
+    pp = (rank / strides[kPp]) % sizes[kPp];
 }
 
 int Layout::GroupId(Axis target, int dp, int tp, int pp) const {
     // Return the parallel ProcessGroup ID where the rank is in
     int id = 0;
     int mult = 1;
-    for (int i = AXIS_COUNT - 1; i >= 0; --i) {
+    for (int i = kAxisCount - 1; i >= 0; --i) {
         Axis ax = order[i];
         if (ax == target) {
             continue;
         }
-        int c = (ax == DP ? dp : (ax == TP ? tp : pp));
+        int c = (ax == kDp ? dp : (ax == kTp ? tp : pp));
         id += c * mult;
         mult *= sizes[ax];
     }
@@ -69,9 +69,9 @@ std::vector<int> Layout::GroupRanks(Axis target, int fixed_dp, int fixed_tp, int
     ranks.reserve(sizes[target]);
     int dp = fixed_dp, tp = fixed_tp, pp = fixed_pp;
     for (int v = 0; v < sizes[target]; ++v) {
-        if (target == DP) {
+        if (target == kDp) {
             dp = v;
-        } else if (target == TP) {
+        } else if (target == kTp) {
             tp = v;
         } else {
             pp = v;
@@ -114,9 +114,9 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     virtual_pipeline_parallel_size_ = virtual_pipeline_parallel_size;
     data_parallel_size_ = world_size_ / tensor_parallel_size_ / pipeline_parallel_size_;
 
-    layout_.sizes[DP] = data_parallel_size_;
-    layout_.sizes[TP] = tensor_parallel_size_;
-    layout_.sizes[PP] = pipeline_parallel_size_;
+    layout_.sizes[kDp] = data_parallel_size_;
+    layout_.sizes[kTp] = tensor_parallel_size_;
+    layout_.sizes[kPp] = pipeline_parallel_size_;
     layout_.InitStrides();
 
     initialized_ = true;
@@ -188,11 +188,11 @@ Layout GlobalEnv::layout() const {
 }
 
 namespace {
-inline const char *AxisName(Axis a) { return a == DP ? "DP" : (a == TP ? "TP" : "PP"); }
+inline const char *AxisName(Axis a) { return a == kDp ? "DP" : (a == kTp ? "TP" : "PP"); }
 
 inline int NumGroups(const Layout &L, Axis target) {
     int n = 1;
-    for (int i = 0; i < AXIS_COUNT; ++i) {
+    for (int i = 0; i < kAxisCount; ++i) {
         if (i != target) {
             n *= L.sizes[i];
         }
@@ -205,12 +205,12 @@ std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
     std::ostringstream oss;
     oss << std::format("\n=== Parallel Communication Groups ===\n"
                        "world_size = {}, config: {{DP={}, TP={}, PP={}}}, order: {{",
-                       GetWorldSize(), L.sizes[DP], L.sizes[TP], L.sizes[PP]);
+                       GetWorldSize(), L.sizes[kDp], L.sizes[kTp], L.sizes[kPp]);
 
-    for (int i = 0; i < AXIS_COUNT; ++i) { oss << AxisName(L.order[i]) << (i + 1 == AXIS_COUNT ? "" : " -> "); }
+    for (int i = 0; i < kAxisCount; ++i) { oss << AxisName(L.order[i]) << (i + 1 == kAxisCount ? "" : " -> "); }
     oss << "}\n";
 
-    for (int a = 0; a < AXIS_COUNT; ++a) {
+    for (int a = 0; a < kAxisCount; ++a) {
         Axis ax = static_cast<Axis>(a);
         if (skip_trivial_axes && L.sizes[ax] <= 1) {
             oss << std::format("[{}] size={}, unenabled\n", AxisName(ax), L.sizes[ax]);
@@ -218,9 +218,9 @@ std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
         }
         // Build <Group ID, <DP, TP, PP>> mapping
         std::vector<std::pair<int, std::tuple<int, int, int>>> groups;
-        for (int dp = 0; dp < (ax == DP ? 1 : L.sizes[DP]); ++dp) {
-            for (int tp = 0; tp < (ax == TP ? 1 : L.sizes[TP]); ++tp) {
-                for (int pp = 0; pp < (ax == PP ? 1 : L.sizes[PP]); ++pp) {
+        for (int dp = 0; dp < (ax == kDp ? 1 : L.sizes[kDp]); ++dp) {
+            for (int tp = 0; tp < (ax == kTp ? 1 : L.sizes[kTp]); ++tp) {
+                for (int pp = 0; pp < (ax == kPp ? 1 : L.sizes[kPp]); ++pp) {
                     int gid = L.GroupId(ax, dp, tp, pp);
                     groups.emplace_back(gid, std::make_tuple(dp, tp, pp));
                 }
@@ -241,9 +241,9 @@ std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
             auto ranks = L.GroupRanks(ax, dp, tp, pp);
             std::sort(ranks.begin(), ranks.end());
 
-            auto dp_size_str = (ax == DP) ? "-" : std::to_string(dp);
-            auto tp_size_str = (ax == TP) ? "-" : std::to_string(tp);
-            auto pp_size_str = (ax == PP) ? "-" : std::to_string(pp);
+            auto dp_size_str = (ax == kDp) ? "-" : std::to_string(dp);
+            auto tp_size_str = (ax == kTp) ? "-" : std::to_string(tp);
+            auto pp_size_str = (ax == kPp) ? "-" : std::to_string(pp);
 
             std::string ranks_str;
             ranks_str.reserve(ranks.size() * 4);
@@ -256,7 +256,7 @@ std::string ProcessGroupOverview(const Layout &L, bool skip_trivial_axes) {
             oss << std::format("  - {} {} (dp={}, tp={}, pp={}): [{}]\n", name, gid, dp_size_str, tp_size_str,
                                pp_size_str, ranks_str);
         }
-        if (a + 1 < AXIS_COUNT) {
+        if (a + 1 < kAxisCount) {
             oss << "\n";
         }
     }

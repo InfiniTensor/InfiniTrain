@@ -183,7 +183,7 @@ int main(int argc, char *argv[]) {
     }
 
 #ifdef PROFILE_MODE
-    infini_train::Profiler::Instance().Report("mixtral.report", infini_train::Profiler::SortBy::DeviceTimePercentage);
+    infini_train::Profiler::Instance().Report("mixtral.report", infini_train::Profiler::SortBy::kDeviceTimePercentage);
     infini_train::Profiler::Instance().PrintRecords("mixtral.records.log");
 #endif
 

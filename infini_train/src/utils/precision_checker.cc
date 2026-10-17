@@ -280,7 +280,7 @@ void SaveNpy(const std::shared_ptr<Tensor> &tensor, const std::string &name, int
 void PrecisionChecker::CheckTensors(const std::string &stage, const std::string &name,
                                     const std::vector<std::shared_ptr<Tensor>> &tensors, const Config &config) {
     const auto &global_config = PrecisionCheckEnv::Instance().GetConfig();
-    if (global_config.level == PrecisionCheckLevel::OFF) {
+    if (global_config.level == PrecisionCheckLevel::kOff) {
         return;
     }
 
@@ -378,8 +378,13 @@ void PrecisionChecker::CheckTensors(const std::string &stage, const std::string 
     }
 }
 
+const PrecisionChecker::Config &PrecisionChecker::DefaultConfig() {
+    static Config default_config;
+    return default_config;
+}
+
 void PrecisionChecker::Init(const PrecisionCheckConfig &global_config, const Config &config) {
-    if (global_config.level == PrecisionCheckLevel::OFF) {
+    if (global_config.level == PrecisionCheckLevel::kOff) {
         return;
     }
 
@@ -408,7 +413,7 @@ static inline bool ShouldSkipNameMap(std::string_view name) {
 
 void PrecisionChecker::BuildNameMap(nn::Module *root_model) {
     const auto &global_config = PrecisionCheckEnv::Instance().GetConfig();
-    if (global_config.level == PrecisionCheckLevel::OFF || root_model == nullptr) {
+    if (global_config.level == PrecisionCheckLevel::kOff || root_model == nullptr) {
         return;
     }
 

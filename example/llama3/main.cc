@@ -577,7 +577,7 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
 #ifdef PROFILE_MODE
-    Profiler::Instance().Report("llama3.report", Profiler::SortBy::DeviceTimePercentage);
+    Profiler::Instance().Report("llama3.report", Profiler::SortBy::kDeviceTimePercentage);
     Profiler::Instance().PrintRecords("llama3.records.log");
 #endif
 

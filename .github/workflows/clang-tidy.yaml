@@ -1,0 +1,95 @@
+name: clang-tidy
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  clang-tidy:
+    name: Run clang-tidy check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect relevant changes
+        id: changes
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ -z "$BASE_REF" || "$BASE_REF" =~ ^0+$ ]]; then
+            BASE_REF="$(git rev-parse HEAD^)"
+          fi
+
+          set +e
+          python3 scripts/clang_tidy.py \
+            --has-relevant-changes \
+            --ref "$BASE_REF"
+          status=$?
+          set -e
+
+          case "$status" in
+            0) echo "run=true" >> "$GITHUB_OUTPUT" ;;
+            1) echo "run=false" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$status" ;;
+          esac
+
+      - name: Checkout submodules
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          git -c url."https://github.com/".insteadOf="git@github.com:" \
+            submodule update --init --recursive
+
+      - name: Install clang-tidy 18
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-18 \
+            clang-tidy-18 \
+            libclang-18-dev \
+            llvm-18-dev \
+            ninja-build
+
+      - name: Build InfiniTrain clang-tidy plugin
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          cmake -S tools/clang_tidy -B build/clang-tidy-plugin -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm \
+            -DClang_DIR=/usr/lib/llvm-18/lib/cmake/clang
+          cmake --build build/clang-tidy-plugin
+
+      - name: Generate compile database
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          cmake -S . -B build/lint -G Ninja \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
+            -DUSE_CUDA=OFF \
+            -DUSE_NCCL=OFF \
+            -DUSE_OMP=OFF \
+            -DBUILD_TEST=ON
+
+      - name: Check all translation units
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          python3 scripts/clang_tidy.py \
+            --all \
+            --build-dir build/lint \
+            --load-plugin build/clang-tidy-plugin/InfiniTrainTidy.so
+
+      - name: Upload clang-tidy reports
+        if: always() && steps.changes.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang-tidy-reports
+          path: build/lint/clang-tidy-report/*.txt
+          if-no-files-found: warn

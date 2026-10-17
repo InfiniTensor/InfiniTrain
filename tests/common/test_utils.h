@@ -93,17 +93,9 @@ inline void ExpectTensorNear(const std::shared_ptr<Tensor> &val1, float val2, fl
 
 class InfiniTrainTest : public ::testing::TestWithParam<Device::DeviceType> {
 protected:
-    Device GetDevice() const {
-#if defined(INFINI_TRAIN_TEST_DEVICE_INDEX)
-        return Device(GetParam(), INFINI_TRAIN_TEST_DEVICE_INDEX);
-#else
-        return Device(GetParam(), 0);
-#endif
-    }
-
-    int DeviceCount() const { return core::GetDeviceGuardImpl(GetDevice().type())->DeviceCount(); }
-
-    bool IsAccelerator() const { return GetDevice().type() != Device::DeviceType::kCPU; }
+    Device GetDevice() const;
+    int DeviceCount() const;
+    bool IsAccelerator() const;
 };
 
 } // namespace test
