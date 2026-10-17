@@ -68,6 +68,24 @@ ParamAndGradBucket::ParamAndGradBucket(const std::vector<std::shared_ptr<Tensor>
     }
 }
 
+size_t ParamAndGradBucket::bucket_id() const { return bucket_id_; }
+
+const std::vector<std::shared_ptr<Tensor>> &ParamAndGradBucket::params() const { return params_; }
+
+const std::shared_ptr<Tensor> &ParamAndGradBucket::param_data() const { return param_data_; }
+
+const std::shared_ptr<Tensor> &ParamAndGradBucket::grad_data() const { return grad_data_; }
+
+DataType ParamAndGradBucket::param_dtype() const { return param_dtype_; }
+
+DataType ParamAndGradBucket::grad_dtype() const { return grad_dtype_; }
+
+size_t ParamAndGradBucket::offset() const { return offset_; }
+
+size_t ParamAndGradBucket::num_elements_unpadded() const { return num_elements_unpadded_; }
+
+float ParamAndGradBucket::gradient_scaling_factor() const { return gradient_scaling_factor_; }
+
 bool ParamAndGradBucket::GetTensorLocInBucket(const std::shared_ptr<Tensor> &parameter, size_t &start_in_bucket,
                                               size_t &end_in_bucket) const {
     const auto iterator = param_to_range_.find(parameter.get());
@@ -245,6 +263,10 @@ const std::vector<LocalGradShard> &ParamAndGradBucketGroup::local_grad_shards() 
 void ParamAndGradBucketGroup::set_local_grad_shards(std::vector<LocalGradShard> shards) {
     local_grad_shards_ = std::move(shards);
 }
+
+const std::vector<std::shared_ptr<ParamAndGradBucket>> &ParamAndGradBucketGroup::buckets() const { return buckets_; }
+
+const DistributedDataParallelConfig &ParamAndGradBucketGroup::config() const { return ddp_config_; }
 
 void ParamAndGradBucketGroup::StartGradSync() {
     if (!collective_pg_) {
@@ -431,6 +453,18 @@ ParamAndGradBuffer::ParamAndGradBuffer(const std::vector<std::shared_ptr<Tensor>
 
     BuildBuckets(param_dtype, grad_dtype);
 }
+
+DistributedDataParallelConfig ParamAndGradBuffer::ddp_config() const { return ddp_config_; }
+
+std::shared_ptr<Tensor> ParamAndGradBuffer::param_buffer() const { return param_buffer_; }
+
+std::shared_ptr<Tensor> ParamAndGradBuffer::grad_buffer() const { return grad_buffer_; }
+
+const ProcessGroup *ParamAndGradBuffer::ddp_pg() const { return ddp_pg_; }
+
+size_t ParamAndGradBuffer::ddp_world_size() const { return ddp_world_size_; }
+
+std::vector<std::shared_ptr<ParamAndGradBucket>> ParamAndGradBuffer::buckets() const { return buckets_; }
 
 void ParamAndGradBuffer::BuildBuckets(DataType param_dtype, DataType grad_dtype) {
     // Pack parameters in buffer, allocate memory, and build buckets.

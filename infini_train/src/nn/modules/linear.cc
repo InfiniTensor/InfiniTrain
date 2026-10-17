@@ -31,6 +31,8 @@ std::vector<std::shared_ptr<Tensor>> Linear::Forward(const std::vector<std::shar
               : std::vector<std::shared_ptr<Tensor>>{input_tensors[0], parameters_[kParamWeightName]});
 }
 
+bool Linear::has_bias() const { return bias_; }
+
 void Linear::ResetParameters() {
     init::KaimingUniform(parameters_[kParamWeightName], sqrt(5.0f));
     if (bias_) {

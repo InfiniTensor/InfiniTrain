@@ -64,23 +64,25 @@ void FinalizeQKNormWeightGradients(const nn::Module &model_chunk, const std::vec
 } // namespace
 
 std::string GetDataParallelProcessGroupName(int global_rank) {
-    return "DP" + std::to_string(global::GetGroupId(global::DP, global_rank));
+    return "DP" + std::to_string(global::GetGroupId(global::kDp, global_rank));
 }
 
 std::string GetTensorParallelProcessGroupName(int global_rank) {
-    return "TP" + std::to_string(global::GetGroupId(global::TP, global_rank));
+    return "TP" + std::to_string(global::GetGroupId(global::kTp, global_rank));
 }
 
 std::string GetPipelineParallelProcessGroupName(int global_rank) {
-    return "PP" + std::to_string(global::GetGroupId(global::PP, global_rank));
+    return "PP" + std::to_string(global::GetGroupId(global::kPp, global_rank));
 }
 
-std::vector<int> GetDataParallelGroupRanks(int global_rank) { return global::GetGroupRanks(global::DP, global_rank); }
+std::vector<int> GetDataParallelGroupRanks(int global_rank) { return global::GetGroupRanks(global::kDp, global_rank); }
 
-std::vector<int> GetTensorParallelGroupRanks(int global_rank) { return global::GetGroupRanks(global::TP, global_rank); }
+std::vector<int> GetTensorParallelGroupRanks(int global_rank) {
+    return global::GetGroupRanks(global::kTp, global_rank);
+}
 
 std::vector<int> GetPipelineParallelGroupRanks(int global_rank) {
-    return global::GetGroupRanks(global::PP, global_rank);
+    return global::GetGroupRanks(global::kPp, global_rank);
 }
 
 std::shared_ptr<Tensor> AllGatherAlongDim(const std::shared_ptr<Tensor> &tensor, int64_t dim, const ProcessGroup *pg) {

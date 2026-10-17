@@ -6,10 +6,10 @@
 namespace infini_train {
 namespace utils {
 
-enum class PrecisionCheckLevel { OFF = 0, MODULE = 1, FUNCTION = 2 };
+enum class PrecisionCheckLevel { kOff = 0, kModule = 1, kFunction = 2 };
 
 struct PrecisionCheckConfig {
-    PrecisionCheckLevel level = PrecisionCheckLevel::OFF;
+    PrecisionCheckLevel level = PrecisionCheckLevel::kOff;
     std::string output_path = "./log_precision_check"; // Output path (default)
     std::string format = "simple";                     // "simple" or "md5"
     bool save_tensors = false;                         // Whether to output .npy file

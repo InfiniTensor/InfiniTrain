@@ -116,6 +116,8 @@ std::string Tokenizer::Decode(uint32_t token_id) const {
     return token_table_[token_id];
 }
 
+uint32_t Tokenizer::GetEndToken() const { return eot_token_; }
+
 void Tokenizer::GenerateText(infini_train::nn::Module &model, uint32_t batch_size, uint32_t sequence_length,
                              uint32_t text_length, Device device) const {
     std::vector<int64_t> dims;

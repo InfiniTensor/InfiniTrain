@@ -20,7 +20,7 @@
 
 ```cpp
 struct PrecisionCheckConfig {
-    PrecisionCheckLevel level = PrecisionCheckLevel::OFF;  // 0=关闭, 1=MODULE, 2=FUNCTION
+    PrecisionCheckLevel level = PrecisionCheckLevel::kOff;  // 0=关闭, 1=MODULE, 2=FUNCTION
     std::string output_path = "./log_precision_check";     // 输出目录
     std::string format = "simple";                         // "simple" 或 "md5"
     bool save_tensors = false;                             // 是否保存 .npy 文件

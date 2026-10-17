@@ -29,7 +29,7 @@ public:
 
     virtual void Step() = 0;
 
-    virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const { return {}; };
+    virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
 
     virtual void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {}
 

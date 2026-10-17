@@ -31,10 +31,7 @@ struct PrintOptions {
     int64_t linewidth = 80;
     std::optional<bool> sci_mode;
 
-    static PrintOptions &Get() {
-        static PrintOptions instance;
-        return instance;
-    }
+    static PrintOptions &Get();
 };
 } // namespace
 

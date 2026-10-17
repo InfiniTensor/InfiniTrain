@@ -24,10 +24,10 @@ public:
 
     void Synchronize() const;
 
-    std::exception_ptr exception() const { return exception_; }
+    std::exception_ptr exception() const;
 
-    core::Event *ready_event() const { return ready_event_; }
-    core::Event *done_event() const { return done_event_; }
+    core::Event *ready_event() const;
+    core::Event *done_event() const;
 
 private:
     bool CheckCclStatus();

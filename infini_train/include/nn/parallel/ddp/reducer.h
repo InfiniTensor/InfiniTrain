@@ -29,7 +29,7 @@ constexpr size_t kBytesPerMB = 1024ULL * 1024ULL;
 class GradBucket {
 public:
     explicit GradBucket(const std::vector<std::shared_ptr<Tensor>> &tensors) : tensors_(tensors) {}
-    const std::vector<std::shared_ptr<Tensor>> &tensors() const { return tensors_; }
+    const std::vector<std::shared_ptr<Tensor>> &tensors() const;
 
 private:
     std::vector<std::shared_ptr<Tensor>> tensors_;

@@ -27,6 +27,11 @@
 #include "infini_train/include/nn/init.h"
 
 namespace infini_train {
+PrintOptions &PrintOptions::Get() {
+    static PrintOptions instance;
+    return instance;
+}
+
 TensorBuffer::TensorBuffer(Device device, size_t size) : device_(device), size_(size) {
     core::DeviceGuard guard(device);
     auto *impl = core::GetDeviceGuardImpl(device.type());

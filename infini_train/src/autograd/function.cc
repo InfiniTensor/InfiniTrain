@@ -147,7 +147,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(const std::vector<std::shar
     // Register precision check hooks if enabled (before forward)
     if (!precision_check_registered_) {
         auto precision_level = utils::PrecisionCheckEnv::Instance().GetConfig().level;
-        if (precision_level == utils::PrecisionCheckLevel::FUNCTION) {
+        if (precision_level == utils::PrecisionCheckLevel::kFunction) {
             utils::PrecisionChecker::RegisterForFunction(this, type_);
             precision_check_registered_ = true;
         }

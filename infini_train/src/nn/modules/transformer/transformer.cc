@@ -372,4 +372,6 @@ std::vector<std::shared_ptr<Tensor>> TransformerModel::Forward(const std::vector
     return res;
 }
 
+const TransformerConfig &TransformerModel::Config() const { return config_; }
+
 } // namespace infini_train::nn
