@@ -1,5 +1,6 @@
 #include "infini_train/include/nn/parallel/global.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <format>
@@ -313,7 +314,10 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     expert_rank_generator_ = RankGenerator(expert_tensor_parallel_size_, expert_parallel_size_,
                                            expert_data_parallel_size_, pipeline_parallel_size_);
 
-    CHECK(dense_rank_generator_.GetRanks(PP) == expert_rank_generator_.GetRanks(PP))
+    const auto dense_pipeline_groups = dense_rank_generator_.GetRanks(PP);
+    const auto expert_pipeline_groups = expert_rank_generator_.GetRanks(PP);
+    CHECK(std::is_permutation(dense_pipeline_groups.begin(), dense_pipeline_groups.end(),
+                              expert_pipeline_groups.begin(), expert_pipeline_groups.end()))
         << "Dense and expert rank views must generate identical pipeline-parallel groups";
 
     initialized_ = true;
