@@ -84,20 +84,24 @@ function(infini_train_add_test)
   endif()
 
   # 1. Create executable target.
+  set(_common_test_sources
+    ${PROJECT_SOURCE_DIR}/tests/common/test_utils.cc
+  )
   if(ARG_TEST_MAIN_SOURCE)
-    add_executable(${ARG_TEST_NAME} ${ARG_SOURCES} ${ARG_TEST_MAIN_SOURCE})
+    add_executable(${ARG_TEST_NAME} ${ARG_SOURCES} ${_common_test_sources} ${ARG_TEST_MAIN_SOURCE})
   elseif(ARG_TEST_MAIN_TARGET)
     if(NOT TARGET ${ARG_TEST_MAIN_TARGET})
       message(FATAL_ERROR
         "infini_train_add_test: TEST_MAIN_TARGET '${ARG_TEST_MAIN_TARGET}' does not exist")
     endif()
-    add_executable(${ARG_TEST_NAME} ${ARG_SOURCES} $<TARGET_OBJECTS:${ARG_TEST_MAIN_TARGET}>)
+    add_executable(${ARG_TEST_NAME} ${ARG_SOURCES} ${_common_test_sources}
+      $<TARGET_OBJECTS:${ARG_TEST_MAIN_TARGET}>)
   else()
     if(NOT TARGET test_main)
       message(FATAL_ERROR
         "infini_train_add_test: default test_main target does not exist")
     endif()
-    add_executable(${ARG_TEST_NAME} ${ARG_SOURCES} $<TARGET_OBJECTS:test_main>)
+    add_executable(${ARG_TEST_NAME} ${ARG_SOURCES} ${_common_test_sources} $<TARGET_OBJECTS:test_main>)
   endif()
   if(ARG_RUNTIME_OUTPUT_DIRECTORY)
     set_target_properties(${ARG_TEST_NAME} PROPERTIES

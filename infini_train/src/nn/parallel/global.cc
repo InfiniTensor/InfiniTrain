@@ -24,25 +24,25 @@ thread_local int thread_global_rank = 0;
 
 namespace {
 
-std::array<bool, AXIS_COUNT> MakeAxisMask(std::initializer_list<Axis> axes) {
+std::array<bool, kAxisCount> MakeAxisMask(std::initializer_list<Axis> axes) {
     CHECK_GT(axes.size(), 0);
-    std::array<bool, AXIS_COUNT> mask{};
+    std::array<bool, kAxisCount> mask{};
     for (const Axis axis : axes) {
         CHECK_GE(static_cast<int>(axis), 0);
-        CHECK_LT(static_cast<int>(axis), AXIS_COUNT);
+        CHECK_LT(static_cast<int>(axis), kAxisCount);
         mask[axis] = true;
     }
     return mask;
 }
 
 const char *AxisName(Axis axis) {
-    if (axis == DP) {
+    if (axis == kDp) {
         return "DP";
-    } else if (axis == TP) {
+    } else if (axis == kTp) {
         return "TP";
-    } else if (axis == PP) {
+    } else if (axis == kPp) {
         return "PP";
-    } else if (axis == EP) {
+    } else if (axis == kEp) {
         return "EP";
     }
     CHECK(false) << "Invalid Axis value: " << static_cast<int>(axis);
@@ -51,18 +51,18 @@ const char *AxisName(Axis axis) {
 std::string OrderString(const RankGenerator &rank_generator, bool expert_view) {
     std::string result;
     bool is_first_axis = true;
-    for (int index = 0; index < AXIS_COUNT; ++index) {
+    for (int index = 0; index < kAxisCount; ++index) {
         const Axis axis = rank_generator.order()[index];
-        if (!expert_view && axis == EP) {
+        if (!expert_view && axis == kEp) {
             continue;
         }
         if (!is_first_axis) {
             result += " -> ";
         }
         is_first_axis = false;
-        if (expert_view && axis == TP) {
+        if (expert_view && axis == kTp) {
             result += "ETP";
-        } else if (expert_view && axis == DP) {
+        } else if (expert_view && axis == kDp) {
             result += "EDP";
         } else {
             result += AxisName(axis);
@@ -75,7 +75,7 @@ void AppendGroups(std::ostringstream &oss, const char *name, const RankGenerator
                   std::initializer_list<Axis> varying_axes, bool skip_trivial_axes) {
     const auto varying_axis_mask = MakeAxisMask(varying_axes);
     int group_size = 1;
-    for (int axis = 0; axis < AXIS_COUNT; ++axis) {
+    for (int axis = 0; axis < kAxisCount; ++axis) {
         if (varying_axis_mask[axis]) {
             group_size *= rank_generator.AxisSize(static_cast<Axis>(axis));
         }
@@ -101,34 +101,34 @@ void AppendGroups(std::ostringstream &oss, const char *name, const RankGenerator
 }
 
 void AppendDenseRankView(std::ostringstream &oss, const RankGenerator &rank_generator, bool skip_trivial_axes) {
-    CHECK_EQ(rank_generator.AxisSize(EP), 1) << "The dense rank view must not contain an expert-parallel axis";
-    oss << std::format("[Dense Rank View] shape={{TP={}, DP={}, PP={}}}, order={{ {} }}\n", rank_generator.AxisSize(TP),
-                       rank_generator.AxisSize(DP), rank_generator.AxisSize(PP),
+    CHECK_EQ(rank_generator.AxisSize(kEp), 1) << "The dense rank view must not contain an expert-parallel axis";
+    oss << std::format("[Dense Rank View] shape={{TP={}, DP={}, PP={}}}, order={{ {} }}\n",
+                       rank_generator.AxisSize(kTp), rank_generator.AxisSize(kDp), rank_generator.AxisSize(kPp),
                        OrderString(rank_generator, /*expert_view=*/false));
-    AppendGroups(oss, "DP", rank_generator, {DP}, skip_trivial_axes);
-    AppendGroups(oss, "TP", rank_generator, {TP}, skip_trivial_axes);
-    AppendGroups(oss, "PP", rank_generator, {PP}, skip_trivial_axes);
+    AppendGroups(oss, "DP", rank_generator, {kDp}, skip_trivial_axes);
+    AppendGroups(oss, "TP", rank_generator, {kTp}, skip_trivial_axes);
+    AppendGroups(oss, "PP", rank_generator, {kPp}, skip_trivial_axes);
 }
 
 void AppendExpertRankView(std::ostringstream &oss, const RankGenerator &rank_generator, bool skip_trivial_axes) {
     oss << std::format("[Expert Rank View] shape={{ETP={}, EP={}, EDP={}, PP={}}}, order={{ {} }}\n",
-                       rank_generator.AxisSize(TP), rank_generator.AxisSize(EP), rank_generator.AxisSize(DP),
-                       rank_generator.AxisSize(PP), OrderString(rank_generator, /*expert_view=*/true));
-    AppendGroups(oss, "EDP", rank_generator, {DP}, skip_trivial_axes);
-    AppendGroups(oss, "ETP", rank_generator, {TP}, skip_trivial_axes);
-    AppendGroups(oss, "EP", rank_generator, {EP}, skip_trivial_axes);
-    AppendGroups(oss, "ETP_EP", rank_generator, {TP, EP}, skip_trivial_axes);
+                       rank_generator.AxisSize(kTp), rank_generator.AxisSize(kEp), rank_generator.AxisSize(kDp),
+                       rank_generator.AxisSize(kPp), OrderString(rank_generator, /*expert_view=*/true));
+    AppendGroups(oss, "EDP", rank_generator, {kDp}, skip_trivial_axes);
+    AppendGroups(oss, "ETP", rank_generator, {kTp}, skip_trivial_axes);
+    AppendGroups(oss, "EP", rank_generator, {kEp}, skip_trivial_axes);
+    AppendGroups(oss, "ETP_EP", rank_generator, {kTp, kEp}, skip_trivial_axes);
 }
 
 } // namespace
 
 RankGenerator::RankGenerator(int tensor_parallel_size, int expert_parallel_size, int data_parallel_size,
-                             int pipeline_parallel_size, std::array<Axis, AXIS_COUNT> order)
+                             int pipeline_parallel_size, std::array<Axis, kAxisCount> order)
     : order_(order) {
-    sizes_[DP] = data_parallel_size;
-    sizes_[TP] = tensor_parallel_size;
-    sizes_[PP] = pipeline_parallel_size;
-    sizes_[EP] = expert_parallel_size;
+    sizes_[kDp] = data_parallel_size;
+    sizes_[kTp] = tensor_parallel_size;
+    sizes_[kPp] = pipeline_parallel_size;
+    sizes_[kEp] = expert_parallel_size;
 
     for (const int size : sizes_) { CHECK_GE(size, 1) << "Parallel axis size must be >= 1"; }
     InitStrides();
@@ -136,7 +136,7 @@ RankGenerator::RankGenerator(int tensor_parallel_size, int expert_parallel_size,
 
 void RankGenerator::InitStrides() {
     int stride = 1;
-    for (int i = 0; i < AXIS_COUNT; ++i) {
+    for (int i = 0; i < kAxisCount; ++i) {
         const Axis ax = order_[i];
         strides_[ax] = stride;
         stride *= sizes_[ax];
@@ -145,7 +145,7 @@ void RankGenerator::InitStrides() {
 
 int RankGenerator::AxisSize(Axis axis) const {
     CHECK_GE(static_cast<int>(axis), 0);
-    CHECK_LT(static_cast<int>(axis), AXIS_COUNT);
+    CHECK_LT(static_cast<int>(axis), kAxisCount);
     return sizes_[axis];
 }
 
@@ -155,12 +155,12 @@ int RankGenerator::WorldSize() const {
     return world_size;
 }
 
-const std::array<Axis, AXIS_COUNT> &RankGenerator::order() const { return order_; }
+const std::array<Axis, kAxisCount> &RankGenerator::order() const { return order_; }
 
 int RankGenerator::RankOf(int dp, int tp, int pp, int ep) const {
-    const int coord[AXIS_COUNT] = {dp, tp, pp, ep};
+    const int coord[kAxisCount] = {dp, tp, pp, ep};
     int r = 0;
-    for (int i = 0; i < AXIS_COUNT; ++i) {
+    for (int i = 0; i < kAxisCount; ++i) {
         const Axis ax = static_cast<Axis>(i);
         r += coord[ax] * strides_[ax];
     }
@@ -168,23 +168,23 @@ int RankGenerator::RankOf(int dp, int tp, int pp, int ep) const {
 }
 
 void RankGenerator::CoordOf(int rank, int &dp, int &tp, int &pp, int &ep) const {
-    dp = (rank / strides_[DP]) % sizes_[DP];
-    tp = (rank / strides_[TP]) % sizes_[TP];
-    pp = (rank / strides_[PP]) % sizes_[PP];
-    ep = (rank / strides_[EP]) % sizes_[EP];
+    dp = (rank / strides_[kDp]) % sizes_[kDp];
+    tp = (rank / strides_[kTp]) % sizes_[kTp];
+    pp = (rank / strides_[kPp]) % sizes_[kPp];
+    ep = (rank / strides_[kEp]) % sizes_[kEp];
 }
 
 int RankGenerator::GroupId(std::initializer_list<Axis> varying_axes, int global_rank) const {
     const auto varying_axis_mask = MakeAxisMask(varying_axes);
     int dp, tp, pp, ep;
     CoordOf(global_rank, dp, tp, pp, ep);
-    const std::array<int, AXIS_COUNT> coordinates{dp, tp, pp, ep};
+    const std::array<int, kAxisCount> coordinates{dp, tp, pp, ep};
 
     // Preserve the legacy Layout::GroupId numbering used in process-group
     // names: fixed axes later in rank order vary faster in the group ordinal.
     int group_id = 0;
     int group_stride = 1;
-    for (int index = AXIS_COUNT - 1; index >= 0; --index) {
+    for (int index = kAxisCount - 1; index >= 0; --index) {
         const Axis axis = order_[index];
         if (varying_axis_mask[axis]) {
             continue;
@@ -200,7 +200,7 @@ int RankGenerator::GroupId(Axis varying_axis, int global_rank) const { return Gr
 std::vector<std::vector<int>> RankGenerator::GetRanks(std::initializer_list<Axis> varying_axes) const {
     const auto varying_axis_mask = MakeAxisMask(varying_axes);
     int group_size = 1;
-    for (int axis = 0; axis < AXIS_COUNT; ++axis) {
+    for (int axis = 0; axis < kAxisCount; ++axis) {
         if (varying_axis_mask[axis]) {
             group_size *= sizes_[axis];
         }
@@ -224,10 +224,10 @@ std::vector<int> RankGenerator::GroupRanks(std::initializer_list<Axis> varying_a
     const auto varying_axis_mask = MakeAxisMask(varying_axes);
     int dp, tp, pp, ep;
     CoordOf(global_rank, dp, tp, pp, ep);
-    std::array<int, AXIS_COUNT> coordinates{dp, tp, pp, ep};
+    std::array<int, kAxisCount> coordinates{dp, tp, pp, ep};
 
     int group_size = 1;
-    for (int axis = 0; axis < AXIS_COUNT; ++axis) {
+    for (int axis = 0; axis < kAxisCount; ++axis) {
         if (varying_axis_mask[axis]) {
             group_size *= sizes_[axis];
         }
@@ -245,7 +245,7 @@ std::vector<int> RankGenerator::GroupRanks(std::initializer_list<Axis> varying_a
             remaining_index /= sizes_[axis];
         }
         CHECK_EQ(remaining_index, 0);
-        ranks.push_back(RankOf(coordinates[DP], coordinates[TP], coordinates[PP], coordinates[EP]));
+        ranks.push_back(RankOf(coordinates[kDp], coordinates[kTp], coordinates[kPp], coordinates[kEp]));
     }
     return ranks;
 }
@@ -314,8 +314,8 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size, bool seq
     expert_rank_generator_ = RankGenerator(expert_tensor_parallel_size_, expert_parallel_size_,
                                            expert_data_parallel_size_, pipeline_parallel_size_);
 
-    const auto dense_pipeline_groups = dense_rank_generator_.GetRanks(PP);
-    const auto expert_pipeline_groups = expert_rank_generator_.GetRanks(PP);
+    const auto dense_pipeline_groups = dense_rank_generator_.GetRanks(kPp);
+    const auto expert_pipeline_groups = expert_rank_generator_.GetRanks(kPp);
     CHECK(std::is_permutation(dense_pipeline_groups.begin(), dense_pipeline_groups.end(),
                               expert_pipeline_groups.begin(), expert_pipeline_groups.end()))
         << "Dense and expert rank views must generate identical pipeline-parallel groups";
@@ -412,8 +412,8 @@ std::string ProcessGroupOverview(const RankGenerator &dense_rank_generator, bool
     std::ostringstream oss;
     oss << std::format("\n=== Parallel Communication Groups ===\n"
                        "world_size = {}, config: {{DP={}, TP={}, PP={}}}\n",
-                       dense_rank_generator.WorldSize(), dense_rank_generator.AxisSize(DP),
-                       dense_rank_generator.AxisSize(TP), dense_rank_generator.AxisSize(PP));
+                       dense_rank_generator.WorldSize(), dense_rank_generator.AxisSize(kDp),
+                       dense_rank_generator.AxisSize(kTp), dense_rank_generator.AxisSize(kPp));
     AppendDenseRankView(oss, dense_rank_generator, skip_trivial_axes);
     oss << "\n";
     return oss.str();
@@ -427,10 +427,10 @@ std::string ProcessGroupOverview(const RankGenerator &dense_rank_generator, cons
     std::ostringstream oss;
     oss << std::format("\n=== Parallel Communication Groups ===\n"
                        "world_size = {}, config: {{DP={}, EDP={}, TP={}, ETP={}, PP={}, EP={}}}\n",
-                       dense_rank_generator.WorldSize(), dense_rank_generator.AxisSize(DP),
-                       expert_rank_generator.AxisSize(DP), dense_rank_generator.AxisSize(TP),
-                       expert_rank_generator.AxisSize(TP), dense_rank_generator.AxisSize(PP),
-                       expert_rank_generator.AxisSize(EP));
+                       dense_rank_generator.WorldSize(), dense_rank_generator.AxisSize(kDp),
+                       expert_rank_generator.AxisSize(kDp), dense_rank_generator.AxisSize(kTp),
+                       expert_rank_generator.AxisSize(kTp), dense_rank_generator.AxisSize(kPp),
+                       expert_rank_generator.AxisSize(kEp));
 
     AppendDenseRankView(oss, dense_rank_generator, skip_trivial_axes);
     oss << "\n";

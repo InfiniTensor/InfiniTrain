@@ -121,6 +121,12 @@ bool Work::IsSuccess() const {
     return success_.load(std::memory_order_acquire) && !exception_;
 }
 
+std::exception_ptr Work::exception() const { return exception_; }
+
+core::Event *Work::ready_event() const { return ready_event_; }
+
+core::Event *Work::done_event() const { return done_event_; }
+
 bool Work::CheckCclStatus() {
     if (comm_ != nullptr) {
         auto *impl = core::GetCclImpl(device_.type());

@@ -55,14 +55,14 @@ struct KernelCallRecord {
 class Profiler {
 public:
     enum class SortBy {
-        HostTimeTotal,
-        HostTimePercentage,
-        HostTimeAverage,
-        DeviceTimeTotal,
-        DeviceTimePercentage,
-        DeviceTimeAverage,
-        Count,
-        NotSorted
+        kHostTimeTotal,
+        kHostTimePercentage,
+        kHostTimeAverage,
+        kDeviceTimeTotal,
+        kDeviceTimePercentage,
+        kDeviceTimeAverage,
+        kCount,
+        kNotSorted
     };
 
     static Profiler &Instance();
@@ -70,8 +70,8 @@ public:
     void StartRecord(const std::string &name, Device::DeviceType device);
     void EndRecord(const std::string &name, Device::DeviceType device);
 
-    void Report(std::ostream &os = std::cout, SortBy sort_by = SortBy::NotSorted) const;
-    void Report(const std::string &file_path, SortBy sort_by = SortBy::NotSorted) const;
+    void Report(std::ostream &os = std::cout, SortBy sort_by = SortBy::kNotSorted) const;
+    void Report(const std::string &file_path, SortBy sort_by = SortBy::kNotSorted) const;
     void PrintRecords(std::ostream &os = std::cout) const;
     void PrintRecords(const std::string &file_path) const;
 

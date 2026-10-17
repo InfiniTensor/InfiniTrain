@@ -15,18 +15,18 @@ extern thread_local int thread_global_rank;
 // TP and DP are view-local axes. In the expert rank generator they represent
 // expert tensor parallelism (ETP) and expert data parallelism (EDP), matching
 // Megatron-LM's RankGenerator semantics.
-enum Axis : uint8_t { DP = 0, TP = 1, PP = 2, EP = 3, AXIS_COUNT = 4 };
+enum Axis : uint8_t { kDp = 0, kTp = 1, kPp = 2, kEp = 3, kAxisCount = 4 };
 
 class RankGenerator {
 public:
     // Default order according to Megatron-LM is tp-cp-ep-dp-pp. Ref:
     // https://github.com/NVIDIA/Megatron-LM/blob/cf2f07d7b1315c96c05554c670c43207c6783e5e/megatron/core/parallel_state.py#L561
     explicit RankGenerator(int tensor_parallel_size, int expert_parallel_size, int data_parallel_size,
-                           int pipeline_parallel_size, std::array<Axis, AXIS_COUNT> order = {TP, EP, DP, PP});
+                           int pipeline_parallel_size, std::array<Axis, kAxisCount> order = {kTp, kEp, kDp, kPp});
 
     int AxisSize(Axis axis) const;
     int WorldSize() const;
-    const std::array<Axis, AXIS_COUNT> &order() const;
+    const std::array<Axis, kAxisCount> &order() const;
 
     // Generate all rank groups by varying the specified axes and fixing all
     // other axes, following Megatron-LM's RankGenerator::get_ranks() ordering.
@@ -44,9 +44,9 @@ public:
 private:
     void InitStrides();
 
-    std::array<int, AXIS_COUNT> sizes_{1, 1, 1, 1};
-    std::array<Axis, AXIS_COUNT> order_{TP, EP, DP, PP};
-    std::array<int, AXIS_COUNT> strides_{1, 1, 1, 1};
+    std::array<int, kAxisCount> sizes_{1, 1, 1, 1};
+    std::array<Axis, kAxisCount> order_{kTp, kEp, kDp, kPp};
+    std::array<int, kAxisCount> strides_{1, 1, 1, 1};
 };
 
 class GlobalEnv {

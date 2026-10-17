@@ -223,6 +223,16 @@ DistributedDataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &inp
 
 std::shared_ptr<nn::Module> DistributedDataParallel::module() const { return modules_.at(kModuleName); }
 
+DistributedDataParallelConfig DistributedDataParallel::ddp_config() const { return ddp_config_; }
+
+const std::vector<std::shared_ptr<ParamAndGradBuffer>> &DistributedDataParallel::param_grad_buffers() const {
+    return param_grad_buffers_;
+}
+
+const std::vector<std::shared_ptr<ParamAndGradBucketGroup>> &DistributedDataParallel::bucket_groups() const {
+    return bucket_groups_;
+}
+
 std::unique_ptr<nn::NoSyncGuard> DistributedDataParallel::no_sync() {
     const bool previous = is_last_microbatch_->load(std::memory_order_relaxed);
     SetIsLastMicrobatch(false);

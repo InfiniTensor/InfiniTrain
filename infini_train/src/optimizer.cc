@@ -35,6 +35,8 @@ void Optimizer::ZeroGrad(bool set_to_none) {
     for (auto param : params_) { param->ZeroGrad(set_to_none); }
 }
 
+std::unordered_map<std::string, std::shared_ptr<Tensor>> Optimizer::StateDict() const { return {}; }
+
 void Optimizer::set_learning_rate(float lr) { learning_rate_ = lr; }
 
 float Optimizer::learning_rate() const { return learning_rate_; }

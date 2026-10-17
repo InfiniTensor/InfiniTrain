@@ -603,7 +603,7 @@ void Train(const nn::parallel::Rank &rank) {
     }
 
 #ifdef PROFILE_MODE
-    Profiler::Instance().Report("gpt2.report", Profiler::SortBy::DeviceTimePercentage);
+    Profiler::Instance().Report("gpt2.report", Profiler::SortBy::kDeviceTimePercentage);
     Profiler::Instance().PrintRecords("gpt2.records.log");
 #endif
 

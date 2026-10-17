@@ -188,27 +188,27 @@ void Profiler::ReportGroupedByRank(std::function<std::ostream &(int64_t)> get_os
                 const auto &[_, A] = a;
                 const auto &[__, B] = b;
                 switch (sort_by) {
-                case SortBy::HostTimeTotal:
+                case SortBy::kHostTimeTotal:
                     return A.host_total_us > B.host_total_us;
-                case SortBy::HostTimePercentage:
+                case SortBy::kHostTimePercentage:
                     return A.host_total_us * dev_sum > B.host_total_us * dev_sum;
-                case SortBy::HostTimeAverage:
+                case SortBy::kHostTimeAverage:
                     return A.host_total_us / A.count > B.host_total_us / B.count;
-                case SortBy::DeviceTimeTotal:
+                case SortBy::kDeviceTimeTotal:
                     return A.device_total_us > B.device_total_us;
-                case SortBy::DeviceTimePercentage:
+                case SortBy::kDeviceTimePercentage:
                     return A.device_total_us * host_sum > B.device_total_us * host_sum;
-                case SortBy::DeviceTimeAverage:
+                case SortBy::kDeviceTimeAverage:
                     return A.device_total_us / A.count > B.device_total_us / B.count;
-                case SortBy::Count:
+                case SortBy::kCount:
                     return A.count > B.count;
-                case SortBy::NotSorted:
+                case SortBy::kNotSorted:
                     return false;
                 }
                 return false;
             };
 
-            if (sort_by != SortBy::NotSorted) {
+            if (sort_by != SortBy::kNotSorted) {
                 std::sort(records.begin(), records.end(), compare);
             }
 

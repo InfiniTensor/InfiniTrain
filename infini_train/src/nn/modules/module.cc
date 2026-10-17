@@ -36,6 +36,11 @@ Module::Module() : Module(kUndefinedType) {}
 
 Module::Module(const std::string &type) : type_(type), device_(Device()) {}
 
+float Module::TrainStep(const std::vector<std::shared_ptr<Tensor>> &, const std::vector<std::shared_ptr<Tensor>> &,
+                        const std::shared_ptr<Optimizer> &, const std::shared_ptr<Module> &, DataType) {
+    return 0.0f;
+}
+
 std::unique_ptr<NoSyncGuard> Module::no_sync() { return nullptr; }
 
 const std::string &Module::type() const { return type_; }

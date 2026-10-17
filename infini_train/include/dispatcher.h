@@ -52,21 +52,11 @@ class Dispatcher {
 public:
     using KeyT = std::pair<Device::DeviceType, std::string>;
 
-    static Dispatcher &Instance() {
-        static Dispatcher instance;
-        return instance;
-    }
+    static Dispatcher &Instance();
 
-    bool HasKernel(const KeyT &key) const { return key_to_kernel_map_.contains(key); }
+    bool HasKernel(const KeyT &key) const;
 
-    const KernelFunction &GetKernel(KeyT key) const {
-        CHECK(key_to_kernel_map_.contains(key))
-            << "Kernel not found: " << key.second << " on device: " << static_cast<int>(key.first);
-#ifdef PROFILE_MODE
-        SetProfileContext(key.second, key.first);
-#endif
-        return key_to_kernel_map_.at(key);
-    }
+    const KernelFunction &GetKernel(KeyT key) const;
 
     template <typename FuncT> void Register(const KeyT &key, FuncT &&kernel) {
         CHECK(!key_to_kernel_map_.contains(key))
