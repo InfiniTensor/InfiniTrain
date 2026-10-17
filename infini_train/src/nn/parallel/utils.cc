@@ -69,59 +69,59 @@ void FinalizeQKNormWeightGradients(const nn::Module &model_chunk, const std::vec
 } // namespace
 
 std::string GetDataParallelProcessGroupName(int global_rank) {
-    return "DP" + std::to_string(global::GetGroupId(global::DP, global_rank));
+    return "DP" + std::to_string(global::GetGroupId(global::kDp, global_rank));
 }
 
 std::string GetExpertDataParallelProcessGroupName(int global_rank) {
-    return "EDP" + std::to_string(global::GetExpertRankGenerator().GroupId(global::DP, global_rank));
+    return "EDP" + std::to_string(global::GetExpertRankGenerator().GroupId(global::kDp, global_rank));
 }
 
 std::string GetTensorParallelProcessGroupName(int global_rank) {
-    return "TP" + std::to_string(global::GetGroupId(global::TP, global_rank));
+    return "TP" + std::to_string(global::GetGroupId(global::kTp, global_rank));
 }
 
 std::string GetExpertTensorParallelProcessGroupName(int global_rank) {
-    return "ETP" + std::to_string(global::GetExpertRankGenerator().GroupId(global::TP, global_rank));
+    return "ETP" + std::to_string(global::GetExpertRankGenerator().GroupId(global::kTp, global_rank));
 }
 
 std::string GetPipelineParallelProcessGroupName(int global_rank) {
-    return "PP" + std::to_string(global::GetGroupId(global::PP, global_rank));
+    return "PP" + std::to_string(global::GetGroupId(global::kPp, global_rank));
 }
 
 std::string GetExpertParallelProcessGroupName(int global_rank) {
-    return "EP" + std::to_string(global::GetExpertRankGenerator().GroupId(global::EP, global_rank));
+    return "EP" + std::to_string(global::GetExpertRankGenerator().GroupId(global::kEp, global_rank));
 }
 
 std::string GetExpertTensorAndExpertParallelProcessGroupName(int global_rank) {
-    return "ETP_EP" + std::to_string(global::GetExpertRankGenerator().GroupId({global::TP, global::EP}, global_rank));
+    return "ETP_EP" + std::to_string(global::GetExpertRankGenerator().GroupId({global::kTp, global::kEp}, global_rank));
 }
 
 std::vector<int> GetDataParallelGroupRanks(int global_rank) {
-    return global::GetDenseRankGenerator().GroupRanks(global::DP, global_rank);
+    return global::GetDenseRankGenerator().GroupRanks(global::kDp, global_rank);
 }
 
 std::vector<int> GetExpertDataParallelGroupRanks(int global_rank) {
-    return global::GetExpertRankGenerator().GroupRanks(global::DP, global_rank);
+    return global::GetExpertRankGenerator().GroupRanks(global::kDp, global_rank);
 }
 
 std::vector<int> GetTensorParallelGroupRanks(int global_rank) {
-    return global::GetDenseRankGenerator().GroupRanks(global::TP, global_rank);
+    return global::GetDenseRankGenerator().GroupRanks(global::kTp, global_rank);
 }
 
 std::vector<int> GetExpertTensorParallelGroupRanks(int global_rank) {
-    return global::GetExpertRankGenerator().GroupRanks(global::TP, global_rank);
+    return global::GetExpertRankGenerator().GroupRanks(global::kTp, global_rank);
 }
 
 std::vector<int> GetPipelineParallelGroupRanks(int global_rank) {
-    return global::GetDenseRankGenerator().GroupRanks(global::PP, global_rank);
+    return global::GetDenseRankGenerator().GroupRanks(global::kPp, global_rank);
 }
 
 std::vector<int> GetExpertParallelGroupRanks(int global_rank) {
-    return global::GetExpertRankGenerator().GroupRanks(global::EP, global_rank);
+    return global::GetExpertRankGenerator().GroupRanks(global::kEp, global_rank);
 }
 
 std::vector<int> GetExpertTensorAndExpertParallelGroupRanks(int global_rank) {
-    return global::GetExpertRankGenerator().GroupRanks({global::TP, global::EP}, global_rank);
+    return global::GetExpertRankGenerator().GroupRanks({global::kTp, global::kEp}, global_rank);
 }
 
 std::shared_ptr<Tensor> AllGatherAlongDim(const std::shared_ptr<Tensor> &tensor, int64_t dim, const ProcessGroup *pg) {

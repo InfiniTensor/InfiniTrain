@@ -78,7 +78,7 @@ public:
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    const TransformerConfig &Config() const { return config_; }
+    const TransformerConfig &Config() const;
 
 private:
     const TransformerConfig config_;

@@ -14,18 +14,18 @@ TEST(RankGeneratorTest, GeneratesDenseAndExpertGroups) {
     const global::RankGenerator dense(/*tp=*/2, /*ep=*/1, /*dp=*/4, /*pp=*/2);
     const global::RankGenerator expert(/*etp=*/1, /*ep=*/2, /*edp=*/4, /*pp=*/2);
 
-    EXPECT_EQ(dense.GroupRanks(global::DP, 7), (std::vector<int>{1, 3, 5, 7}));
-    EXPECT_EQ(dense.GroupRanks(global::TP, 7), (std::vector<int>{6, 7}));
-    EXPECT_EQ(expert.GroupRanks(global::DP, 7), (std::vector<int>{1, 3, 5, 7}));
-    EXPECT_EQ(expert.GroupRanks(global::TP, 7), (std::vector<int>{7}));
-    EXPECT_EQ(expert.GroupRanks(global::EP, 7), (std::vector<int>{6, 7}));
-    EXPECT_EQ(expert.GroupRanks({global::TP, global::EP}, 7), (std::vector<int>{6, 7}));
+    EXPECT_EQ(dense.GroupRanks(global::kDp, 7), (std::vector<int>{1, 3, 5, 7}));
+    EXPECT_EQ(dense.GroupRanks(global::kTp, 7), (std::vector<int>{6, 7}));
+    EXPECT_EQ(expert.GroupRanks(global::kDp, 7), (std::vector<int>{1, 3, 5, 7}));
+    EXPECT_EQ(expert.GroupRanks(global::kTp, 7), (std::vector<int>{7}));
+    EXPECT_EQ(expert.GroupRanks(global::kEp, 7), (std::vector<int>{6, 7}));
+    EXPECT_EQ(expert.GroupRanks({global::kTp, global::kEp}, 7), (std::vector<int>{6, 7}));
 
-    EXPECT_EQ(dense.GroupId(global::DP, 7), 2);
-    EXPECT_EQ(dense.GetRanks(global::DP).at(2), (std::vector<int>{1, 3, 5, 7}));
-    EXPECT_EQ(expert.GroupId({global::TP, global::EP}, 7), 6);
-    EXPECT_EQ(expert.GetRanks({global::TP, global::EP}).at(6), (std::vector<int>{6, 7}));
-    EXPECT_EQ(dense.GetRanks(global::PP), expert.GetRanks(global::PP));
+    EXPECT_EQ(dense.GroupId(global::kDp, 7), 2);
+    EXPECT_EQ(dense.GetRanks(global::kDp).at(2), (std::vector<int>{1, 3, 5, 7}));
+    EXPECT_EQ(expert.GroupId({global::kTp, global::kEp}, 7), 6);
+    EXPECT_EQ(expert.GetRanks({global::kTp, global::kEp}).at(6), (std::vector<int>{6, 7}));
+    EXPECT_EQ(dense.GetRanks(global::kPp), expert.GetRanks(global::kPp));
 }
 
 TEST(GlobalEnvTest, ExposesDenseAndExpertViewsWithoutRenamingDenseGroups) {

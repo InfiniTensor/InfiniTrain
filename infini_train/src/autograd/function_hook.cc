@@ -10,6 +10,11 @@ enum class ReduceOpType : int8_t;
 } // namespace infini_train::nn::parallel::comm
 
 namespace infini_train::autograd {
+bool PreAccumulateGradHook::TryBypassAccumulate(const std::shared_ptr<Tensor> &, const std::shared_ptr<Tensor> &, bool,
+                                                float) {
+    return false;
+}
+
 AllReducePostAccumulateHook::AllReducePostAccumulateHook(infini_train::nn::parallel::comm::ReduceOpType reduce_op,
                                                          const infini_train::nn::parallel::ProcessGroup *pg,
                                                          std::shared_ptr<const std::atomic_bool> enabled)

@@ -44,7 +44,7 @@ public:
     // LoRA-specific methods
     void MergeWeights();   // Merge LoRA weights into base: W' = W + (alpha/r) * B @ A
     void UnmergeWeights(); // Restore original base weights
-    bool IsMerged() const { return merged_; }
+    bool IsMerged() const;
 
     // Get only LoRA parameters (for optimizer)
     std::vector<std::shared_ptr<Tensor>> LoRAParameters() const;

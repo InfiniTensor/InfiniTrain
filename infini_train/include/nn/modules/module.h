@@ -93,9 +93,7 @@ public:
     virtual float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
                             const std::vector<std::shared_ptr<Tensor>> &targets,
                             const std::shared_ptr<Optimizer> &optimizer, const std::shared_ptr<Module> &loss_fn,
-                            DataType dtype) {
-        return 0.0f;
-    };
+                            DataType dtype);
 
     virtual std::unique_ptr<NoSyncGuard> no_sync();
 

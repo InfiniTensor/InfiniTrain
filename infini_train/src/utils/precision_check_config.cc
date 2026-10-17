@@ -58,7 +58,7 @@ PrecisionCheckEnv &PrecisionCheckEnv::Instance() {
 
 void PrecisionCheckEnv::Init(const PrecisionCheckConfig &config) {
     config_ = config;
-    if (config_.level != PrecisionCheckLevel::OFF) {
+    if (config_.level != PrecisionCheckLevel::kOff) {
         // Create timestamped subdirectory: output_path/YYYYMMDD_HHMMSS/
         auto now = std::chrono::system_clock::now();
         auto time_t = std::chrono::system_clock::to_time_t(now);

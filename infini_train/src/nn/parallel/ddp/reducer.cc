@@ -58,6 +58,8 @@ std::shared_ptr<Tensor> MakeGradView(const std::shared_ptr<Tensor> &contents, si
 }
 } // namespace
 
+const std::vector<std::shared_ptr<Tensor>> &GradBucket::tensors() const { return tensors_; }
+
 std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector<std::shared_ptr<Tensor>> &tensors,
                                                                const std::vector<size_t> &bucket_size_limits,
                                                                const std::vector<size_t> &tensor_indices) {
