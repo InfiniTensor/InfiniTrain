@@ -9,7 +9,6 @@
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
-#include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/work.h"
@@ -421,10 +420,9 @@ void ParamAndGradBucketGroup::SetNextParamGatherBucketGroup(std::shared_ptr<Para
 ParamAndGradBuffer::ParamAndGradBuffer(const std::vector<std::shared_ptr<Tensor>> &params, DataType &param_dtype,
                                        DataType &grad_dtype, const ProcessGroup *ddp_pg,
                                        DistributedDataParallelConfig ddp_config)
-    : params_(std::move(params)), ddp_pg_(std::move(ddp_pg)), ddp_config_(ddp_config) {
-    if (ddp_pg_) {
-        ddp_world_size_ = global::GetDataParallelSize();
-    }
+    : params_(std::move(params)), ddp_pg_(ddp_pg), ddp_config_(ddp_config) {
+    CHECK_NOTNULL(ddp_pg_);
+    ddp_world_size_ = static_cast<size_t>(ddp_pg_->GetGroupSize());
 
     grads_.clear();
     grads_.resize(params_.size());
