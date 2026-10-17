@@ -1,4 +1,3 @@
-#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -32,30 +31,13 @@ TEST(RankGeneratorTest, GeneratesDenseAndExpertGroups) {
 TEST(GlobalEnvTest, ExposesDenseAndExpertViewsWithoutRenamingDenseGroups) {
     // These IDs match the pre-RankGenerator dense Layout implementation.
     for (int rank = 0; rank < global::GetWorldSize(); ++rank) {
-        const int tp = rank % 2;
-        const int dp = (rank / 2) % 4;
+        const int tp = rank % 4;
+        const int dp = (rank / 4) % 2;
         const int pp = rank / 8;
         EXPECT_EQ(GetDataParallelProcessGroupName(rank), "DP" + std::to_string(pp + tp * 2));
         EXPECT_EQ(GetTensorParallelProcessGroupName(rank), "TP" + std::to_string(pp + dp * 2));
-        EXPECT_EQ(GetPipelineParallelProcessGroupName(rank), "PP" + std::to_string(dp + tp * 4));
+        EXPECT_EQ(GetPipelineParallelProcessGroupName(rank), "PP" + std::to_string(dp + tp * 2));
     }
 }
 
 } // namespace
-
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    setenv("WORLD_SIZE", "16", 1);
-    setenv("LOCAL_WORLD_SIZE", "1", 1);
-    setenv("RANK", "0", 1);
-    setenv("LOCAL_RANK", "0", 1);
-    infini_train::nn::parallel::global::GlobalEnv::Instance().Init(
-        /*nthread_per_process=*/1,
-        /*tensor_parallel_size=*/2,
-        /*sequence_parallel_enabled=*/false,
-        /*pipeline_parallel_size=*/2,
-        /*virtual_pipeline_parallel_size=*/1,
-        /*expert_parallel_size=*/2,
-        /*expert_tensor_parallel_size=*/1);
-    return RUN_ALL_TESTS();
-}
