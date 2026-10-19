@@ -1,3 +1,5 @@
+#include <optional>
+
 #include "gtest/gtest.h"
 
 #if defined(INFINI_TRAIN_TEST_BACKEND_HEADER) && !defined(INFINI_TRAIN_TEST_BACKEND_REGISTRAR)

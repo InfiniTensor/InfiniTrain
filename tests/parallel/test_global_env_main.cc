@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <optional>
 
 #include "gtest/gtest.h"
 
