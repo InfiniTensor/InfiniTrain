@@ -1,8 +1,9 @@
 #pragma once
 
 #include <map>
+#include <ostream>
 #include <string>
-#include <type_traits>
+#include <type_traits> // IWYU pragma: keep
 #include <utility>
 
 #include "glog/logging.h"
