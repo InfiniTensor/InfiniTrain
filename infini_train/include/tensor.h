@@ -216,6 +216,10 @@ public:
     bool requires_grad() const;
     void set_requires_grad(bool requires_grad);
 
+    // Expert parameters synchronize over EDP; other parameters synchronize over dense DP.
+    bool is_expert_parallel() const;
+    void set_is_expert_parallel(bool is_expert_parallel);
+
     bool is_leaf() const;
     void set_is_leaf(bool is_leaf);
 
@@ -245,6 +249,7 @@ private:
     std::shared_ptr<Tensor> grad_ = nullptr;
     bool requires_grad_ = false;
     bool sequence_parallel_ = false;
+    bool is_expert_parallel_ = false;
     bool is_leaf_ = true;
     std::shared_ptr<autograd::Function> grad_fn_ = nullptr;
     int output_idx_ = 0;

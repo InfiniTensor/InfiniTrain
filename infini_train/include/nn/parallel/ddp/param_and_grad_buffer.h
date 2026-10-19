@@ -146,7 +146,7 @@ private:
     std::vector<std::shared_ptr<ParamAndGradBucket>> buckets_;
     const ProcessGroup *collective_pg_ = nullptr;
     size_t collective_pg_size_ = 1;
-    int rank_in_collective_pg_ = -1;
+    size_t rank_in_collective_pg_ = 0;
     DistributedDataParallelConfig ddp_config_;
 
     std::unordered_set<Tensor *> params_;
@@ -187,10 +187,12 @@ public:
      * @param param_dtype Flat parameter-buffer dtype.
      * @param grad_dtype  Gradient storage dtype.
      * @param ddp_pg      Data-parallel process group used by derived bucket groups.
+     * @param gradient_scaling_factor Pre-collective gradient scale for this synchronization domain.
      * @param ddp_config  DDP/DistributedOptimizer bucketing and padding config.
      */
     ParamAndGradBuffer(const std::vector<std::shared_ptr<Tensor>> &params, DataType &param_dtype, DataType &grad_dtype,
-                       const ProcessGroup *ddp_pg, DistributedDataParallelConfig ddp_config);
+                       const ProcessGroup *ddp_pg, float gradient_scaling_factor,
+                       DistributedDataParallelConfig ddp_config);
 
     DistributedDataParallelConfig ddp_config() const;
 
@@ -225,6 +227,7 @@ private:
 
     const ProcessGroup *ddp_pg_ = nullptr;
     size_t ddp_world_size_ = 1;
+    float gradient_scaling_factor_ = 1.f;
     std::vector<std::shared_ptr<ParamAndGradBucket>> buckets_;
 
     bool need_rebind_grad_views_ = true;

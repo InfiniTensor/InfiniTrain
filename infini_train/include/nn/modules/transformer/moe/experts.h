@@ -6,8 +6,11 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
-#include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/tensor.h"
+
+namespace infini_train::nn {
+struct TransformerConfig;
+}
 
 namespace infini_train::nn::moe {
 

@@ -18,7 +18,7 @@ public:
 
     static constexpr char kSwiGLULayerName[] = "swiglu";
 
-    explicit MLP(const TransformerConfig &config);
+    explicit MLP(const TransformerConfig &config, bool is_expert = false);
 
     std::vector<std::shared_ptr<infini_train::Tensor>>
     Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
