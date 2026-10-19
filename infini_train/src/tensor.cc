@@ -66,7 +66,8 @@ Tensor::Tensor(const std::vector<int64_t> &dims, DataType dtype, Device device, 
 
 Tensor::Tensor(const Tensor &tensor, size_t offset, const std::vector<int64_t> &dims)
     : buffer_(tensor.buffer_), offset_(tensor.offset_ + offset), dims_(dims),
-      num_elements_(std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>())), dtype_(tensor.dtype_) {
+      num_elements_(std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<int64_t>())), dtype_(tensor.dtype_),
+      is_expert_parallel_(tensor.is_expert_parallel_) {
     CHECK_LE(offset_ + kDataTypeToSize.at(dtype_) * num_elements_, buffer_->Size());
     sequence_parallel_ = tensor.sequence_parallel_;
 }
@@ -189,6 +190,7 @@ Tensor Tensor::To(Device device) {
 
     new_tensor.requires_grad_ = requires_grad_;
     new_tensor.sequence_parallel_ = sequence_parallel_;
+    new_tensor.is_expert_parallel_ = is_expert_parallel_;
 
     return new_tensor;
 }
@@ -216,7 +218,7 @@ Tensor Tensor::To(DataType dtype) {
 
     new_tensor.requires_grad_ = requires_grad_;
     new_tensor.sequence_parallel_ = sequence_parallel_;
-
+    new_tensor.is_expert_parallel_ = is_expert_parallel_;
     return new_tensor;
 }
 
@@ -519,6 +521,9 @@ void Tensor::set_grad(const std::shared_ptr<Tensor> &grad) {
 
 bool Tensor::requires_grad() const { return requires_grad_; }
 void Tensor::set_requires_grad(bool requires_grad) { requires_grad_ = requires_grad; }
+
+bool Tensor::is_expert_parallel() const { return is_expert_parallel_; }
+void Tensor::set_is_expert_parallel(bool is_expert_parallel) { is_expert_parallel_ = is_expert_parallel; }
 
 bool Tensor::is_leaf() const { return is_leaf_; }
 void Tensor::set_is_leaf(bool is_leaf) { is_leaf_ = is_leaf; }

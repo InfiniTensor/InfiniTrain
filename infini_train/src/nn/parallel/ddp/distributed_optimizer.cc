@@ -148,13 +148,9 @@ void DistributedOptimizer::FinishParamSync(bool skip_next_bucket_dispatch) {
 }
 
 void DistributedOptimizer::ZeroGrad(bool set_to_none) {
-    // Clear BucketGroup state and reset buffer:
-    // If set_to_none is true:
-    //   1) buffers will not be zeroed,
-    //   2) each of full_params's tensor->grad() will be set to nullptr
-    // If set_to_none is false:
-    //   1) buffers will be zeroed,
-    //   2) do not perform Fill(0) for each param
+    // Clear BucketGroup state and zero full grad buffers. Zeroing is required for
+    // MoE parameters that are unused on this rank and therefore never run a grad hook.
+    // set_to_none only controls whether parameter grad views are detached and rebound.
     for (auto &buffer : param_grad_buffers_) { buffer->Reset(set_to_none); }
     for (auto &group : bucket_groups_) { group->Reset(); }
     if (set_to_none) {
