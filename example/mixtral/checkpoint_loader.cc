@@ -1,7 +1,9 @@
 #include "example/mixtral/checkpoint_loader.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -12,6 +14,8 @@
 
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
+#include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
 #include "example/common/utils.h"
@@ -24,6 +28,12 @@ namespace {
 constexpr int32_t kTinyMixtralLLMCMagic = 20260513;
 constexpr int32_t kTinyMixtralLLMCVersion = 2;
 constexpr int64_t kLLMCHeaderEntries = 256;
+
+void SkipFloatValues(std::ifstream &ifs, int64_t num_values, const std::string &name) {
+    CHECK_GE(num_values, 0);
+    ifs.seekg(num_values * static_cast<int64_t>(sizeof(float)), std::ios::cur);
+    CHECK(ifs) << "Failed to skip non-local tensor " << name;
+}
 
 } // namespace
 
@@ -97,6 +107,8 @@ void CheckLLMCConfig(const std::string &filepath, const nn::TransformerConfig &e
 std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
                                                    const nn::TransformerConfig &expected_config) {
     CheckLLMCConfig(filepath, expected_config);
+    CHECK_EQ(infini_train::nn::parallel::global::GetPipelineParallelSize(), 1)
+        << "Mixtral LLMC loading currently requires pipeline_parallel=1";
     auto model = std::make_shared<nn::TransformerModel>(expected_config);
 
     std::ifstream ifs(filepath, std::ios::binary);
@@ -134,6 +146,18 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     };
 
     const auto &moe_config = config.moe_config.value();
+    const int64_t expert_parallel_size = infini_train::nn::parallel::global::GetExpertParallelSize();
+    CHECK_EQ(moe_config.num_experts % expert_parallel_size, 0);
+    const int64_t num_local_experts = moe_config.num_experts / expert_parallel_size;
+    const auto expert_ranks = infini_train::nn::parallel::GetExpertParallelGroupRanks(
+        infini_train::nn::parallel::global::thread_global_rank);
+    const auto rank_it
+        = std::find(expert_ranks.begin(), expert_ranks.end(), infini_train::nn::parallel::global::thread_global_rank);
+    CHECK(rank_it != expert_ranks.end());
+    const int64_t expert_parallel_rank = std::distance(expert_ranks.begin(), rank_it);
+    const int64_t first_local_expert = expert_parallel_rank * num_local_experts;
+    const int64_t last_local_expert = first_local_expert + num_local_experts;
+
     read_tensor_by_state_key("transformer.wte.weight");
     for (int64_t layer = 0; layer < config.n_layer; ++layer) {
         const std::string prefix = "transformer.h." + std::to_string(layer);
@@ -149,7 +173,15 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
         read_tensor_by_state_key(prefix + ".ln_2.weight");
         read_tensor_by_state_key(prefix + ".mlp.router.weight");
         for (int64_t expert = 0; expert < moe_config.num_experts; ++expert) {
-            const std::string expert_prefix = prefix + ".mlp.experts.expert_" + std::to_string(expert);
+            if (expert < first_local_expert || expert >= last_local_expert) {
+                SkipFloatValues(ifs, 2 * moe_config.moe_ffn_hidden_size * config.n_embd,
+                                prefix + ".mlp.experts.expert_" + std::to_string(expert) + ".c_fc.weight");
+                SkipFloatValues(ifs, config.n_embd * moe_config.moe_ffn_hidden_size,
+                                prefix + ".mlp.experts.expert_" + std::to_string(expert) + ".c_proj.weight");
+                continue;
+            }
+            const int64_t local_expert = expert - first_local_expert;
+            const std::string expert_prefix = prefix + ".mlp.experts.expert_" + std::to_string(local_expert);
             const std::string packed_fc1_name = expert_prefix + ".c_fc.weight";
             read_projection_into_packed_weight(packed_fc1_name, 0, moe_config.moe_ffn_hidden_size,
                                                expert_prefix + ".c_fc2.weight"); // Mixtral w1/gate_proj
