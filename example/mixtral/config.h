@@ -33,8 +33,8 @@ inline nn::TransformerConfig TinyMixtralConfig() {
     moe_config.num_experts = 8;
     moe_config.router_topk = 2;
     moe_config.moe_ffn_hidden_size = 1792; // Scaled down as 512 * 3.5; real Mixtral uses 14336.
-    moe_config.token_dispatcher_type = nn::MoEConfig::TokenDispatcherType::kAllGather; // Single-rank validation path.
-    moe_config.expert_impl = nn::MoEConfig::ExpertImpl::kSequential;                   // Local correctness path.
+    moe_config.token_dispatcher_type = nn::MoEConfig::TokenDispatcherType::kAllGather; // EP correctness validation.
+    moe_config.expert_impl = nn::MoEConfig::ExpertImpl::kSequential;                   // Sequential local experts.
     config.moe_config = moe_config;
     return config;
 }
