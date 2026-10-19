@@ -1,5 +1,7 @@
 #include "tests/common/test_utils.h"
 
+#include "infini_train/include/core/runtime/device_guard.h"
+
 namespace infini_train::test {
 
 Device InfiniTrainTest::GetDevice() const {

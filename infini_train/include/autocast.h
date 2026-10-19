@@ -1,16 +1,26 @@
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+
 #include <array>
+#include <memory>
+#include <ostream>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
+#include <utility>
+
+#include "glog/logging.h"
 
 #include "infini_train/include/common/common.h"
 #include "infini_train/include/core/privateuse1_backend.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/tensor.h"
 
 namespace infini_train {
+class Tensor;
+
 namespace {
 inline std::string_view GetBaseOpName(std::string_view op) {
     constexpr std::string_view function_suffix = "Function";

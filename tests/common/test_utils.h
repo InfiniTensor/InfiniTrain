@@ -1,12 +1,15 @@
 #pragma once
 
+#include <stddef.h>
+
 #include <memory>
 #include <vector>
 
-#include "infini_train/include/core/runtime/device_guard.h"
+#include "gtest/gtest.h"
+
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/tensor.h"
-#include "gtest/gtest.h"
 
 namespace infini_train {
 namespace test {
