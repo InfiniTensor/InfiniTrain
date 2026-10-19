@@ -12,18 +12,19 @@
 namespace infini_train::nn::moe {
 
 class MoELayer : public CloneableModule<MoELayer> {
-public:
-    static constexpr char kType[] = "MoELayer";
-    static constexpr char kRouterLayerName[] = "router";
-    static constexpr char kExpertsLayerName[] = "experts";
+ public:
+  static constexpr char kType[] = "MoELayer";
+  static constexpr char kRouterLayerName[] = "router";
+  static constexpr char kExpertsLayerName[] = "experts";
 
-    explicit MoELayer(const TransformerConfig &config);
+  explicit MoELayer(const TransformerConfig &config);
 
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+  std::vector<std::shared_ptr<Tensor>> Forward(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
-private:
-    TransformerConfig config_;
-    int64_t num_local_experts_ = 0;
+ private:
+  TransformerConfig config_;
+  int64_t num_local_experts_ = 0;
 };
 
-} // namespace infini_train::nn::moe
+}  // namespace infini_train::nn::moe

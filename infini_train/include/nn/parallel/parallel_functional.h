@@ -7,7 +7,7 @@
 
 namespace infini_train::nn::parallel::comm {
 enum class ReduceOpType : int8_t;
-} // namespace infini_train::nn::parallel::comm
+}  // namespace infini_train::nn::parallel::comm
 
 namespace infini_train {
 class Tensor;
@@ -18,35 +18,42 @@ class Module;
 
 namespace parallel {
 class ProcessGroup;
-} // namespace parallel
-} // namespace nn
-} // namespace infini_train
+}  // namespace parallel
+}  // namespace nn
+}  // namespace infini_train
 
 namespace infini_train::nn::parallel::function {
 
 // Concatenates equal-shaped tensors from the group along the first dimension.
 // Backward uses SUM ReduceScatter.
-std::shared_ptr<Tensor> AllGather(const std::shared_ptr<Tensor> &input, const ProcessGroup *pg);
+std::shared_ptr<Tensor> AllGather(const std::shared_ptr<Tensor> &input,
+                                  const ProcessGroup *pg);
 
 // Reduces and scatters input along the first dimension.
-// Backward is currently supported only for SUM reduction, where it is implemented as AllGather.
-std::shared_ptr<Tensor> ReduceScatter(const std::shared_ptr<Tensor> &input, comm::ReduceOpType reduce_op,
+// Backward is currently supported only for SUM reduction, where it is
+// implemented as AllGather.
+std::shared_ptr<Tensor> ReduceScatter(const std::shared_ptr<Tensor> &input,
+                                      comm::ReduceOpType reduce_op,
                                       const ProcessGroup *pg);
 
 // Exchanges equal contiguous chunks between ranks.
 // Backward applies AlltoAll with the same process group.
-std::shared_ptr<Tensor> AlltoAll(const std::shared_ptr<Tensor> &input, const ProcessGroup *pg);
+std::shared_ptr<Tensor> AlltoAll(const std::shared_ptr<Tensor> &input,
+                                 const ProcessGroup *pg);
 
-std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                                                          const std::vector<Device> &device_ids, int dim);
+std::vector<std::vector<std::shared_ptr<Tensor>>> Scatter(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+    const std::vector<Device> &device_ids, int dim);
 
-std::vector<std::shared_ptr<Tensor>> Gather(const std::vector<std::vector<std::shared_ptr<Tensor>>> &outputs,
-                                            Device target_device, int dim);
+std::vector<std::shared_ptr<Tensor>> Gather(
+    const std::vector<std::vector<std::shared_ptr<Tensor>>> &outputs,
+    Device target_device, int dim);
 
-std::vector<std::vector<std::shared_ptr<Tensor>>>
-BroadcastCoalescedReshape(const std::vector<std::shared_ptr<Tensor>> &tensors, const std::vector<Device> &devices);
+std::vector<std::vector<std::shared_ptr<Tensor>>> BroadcastCoalescedReshape(
+    const std::vector<std::shared_ptr<Tensor>> &tensors,
+    const std::vector<Device> &devices);
 
-std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &network,
-                                               const std::vector<Device> &devices);
+std::vector<std::shared_ptr<Module>> Replicate(
+    const std::shared_ptr<Module> &network, const std::vector<Device> &devices);
 
-} // namespace infini_train::nn::parallel::function
+}  // namespace infini_train::nn::parallel::function

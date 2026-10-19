@@ -11,26 +11,29 @@ class Tensor;
 
 namespace infini_train::nn {
 class Sigmoid : public CloneableModule<Sigmoid> {
-public:
-    static constexpr char kType[] = "Sigmoid";
-    Sigmoid() : CloneableModule(kType) {}
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+ public:
+  static constexpr char kType[] = "Sigmoid";
+  Sigmoid() : CloneableModule(kType) {}
+  std::vector<std::shared_ptr<Tensor>> Forward(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 };
 
 class NewGELU : public CloneableModule<NewGELU> {
-public:
-    static constexpr char kType[] = "NewGELU";
-    NewGELU() : CloneableModule(kType) {}
+ public:
+  static constexpr char kType[] = "NewGELU";
+  NewGELU() : CloneableModule(kType) {}
 
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &x) override;
+  std::vector<std::shared_ptr<Tensor>> Forward(
+      const std::vector<std::shared_ptr<Tensor>> &x) override;
 };
 
 class SwiGLU : public CloneableModule<SwiGLU> {
-public:
-    static constexpr char kType[] = "SwiGLU";
-    SwiGLU() : CloneableModule(kType) {}
+ public:
+  static constexpr char kType[] = "SwiGLU";
+  SwiGLU() : CloneableModule(kType) {}
 
-    // The last input dimension is packed as [gate, up], matching Megatron-LM.
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &x) override;
+  // The last input dimension is packed as [gate, up], matching Megatron-LM.
+  std::vector<std::shared_ptr<Tensor>> Forward(
+      const std::vector<std::shared_ptr<Tensor>> &x) override;
 };
-} // namespace infini_train::nn
+}  // namespace infini_train::nn

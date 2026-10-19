@@ -36,350 +36,428 @@
 
 namespace infini_train::nn {
 namespace {
-std::vector<std::shared_ptr<Tensor>> RunTransformerLayers(const std::shared_ptr<nn::ModuleList> &layers, size_t start,
-                                                          size_t end,
-                                                          const std::vector<std::shared_ptr<Tensor>> &inputs) {
-    auto hidden = inputs[0];
-    auto layer_inputs = inputs;
-    for (size_t layer_idx = start; layer_idx < end; ++layer_idx) {
-        layer_inputs[0] = hidden;
-        hidden = (*(*layers)[layer_idx])(layer_inputs)[0];
-    }
-    return {hidden};
+std::vector<std::shared_ptr<Tensor>> RunTransformerLayers(
+    const std::shared_ptr<nn::ModuleList> &layers, size_t start, size_t end,
+    const std::vector<std::shared_ptr<Tensor>> &inputs) {
+  auto hidden = inputs[0];
+  auto layer_inputs = inputs;
+  for (size_t layer_idx = start; layer_idx < end; ++layer_idx) {
+    layer_inputs[0] = hidden;
+    hidden = (*(*layers)[layer_idx])(layer_inputs)[0];
+  }
+  return {hidden};
 }
 
-std::vector<std::shared_ptr<Tensor>> CheckpointTransformerLayers(const std::shared_ptr<nn::ModuleList> &layers,
-                                                                 size_t start, size_t end,
-                                                                 const std::vector<std::shared_ptr<Tensor>> &inputs) {
-    auto forward_fn = [layers, start, end](const std::vector<std::shared_ptr<Tensor>> &checkpoint_inputs) {
+std::vector<std::shared_ptr<Tensor>> CheckpointTransformerLayers(
+    const std::shared_ptr<nn::ModuleList> &layers, size_t start, size_t end,
+    const std::vector<std::shared_ptr<Tensor>> &inputs) {
+  auto forward_fn =
+      [layers, start,
+       end](const std::vector<std::shared_ptr<Tensor>> &checkpoint_inputs) {
         return RunTransformerLayers(layers, start, end, checkpoint_inputs);
-    };
-    constexpr bool kUseReentrant = false;
-    // FIXME(zbl): RNG state preservation is not implemented. Checkpointed layers
-    //             must not use Dropout or other random ops that need identical replay.
-    constexpr bool kPreserveRngState = false;
-    return utils::checkpoint::Checkpoint(forward_fn, inputs, kUseReentrant, kPreserveRngState);
+      };
+  constexpr bool kUseReentrant = false;
+  // FIXME(zbl): RNG state preservation is not implemented. Checkpointed layers
+  //             must not use Dropout or other random ops that need identical
+  //             replay.
+  constexpr bool kPreserveRngState = false;
+  return utils::checkpoint::Checkpoint(forward_fn, inputs, kUseReentrant,
+                                       kPreserveRngState);
 }
 
 bool ShouldUseLayerRecompute(const TransformerConfig &config) {
-    if (!config.RecomputeEnabled() || !autograd::GradMode::IsEnabled()) {
-        return false;
-    }
-    if (config.recompute_granularity == ActivationRecomputeGranularity::kSelective) {
-        LOG(FATAL) << "Selective activation recompute is not implemented yet. Use full layer recompute.";
-    }
-    return config.recompute_granularity == ActivationRecomputeGranularity::kFull;
+  if (!config.RecomputeEnabled() || !autograd::GradMode::IsEnabled()) {
+    return false;
+  }
+  if (config.recompute_granularity ==
+      ActivationRecomputeGranularity::kSelective) {
+    LOG(FATAL) << "Selective activation recompute is not implemented yet. Use "
+                  "full layer recompute.";
+  }
+  return config.recompute_granularity == ActivationRecomputeGranularity::kFull;
 }
 
 size_t GetRecomputeNumLayers(const TransformerConfig &config) {
-    if (config.recompute_method == ActivationRecomputeMethod::kNone) {
-        return 1;
-    }
-    CHECK_GE(config.recompute_num_layers, 1)
-        << "recompute_num_layers must be >= 1 when recompute_method is uniform or block.";
-    return static_cast<size_t>(config.recompute_num_layers);
+  if (config.recompute_method == ActivationRecomputeMethod::kNone) {
+    return 1;
+  }
+  CHECK_GE(config.recompute_num_layers, 1)
+      << "recompute_num_layers must be >= 1 when recompute_method is uniform "
+         "or block.";
+  return static_cast<size_t>(config.recompute_num_layers);
 }
-} // namespace
+}  // namespace
 
 TransformerFirstStage::TransformerFirstStage(const TransformerConfig &config)
     : CloneableModule(kType), config_(config) {
-    modules_[kWTELayerName] = std::make_shared<parallel::VocabParallelEmbedding>(
-        config_.vocab_size, config_.n_embd, parallel::global::GetSequenceParallelEnabled());
+  modules_[kWTELayerName] = std::make_shared<parallel::VocabParallelEmbedding>(
+      config_.vocab_size, config_.n_embd,
+      parallel::global::GetSequenceParallelEnabled());
 
-    // Only learned absolute position embedding uses a trainable WPE table.
-    if (config_.position_embedding_type == PositionEmbeddingType::kLearnedAbsolute) {
-        modules_[kWPELayerName] = std::make_shared<Embedding>(config_.block_size, config_.n_embd);
-        if (parallel::global::GetSequenceParallelEnabled()) {
-            modules_[kWPELayerName]->parameter(Embedding::kParamWeightName)->set_sequence_parallel(true);
-        }
-    } else if (config_.position_embedding_type != PositionEmbeddingType::kRoPE) {
-        LOG(FATAL) << "Unsupported position embedding type";
+  // Only learned absolute position embedding uses a trainable WPE table.
+  if (config_.position_embedding_type ==
+      PositionEmbeddingType::kLearnedAbsolute) {
+    modules_[kWPELayerName] =
+        std::make_shared<Embedding>(config_.block_size, config_.n_embd);
+    if (parallel::global::GetSequenceParallelEnabled()) {
+      modules_[kWPELayerName]
+          ->parameter(Embedding::kParamWeightName)
+          ->set_sequence_parallel(true);
     }
+  } else if (config_.position_embedding_type != PositionEmbeddingType::kRoPE) {
+    LOG(FATAL) << "Unsupported position embedding type";
+  }
 }
 
-std::vector<std::shared_ptr<Tensor>> TransformerFirstStage::Forward(const std::vector<std::shared_ptr<Tensor>> &input) {
-    // (B, T)
-    auto x1 = input[0];
-    CHECK_LE(x1->Dims()[1], config_.block_size)
-        << "Cannot forward sequence of length " << x1->Dims()[1] << ", block size is only " << config_.block_size;
+std::vector<std::shared_ptr<Tensor>> TransformerFirstStage::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input) {
+  // (B, T)
+  auto x1 = input[0];
+  CHECK_LE(x1->Dims()[1], config_.block_size)
+      << "Cannot forward sequence of length " << x1->Dims()[1]
+      << ", block size is only " << config_.block_size;
+  const auto device = x1->GetDevice();
+
+  // (B, T) -> Embedding(V_local, C) -> (B, T, C)
+  auto tok_emb = (*modules_[kWTELayerName])({x1});
+
+  // Add position embedding only for models that use learned absolute position
+  // encoding.
+  if (modules_.contains(kWPELayerName)) {
+    // (T_local)
+    // NOTE(zbl): Slice pos sequence when SP is enabled
+    auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
+    auto sequence_parallel_enabled =
+        nn::parallel::global::GetSequenceParallelEnabled();
+    int tp_rank = 0;
+    if (tp_world_size > 1) {
+      auto tp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
+          nn::parallel::GetTensorParallelProcessGroupName(
+              device.Rank().GlobalRank()));
+      tp_rank = tp_group->GetGroupRank(device.Rank().GlobalRank());
+    }
+    int64_t t_local = sequence_parallel_enabled ? x1->Dims()[1] / tp_world_size
+                                                : x1->Dims()[1];
+    int64_t start = sequence_parallel_enabled ? tp_rank * t_local : 0;
+    auto pos = nn::init::Arange(start, start + t_local,
+                                infini_train::DataType::kINT64, device);
+
+    // (T) -> Embedding(T_max, C) -> (T, C)
+    auto pos_emb = (*modules_[kWPELayerName])({pos});
+    // (B, T, C)
+    return {tok_emb[0] + pos_emb[0]};
+  } else {
+    // For RoPE-based models (LLaMA3), no absolute position embedding is needed.
+    // (B, T, C)
+    return tok_emb;
+  }
+}
+
+TransformerLayer::TransformerLayer(const nn::TransformerConfig &config)
+    : CloneableModule(kType) {
+  switch (config.norm_type) {
+    case NormType::kLayerNorm:
+      modules_[kLn1LayerName] =
+          std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
+      modules_[kLn2LayerName] =
+          std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
+      break;
+    case NormType::kRMSNorm:
+      modules_[kLn1LayerName] =
+          std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
+      modules_[kLn2LayerName] =
+          std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
+      break;
+    default:
+      LOG(FATAL) << "Unsupported norm type";
+  }
+
+  modules_[kAttnLayerName] = std::make_shared<CausalSelfAttention>(config);
+  if (config.ffn_type == FFNType::kMoE) {
+    modules_[kMlpLayerName] = std::make_shared<moe::MoELayer>(config);
+  } else {
+    modules_[kMlpLayerName] = std::make_shared<MLP>(config);
+  }
+}
+
+std::vector<std::shared_ptr<Tensor>> TransformerLayer::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &x) {
+  // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd)
+  auto ln1_out = (*modules_[kLn1LayerName])({x[0]})[0];
+
+  std::vector<std::shared_ptr<Tensor>> attn_input = {ln1_out};
+  if (x.size() > 1) {
+    attn_input.push_back(x[1]);  // freqs_cis
+  }
+  if (x.size() > 2) {
+    attn_input.push_back(x[2]);  // start_pos
+  }
+  if (x.size() > 3) {
+    attn_input.push_back(x[3]);  // mask
+  }
+
+  auto attn_out = (*modules_[kAttnLayerName])(attn_input)[0];
+  auto x1 = x[0] + attn_out;
+
+  // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd) -> MLP -> (bs,
+  // seq_len, n_embd) -> Add -> (bs, seq_len, n_embd)
+  auto x2 =
+      x1 + (*modules_[kMlpLayerName])((*modules_[kLn2LayerName])({x1}))[0];
+
+  // (bs, seq_len, n_embd)
+  return {x2};
+}
+
+TransformerChunk::TransformerChunk(const TransformerConfig &config,
+                                   int start_layer, int end_layer)
+    : CloneableModule(kType), config_(config) {
+  std::vector<std::shared_ptr<nn::Module>> h;
+  for (int64_t i = start_layer; i < end_layer; ++i) {
+    auto layer = std::make_shared<TransformerLayer>(config);
+    h.push_back(layer);
+  }
+  modules_[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
+}
+
+std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &x) {
+  auto x1 = x[0];
+  auto layers =
+      std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName]);
+  CHECK(layers);
+
+  // Check if we need to pass RoPE parameters (for LLaMA3 style models).
+  std::vector<std::shared_ptr<Tensor>> layer_inputs = {x1};
+  if (config_.position_embedding_type == PositionEmbeddingType::kRoPE) {
+    // For RoPE models, we need to prepare freqs_cis and potentially other
+    // parameters
     const auto device = x1->GetDevice();
 
-    // (B, T) -> Embedding(V_local, C) -> (B, T, C)
-    auto tok_emb = (*modules_[kWTELayerName])({x1});
-
-    // Add position embedding only for models that use learned absolute position encoding.
-    if (modules_.contains(kWPELayerName)) {
-        // (T_local)
-        // NOTE(zbl): Slice pos sequence when SP is enabled
-        auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
-        auto sequence_parallel_enabled = nn::parallel::global::GetSequenceParallelEnabled();
-        int tp_rank = 0;
-        if (tp_world_size > 1) {
-            auto tp_group = nn::parallel::ProcessGroupFactory::Instance()->Get(
-                nn::parallel::GetTensorParallelProcessGroupName(device.Rank().GlobalRank()));
-            tp_rank = tp_group->GetGroupRank(device.Rank().GlobalRank());
-        }
-        int64_t t_local = sequence_parallel_enabled ? x1->Dims()[1] / tp_world_size : x1->Dims()[1];
-        int64_t start = sequence_parallel_enabled ? tp_rank * t_local : 0;
-        auto pos = nn::init::Arange(start, start + t_local, infini_train::DataType::kINT64, device);
-
-        // (T) -> Embedding(T_max, C) -> (T, C)
-        auto pos_emb = (*modules_[kWPELayerName])({pos});
-        // (B, T, C)
-        return {tok_emb[0] + pos_emb[0]};
-    } else {
-        // For RoPE-based models (LLaMA3), no absolute position embedding is needed.
-        // (B, T, C)
-        return tok_emb;
-    }
-}
-
-TransformerLayer::TransformerLayer(const nn::TransformerConfig &config) : CloneableModule(kType) {
-    switch (config.norm_type) {
-    case NormType::kLayerNorm:
-        modules_[kLn1LayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
-        modules_[kLn2LayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config.n_embd});
-        break;
-    case NormType::kRMSNorm:
-        modules_[kLn1LayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
-        modules_[kLn2LayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
-        break;
-    default:
-        LOG(FATAL) << "Unsupported norm type";
+    // Init freqs_cis on device only once
+    if (buffers_[kFreqsCisName] == nullptr) {
+      int64_t head_dim = config_.n_embd / config_.n_head;
+      autograd::NoGradGuard no_grad;
+      buffers_[kFreqsCisName] = PrecomputeFreqsCis(
+          head_dim, config_.block_size * 2, config_.rope_theta,
+          config_.use_scaled_rope, device);
     }
 
-    modules_[kAttnLayerName] = std::make_shared<CausalSelfAttention>(config);
-    if (config.ffn_type == FFNType::kMoE) {
-        modules_[kMlpLayerName] = std::make_shared<moe::MoELayer>(config);
-    } else {
-        modules_[kMlpLayerName] = std::make_shared<MLP>(config);
-    }
-}
+    const auto t =
+        x1->Dims()[1] *
+        nn::parallel::global::GetSequenceParallelSize();  // full_seq_len
 
-std::vector<std::shared_ptr<Tensor>> TransformerLayer::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd)
-    auto ln1_out = (*modules_[kLn1LayerName])({x[0]})[0];
+    // Dynamic start_pos (set to 0 for now)
+    int64_t start_pos = 0;
+    auto freqs_view =
+        buffers_[kFreqsCisName]->Slice(0, start_pos, start_pos + t, 1);
 
-    std::vector<std::shared_ptr<Tensor>> attn_input = {ln1_out};
-    if (x.size() > 1) {
-        attn_input.push_back(x[1]); // freqs_cis
-    }
-    if (x.size() > 2) {
-        attn_input.push_back(x[2]); // start_pos
-    }
-    if (x.size() > 3) {
-        attn_input.push_back(x[3]); // mask
-    }
+    // Create causal mask
+    std::shared_ptr<Tensor> ones =
+        std::make_shared<Tensor>(nn::function::Ones({t, t})->To(device));
+    std::shared_ptr<Tensor> mask =
+        nn::function::Triu(ones, 1)->View({1, 1, t, t});
 
-    auto attn_out = (*modules_[kAttnLayerName])(attn_input)[0];
-    auto x1 = x[0] + attn_out;
+    std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 
-    // (bs, seq_len, n_embd) -> Layernorm -> (bs, seq_len, n_embd) -> MLP -> (bs, seq_len, n_embd) -> Add -> (bs,
-    // seq_len, n_embd)
-    auto x2 = x1 + (*modules_[kMlpLayerName])((*modules_[kLn2LayerName])({x1}))[0];
+    layer_inputs = {x1, freqs_view, start_pos_ptr, mask};
+  } else if (config_.position_embedding_type !=
+             PositionEmbeddingType::kLearnedAbsolute) {
+    LOG(FATAL) << "Unsupported position embedding type";
+  }
 
-    // (bs, seq_len, n_embd)
-    return {x2};
-}
+  if (!ShouldUseLayerRecompute(config_)) {
+    return RunTransformerLayers(
+        layers, 0, static_cast<size_t>(layers->end() - layers->begin()),
+        layer_inputs);
+  }
 
-TransformerChunk::TransformerChunk(const TransformerConfig &config, int start_layer, int end_layer)
-    : CloneableModule(kType), config_(config) {
-    std::vector<std::shared_ptr<nn::Module>> h;
-    for (int64_t i = start_layer; i < end_layer; ++i) {
-        auto layer = std::make_shared<TransformerLayer>(config);
-        h.push_back(layer);
-    }
-    modules_[kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
-}
-
-std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    auto x1 = x[0];
-    auto layers = std::dynamic_pointer_cast<nn::ModuleList>(modules_[kHLayerName]);
-    CHECK(layers);
-
-    // Check if we need to pass RoPE parameters (for LLaMA3 style models).
-    std::vector<std::shared_ptr<Tensor>> layer_inputs = {x1};
-    if (config_.position_embedding_type == PositionEmbeddingType::kRoPE) {
-        // For RoPE models, we need to prepare freqs_cis and potentially other parameters
-        const auto device = x1->GetDevice();
-
-        // Init freqs_cis on device only once
-        if (buffers_[kFreqsCisName] == nullptr) {
-            int64_t head_dim = config_.n_embd / config_.n_head;
-            autograd::NoGradGuard no_grad;
-            buffers_[kFreqsCisName] = PrecomputeFreqsCis(head_dim, config_.block_size * 2, config_.rope_theta,
-                                                         config_.use_scaled_rope, device);
-        }
-
-        const auto t = x1->Dims()[1] * nn::parallel::global::GetSequenceParallelSize(); // full_seq_len
-
-        // Dynamic start_pos (set to 0 for now)
-        int64_t start_pos = 0;
-        auto freqs_view = buffers_[kFreqsCisName]->Slice(0, start_pos, start_pos + t, 1);
-
-        // Create causal mask
-        std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(nn::function::Ones({t, t})->To(device));
-        std::shared_ptr<Tensor> mask = nn::function::Triu(ones, 1)->View({1, 1, t, t});
-
-        std::shared_ptr<Tensor> start_pos_ptr = nullptr;
-
-        layer_inputs = {x1, freqs_view, start_pos_ptr, mask};
-    } else if (config_.position_embedding_type != PositionEmbeddingType::kLearnedAbsolute) {
-        LOG(FATAL) << "Unsupported position embedding type";
-    }
-
-    if (!ShouldUseLayerRecompute(config_)) {
-        return RunTransformerLayers(layers, 0, static_cast<size_t>(layers->end() - layers->begin()), layer_inputs);
-    }
-
-    const size_t num_layers = static_cast<size_t>(layers->end() - layers->begin());
-    const size_t recompute_num_layers = GetRecomputeNumLayers(config_);
-    switch (config_.recompute_method) {
+  const size_t num_layers =
+      static_cast<size_t>(layers->end() - layers->begin());
+  const size_t recompute_num_layers = GetRecomputeNumLayers(config_);
+  switch (config_.recompute_method) {
     case ActivationRecomputeMethod::kNone: {
-        for (size_t layer_idx = 0; layer_idx < num_layers; ++layer_idx) {
-            layer_inputs[0] = x1;
-            x1 = CheckpointTransformerLayers(layers, layer_idx, layer_idx + 1, layer_inputs)[0];
-        }
-        break;
+      for (size_t layer_idx = 0; layer_idx < num_layers; ++layer_idx) {
+        layer_inputs[0] = x1;
+        x1 = CheckpointTransformerLayers(layers, layer_idx, layer_idx + 1,
+                                         layer_inputs)[0];
+      }
+      break;
     }
     case ActivationRecomputeMethod::kUniform: {
-        size_t layer_idx = 0;
-        while (layer_idx < num_layers) {
-            auto chunk_end = std::min(layer_idx + recompute_num_layers, num_layers);
-            layer_inputs[0] = x1;
-            x1 = CheckpointTransformerLayers(layers, layer_idx, chunk_end, layer_inputs)[0];
-            layer_idx = chunk_end;
-        }
-        break;
+      size_t layer_idx = 0;
+      while (layer_idx < num_layers) {
+        auto chunk_end = std::min(layer_idx + recompute_num_layers, num_layers);
+        layer_inputs[0] = x1;
+        x1 = CheckpointTransformerLayers(layers, layer_idx, chunk_end,
+                                         layer_inputs)[0];
+        layer_idx = chunk_end;
+      }
+      break;
     }
     case ActivationRecomputeMethod::kBlock: {
-        const size_t checkpoint_layers = std::min(recompute_num_layers, num_layers);
-        for (size_t layer_idx = 0; layer_idx < num_layers; ++layer_idx) {
-            layer_inputs[0] = x1;
-            if (layer_idx < checkpoint_layers) {
-                x1 = CheckpointTransformerLayers(layers, layer_idx, layer_idx + 1, layer_inputs)[0];
-            } else {
-                x1 = RunTransformerLayers(layers, layer_idx, layer_idx + 1, layer_inputs)[0];
-            }
+      const size_t checkpoint_layers =
+          std::min(recompute_num_layers, num_layers);
+      for (size_t layer_idx = 0; layer_idx < num_layers; ++layer_idx) {
+        layer_inputs[0] = x1;
+        if (layer_idx < checkpoint_layers) {
+          x1 = CheckpointTransformerLayers(layers, layer_idx, layer_idx + 1,
+                                           layer_inputs)[0];
+        } else {
+          x1 = RunTransformerLayers(layers, layer_idx, layer_idx + 1,
+                                    layer_inputs)[0];
         }
-        break;
+      }
+      break;
     }
     default:
-        LOG(FATAL) << "Unsupported activation recompute method.";
-    }
+      LOG(FATAL) << "Unsupported activation recompute method.";
+  }
 
-    return {x1};
+  return {x1};
 }
 
-TransformerLastStage::TransformerLastStage(const TransformerConfig &config) : CloneableModule(kType), config_(config) {
-    switch (config.norm_type) {
+TransformerLastStage::TransformerLastStage(const TransformerConfig &config)
+    : CloneableModule(kType), config_(config) {
+  switch (config.norm_type) {
     case NormType::kLayerNorm:
-        modules_[kLnFLayerName] = std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd});
-        break;
+      modules_[kLnFLayerName] =
+          std::make_shared<nn::LayerNorm>(std::vector<int64_t>{config_.n_embd});
+      break;
     case NormType::kRMSNorm:
-        modules_[kLnFLayerName] = std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
-        break;
+      modules_[kLnFLayerName] =
+          std::make_shared<RMSNorm>(config.n_embd, config.norm_eps);
+      break;
     default:
-        LOG(FATAL) << "Unsupported norm type";
-    }
-    // NOTE(zbl): weight-tying is possible but torch script did not do so
-    modules_[kLMHeadLayerName] = std::make_shared<parallel::ColumnParallelLinear>(
-        /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
-        /*bias=*/config_.add_bias_lm_head,
-        // NOTE(zbl): each rank would get sharded [B, T, V_local] as logits
-        /*gather_output=*/false,
-        /*input_is_parallel=*/false,
-        /*skip_bias_add=*/false,
-        /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+      LOG(FATAL) << "Unsupported norm type";
+  }
+  // NOTE(zbl): weight-tying is possible but torch script did not do so
+  modules_[kLMHeadLayerName] = std::make_shared<parallel::ColumnParallelLinear>(
+      /*in_features=*/config_.n_embd, /*out_features=*/config_.vocab_size,
+      /*bias=*/config_.add_bias_lm_head,
+      // NOTE(zbl): each rank would get sharded [B, T, V_local] as logits
+      /*gather_output=*/false,
+      /*input_is_parallel=*/false,
+      /*skip_bias_add=*/false,
+      /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
 }
 
-std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    // (B, T, C) -> Layernorm -> (B, T, C)
-    auto x1 = (*modules_[kLnFLayerName])(x);
+std::vector<std::shared_ptr<Tensor>> TransformerLastStage::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &x) {
+  // (B, T, C) -> Layernorm -> (B, T, C)
+  auto x1 = (*modules_[kLnFLayerName])(x);
 
-    // TODO(dcj): add inference-time mini-optimization
-    // (B, T, C) -> Linear(C, V) -> (B, T, V)
-    return (*modules_[kLMHeadLayerName])(x1);
+  // TODO(dcj): add inference-time mini-optimization
+  // (B, T, C) -> Linear(C, V) -> (B, T, V)
+  return (*modules_[kLMHeadLayerName])(x1);
 }
 
 TransformerModel::TransformerModel(const TransformerConfig config)
-    : CloneableModule(kType), config_(config),
+    : CloneableModule(kType),
+      config_(config),
       stage_info_(nn::parallel::PipelineParallel::GetStageInfo(
-          config_.n_layer, nn::parallel::global::GetPipelineParallelSize(), nn::parallel::pp_rank,
+          config_.n_layer, nn::parallel::global::GetPipelineParallelSize(),
+          nn::parallel::pp_rank,
           nn::parallel::global::GetVirtualPipelineParallelSize())) {
-    auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
+  auto tp_world_size = nn::parallel::global::GetTensorParallelSize();
 
-    // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
-    //            Megatron-LM has an optional argument `--make-vocab-size-divisible-by`, would do padding to vocab
-    //            Here we introduce padding by default, might need modify Tokenizer correspondingly later
-    CHECK_EQ(config.vocab_size % tp_world_size, 0) << "Vocab size should be divisible by TP world size";
+  // NOTE(zbl): VocabParallelEmbedding requires vocab_size % tp_size == 0
+  //            Megatron-LM has an optional argument
+  //            `--make-vocab-size-divisible-by`, would do padding to vocab Here
+  //            we introduce padding by default, might need modify Tokenizer
+  //            correspondingly later
+  CHECK_EQ(config.vocab_size % tp_world_size, 0)
+      << "Vocab size should be divisible by TP world size";
 
-    std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
-    if (stage_info_.is_first_stage) {
-        modules_[kPPFirstStageName] = std::make_shared<TransformerFirstStage>(config_);
-        transformer[TransformerFirstStage::kWTELayerName]
-            = modules_[kPPFirstStageName]->mutable_module(TransformerFirstStage::kWTELayerName);
-        if (config_.position_embedding_type == PositionEmbeddingType::kLearnedAbsolute) {
-            transformer[TransformerFirstStage::kWPELayerName]
-                = modules_[kPPFirstStageName]->mutable_module(TransformerFirstStage::kWPELayerName);
-        }
+  std::unordered_map<std::string, std::shared_ptr<nn::Module>> transformer;
+  if (stage_info_.is_first_stage) {
+    modules_[kPPFirstStageName] =
+        std::make_shared<TransformerFirstStage>(config_);
+    transformer[TransformerFirstStage::kWTELayerName] =
+        modules_[kPPFirstStageName]->mutable_module(
+            TransformerFirstStage::kWTELayerName);
+    if (config_.position_embedding_type ==
+        PositionEmbeddingType::kLearnedAbsolute) {
+      transformer[TransformerFirstStage::kWPELayerName] =
+          modules_[kPPFirstStageName]->mutable_module(
+              TransformerFirstStage::kWPELayerName);
     }
+  }
 
-    {
-        std::map<int, std::pair<int, std::shared_ptr<TransformerChunk>>> start_layer_to_layer_size_and_chunk;
-        for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
-            const auto [start_layer, end_layer] = stage_info_.layer_ranges_per_chunk[chunk_idx];
-            auto chunk = std::make_shared<TransformerChunk>(config_, start_layer, end_layer);
-            start_layer_to_layer_size_and_chunk[start_layer] = std::make_pair(end_layer - start_layer, chunk);
-        }
-        std::vector<std::shared_ptr<nn::Module>> h;
-        int chunk_idx = 0;
-        for (auto &[start_layer, layer_size_and_chunk] : start_layer_to_layer_size_and_chunk) {
-            auto [layer_size, chunk] = layer_size_and_chunk;
-            for (int idx = 0; idx < layer_size; ++idx) {
-                h.push_back(chunk->mutable_module(TransformerChunk::kHLayerName)->mutable_module(std::to_string(idx)));
-            }
-            modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)] = std::move(chunk);
-            ++chunk_idx;
-        }
-        transformer[TransformerChunk::kHLayerName] = std::make_shared<nn::ModuleList>(std::move(h));
+  {
+    std::map<int, std::pair<int, std::shared_ptr<TransformerChunk>>>
+        start_layer_to_layer_size_and_chunk;
+    for (int chunk_idx = 0;
+         chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
+      const auto [start_layer, end_layer] =
+          stage_info_.layer_ranges_per_chunk[chunk_idx];
+      auto chunk =
+          std::make_shared<TransformerChunk>(config_, start_layer, end_layer);
+      start_layer_to_layer_size_and_chunk[start_layer] =
+          std::make_pair(end_layer - start_layer, chunk);
     }
+    std::vector<std::shared_ptr<nn::Module>> h;
+    int chunk_idx = 0;
+    for (auto &[start_layer, layer_size_and_chunk] :
+         start_layer_to_layer_size_and_chunk) {
+      auto [layer_size, chunk] = layer_size_and_chunk;
+      for (int idx = 0; idx < layer_size; ++idx) {
+        h.push_back(chunk->mutable_module(TransformerChunk::kHLayerName)
+                        ->mutable_module(std::to_string(idx)));
+      }
+      modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)] =
+          std::move(chunk);
+      ++chunk_idx;
+    }
+    transformer[TransformerChunk::kHLayerName] =
+        std::make_shared<nn::ModuleList>(std::move(h));
+  }
 
-    if (stage_info_.is_last_stage) {
-        modules_[kPPLastStageName] = std::make_shared<TransformerLastStage>(config_);
-        transformer[TransformerLastStage::kLnFLayerName]
-            = modules_[kPPLastStageName]->mutable_module(TransformerLastStage::kLnFLayerName);
-        modules_[TransformerLastStage::kLMHeadLayerName]
-            = modules_[kPPLastStageName]->mutable_module(TransformerLastStage::kLMHeadLayerName);
-    }
-    modules_[kTransformerModelName] = std::make_shared<nn::ModuleDict>(std::move(transformer));
+  if (stage_info_.is_last_stage) {
+    modules_[kPPLastStageName] =
+        std::make_shared<TransformerLastStage>(config_);
+    transformer[TransformerLastStage::kLnFLayerName] =
+        modules_[kPPLastStageName]->mutable_module(
+            TransformerLastStage::kLnFLayerName);
+    modules_[TransformerLastStage::kLMHeadLayerName] =
+        modules_[kPPLastStageName]->mutable_module(
+            TransformerLastStage::kLMHeadLayerName);
+  }
+  modules_[kTransformerModelName] =
+      std::make_shared<nn::ModuleDict>(std::move(transformer));
 
-    // FIXME(jym): Assigning the parameter values of wte to LMHead, which is not real tying operation
-    // TODO: Implement real GPT-2 weight tying: make lm_head.weight share the exact same Parameter/Tensor (same
-    // shared_ptr/storage) as transformer.wte.weight (pointer aliasing, not value copy), and ensure the tie is
-    // applied after loading weights so it won't be overwritten. Also fix GPT2::FromLLMC() loading logic to respect
-    // weight tying (do not create/load a separate lm_head.weight tensor; load once into the tied weight) so
-    // parameter counting matches PyTorch/PEFT.
-    if (config_.tie_weights && nn::parallel::global::GetPipelineParallelSize() == 1) {
-        // https://paperswithcode.com/method/weight-tying
-        *mutable_module(kTransformerModelName)
-             ->mutable_module(TransformerFirstStage::kWTELayerName)
-             ->mutable_parameter(nn::parallel::VocabParallelEmbedding::kParamWeightName)
-            = module(TransformerLastStage::kLMHeadLayerName)
-                  .parameter(nn::parallel::ColumnParallelLinear::kParamWeightName);
-    }
+  // FIXME(jym): Assigning the parameter values of wte to LMHead, which is not
+  // real tying operation
+  // TODO: Implement real GPT-2 weight tying: make lm_head.weight share the
+  // exact same Parameter/Tensor (same shared_ptr/storage) as
+  // transformer.wte.weight (pointer aliasing, not value copy), and ensure the
+  // tie is applied after loading weights so it won't be overwritten. Also fix
+  // GPT2::FromLLMC() loading logic to respect weight tying (do not create/load
+  // a separate lm_head.weight tensor; load once into the tied weight) so
+  // parameter counting matches PyTorch/PEFT.
+  if (config_.tie_weights &&
+      nn::parallel::global::GetPipelineParallelSize() == 1) {
+    // https://paperswithcode.com/method/weight-tying
+    *mutable_module(kTransformerModelName)
+         ->mutable_module(TransformerFirstStage::kWTELayerName)
+         ->mutable_parameter(
+             nn::parallel::VocabParallelEmbedding::kParamWeightName) =
+        module(TransformerLastStage::kLMHeadLayerName)
+            .parameter(nn::parallel::ColumnParallelLinear::kParamWeightName);
+  }
 }
 
-std::vector<std::shared_ptr<Tensor>> TransformerModel::Forward(const std::vector<std::shared_ptr<Tensor>> &x) {
-    auto x1 = (*modules_[kPPFirstStageName])(x);
-    for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size(); ++chunk_idx) {
-        x1 = (*modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)])(x1);
-    }
+std::vector<std::shared_ptr<Tensor>> TransformerModel::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &x) {
+  auto x1 = (*modules_[kPPFirstStageName])(x);
+  for (int chunk_idx = 0; chunk_idx < stage_info_.layer_ranges_per_chunk.size();
+       ++chunk_idx) {
+    x1 = (*modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)])(x1);
+  }
 
-    auto res = (*modules_[kPPLastStageName])(x1);
-    return res;
+  auto res = (*modules_[kPPLastStageName])(x1);
+  return res;
 }
 
 const TransformerConfig &TransformerModel::Config() const { return config_; }
 
-} // namespace infini_train::nn
+}  // namespace infini_train::nn

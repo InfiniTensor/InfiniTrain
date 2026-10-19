@@ -21,446 +21,502 @@
 
 namespace infini_train::nn::parallel {
 namespace {
-void CopyGradToBucket(const std::shared_ptr<Tensor> &grad, const std::shared_ptr<Tensor> &flat,
+void CopyGradToBucket(const std::shared_ptr<Tensor> &grad,
+                      const std::shared_ptr<Tensor> &flat,
                       size_t dst_elem_offset) {
-    CHECK(grad && flat);
-    const size_t element_size_in_bytes = kDataTypeToSize.at(grad->Dtype());
-    const size_t bytes = grad->NumElements() * element_size_in_bytes;
-    char *dst = static_cast<char *>(flat->DataPtr()) + dst_elem_offset * element_size_in_bytes;
-    const void *src = grad->DataPtr();
+  CHECK(grad && flat);
+  const size_t element_size_in_bytes = kDataTypeToSize.at(grad->Dtype());
+  const size_t bytes = grad->NumElements() * element_size_in_bytes;
+  char *dst = static_cast<char *>(flat->DataPtr()) +
+              dst_elem_offset * element_size_in_bytes;
+  const void *src = grad->DataPtr();
 
-    auto dev = grad->GetDevice();
+  auto dev = grad->GetDevice();
 
-    core::DeviceGuard guard(dev);
-    auto impl = core::GetDeviceGuardImpl(dev.type());
-    impl->MemcpyAsync(dst, src, bytes, core::MemcpyKind::kD2D, impl->GetStream(dev));
+  core::DeviceGuard guard(dev);
+  auto impl = core::GetDeviceGuardImpl(dev.type());
+  impl->MemcpyAsync(dst, src, bytes, core::MemcpyKind::kD2D,
+                    impl->GetStream(dev));
 }
 
-void CopyBucketToGrad(const std::shared_ptr<Tensor> &flat, const std::shared_ptr<Tensor> &grad,
+void CopyBucketToGrad(const std::shared_ptr<Tensor> &flat,
+                      const std::shared_ptr<Tensor> &grad,
                       size_t src_elem_offset) {
-    CHECK(grad && flat);
-    const size_t element_size_in_bytes = kDataTypeToSize.at(grad->Dtype());
-    const size_t bytes = grad->NumElements() * element_size_in_bytes;
-    const char *src = static_cast<const char *>(flat->DataPtr()) + src_elem_offset * element_size_in_bytes;
-    void *dst = grad->DataPtr();
+  CHECK(grad && flat);
+  const size_t element_size_in_bytes = kDataTypeToSize.at(grad->Dtype());
+  const size_t bytes = grad->NumElements() * element_size_in_bytes;
+  const char *src = static_cast<const char *>(flat->DataPtr()) +
+                    src_elem_offset * element_size_in_bytes;
+  void *dst = grad->DataPtr();
 
-    auto dev = grad->GetDevice();
+  auto dev = grad->GetDevice();
 
-    core::DeviceGuard guard(dev);
-    auto impl = core::GetDeviceGuardImpl(dev.type());
-    impl->MemcpyAsync(dst, src, bytes, core::MemcpyKind::kD2D, impl->GetStream(dev));
+  core::DeviceGuard guard(dev);
+  auto impl = core::GetDeviceGuardImpl(dev.type());
+  impl->MemcpyAsync(dst, src, bytes, core::MemcpyKind::kD2D,
+                    impl->GetStream(dev));
 }
 
-std::shared_ptr<Tensor> MakeGradView(const std::shared_ptr<Tensor> &contents, size_t offset_elems,
+std::shared_ptr<Tensor> MakeGradView(const std::shared_ptr<Tensor> &contents,
+                                     size_t offset_elems,
                                      const std::vector<int64_t> &dims) {
-    // Return a view of contents (same chunk of memory)
-    auto view = std::make_shared<Tensor>(*contents, offset_elems * kDataTypeToSize.at(contents->Dtype()), dims);
-    return view;
+  // Return a view of contents (same chunk of memory)
+  auto view = std::make_shared<Tensor>(
+      *contents, offset_elems * kDataTypeToSize.at(contents->Dtype()), dims);
+  return view;
 }
-} // namespace
+}  // namespace
 
-const std::vector<std::shared_ptr<Tensor>> &GradBucket::tensors() const { return tensors_; }
+const std::vector<std::shared_ptr<Tensor>> &GradBucket::tensors() const {
+  return tensors_;
+}
 
-std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(const std::vector<std::shared_ptr<Tensor>> &tensors,
-                                                               const std::vector<size_t> &bucket_size_limits,
-                                                               const std::vector<size_t> &tensor_indices) {
+std::vector<std::vector<size_t>> ComputeBucketAssignmentBySize(
+    const std::vector<std::shared_ptr<Tensor>> &tensors,
+    const std::vector<size_t> &bucket_size_limits,
+    const std::vector<size_t> &tensor_indices) {
+  CHECK(!tensors.empty());
+  CHECK(!bucket_size_limits.empty());
+  // By default, tensors are bucketed in reverse order, closer to the order that
+  // grad goes ready in backward
+  auto ReverseOrder = [](size_t n) {
+    std::vector<size_t> idx(n);
+    std::iota(idx.begin(), idx.end(), 0);
+    std::reverse(idx.begin(), idx.end());
+    return idx;
+  };
+  std::vector<size_t> order =
+      tensor_indices.empty() ? ReverseOrder(tensors.size()) : tensor_indices;
 
-    CHECK(!tensors.empty());
-    CHECK(!bucket_size_limits.empty());
-    // By default, tensors are bucketed in reverse order, closer to the order that grad goes ready in backward
-    auto ReverseOrder = [](size_t n) {
-        std::vector<size_t> idx(n);
-        std::iota(idx.begin(), idx.end(), 0);
-        std::reverse(idx.begin(), idx.end());
-        return idx;
-    };
-    std::vector<size_t> order = tensor_indices.empty() ? ReverseOrder(tensors.size()) : tensor_indices;
-
-    // Group tensors by device/dtype, make sure that device and dtype is the same in a single bucket
-    struct Key {
-        int dev;
-        DataType dtype;
-        bool operator==(const Key &o) const { return dev == o.dev && dtype == o.dtype; }
-    };
-    struct KeyHash {
-        size_t operator()(const Key &k) const {
-            return (std::hash<int>()(k.dev) << 1) ^ std::hash<int>()(static_cast<int>(k.dtype));
-        }
-    };
-
-    // Maintain the current state of each bucket
-    struct State {
-        std::vector<size_t> current_tensors; // Indices of tensors in the bucket
-        size_t current_bytes = 0;            // Total bytes used by the bucket
-        size_t limit_idx = 0;                // The index of bucket_size_limits used by the bucket
-    };
-
-    std::unordered_map<Key, State, KeyHash> states;
-    std::vector<Key> key_order;
-
-    std::vector<std::vector<size_t>> buckets_all;
-    buckets_all.reserve(tensors.size());
-
-    auto FlushCurrentBucket = [&](State &s) {
-        if (!s.current_tensors.empty()) {
-            buckets_all.push_back(std::move(s.current_tensors));
-            s.current_tensors.clear();
-            s.current_bytes = 0;
-            // Iterate along bucket_size_limits till the last one everytime a bucket is completed
-            if (s.limit_idx + 1 < bucket_size_limits.size()) {
-                ++s.limit_idx;
-            }
-        }
-    };
-
-    for (size_t idx_in_order : order) {
-        CHECK_LT(idx_in_order, tensors.size());
-        const auto &tensor = tensors[idx_in_order];
-        CHECK(tensor);
-
-        const Key k = Key{tensors[idx_in_order]->GetDevice().index(), tensors[idx_in_order]->Dtype()};
-        auto it = states.find(k);
-        if (it == states.end()) {
-            it = states.emplace(k, State{}).first;
-            key_order.push_back(k);
-        }
-        auto &state = it->second;
-
-        const size_t element_size_in_bytes = kDataTypeToSize.at(tensor->Dtype());
-        const size_t bytes = tensor->NumElements() * element_size_in_bytes;
-        const size_t cap = bucket_size_limits[state.limit_idx];
-
-        // Assign current tensor to current bucket first
-        state.current_tensors.push_back(idx_in_order);
-        state.current_bytes += bytes;
-
-        // If current bucket is out of capacity, then flush and move on to the next bucket
-        if (state.current_bytes >= cap) {
-            FlushCurrentBucket(state);
-        }
+  // Group tensors by device/dtype, make sure that device and dtype is the same
+  // in a single bucket
+  struct Key {
+    int dev;
+    DataType dtype;
+    bool operator==(const Key &o) const {
+      return dev == o.dev && dtype == o.dtype;
     }
+  };
+  struct KeyHash {
+    size_t operator()(const Key &k) const {
+      return (std::hash<int>()(k.dev) << 1) ^
+             std::hash<int>()(static_cast<int>(k.dtype));
+    }
+  };
 
-    // Flush the last bucket of each group manually
-    for (auto &key : key_order) { FlushCurrentBucket(states[key]); }
+  // Maintain the current state of each bucket
+  struct State {
+    std::vector<size_t> current_tensors;  // Indices of tensors in the bucket
+    size_t current_bytes = 0;             // Total bytes used by the bucket
+    size_t limit_idx = 0;  // The index of bucket_size_limits used by the bucket
+  };
 
-    return buckets_all;
+  std::unordered_map<Key, State, KeyHash> states;
+  std::vector<Key> key_order;
+
+  std::vector<std::vector<size_t>> buckets_all;
+  buckets_all.reserve(tensors.size());
+
+  auto FlushCurrentBucket = [&](State &s) {
+    if (!s.current_tensors.empty()) {
+      buckets_all.push_back(std::move(s.current_tensors));
+      s.current_tensors.clear();
+      s.current_bytes = 0;
+      // Iterate along bucket_size_limits till the last one everytime a bucket
+      // is completed
+      if (s.limit_idx + 1 < bucket_size_limits.size()) {
+        ++s.limit_idx;
+      }
+    }
+  };
+
+  for (size_t idx_in_order : order) {
+    CHECK_LT(idx_in_order, tensors.size());
+    const auto &tensor = tensors[idx_in_order];
+    CHECK(tensor);
+
+    const Key k = Key{tensors[idx_in_order]->GetDevice().index(),
+                      tensors[idx_in_order]->Dtype()};
+    auto it = states.find(k);
+    if (it == states.end()) {
+      it = states.emplace(k, State{}).first;
+      key_order.push_back(k);
+    }
+    auto &state = it->second;
+
+    const size_t element_size_in_bytes = kDataTypeToSize.at(tensor->Dtype());
+    const size_t bytes = tensor->NumElements() * element_size_in_bytes;
+    const size_t cap = bucket_size_limits[state.limit_idx];
+
+    // Assign current tensor to current bucket first
+    state.current_tensors.push_back(idx_in_order);
+    state.current_bytes += bytes;
+
+    // If current bucket is out of capacity, then flush and move on to the next
+    // bucket
+    if (state.current_bytes >= cap) {
+      FlushCurrentBucket(state);
+    }
+  }
+
+  // Flush the last bucket of each group manually
+  for (auto &key : key_order) {
+    FlushCurrentBucket(states[key]);
+  }
+
+  return buckets_all;
 }
 
-Reducer::Reducer(std::vector<std::shared_ptr<Tensor>> parameters, std::vector<std::vector<size_t>> bucket_indices,
-                 const DistributedDataParallelConfig ddp_config, const ProcessGroup *process_group,
+Reducer::Reducer(std::vector<std::shared_ptr<Tensor>> parameters,
+                 std::vector<std::vector<size_t>> bucket_indices,
+                 const DistributedDataParallelConfig ddp_config,
+                 const ProcessGroup *process_group,
                  float gradient_scaling_factor)
-    : params_(std::move(parameters)), ddp_config_(ddp_config), process_group_(process_group),
+    : params_(std::move(parameters)),
+      ddp_config_(ddp_config),
+      process_group_(process_group),
       gradient_scaling_factor_(gradient_scaling_factor) {
-    CHECK(process_group_) << "Reducer requires a non-trivial parameter synchronization process group.";
-    BuildBuckets(bucket_indices);
-    ready_seen_this_iter_.assign(params_.size(), 0);
+  CHECK(process_group_) << "Reducer requires a non-trivial parameter "
+                           "synchronization process group.";
+  BuildBuckets(bucket_indices);
+  ready_seen_this_iter_.assign(params_.size(), 0);
 }
 
-void Reducer::InitializeBuckets(const std::vector<std::vector<size_t>> &bucket_indices) {
-    buckets_.clear();
-    locators_.clear();
-    next_bucket_ = 0;
-    BuildBuckets(bucket_indices);
+void Reducer::InitializeBuckets(
+    const std::vector<std::vector<size_t>> &bucket_indices) {
+  buckets_.clear();
+  locators_.clear();
+  next_bucket_ = 0;
+  BuildBuckets(bucket_indices);
 }
 
 void Reducer::InitializeBucketViews(Bucket &bucket) {
-    bucket.bucket_views_in.clear();
-    bucket.bucket_views_out.clear();
-    bucket.bucket_views_in.reserve(bucket.variables.size());
-    bucket.bucket_views_out.reserve(bucket.variables.size());
+  bucket.bucket_views_in.clear();
+  bucket.bucket_views_out.clear();
+  bucket.bucket_views_in.reserve(bucket.variables.size());
+  bucket.bucket_views_out.reserve(bucket.variables.size());
 
-    for (size_t i = 0; i < bucket.variables.size(); ++i) {
-        const auto &v = bucket.variables[i];
-        const size_t offset_elems = bucket.offsets[i];
-        auto view_in = MakeGradView(bucket.contents, offset_elems, v->Dims());
-        bucket.bucket_views_in.push_back(view_in);
-    }
-    // Set (out == in) by default when all grads are dense
-    bucket.bucket_views_out = bucket.bucket_views_in;
+  for (size_t i = 0; i < bucket.variables.size(); ++i) {
+    const auto &v = bucket.variables[i];
+    const size_t offset_elems = bucket.offsets[i];
+    auto view_in = MakeGradView(bucket.contents, offset_elems, v->Dims());
+    bucket.bucket_views_in.push_back(view_in);
+  }
+  // Set (out == in) by default when all grads are dense
+  bucket.bucket_views_out = bucket.bucket_views_in;
 }
 
-void Reducer::BuildBuckets(const std::vector<std::vector<size_t>> &bucket_indices) {
-    locators_.resize(params_.size());
-    buckets_.clear();
-    buckets_.reserve(bucket_indices.size());
+void Reducer::BuildBuckets(
+    const std::vector<std::vector<size_t>> &bucket_indices) {
+  locators_.resize(params_.size());
+  buckets_.clear();
+  buckets_.reserve(bucket_indices.size());
 
-    for (size_t bucket_idx = 0; bucket_idx < bucket_indices.size(); ++bucket_idx) {
-        Bucket bucket;
+  for (size_t bucket_idx = 0; bucket_idx < bucket_indices.size();
+       ++bucket_idx) {
+    Bucket bucket;
 
-        CHECK(!bucket_indices[bucket_idx].empty());
-        const auto &first_param = params_[bucket_indices[bucket_idx][0]];
-        bucket.dtype = first_param->Dtype();
+    CHECK(!bucket_indices[bucket_idx].empty());
+    const auto &first_param = params_[bucket_indices[bucket_idx][0]];
+    bucket.dtype = first_param->Dtype();
 
-        size_t total_elems = 0;
+    size_t total_elems = 0;
 
-        for (auto param_idx : bucket_indices[bucket_idx]) {
-            const auto &param = params_.at(param_idx);
-            CHECK(param);
-            CHECK(param->GetDevice() == first_param->GetDevice()) << "Bucket cannot span devices";
-            CHECK(param->Dtype() == first_param->Dtype()) << "Bucket cannot span dtypes";
+    for (auto param_idx : bucket_indices[bucket_idx]) {
+      const auto &param = params_.at(param_idx);
+      CHECK(param);
+      CHECK(param->GetDevice() == first_param->GetDevice())
+          << "Bucket cannot span devices";
+      CHECK(param->Dtype() == first_param->Dtype())
+          << "Bucket cannot span dtypes";
 
-            bucket.variables.push_back(param);
-            bucket.offsets.push_back(total_elems);
-            bucket.lengths.push_back(param->NumElements());
-            total_elems += param->NumElements();
+      bucket.variables.push_back(param);
+      bucket.offsets.push_back(total_elems);
+      bucket.lengths.push_back(param->NumElements());
+      total_elems += param->NumElements();
 
-            locators_[param_idx] = {bucket_idx, bucket.variables.size() - 1};
-        }
-
-        // Assgin 1D (flat) contents
-        auto dev = bucket.variables.front()->GetDevice();
-        bucket.contents
-            = std::make_shared<Tensor>(std::vector<int64_t>{static_cast<int64_t>(total_elems)}, bucket.dtype, dev);
-        bucket.pending = bucket.variables.size();
-
-        bucket.variable_indices = bucket_indices[bucket_idx];
-        InitializeBucketViews(bucket);
-        buckets_.push_back(std::move(bucket));
+      locators_[param_idx] = {bucket_idx, bucket.variables.size() - 1};
     }
+
+    // Assgin 1D (flat) contents
+    auto dev = bucket.variables.front()->GetDevice();
+    bucket.contents = std::make_shared<Tensor>(
+        std::vector<int64_t>{static_cast<int64_t>(total_elems)}, bucket.dtype,
+        dev);
+    bucket.pending = bucket.variables.size();
+
+    bucket.variable_indices = bucket_indices[bucket_idx];
+    InitializeBucketViews(bucket);
+    buckets_.push_back(std::move(bucket));
+  }
 }
 
 void Reducer::RebuildBuckets() {
-    // NOTE(zbl): Assume mutex is on when entering this function
-    // If no order is recorded then skip the rebuild
-    if (grad_ready_order_indices_.empty()) {
-        return;
-    }
+  // NOTE(zbl): Assume mutex is on when entering this function
+  // If no order is recorded then skip the rebuild
+  if (grad_ready_order_indices_.empty()) {
+    return;
+  }
 
-    // full_order = real ready order + missing index
-    std::vector<uint8_t> seen(params_.size(), 0);
-    for (auto idx : grad_ready_order_indices_) {
-        if (idx < params_.size()) {
-            seen[idx] = 1;
-        }
+  // full_order = real ready order + missing index
+  std::vector<uint8_t> seen(params_.size(), 0);
+  for (auto idx : grad_ready_order_indices_) {
+    if (idx < params_.size()) {
+      seen[idx] = 1;
     }
-    std::vector<size_t> full_order = grad_ready_order_indices_;
-    full_order.reserve(params_.size());
-    for (size_t i = 0; i < params_.size(); ++i) {
-        if (!seen[i]) {
-            full_order.push_back(i);
-        }
+  }
+  std::vector<size_t> full_order = grad_ready_order_indices_;
+  full_order.reserve(params_.size());
+  for (size_t i = 0; i < params_.size(); ++i) {
+    if (!seen[i]) {
+      full_order.push_back(i);
     }
+  }
 
-    std::vector<std::shared_ptr<Tensor>> tensors_in_order;
-    tensors_in_order.reserve(full_order.size());
-    for (auto global_idx : full_order) {
-        CHECK_LT(global_idx, params_.size());
-        tensors_in_order.push_back(params_[global_idx]);
-    }
+  std::vector<std::shared_ptr<Tensor>> tensors_in_order;
+  tensors_in_order.reserve(full_order.size());
+  for (auto global_idx : full_order) {
+    CHECK_LT(global_idx, params_.size());
+    tensors_in_order.push_back(params_[global_idx]);
+  }
 
-    const size_t first_cap_bytes = ddp_config_.first_bucket_cap_mb * kBytesPerMB;
-    const size_t normal_cap_bytes = ddp_config_.normal_bucket_cap_mb * kBytesPerMB;
-    std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
-    auto new_bucket_indices = ComputeBucketAssignmentBySize(tensors_in_order, bucket_size_limits, full_order);
+  const size_t first_cap_bytes = ddp_config_.first_bucket_cap_mb * kBytesPerMB;
+  const size_t normal_cap_bytes =
+      ddp_config_.normal_bucket_cap_mb * kBytesPerMB;
+  std::vector<size_t> bucket_size_limits = {first_cap_bytes, normal_cap_bytes};
+  auto new_bucket_indices = ComputeBucketAssignmentBySize(
+      tensors_in_order, bucket_size_limits, full_order);
 
-    InitializeBuckets(new_bucket_indices);
+  InitializeBuckets(new_bucket_indices);
 }
 
-std::vector<std::vector<std::shared_ptr<Tensor>>> Reducer::GetBucketTensors() const {
-    std::lock_guard<std::mutex> g(mutex_);
-    std::vector<std::vector<std::shared_ptr<Tensor>>> out;
-    out.reserve(buckets_.size());
-    for (auto const &b : buckets_) { out.push_back({b.contents}); }
-    return out;
+std::vector<std::vector<std::shared_ptr<Tensor>>> Reducer::GetBucketTensors()
+    const {
+  std::lock_guard<std::mutex> g(mutex_);
+  std::vector<std::vector<std::shared_ptr<Tensor>>> out;
+  out.reserve(buckets_.size());
+  for (auto const &b : buckets_) {
+    out.push_back({b.contents});
+  }
+  return out;
 }
 
-void Reducer::RegisterCommHook(std::shared_ptr<autograd::PostAccumulateGradHook> hook) {
-    std::lock_guard<std::mutex> g(mutex_);
-    comm_hook_ = std::move(hook);
+void Reducer::RegisterCommHook(
+    std::shared_ptr<autograd::PostAccumulateGradHook> hook) {
+  std::lock_guard<std::mutex> g(mutex_);
+  comm_hook_ = std::move(hook);
 }
 
 void Reducer::PrepareForBackward() {
-    std::lock_guard<std::mutex> g(mutex_);
-    buckets_finished_.store(0, std::memory_order_relaxed);
+  std::lock_guard<std::mutex> g(mutex_);
+  buckets_finished_.store(0, std::memory_order_relaxed);
 
-    if (need_rebuild_ && !has_rebuilt_bucket_) {
-        RebuildBuckets();
-        has_rebuilt_bucket_ = true;
-        need_rebuild_ = false;
-    }
-    next_bucket_ = 0;
-    grad_ready_order_indices_.clear();
-    ready_seen_this_iter_.assign(params_.size(), 0);
+  if (need_rebuild_ && !has_rebuilt_bucket_) {
+    RebuildBuckets();
+    has_rebuilt_bucket_ = true;
+    need_rebuild_ = false;
+  }
+  next_bucket_ = 0;
+  grad_ready_order_indices_.clear();
+  ready_seen_this_iter_.assign(params_.size(), 0);
 
-    for (auto &bucket : buckets_) {
-        bucket.pending = bucket.variables.size();
-        if (ddp_config_.gradient_as_bucket_view) {
-            for (size_t i = 0; i < bucket.variables.size(); ++i) {
-                // Tie each param.grad to slice of contents
-                const auto &param = bucket.variables[i];
-                auto view = bucket.bucket_views_in[i];
-                auto grad = param->grad();
+  for (auto &bucket : buckets_) {
+    bucket.pending = bucket.variables.size();
+    if (ddp_config_.gradient_as_bucket_view) {
+      for (size_t i = 0; i < bucket.variables.size(); ++i) {
+        // Tie each param.grad to slice of contents
+        const auto &param = bucket.variables[i];
+        auto view = bucket.bucket_views_in[i];
+        auto grad = param->grad();
 
-                // NOTE(zbl): This will affect behaviors in `infini_train::autograd::AccumulateGrad::Backward()`
-                // If ZeroGrad(set_to_none=True), grad is nullptr at this point
-                // If ZeroGrad(set_to_none=False), grad is set to view of bucket.contents (or modified by user)
-                // Either way, we reset grad to view of bucket.contents
-                // Since bucket.contents might not be zeroed, we might need to overwrite it on next grad accumulation
-                if (!grad || (grad.get() != view.get())) {
-                    if (grad) {
-                        // Buckets might be rebuilt between micro-batches when grad accumulation is on.
-                        // In this case, the old grad may point to a diffrent previous bucket view, the new bucket view
-                        // should continue accumulating from the same value left in old bucket view on next backward.
-                        view->CopyFrom(grad);
-                    } else {
-                        // In this case, ZeroGrad(set_to_none=true) leaves grad null.
-                        // Bucket view may contain stale data, so we must overwrite it on next backward.
-                        param->MarkGradOverwriteOnNextAccum();
-                    }
-                    param->set_grad(view);
-                }
-            }
+        // NOTE(zbl): This will affect behaviors in
+        // `infini_train::autograd::AccumulateGrad::Backward()` If
+        // ZeroGrad(set_to_none=True), grad is nullptr at this point If
+        // ZeroGrad(set_to_none=False), grad is set to view of bucket.contents
+        // (or modified by user) Either way, we reset grad to view of
+        // bucket.contents Since bucket.contents might not be zeroed, we might
+        // need to overwrite it on next grad accumulation
+        if (!grad || (grad.get() != view.get())) {
+          if (grad) {
+            // Buckets might be rebuilt between micro-batches when grad
+            // accumulation is on. In this case, the old grad may point to a
+            // diffrent previous bucket view, the new bucket view should
+            // continue accumulating from the same value left in old bucket view
+            // on next backward.
+            view->CopyFrom(grad);
+          } else {
+            // In this case, ZeroGrad(set_to_none=true) leaves grad null.
+            // Bucket view may contain stale data, so we must overwrite it on
+            // next backward.
+            param->MarkGradOverwriteOnNextAccum();
+          }
+          param->set_grad(view);
         }
+      }
     }
+  }
 }
 
 void Reducer::SetIsLastMicrobatch(bool is_last_microbatch) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    is_last_microbatch_ = is_last_microbatch;
+  std::lock_guard<std::mutex> lock(mutex_);
+  is_last_microbatch_ = is_last_microbatch;
 }
 
 void Reducer::AttachHooksToParameters() {
-    for (size_t param_idx = 0; param_idx < params_.size(); ++param_idx) {
-        class BucketHook final : public autograd::PostAccumulateGradHook {
-        public:
-            BucketHook(std::weak_ptr<Reducer> reducer, size_t var_index)
-                : reducer_(std::move(reducer)), var_index_(var_index) {}
+  for (size_t param_idx = 0; param_idx < params_.size(); ++param_idx) {
+    class BucketHook final : public autograd::PostAccumulateGradHook {
+     public:
+      BucketHook(std::weak_ptr<Reducer> reducer, size_t var_index)
+          : reducer_(std::move(reducer)), var_index_(var_index) {}
 
-            void operator()(const std::shared_ptr<Tensor> &) override {
-                if (auto r = reducer_.lock()) {
-                    r->MarkVariableReadyDense(var_index_);
-                }
-            }
-
-        private:
-            std::weak_ptr<Reducer> reducer_;
-            size_t var_index_;
-        };
-
-        if (!params_[param_idx]->requires_grad()) {
-            continue;
+      void operator()(const std::shared_ptr<Tensor> &) override {
+        if (auto r = reducer_.lock()) {
+          r->MarkVariableReadyDense(var_index_);
         }
-        auto hook = std::make_unique<BucketHook>(weak_from_this(), param_idx);
-        params_[param_idx]->RegisterPostAccumulateGradHook(std::move(hook));
+      }
+
+     private:
+      std::weak_ptr<Reducer> reducer_;
+      size_t var_index_;
+    };
+
+    if (!params_[param_idx]->requires_grad()) {
+      continue;
     }
+    auto hook = std::make_unique<BucketHook>(weak_from_this(), param_idx);
+    params_[param_idx]->RegisterPostAccumulateGradHook(std::move(hook));
+  }
 }
 
 void Reducer::MarkVariableReadyDense(size_t variable_index) {
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (!is_last_microbatch_) {
-        return;
-    }
+  std::unique_lock<std::mutex> lock(mutex_);
+  if (!is_last_microbatch_) {
+    return;
+  }
 
-    const auto loc = locators_.at(variable_index);
-    auto &bucket = buckets_.at(loc.bucket_index);
+  const auto loc = locators_.at(variable_index);
+  auto &bucket = buckets_.at(loc.bucket_index);
 
-    // Record real order of bucket being ready
-    if (!has_rebuilt_bucket_ && !ready_seen_this_iter_[variable_index]) {
-        grad_ready_order_indices_.push_back(variable_index);
-        ready_seen_this_iter_[variable_index] = 1;
-    }
+  // Record real order of bucket being ready
+  if (!has_rebuilt_bucket_ && !ready_seen_this_iter_[variable_index]) {
+    grad_ready_order_indices_.push_back(variable_index);
+    ready_seen_this_iter_[variable_index] = 1;
+  }
 
-    if (!ddp_config_.gradient_as_bucket_view) {
-        auto grad = bucket.variables[loc.intra_bucket_index]->grad();
-        CHECK(grad && grad->Dtype() == bucket.dtype && grad->GetDevice() == bucket.contents->GetDevice());
-        CopyGradToBucket(grad, bucket.contents, bucket.offsets[loc.intra_bucket_index]);
-    }
+  if (!ddp_config_.gradient_as_bucket_view) {
+    auto grad = bucket.variables[loc.intra_bucket_index]->grad();
+    CHECK(grad && grad->Dtype() == bucket.dtype &&
+          grad->GetDevice() == bucket.contents->GetDevice());
+    CopyGradToBucket(grad, bucket.contents,
+                     bucket.offsets[loc.intra_bucket_index]);
+  }
 
-    CHECK(bucket.pending > 0);
-    bucket.pending -= 1;
+  CHECK(bucket.pending > 0);
+  bucket.pending -= 1;
 
-    bool should_launch_next = (bucket.pending == 0);
+  bool should_launch_next = (bucket.pending == 0);
 
-    if (should_launch_next) {
-        MarkBucketReady(loc.bucket_index);
-    }
+  if (should_launch_next) {
+    MarkBucketReady(loc.bucket_index);
+  }
 
-    // Release mutex
-    lock.unlock();
+  // Release mutex
+  lock.unlock();
 
-    if (all_buckets_ready_this_iter_) {
-        FinalizeBackward();
-    }
+  if (all_buckets_ready_this_iter_) {
+    FinalizeBackward();
+  }
 }
 
 void Reducer::MarkBucketReady(size_t bucket_index) {
-    // NOTE(zbl): Assume mutex is on when entering this function
-    if (bucket_index > next_bucket_) {
-        // Only when bucket_index == next_bucket_ will we launch all-reduce
-        // bucket_index > next_bucket_ means that there are still buckets before that are not ready
-        return;
-    }
-    // From next_bucket_, launch ready buckets(pending==0) in turn
-    while (next_bucket_ < buckets_.size() && buckets_[next_bucket_].pending == 0) {
-        FinalizeBucketDense(next_bucket_);
-        ++next_bucket_;
-    }
+  // NOTE(zbl): Assume mutex is on when entering this function
+  if (bucket_index > next_bucket_) {
+    // Only when bucket_index == next_bucket_ will we launch all-reduce
+    // bucket_index > next_bucket_ means that there are still buckets before
+    // that are not ready
+    return;
+  }
+  // From next_bucket_, launch ready buckets(pending==0) in turn
+  while (next_bucket_ < buckets_.size() &&
+         buckets_[next_bucket_].pending == 0) {
+    FinalizeBucketDense(next_bucket_);
+    ++next_bucket_;
+  }
 
-    // If all buckets are ready
-    if (next_bucket_ == buckets_.size()) {
-        // Mark that it's time to finalize backward
-        all_buckets_ready_this_iter_ = true;
+  // If all buckets are ready
+  if (next_bucket_ == buckets_.size()) {
+    // Mark that it's time to finalize backward
+    all_buckets_ready_this_iter_ = true;
 
-        // Try to rebuild them in real order in the first round
-        if (!has_rebuilt_bucket_ && !grad_ready_order_indices_.empty()) {
-            need_rebuild_ = true;
-        }
+    // Try to rebuild them in real order in the first round
+    if (!has_rebuilt_bucket_ && !grad_ready_order_indices_.empty()) {
+      need_rebuild_ = true;
     }
+  }
 }
 
 void Reducer::FinalizeBucketDense(size_t bucket_index) {
-    // NOTE(zbl): Assume mutex is on when entering this function
-    auto &bucket = buckets_.at(bucket_index);
-    if (gradient_scaling_factor_ != 1.f) {
-        auto kernel = Dispatcher::Instance().GetKernel({bucket.contents->GetDevice().type(), "AccumulateGrad"});
-        kernel.Call<void>(bucket.contents, gradient_scaling_factor_ - 1.f, bucket.contents);
-    }
-    if (comm_hook_) {
-        std::vector<std::shared_ptr<Tensor>> bucket_view{bucket.contents};
-        // NOTE(zbl): Custom hook should do in-place operations
-        //            e.g. comm_hook_(GradBucket{bucket_view})[0];
-        // FIXME(zbl): support custom hook later
-        LOG(FATAL) << "Custom hook is not supported now";
-    } else {
-        const auto reduce_op = ddp_config_.average_in_collective ? comm::ReduceOpType::kAvg : comm::ReduceOpType::kSum;
-        bucket.work = process_group_->AllReduce(bucket.contents, reduce_op, true);
-    }
+  // NOTE(zbl): Assume mutex is on when entering this function
+  auto &bucket = buckets_.at(bucket_index);
+  if (gradient_scaling_factor_ != 1.f) {
+    auto kernel = Dispatcher::Instance().GetKernel(
+        {bucket.contents->GetDevice().type(), "AccumulateGrad"});
+    kernel.Call<void>(bucket.contents, gradient_scaling_factor_ - 1.f,
+                      bucket.contents);
+  }
+  if (comm_hook_) {
+    std::vector<std::shared_ptr<Tensor>> bucket_view{bucket.contents};
+    // NOTE(zbl): Custom hook should do in-place operations
+    //            e.g. comm_hook_(GradBucket{bucket_view})[0];
+    // FIXME(zbl): support custom hook later
+    LOG(FATAL) << "Custom hook is not supported now";
+  } else {
+    const auto reduce_op = ddp_config_.average_in_collective
+                               ? comm::ReduceOpType::kAvg
+                               : comm::ReduceOpType::kSum;
+    bucket.work = process_group_->AllReduce(bucket.contents, reduce_op, true);
+  }
 }
 
 void Reducer::FinalizeBackward() {
-    // NOTE(zbl): Assume mutex is off when entering this function
-    // Collect all works with mutex on
-    std::vector<std::shared_ptr<Work>> works;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        for (auto &bucket : buckets_) {
-            if (bucket.work) {
-                works.push_back(bucket.work);
-            }
-        }
+  // NOTE(zbl): Assume mutex is off when entering this function
+  // Collect all works with mutex on
+  std::vector<std::shared_ptr<Work>> works;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto &bucket : buckets_) {
+      if (bucket.work) {
+        works.push_back(bucket.work);
+      }
     }
+  }
 
-    // Wait for works to be done with mutex off
-    // Note(zbl): Use non-blocking stream wait instead of sync on host
-    for (auto &work : works) { work->WaitNonBlocking(); }
+  // Wait for works to be done with mutex off
+  // Note(zbl): Use non-blocking stream wait instead of sync on host
+  for (auto &work : works) {
+    work->WaitNonBlocking();
+  }
 
-    // Write grad back and reset with mutex on
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        for (auto &bucket : buckets_) {
-            if (!bucket.work) {
-                continue;
-            }
-            if (!ddp_config_.gradient_as_bucket_view) {
-                for (size_t i = 0; i < bucket.variables.size(); ++i) {
-                    // NOTE(zbl): For better performance, try to directly assgin bucket slice to grad instead of copying
-                    //            i.e. bucket.variables[i]->set_grad(bucket.bucket_views_in[i]);
-                    CopyBucketToGrad(bucket.contents, bucket.variables[i]->grad(), bucket.offsets[i]);
-                }
-            }
-            bucket.work.reset();
+  // Write grad back and reset with mutex on
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto &bucket : buckets_) {
+      if (!bucket.work) {
+        continue;
+      }
+      if (!ddp_config_.gradient_as_bucket_view) {
+        for (size_t i = 0; i < bucket.variables.size(); ++i) {
+          // NOTE(zbl): For better performance, try to directly assgin bucket
+          // slice to grad instead of copying
+          //            i.e.
+          //            bucket.variables[i]->set_grad(bucket.bucket_views_in[i]);
+          CopyBucketToGrad(bucket.contents, bucket.variables[i]->grad(),
+                           bucket.offsets[i]);
         }
-        all_buckets_ready_this_iter_ = false;
+      }
+      bucket.work.reset();
     }
+    all_buckets_ready_this_iter_ = false;
+  }
 }
-} // namespace infini_train::nn::parallel
+}  // namespace infini_train::nn::parallel

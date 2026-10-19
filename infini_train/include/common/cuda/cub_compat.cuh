@@ -14,4 +14,4 @@ using CubMaxOp = cub::Max;
 using CubMinOp = cub::Min;
 #endif
 
-} // namespace infini_train::kernels::cuda
+}  // namespace infini_train::kernels::cuda

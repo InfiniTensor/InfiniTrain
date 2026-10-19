@@ -7,40 +7,43 @@
 namespace nn = infini_train::nn;
 namespace llama3 {
 inline nn::TransformerConfig LLaMA3Config() {
-    return {.block_size = 8192,
-            .vocab_size = 128256,
-            .original_vocab_size = 128256,
-            .n_layer = 16,
-            .n_head = 32,
-            .n_kv_head = 8,
-            .n_embd = 2048,
-            .position_embedding_type = nn::PositionEmbeddingType::kRoPE,
-            .activation_type = nn::MLPType::kSwiGLU,
-            .norm_type = nn::NormType::kRMSNorm,
-            .add_bias_linear = false,
-            .add_bias_lm_head = false,
-            .tie_weights = false,
-            .ffn_hidden_size = 8192,
-            .rotary_interleaved = true};
+  return {.block_size = 8192,
+          .vocab_size = 128256,
+          .original_vocab_size = 128256,
+          .n_layer = 16,
+          .n_head = 32,
+          .n_kv_head = 8,
+          .n_embd = 2048,
+          .position_embedding_type = nn::PositionEmbeddingType::kRoPE,
+          .activation_type = nn::MLPType::kSwiGLU,
+          .norm_type = nn::NormType::kRMSNorm,
+          .add_bias_linear = false,
+          .add_bias_lm_head = false,
+          .tie_weights = false,
+          .ffn_hidden_size = 8192,
+          .rotary_interleaved = true};
 }
 
 inline void SanitizeLLaMA3Config(const nn::TransformerConfig &c) {
-    CHECK_GT(c.block_size, 0);
-    CHECK_GT(c.vocab_size, 0);
-    CHECK_GE(c.vocab_size, c.original_vocab_size);
-    CHECK_GT(c.n_layer, 0);
-    CHECK_GT(c.n_head, 0);
-    CHECK_GT(c.n_kv_head, 0);
-    CHECK_LE(c.n_kv_head, c.n_head);
-    CHECK_EQ(c.n_head % c.n_kv_head, 0) << "n_head must be divisible by n_kv_head for GQA";
-    CHECK_GT(c.n_embd, 0);
-    CHECK_EQ(c.n_embd % c.n_head, 0) << "n_embd must be divisible by n_head";
-    CHECK(c.position_embedding_type == nn::PositionEmbeddingType::kRoPE) << "LLaMA-3 requires RoPE position embedding";
-    CHECK(c.activation_type == nn::MLPType::kSwiGLU) << "LLaMA-3 requires SwiGLU activation";
-    CHECK(c.norm_type == nn::NormType::kRMSNorm) << "LLaMA-3 requires RMSNorm";
-    CHECK(!c.add_bias_linear) << "LLaMA-3 has no bias in linear layers";
-    CHECK(!c.tie_weights) << "LLaMA-3 does not tie embedding and lm_head weights";
-    CHECK(c.ffn_hidden_size.has_value()) << "LLaMA-3 requires ffn_hidden_size";
-    CHECK_GT(c.ffn_hidden_size.value(), 0);
+  CHECK_GT(c.block_size, 0);
+  CHECK_GT(c.vocab_size, 0);
+  CHECK_GE(c.vocab_size, c.original_vocab_size);
+  CHECK_GT(c.n_layer, 0);
+  CHECK_GT(c.n_head, 0);
+  CHECK_GT(c.n_kv_head, 0);
+  CHECK_LE(c.n_kv_head, c.n_head);
+  CHECK_EQ(c.n_head % c.n_kv_head, 0)
+      << "n_head must be divisible by n_kv_head for GQA";
+  CHECK_GT(c.n_embd, 0);
+  CHECK_EQ(c.n_embd % c.n_head, 0) << "n_embd must be divisible by n_head";
+  CHECK(c.position_embedding_type == nn::PositionEmbeddingType::kRoPE)
+      << "LLaMA-3 requires RoPE position embedding";
+  CHECK(c.activation_type == nn::MLPType::kSwiGLU)
+      << "LLaMA-3 requires SwiGLU activation";
+  CHECK(c.norm_type == nn::NormType::kRMSNorm) << "LLaMA-3 requires RMSNorm";
+  CHECK(!c.add_bias_linear) << "LLaMA-3 has no bias in linear layers";
+  CHECK(!c.tie_weights) << "LLaMA-3 does not tie embedding and lm_head weights";
+  CHECK(c.ffn_hidden_size.has_value()) << "LLaMA-3 requires ffn_hidden_size";
+  CHECK_GT(c.ffn_hidden_size.value(), 0);
 }
-} // namespace llama3
+}  // namespace llama3

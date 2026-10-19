@@ -23,13 +23,14 @@ class Tensor;
 
 namespace {
 inline std::string_view GetBaseOpName(std::string_view op) {
-    constexpr std::string_view function_suffix = "Function";
-    if (op.size() >= function_suffix.size() && op.substr(op.size() - function_suffix.size()) == function_suffix) {
-        return op.substr(0, op.size() - function_suffix.size());
-    }
-    return op;
+  constexpr std::string_view function_suffix = "Function";
+  if (op.size() >= function_suffix.size() &&
+      op.substr(op.size() - function_suffix.size()) == function_suffix) {
+    return op.substr(0, op.size() - function_suffix.size());
+  }
+  return op;
 }
-}; // namespace
+};  // namespace
 
 /**
  * @brief Defines the cast policies for autocast operations.
@@ -38,155 +39,173 @@ inline std::string_view GetBaseOpName(std::string_view op) {
  * types are promoted or demoted during mixed-precision computation.
  */
 enum class CastPolicy : uint8_t {
-    kLowerPrecision = 0, // Cast all inputs to lower precision (e.g., float16 or bfloat16) before running the op.
-    kFP32,               // Cast all inputs to float32 before running the op.
-    kPromoteWidest,      // Promote all inputs to the widest type among them before running the op.
-    kCount,              // Number of cast policies. **New policies should be added before this**.
+  kLowerPrecision = 0,  // Cast all inputs to lower precision (e.g., float16 or
+                        // bfloat16) before running the op.
+  kFP32,                // Cast all inputs to float32 before running the op.
+  kPromoteWidest,  // Promote all inputs to the widest type among them before
+                   // running the op.
+  kCount,  // Number of cast policies. **New policies should be added before
+           // this**.
 };
 
-// Cast-policy maps and their associated operations. The op names should match the ones defined in the op registry.
+// Cast-policy maps and their associated operations. The op names should match
+// the ones defined in the op registry.
 inline constexpr std::array kLowerPrecisionOps = {"Matmul", "Linear"};
-inline constexpr std::array kFP32Ops
-    = {"Sin",      "Cos",        "Tan",   "Asin",  "Acos",  "Atan",         "Sinh",
-       "Cosh",     "Tanh",       "Asinh", "Acosh", "Atanh", "Exp",          "Log",
-       "Sqrt",     "Reciprocal", "Rsqrt", "Prod",  "Pow",   "CrossEntropy", "VocabParallelCrossEntropy",
-       "Layernorm"};
+inline constexpr std::array kFP32Ops = {
+    "Sin",        "Cos",          "Tan",
+    "Asin",       "Acos",         "Atan",
+    "Sinh",       "Cosh",         "Tanh",
+    "Asinh",      "Acosh",        "Atanh",
+    "Exp",        "Log",          "Sqrt",
+    "Reciprocal", "Rsqrt",        "Prod",
+    "Pow",        "CrossEntropy", "VocabParallelCrossEntropy",
+    "Layernorm"};
 
-// Mapping from operation names to their cast policies. This is the primary construct that is used in autocasting. The
-// op names should match the ones defined in the op registry.
-inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap = {
-    {"Matmul", CastPolicy::kLowerPrecision},
-    {"Linear", CastPolicy::kLowerPrecision},
-    {"Sin", CastPolicy::kFP32},
-    {"Cos", CastPolicy::kFP32},
-    {"Tan", CastPolicy::kFP32},
-    {"Asin", CastPolicy::kFP32},
-    {"Acos", CastPolicy::kFP32},
-    {"Atan", CastPolicy::kFP32},
-    {"Sinh", CastPolicy::kFP32},
-    {"Cosh", CastPolicy::kFP32},
-    {"Tanh", CastPolicy::kFP32},
-    {"Asinh", CastPolicy::kFP32},
-    {"Acosh", CastPolicy::kFP32},
-    {"Atanh", CastPolicy::kFP32},
-    {"Tanh", CastPolicy::kFP32},
-    {"Exp", CastPolicy::kFP32},
-    {"Log", CastPolicy::kFP32},
-    {"Sqrt", CastPolicy::kFP32},
-    {"Reciprocal", CastPolicy::kFP32},
-    {"Rsqrt", CastPolicy::kFP32},
-    {"Prod", CastPolicy::kFP32},
-    {"Pow", CastPolicy::kFP32},
-    {"CrossEntropy", CastPolicy::kFP32},
-    {"VocabParallelCrossEntropy", CastPolicy::kFP32},
-    {"Layernorm", CastPolicy::kFP32},
+// Mapping from operation names to their cast policies. This is the primary
+// construct that is used in autocasting. The op names should match the ones
+// defined in the op registry.
+inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
+    {
+        {"Matmul", CastPolicy::kLowerPrecision},
+        {"Linear", CastPolicy::kLowerPrecision},
+        {"Sin", CastPolicy::kFP32},
+        {"Cos", CastPolicy::kFP32},
+        {"Tan", CastPolicy::kFP32},
+        {"Asin", CastPolicy::kFP32},
+        {"Acos", CastPolicy::kFP32},
+        {"Atan", CastPolicy::kFP32},
+        {"Sinh", CastPolicy::kFP32},
+        {"Cosh", CastPolicy::kFP32},
+        {"Tanh", CastPolicy::kFP32},
+        {"Asinh", CastPolicy::kFP32},
+        {"Acosh", CastPolicy::kFP32},
+        {"Atanh", CastPolicy::kFP32},
+        {"Tanh", CastPolicy::kFP32},
+        {"Exp", CastPolicy::kFP32},
+        {"Log", CastPolicy::kFP32},
+        {"Sqrt", CastPolicy::kFP32},
+        {"Reciprocal", CastPolicy::kFP32},
+        {"Rsqrt", CastPolicy::kFP32},
+        {"Prod", CastPolicy::kFP32},
+        {"Pow", CastPolicy::kFP32},
+        {"CrossEntropy", CastPolicy::kFP32},
+        {"VocabParallelCrossEntropy", CastPolicy::kFP32},
+        {"Layernorm", CastPolicy::kFP32},
 };
 
 inline DataType GetDefaultAutocastDtype(Device::DeviceType device_type) {
-    if (device_type == Device::DeviceType::kPrivateUse1) {
-        return core::GetPrivateUse1BackendDefaultAutocastDtype();
-    }
+  if (device_type == Device::DeviceType::kPrivateUse1) {
+    return core::GetPrivateUse1BackendDefaultAutocastDtype();
+  }
 
-    static constexpr std::array kDeviceDefaultDtype = {
-        DataType::kBFLOAT16, // CPU
-        DataType::kFLOAT16,  // CUDA
-    };
-    const auto index = static_cast<size_t>(device_type);
-    CHECK_LT(index, kDeviceDefaultDtype.size()) << "Invalid device type for autocast";
-    return kDeviceDefaultDtype[index];
+  static constexpr std::array kDeviceDefaultDtype = {
+      DataType::kBFLOAT16,  // CPU
+      DataType::kFLOAT16,   // CUDA
+  };
+  const auto index = static_cast<size_t>(device_type);
+  CHECK_LT(index, kDeviceDefaultDtype.size())
+      << "Invalid device type for autocast";
+  return kDeviceDefaultDtype[index];
 }
 
 // Thread-local context to track autocast state
 struct AutocastContext {
-    bool enabled = false;                                      // Whether autocast is active in the current thread
-    Device::DeviceType device_type = Device::DeviceType::kCPU; // Target device type (CPU/GPU)
-    DataType autocast_dtype = DataType::kBFLOAT16;             // The data type used for autocasting
+  bool enabled = false;  // Whether autocast is active in the current thread
+  Device::DeviceType device_type =
+      Device::DeviceType::kCPU;  // Target device type (CPU/GPU)
+  DataType autocast_dtype =
+      DataType::kBFLOAT16;  // The data type used for autocasting
 
-    // Cast a parameter pack of tensors (or shared_ptr<Tensor>) according to the cast policy
-    // associated with `op_name`. Called from autograd::Function::Apply with type_ as op_name.
-    template <typename... ArgsT> void Autocast(std::string_view op_name, ArgsT &...args) {
-        if (!enabled) {
-            return;
-        }
-
-        auto map_it = kOpCastPolicyMap.find(GetBaseOpName(op_name));
-        if (map_it == kOpCastPolicyMap.end()) {
-            return;
-        }
-
-        CastPolicy policy = map_it->second;
-
-        auto is_floating_point = [](DataType dtype) -> bool {
-            return dtype == DataType::kFLOAT32 || dtype == DataType::kFLOAT16 || dtype == DataType::kBFLOAT16;
-        };
-
-        auto get_target_dtype = [&]() {
-            switch (policy) {
-            case CastPolicy::kLowerPrecision:
-                return autocast_dtype;
-            case CastPolicy::kFP32:
-                return DataType::kFLOAT32;
-            case CastPolicy::kPromoteWidest:
-                LOG_LOC(FATAL, "kPromoteWidest not yet implemented");
-            default:
-                LOG_LOC(FATAL, "Invalid cast policy");
-            }
-        };
-
-        auto cast_arg = [&](auto &arg) {
-            using T = std::decay_t<decltype(arg)>;
-            if constexpr (std::is_same_v<T, std::shared_ptr<Tensor>>) {
-                if (arg) {
-                    DataType current_dtype = arg->Dtype();
-                    if (is_floating_point(current_dtype)) {
-                        DataType target_dtype = get_target_dtype();
-                        if (current_dtype != target_dtype) {
-                            arg = std::make_shared<Tensor>(arg->To(target_dtype));
-                        }
-                    }
-                }
-            } else if constexpr (std::is_same_v<T, Tensor>) {
-                DataType current_dtype = arg.Dtype();
-                if (is_floating_point(current_dtype)) {
-                    DataType target_dtype = get_target_dtype();
-                    if (current_dtype != target_dtype) {
-                        arg = arg.To(target_dtype);
-                    }
-                }
-            }
-        };
-
-        (cast_arg(args), ...);
+  // Cast a parameter pack of tensors (or shared_ptr<Tensor>) according to the
+  // cast policy associated with `op_name`. Called from
+  // autograd::Function::Apply with type_ as op_name.
+  template <typename... ArgsT>
+  void Autocast(std::string_view op_name, ArgsT &...args) {
+    if (!enabled) {
+      return;
     }
+
+    auto map_it = kOpCastPolicyMap.find(GetBaseOpName(op_name));
+    if (map_it == kOpCastPolicyMap.end()) {
+      return;
+    }
+
+    CastPolicy policy = map_it->second;
+
+    auto is_floating_point = [](DataType dtype) -> bool {
+      return dtype == DataType::kFLOAT32 || dtype == DataType::kFLOAT16 ||
+             dtype == DataType::kBFLOAT16;
+    };
+
+    auto get_target_dtype = [&]() {
+      switch (policy) {
+        case CastPolicy::kLowerPrecision:
+          return autocast_dtype;
+        case CastPolicy::kFP32:
+          return DataType::kFLOAT32;
+        case CastPolicy::kPromoteWidest:
+          LOG_LOC(FATAL, "kPromoteWidest not yet implemented");
+        default:
+          LOG_LOC(FATAL, "Invalid cast policy");
+      }
+    };
+
+    auto cast_arg = [&](auto &arg) {
+      using T = std::decay_t<decltype(arg)>;
+      if constexpr (std::is_same_v<T, std::shared_ptr<Tensor>>) {
+        if (arg) {
+          DataType current_dtype = arg->Dtype();
+          if (is_floating_point(current_dtype)) {
+            DataType target_dtype = get_target_dtype();
+            if (current_dtype != target_dtype) {
+              arg = std::make_shared<Tensor>(arg->To(target_dtype));
+            }
+          }
+        }
+      } else if constexpr (std::is_same_v<T, Tensor>) {
+        DataType current_dtype = arg.Dtype();
+        if (is_floating_point(current_dtype)) {
+          DataType target_dtype = get_target_dtype();
+          if (current_dtype != target_dtype) {
+            arg = arg.To(target_dtype);
+          }
+        }
+      }
+    };
+
+    (cast_arg(args), ...);
+  }
 };
 
 // Global thread-local storage for autocast context
 inline thread_local AutocastContext tls_autocast_context;
 
-inline AutocastContext GetCurrentAutocastContext() { return tls_autocast_context; }
+inline AutocastContext GetCurrentAutocastContext() {
+  return tls_autocast_context;
+}
 
 // RAII guard to enable/disable autocast in a scope
 class AutocastGuard {
-public:
-    explicit AutocastGuard(const AutocastContext &context);
+ public:
+  explicit AutocastGuard(const AutocastContext &context);
 
-    AutocastGuard(Device::DeviceType device_type, DataType autocast_dtype);
+  AutocastGuard(Device::DeviceType device_type, DataType autocast_dtype);
 
-    explicit AutocastGuard(Device::DeviceType device_type)
-        : AutocastGuard(device_type, GetDefaultAutocastDtype(device_type)) {}
+  explicit AutocastGuard(Device::DeviceType device_type)
+      : AutocastGuard(device_type, GetDefaultAutocastDtype(device_type)) {}
 
-    // Disable autocast (restore previous state)
-    ~AutocastGuard();
+  // Disable autocast (restore previous state)
+  ~AutocastGuard();
 
-    AutocastGuard(const AutocastGuard &) = delete;
-    AutocastGuard &operator=(const AutocastGuard &) = delete;
+  AutocastGuard(const AutocastGuard &) = delete;
+  AutocastGuard &operator=(const AutocastGuard &) = delete;
 
-    void Enable() const;
-    void Disable() const;
-    bool IsEnabled() const;
+  void Enable() const;
+  void Disable() const;
+  bool IsEnabled() const;
 
-private:
-    AutocastContext saved_context_;
+ private:
+  AutocastContext saved_context_;
 };
 
-} // namespace infini_train
+}  // namespace infini_train

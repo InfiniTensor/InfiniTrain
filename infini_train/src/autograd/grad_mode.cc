@@ -10,19 +10,28 @@ void GradMode::SetEnabled(bool enabled) { grad_enabled_ = enabled; }
 
 bool GradMode::PropagateRequiresGrad() { return propagate_requires_grad_; }
 
-void GradMode::SetPropagateRequiresGrad(bool enabled) { propagate_requires_grad_ = enabled; }
+void GradMode::SetPropagateRequiresGrad(bool enabled) {
+  propagate_requires_grad_ = enabled;
+}
 
-NoGradGuard::NoGradGuard() : prev_(GradMode::IsEnabled()) { GradMode::SetEnabled(false); }
+NoGradGuard::NoGradGuard() : prev_(GradMode::IsEnabled()) {
+  GradMode::SetEnabled(false);
+}
 
 NoGradGuard::~NoGradGuard() { GradMode::SetEnabled(prev_); }
 
-EnableGradGuard::EnableGradGuard() : prev_(GradMode::IsEnabled()) { GradMode::SetEnabled(true); }
+EnableGradGuard::EnableGradGuard() : prev_(GradMode::IsEnabled()) {
+  GradMode::SetEnabled(true);
+}
 
 EnableGradGuard::~EnableGradGuard() { GradMode::SetEnabled(prev_); }
 
-PropagateRequiresGradGuard::PropagateRequiresGradGuard(bool enabled) : prev_(GradMode::PropagateRequiresGrad()) {
-    GradMode::SetPropagateRequiresGrad(enabled);
+PropagateRequiresGradGuard::PropagateRequiresGradGuard(bool enabled)
+    : prev_(GradMode::PropagateRequiresGrad()) {
+  GradMode::SetPropagateRequiresGrad(enabled);
 }
 
-PropagateRequiresGradGuard::~PropagateRequiresGradGuard() { GradMode::SetPropagateRequiresGrad(prev_); }
-} // namespace infini_train::autograd
+PropagateRequiresGradGuard::~PropagateRequiresGradGuard() {
+  GradMode::SetPropagateRequiresGrad(prev_);
+}
+}  // namespace infini_train::autograd

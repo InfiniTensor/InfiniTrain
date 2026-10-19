@@ -3,13 +3,14 @@
 #include <memory>
 #include <string>
 
-#include "infini_train/include/nn/modules/transformer/transformer_config.h" // IWYU pragma: keep
+#include "infini_train/include/nn/modules/transformer/transformer_config.h"  // IWYU pragma: keep
 
 namespace infini_train::nn {
 class TransformerModel;
-} // namespace infini_train::nn
+}  // namespace infini_train::nn
 
 namespace qwen3 {
-std::shared_ptr<infini_train::nn::TransformerModel>
-LoadFromLLMC(const std::string &filepath, const infini_train::nn::ActivationRecomputeOptions &recompute_options = {});
-} // namespace qwen3
+std::shared_ptr<infini_train::nn::TransformerModel> LoadFromLLMC(
+    const std::string &filepath,
+    const infini_train::nn::ActivationRecomputeOptions &recompute_options = {});
+}  // namespace qwen3

@@ -16,129 +16,148 @@ namespace infini_train {
 class Tensor;
 class Optimizer;
 class HookHandle;
-template <typename HookType> class HookHandleImpl;
+template <typename HookType>
+class HookHandleImpl;
 enum class DataType : int8_t;
-} // namespace infini_train
+}  // namespace infini_train
 
 namespace infini_train::nn {
 class Module;
 
 class NoSyncGuard {
-public:
-    explicit NoSyncGuard(std::function<void()> exit_func);
-    ~NoSyncGuard();
+ public:
+  explicit NoSyncGuard(std::function<void()> exit_func);
+  ~NoSyncGuard();
 
-    NoSyncGuard(const NoSyncGuard &) = delete;
-    NoSyncGuard &operator=(const NoSyncGuard &) = delete;
+  NoSyncGuard(const NoSyncGuard &) = delete;
+  NoSyncGuard &operator=(const NoSyncGuard &) = delete;
 
-private:
-    std::function<void()> exit_func_;
+ private:
+  std::function<void()> exit_func_;
 };
 
 namespace parallel::function {
-std::vector<std::shared_ptr<Module>> Replicate(const std::shared_ptr<Module> &network,
-                                               const std::vector<Device> &devices);
-} // namespace parallel::function
+std::vector<std::shared_ptr<Module>> Replicate(
+    const std::shared_ptr<Module> &network, const std::vector<Device> &devices);
+}  // namespace parallel::function
 
 class Module : public std::enable_shared_from_this<Module> {
-public:
-    template <typename HookType> using ModuleHookHandleImpl = infini_train::HookHandleImpl<HookType>;
+ public:
+  template <typename HookType>
+  using ModuleHookHandleImpl = infini_train::HookHandleImpl<HookType>;
 
-    using ModulePreHook = std::function<void(Module *, const std::vector<std::shared_ptr<Tensor>> &)>;
-    using ModulePostHook = std::function<void(Module *, const std::vector<std::shared_ptr<Tensor>> &,
-                                              const std::vector<std::shared_ptr<Tensor>> &)>;
+  using ModulePreHook = std::function<void(
+      Module *, const std::vector<std::shared_ptr<Tensor>> &)>;
+  using ModulePostHook =
+      std::function<void(Module *, const std::vector<std::shared_ptr<Tensor>> &,
+                         const std::vector<std::shared_ptr<Tensor>> &)>;
 
-    static constexpr char kUndefinedType[] = "Undefined";
+  static constexpr char kUndefinedType[] = "Undefined";
 
-    static constexpr char kPPFirstStageName[] = "__pp_first_stage";
-    static constexpr char kPPLastStageName[] = "__pp_last_stage";
-    static constexpr char kPPChunkNamePrefix[] = "__pp_chunk_";
+  static constexpr char kPPFirstStageName[] = "__pp_first_stage";
+  static constexpr char kPPLastStageName[] = "__pp_last_stage";
+  static constexpr char kPPChunkNamePrefix[] = "__pp_chunk_";
 
-    explicit Module();
-    explicit Module(const std::string &type);
-    Module(const Module &) = default;
+  explicit Module();
+  explicit Module(const std::string &type);
+  Module(const Module &) = default;
 
-    virtual ~Module(){};
+  virtual ~Module(){};
 
-    const std::string &type() const;
+  const std::string &type() const;
 
-    virtual std::vector<std::shared_ptr<Tensor>> Parameters() const;
+  virtual std::vector<std::shared_ptr<Tensor>> Parameters() const;
 
-    // InfiniTrain's NamedParameters returns results ordered by full parameter name.
-    // TODO: Align with PyTorch's ordering in the future.
-    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
-    NamedParameters(const std::string &prefix = "", bool recurse = true, bool remove_duplicate = true) const;
-    bool has_parameter(const std::string &name) const;
-    std::shared_ptr<Tensor> *mutable_parameter(const std::string &name);
-    const std::shared_ptr<Tensor> &parameter(const std::string &name) const;
+  // InfiniTrain's NamedParameters returns results ordered by full parameter
+  // name.
+  // TODO: Align with PyTorch's ordering in the future.
+  std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> NamedParameters(
+      const std::string &prefix = "", bool recurse = true,
+      bool remove_duplicate = true) const;
+  bool has_parameter(const std::string &name) const;
+  std::shared_ptr<Tensor> *mutable_parameter(const std::string &name);
+  const std::shared_ptr<Tensor> &parameter(const std::string &name) const;
 
-    virtual std::vector<std::shared_ptr<Tensor>> Buffers() const;
+  virtual std::vector<std::shared_ptr<Tensor>> Buffers() const;
 
-    std::vector<std::shared_ptr<Module>> modules();
-    std::shared_ptr<Module> &mutable_module(const std::string &name);
-    const Module &module(const std::string &name) const;
+  std::vector<std::shared_ptr<Module>> modules();
+  std::shared_ptr<Module> &mutable_module(const std::string &name);
+  const Module &module(const std::string &name) const;
 
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const;
 
-    // Current behavior: missing keys / shape / dtype mismatches are FATAL errors; unexpected keys in state_dict are
-    // WARNING-only and silently ignored.
-    void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict);
+  // Current behavior: missing keys / shape / dtype mismatches are FATAL errors;
+  // unexpected keys in state_dict are WARNING-only and silently ignored.
+  void LoadStateDict(
+      const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+          &state_dict);
 
-    // Public module invocation entry point.
-    std::vector<std::shared_ptr<Tensor>> operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
+  // Public module invocation entry point.
+  std::vector<std::shared_ptr<Tensor>> operator()(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors);
 
-    // Forward to be overridden by subclasses
-    virtual std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors);
+  // Forward to be overridden by subclasses
+  virtual std::vector<std::shared_ptr<Tensor>> Forward(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors);
 
-    virtual float TrainStep(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                            const std::vector<std::shared_ptr<Tensor>> &targets,
-                            const std::shared_ptr<Optimizer> &optimizer, const std::shared_ptr<Module> &loss_fn,
-                            DataType dtype);
+  virtual float TrainStep(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+      const std::vector<std::shared_ptr<Tensor>> &targets,
+      const std::shared_ptr<Optimizer> &optimizer,
+      const std::shared_ptr<Module> &loss_fn, DataType dtype);
 
-    virtual std::unique_ptr<NoSyncGuard> no_sync();
+  virtual std::unique_ptr<NoSyncGuard> no_sync();
 
-    virtual void To(Device device);
+  virtual void To(Device device);
 
-    virtual void To(DataType dtype);
+  virtual void To(DataType dtype);
 
-    void Apply(std::function<void(Module *)> fn);
+  void Apply(std::function<void(Module *)> fn);
 
-    virtual std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const;
+  virtual std::shared_ptr<Module> ReplicateForDataParallel(
+      int device_idx) const;
 
-    std::vector<std::pair<std::string, std::shared_ptr<Module>>>
-    NamedModules(std::unordered_set<Module *> *memory = nullptr, const std::string &prefix = "",
-                 bool remove_duplicate = true);
+  std::vector<std::pair<std::string, std::shared_ptr<Module>>> NamedModules(
+      std::unordered_set<Module *> *memory = nullptr,
+      const std::string &prefix = "", bool remove_duplicate = true);
 
-    // Hook registration methods
-    std::shared_ptr<infini_train::HookHandle> RegisterForwardPreHook(ModulePreHook hook);
-    std::shared_ptr<infini_train::HookHandle> RegisterForwardPostHook(ModulePostHook hook);
-    std::shared_ptr<infini_train::HookHandle> RegisterBackwardPreHook(ModulePreHook hook);
-    std::shared_ptr<infini_train::HookHandle> RegisterBackwardPostHook(ModulePostHook hook);
+  // Hook registration methods
+  std::shared_ptr<infini_train::HookHandle> RegisterForwardPreHook(
+      ModulePreHook hook);
+  std::shared_ptr<infini_train::HookHandle> RegisterForwardPostHook(
+      ModulePostHook hook);
+  std::shared_ptr<infini_train::HookHandle> RegisterBackwardPreHook(
+      ModulePreHook hook);
+  std::shared_ptr<infini_train::HookHandle> RegisterBackwardPostHook(
+      ModulePostHook hook);
 
-protected:
-    Device device_;
-    const std::string type_ = kUndefinedType;
-    std::unordered_map<std::string, std::shared_ptr<Module>> modules_;
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> buffers_;
+ protected:
+  Device device_;
+  const std::string type_ = kUndefinedType;
+  std::unordered_map<std::string, std::shared_ptr<Module>> modules_;
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> buffers_;
 
-    std::vector<ModulePreHook> forward_pre_hooks_;
-    std::vector<ModulePostHook> forward_post_hooks_;
-    std::vector<ModulePreHook> backward_pre_hooks_;
-    std::vector<ModulePostHook> backward_post_hooks_;
+  std::vector<ModulePreHook> forward_pre_hooks_;
+  std::vector<ModulePostHook> forward_post_hooks_;
+  std::vector<ModulePreHook> backward_pre_hooks_;
+  std::vector<ModulePostHook> backward_post_hooks_;
 
-private:
-    friend std::vector<std::shared_ptr<Module>> parallel::function::Replicate(const std::shared_ptr<Module> &network,
-                                                                              const std::vector<Device> &devices);
+ private:
+  friend std::vector<std::shared_ptr<Module>> parallel::function::Replicate(
+      const std::shared_ptr<Module> &network,
+      const std::vector<Device> &devices);
 };
 
-template <typename Derived> class CloneableModule : public Module {
-public:
-    CloneableModule() = default;
-    explicit CloneableModule(const std::string &type) : Module(type) {}
+template <typename Derived>
+class CloneableModule : public Module {
+ public:
+  CloneableModule() = default;
+  explicit CloneableModule(const std::string &type) : Module(type) {}
 
-    std::shared_ptr<Module> ReplicateForDataParallel(int device_idx) const override {
-        return std::make_shared<Derived>(static_cast<const Derived &>(*this));
-    }
+  std::shared_ptr<Module> ReplicateForDataParallel(
+      int device_idx) const override {
+    return std::make_shared<Derived>(static_cast<const Derived &>(*this));
+  }
 };
-} // namespace infini_train::nn
+}  // namespace infini_train::nn

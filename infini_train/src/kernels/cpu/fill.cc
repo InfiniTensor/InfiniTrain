@@ -11,19 +11,20 @@
 
 namespace infini_train::kernels::cpu {
 void Fill(std::shared_ptr<Tensor> tensor, Scalar scalar) {
-    core::cpu::DispatchCpuFunc<INFINI_ALL_NUMERIC_TYPES>(
-        tensor->Dtype(),
-        [=]<typename T>() {
-            auto data = reinterpret_cast<T *>(tensor->DataPtr());
-            const T casted_value = scalar.to<T>();
-            std::fill(data, data + tensor->NumElements(), casted_value);
-        },
-        "CPU Fill");
+  core::cpu::DispatchCpuFunc<INFINI_ALL_NUMERIC_TYPES>(
+      tensor->Dtype(),
+      [=]<typename T>() {
+        auto data = reinterpret_cast<T *>(tensor->DataPtr());
+        const T casted_value = scalar.to<T>();
+        std::fill(data, data + tensor->NumElements(), casted_value);
+      },
+      "CPU Fill");
 }
-} // namespace infini_train::kernels::cpu
+}  // namespace infini_train::kernels::cpu
 
-#define REGISTER_CPU_FILL_KERNEL(kernel_name)                                                                          \
-    REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, infini_train::kernels::cpu::kernel_name)
+#define REGISTER_CPU_FILL_KERNEL(kernel_name)                          \
+  REGISTER_KERNEL(infini_train::Device::DeviceType::kCPU, kernel_name, \
+                  infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_FILL_KERNEL(Fill)
 

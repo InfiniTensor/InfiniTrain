@@ -19,19 +19,19 @@ void Gemm(Device device, GemmParams p);
  * where m_phys and n_phys are the physical (pre-transpose) row/col counts of A.
  */
 struct SgemvParams {
-    GemmTranspose trans = GemmTranspose::kNoTranspose;
-    int m = 0;
-    int n = 0;
-    const float *A = nullptr;
-    int lda = 0;
-    const float *x = nullptr;
-    int incx = 1;
-    float *y = nullptr;
-    int incy = 1;
-    float alpha = 1.0f;
-    float beta = 0.0f;
+  GemmTranspose trans = GemmTranspose::kNoTranspose;
+  int m = 0;
+  int n = 0;
+  const float *A = nullptr;
+  int lda = 0;
+  const float *x = nullptr;
+  int incx = 1;
+  float *y = nullptr;
+  int incy = 1;
+  float alpha = 1.0f;
+  float beta = 0.0f;
 };
 
 void SgemvCuda(const Device &device, const SgemvParams &p);
 
-} // namespace infini_train::kernels::cuda
+}  // namespace infini_train::kernels::cuda

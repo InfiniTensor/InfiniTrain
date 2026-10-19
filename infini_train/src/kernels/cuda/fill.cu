@@ -11,36 +11,42 @@
 
 namespace infini_train::kernels::cuda {
 
-template <typename T> __global__ void FillKernel(T *data, T value, size_t size) {
-    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < size) {
-        data[idx] = value;
-    }
+template <typename T>
+__global__ void FillKernel(T *data, T value, size_t size) {
+  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx < size) {
+    data[idx] = value;
+  }
 }
 
 // TODO(dcj): refactor Fill kernel with elementwise template
 void Fill(std::shared_ptr<Tensor> tensor, Scalar scalar) {
-    const int num_tokens = tensor->NumElements();
-    const int threads_per_block = 256;
-    const int num_blocks = (num_tokens + threads_per_block - 1) / threads_per_block;
-    auto device = tensor->GetDevice();
-    const auto &cuda_stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
-                                  infini_train::core::GetDeviceGuardImpl(device.type())->GetStream(device))
-                                  ->cuda_stream();
+  const int num_tokens = tensor->NumElements();
+  const int threads_per_block = 256;
+  const int num_blocks =
+      (num_tokens + threads_per_block - 1) / threads_per_block;
+  auto device = tensor->GetDevice();
+  const auto &cuda_stream =
+      dynamic_cast<infini_train::core::cuda::CudaStream *>(
+          infini_train::core::GetDeviceGuardImpl(device.type())
+              ->GetStream(device))
+          ->cuda_stream();
 
-    core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
-        tensor->Dtype(),
-        [=]<typename T>() {
-            const T casted_value = scalar.to<T>();
-            FillKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(static_cast<T *>(tensor->DataPtr()),
-                                                                             casted_value, tensor->NumElements());
-        },
-        "CUDA Fill");
+  core::cuda::DispatchCudaFunc<INFINI_ALL_NUMERIC_TYPES>(
+      tensor->Dtype(),
+      [=]<typename T>() {
+        const T casted_value = scalar.to<T>();
+        FillKernel<T><<<num_blocks, threads_per_block, 0, cuda_stream>>>(
+            static_cast<T *>(tensor->DataPtr()), casted_value,
+            tensor->NumElements());
+      },
+      "CUDA Fill");
 }
-} // namespace infini_train::kernels::cuda
+}  // namespace infini_train::kernels::cuda
 
-#define REGISTER_CUDA_FILL_KERNEL(kernel_name)                                                                         \
-    REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, infini_train::kernels::cuda::kernel_name)
+#define REGISTER_CUDA_FILL_KERNEL(kernel_name)                          \
+  REGISTER_KERNEL(infini_train::Device::DeviceType::kCUDA, kernel_name, \
+                  infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_FILL_KERNEL(Fill)
 

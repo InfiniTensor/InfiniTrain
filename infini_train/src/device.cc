@@ -14,9 +14,9 @@ namespace infini_train {
 Device::Device() : type_(DeviceType::kCPU), index_(0) {}
 
 Device::Device(DeviceType type, int8_t index) : type_(type), index_(index) {
-    if (type_ == DeviceType::kCPU && index_ != 0) {
-        LOG(FATAL) << "CPU device index should be 0";
-    }
+  if (type_ == DeviceType::kCPU && index_ != 0) {
+    LOG(FATAL) << "CPU device index should be 0";
+  }
 }
 
 Device::DeviceType Device::type() const { return type_; }
@@ -30,54 +30,59 @@ bool Device::IsCUDA() const { return type_ == DeviceType::kCUDA; }
 bool Device::IsPrivateUse1() const { return type_ == DeviceType::kPrivateUse1; }
 
 std::optional<Device::DeviceType> Device::ParseType(std::string_view name) {
-    if (name == "cpu") {
-        return DeviceType::kCPU;
-    }
-    if (name == "cuda") {
-        return DeviceType::kCUDA;
-    }
-    if (name == "privateuse1" || (core::HasPrivateUse1Backend() && name == core::GetPrivateUse1BackendName())) {
-        return DeviceType::kPrivateUse1;
-    }
-    return std::nullopt;
+  if (name == "cpu") {
+    return DeviceType::kCPU;
+  }
+  if (name == "cuda") {
+    return DeviceType::kCUDA;
+  }
+  if (name == "privateuse1" || (core::HasPrivateUse1Backend() &&
+                                name == core::GetPrivateUse1BackendName())) {
+    return DeviceType::kPrivateUse1;
+  }
+  return std::nullopt;
 }
 
 std::string Device::ToString() const {
-    std::string type_str = "Unknown";
-    switch (type_) {
+  std::string type_str = "Unknown";
+  switch (type_) {
     case DeviceType::kCPU:
-        type_str = "CPU";
-        break;
+      type_str = "CPU";
+      break;
     case DeviceType::kCUDA:
-        type_str = "CUDA";
-        break;
+      type_str = "CUDA";
+      break;
     case DeviceType::kPrivateUse1:
-        type_str = core::GetPrivateUse1BackendName();
-        break;
+      type_str = core::GetPrivateUse1BackendName();
+      break;
     default:
-        break;
-    }
-    std::ostringstream oss;
-    oss << std::format("Device({}, {})", type_str, index_);
-    return oss.str();
+      break;
+  }
+  std::ostringstream oss;
+  oss << std::format("Device({}, {})", type_str, index_);
+  return oss.str();
 }
 
 nn::parallel::Rank Device::Rank() const {
-    const int thread_rank = index_ - nn::parallel::global::GetDeviceIndex(0);
-    CHECK_GE(thread_rank, 0) << "Device index is outside the current process rank range";
-    CHECK_LT(thread_rank, nn::parallel::global::GetNthreadPerProc())
-        << "Device index is outside the current process rank range";
-    return {nn::parallel::global::GetGlobalProcRank(), thread_rank, nn::parallel::global::GetNprocPerNode(),
-            nn::parallel::global::GetNthreadPerProc()};
+  const int thread_rank = index_ - nn::parallel::global::GetDeviceIndex(0);
+  CHECK_GE(thread_rank, 0)
+      << "Device index is outside the current process rank range";
+  CHECK_LT(thread_rank, nn::parallel::global::GetNthreadPerProc())
+      << "Device index is outside the current process rank range";
+  return {nn::parallel::global::GetGlobalProcRank(), thread_rank,
+          nn::parallel::global::GetNprocPerNode(),
+          nn::parallel::global::GetNthreadPerProc()};
 }
 
 std::ostream &operator<<(std::ostream &os, const Device &device) {
-    os << device.ToString();
-    return os;
+  os << device.ToString();
+  return os;
 }
 
-bool operator==(const Device &a, const Device &b) { return a.type_ == b.type_ && a.index_ == b.index_; }
+bool operator==(const Device &a, const Device &b) {
+  return a.type_ == b.type_ && a.index_ == b.index_;
+}
 
 bool operator!=(const Device &a, const Device &b) { return !(a == b); }
 
-} // namespace infini_train
+}  // namespace infini_train

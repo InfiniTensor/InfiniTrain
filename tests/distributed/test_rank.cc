@@ -9,10 +9,11 @@ namespace infini_train::nn::parallel {
 namespace {
 
 TEST(RankTest, DetectsParallelismFromGlobalWorldSize) {
-    const Rank rank(global::GetGlobalProcRank(), 0, global::GetNprocPerNode(), global::GetNthreadPerProc());
+  const Rank rank(global::GetGlobalProcRank(), 0, global::GetNprocPerNode(),
+                  global::GetNthreadPerProc());
 
-    EXPECT_EQ(rank.IsParallel(), global::GetWorldSize() > 1);
+  EXPECT_EQ(rank.IsParallel(), global::GetWorldSize() > 1);
 }
 
-} // namespace
-} // namespace infini_train::nn::parallel
+}  // namespace
+}  // namespace infini_train::nn::parallel

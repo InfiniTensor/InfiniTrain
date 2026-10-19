@@ -9,46 +9,66 @@
 #include "glog/logging.h"
 
 namespace infini_train::nn {
-Sequential::Sequential(std::vector<std::shared_ptr<Module>> &&layers) : CloneableModule(kType) {
-    int idx = 0;
-    for (auto &layer : layers) {
-        modules_[std::to_string(idx)] = std::move(layer);
-        ++idx;
-    }
+Sequential::Sequential(std::vector<std::shared_ptr<Module>> &&layers)
+    : CloneableModule(kType) {
+  int idx = 0;
+  for (auto &layer : layers) {
+    modules_[std::to_string(idx)] = std::move(layer);
+    ++idx;
+  }
 }
 
-std::vector<std::shared_ptr<Tensor>> Sequential::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    auto &x = const_cast<std::vector<std::shared_ptr<Tensor>> &>(input_tensors);
-    for (int idx = 0; idx < modules_.size(); ++idx) { x = (*modules_[std::to_string(idx)])(x); }
-    return x;
+std::vector<std::shared_ptr<Tensor>> Sequential::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  auto &x = const_cast<std::vector<std::shared_ptr<Tensor>> &>(input_tensors);
+  for (int idx = 0; idx < modules_.size(); ++idx) {
+    x = (*modules_[std::to_string(idx)])(x);
+  }
+  return x;
 }
 
-ModuleDict::ModuleDict(std::unordered_map<std::string, std::shared_ptr<Module>> modules) : CloneableModule(kType) {
-    for (auto &[name, layer] : modules) { modules_[name] = std::move(layer); }
+ModuleDict::ModuleDict(
+    std::unordered_map<std::string, std::shared_ptr<Module>> modules)
+    : CloneableModule(kType) {
+  for (auto &[name, layer] : modules) {
+    modules_[name] = std::move(layer);
+  }
 }
 
-std::vector<std::shared_ptr<Tensor>> ModuleDict::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    LOG(FATAL) << "Not implemented";
+std::vector<std::shared_ptr<Tensor>> ModuleDict::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  LOG(FATAL) << "Not implemented";
 }
 
 ModuleList::ModuleList(std::vector<std::shared_ptr<Module>> &&layers)
     : CloneableModule(kType), module_list_(std::move(layers)) {
-    int idx = 0;
-    for (auto &layer : module_list_) {
-        modules_[std::to_string(idx)] = layer;
-        ++idx;
-    }
+  int idx = 0;
+  for (auto &layer : module_list_) {
+    modules_[std::to_string(idx)] = layer;
+    ++idx;
+  }
 }
 
-std::vector<std::shared_ptr<Tensor>> ModuleList::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    LOG(FATAL) << "Not implemented";
+std::vector<std::shared_ptr<Tensor>> ModuleList::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  LOG(FATAL) << "Not implemented";
 }
 
-std::vector<std::shared_ptr<Module>>::iterator ModuleList::begin() { return module_list_.begin(); }
-std::vector<std::shared_ptr<Module>>::iterator ModuleList::end() { return module_list_.end(); }
-std::vector<std::shared_ptr<Module>>::const_iterator ModuleList::begin() const { return module_list_.begin(); }
-std::vector<std::shared_ptr<Module>>::const_iterator ModuleList::end() const { return module_list_.end(); }
+std::vector<std::shared_ptr<Module>>::iterator ModuleList::begin() {
+  return module_list_.begin();
+}
+std::vector<std::shared_ptr<Module>>::iterator ModuleList::end() {
+  return module_list_.end();
+}
+std::vector<std::shared_ptr<Module>>::const_iterator ModuleList::begin() const {
+  return module_list_.begin();
+}
+std::vector<std::shared_ptr<Module>>::const_iterator ModuleList::end() const {
+  return module_list_.end();
+}
 
-std::shared_ptr<Module> &ModuleList::operator[](std::size_t idx) { return module_list_.at(idx); }
+std::shared_ptr<Module> &ModuleList::operator[](std::size_t idx) {
+  return module_list_.at(idx);
+}
 
-} // namespace infini_train::nn
+}  // namespace infini_train::nn

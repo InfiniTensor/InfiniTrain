@@ -133,7 +133,9 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="do not modify files")
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--ref", help="compare with the merge-base of REF")
-    scope.add_argument("--all", action="store_true", help="format all tracked project files")
+    scope.add_argument(
+        "--all", action="store_true", help="format all tracked project files"
+    )
     parser.add_argument("--clang-format", default="clang-format-16")
     args = parser.parse_args()
 
@@ -162,8 +164,7 @@ def main() -> int:
         print("No supported C/C++ files require clang-format.")
         return 0
     results = [
-        format_file(args.clang_format, path, ranges[path], args.check)
-        for path in files
+        format_file(args.clang_format, path, ranges[path], args.check) for path in files
     ]
     return 0 if all(results) else 1
 

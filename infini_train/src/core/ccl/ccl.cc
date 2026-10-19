@@ -10,108 +10,136 @@
 
 namespace infini_train::nn::parallel::comm {
 enum class ReduceOpType : int8_t;
-} // namespace infini_train::nn::parallel::comm
+}  // namespace infini_train::nn::parallel::comm
 
 namespace infini_train {
 enum class DataType : int8_t;
-} // namespace infini_train
+}  // namespace infini_train
 
 namespace infini_train::core {
 class CclComm;
 class CclUniqueId;
 enum class CclStatus : int32_t;
 
-void CclImpl::GroupStart() const { LOG(FATAL) << "CclImpl::GroupStart is not implemented."; }
+void CclImpl::GroupStart() const {
+  LOG(FATAL) << "CclImpl::GroupStart is not implemented.";
+}
 
-void CclImpl::GroupEnd() const { LOG(FATAL) << "CclImpl::GroupEnd is not implemented."; }
+void CclImpl::GroupEnd() const {
+  LOG(FATAL) << "CclImpl::GroupEnd is not implemented.";
+}
 
 void CclImpl::GetAsyncError(const CclComm *comm, CclStatus *async_error) const {
-    LOG(FATAL) << "CclImpl::GetAsyncError is not implemented.";
+  LOG(FATAL) << "CclImpl::GetAsyncError is not implemented.";
 }
 
-void CclImpl::GetUniqueId(CclUniqueId **unique_id) const { LOG(FATAL) << "CclImpl::GetUniqueId is not implemented."; }
+void CclImpl::GetUniqueId(CclUniqueId **unique_id) const {
+  LOG(FATAL) << "CclImpl::GetUniqueId is not implemented.";
+}
 
 void CclImpl::CommInitAll(CclComm **comms, int ndev, const int *devlist) const {
-    LOG(FATAL) << "CclImpl::CommInitAll is not implemented.";
+  LOG(FATAL) << "CclImpl::CommInitAll is not implemented.";
 }
 
-void CclImpl::CommInitRank(CclComm **comm, int nranks, const CclUniqueId &unique_id, int rank) const {
-    LOG(FATAL) << "CclImpl::CommInitRank is not implemented.";
+void CclImpl::CommInitRank(CclComm **comm, int nranks,
+                           const CclUniqueId &unique_id, int rank) const {
+  LOG(FATAL) << "CclImpl::CommInitRank is not implemented.";
 }
 
-void CclImpl::CommDestroy(CclComm *comm) const { LOG(FATAL) << "CclImpl::CommDestroy is not implemented."; }
-
-void CclImpl::AllReduce(const void *sendbuff, void *recvbuff, size_t count, DataType dtype,
-                        nn::parallel::comm::ReduceOpType reduce_op, const CclComm *comm, Stream *stream) const {
-    LOG(FATAL) << "CclImpl::AllReduce is not implemented.";
+void CclImpl::CommDestroy(CclComm *comm) const {
+  LOG(FATAL) << "CclImpl::CommDestroy is not implemented.";
 }
 
-void CclImpl::Broadcast(const void *sendbuff, void *recvbuff, size_t count, DataType dtype, int root,
+void CclImpl::AllReduce(const void *sendbuff, void *recvbuff, size_t count,
+                        DataType dtype,
+                        nn::parallel::comm::ReduceOpType reduce_op,
                         const CclComm *comm, Stream *stream) const {
-    LOG(FATAL) << "CclImpl::Broadcast is not implemented.";
+  LOG(FATAL) << "CclImpl::AllReduce is not implemented.";
 }
 
-void CclImpl::Reduce(const void *sendbuff, void *recvbuff, size_t count, DataType dtype,
-                     nn::parallel::comm::ReduceOpType reduce_op, int root, const CclComm *comm, Stream *stream) const {
-    LOG(FATAL) << "CclImpl::Reduce is not implemented.";
-}
-
-void CclImpl::AllGather(const void *sendbuff, void *recvbuff, size_t count, DataType dtype, const CclComm *comm,
+void CclImpl::Broadcast(const void *sendbuff, void *recvbuff, size_t count,
+                        DataType dtype, int root, const CclComm *comm,
                         Stream *stream) const {
-    LOG(FATAL) << "CclImpl::AllGather is not implemented.";
+  LOG(FATAL) << "CclImpl::Broadcast is not implemented.";
 }
 
-void CclImpl::ReduceScatter(const void *sendbuff, void *recvbuff, size_t recv_count, DataType dtype,
-                            nn::parallel::comm::ReduceOpType reduce_op, const CclComm *comm, Stream *stream) const {
-    LOG(FATAL) << "CclImpl::ReduceScatter is not implemented.";
+void CclImpl::Reduce(const void *sendbuff, void *recvbuff, size_t count,
+                     DataType dtype, nn::parallel::comm::ReduceOpType reduce_op,
+                     int root, const CclComm *comm, Stream *stream) const {
+  LOG(FATAL) << "CclImpl::Reduce is not implemented.";
 }
 
-void CclImpl::AlltoAll(const void *sendbuff, void *recvbuff, size_t count, DataType dtype, const CclComm *comm,
+void CclImpl::AllGather(const void *sendbuff, void *recvbuff, size_t count,
+                        DataType dtype, const CclComm *comm,
+                        Stream *stream) const {
+  LOG(FATAL) << "CclImpl::AllGather is not implemented.";
+}
+
+void CclImpl::ReduceScatter(const void *sendbuff, void *recvbuff,
+                            size_t recv_count, DataType dtype,
+                            nn::parallel::comm::ReduceOpType reduce_op,
+                            const CclComm *comm, Stream *stream) const {
+  LOG(FATAL) << "CclImpl::ReduceScatter is not implemented.";
+}
+
+void CclImpl::AlltoAll(const void *sendbuff, void *recvbuff, size_t count,
+                       DataType dtype, const CclComm *comm,
                        Stream *stream) const {
-    LOG(FATAL) << "CclImpl::AlltoAll is not implemented.";
+  LOG(FATAL) << "CclImpl::AlltoAll is not implemented.";
 }
 
-void CclImpl::Send(const void *buff, size_t count, DataType dtype, int peer, const CclComm *comm,
-                   Stream *stream) const {
-    LOG(FATAL) << "CclImpl::Send is not implemented.";
+void CclImpl::Send(const void *buff, size_t count, DataType dtype, int peer,
+                   const CclComm *comm, Stream *stream) const {
+  LOG(FATAL) << "CclImpl::Send is not implemented.";
 }
 
-void CclImpl::Recv(void *buff, size_t count, DataType dtype, int peer, const CclComm *comm, Stream *stream) const {
-    LOG(FATAL) << "CclImpl::Recv is not implemented.";
+void CclImpl::Recv(void *buff, size_t count, DataType dtype, int peer,
+                   const CclComm *comm, Stream *stream) const {
+  LOG(FATAL) << "CclImpl::Recv is not implemented.";
 }
 
-CclGroupGuard::CclGroupGuard(Device::DeviceType type) : impl_(GetCclImpl(type)) { impl_->GroupStart(); }
+CclGroupGuard::CclGroupGuard(Device::DeviceType type)
+    : impl_(GetCclImpl(type)) {
+  impl_->GroupStart();
+}
 
 CclGroupGuard::~CclGroupGuard() { impl_->GroupEnd(); }
 
 CclImplRegistry &CclImplRegistry::Instance() {
-    static CclImplRegistry instance;
-    return instance;
+  static CclImplRegistry instance;
+  return instance;
 }
 
-void CclImplRegistry::Register(Device::DeviceType type, std::unique_ptr<CclImpl> impl) {
-    if (type != impl->Type()) {
-        LOG(FATAL) << std::format("Register CclImpl with type {}, but as type {}", static_cast<int>(impl->Type()),
-                                  static_cast<int>(type));
-    }
+void CclImplRegistry::Register(Device::DeviceType type,
+                               std::unique_ptr<CclImpl> impl) {
+  if (type != impl->Type()) {
+    LOG(FATAL) << std::format("Register CclImpl with type {}, but as type {}",
+                              static_cast<int>(impl->Type()),
+                              static_cast<int>(type));
+  }
 
-    if (impls_.contains(type)) {
-        LOG(FATAL) << std::format("CclImpl for type {} already registered", static_cast<int>(type));
-    }
+  if (impls_.contains(type)) {
+    LOG(FATAL) << std::format("CclImpl for type {} already registered",
+                              static_cast<int>(type));
+  }
 
-    impls_[type] = std::move(impl);
+  impls_[type] = std::move(impl);
 }
 
-bool CclImplRegistry::Has(Device::DeviceType type) const { return impls_.contains(type); }
+bool CclImplRegistry::Has(Device::DeviceType type) const {
+  return impls_.contains(type);
+}
 
 CclImpl *CclImplRegistry::Get(Device::DeviceType type) const {
-    auto it = impls_.find(type);
-    if (it == impls_.end()) {
-        LOG(FATAL) << "No CclImpl registered for type " << static_cast<int>(type);
-    }
-    return it->second.get();
+  auto it = impls_.find(type);
+  if (it == impls_.end()) {
+    LOG(FATAL) << "No CclImpl registered for type " << static_cast<int>(type);
+  }
+  return it->second.get();
 }
 
-CclImpl *GetCclImpl(Device::DeviceType type) { return CclImplRegistry::Instance().Get(type); }
+CclImpl *GetCclImpl(Device::DeviceType type) {
+  return CclImplRegistry::Instance().Get(type);
+}
 
-} // namespace infini_train::core
+}  // namespace infini_train::core

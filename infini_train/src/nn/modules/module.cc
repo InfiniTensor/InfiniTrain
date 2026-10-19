@@ -24,21 +24,24 @@
 
 namespace infini_train::nn {
 
-NoSyncGuard::NoSyncGuard(std::function<void()> exit_func) : exit_func_(std::move(exit_func)) {}
+NoSyncGuard::NoSyncGuard(std::function<void()> exit_func)
+    : exit_func_(std::move(exit_func)) {}
 
 NoSyncGuard::~NoSyncGuard() {
-    if (exit_func_) {
-        exit_func_();
-    }
+  if (exit_func_) {
+    exit_func_();
+  }
 }
 
 Module::Module() : Module(kUndefinedType) {}
 
 Module::Module(const std::string &type) : type_(type), device_(Device()) {}
 
-float Module::TrainStep(const std::vector<std::shared_ptr<Tensor>> &, const std::vector<std::shared_ptr<Tensor>> &,
-                        const std::shared_ptr<Optimizer> &, const std::shared_ptr<Module> &, DataType) {
-    return 0.0f;
+float Module::TrainStep(const std::vector<std::shared_ptr<Tensor>> &,
+                        const std::vector<std::shared_ptr<Tensor>> &,
+                        const std::shared_ptr<Optimizer> &,
+                        const std::shared_ptr<Module> &, DataType) {
+  return 0.0f;
 }
 
 std::unique_ptr<NoSyncGuard> Module::no_sync() { return nullptr; }
@@ -46,335 +49,395 @@ std::unique_ptr<NoSyncGuard> Module::no_sync() { return nullptr; }
 const std::string &Module::type() const { return type_; }
 
 std::vector<std::shared_ptr<Tensor>> Module::Parameters() const {
-    const auto &named_parameters = NamedParameters();
+  const auto &named_parameters = NamedParameters();
 
-    std::vector<std::shared_ptr<Tensor>> params;
-    params.reserve(named_parameters.size());
+  std::vector<std::shared_ptr<Tensor>> params;
+  params.reserve(named_parameters.size());
 
-    for (const auto &[_, param] : named_parameters) { params.emplace_back(param); }
+  for (const auto &[_, param] : named_parameters) {
+    params.emplace_back(param);
+  }
 
-    return params;
+  return params;
 }
 
 std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
-Module::NamedParameters(const std::string &prefix, bool recurse, bool remove_duplicate) const {
-    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> named_parameters;
-    std::unordered_set<const Tensor *> visited_parameters;
+Module::NamedParameters(const std::string &prefix, bool recurse,
+                        bool remove_duplicate) const {
+  std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> named_parameters;
+  std::unordered_set<const Tensor *> visited_parameters;
 
-    std::vector<std::pair<std::string, std::shared_ptr<Module>>> named_modules;
+  std::vector<std::pair<std::string, std::shared_ptr<Module>>> named_modules;
 
-    if (recurse) {
-        named_modules = const_cast<Module *>(this)->NamedModules(
-            /*memory=*/nullptr, prefix, remove_duplicate);
-    } else {
-        named_modules.emplace_back(prefix, std::const_pointer_cast<Module>(shared_from_this()));
+  if (recurse) {
+    named_modules = const_cast<Module *>(this)->NamedModules(
+        /*memory=*/nullptr, prefix, remove_duplicate);
+  } else {
+    named_modules.emplace_back(
+        prefix, std::const_pointer_cast<Module>(shared_from_this()));
+  }
+
+  for (const auto &[module_prefix, module] : named_modules) {
+    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
+        local_parameters;
+    local_parameters.reserve(module->parameters_.size());
+
+    for (const auto &[name, parameter] : module->parameters_) {
+      if (parameter != nullptr) {
+        local_parameters.emplace_back(name, parameter);
+      }
     }
 
-    for (const auto &[module_prefix, module] : named_modules) {
-        std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> local_parameters;
-        local_parameters.reserve(module->parameters_.size());
+    std::sort(
+        local_parameters.begin(), local_parameters.end(),
+        [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
 
-        for (const auto &[name, parameter] : module->parameters_) {
-            if (parameter != nullptr) {
-                local_parameters.emplace_back(name, parameter);
-            }
-        }
+    for (const auto &[name, parameter] : local_parameters) {
+      if (remove_duplicate &&
+          !visited_parameters.insert(parameter.get()).second) {
+        continue;
+      }
 
-        std::sort(local_parameters.begin(), local_parameters.end(),
-                  [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
+      const std::string full_name =
+          module_prefix.empty() ? name : module_prefix + "." + name;
 
-        for (const auto &[name, parameter] : local_parameters) {
-            if (remove_duplicate && !visited_parameters.insert(parameter.get()).second) {
-                continue;
-            }
-
-            const std::string full_name = module_prefix.empty() ? name : module_prefix + "." + name;
-
-            named_parameters.emplace_back(full_name, parameter);
-        }
+      named_parameters.emplace_back(full_name, parameter);
     }
+  }
 
-    return named_parameters;
+  return named_parameters;
 }
 
-bool Module::has_parameter(const std::string &name) const { return parameters_.find(name) != parameters_.end(); }
+bool Module::has_parameter(const std::string &name) const {
+  return parameters_.find(name) != parameters_.end();
+}
 
 std::shared_ptr<Tensor> *Module::mutable_parameter(const std::string &name) {
-    CHECK(parameters_.find(name) != parameters_.end());
-    return &parameters_.at(name);
+  CHECK(parameters_.find(name) != parameters_.end());
+  return &parameters_.at(name);
 }
 
-const std::shared_ptr<Tensor> &Module::parameter(const std::string &name) const {
-    CHECK(parameters_.find(name) != parameters_.end());
-    return parameters_.at(name);
+const std::shared_ptr<Tensor> &Module::parameter(
+    const std::string &name) const {
+  CHECK(parameters_.find(name) != parameters_.end());
+  return parameters_.at(name);
 }
 
 std::vector<std::shared_ptr<Tensor>> Module::Buffers() const {
-    std::vector<std::shared_ptr<Tensor>> buffers;
-    for (auto &[_, buffer] : buffers_) { buffers.push_back(buffer); }
-    for (auto &[_, module] : modules_) {
-        for (auto &buffer : module->Buffers()) { buffers.push_back(buffer); }
+  std::vector<std::shared_ptr<Tensor>> buffers;
+  for (auto &[_, buffer] : buffers_) {
+    buffers.push_back(buffer);
+  }
+  for (auto &[_, module] : modules_) {
+    for (auto &buffer : module->Buffers()) {
+      buffers.push_back(buffer);
     }
-    return buffers;
+  }
+  return buffers;
 }
 
 std::vector<std::shared_ptr<Module>> Module::modules() {
-    std::vector<std::shared_ptr<Module>> modules;
-    auto named_modules = NamedModules();
+  std::vector<std::shared_ptr<Module>> modules;
+  auto named_modules = NamedModules();
 
-    std::shared_ptr<Module> root;
-    for (auto &[name, module] : named_modules) {
-        if (name != "") {
-            modules.push_back(module);
-        } else {
-            root = module;
-        }
+  std::shared_ptr<Module> root;
+  for (auto &[name, module] : named_modules) {
+    if (name != "") {
+      modules.push_back(module);
+    } else {
+      root = module;
     }
+  }
 
-    modules.insert(modules.begin(), root);
-    return modules;
+  modules.insert(modules.begin(), root);
+  return modules;
 }
 
 std::vector<std::pair<std::string, std::shared_ptr<Module>>>
-Module::NamedModules(std::unordered_set<Module *> *memory, const std::string &prefix, bool remove_duplicate) {
-    std::unordered_set<Module *> local_memory;
-    if (memory == nullptr) {
-        memory = &local_memory;
+Module::NamedModules(std::unordered_set<Module *> *memory,
+                     const std::string &prefix, bool remove_duplicate) {
+  std::unordered_set<Module *> local_memory;
+  if (memory == nullptr) {
+    memory = &local_memory;
+  }
+
+  std::vector<std::pair<std::string, std::shared_ptr<Module>>> named_modules;
+
+  // Only dedup when remove_duplicate=true
+  if (remove_duplicate) {
+    if (memory->contains(this)) {
+      return named_modules;  // already visited: don't emit, don't recurse
     }
+    memory->insert(this);
+  }
 
-    std::vector<std::pair<std::string, std::shared_ptr<Module>>> named_modules;
+  // Emit self first (pre-order)
+  named_modules.emplace_back(prefix, shared_from_this());
 
-    // Only dedup when remove_duplicate=true
-    if (remove_duplicate) {
-        if (memory->contains(this)) {
-            return named_modules; // already visited: don't emit, don't recurse
-        }
-        memory->insert(this);
+  // Collect children then sort by key for stable order
+  std::vector<std::pair<std::string, std::shared_ptr<Module>>> children;
+  children.reserve(modules_.size());
+  for (const auto &[name, module] : modules_) {
+    if (!module) {
+      continue;
     }
+    children.emplace_back(name, module);
+  }
+  std::sort(children.begin(), children.end(),
+            [](const auto &a, const auto &b) { return a.first < b.first; });
 
-    // Emit self first (pre-order)
-    named_modules.emplace_back(prefix, shared_from_this());
+  // Recurse in sorted order
+  for (const auto &[name, module] : children) {
+    const auto submodule_prefix = (prefix.empty() ? "" : prefix + ".") + name;
+    auto sub = module->NamedModules(memory, submodule_prefix, remove_duplicate);
+    named_modules.insert(named_modules.end(), sub.begin(), sub.end());
+  }
 
-    // Collect children then sort by key for stable order
-    std::vector<std::pair<std::string, std::shared_ptr<Module>>> children;
-    children.reserve(modules_.size());
-    for (const auto &[name, module] : modules_) {
-        if (!module) {
-            continue;
-        }
-        children.emplace_back(name, module);
-    }
-    std::sort(children.begin(), children.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
-
-    // Recurse in sorted order
-    for (const auto &[name, module] : children) {
-        const auto submodule_prefix = (prefix.empty() ? "" : prefix + ".") + name;
-        auto sub = module->NamedModules(memory, submodule_prefix, remove_duplicate);
-        named_modules.insert(named_modules.end(), sub.begin(), sub.end());
-    }
-
-    return named_modules;
+  return named_modules;
 }
 
-std::shared_ptr<Module> &Module::mutable_module(const std::string &name) { return modules_.at(name); }
+std::shared_ptr<Module> &Module::mutable_module(const std::string &name) {
+  return modules_.at(name);
+}
 
 const Module &Module::module(const std::string &name) const {
-    CHECK(modules_.find(name) != modules_.end());
-    return *modules_.at(name).get();
+  CHECK(modules_.find(name) != modules_.end());
+  return *modules_.at(name).get();
 }
 
-std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict() const {
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> state;
-    for (auto &[name, param] : parameters_) { state.emplace(name, param); }
-    for (auto &[name, buffer] : buffers_) { state.emplace(name, buffer); }
-    for (auto &[name, module] : modules_) {
-        if (name.starts_with("__pp")) {
-            continue;
-        }
-        for (auto &[sub_name, param] : module->StateDict()) { state.emplace(name + "." + sub_name, param); }
+std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict()
+    const {
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> state;
+  for (auto &[name, param] : parameters_) {
+    state.emplace(name, param);
+  }
+  for (auto &[name, buffer] : buffers_) {
+    state.emplace(name, buffer);
+  }
+  for (auto &[name, module] : modules_) {
+    if (name.starts_with("__pp")) {
+      continue;
     }
-    return state;
+    for (auto &[sub_name, param] : module->StateDict()) {
+      state.emplace(name + "." + sub_name, param);
+    }
+  }
+  return state;
 }
 
-void Module::LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
-    // Stage 1: Validate all keys, shapes, and dtypes without copying
-    std::vector<std::string> error_msgs;
-    std::unordered_set<std::string> visited_keys;
-    auto expected = StateDict();
+void Module::LoadStateDict(
+    const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+        &state_dict) {
+  // Stage 1: Validate all keys, shapes, and dtypes without copying
+  std::vector<std::string> error_msgs;
+  std::unordered_set<std::string> visited_keys;
+  auto expected = StateDict();
 
-    for (const auto &[name, dst] : expected) {
-        visited_keys.insert(name);
-        if (!state_dict.contains(name)) {
-            error_msgs.push_back(std::format("Missing key: {}", name));
-            continue;
-        }
-        const auto &src = state_dict.at(name);
-        if (dst->Dims() != src->Dims()) {
-            error_msgs.push_back(std::format("Shape mismatch for '{}': expected={}, got={}", name,
-                                             infini_train::utils::DimsToString(dst->Dims()),
-                                             infini_train::utils::DimsToString(src->Dims())));
-        }
-        if (dst->Dtype() != src->Dtype()) {
-            error_msgs.push_back(std::format("Dtype mismatch for '{}': expected={}, got={}", name,
-                                             kDataTypeToDesc.at(dst->Dtype()), kDataTypeToDesc.at(src->Dtype())));
-        }
+  for (const auto &[name, dst] : expected) {
+    visited_keys.insert(name);
+    if (!state_dict.contains(name)) {
+      error_msgs.push_back(std::format("Missing key: {}", name));
+      continue;
     }
+    const auto &src = state_dict.at(name);
+    if (dst->Dims() != src->Dims()) {
+      error_msgs.push_back(
+          std::format("Shape mismatch for '{}': expected={}, got={}", name,
+                      infini_train::utils::DimsToString(dst->Dims()),
+                      infini_train::utils::DimsToString(src->Dims())));
+    }
+    if (dst->Dtype() != src->Dtype()) {
+      error_msgs.push_back(std::format(
+          "Dtype mismatch for '{}': expected={}, got={}", name,
+          kDataTypeToDesc.at(dst->Dtype()), kDataTypeToDesc.at(src->Dtype())));
+    }
+  }
 
-    for (const auto &[name, src] : state_dict) {
-        if (!visited_keys.contains(name)) {
-            LOG(WARNING) << std::format("Unexpected key in state_dict: {}", name);
-        }
+  for (const auto &[name, src] : state_dict) {
+    if (!visited_keys.contains(name)) {
+      LOG(WARNING) << std::format("Unexpected key in state_dict: {}", name);
     }
+  }
 
-    if (!error_msgs.empty()) {
-        std::string msg = "LoadStateDict failed:";
-        for (const auto &err : error_msgs) { msg += "\n  " + err; }
-        LOG(FATAL) << msg;
+  if (!error_msgs.empty()) {
+    std::string msg = "LoadStateDict failed:";
+    for (const auto &err : error_msgs) {
+      msg += "\n  " + err;
     }
+    LOG(FATAL) << msg;
+  }
 
-    // Stage 2: All checks passed, now copy data
-    for (const auto &[name, dst] : expected) {
-        const auto &src = state_dict.at(name);
-        dst->CopyFrom(*src);
-    }
+  // Stage 2: All checks passed, now copy data
+  for (const auto &[name, dst] : expected) {
+    const auto &src = state_dict.at(name);
+    dst->CopyFrom(*src);
+  }
 }
 
-std::vector<std::shared_ptr<Tensor>> Module::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    LOG(FATAL) << "Forward function not implemented for this module";
-    return {};
+std::vector<std::shared_ptr<Tensor>> Module::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  LOG(FATAL) << "Forward function not implemented for this module";
+  return {};
 }
 
-std::vector<std::shared_ptr<Tensor>> Module::operator()(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    // Compared to `Forward()` which will bypass hooks, this is the full module call protocol including hooks.
-    // 1. Call global module forward pre-hooks
-    utils::GlobalModuleHookRegistry::Instance().CallModuleForwardPreHooks(this, input_tensors);
+std::vector<std::shared_ptr<Tensor>> Module::operator()(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  // Compared to `Forward()` which will bypass hooks, this is the full module
+  // call protocol including hooks.
+  // 1. Call global module forward pre-hooks
+  utils::GlobalModuleHookRegistry::Instance().CallModuleForwardPreHooks(
+      this, input_tensors);
 
-    // 2. Call local forward pre-hooks
-    for (const auto &hook : forward_pre_hooks_) {
-        if (hook) {
-            hook(this, input_tensors);
-        }
+  // 2. Call local forward pre-hooks
+  for (const auto &hook : forward_pre_hooks_) {
+    if (hook) {
+      hook(this, input_tensors);
     }
+  }
 
-    // 3. Call actual Forward implementation
-    auto output_tensors = Forward(input_tensors);
+  // 3. Call actual Forward implementation
+  auto output_tensors = Forward(input_tensors);
 
-    // 4. Call local forward post-hooks
-    for (const auto &hook : forward_post_hooks_) {
-        if (hook) {
-            hook(this, input_tensors, output_tensors);
-        }
+  // 4. Call local forward post-hooks
+  for (const auto &hook : forward_post_hooks_) {
+    if (hook) {
+      hook(this, input_tensors, output_tensors);
     }
+  }
 
-    // 5. Call global module forward hooks
-    utils::GlobalModuleHookRegistry::Instance().CallModuleForwardHooks(this, input_tensors, output_tensors);
+  // 5. Call global module forward hooks
+  utils::GlobalModuleHookRegistry::Instance().CallModuleForwardHooks(
+      this, input_tensors, output_tensors);
 
-    // 6. Register backward hooks on output tensors' grad_fn
-    const bool has_local_backward_hooks = !backward_pre_hooks_.empty() || !backward_post_hooks_.empty();
-    const bool has_global_backward_hooks = utils::GlobalModuleHookRegistry::Instance().HasModuleBackwardHooks();
+  // 6. Register backward hooks on output tensors' grad_fn
+  const bool has_local_backward_hooks =
+      !backward_pre_hooks_.empty() || !backward_post_hooks_.empty();
+  const bool has_global_backward_hooks =
+      utils::GlobalModuleHookRegistry::Instance().HasModuleBackwardHooks();
 
-    if (UNLIKELY(has_local_backward_hooks || has_global_backward_hooks)) {
-        for (const auto &output : output_tensors) {
-            if (output && output->output_idx() == 0 && output->grad_fn()) {
-                // Local backward prehooks
-                if (!backward_pre_hooks_.empty()) {
-                    output->grad_fn()->RegisterBackwardPreHook(
-                        [this](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-                            for (const auto &hook : backward_pre_hooks_) {
-                                if (hook) {
-                                    hook(this, grad_outputs);
-                                }
-                            }
-                        });
+  if (UNLIKELY(has_local_backward_hooks || has_global_backward_hooks)) {
+    for (const auto &output : output_tensors) {
+      if (output && output->output_idx() == 0 && output->grad_fn()) {
+        // Local backward prehooks
+        if (!backward_pre_hooks_.empty()) {
+          output->grad_fn()->RegisterBackwardPreHook(
+              [this](autograd::Function *,
+                     const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+                for (const auto &hook : backward_pre_hooks_) {
+                  if (hook) {
+                    hook(this, grad_outputs);
+                  }
                 }
-                // Local backward post-hooks
-                if (!backward_post_hooks_.empty()) {
-                    output->grad_fn()->RegisterBackwardPostHook(
-                        [this](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &grad_inputs,
-                               const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-                            for (const auto &hook : backward_post_hooks_) {
-                                if (hook) {
-                                    hook(this, grad_inputs, grad_outputs);
-                                }
-                            }
-                        });
-                }
-                // Global backward hooks
-                if (has_global_backward_hooks) {
-                    output->grad_fn()->RegisterBackwardPostHook(
-                        [this](autograd::Function *, const std::vector<std::shared_ptr<Tensor>> &grad_inputs,
-                               const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-                            // Registry convention: (grad_outputs, grad_inputs)
-                            utils::GlobalModuleHookRegistry::Instance().CallModuleFullBackwardHooks(this, grad_outputs,
-                                                                                                    grad_inputs);
-                        });
-                }
-            }
+              });
         }
+        // Local backward post-hooks
+        if (!backward_post_hooks_.empty()) {
+          output->grad_fn()->RegisterBackwardPostHook(
+              [this](autograd::Function *,
+                     const std::vector<std::shared_ptr<Tensor>> &grad_inputs,
+                     const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+                for (const auto &hook : backward_post_hooks_) {
+                  if (hook) {
+                    hook(this, grad_inputs, grad_outputs);
+                  }
+                }
+              });
+        }
+        // Global backward hooks
+        if (has_global_backward_hooks) {
+          output->grad_fn()->RegisterBackwardPostHook(
+              [this](autograd::Function *,
+                     const std::vector<std::shared_ptr<Tensor>> &grad_inputs,
+                     const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+                // Registry convention: (grad_outputs, grad_inputs)
+                utils::GlobalModuleHookRegistry::Instance()
+                    .CallModuleFullBackwardHooks(this, grad_outputs,
+                                                 grad_inputs);
+              });
+        }
+      }
     }
+  }
 
-    return output_tensors;
+  return output_tensors;
 }
 
 void Module::To(Device device) {
-    if (device == device_) {
-        return;
-    }
+  if (device == device_) {
+    return;
+  }
 
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> new_parameters;
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> new_buffers;
-    for (auto &[name, param] : parameters_) {
-        new_parameters.emplace(name, std::make_shared<Tensor>(param->To(device)));
-    }
-    for (auto &[name, buffer] : buffers_) { new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(device))); }
-    parameters_ = std::move(new_parameters);
-    buffers_ = std::move(new_buffers);
-    device_ = device;
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> new_parameters;
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> new_buffers;
+  for (auto &[name, param] : parameters_) {
+    new_parameters.emplace(name, std::make_shared<Tensor>(param->To(device)));
+  }
+  for (auto &[name, buffer] : buffers_) {
+    new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(device)));
+  }
+  parameters_ = std::move(new_parameters);
+  buffers_ = std::move(new_buffers);
+  device_ = device;
 
-    for (auto &[_, module] : modules_) { module->To(device); }
+  for (auto &[_, module] : modules_) {
+    module->To(device);
+  }
 }
 
 void Module::To(DataType dtype) {
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> new_parameters;
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> new_buffers;
-    for (auto &[name, param] : parameters_) {
-        new_parameters.emplace(name, std::make_shared<Tensor>(param->To(dtype)));
-    }
-    for (auto &[name, buffer] : buffers_) { new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(dtype))); }
-    parameters_ = std::move(new_parameters);
-    buffers_ = std::move(new_buffers);
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> new_parameters;
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> new_buffers;
+  for (auto &[name, param] : parameters_) {
+    new_parameters.emplace(name, std::make_shared<Tensor>(param->To(dtype)));
+  }
+  for (auto &[name, buffer] : buffers_) {
+    new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(dtype)));
+  }
+  parameters_ = std::move(new_parameters);
+  buffers_ = std::move(new_buffers);
 
-    for (auto &[_, layer] : modules_) { layer->To(dtype); }
+  for (auto &[_, layer] : modules_) {
+    layer->To(dtype);
+  }
 }
 
 void Module::Apply(std::function<void(Module *)> fn) {
-    for (auto &[_, module] : modules_) { module->Apply(fn); }
-    fn(this);
+  for (auto &[_, module] : modules_) {
+    module->Apply(fn);
+  }
+  fn(this);
 }
 
 std::shared_ptr<Module> Module::ReplicateForDataParallel(int device_idx) const {
-    // TODO(dcj): use device_idx later
-    return std::make_shared<Module>(*this);
+  // TODO(dcj): use device_idx later
+  return std::make_shared<Module>(*this);
 }
 
-std::shared_ptr<infini_train::HookHandle> Module::RegisterForwardPreHook(ModulePreHook hook) {
-    forward_pre_hooks_.push_back(std::move(hook));
-    return std::make_shared<ModuleHookHandleImpl<ModulePreHook>>(&forward_pre_hooks_, forward_pre_hooks_.size() - 1);
+std::shared_ptr<infini_train::HookHandle> Module::RegisterForwardPreHook(
+    ModulePreHook hook) {
+  forward_pre_hooks_.push_back(std::move(hook));
+  return std::make_shared<ModuleHookHandleImpl<ModulePreHook>>(
+      &forward_pre_hooks_, forward_pre_hooks_.size() - 1);
 }
 
-std::shared_ptr<infini_train::HookHandle> Module::RegisterForwardPostHook(ModulePostHook hook) {
-    forward_post_hooks_.push_back(std::move(hook));
-    return std::make_shared<ModuleHookHandleImpl<ModulePostHook>>(&forward_post_hooks_, forward_post_hooks_.size() - 1);
+std::shared_ptr<infini_train::HookHandle> Module::RegisterForwardPostHook(
+    ModulePostHook hook) {
+  forward_post_hooks_.push_back(std::move(hook));
+  return std::make_shared<ModuleHookHandleImpl<ModulePostHook>>(
+      &forward_post_hooks_, forward_post_hooks_.size() - 1);
 }
 
-std::shared_ptr<infini_train::HookHandle> Module::RegisterBackwardPreHook(ModulePreHook hook) {
-    backward_pre_hooks_.push_back(std::move(hook));
-    return std::make_shared<ModuleHookHandleImpl<ModulePreHook>>(&backward_pre_hooks_, backward_pre_hooks_.size() - 1);
+std::shared_ptr<infini_train::HookHandle> Module::RegisterBackwardPreHook(
+    ModulePreHook hook) {
+  backward_pre_hooks_.push_back(std::move(hook));
+  return std::make_shared<ModuleHookHandleImpl<ModulePreHook>>(
+      &backward_pre_hooks_, backward_pre_hooks_.size() - 1);
 }
 
-std::shared_ptr<infini_train::HookHandle> Module::RegisterBackwardPostHook(ModulePostHook hook) {
-    backward_post_hooks_.push_back(std::move(hook));
-    return std::make_shared<ModuleHookHandleImpl<ModulePostHook>>(&backward_post_hooks_,
-                                                                  backward_post_hooks_.size() - 1);
+std::shared_ptr<infini_train::HookHandle> Module::RegisterBackwardPostHook(
+    ModulePostHook hook) {
+  backward_post_hooks_.push_back(std::move(hook));
+  return std::make_shared<ModuleHookHandleImpl<ModulePostHook>>(
+      &backward_post_hooks_, backward_post_hooks_.size() - 1);
 }
-} // namespace infini_train::nn
+}  // namespace infini_train::nn

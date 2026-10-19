@@ -10,79 +10,80 @@
 
 namespace infini_train::nn {
 class TransformerLayer : public CloneableModule<TransformerLayer> {
-public:
-    static constexpr char kType[] = "Layer";
-    static constexpr char kLn1LayerName[] = "ln_1";
-    static constexpr char kAttnLayerName[] = "attn";
-    static constexpr char kLn2LayerName[] = "ln_2";
-    static constexpr char kMlpLayerName[] = "mlp";
+ public:
+  static constexpr char kType[] = "Layer";
+  static constexpr char kLn1LayerName[] = "ln_1";
+  static constexpr char kAttnLayerName[] = "attn";
+  static constexpr char kLn2LayerName[] = "ln_2";
+  static constexpr char kMlpLayerName[] = "mlp";
 
-    explicit TransformerLayer(const TransformerConfig &config);
+  explicit TransformerLayer(const TransformerConfig &config);
 
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+  std::vector<std::shared_ptr<infini_train::Tensor>> Forward(
+      const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
 
 class TransformerFirstStage : public CloneableModule<TransformerFirstStage> {
-public:
-    static constexpr char kType[] = "TransformerFirstStage";
-    static constexpr char kWTELayerName[] = "wte";
-    static constexpr char kWPELayerName[] = "wpe";
+ public:
+  static constexpr char kType[] = "TransformerFirstStage";
+  static constexpr char kWTELayerName[] = "wte";
+  static constexpr char kWPELayerName[] = "wpe";
 
-    explicit TransformerFirstStage(const TransformerConfig &config);
+  explicit TransformerFirstStage(const TransformerConfig &config);
 
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+  std::vector<std::shared_ptr<infini_train::Tensor>> Forward(
+      const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-private:
-    TransformerConfig config_;
+ private:
+  TransformerConfig config_;
 };
 
 class TransformerChunk : public CloneableModule<TransformerChunk> {
-public:
-    static constexpr char kType[] = "TransformerChunk";
-    static constexpr char kHLayerName[] = "h";
-    static constexpr char kFreqsCisName[] = "freqs_cis";
+ public:
+  static constexpr char kType[] = "TransformerChunk";
+  static constexpr char kHLayerName[] = "h";
+  static constexpr char kFreqsCisName[] = "freqs_cis";
 
-    TransformerChunk(const TransformerConfig &config, int start_layer, int end_layer);
+  TransformerChunk(const TransformerConfig &config, int start_layer,
+                   int end_layer);
 
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+  std::vector<std::shared_ptr<infini_train::Tensor>> Forward(
+      const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-private:
-    const TransformerConfig config_;
+ private:
+  const TransformerConfig config_;
 };
 
 class TransformerLastStage : public CloneableModule<TransformerLastStage> {
-public:
-    static constexpr char kType[] = "TransformerLastStage";
-    static constexpr char kLnFLayerName[] = "ln_f";
-    static constexpr char kLMHeadLayerName[] = "lm_head";
+ public:
+  static constexpr char kType[] = "TransformerLastStage";
+  static constexpr char kLnFLayerName[] = "ln_f";
+  static constexpr char kLMHeadLayerName[] = "lm_head";
 
-    explicit TransformerLastStage(const TransformerConfig &config);
+  explicit TransformerLastStage(const TransformerConfig &config);
 
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+  std::vector<std::shared_ptr<infini_train::Tensor>> Forward(
+      const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-private:
-    const TransformerConfig config_;
+ private:
+  const TransformerConfig config_;
 };
 
 class TransformerModel : public CloneableModule<TransformerModel> {
-public:
-    static constexpr char kType[] = "Transformer";
-    static constexpr char kTransformerModelName[] = "transformer";
+ public:
+  static constexpr char kType[] = "Transformer";
+  static constexpr char kTransformerModelName[] = "transformer";
 
-    explicit TransformerModel(const TransformerConfig config);
+  explicit TransformerModel(const TransformerConfig config);
 
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+  std::vector<std::shared_ptr<infini_train::Tensor>> Forward(
+      const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    const TransformerConfig &Config() const;
+  const TransformerConfig &Config() const;
 
-private:
-    const TransformerConfig config_;
-    const infini_train::nn::parallel::StageInfo stage_info_;
+ private:
+  const TransformerConfig config_;
+  const infini_train::nn::parallel::StageInfo stage_info_;
 };
 
-} // namespace infini_train::nn
+}  // namespace infini_train::nn

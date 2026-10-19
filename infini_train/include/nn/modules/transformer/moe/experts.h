@@ -15,16 +15,17 @@ struct TransformerConfig;
 namespace infini_train::nn::moe {
 
 class SequentialMLP : public CloneableModule<SequentialMLP> {
-public:
-    static constexpr char kType[] = "SequentialMLP";
-    static constexpr char kExpertNamePrefix[] = "expert_";
+ public:
+  static constexpr char kType[] = "SequentialMLP";
+  static constexpr char kExpertNamePrefix[] = "expert_";
 
-    SequentialMLP(int64_t num_local_experts, const TransformerConfig &config);
+  SequentialMLP(int64_t num_local_experts, const TransformerConfig &config);
 
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+  std::vector<std::shared_ptr<Tensor>> Forward(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
-private:
-    int64_t num_local_experts_ = 0;
+ private:
+  int64_t num_local_experts_ = 0;
 };
 
-} // namespace infini_train::nn::moe
+}  // namespace infini_train::nn::moe

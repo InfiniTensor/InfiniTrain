@@ -10,17 +10,17 @@ namespace infini_train::nn {
 struct TransformerConfig;
 
 class MLP : public infini_train::nn::CloneableModule<MLP> {
-public:
-    static constexpr char kType[] = "MLP";
-    static constexpr char kCFcLayerName[] = "c_fc";
-    static constexpr char kGeluLayerName[] = "gelu";
-    static constexpr char kCProjLayerName[] = "c_proj";
+ public:
+  static constexpr char kType[] = "MLP";
+  static constexpr char kCFcLayerName[] = "c_fc";
+  static constexpr char kGeluLayerName[] = "gelu";
+  static constexpr char kCProjLayerName[] = "c_proj";
 
-    static constexpr char kSwiGLULayerName[] = "swiglu";
+  static constexpr char kSwiGLULayerName[] = "swiglu";
 
-    explicit MLP(const TransformerConfig &config, bool is_expert = false);
+  explicit MLP(const TransformerConfig &config, bool is_expert = false);
 
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+  std::vector<std::shared_ptr<infini_train::Tensor>> Forward(
+      const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };
-} // namespace infini_train::nn
+}  // namespace infini_train::nn

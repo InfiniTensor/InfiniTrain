@@ -9,26 +9,27 @@ namespace nn {
 class Module;
 }
 class Tokenizer {
-public:
-    enum class Version : uint32_t {
-        kV1 = 1, // GPT2
-        kV2 = 2, // LLaMA-3
-        kV3 = 3, // Qwen-3
-    };
+ public:
+  enum class Version : uint32_t {
+    kV1 = 1,  // GPT2
+    kV2 = 2,  // LLaMA-3
+    kV3 = 3,  // Qwen-3
+  };
 
-    Tokenizer(const std::string &filepath);
+  Tokenizer(const std::string &filepath);
 
-    std::string Decode(uint32_t token_id) const;
+  std::string Decode(uint32_t token_id) const;
 
-    void GenerateText(infini_train::nn::Module &model, uint32_t batch_size, uint32_t sequence_length,
-                      uint32_t text_length, Device device) const;
+  void GenerateText(infini_train::nn::Module &model, uint32_t batch_size,
+                    uint32_t sequence_length, uint32_t text_length,
+                    Device device) const;
 
-    uint32_t GetEndToken() const;
+  uint32_t GetEndToken() const;
 
-private:
-    uint32_t magic_number_ = 0;
-    uint32_t vocab_size_ = 0;
-    std::vector<std::string> token_table_;
-    uint32_t eot_token_ = 0;
+ private:
+  uint32_t magic_number_ = 0;
+  uint32_t vocab_size_ = 0;
+  std::vector<std::string> token_table_;
+  uint32_t eot_token_ = 0;
 };
-} // namespace infini_train
+}  // namespace infini_train

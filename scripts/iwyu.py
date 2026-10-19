@@ -24,9 +24,7 @@ RELEVANT_FILES = {
     Path("scripts/iwyu.py"),
 }
 INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
-CORRECT_RESULT_RE = re.compile(
-    r"^\(.+ has correct #includes/fwd-decls\)$"
-)
+CORRECT_RESULT_RE = re.compile(r"^\(.+ has correct #includes/fwd-decls\)$")
 
 
 def capture(command: list[str]) -> str:
@@ -74,9 +72,7 @@ def changed_files(ref: str | None) -> list[Path]:
         arguments = ["git", "diff", f"{merge_base(ref)}..HEAD"]
     else:
         arguments = ["git", "diff", "--cached"]
-    output = capture(
-        [*arguments, "--no-renames", "--diff-filter=ACDM", "--name-only"]
-    )
+    output = capture([*arguments, "--no-renames", "--diff-filter=ACDM", "--name-only"])
     return [Path(line) for line in output.splitlines() if line.strip()]
 
 
@@ -174,9 +170,7 @@ def main() -> int:
     )
     parser.add_argument("--ref", help="compare with the merge-base of REF")
     parser.add_argument("--build-dir", type=Path, default=Path("build/lint"))
-    parser.add_argument(
-        "--jobs", type=int, default=min(4, max(1, os.cpu_count() or 1))
-    )
+    parser.add_argument("--jobs", type=int, default=min(4, max(1, os.cpu_count() or 1)))
     parser.add_argument("--iwyu-tool")
     fix_mode = parser.add_mutually_exclusive_group()
     fix_mode.add_argument(
